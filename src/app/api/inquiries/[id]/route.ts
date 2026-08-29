@@ -18,7 +18,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
       company: { select: { id: true, name: true } },
       person: { select: { id: true, firstName: true, lastName: true, email: true } },
       assignedTo: { select: { id: true, name: true } },
-      convertedJob: { select: { id: true, jobCode: true, name: true } },
+      // The job's live orders ride along so the converted banner can name
+      // the quote that already exists. Without them the banner said only
+      // "converted to SR-JOB-NNNN" and an agent looking for the quote had
+      // to click through and hunt for it — which reads, from the inquiry,
+      // exactly like no quote was ever made.
+      convertedJob: {
+        select: {
+          id: true, jobCode: true, name: true,
+          orders: {
+            select: { id: true, orderNumber: true, status: true },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          },
+        },
+      },
+      // The add-on path attaches to an existing Job's order instead of
+      // creating a Job; it was never surfaced at all.
+      convertedOrder: { select: { id: true, orderNumber: true, status: true } },
     },
   })
   if (!inquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -120,7 +137,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         company: { select: { id: true, name: true } },
         person: { select: { id: true, firstName: true, lastName: true, email: true } },
         assignedTo: { select: { id: true, name: true } },
-        convertedJob: { select: { id: true, jobCode: true, name: true } },
+        convertedJob: {
+          select: {
+            id: true, jobCode: true, name: true,
+            orders: { select: { id: true, orderNumber: true, status: true }, orderBy: { createdAt: 'desc' }, take: 5 },
+          },
+        },
+        convertedOrder: { select: { id: true, orderNumber: true, status: true } },
       },
     })
 

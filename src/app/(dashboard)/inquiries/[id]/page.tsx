@@ -41,7 +41,42 @@ interface CartSnapshotLine {
    *  which must not be rendered as "$0" — that reads as free. */
   priceOnQuote?: boolean
 }
+/**
+ * What the Gmail triage AI writes onto a GMAIL inquiry. This page used to
+ * know ONLY the WEB_FORM shape below, so every field in the meta grid
+ * resolved to "—" on an email inquiry even though the parse had captured
+ * the contact, the company, the dates and the equipment list — which reads
+ * on screen exactly like the email was never parsed at all.
+ */
+interface ExtractedContact {
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  title?: string | null
+}
+interface ExtractedJobIntent {
+  projectName?: string | null
+  vehicleType?: string | null
+  pickupDate?: string | null
+  returnDate?: string | null
+  duration?: string | null
+  location?: string | null
+  equipment?: string[] | null
+}
+interface ExtractedData {
+  company?: string | null
+  contact?: ExtractedContact | null
+  summary?: string | null
+  rawNotes?: string | null
+  urgency?: string | null
+  confidence?: number | null
+  messageNature?: string | null
+  jobIntent?: ExtractedJobIntent | null
+}
 interface SupplyOrderMetadata {
+  /** GMAIL inquiries only. */
+  extractedData?: ExtractedData | null
+  fromAddress?: string | null
   kind?: string
   contact?: { name?: string | null; email?: string | null; phone?: string | null }
   production?: { companyName?: string | null; productionName?: string | null }
@@ -67,7 +102,13 @@ interface Inquiry {
   company: { id: string; name: string } | null
   person: { id: string; firstName: string; lastName: string; email: string } | null
   assignedTo: { id: string; name: string } | null
-  convertedJob: { id: string; jobCode: string; name: string } | null
+  convertedJob: {
+    id: string
+    jobCode: string
+    name: string
+    orders: { id: string; orderNumber: string; status: string }[]
+  } | null
+  convertedOrder: { id: string; orderNumber: string; status: string } | null
   sourceMetadata: SupplyOrderMetadata | null
 }
 
@@ -236,6 +277,10 @@ export default function InquiryDetailPage() {
   // code expected 'supply-order'. Matching both renders the structured cart for
   // new and already-submitted order-form inquiries.
   const isSupplyOrder = meta?.kind === 'production-order' || meta?.kind === 'supply-order'
+  // The Gmail triage parse. Present on GMAIL inquiries; the fields below
+  // fall through to it so an email inquiry stops rendering a row of
+  // dashes over a parse that captured every one of them.
+  const ex = meta?.extractedData ?? null
   // Payment-info requests are typed by their fixed title (set by the
   // /payment-info route). They get a payment-specific action — the
   // sales-lead buttons would wrongly spin up a Job/quote from a payment
@@ -350,13 +395,58 @@ export default function InquiryDetailPage() {
           </div>
         )}
 
-        {inquiry.convertedJob && (
-          <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
-            Converted to{' '}
-            <Link href={`/jobs/${inquiry.convertedJob.id}`} className="font-mono font-semibold hover:underline">
-              {inquiry.convertedJob.jobCode}
-            </Link>{' '}
-            — {inquiry.convertedJob.name}
+        {/* Converting closes the inquiry, which hides every action button —
+            so this banner is the ONLY way out of the page. It names the
+            orders too: a converted inquiry whose job already carries a
+            draft quote looked, from here, exactly like one where nobody
+            had written the quote yet. */}
+        {(inquiry.convertedJob || inquiry.convertedOrder) && (
+          <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-2 space-y-1">
+            {inquiry.convertedJob && (
+              <div>
+                Converted to{' '}
+                <Link href={`/jobs/${inquiry.convertedJob.id}`} className="font-mono font-semibold hover:underline">
+                  {inquiry.convertedJob.jobCode}
+                </Link>{' '}
+                — {inquiry.convertedJob.name}
+              </div>
+            )}
+            {(() => {
+              const orders = inquiry.convertedOrder
+                ? [inquiry.convertedOrder]
+                : (inquiry.convertedJob?.orders ?? [])
+              if (orders.length === 0) {
+                return (
+                  <div className="text-emerald-800/80">
+                    No quote on it yet —{' '}
+                    {inquiry.convertedJob && (
+                      <Link href={`/jobs/${inquiry.convertedJob.id}`} className="font-semibold hover:underline">
+                        open the job to build one →
+                      </Link>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-emerald-800/80">
+                    {orders.length === 1 ? 'Quote:' : 'Quotes:'}
+                  </span>
+                  {orders.map((o) => (
+                    <Link
+                      key={o.id}
+                      href={`/orders/${o.id}`}
+                      className="font-mono font-semibold hover:underline"
+                    >
+                      {o.orderNumber}
+                      <span className="ml-1 font-sans font-normal text-emerald-800/70">
+                        ({o.status.toLowerCase()})
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -365,13 +455,81 @@ export default function InquiryDetailPage() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 grid grid-cols-2 md:grid-cols-4 gap-3">
         <Meta label="Contact" value={contactDisplay(inquiry)} />
         <Meta label="Email" value={contactEmail(inquiry)} />
-        <Meta label="Phone" value={meta?.contact?.phone || '—'} />
-        <Meta label="Company" value={meta?.production?.companyName || inquiry.company?.name || '—'} />
-        <Meta label="Production" value={meta?.production?.productionName || '—'} />
-        <Meta label="Pickup → Return" value={`${fmtDate(inquiry.preferredStartDate)} → ${fmtDate(inquiry.preferredEndDate)}`} />
+        <Meta label="Phone" value={meta?.contact?.phone || ex?.contact?.phone || '—'} />
+        <Meta label="Company" value={meta?.production?.companyName || inquiry.company?.name || ex?.company || '—'} />
+        <Meta label="Production" value={meta?.production?.productionName || ex?.jobIntent?.projectName || '—'} />
+        <Meta
+          label="Pickup → Return"
+          value={
+            inquiry.preferredStartDate || inquiry.preferredEndDate
+              ? `${fmtDate(inquiry.preferredStartDate)} → ${fmtDate(inquiry.preferredEndDate)}`
+              : ex?.jobIntent?.pickupDate || ex?.jobIntent?.returnDate
+                ? `${fmtDate(ex.jobIntent.pickupDate ?? null)} → ${fmtDate(ex.jobIntent.returnDate ?? null)}`
+                : '— → —'
+          }
+        />
         <Meta label="Est. value" value={fmtMoney(inquiry.estimatedValue)} />
         <Meta label="Assigned" value={inquiry.assignedTo?.name || '—'} />
       </div>
+
+      {/* What the triage AI read out of the email. This is the "parse"
+          — it runs on arrival, it is stored on the inquiry, and until now
+          it was written to the database and shown to nobody. The raw
+          thread stays below it: this is a reading of the email, not a
+          replacement for it, and an agent quoting off it should be able
+          to check it against the client's own words. */}
+      {ex && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-baseline justify-between gap-2 flex-wrap">
+            <h2 className="text-sm font-semibold text-white">Read from the email</h2>
+            <span className="text-[11px] text-zinc-500">
+              {ex.messageNature ? `${ex.messageNature} · ` : ''}
+              {typeof ex.confidence === 'number' ? `${Math.round(ex.confidence * 100)}% confidence` : 'parsed on arrival'}
+              {ex.urgency && ex.urgency !== 'normal' && (
+                <span className="ml-1.5 text-amber-500 font-semibold uppercase">{ex.urgency}</span>
+              )}
+            </span>
+          </div>
+          <div className="p-4 space-y-3">
+            {ex.summary && <p className="text-sm text-zinc-200 leading-relaxed">{ex.summary}</p>}
+
+            {(ex.jobIntent?.vehicleType || ex.jobIntent?.location || ex.jobIntent?.duration) && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {ex.jobIntent?.vehicleType && <Meta label="Vehicle" value={ex.jobIntent.vehicleType} />}
+                {ex.jobIntent?.location && <Meta label="Location" value={ex.jobIntent.location} />}
+                {ex.jobIntent?.duration && <Meta label="Duration" value={ex.jobIntent.duration} />}
+              </div>
+            )}
+
+            {/* The ask, in the client's terms — discounts, holiday hours,
+                preloads. This is the part an agent gets wrong by skimming. */}
+            {ex.rawNotes && (
+              <div className="rounded-lg border border-amber-600/40 bg-amber-950/20 px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Worth catching</div>
+                <p className="text-[13px] text-amber-100/90 leading-relaxed">{ex.rawNotes}</p>
+              </div>
+            )}
+
+            {(ex.jobIntent?.equipment?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                  Equipment asked for ({ex.jobIntent!.equipment!.length})
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ex.jobIntent!.equipment!.map((item, i) => (
+                    <span
+                      key={`${item}-${i}`}
+                      className="text-[11px] text-zinc-300 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Cart for supply-order WEB_FORM submissions */}
       {isSupplyOrder && cart.length > 0 && (
@@ -508,9 +666,15 @@ function contactDisplay(i: Inquiry): string {
   return (
     meta?.contact?.name ||
     (i.person ? `${i.person.firstName} ${i.person.lastName}`.trim() : '') ||
+    meta?.extractedData?.contact?.name ||
     '—'
   )
 }
 function contactEmail(i: Inquiry): string {
-  return i.sourceMetadata?.contact?.email || i.person?.email || '—'
+  return (
+    i.sourceMetadata?.contact?.email ||
+    i.person?.email ||
+    i.sourceMetadata?.extractedData?.contact?.email ||
+    '—'
+  )
 }
