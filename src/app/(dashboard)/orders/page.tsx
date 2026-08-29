@@ -229,6 +229,7 @@ export default function OrdersPage() {
         )}
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-visible">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-[10px] font-semibold uppercase tracking-wider bg-lt-inner">
@@ -374,6 +375,7 @@ export default function OrdersPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {total > 25 && (
@@ -457,7 +459,7 @@ function MarkLostModal({
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-lt-card border border-lt-hairline rounded-xl w-full max-w-md p-5"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl w-full max-w-md p-5"
       >
         <h2 className="text-lg font-semibold text-lt-fg">Mark this quote lost</h2>
         <p className="text-sm text-lt-fg2 mt-1">

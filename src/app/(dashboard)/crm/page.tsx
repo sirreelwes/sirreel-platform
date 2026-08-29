@@ -742,6 +742,7 @@ export default function CRMPage() {
       {/* Companies Tab */}
       {tab === "companies" && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
@@ -815,6 +816,7 @@ export default function CRMPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -884,6 +886,7 @@ export default function CRMPage() {
       {/* People Tab */}
       {tab === "people" && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
@@ -1027,6 +1030,7 @@ export default function CRMPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -1080,7 +1084,7 @@ export default function CRMPage() {
       {/* Add Contact Modal */}
       {showAddContact && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddContact(false)}>
-          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-lt-fg mb-4">Add Contact</h2>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -1139,7 +1143,7 @@ export default function CRMPage() {
       {/* Add Company Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-lt-fg mb-4">Add Company</h2>
             <div className="space-y-3">
               <div>

@@ -544,7 +544,7 @@ function UpgradeToClaimModal({ incidentId, onClose }: { incidentId: string; onCl
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-20">
-      <div className="bg-lt-card rounded-xl w-full max-w-lg p-6 space-y-3 shadow-xl">
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card rounded-xl w-full max-w-lg p-6 space-y-3 shadow-xl">
         <h2 className="text-lg font-semibold text-lt-fg">Upgrade to claim</h2>
         <p className="text-xs text-lt-fg3">
           Carrier name + carrier claim number are required — this is the carrier-required floor.
@@ -618,7 +618,7 @@ function BillRenterModal({ incidentId, onClose }: { incidentId: string; onClose:
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-20">
-      <div className="bg-lt-card rounded-xl w-full max-w-lg p-6 space-y-3 shadow-xl">
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card rounded-xl w-full max-w-lg p-6 space-y-3 shadow-xl">
         <h2 className="text-lg font-semibold text-lt-fg">Bill renter</h2>
         <p className="text-xs text-lt-fg3">
           Captures DamageItem(s) on this incident. The existing L&D invoice flow on the order detail page picks up SEND_TO_LD rows; BILL_NOW rows land on the next RENTAL invoice automatically.

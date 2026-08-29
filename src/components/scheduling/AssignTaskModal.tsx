@@ -73,7 +73,7 @@ export function AssignTaskModal({ task, onClose, onAssigned }: AssignTaskModalPr
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={() => { if (!saving) onClose() }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-baseline justify-between mb-1">
           <h2 className="text-lg font-semibold text-zinc-900">Assign {label} task</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>

@@ -239,6 +239,7 @@ export default function AdminAssetCategoriesPage() {
       </div>
 
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-lt-card">
             <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
@@ -263,6 +264,7 @@ export default function AdminAssetCategoriesPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {target && (
@@ -430,7 +432,7 @@ function GuardModal(props: {
   const armed = confirmText === "DELETE";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
-      <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-5 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-lt-fg">Delete “{target.name}”?</h2>
 
         <div className="mt-3 rounded-lg bg-lt-inner border border-lt-hairline p-3 text-xs text-lt-fg2 space-y-1">

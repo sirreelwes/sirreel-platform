@@ -726,7 +726,7 @@ function AddOnModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3">

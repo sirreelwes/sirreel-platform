@@ -719,7 +719,7 @@ export default function ContractReviewDetailPage() {
           onClick={() => !rerunning && setShowRerunConfirm(false)}
         >
           <div
-            className="bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
+            className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-base font-bold text-gray-900">Re-run AI review?</h2>
@@ -758,7 +758,7 @@ export default function ContractReviewDetailPage() {
           onClick={() => !generating && setShowRegenerateConfirm(false)}
         >
           <div
-            className="bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
+            className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-base font-bold text-gray-900">Regenerate counter-PDF?</h2>

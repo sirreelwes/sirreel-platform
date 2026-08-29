@@ -488,6 +488,7 @@ function ClaimsListLink({ rows }: { rows: ClaimRow[] | null }) {
   }
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-xs uppercase tracking-wide">
@@ -516,6 +517,7 @@ function ClaimsListLink({ rows }: { rows: ClaimRow[] | null }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -547,7 +549,7 @@ function NewIncidentModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-20">
-      <div className="bg-lt-card rounded-xl w-full max-w-md p-6 space-y-3 shadow-xl">
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card rounded-xl w-full max-w-md p-6 space-y-3 shadow-xl">
         <h2 className="text-lg font-semibold text-lt-fg">New incident</h2>
         <p className="text-xs text-lt-fg3">
           Capture what happened. Order/asset/company linking happens on the incident detail page once it exists.

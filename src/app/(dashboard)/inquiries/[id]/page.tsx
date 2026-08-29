@@ -387,6 +387,7 @@ export default function InquiryDetailPage() {
               )}
             </span>
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-zinc-950/40">
               <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -418,6 +419,7 @@ export default function InquiryDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

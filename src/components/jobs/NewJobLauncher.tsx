@@ -105,7 +105,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
 
       {open && !resolving && (
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={reset}>
-          <div className="bg-white rounded-2xl w-[460px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl w-[460px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">New Job</h3>

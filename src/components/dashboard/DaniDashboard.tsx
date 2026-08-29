@@ -214,7 +214,7 @@ function CollectionsWidget({ rwOrders, loading }: { rwOrders: any[]; loading: bo
         <div className="text-[11px] text-gray-400 py-8 text-center">Loading...</div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
             <div className="text-center p-3 rounded-lg bg-emerald-50 border border-emerald-100">
               <div className="text-[9px] font-bold text-emerald-600 uppercase mb-1">Today</div>
               <div className="text-lg font-extrabold text-emerald-700">{fmtMoney(collectedToday)}</div>
@@ -300,7 +300,7 @@ export default function DaniDashboard({ userName }: { userName: string }) {
         <NeedsAttentionAlerts />
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <StatCard label="Incomplete Paperwork" value={incompleteJobs.length} sub="jobs need action"     color="amber"   />
         <StatCard label="COI Review Queue"      value={coiQueue.length}       sub="waiting for approval" color="red"     />
         <StatCard label="Redlines Pending"      value={redlines.length}       sub="agreement disputes"   color="purple"  />
@@ -309,12 +309,12 @@ export default function DaniDashboard({ userName }: { userName: string }) {
           sub="from RentalWorks" color="blue" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <IncompleteJobsWidget jobs={incompleteJobs} loading={loading} />
         <CoiQueueWidget       items={coiQueue}      loading={loading} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <RedlineWidget        items={redlines}       loading={loading} />
         <RecentActivityWidget items={recentActivity} loading={loading} />
       </div>

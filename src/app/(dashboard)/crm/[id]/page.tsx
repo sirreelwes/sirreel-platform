@@ -916,6 +916,7 @@ export default function CompanyDetailPage() {
                   : 'No orders yet'}
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-lt-fg3 text-xs uppercase border-b border-lt-hairline">
                   <th className="py-2 text-left font-medium">Order #</th>
@@ -937,6 +938,7 @@ export default function CompanyDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
@@ -1050,7 +1052,7 @@ export default function CompanyDetailPage() {
       {/* Link Contact Modal */}
       {showLinkContact && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLinkContact(false)}>
-          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-lt-fg mb-4">Link Contact to {company.name}</h2>
 
             <div className="space-y-3">

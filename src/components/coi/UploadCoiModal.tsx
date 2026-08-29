@@ -63,7 +63,7 @@ export function UploadCoiModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">

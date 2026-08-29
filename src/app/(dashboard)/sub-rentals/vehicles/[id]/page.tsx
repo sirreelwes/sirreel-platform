@@ -265,6 +265,7 @@ export default function SubcontractedVehiclePage() {
               </div>
             )}
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold">
@@ -303,6 +304,7 @@ export default function SubcontractedVehiclePage() {
               })}
             </tbody>
           </table>
+          </div>
           <div className="px-4 py-3 border-t border-gray-100">
             <div className={label}>Rate structure notes</div>
             {editing && d ? (

@@ -116,7 +116,7 @@ function ReportingPageInner() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {[
           { label: 'Revenue', value: '$' + revenue.total.toLocaleString(), sub: `${revChange > 0 ? '+' : ''}${revChange}% vs prev`, color: revChange > 0 ? 'text-emerald-600' : 'text-red-600', bg: 'bg-emerald-50', icon: '💰' },
           { label: 'Pipeline', value: '$' + pipelineTotal.toLocaleString(), sub: `${pipeline.reduce((s, p) => s + p.count, 0)} jobs in progress`, color: 'text-blue-600', bg: 'bg-blue-50', icon: '📊' },
@@ -135,7 +135,7 @@ function ReportingPageInner() {
       </div>
 
       {/* Two column layout */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         {/* Revenue chart */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Monthly Revenue (6mo)</div>
@@ -178,7 +178,7 @@ function ReportingPageInner() {
       </div>
 
       {/* Three column layout */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Agent performance */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Agent Performance</div>
@@ -250,7 +250,7 @@ function ReportingPageInner() {
       </div>
 
       {/* Activity feed + alerts */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Activity feed */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Recent Activity</div>

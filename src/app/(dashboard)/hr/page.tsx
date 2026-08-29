@@ -170,6 +170,7 @@ function EmployeeList({ employees }: { employees: EmployeeRow[] | null }) {
   }
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-xs uppercase tracking-wide">
@@ -215,6 +216,7 @@ function EmployeeList({ employees }: { employees: EmployeeRow[] | null }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

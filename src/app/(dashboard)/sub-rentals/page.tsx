@@ -123,6 +123,7 @@ export default function SubRentalsPage() {
             No sub-rentals yet. Open any order, hit “Sub-rent…” on a line.
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold">
@@ -179,6 +180,7 @@ export default function SubRentalsPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

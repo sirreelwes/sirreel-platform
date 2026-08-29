@@ -82,7 +82,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
         <span className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">🔴 Live · RentalWorks</span>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <a href="/bookings" className="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-sm block">
           <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">My Active Jobs</div>
           <div className="text-3xl font-extrabold text-gray-900">{active.length}</div>
@@ -105,7 +105,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
         </a>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Inquiry Queue */}
         <div className="col-span-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
@@ -138,13 +138,13 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
           </div>
         </div>
 
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           {/* Today's Movement */}
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Today's Movement</div>
             </div>
-            <div className="p-4 grid grid-cols-2 gap-4">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="text-[10px] font-bold text-amber-600 uppercase mb-2">📤 Going Out ({goingOut.length})</div>
                 {goingOut.length === 0 && !loading && <div className="text-[11px] text-gray-400 py-2">None scheduled today</div>}

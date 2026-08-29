@@ -410,7 +410,7 @@ export function CaptureReviewWidget({ onChanged, forceCollapsed }: { onChanged?:
 
       {editing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
-          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md">
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md">
             <h3 className="text-base font-semibold text-lt-fg mb-1">Add contact</h3>
             <p className="text-xs text-lt-fg2 mb-4">
               {/* The thread-drawer "Add" path passes a capture whose

@@ -107,6 +107,7 @@ export default function PlanyoCancellationsPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-[10px] font-bold uppercase tracking-wide text-gray-500">
               <tr>
@@ -163,6 +164,7 @@ export default function PlanyoCancellationsPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

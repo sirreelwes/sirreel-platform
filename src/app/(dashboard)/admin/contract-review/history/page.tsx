@@ -171,6 +171,7 @@ export default function ContractReviewHistoryPage() {
 
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
@@ -227,6 +228,7 @@ export default function ContractReviewHistoryPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Pagination */}

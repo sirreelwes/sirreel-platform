@@ -69,7 +69,7 @@ export function QuickReplyLauncher({ emailId, onClose, onSent }: { emailId: stri
   if (error) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 text-sm text-rose-700" onClick={(e) => e.stopPropagation()}>
+        <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-xl shadow-xl w-full max-w-sm p-5 text-sm text-rose-700" onClick={(e) => e.stopPropagation()}>
           {error}
           <div className="mt-3 text-right"><button onClick={onClose} className="text-gray-600 hover:text-gray-900 text-xs font-medium">Close</button></div>
         </div>
@@ -79,7 +79,7 @@ export function QuickReplyLauncher({ emailId, onClose, onSent }: { emailId: stri
   if (messages === null) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-xl shadow-xl px-5 py-4 text-sm text-gray-500">Loading the email…</div>
+        <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-xl shadow-xl px-5 py-4 text-sm text-gray-500">Loading the email…</div>
       </div>
     );
   }

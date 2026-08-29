@@ -169,6 +169,7 @@ export default function StaleHoldsPage() {
       </section>
 
       <section className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-zinc-50 text-zinc-600 text-xs uppercase tracking-wide">
             <tr>
@@ -244,6 +245,7 @@ export default function StaleHoldsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   )

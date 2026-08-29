@@ -86,7 +86,7 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-16 px-4" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg p-5"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-gray-900 mb-4">Add subcontracted vehicle</h2>
@@ -251,6 +251,7 @@ export default function SubcontractedVehiclesPage() {
             </div>
           )
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 font-semibold">
@@ -295,6 +296,7 @@ export default function SubcontractedVehiclesPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

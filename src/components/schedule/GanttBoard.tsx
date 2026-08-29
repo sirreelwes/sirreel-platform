@@ -2381,7 +2381,7 @@ export function GanttBoard() {
       {/* Unit N/A action menu — fixed so the scrolling label column can't clip it. */}
       {naPrompt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!naBusy) { setNaPrompt(null); setNaNote('') } }}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-900">
               {naPrompt.action === 'refer' ? 'Refer to maintenance' : 'Mark not available'} · {naPrompt.unitName}
             </h3>

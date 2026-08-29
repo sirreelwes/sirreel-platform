@@ -234,6 +234,7 @@ export default function AdminFeesPage() {
         ) : fees.length === 0 ? (
           <div className="px-6 py-8 text-sm text-lt-fg3">No fees yet — create one or run the seed script.</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lt-hairline text-lt-fg2 text-xs uppercase tracking-wide">
@@ -288,6 +289,7 @@ export default function AdminFeesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

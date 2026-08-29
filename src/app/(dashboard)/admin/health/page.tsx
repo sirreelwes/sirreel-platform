@@ -263,6 +263,7 @@ export default function AdminHealthPage() {
 
           <h2 className="text-sm font-semibold text-white mb-2">Last 24 hours</h2>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400 text-left text-xs uppercase tracking-wide">
@@ -330,6 +331,7 @@ export default function AdminHealthPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

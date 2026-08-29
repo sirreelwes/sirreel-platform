@@ -780,7 +780,7 @@ export default function PersonDetailPage() {
       {/* Link Company Modal */}
       {showLinkCompany && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLinkCompany(false)}>
-          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-lt-fg mb-4">Link {person.firstName} to a Company</h2>
             <div className="space-y-3">
               <div>

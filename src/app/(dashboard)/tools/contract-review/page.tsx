@@ -136,7 +136,7 @@ export default function ContractReviewPage() {
 
       {showJobConfirmModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <h2 className="text-base font-bold text-gray-900">No Job linked</h2>
             <p className="text-sm text-gray-600">
               Contracts are usually associated with a Job. Skipping this means the review will be saved as an orphan and you&apos;ll need to link it later.

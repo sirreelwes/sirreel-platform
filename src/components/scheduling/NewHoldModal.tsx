@@ -444,7 +444,7 @@ export function NewHoldModal({
   if (heldNotice) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center space-y-3">
+        <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center space-y-3">
           <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-600 text-xl">✓</div>
           <h2 className="text-lg font-semibold text-zinc-900">Hold created</h2>
           <p className="text-sm text-zinc-600">{heldNotice.message}</p>
@@ -484,7 +484,7 @@ export function NewHoldModal({
         <div className="px-6 py-4 space-y-4">
           {/* Date range — editable per the brief. Pre-filled by the
               caller (gantt row click pre-fills the clicked date). */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs uppercase tracking-wide text-zinc-600">Start</span>
               <input
@@ -609,7 +609,7 @@ export function NewHoldModal({
             <ContactPicker value={contact} onChange={setContact} />
             {contact.mode === 'creating_new' && (
               <div className="mt-2 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="email"
                     value={contact.email}

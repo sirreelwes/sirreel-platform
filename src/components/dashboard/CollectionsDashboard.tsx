@@ -118,7 +118,7 @@ export default function CollectionsDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Collected Today</div>
           <div className="text-3xl font-extrabold text-emerald-600">${collectedToday.toLocaleString()}</div>
@@ -141,7 +141,7 @@ export default function CollectionsDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left col — Collections log + Claims */}
         <div className="space-y-4">
           {/* Payments received today */}
@@ -209,7 +209,7 @@ export default function CollectionsDashboard() {
         </div>
 
         {/* Right 2 cols — Outstanding + Overdue */}
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           {/* Overdue */}
           {overdue.length > 0 && (
             <div className="bg-white rounded-xl border border-red-200">
@@ -284,7 +284,7 @@ export default function CollectionsDashboard() {
       {/* Log Payment Modal */}
       {newPayment && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setNewPayment(false)}>
-          <div className="bg-white rounded-2xl w-[420px] shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl w-[420px] shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 flex justify-between items-center">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900">Log Payment</h2>
@@ -293,8 +293,8 @@ export default function CollectionsDashboard() {
               <button onClick={() => setNewPayment(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
             <div className="p-5 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
                   <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Client Name</div>
                   <input value={pClient} onChange={e => setPClient(e.target.value)} placeholder="e.g. Echobend Pictures"
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />

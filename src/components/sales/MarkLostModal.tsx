@@ -54,7 +54,7 @@ export function MarkLostModal({ job, onClose, onMarked }: MarkLostModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-md"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-zinc-800">

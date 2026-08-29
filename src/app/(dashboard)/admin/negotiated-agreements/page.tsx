@@ -96,6 +96,7 @@ export default function NegotiatedAgreementsRegistryPage() {
               No companies have a recorded standing agreement yet. Record one from a Company file via Clients → open a company → Edit → Negotiated standing agreement.
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-[10px] font-semibold uppercase tracking-wider bg-lt-inner">
@@ -172,6 +173,7 @@ export default function NegotiatedAgreementsRegistryPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

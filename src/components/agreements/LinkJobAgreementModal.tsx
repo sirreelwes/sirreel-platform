@@ -134,7 +134,7 @@ export function LinkJobAgreementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
           <div>
             <h3 className="text-base font-bold text-white">Agreement on file</h3>
@@ -186,7 +186,7 @@ export function LinkJobAgreementModal({
           </div>
         ) : (
           <div className="space-y-4 px-5 py-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={label}>Type</label>
                 <select value={contractType} onChange={(e) => setContractType(e.target.value as 'RENTAL_AGREEMENT' | 'STAGE_CONTRACT')} className={input}>
@@ -208,7 +208,7 @@ export function LinkJobAgreementModal({
               <span className="text-sm text-zinc-300">Annual / standing agreement (covers multiple jobs)</span>
             </label>
             {isAnnual && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={label}>Effective</label>
                   <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className={input} />
@@ -219,7 +219,7 @@ export function LinkJobAgreementModal({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={label}>Signer <span className="text-zinc-600">(optional)</span></label>
                 <input type="text" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Name" className={input} />

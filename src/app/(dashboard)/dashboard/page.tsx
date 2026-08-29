@@ -242,7 +242,7 @@ function AdminDashboard({ userName }: { userName: string }) {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
         <div className="p-3 bg-white rounded-xl border border-gray-200">
           <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Units Out</div>
           <div className="text-2xl font-extrabold text-gray-900">{totalOut}</div>
@@ -271,9 +271,9 @@ function AdminDashboard({ userName }: { userName: string }) {
       </div>
 
       {/* TOP ROW: Email Inbox + Alerts */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         {/* Email — needs reply feed */}
-        <div className="col-span-2 p-4 bg-white rounded-xl border border-gray-200">
+        <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-200">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Latest Emails</div>
@@ -525,7 +525,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Active & Confirmed Jobs · Live</div>
             <a href="/bookings" className="text-[10px] text-blue-600 font-semibold hover:underline">View all {rwOrders.length} →</a>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {activeJobs.slice(0, 8).map(o => (
               <div key={o.orderId} className={`p-2.5 rounded-lg border ${o.status === 'ACTIVE' ? 'border-l-2 border-l-emerald-400 border-gray-100' : 'border-l-2 border-l-blue-400 border-gray-100'}`}>
                 <div className="flex justify-between items-start">

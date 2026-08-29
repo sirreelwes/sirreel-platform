@@ -2419,6 +2419,7 @@ export default function OrderDetailPage() {
           </div>
         )}
 
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-xs uppercase tracking-wide">
@@ -2648,6 +2649,7 @@ export default function OrderDetailPage() {
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Discounts panel — first-class. Renders null when there's no
             line content AND no existing discounts ("no discounts =
@@ -3577,6 +3579,7 @@ export default function OrderDetailPage() {
           <div className="text-xs text-lt-fg3">No portal access issued yet.</div>
         ) : (
           <div className="border border-lt-hairline rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-lt-inner text-lt-fg3">
                 <tr>
@@ -3645,6 +3648,7 @@ export default function OrderDetailPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

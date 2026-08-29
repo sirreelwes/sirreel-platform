@@ -232,7 +232,7 @@ function AttachModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 w-full max-w-lg space-y-3"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-2xl p-5 w-full max-w-lg space-y-3"
         onClick={(e) => e.stopPropagation()}
       >
         <div>
@@ -260,7 +260,7 @@ function AttachModal({
 
         <FileDropzone file={file} onFile={setFile} hint="PDF exported from RentalWorks · max 25 MB" />
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">RW number</span>
             <input
