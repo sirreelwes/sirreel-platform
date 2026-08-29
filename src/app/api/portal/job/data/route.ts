@@ -9,6 +9,7 @@ import {
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
+import { findJobCoverage, coverageSentence } from '@/lib/orders/agreementCoverage'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 export const dynamic = 'force-dynamic'
@@ -305,6 +306,24 @@ export async function GET(req: NextRequest) {
   // by ensureSignedAgreementForOrder). Orders that were papered on
   // baseline before the company recorded standing terms keep their
   // baseline + don't surface the banner.
+  // Papered by a sibling order on the same job? Then this order asks for
+  // nothing — see lib/orders/agreementCoverage. Only consulted when this
+  // order has no signature of its own; its own signature always wins.
+  const ownSigned =
+    rentalAgreement?.status === 'SIGNED_BASELINE' ||
+    rentalAgreement?.status === 'SIGNED_NEGOTIATED' ||
+    rentalAgreement?.status === 'SIGNED_OFFLINE'
+  const jobCoverage = ownSigned ? null : await findJobCoverage(order.id)
+  const agreementCoverage = jobCoverage
+    ? {
+        orderNumber: jobCoverage.orderNumber,
+        jobCode: jobCoverage.jobCode,
+        signedAt: jobCoverage.signedAt?.toISOString() ?? null,
+        signerName: jobCoverage.signerName,
+        sentence: coverageSentence(jobCoverage),
+      }
+    : null
+
   const now = new Date()
   const standingAgreementActive =
     !!order.company.negotiatedTermsApprovedAt &&
@@ -450,6 +469,7 @@ export async function GET(req: NextRequest) {
       }),
     },
     agreement: rentalAgreement,
+    agreementCoverage,
     team: otherAccesses
       .filter((a) => a.contactId !== resolved.contactId && a.contact)
       .map((a) => ({

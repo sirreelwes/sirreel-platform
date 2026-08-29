@@ -82,6 +82,15 @@ interface PortalData {
     documentToSignUrl?: string | null;
     signedDocumentUrl?: string | null;
   } | null;
+  /** Set when a SIBLING order on this job is already signed — this order
+   *  asks for nothing. Never set when the order has its own signature. */
+  agreementCoverage: {
+    orderNumber: string;
+    jobCode: string | null;
+    signedAt: string | null;
+    signerName: string | null;
+    sentence: string;
+  } | null;
   team: { id: string; firstName: string; lastName: string; email: string; lastAccessedAt: string | null }[];
   activity: { at: string; kind: string; label: string }[];
   paperwork: {
@@ -657,10 +666,18 @@ export default function JobPortalPage() {
               {/* Rental Agreement */}
               <PaperworkRow
                 label="Rental Agreement"
-                status={agreementStatusLabel(data.paperwork.agreement)}
-                statusKind={agreementStatusKind(data.paperwork.agreement)}
+                status={data.agreementCoverage ? 'Covered' : agreementStatusLabel(data.paperwork.agreement)}
+                statusKind={data.agreementCoverage ? 'success' : agreementStatusKind(data.paperwork.agreement)}
               >
-                {data.paperwork.agreement?.signedAt ? (
+                {data.agreementCoverage ? (
+                  /* Papered by another order on the same job. Say WHICH
+                     signature and when — a bare "Covered" reads like a
+                     glitch to someone who knows they never signed for this
+                     order, and Ana needs to be able to trace it too. */
+                  <div className="text-xs text-gray-600 leading-relaxed">
+                    {data.agreementCoverage.sentence}
+                  </div>
+                ) : data.paperwork.agreement?.signedAt ? (
                   data.paperwork.agreement.signedDocumentUrl ? (
                     // Two affordances, because the client wants both: read
                     // it now, and keep a copy for their production files.

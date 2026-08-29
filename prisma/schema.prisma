@@ -5491,6 +5491,25 @@ model SignedAgreement {
 
   status AgreementStatus @default(PORTAL_GENERATED)
 
+  /// This order is papered by ANOTHER order's signature on the same job.
+  ///
+  /// A client who books a second order onto a job we've already papered was
+  /// being asked to sign again (Wes 2026-08-29). They shouldn't be: the
+  /// rental agreement document renders Job #, never an order number, so a
+  /// signature already covers the job — the per-order row is a storage
+  /// artifact, not a legal boundary.
+  ///
+  /// Deliberately NOT a new AgreementStatus. 55 sites across the app test
+  /// the SIGNED_* statuses inline with no shared predicate, so a new status
+  /// would have to be threaded through every one of them, and a missed site
+  /// would render an unsigned order as signed. This is additive instead:
+  /// the row keeps its own honest status (it has no signature of its own,
+  /// and the signed-copy surfaces must keep saying so), and only the
+  /// surfaces that ASK consult this column.
+  coveredByAgreementId String?          @map("covered_by_agreement_id")
+  coveredBy            SignedAgreement? @relation("AgreementCoverage", fields: [coveredByAgreementId], references: [id], onDelete: SetNull)
+  covers               SignedAgreement[] @relation("AgreementCoverage")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

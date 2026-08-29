@@ -1,5 +1,6 @@
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
+import { applyJobCoverage } from '@/lib/orders/agreementCoverage'
 import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
 
 /**
@@ -40,7 +41,12 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
     where: { orderId_contractType: { orderId, contractType: 'RENTAL_AGREEMENT' } },
     select: { id: true },
   })
-  if (existing) return
+  if (existing) {
+    // Already have a row — but the job may have been papered since (a second
+    // order attached to a live job is exactly the case this exists for).
+    await applyJobCoverage(orderId)
+    return
+  }
 
   // Look up the Company's standing agreement state. Only the few
   // fields we need to decide whether to auto-apply.
@@ -81,6 +87,10 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
         // template.
       },
     })
+    // The baseline branch below picks coverage up via
+    // ensureBaselineRentalDocumentToSign; this branch returns before that, so
+    // stamp it here or a standing-terms client gets asked twice on one job.
+    await applyJobCoverage(orderId)
     return
   }
 
@@ -137,9 +147,13 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
 export async function ensureBaselineRentalDocumentToSign(orderId: string): Promise<string | null> {
   const agreement = await prisma.signedAgreement.findUnique({
     where: { orderId_contractType: { orderId, contractType: 'RENTAL_AGREEMENT' } },
-    select: { id: true, status: true, documentType: true, documentToSignUrl: true },
+    select: { id: true, status: true, documentType: true, documentToSignUrl: true, coveredByAgreementId: true },
   })
   if (!agreement) return null
+  // Papered by a sibling order on the same job — don't render a document to
+  // sign, because nothing is going to ask for it. Re-checked on every read
+  // (cheap, and it self-heals if the sibling's signature is later voided).
+  if (await applyJobCoverage(orderId)) return null
   if (agreement.documentType !== 'BASELINE') return agreement.documentToSignUrl
   if (agreement.documentToSignUrl) return agreement.documentToSignUrl
   if (agreement.status === 'SIGNED_BASELINE' || agreement.status === 'SIGNED_NEGOTIATED') {

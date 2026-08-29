@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
             // select. Aggregated across the job's non-cancelled orders
             // to compute Rental + Stage paperwork chips for the list.
             signedAgreements: {
-              select: { contractType: true, status: true },
+              select: { contractType: true, status: true, coveredByAgreementId: true },
             },
             // Phase 7 billing rollup — read the STORED reconciled
             // amountPaid / balanceDue / status columns that
@@ -335,7 +335,10 @@ export async function GET(req: NextRequest) {
       // non-cancelled orders on the job. CoiCheck is per-Job.
       const liveOrders = j.orders.filter((o) => o.status !== ('CANCELLED' as OrderStatus))
       const allAgreements = liveOrders.flatMap(
-        (o) => (o as { signedAgreements?: { contractType: ContractType; status: AgreementStatus }[] }).signedAgreements || [],
+        (o) =>
+          (o as {
+            signedAgreements?: { contractType: ContractType; status: AgreementStatus; coveredByAgreementId: string | null }[]
+          }).signedAgreements || [],
       )
       const rentalAgreement = rollupAgreementState(allAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT'), liveOrders.length)
       const stageAgreementsExist = allAgreements.some((a) => a.contractType === 'STAGE_CONTRACT')
@@ -650,11 +653,17 @@ const PRE_RELEASE_STATES: AgreementStatus[] = ['PORTAL_GENERATED']
 export type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
 
 function rollupAgreementState(
-  rows: { status: AgreementStatus }[],
+  rows: { status: AgreementStatus; coveredByAgreementId?: string | null }[],
   liveOrderCount: number,
 ): { state: AgreementRollupState; count: number } {
   if (rows.length === 0) return { state: 'NONE', count: 0 }
-  const signed = rows.filter((r) => isSignedAgreementStatus(r.status)).length
+  // A row papered by a sibling order on the same job is SATISFIED, even
+  // though it carries no signature of its own. Without this a second order
+  // attached to a papered job pins the chip on PARTIAL forever and the desk
+  // chases paperwork that nobody is ever going to send.
+  const signed = rows.filter(
+    (r) => isSignedAgreementStatus(r.status) || !!r.coveredByAgreementId,
+  ).length
   if (signed === rows.length && rows.length >= liveOrderCount) {
     return { state: 'SIGNED', count: signed }
   }
