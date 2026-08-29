@@ -4033,6 +4033,14 @@ model SubRental {
   vendorTokenMintedAt DateTime? @map("vendor_token_minted_at")
   /// When the vendor was told we had quoted these dates.
   vendorNotifiedAt    DateTime? @map("vendor_notified_at")
+  /// When the vendor was asked to actually HOLD the dates — stamped on the
+  /// client-approval hook, and only once that notice really left. Distinct
+  /// from the status flip on purpose: approval moves the row to REQUESTED
+  /// whether or not the mail sends, so `status = REQUESTED AND
+  /// vendorHoldRequestedAt IS NULL` is exactly the set a human still has to
+  /// phone. Without it a failed send is indistinguishable from a delivered
+  /// one and the vendor silently never hears.
+  vendorHoldRequestedAt DateTime? @map("vendor_hold_requested_at")
 
   // ── Driver relay ─────────────────────────────────────────────────────────
   // The vendor names a driver on their page; HQ then mints a relay address so

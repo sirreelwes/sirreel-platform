@@ -26,9 +26,9 @@ const STATUS_COPY: Record<string, { label: string; blurb: string; tone: string }
     tone: '#a37f2c',
   },
   REQUESTED: {
-    label: 'Booking requested',
+    label: 'Hold requested',
     blurb:
-      'The production has accepted. We will follow up here for driver details and call time.',
+      'The production has accepted — please hold this unit for the dates below and reply to the email that brought you here to confirm. We will follow up with the PO. Name your driver below whenever you are ready; call time and location appear here once the production confirms them.',
     tone: '#a37f2c',
   },
   CONFIRMED: { label: 'Confirmed', blurb: 'This booking is confirmed.', tone: '#2f7d5d' },
