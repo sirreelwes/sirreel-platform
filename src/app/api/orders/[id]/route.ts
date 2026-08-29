@@ -197,13 +197,32 @@ export async function PUT(req: NextRequest, { params }: Params) {
           );
         }
       }
-      data.status = status;
       // Phase 1 sales pipeline: keep quoteStatus in lockstep with status
       // and stamp the sales-stage timestamps on first transition.
       const current = await prisma.order.findUnique({
         where: { id },
         select: { status: true, sentAt: true, wonAt: true, lostAt: true },
       });
+
+      // "Sent" is a FACT about an email, not a status a client may set.
+      // The order page's "Add and Send Quote" used to flip this field
+      // directly: the board read QUOTE_SENT while the agent got no
+      // preview, the client got no email, and quoteSentAt stayed null.
+      // Reaching QUOTE_SENT now requires POST /api/orders/[id]/send-quote,
+      // which composes, previews, dispatches, and stamps quoteSentAt.
+      // Re-PUTting the status an order already has stays a no-op so
+      // unrelated field edits don't 409.
+      if (status === 'QUOTE_SENT' && current && current.status !== 'QUOTE_SENT') {
+        return NextResponse.json(
+          {
+            error: 'use the send-quote route',
+            reason: 'A quote is marked sent by actually sending it — use Send Quote (which previews the email first), not a status change.',
+          },
+          { status: 409 },
+        );
+      }
+
+      data.status = status;
       if (current) {
         priorStatus = current.status;
         const sync = computeQuoteStatusSync(status as OrderStatus, current);

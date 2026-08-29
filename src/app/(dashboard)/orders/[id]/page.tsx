@@ -865,8 +865,16 @@ export default function OrderDetailPage() {
       await Promise.all([fetchOrder(), fetchPortalAccess()]);
       setAddContactOpen(false);
       resetAddForm();
+      // "Add and Send Quote" goes through the SAME review gate as every
+      // other send. It used to call updateStatus("QUOTE_SENT"), which
+      // flipped the order to "sent" without composing anything — no
+      // preview for the agent, no email for the client, no quoteSentAt,
+      // no audit row. The board read "quote sent" and the client had
+      // received nothing. Nothing may mark a quote sent except an
+      // actual send; POST /api/orders/[id] now refuses that transition
+      // too, so this can't regress from another caller.
       if (opts.andSendQuote && order && order.status === "DRAFT") {
-        await updateStatus("QUOTE_SENT");
+        openSendQuoteReview();
       }
     } finally {
       setAddContactBusy(false);

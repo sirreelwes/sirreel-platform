@@ -65,6 +65,10 @@ interface CompositionOk {
   defaultBody?: string | null;
   to: RankedContact;
   alternatives: RankedContact[];
+  /** Copied automatically — the job's other contacts and the shared
+   *  sales desk. Optional because only the quote composer supplies it
+   *  today; the row simply doesn't render for the other kinds. */
+  autoCc?: { email: string; name: string | null; reason: 'job-contact' | 'sales-team' }[];
   from: string;
   subject: string;
   html: string;
@@ -603,6 +607,24 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                       {preview.to.role ?? 'Contact'}
                       {preview.to.isPrimary && <span className="text-emerald-400"> · primary</span>}
                     </div>
+                    {/* Who else receives this WITHOUT the rep typing them.
+                        The modal used to show only To and the rep's own CC
+                        box, so "is the team getting a copy?" had no answer
+                        on the screen where it matters. */}
+                    {preview.autoCc && preview.autoCc.length > 0 && (
+                      <div className="text-[11px] text-zinc-500 mt-1.5">
+                        <span className="uppercase tracking-wider text-zinc-600">Also copied</span>{' '}
+                        {preview.autoCc.map((c, i) => (
+                          <span key={c.email}>
+                            {i > 0 && ', '}
+                            <span className="font-mono text-zinc-400">{c.email}</span>
+                            {c.reason === 'sales-team' && (
+                              <span className="text-zinc-600"> (sales team)</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {preview.alternatives.length > 0 && (
                     <button

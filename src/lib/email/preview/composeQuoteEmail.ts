@@ -24,6 +24,7 @@ import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { teamInboxEmail } from '@/lib/email/teamVisibility'
 
 export interface AttachmentMeta {
   filename: string
@@ -43,6 +44,14 @@ export interface QuoteEmailCompositionOk {
   /** Other ranked recipients on this order — surfaces in the modal's
    *  "Change recipient" affordance. Excludes `to`. */
   alternatives: RankedRecipient[]
+  /** Everyone who gets copied WITHOUT the rep typing them — the job's
+   *  other contacts plus the shared sales desk. The review modal only
+   *  ever showed To and the rep's own CC box, so an agent reviewing a
+   *  quote could not see that the team was copied at all (Wes,
+   *  2026-08-29: "a copy of the sent quote should go to sales team").
+   *  Derived here rather than in the modal so preview and send cannot
+   *  disagree about who receives the mail. */
+  autoCc: { email: string; name: string | null; reason: 'job-contact' | 'sales-team' }[]
   from: string
   subject: string
   html: string
@@ -185,11 +194,22 @@ export async function composeQuoteEmail(
     },
   })
 
+  // Same two inputs the send route composes its `cc` from: the ranked
+  // non-primary contacts, then the shared desk.
+  const team = teamInboxEmail()
+  const autoCc: { email: string; name: string | null; reason: 'job-contact' | 'sales-team' }[] =
+    alternatives.map((a) => ({ email: a.email, name: a.name ?? null, reason: 'job-contact' as const }))
+  if (team && !autoCc.some((c) => c.email.toLowerCase() === team.toLowerCase())
+      && to.email.toLowerCase() !== team.toLowerCase()) {
+    autoCc.push({ email: team, name: 'Sales team', reason: 'sales-team' })
+  }
+
   return {
     ok: true,
     defaultBody: defaultEmailBody({ kind: 'quote' }),
     to,
     alternatives,
+    autoCc,
     from: SEND_FROM,
     subject,
     html,
