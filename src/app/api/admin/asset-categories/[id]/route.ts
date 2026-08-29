@@ -43,6 +43,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data.name = n;
   }
 
+  // Search aliases — the words crews use that our name doesn't contain
+  // ("garment rack" for Wardrobe Rack). The order-form catalog search already
+  // matches on AssetCategory.aliases; until now there was no way to WRITE
+  // them outside the seed script, so the field existed and nobody could fill
+  // it. Normalised the same way as InventoryItem: trimmed, lowercased, deduped.
+  if (body.aliases !== undefined) {
+    data.aliases = Array.isArray(body.aliases)
+      ? [...new Set(body.aliases.map((a: unknown) => String(a).trim().toLowerCase()).filter(Boolean))]
+      : [];
+  }
+
   if (body.dailyRate !== undefined) {
     const d = parseMoney(body.dailyRate);
     if (d === null) {

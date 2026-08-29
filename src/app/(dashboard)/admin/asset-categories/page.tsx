@@ -16,6 +16,8 @@ type Category = {
   isActive: boolean;
   archivedAt: string | null;
   hasImage: boolean;
+  /** Words crews search by that the name doesn't contain. */
+  aliases: string[];
   refs: Refs;
 };
 
@@ -48,7 +50,8 @@ export default function AdminAssetCategoriesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<{ name: string; dailyRate: string; weeklyRate: string }>({ name: "", dailyRate: "", weeklyRate: "" });
+  // aliases edits as one comma-separated string; split on save.
+  const [editValues, setEditValues] = useState<{ name: string; dailyRate: string; weeklyRate: string; aliases: string }>({ name: "", dailyRate: "", weeklyRate: "", aliases: "" });
   const [saving, setSaving] = useState(false);
 
   const [hideTest, setHideTest] = useState(true);
@@ -110,7 +113,12 @@ export default function AdminAssetCategoriesPage() {
 
   const startEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setEditValues({ name: cat.name ?? "", dailyRate: cat.dailyRate ?? "", weeklyRate: cat.weeklyRate ?? "" });
+    setEditValues({
+      name: cat.name ?? "",
+      dailyRate: cat.dailyRate ?? "",
+      weeklyRate: cat.weeklyRate ?? "",
+      aliases: (cat.aliases ?? []).join(", "),
+    });
   };
 
   const saveEdit = async (id: string) => {
@@ -119,7 +127,12 @@ export default function AdminAssetCategoriesPage() {
     const res = await fetch(`/api/admin/asset-categories/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editValues.name, dailyRate: editValues.dailyRate, weeklyRate: editValues.weeklyRate === "" ? null : editValues.weeklyRate }),
+      body: JSON.stringify({
+        name: editValues.name,
+        dailyRate: editValues.dailyRate,
+        weeklyRate: editValues.weeklyRate === "" ? null : editValues.weeklyRate,
+        aliases: editValues.aliases.split(",").map((a) => a.trim()).filter(Boolean),
+      }),
     });
     setSaving(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Failed to save"); return; }
@@ -262,8 +275,8 @@ export default function AdminAssetCategoriesPage() {
 
 function DepartmentGroup(props: {
   dept: string; rows: Category[];
-  editingId: string | null; editValues: { name: string; dailyRate: string; weeklyRate: string };
-  setEditValues: (v: { name: string; dailyRate: string; weeklyRate: string }) => void;
+  editingId: string | null; editValues: { name: string; dailyRate: string; weeklyRate: string; aliases: string };
+  setEditValues: (v: { name: string; dailyRate: string; weeklyRate: string; aliases: string }) => void;
   saving: boolean; startEdit: (c: Category) => void; saveEdit: (id: string) => void; cancelEdit: () => void;
   openGuard: (c: Category) => void; restore: (c: Category) => void;
   imgV: number; imgBusy: string | null;
@@ -305,6 +318,32 @@ function DepartmentGroup(props: {
                   </div>
                   {/* Slug is the stable key — display only, never edited on rename. */}
                   <span className="block text-lt-fg3 font-mono text-[11px]">{cat.slug}</span>
+                  {/* Search aliases. Visible even when not editing, because the
+                      whole problem was that nobody knew the field existed. */}
+                  {editing ? (
+                    <input
+                      type="text"
+                      value={editValues.aliases}
+                      onChange={(e) => setEditValues({ ...editValues, aliases: e.target.value })}
+                      placeholder="also searched as: 4ft table, banquet table"
+                      title="Comma-separated words crews search by"
+                      className="mt-1 w-72 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-[11px] text-lt-fg focus:outline-none focus:border-amber-500"
+                    />
+                  ) : cat.aliases?.length ? (
+                    <span className="mt-0.5 flex flex-wrap gap-1">
+                      {cat.aliases.map((a) => (
+                        <span key={a} className="text-[10px] bg-lt-inner text-lt-fg2 rounded px-1.5 py-0.5">{a}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => startEdit(cat)}
+                      className="mt-0.5 text-[10px] text-lt-fg3 hover:text-amber-600"
+                      title="Add words crews search by"
+                    >
+                      + add search words
+                    </button>
+                  )}
                 </div>
               </div>
             </td>
