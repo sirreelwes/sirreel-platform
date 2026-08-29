@@ -87,6 +87,9 @@ export function calloutBox(html: string): string {
 export function renderEmailShell(o: EmailShellOptions): string {
   const preheader = o.preheader ?? o.heading
   const logo = `${PUBLIC_SITE_URL}/sirreel-logo-white.png`
+  // The S mark, balancing the footer opposite the address. Same host as
+  // the header wordmark, so if one loads both do.
+  const mark = `${PUBLIC_SITE_URL}/s-logo-white.png`
 
   const cta = o.cta
     ? `
@@ -148,16 +151,32 @@ export function renderEmailShell(o: EmailShellOptions): string {
               : ''
           }
 
-          <!-- footer -->
+          <!-- footer — address left, S mark right (two cells of one row,
+               not floats: Outlook ignores float and would stack them).
+               The mark cell has a fixed width so the address column can
+               never push it off the card, and the whole thing still reads
+               correctly with images blocked: the mark is decorative, so
+               its alt is empty rather than a stray "SirReel" under the
+               address. -->
           <tr>
             <td style="background:${INK};border-radius:0 0 10px 10px;padding:20px 28px;">
-              <div style="font-family:${FONT};font-size:13px;font-weight:700;color:#ffffff;margin:0 0 5px;">${esc(PUBLIC_CONTACT.entity)}</div>
-              <div style="font-family:${FONT};font-size:12.5px;line-height:1.6;color:#a8a294;">
-                ${esc(PUBLIC_CONTACT.address)}<br>
-                <a href="${PUBLIC_CONTACT.phoneHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.phone)}</a>
-                &nbsp;·&nbsp;
-                <a href="${PUBLIC_CONTACT.emailHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.email)}</a>
-              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <div style="font-family:${FONT};font-size:13px;font-weight:700;color:#ffffff;margin:0 0 5px;">${esc(PUBLIC_CONTACT.entity)}</div>
+                    <div style="font-family:${FONT};font-size:12.5px;line-height:1.6;color:#a8a294;">
+                      ${esc(PUBLIC_CONTACT.address)}<br>
+                      <a href="${PUBLIC_CONTACT.phoneHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.phone)}</a>
+                      &nbsp;·&nbsp;
+                      <a href="${PUBLIC_CONTACT.emailHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.email)}</a>
+                    </div>
+                  </td>
+                  <td width="52" style="width:52px;vertical-align:middle;text-align:right;padding-left:16px;">
+                    <img src="${mark}" alt="" width="44"
+                         style="display:block;width:44px;max-width:44px;height:auto;border:0;margin-left:auto;">
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 

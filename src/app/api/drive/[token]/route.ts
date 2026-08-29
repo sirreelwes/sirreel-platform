@@ -100,7 +100,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
           blindPickup: true, blindReturn: true,
           blindPickupInstructions: true, blindReturnInstructions: true,
           lineItems: {
-            where: { type: { not: 'FEE' } },
+            // THIS RUN ONLY. A job's order carries a line per rental
+            // WINDOW — a client asking for the same truck on Aug 27–28
+            // and again on Sep 2–3 is two lines, correctly. Handing the
+            // driver every line on the job therefore doubled the kit on
+            // their screen: the Aug 27 driver was told to expect two
+            // trucks and 30 straps for a run that is one truck and 15.
+            //
+            // Overlap, not equality: a line may legitimately span more
+            // than the assignment's own window (a strap kit out for the
+            // fortnight), and that kit IS on this truck.
+            where: {
+              type: { not: 'FEE' },
+              pickupDate: { lte: asg.endDate },
+              returnDate: { gte: asg.startDate },
+            },
             orderBy: { sortOrder: 'asc' },
             select: { id: true, description: true, quantity: true },
           },
@@ -115,7 +129,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const isBlindPickup = orders.some((o) => o.blindPickup)
   const isBlindReturn = orders.some((o) => o.blindReturn)
 
-  // What's loaded on the vehicle — the driver's pick list.
+  // What's loaded on the vehicle — the driver's pick list, scoped to this
+  // run's dates by the query above.
+  //
+  // KNOWN LIMIT: order lines carry dates but no assignment FK, so on a job
+  // running two vehicles over the SAME window both drivers still see the
+  // job's whole kit. Splitting that needs a line→assignment link, which is
+  // a schema change; the dates are the half that can be fixed today, and
+  // they were the half producing visibly doubled rows.
   const loadList = orders.flatMap((o) =>
     o.lineItems.map((li) => ({
       id: li.id,
