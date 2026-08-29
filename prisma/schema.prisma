@@ -3488,6 +3488,23 @@ model OrderLineItem {
   /// count is known at quote time — so they stay false.
   usageEstimated  Boolean             @default(false) @map("usage_estimated")
 
+  /// The line this one hangs UNDER — partner ancillaries beneath the vehicle
+  /// they belong to (Wes 2026-08-28: "positioned as subitems to the EcoFlux
+  /// ... each vehicle may have different usage totals and it should be
+  /// vehicle specific").
+  ///
+  /// Keyed to the LINE, not the vehicle: two coaches on one order are two
+  /// lines, and the whole point is that each carries its own mileage and
+  /// generator hours. Keying to the vehicle would have let a job hold only
+  /// one set of usage numbers per unit type.
+  ///
+  /// Distinct from packageInstanceId, which is package PRICING — there the
+  /// header carries the price and members come through at rate 0. Here every
+  /// child is separately priced; only the position is inherited.
+  parentLineItemId String?            @map("parent_line_item_id")
+  parentLineItem   OrderLineItem?     @relation("LineItemChildren", fields: [parentLineItemId], references: [id], onDelete: Cascade)
+  childLineItems   OrderLineItem[]    @relation("LineItemChildren")
+
   /// Provenance for lines created from a partner's ancillary fee schedule
   /// (src/lib/sub-rentals/orderFees.ts). Deliberately its own column rather
   /// than a marker in `qualifier` — qualifier prints on the quote in italics,

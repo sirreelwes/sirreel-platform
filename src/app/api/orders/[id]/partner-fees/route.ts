@@ -38,7 +38,10 @@ async function loadOrder(orderId: string) {
       startDate: true,
       endDate: true,
       lineItems: {
-        select: { id: true, sortOrder: true, description: true, billableDays: true, partnerVehicleId: true },
+        select: {
+          id: true, sortOrder: true, description: true, type: true,
+          billableDays: true, partnerVehicleId: true, parentLineItemId: true,
+        },
         orderBy: { sortOrder: 'asc' },
       },
     },
@@ -88,20 +91,37 @@ export async function GET(req: NextRequest, { params }: Params) {
       orderBy: { name: 'asc' },
       select: { id: true, name: true, vehicleType: true },
     })
+    // The lines these fees can hang under. Only top-level vehicle/equipment
+    // lines — a fee cannot parent another fee.
+    const parents = order.lineItems
+      .filter((l) => !l.parentLineItemId && l.type !== 'FEE' && l.type !== 'DISCOUNT')
+      .map((l) => ({
+        id: l.id,
+        description: l.description,
+        hasFees: order.lineItems.some((c) => c.parentLineItemId === l.id),
+      }))
+
+    const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
     return NextResponse.json({
       candidates: vehicles
-        .map((v) => ({ ...v, onThisJob: onJobIds.has(v.id) }))
+        .map((v) => ({
+          ...v,
+          onThisJob: onJobIds.has(v.id),
+          // Pre-pair the unit with the line that names it, so the rep
+          // normally confirms rather than chooses twice.
+          suggestedParentId:
+            parents.find((pl) => norm(pl.description).includes(norm(v.name)))?.id ?? null,
+        }))
         .sort((a, b) => Number(b.onThisJob) - Number(a.onThisJob)),
+      parents,
       days: orderDays(order),
-      addedVehicleIds: [...new Set(order.lineItems.map((l) => l.partnerVehicleId).filter(Boolean))],
     })
   }
 
   const schedule = await partnerFeeSchedule(vehicleId)
   if (!schedule) return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
 
-  const already = order.lineItems.some((l) => l.partnerVehicleId === vehicleId)
-  return NextResponse.json({ ...schedule, days: orderDays(order), alreadyAdded: already })
+  return NextResponse.json({ ...schedule, days: orderDays(order) })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -111,10 +131,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = (await req.json().catch(() => ({}))) as {
     vehicleId?: unknown
+    parentLineItemId?: unknown
     estimates?: unknown
   }
   const vehicleId = typeof body.vehicleId === 'string' ? body.vehicleId : ''
   if (!vehicleId) return NextResponse.json({ error: 'vehicleId is required.' }, { status: 400 })
+  const parentLineItemId = typeof body.parentLineItemId === 'string' ? body.parentLineItemId : ''
+  if (!parentLineItemId) {
+    return NextResponse.json({ error: 'Choose which line these fees belong to.' }, { status: 400 })
+  }
 
   const estimates: FeeEstimates = {}
   if (body.estimates && typeof body.estimates === 'object') {
@@ -130,9 +155,18 @@ export async function POST(req: NextRequest, { params }: Params) {
   const schedule = await partnerFeeSchedule(vehicleId)
   if (!schedule) return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
 
-  if (order.lineItems.some((l) => l.partnerVehicleId === vehicleId)) {
+  const parent = order.lineItems.find((l) => l.id === parentLineItemId)
+  if (!parent) return NextResponse.json({ error: 'That line is not on this order.' }, { status: 404 })
+  if (parent.parentLineItemId) {
+    return NextResponse.json({ error: 'Fees attach to a unit line, not to another fee.' }, { status: 400 })
+  }
+
+  // Idempotency is per LINE, not per vehicle — two coaches on one order are
+  // two lines and each carries its own usage, so "already added" can only
+  // mean "already added to THIS line".
+  if (order.lineItems.some((l) => l.parentLineItemId === parentLineItemId)) {
     return NextResponse.json(
-      { error: `${schedule.vehicleName}'s fees are already on this order. Remove them first to re-add.` },
+      { error: `${parent.description} already has fees. Remove them first to re-add.` },
       { status: 409 },
     )
   }
@@ -148,10 +182,20 @@ export async function POST(req: NextRequest, { params }: Params) {
   // be wrong on the pick list and the invoice alike.
   const pickup = order.startDate ?? new Date()
   const ret = order.endDate ?? pickup
-  let sortOrder = (order.lineItems.at(-1)?.sortOrder ?? -1) + 1
 
-  const created = await prisma.$transaction(
-    lines.map((l) =>
+  // Children slot in directly BELOW their parent, so the reader sees the
+  // coach and its charges together. Everything after the parent shifts down
+  // by the number of children; without this the fees would sort to the
+  // bottom of the order and read as unrelated.
+  const shiftFrom = parent.sortOrder
+  let sortOrder = shiftFrom + 1
+
+  const created = await prisma.$transaction([
+    prisma.orderLineItem.updateMany({
+      where: { orderId, sortOrder: { gt: shiftFrom } },
+      data: { sortOrder: { increment: lines.length } },
+    }),
+    ...lines.map((l) =>
       prisma.orderLineItem.create({
         data: {
           orderId,
@@ -172,11 +216,12 @@ export async function POST(req: NextRequest, { params }: Params) {
           // Provenance, and the idempotency key the 409 above reads. NOT
           // `qualifier` — that prints on the quote.
           partnerVehicleId: vehicleId,
+          parentLineItemId,
         },
         select: { id: true, description: true, lineTotal: true, usageEstimated: true },
       }),
     ),
-  )
+  ])
 
   await recalcOrderTotals(orderId)
 
@@ -190,10 +235,14 @@ export async function POST(req: NextRequest, { params }: Params) {
         vehicleName: schedule.vehicleName,
         days,
         estimates,
-        lines: created.map((c) => ({ description: c.description, total: c.lineTotal.toString() })),
+        parentLineItemId,
+        parentDescription: parent.description,
+        lines: lines.map((l) => ({ description: l.description, total: l.lineTotal.toString() })),
       },
     },
   })
 
-  return NextResponse.json({ ok: true, added: created.length, lines: created })
+  // First element is the updateMany batch payload, not a line.
+  const createdLines = created.slice(1) as Array<{ id: string; description: string; lineTotal: unknown; usageEstimated: boolean }>
+  return NextResponse.json({ ok: true, added: createdLines.length, lines: createdLines })
 }

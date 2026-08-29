@@ -69,6 +69,7 @@ interface PortalData {
     categoryName: string | null;
     notes: string | null;
     usageEstimated: boolean;
+    isSubItem: boolean;
   }[];
   agreement: {
     status: string;
@@ -1055,7 +1056,7 @@ export default function JobPortalPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {data.lineItems.map((li) => (
-                <div key={li.id} className="py-2 flex items-start justify-between gap-3">
+                <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm text-gray-900 truncate">{li.description}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">

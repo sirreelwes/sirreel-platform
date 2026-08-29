@@ -37,6 +37,9 @@ type LineItem = {
   id: string;
   sortOrder: number;
   type: string;
+  /** Set on partner ancillaries — they render indented under their unit so
+   *  two coaches on one order each show their own mileage and hours. */
+  parentLineItemId?: string | null;
   description: string;
   rateType: string;
   rate: string;
@@ -2442,8 +2445,11 @@ export default function OrderDetailPage() {
               </td></tr>
             ) : (
               order.lineItems.map((li) => (
-                <tr key={li.id} className="border-b border-lt-hairline/50 hover:bg-lt-inner/30">
-                  <td className="px-6 py-3">
+                <tr key={li.id} className={`border-b border-lt-hairline/50 hover:bg-lt-inner/30${li.parentLineItemId ? " bg-lt-inner/20" : ""}`}>
+                  <td className={`py-3 ${li.parentLineItemId ? "pl-12 pr-6" : "px-6"}`}>
+                    {li.parentLineItemId && (
+                      <span className="text-lt-fg3 mr-1.5" aria-hidden="true">└</span>
+                    )}
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       li.type === "VEHICLE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
                       li.type === "DISCOUNT" ? "bg-chip-neutral-bg text-chip-neutral-fg" :

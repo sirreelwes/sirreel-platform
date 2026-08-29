@@ -22,6 +22,14 @@ interface Candidate {
   name: string
   vehicleType: string | null
   onThisJob: boolean
+  /** The order line naming this unit, if one does — the rep confirms
+   *  rather than choosing twice. */
+  suggestedParentId: string | null
+}
+interface ParentLine {
+  id: string
+  description: string
+  hasFees: boolean
 }
 interface Fee {
   id: string
@@ -46,13 +54,13 @@ export default function PartnerFeesModal({
   onAdded: () => void
 }) {
   const [candidates, setCandidates] = useState<Candidate[]>([])
-  const [addedIds, setAddedIds] = useState<string[]>([])
+  const [parents, setParents] = useState<ParentLine[]>([])
+  const [parentId, setParentId] = useState<string>('')
   const [vehicleId, setVehicleId] = useState<string>('')
   const [vehicleName, setVehicleName] = useState<string>('')
   const [fees, setFees] = useState<Fee[]>([])
   const [days, setDays] = useState(1)
   const [estimates, setEstimates] = useState<Record<string, string>>({})
-  const [alreadyAdded, setAlreadyAdded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,10 +76,16 @@ export default function PartnerFeesModal({
         if (!alive) return
         if (!r.ok) { setError(j.error ?? 'Could not load partner units.'); return }
         setCandidates(j.candidates ?? [])
-        setAddedIds(j.addedVehicleIds ?? [])
+        setParents(j.parents ?? [])
         setDays(j.days ?? 1)
         const first = (j.candidates ?? []).find((c: Candidate) => c.onThisJob) ?? (j.candidates ?? [])[0]
-        if (first) setVehicleId(first.id)
+        if (first) {
+          setVehicleId(first.id)
+          const suggested = first.suggestedParentId
+            ?? (j.parents ?? []).find((pl: ParentLine) => !pl.hasFees)?.id
+            ?? (j.parents ?? [])[0]?.id
+          if (suggested) setParentId(suggested)
+        }
       } catch {
         if (alive) setError('Could not load partner units.')
       } finally {
@@ -90,7 +104,6 @@ export default function PartnerFeesModal({
       setFees(j.fees ?? [])
       setDays(j.days ?? 1)
       setVehicleName(j.vehicleName ?? '')
-      setAlreadyAdded(!!j.alreadyAdded)
       setEstimates({})
     } catch {
       setError('Could not load fees.')
@@ -98,6 +111,15 @@ export default function PartnerFeesModal({
   }, [orderId])
 
   useEffect(() => { if (vehicleId) void loadSchedule(vehicleId) }, [vehicleId, loadSchedule])
+
+  // Follow the unit's own suggested line when the rep switches units.
+  useEffect(() => {
+    const c = candidates.find((x) => x.id === vehicleId)
+    if (c?.suggestedParentId) setParentId(c.suggestedParentId)
+  }, [vehicleId, candidates])
+
+  const parent = parents.find((pl) => pl.id === parentId) ?? null
+  const alreadyAdded = !!parent?.hasFees
 
   const dayFees = fees.filter((f) => !f.metered)
   const meteredFees = fees.filter((f) => f.metered)
@@ -124,7 +146,7 @@ export default function PartnerFeesModal({
       const r = await fetch(`/api/orders/${orderId}/partner-fees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vehicleId, estimates: payload }),
+        body: JSON.stringify({ vehicleId, parentLineItemId: parentId, estimates: payload }),
       })
       const j = await r.json()
       if (!r.ok) { setError(j.error ?? 'Could not add the fees.'); return }
@@ -152,6 +174,25 @@ export default function PartnerFeesModal({
             <p className="text-sm text-gray-500">No subcontracted units on the roster yet.</p>
           ) : (
             <>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-1" htmlFor="pf-parent">
+                  Add these fees under
+                </label>
+                <select id="pf-parent" value={parentId} onChange={(e) => setParentId(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white">
+                  <option value="">Choose a line…</option>
+                  {parents.map((pl) => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.description}{pl.hasFees ? ' — already has fees' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Fees sit under the unit they belong to, so two coaches on one order each carry
+                  their own mileage and hours.
+                </p>
+              </div>
+
               {candidates.length > 1 && (
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-1" htmlFor="pf-vehicle">
@@ -167,7 +208,6 @@ export default function PartnerFeesModal({
                       <option key={c.id} value={c.id}>
                         {c.name}{c.vehicleType ? ` — ${c.vehicleType}` : ''}
                         {c.onThisJob ? ' (on this job)' : ''}
-                        {addedIds.includes(c.id) ? ' — fees already added' : ''}
                       </option>
                     ))}
                   </select>
@@ -176,8 +216,8 @@ export default function PartnerFeesModal({
 
               {alreadyAdded && (
                 <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  {vehicleName}&apos;s fees are already on this order. Remove those lines before re-adding,
-                  so the charges can&apos;t double.
+                  {parent?.description} already has fees. Remove those lines before re-adding, so
+                  the charges can&apos;t double.
                 </div>
               )}
 
@@ -253,7 +293,7 @@ export default function PartnerFeesModal({
             </button>
             <button
               onClick={submit}
-              disabled={saving || loading || alreadyAdded || total <= 0}
+              disabled={saving || loading || alreadyAdded || !parentId || total <= 0}
               className="px-4 py-1.5 text-sm font-semibold rounded bg-gray-900 text-white hover:bg-black disabled:opacity-40"
             >
               {saving ? 'Adding…' : 'Add to order'}

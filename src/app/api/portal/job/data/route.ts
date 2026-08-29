@@ -145,6 +145,7 @@ export async function GET(req: NextRequest) {
             // actually read the order.
             notes: true,
             usageEstimated: true,
+            parentLineItemId: true,
             inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
@@ -381,6 +382,7 @@ export async function GET(req: NextRequest) {
       categoryName: categoryNameForLine(li),
       notes: li.notes,
       usageEstimated: li.usageEstimated,
+      isSubItem: !!li.parentLineItemId,
     })),
     paperwork: {
       quotePdfUrl: order.quotePdfUrl,
