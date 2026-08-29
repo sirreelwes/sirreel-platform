@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -32,6 +32,10 @@ import {
   lineEditLockReason as lineEditLockReasonFn,
 } from "@/lib/orders/editability";
 import { isStageLineItem } from "@/lib/orders/stageLines";
+import {
+  groupLineItemsByDepartment,
+  lineItemSectionLabel,
+} from "@/lib/orders/lineItemDepartments";
 
 type LineItem = {
   id: string;
@@ -475,6 +479,16 @@ export default function OrderDetailPage() {
   // pass it to pickRate (daily vs weekly fallback). The inline editor
   // doesn't expose a rateType toggle — keep the existing value.
   const [editRateType, setEditRateType] = useState<string>("DAILY");
+  // Inline-save in flight. Before this the Save control was a bare text
+  // link with no pressed/working state, so a slow PUT read as "nothing
+  // happened" and reps re-clicked (or assumed there was no save at all).
+  const [savingLineId, setSavingLineId] = useState<string | null>(null);
+  // Line-item grouping. Department is the default because that's how the
+  // client-facing Quote PDF is laid out — a rep working through client
+  // comments should be reading the same document they sent. "Entry
+  // order" (sortOrder) is the old behaviour, kept for the rare case
+  // where the build sequence is what you're checking.
+  const [lineGrouping, setLineGrouping] = useState<'department' | 'entry'>('department');
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
   // Fee-catalog picker state (liType === "FEE"). The picker lists
@@ -1672,7 +1686,14 @@ export default function OrderDetailPage() {
     }
   };
 
+  const cancelEditLine = () => {
+    setEditingLineId(null);
+    setSavingLineId(null);
+  };
+
   const saveEditLine = async (lineId: string) => {
+    if (savingLineId) return;
+    setSavingLineId(lineId);
     const body: Record<string, unknown> = {
       rate: parseFloat(editRate) || 0,
       quantity: parseInt(editQty) || 1,
@@ -1708,10 +1729,26 @@ export default function OrderDetailPage() {
       // simplest "tell the rep what went wrong" path that doesn't
       // require a toast component on this surface.
       alert(data.reason || data.error || `Save failed (HTTP ${res.status})`);
+      setSavingLineId(null);
       return;
     }
+    setSavingLineId(null);
     setEditingLineId(null);
     fetchOrder();
+  };
+
+  /** Enter saves, Escape cancels — from any field in the edit row. The
+   *  description combobox handles its own Enter (pick the highlighted
+   *  hit) and stops propagation, so this only fires from rate/qty/days
+   *  and from the row itself. */
+  const editRowKeyDown = (e: React.KeyboardEvent, lineId: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveEditLine(lineId);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEditLine();
+    }
   };
 
   // Frictionless remove + undo toast. The line we're about to delete
@@ -1751,6 +1788,20 @@ export default function OrderDetailPage() {
     });
   };
 
+  /**
+   * Line-item sections. Department mode mirrors the Quote PDF exactly
+   * (kit pieces stay pinned under their parent, standalone fees close
+   * the list); entry mode is a single unlabeled section holding the
+   * server's sortOrder, i.e. the pre-2026-08-29 behaviour.
+   */
+  const lineItemSections = useMemo(() => {
+    const items = order?.lineItems ?? [];
+    if (lineGrouping === 'entry') {
+      return items.length > 0 ? [{ key: 'ENTRY' as const, items }] : [];
+    }
+    return groupLineItemsByDepartment(items);
+  }, [order?.lineItems, lineGrouping]);
+
   if (loading || !order) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -1758,6 +1809,253 @@ export default function OrderDetailPage() {
       </div>
     );
   }
+
+  /**
+   * One line-item row. Extracted from the tbody so the flat (entry-order)
+   * and department-grouped renderings share exactly one row definition —
+   * the two must never drift.
+   */
+  const renderLineRow = (li: LineItem) => (
+    <tr
+      key={li.id}
+      onKeyDown={editingLineId === li.id ? (e) => editRowKeyDown(e, li.id) : undefined}
+      className={
+        editingLineId === li.id
+          // The row being edited has to read as a distinct, unfinished
+          // state — otherwise an in-progress edit is indistinguishable
+          // from a saved row and gets abandoned by navigating away.
+          ? "border-b border-lt-hairline/50 bg-amber-500/10 outline outline-1 -outline-offset-1 outline-amber-500/40"
+          : `border-b border-lt-hairline/50 hover:bg-lt-inner/30${li.parentLineItemId ? " bg-lt-inner/20" : ""}`
+      }
+    >
+    <td className={`py-3 ${li.parentLineItemId ? "pl-12 pr-6" : "px-6"}`}>
+      {li.parentLineItemId && (
+        <span className="text-lt-fg3 mr-1.5" aria-hidden="true">└</span>
+      )}
+      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+        li.type === "VEHICLE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+        li.type === "DISCOUNT" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+        li.type === "FEE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+        "bg-lt-inner text-lt-fg2"
+      }`}>{li.type}</span>
+      {li.autoKitPieceId && (
+        <span
+          className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg"
+          title="Included accessory — quantity is derived from the parent line and re-derived whenever it changes"
+        >
+          incl
+        </span>
+      )}
+    </td>
+    {editingLineId === li.id ? (
+      <td className="px-4 py-2">
+        {/* Phase 1 catalog re-pick. EQUIPMENT/EXPENDABLE/
+            VEHICLE rows get the live catalog combobox;
+            DISCOUNT/FEE stay plain text since they aren't
+            backed by a catalog product. Picking a hit
+            writes description / department / catalog FK /
+            rate via applyEditMatch; clearing the binding
+            drops the FK without erasing the typed text. */}
+        {li.type === 'DISCOUNT' || li.type === 'FEE' ? (
+          <input
+            type="text"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            placeholder="Line description"
+            className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+          />
+        ) : (
+          <LineItemDescriptionCombobox
+            companyId={order?.company?.id ?? null}
+            value={editDesc}
+            onChange={(next) => setEditDesc(next)}
+            onPickCatalog={(hit) => applyEditMatch(hit)}
+            catalogBinding={(() => {
+              const bid = editCatalogType === 'INVENTORY' ? editInvItemId
+                : editCatalogType === 'ASSET_CATEGORY' ? editAssetCatId
+                : null;
+              if (!bid || !editCatalogType || !editMatchedName) return null;
+              return { id: bid, type: editCatalogType, name: editMatchedName };
+            })()}
+            onClearCatalog={() => {
+              setEditInvItemId(null);
+              setEditAssetCatId(null);
+              setEditCatalogType(null);
+              setEditMatchedName(null);
+            }}
+            // Packages don't apply inline (would need row
+            // expansion) — scope them out of the dropdown.
+            types={['INVENTORY', 'ASSET_CATEGORY']}
+            placeholder="Search catalog to re-link, or edit description"
+            hideCustomChip
+          />
+        )}
+        {/* Department selector — manual override on top
+            of the catalog-derived value. Server's PUT
+            honors the explicit dept + runs the
+            pick-list sync when the dept crosses the
+            WAREHOUSE boundary (commit e29761c). */}
+        <select
+          value={editDept}
+          onChange={(e) => setEditDept(e.target.value as LineItemDepartment)}
+          className="mt-1 w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-[11px] text-lt-fg2"
+          aria-label="Department"
+        >
+          <option value="VEHICLES">Vehicles</option>
+          <option value="COMMUNICATIONS">Communications</option>
+          <option value="STAGES">Stages</option>
+          <option value="GE">G&amp;E</option>
+          <option value="PRO_SUPPLIES">Pro Supplies</option>
+          <option value="EXPENDABLES">Expendables</option>
+          <option value="ART">Art</option>
+        </select>
+      </td>
+    ) : (
+      <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+    )}
+    <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
+      {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : `${fmtDate(li.pickupDate)} - ${fmtDate(li.returnDate)}`}
+    </td>
+    {editingLineId === li.id ? (
+      <>
+        <td className="px-4 py-2">
+          <div className="flex items-center gap-1">
+            <CurrencyInput
+              value={Number(editRate) || 0}
+              onChange={(next) => setEditRate(next === 0 ? '' : String(next))}
+              min={0}
+              className="w-24"
+              inputClassName="px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-right font-mono"
+              ariaLabel="Edit rate"
+            />
+            <span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+          </div>
+        </td>
+        <td className="px-4 py-2 text-center">
+          <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
+            className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
+        </td>
+        <td className="px-4 py-2 text-center">
+          <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
+            placeholder="auto"
+            className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
+        </td>
+        <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
+        <td className="px-4 py-2 whitespace-nowrap text-right">
+          {/* Save used to be a bare text link the same size and
+              weight as "Edit" / "Sub-rent…" on every other row —
+              reps genuinely could not find it and assumed the
+              inline editor had no save at all. It's a filled
+              button now, with Enter as the keyboard path. */}
+          <button
+            onClick={() => saveEditLine(li.id)}
+            disabled={savingLineId === li.id}
+            title="Save this line (Enter)"
+            className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold mr-1.5"
+          >
+            {savingLineId === li.id ? "Saving…" : "Save"}
+          </button>
+          <button
+            onClick={cancelEditLine}
+            disabled={savingLineId === li.id}
+            title="Discard changes (Esc)"
+            className="px-2 py-1 rounded text-lt-fg3 hover:text-lt-fg2 hover:bg-lt-inner text-xs disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </td>
+      </>
+    ) : (
+      <>
+        <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
+          {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+        </td>
+        <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
+        <td className="px-4 py-3 text-center text-lt-fg2">
+          {(() => {
+            const billed = li.billableDays ?? li.computedDays;
+            if (billed == null) return "--";
+            // Billable under the calendar span is normal (weekly
+            // cap, half-days) — surface it rather than hide it.
+            const span = li.computedDays;
+            return span != null && span !== billed ? (
+              <span title={`${span} calendar days \u00b7 billing ${billed}`}>
+                {billed}
+                <span className="text-lt-fg3 text-[10px] ml-0.5">/{span}</span>
+              </span>
+            ) : (
+              billed
+            );
+          })()}
+        </td>
+        <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
+        <td className="px-4 py-3 whitespace-nowrap text-right">
+          {(() => {
+            // (Phase 2) Per-row editability check. With
+            // VEHICLES + STAGES now allowed post-BOOKED,
+            // the only no-edit state is when the order
+            // itself is locked (INVOICED / CLOSED /
+            // CANCELLED). The helper still drives the
+            // gate so the UI can't drift from the API.
+            const lineEditable = isLineItemEditableFn(
+              order.status as OrderStatus,
+              li.department,
+            );
+            const lockReason = lineEditLockReasonFn(
+              order.status as OrderStatus,
+              li.department,
+            ) ?? 'Order is locked — line items can\u2019t be edited directly. Re-quote or void to make changes.';
+            // Sub-rent action — internal-only, gated on
+            // canManageSubRentals (AGENT/MANAGER/ADMIN).
+            // EQUIPMENT/EXPENDABLE lines only; vehicles
+            // and discounts/fees aren't sub-rented.
+            const canSubRent = canManageSubRentals
+              && (li.type === 'EQUIPMENT' || li.type === 'EXPENDABLE')
+            return (
+              <>
+                {lineEditable && (
+                  <button
+                    onClick={() => startEditLine(li)}
+                    className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canSubRent && (
+                  <button
+                    onClick={() => setSubRentalLine({
+                      orderId,
+                      orderLineItemId: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                      pickupDate: li.startDate,
+                      returnDate: li.endDate,
+                    })}
+                    title="Sub-rent this line from a vendor (internal — never on client docs)"
+                    className="text-lt-fg3 hover:text-amber-600 text-xs mr-2"
+                  >
+                    Sub-rent…
+                  </button>
+                )}
+                <span className="inline-block align-middle">
+                  <LineItemRowActions
+                    onRemove={() => { void deleteLineItem(li); }}
+                    editability={{
+                      canEdit: lineEditable,
+                      lockedReason: lockReason,
+                    }}
+                  />
+                </span>
+              </>
+            );
+          })()}
+        </td>
+      </>
+    )}
+    </tr>
+  );
+
 
   const actions = STATUS_ACTIONS[order.status] || [];
   // (Phase 1 step 4 → Phase 2) Gate widened to the full editable
@@ -2190,7 +2488,30 @@ export default function OrderDetailPage() {
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
-          <h2 className="text-lg font-semibold text-lt-fg">Line Items</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-lt-fg">Line Items</h2>
+            {/* Grouping. Department is the default so the page matches the
+                Quote PDF the client is commenting on. */}
+            <div className="inline-flex rounded-lg border border-lt-hairline overflow-hidden text-xs">
+              {([
+                { key: 'department' as const, label: 'By department' },
+                { key: 'entry' as const, label: 'Entry order' },
+              ]).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setLineGrouping(opt.key)}
+                  aria-pressed={lineGrouping === opt.key}
+                  className={`px-2.5 py-1 transition-colors ${
+                    lineGrouping === opt.key
+                      ? 'bg-lt-fg text-white font-medium'
+                      : 'text-lt-fg3 hover:text-lt-fg2 hover:bg-lt-inner'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {isEditable && (
             <div className="flex items-center gap-2">
               {/* Partner ancillaries (driver, mileage, generator, supplies) —
@@ -2461,215 +2782,26 @@ export default function OrderDetailPage() {
                 No line items yet. Click \"+ Add Item\" to start building this order.
               </td></tr>
             ) : (
-              order.lineItems.map((li) => (
-                <tr key={li.id} className={`border-b border-lt-hairline/50 hover:bg-lt-inner/30${li.parentLineItemId ? " bg-lt-inner/20" : ""}`}>
-                  <td className={`py-3 ${li.parentLineItemId ? "pl-12 pr-6" : "px-6"}`}>
-                    {li.parentLineItemId && (
-                      <span className="text-lt-fg3 mr-1.5" aria-hidden="true">└</span>
-                    )}
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      li.type === "VEHICLE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      li.type === "DISCOUNT" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      li.type === "FEE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      "bg-lt-inner text-lt-fg2"
-                    }`}>{li.type}</span>
-                    {li.autoKitPieceId && (
-                      <span
-                        className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg"
-                        title="Included accessory — quantity is derived from the parent line and re-derived whenever it changes"
-                      >
-                        incl
-                      </span>
-                    )}
-                  </td>
-                  {editingLineId === li.id ? (
-                    <td className="px-4 py-2">
-                      {/* Phase 1 catalog re-pick. EQUIPMENT/EXPENDABLE/
-                          VEHICLE rows get the live catalog combobox;
-                          DISCOUNT/FEE stay plain text since they aren't
-                          backed by a catalog product. Picking a hit
-                          writes description / department / catalog FK /
-                          rate via applyEditMatch; clearing the binding
-                          drops the FK without erasing the typed text. */}
-                      {li.type === 'DISCOUNT' || li.type === 'FEE' ? (
-                        <input
-                          type="text"
-                          value={editDesc}
-                          onChange={(e) => setEditDesc(e.target.value)}
-                          placeholder="Line description"
-                          className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
-                        />
-                      ) : (
-                        <LineItemDescriptionCombobox
-                          companyId={order?.company?.id ?? null}
-                          value={editDesc}
-                          onChange={(next) => setEditDesc(next)}
-                          onPickCatalog={(hit) => applyEditMatch(hit)}
-                          catalogBinding={(() => {
-                            const bid = editCatalogType === 'INVENTORY' ? editInvItemId
-                              : editCatalogType === 'ASSET_CATEGORY' ? editAssetCatId
-                              : null;
-                            if (!bid || !editCatalogType || !editMatchedName) return null;
-                            return { id: bid, type: editCatalogType, name: editMatchedName };
-                          })()}
-                          onClearCatalog={() => {
-                            setEditInvItemId(null);
-                            setEditAssetCatId(null);
-                            setEditCatalogType(null);
-                            setEditMatchedName(null);
-                          }}
-                          // Packages don't apply inline (would need row
-                          // expansion) — scope them out of the dropdown.
-                          types={['INVENTORY', 'ASSET_CATEGORY']}
-                          placeholder="Search catalog to re-link, or edit description"
-                          hideCustomChip
-                        />
-                      )}
-                      {/* Department selector — manual override on top
-                          of the catalog-derived value. Server's PUT
-                          honors the explicit dept + runs the
-                          pick-list sync when the dept crosses the
-                          WAREHOUSE boundary (commit e29761c). */}
-                      <select
-                        value={editDept}
-                        onChange={(e) => setEditDept(e.target.value as LineItemDepartment)}
-                        className="mt-1 w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-[11px] text-lt-fg2"
-                        aria-label="Department"
-                      >
-                        <option value="VEHICLES">Vehicles</option>
-                        <option value="COMMUNICATIONS">Communications</option>
-                        <option value="STAGES">Stages</option>
-                        <option value="GE">G&amp;E</option>
-                        <option value="PRO_SUPPLIES">Pro Supplies</option>
-                        <option value="EXPENDABLES">Expendables</option>
-                        <option value="ART">Art</option>
-                      </select>
-                    </td>
-                  ) : (
-                    <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+              lineItemSections.map((section) => (
+                <Fragment key={section.key}>
+                  {/* Department band. Suppressed in entry-order mode,
+                      where there is exactly one unlabeled section. */}
+                  {section.key !== 'ENTRY' && (
+                    <tr className="bg-lt-inner/60 border-y border-lt-hairline">
+                      <td colSpan={6} className="px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lt-fg2">
+                        {lineItemSectionLabel(section.key)}
+                        <span className="ml-2 font-normal normal-case tracking-normal text-lt-fg3">
+                          {section.items.length} {section.items.length === 1 ? 'line' : 'lines'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-1.5 text-right text-[11px] font-semibold text-lt-fg2 font-mono">
+                        {fmt(section.items.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0))}
+                      </td>
+                      <td className="px-4 py-1.5" />
+                    </tr>
                   )}
-                  <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
-                    {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : `${fmtDate(li.pickupDate)} - ${fmtDate(li.returnDate)}`}
-                  </td>
-                  {editingLineId === li.id ? (
-                    <>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-1">
-                          <CurrencyInput
-                            value={Number(editRate) || 0}
-                            onChange={(next) => setEditRate(next === 0 ? '' : String(next))}
-                            min={0}
-                            className="w-24"
-                            inputClassName="px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-right font-mono"
-                            ariaLabel="Edit rate"
-                          />
-                          <span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
-                          className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
-                          placeholder="auto"
-                          className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
-                      </td>
-                      <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <button onClick={() => saveEditLine(li.id)} className="text-chip-good-fg hover:opacity-70 text-xs mr-2">Save</button>
-                        <button onClick={() => setEditingLineId(null)} className="text-lt-fg3 hover:text-lt-fg2 text-xs">X</button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
-                        {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
-                      <td className="px-4 py-3 text-center text-lt-fg2">
-                        {(() => {
-                          const billed = li.billableDays ?? li.computedDays;
-                          if (billed == null) return "--";
-                          // Billable under the calendar span is normal (weekly
-                          // cap, half-days) — surface it rather than hide it.
-                          const span = li.computedDays;
-                          return span != null && span !== billed ? (
-                            <span title={`${span} calendar days \u00b7 billing ${billed}`}>
-                              {billed}
-                              <span className="text-lt-fg3 text-[10px] ml-0.5">/{span}</span>
-                            </span>
-                          ) : (
-                            billed
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
-                        {(() => {
-                          // (Phase 2) Per-row editability check. With
-                          // VEHICLES + STAGES now allowed post-BOOKED,
-                          // the only no-edit state is when the order
-                          // itself is locked (INVOICED / CLOSED /
-                          // CANCELLED). The helper still drives the
-                          // gate so the UI can't drift from the API.
-                          const lineEditable = isLineItemEditableFn(
-                            order.status as OrderStatus,
-                            li.department,
-                          );
-                          const lockReason = lineEditLockReasonFn(
-                            order.status as OrderStatus,
-                            li.department,
-                          ) ?? 'Order is locked — line items can\u2019t be edited directly. Re-quote or void to make changes.';
-                          // Sub-rent action — internal-only, gated on
-                          // canManageSubRentals (AGENT/MANAGER/ADMIN).
-                          // EQUIPMENT/EXPENDABLE lines only; vehicles
-                          // and discounts/fees aren't sub-rented.
-                          const canSubRent = canManageSubRentals
-                            && (li.type === 'EQUIPMENT' || li.type === 'EXPENDABLE')
-                          return (
-                            <>
-                              {lineEditable && (
-                                <button
-                                  onClick={() => startEditLine(li)}
-                                  className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
-                                >
-                                  Edit
-                                </button>
-                              )}
-                              {canSubRent && (
-                                <button
-                                  onClick={() => setSubRentalLine({
-                                    orderId,
-                                    orderLineItemId: li.id,
-                                    description: li.description,
-                                    quantity: li.quantity,
-                                    rate: Number(li.rate),
-                                    pickupDate: li.startDate,
-                                    returnDate: li.endDate,
-                                  })}
-                                  title="Sub-rent this line from a vendor (internal — never on client docs)"
-                                  className="text-lt-fg3 hover:text-amber-600 text-xs mr-2"
-                                >
-                                  Sub-rent…
-                                </button>
-                              )}
-                              <span className="inline-block align-middle">
-                                <LineItemRowActions
-                                  onRemove={() => { void deleteLineItem(li); }}
-                                  editability={{
-                                    canEdit: lineEditable,
-                                    lockedReason: lockReason,
-                                  }}
-                                />
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </td>
-                    </>
-                  )}
-                </tr>
+                  {section.items.map((li) => renderLineRow(li))}
+                </Fragment>
               ))
             )}
           </tbody>

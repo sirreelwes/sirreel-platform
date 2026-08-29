@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
+import { LINE_ITEM_DEPARTMENT_ORDER } from '@/lib/orders/lineItemDepartments'
 
 // Hyphenation is registered ONCE in lib/pdf/hyphenation (it's a global,
 // last-registration-wins setting — see that module for the policy and
@@ -160,17 +161,10 @@ const DEPT_LABELS: Record<Department, string> = {
   ART: 'Art Department',
 }
 
-// Section ordering — mirrors the new-quote builder grouping so the PDF
-// flows in the same order the agent saw on screen.
-const DEPT_ORDER: Department[] = [
-  'VEHICLES',
-  'GE',
-  'COMMUNICATIONS',
-  'STAGES',
-  'PRO_SUPPLIES',
-  'EXPENDABLES',
-  'ART',
-]
+// Section ordering — shared with the internal order-detail table so the
+// PDF the client commented on and the page the rep edits flow in the
+// same order. Single source: src/lib/orders/lineItemDepartments.ts.
+const DEPT_ORDER: readonly Department[] = LINE_ITEM_DEPARTMENT_ORDER
 
 // ─────────────────────────────────────────────────────────────────────
 // Formatting helpers
