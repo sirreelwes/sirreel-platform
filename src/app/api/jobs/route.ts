@@ -244,7 +244,13 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      // Headroom above the live-job count so the list never silently
+      // truncates. Archiving dormant jobs (scripts/archive-dormant-jobs.ts)
+      // is what keeps the number down — 250 live jobs became 202 on
+      // 2026-08-29 — and this cap is the backstop, not the mechanism. If
+      // it ever binds again, run the sweep rather than raising it: a
+      // truncated list gives no sign it was truncated.
+      take: 300,
     })
 
     // Kanban manual placements (side table, presentation-only). One
