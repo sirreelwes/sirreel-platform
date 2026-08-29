@@ -3467,6 +3467,25 @@ model OrderLineItem {
   qualifier       String?             @db.Text
   notes           String?             @db.Text
 
+  /// This line was quoted from a REP'S ESTIMATE of usage, not a known
+  /// quantity — partner mileage and generator hours, where nobody knows the
+  /// number until the job runs (Wes 2026-08-28). The client-facing wording
+  /// lives in `notes` and prints under the description on the quote; this
+  /// flag is the machine-readable half, so invoicing can find every line
+  /// that still needs an actual instead of grepping small print.
+  ///
+  /// Day-rate ancillaries (driver, supplies) are NOT estimated — the day
+  /// count is known at quote time — so they stay false.
+  usageEstimated  Boolean             @default(false) @map("usage_estimated")
+
+  /// Provenance for lines created from a partner's ancillary fee schedule
+  /// (src/lib/sub-rentals/orderFees.ts). Deliberately its own column rather
+  /// than a marker in `qualifier` — qualifier prints on the quote in italics,
+  /// so a provenance tag parked there would show a client an internal id.
+  /// Also the idempotency key: adding the same unit's fees twice is refused,
+  /// because a duplicated $550 driver fee on a sent quote is invisible.
+  partnerVehicleId String?            @map("partner_vehicle_id")
+
   // Package grouping. When a package is selected on a line, one
   // header line + N member lines share a single `packageInstanceId`
   // (cuid minted at add-time). The header carries the package price;

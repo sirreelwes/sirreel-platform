@@ -139,6 +139,12 @@ export async function GET(req: NextRequest) {
             billableDays: true,
             startDate: true,
             endDate: true,
+            // Client-facing small print. Carries the partner-fee estimate
+            // wording ("actual usage will be invoiced"), which the client must
+            // see here as well as on the quote PDF — the portal is where they
+            // actually read the order.
+            notes: true,
+            usageEstimated: true,
             inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
@@ -373,6 +379,8 @@ export async function GET(req: NextRequest) {
       endDate: li.endDate,
       inventoryCode: catalogClientCode(li),
       categoryName: categoryNameForLine(li),
+      notes: li.notes,
+      usageEstimated: li.usageEstimated,
     })),
     paperwork: {
       quotePdfUrl: order.quotePdfUrl,

@@ -67,6 +67,8 @@ interface PortalData {
     days: number | null;
     inventoryCode: string | null;
     categoryName: string | null;
+    notes: string | null;
+    usageEstimated: boolean;
   }[];
   agreement: {
     status: string;
@@ -1059,8 +1061,19 @@ export default function JobPortalPage() {
                     <div className="text-[11px] text-gray-500 mt-0.5">
                       {li.categoryName && <span>{li.categoryName} · </span>}
                       Qty {li.quantity}
-                      {li.days != null && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
+                      {/* FLAT lines (partner ancillaries, one-off charges) bill
+                          one period, not one day — printing "1 day" beside a
+                          mileage charge reads as a daily rate. */}
+                      {li.days != null && li.rateType !== 'FLAT' && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
                     </div>
+                    {/* Client-facing small print. On a partner ancillary this
+                        is the estimate wording — the client has to see it
+                        here, not only on the quote PDF. */}
+                    {li.notes && (
+                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-gray-500'}`}>
+                        {li.notes}
+                      </div>
+                    )}
                   </div>
                   <div className="text-[11px] text-gray-500 text-right flex-shrink-0">
                     {fmtCurrency(li.rate)}

@@ -8,6 +8,7 @@ import { getPermissions } from "@/lib/permissions";
 import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
+import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -497,6 +498,7 @@ export default function OrderDetailPage() {
 
   // Delivery/pickup marking — local toggles seeded from the order; dirty until
   // Save. Task creation is a later step; this only flips the flags.
+  const [showPartnerFees, setShowPartnerFees] = useState(false);
   const [deliveryRequested, setDeliveryRequested] = useState(false);
   const [pickupRequested, setPickupRequested] = useState(false);
   const [dispatchDirty, setDispatchDirty] = useState(false);
@@ -2123,15 +2125,32 @@ export default function OrderDetailPage() {
         onChanged={() => void fetchOrder()}
       />
 
+      {showPartnerFees && (
+        <PartnerFeesModal
+          orderId={orderId}
+          onClose={() => setShowPartnerFees(false)}
+          onAdded={fetchOrder}
+        />
+      )}
+
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
           <h2 className="text-lg font-semibold text-lt-fg">Line Items</h2>
           {isEditable && (
-            <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
-              className="px-3 py-1.5 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
-              {showAddForm ? "Cancel" : "+ Add Item"}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Partner ancillaries (driver, mileage, generator, supplies) —
+                  without this they never reach the order and the quote goes
+                  out short by more than the vehicle line itself. */}
+              <button onClick={() => setShowPartnerFees(true)}
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline border border-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
+                + Partner fees
+              </button>
+              <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
+                className="px-3 py-1.5 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
+                {showAddForm ? "Cancel" : "+ Add Item"}
+              </button>
+            </div>
           )}
         </div>
 
