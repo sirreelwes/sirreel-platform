@@ -27,9 +27,14 @@
  *
  * Idempotent: items are matched by `code` and kits by (parent, piece),
  * so a re-run updates rather than duplicates. Nothing is deleted.
+ *
+ * A --write run journals every id it CREATED to tmp/walkie-kit-seed-*.json.
+ * That file is the only safe basis for an undo: deleting these rows by
+ * shape (say, "every kit piece on a CP200") would take out anything a
+ * human configured in the drawer afterwards.
  */
 
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import path from 'path'
 
 const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
@@ -51,8 +56,16 @@ function numArg(flag: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-// The three radios the kit hangs off. Codes, not names — names drift.
-const RADIO_CODES = ['103733', '104387', 'CP200S']
+// The radios the kit hangs off. Codes, not names — names drift.
+//
+// CP200S (the "Sub" radio) is deliberately NOT here. It has zero on hand
+// and no replacement cost, which reads as a sub-rental placeholder rather
+// than stock we own — and a sub'd radio most likely arrives with the
+// partner's own batteries, so auto-adding OURS to that order would send
+// gear nobody asked for. Pending Wes's call; `--include-sub` adds it, and
+// the script is idempotent so that is a one-line re-run.
+const RADIO_CODES = ['103733', '104387']
+if (args.includes('--include-sub')) RADIO_CODES.push('CP200S')
 
 const PIECES = [
   {
@@ -78,6 +91,9 @@ const PIECES = [
     kit: { qtyPer: 0.5, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 },
   },
 ]
+
+/** Ids this run brought into existence — never ids it merely updated. */
+const created = { items: [] as Array<{ id: string; code: string }>, kitPieces: [] as Array<{ id: string; parentCode: string; pieceCode: string }> }
 
 async function main() {
   const radios = await prisma.inventoryItem.findMany({
@@ -146,9 +162,16 @@ async function main() {
           select: { id: true },
         })
       : await prisma.inventoryItem.create({ data, select: { id: true } })
+    if (!existing) created.items.push({ id: item.id, code: piece.code })
 
     for (const radio of radios) {
-      await prisma.inventoryKitPiece.upsert({
+      const priorKit = await prisma.inventoryKitPiece.findUnique({
+        where: {
+          parentItemId_pieceItemId: { parentItemId: radio.id, pieceItemId: item.id },
+        },
+        select: { id: true },
+      })
+      const kitRow = await prisma.inventoryKitPiece.upsert({
         where: {
           parentItemId_pieceItemId: { parentItemId: radio.id, pieceItemId: item.id },
         },
@@ -167,9 +190,22 @@ async function main() {
           rounding: piece.kit.rounding,
           minQty: piece.kit.minQty,
         },
+        select: { id: true },
       })
-      console.log(`        → attached to ${radio.code}`)
+      if (!priorKit) {
+        created.kitPieces.push({ id: kitRow.id, parentCode: radio.code, pieceCode: piece.code })
+      }
+      console.log(`        → attached to ${radio.code}${priorKit ? ' (updated)' : ''}`)
     }
+  }
+
+  if (WRITE && (created.items.length > 0 || created.kitPieces.length > 0)) {
+    mkdirSync(path.join(process.cwd(), 'tmp'), { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const journal = path.join(process.cwd(), 'tmp', `walkie-kit-seed-${stamp}.json`)
+    writeFileSync(journal, JSON.stringify({ createdAt: stamp, ...created }, null, 2))
+    console.log(`\nJournal: ${journal}`)
+    console.log('  Undo deletes ONLY these ids — never by shape.')
   }
 
   console.log(
