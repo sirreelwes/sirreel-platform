@@ -43,7 +43,7 @@ interface Row {
 
 interface Cluster {
   key: string
-  method: 'EMAIL' | 'PHONE'
+  method: 'EMAIL' | 'PHONE' | 'NAME'
   classification: Classification
   rationale: string
   survivorId: string | null

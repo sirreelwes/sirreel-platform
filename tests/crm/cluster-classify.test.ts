@@ -75,5 +75,29 @@ eq('mononym pair → LIKELY_DUPE', cls(m('Taylor', '.'), m('Taylor', '')), 'LIKE
 // ── Degenerate input ───────────────────────────────────────────────────
 eq('single member is not a cluster', cls(m('Abi', 'Perl')), 'UNCERTAIN')
 
+// ── NAME-method clusters ───────────────────────────────────────────────
+// These members were grouped BECAUSE their names match, so the surname test
+// is circular for them and must not run. A name cluster is never better than
+// UNCERTAIN however obvious it looks — two people really are called Maria
+// Fernandez, and there are four rows for that name in the book.
+const nameCls = (members: ClusterMember[], corroboratedIds?: Set<string>) =>
+  classifyCluster({ key: 'name:x', members, method: 'NAME', corroboratedIds }).classification
+
+const abi = [m('Abi', 'Perl'), m('Abi', 'Perl'), m('Abi', 'Perl')]
+eq('name cluster with no corroboration → UNCERTAIN', nameCls(abi), 'UNCERTAIN')
+eq('name cluster where a subset shares a phone → still UNCERTAIN',
+  nameCls(abi, new Set([abi[0].id, abi[1].id])), 'UNCERTAIN')
+eq('identical names would be LIKELY_DUPE under the PHONE branch',
+  cls(m('Abi', 'Perl'), m('Abi', 'Perl')), 'LIKELY_DUPE')
+
+const rationaleOf = (members: ClusterMember[], corroboratedIds?: Set<string>) =>
+  classifyCluster({ key: 'name:x', members, method: 'NAME', corroboratedIds }).rationale
+// The count must describe the members PRESENT — suppression can drop members
+// after the corroborated id set is built, and "3 of 2" is worse than silence.
+eq('rationale counts only present members',
+  /2 of 3 also share a phone/.test(rationaleOf(abi, new Set([abi[0].id, abi[1].id]))), true)
+eq('rationale ignores corroborated ids no longer in the cluster',
+  /nothing else in common/.test(rationaleOf([abi[0], abi[1]], new Set(['ghost-id']))), true)
+
 console.log(fail === 0 ? '\nAll cluster-classification checks passed.' : `\n${fail} FAILED`)
 process.exit(fail === 0 ? 0 : 1)

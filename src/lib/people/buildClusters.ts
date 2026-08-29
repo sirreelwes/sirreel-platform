@@ -14,11 +14,14 @@
  * UI calls this on demand; not on every page load.
  */
 import { prisma } from '@/lib/prisma'
-import { classifyCluster, reviewQueueOrder, type ClassifiedCluster, type ClusterMember } from './clusters'
+import {
+  classifyCluster, reviewQueueOrder, surnameOf, givenNameOf,
+  type ClassifiedCluster, type ClusterMember,
+} from './clusters'
 
 const STAFF_EMAIL_REGEX = /@sirreel\.com$/i
 
-type Method = 'EMAIL' | 'PHONE'
+type Method = 'EMAIL' | 'PHONE' | 'NAME'
 
 export interface ClusterWithRefs extends ClassifiedCluster {
   method: Method
@@ -163,8 +166,31 @@ export async function buildClusters(args: {
     }
   }
 
+  // ── Name method (Method B) ──────────────────────────────────────
+  // The gap the other two methods cannot see: a person whose rows share
+  // neither a mailbox nor a number. That is the NORMAL shape here — a
+  // freelance producer accumulates a row per employer plus a personal
+  // one, and only some of those signatures carried a phone. Abi Perl had
+  // three rows and the phone method reached two of them.
+  //
+  // Keyed on given name + surname via the same accessors the classifier
+  // uses, so a row keeping its surname inside firstName still matches one
+  // that uses the column. Both parts must be present: a mononym ("Taylor")
+  // is far too weak to group strangers on, and 130 rows have no surname
+  // anywhere.
+  const byName = new Map<string, PersonLite[]>()
+  for (const p of visible) {
+    const given = givenNameOf(p)
+    const surname = surnameOf(p)
+    if (!given || !surname) continue
+    const k = `${given} ${surname}`
+    const arr = byName.get(k) ?? []
+    arr.push(p)
+    byName.set(k, arr)
+  }
+
   // Build cluster list
-  type Pending = { key: string; method: Method; members: PersonLite[] }
+  type Pending = { key: string; method: Method; members: PersonLite[]; corroboratedIds?: Set<string> }
   const pending: Pending[] = []
   for (const [k, members] of byEmail) {
     if (members.length > 1) pending.push({ key: `email:${k}`, method: 'EMAIL', members })
@@ -172,6 +198,54 @@ export async function buildClusters(args: {
   for (const [k, members] of byPhone) {
     if (members.length > 1) pending.push({ key: `phone:${k}`, method: 'PHONE', members })
   }
+
+  // ── Absorb, so one person is one row of work ────────────────────
+  // 167 of the 365 name groups are already covered by a phone cluster.
+  // Emitting both would nearly double the queue with pairs the reviewer
+  // has to recognise as the same decision seen twice.
+  //
+  // A name group ABSORBS a phone/email cluster when that cluster's members
+  // are a strict subset of it: the name group is the same finding plus the
+  // rows the phone couldn't reach, so it replaces it, and the absorbed ids
+  // are carried through as corroboration.
+  //
+  // Two deliberate refusals:
+  //  · Exactly equal → the name adds nothing, so the stronger cluster stands
+  //    and the name group is dropped. (Otherwise every phone cluster would
+  //    be downgraded to a name cluster's UNCERTAIN for no new information.)
+  //  · TWO OR MORE subsets → left alone. Two proven groups inside one name
+  //    means two people who share a name and each have their own corroborated
+  //    rows; fusing them would assert exactly the thing that is in doubt, and
+  //    would trade two confident clusters for one vague one.
+  //
+  // A name group that is CONTAINED IN a phone cluster (rather than containing
+  // one) is not absorbed either way, so those two clusters overlap in the
+  // queue. That is deliberate and worth keeping: it is how the name method
+  // rescues duplicates buried in an office line. Adam Navarro has two rows;
+  // the phone method could only see him as half of "Mike Simeone | Adam
+  // Navarro" — two colleagues on the cfg.rentals number, correctly UNCERTAIN
+  // and un-mergeable. The name cluster pulls his own two rows out as their
+  // own finding. Same for Medhat Isaac and Dany Lugo. Collapsing these
+  // overlaps would re-bury exactly the work this method exists to surface.
+  const absorbed = new Set<Pending>()
+  const nameClusters: Pending[] = []
+  for (const [k, members] of byName) {
+    if (members.length < 2) continue
+    const ids = new Set(members.map((m) => m.id))
+    const subsets = pending.filter((c) => c.members.every((m) => ids.has(m.id)))
+    if (subsets.length > 1) continue
+    const only = subsets[0]
+    if (only && only.members.length === members.length) continue
+    if (only) absorbed.add(only)
+    nameClusters.push({
+      key: `name:${k}`,
+      method: 'NAME',
+      members,
+      corroboratedIds: new Set(only ? only.members.map((m) => m.id) : []),
+    })
+  }
+  for (const c of absorbed) pending.splice(pending.indexOf(c), 1)
+  pending.push(...nameClusters)
 
   // Suppression filter — drop the cluster entirely if ALL members are
   // suppressed; otherwise drop the suppressed members and keep what's
@@ -191,7 +265,12 @@ export async function buildClusters(args: {
   const out: ClusterWithRefs[] = []
   for (const c of filtered) {
     const classifiedMembers = c.members.map((m) => toMember(m, refs.get(m.id) ?? { refCount: 0, hasUserAccount: false }))
-    const classified = classifyCluster({ key: c.key, members: classifiedMembers })
+    const classified = classifyCluster({
+      key: c.key,
+      members: classifiedMembers,
+      method: c.method,
+      corroboratedIds: c.corroboratedIds,
+    })
     out.push({
       ...classified,
       method: c.method,
@@ -206,12 +285,19 @@ export async function buildClusters(args: {
     })
   }
 
-  // Sort: EMAIL method clusters first (strongest signal — case-only
-  // dupes pre-Wes-canary, plus any future email-case clusters), then
-  // by the classifier's review queue order.
+  // Sort: by strength of the signal that formed the cluster — EMAIL
+  // (case-only dupes) then PHONE then NAME — and within a method by the
+  // classifier's review queue order.
+  //
+  // Ranked rather than `a.method === 'EMAIL' ? -1 : 1`, which was a valid
+  // comparator only while there were exactly two methods: with three it
+  // returns 1 for both PHONE-vs-NAME and NAME-vs-PHONE, so the sort is
+  // inconsistent and the resulting order is whatever the engine does with
+  // contradictory answers.
+  const methodRank = (m: Method) => (m === 'EMAIL' ? 0 : m === 'PHONE' ? 1 : 2)
   out.sort((a, b) => {
-    if (a.method !== b.method) return a.method === 'EMAIL' ? -1 : 1
-    return reviewQueueOrder(a, b)
+    const r = methodRank(a.method) - methodRank(b.method)
+    return r !== 0 ? r : reviewQueueOrder(a, b)
   })
 
   return out

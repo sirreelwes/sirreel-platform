@@ -136,6 +136,11 @@ function pickSurvivor(members: ClusterMember[]): ClusterMember {
 export function classifyCluster(args: {
   key: string
   members: ClusterMember[]
+  /** How the cluster was formed. NAME gets its own branch — see below. */
+  method?: 'EMAIL' | 'PHONE' | 'NAME'
+  /** For NAME clusters: ids that ALSO share a phone or email with the group,
+   *  i.e. whose membership rests on more than the name. */
+  corroboratedIds?: ReadonlySet<string>
 }): ClassifiedCluster {
   const { key, members } = args
   if (members.length < 2) {
@@ -145,6 +150,36 @@ export function classifyCluster(args: {
       classification: 'UNCERTAIN',
       survivorId: null,
       rationale: 'fewer than 2 members — not a cluster',
+    }
+  }
+
+  // ── NAME clusters ────────────────────────────────────────────────────
+  // These members were grouped BECAUSE their names are identical, so running
+  // the surname test on them is circular — it would return LIKELY_DUPE for
+  // every one of them by construction, which is an assertion the evidence
+  // cannot support. Two people really are called Maria Fernandez.
+  //
+  // So a name cluster is never better than UNCERTAIN. It still earns its
+  // place in the queue: it is the only method that can see a person whose
+  // rows share no phone and no mailbox, which is the normal shape for a
+  // production freelancer who has changed employers three times. A reviewer
+  // resolves these in a glance; the classifier should not pretend to.
+  if (args.method === 'NAME') {
+    const corroboratedIds = args.corroboratedIds ?? new Set<string>()
+    // Counted over the members actually PRESENT, not over the id set —
+    // suppression can drop members between the absorb pass and here, and a
+    // rationale claiming "3 of 4" about a 2-row cluster is worse than none.
+    const corroborated = members.filter((m) => corroboratedIds.has(m.id)).length
+    const nameOnly = members.length - corroborated
+    return {
+      key,
+      members,
+      classification: 'UNCERTAIN',
+      survivorId: pickSurvivor(members).id,
+      rationale:
+        corroborated > 0
+          ? `identical name; ${corroborated} of ${members.length} also share a phone, the other ${nameOnly} match on name alone`
+          : `identical name, nothing else in common — one person across several mailboxes, or two people with the same name`,
     }
   }
 
