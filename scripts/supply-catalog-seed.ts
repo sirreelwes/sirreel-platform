@@ -13,7 +13,7 @@
  *
  * Per item, the script sets:
  *   description, categoryId, dailyRate (from JSON.rate),
- *   department = PRO_SUPPLIES,
+ *   department = the CATEGORY's department (see below),
  *   type = EQUIPMENT (unit=day) | EXPENDABLE (unit=ea),
  *   aliases (replace),
  *   publicVisible = true, isActive = true.
@@ -22,10 +22,20 @@
  * deleted. The reconciliation report at the end lists what
  * changed.
  *
+ * Department (2026-08-29). This script used to stamp
+ * `department: 'PRO_SUPPLIES'` on every row it wrote, regardless of
+ * bucket — which is how 82 generators, ladders, hazers, steeldeck and
+ * expendables ended up billing under Pro Supplies rate rules. Since
+ * InventoryCategory now OWNS the department (the add-item modal asks
+ * for one thing, not two), the seed takes the department from the
+ * category it files the item under. A category the JSON declares with
+ * no `department` keeps whatever the DB row already carries — this
+ * script must never quietly re-flatten a department again.
+ *
  * Dry-run by default; pass --write to commit.
  */
 
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type LineItemDepartment } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -36,6 +46,10 @@ const dryRun = !args.includes('--write')
 interface SeedCategory {
   name: string
   slug: string
+  /** Optional. Set on a category the seed CREATES; an existing
+   *  category's department is left to the DB (it's edited there, not
+   *  here). Omitted → PRO_SUPPLIES via the column default. */
+  department?: LineItemDepartment
 }
 
 interface SeedItem {
@@ -66,29 +80,44 @@ async function main() {
   let catUpdated = 0
   let catUnchanged = 0
   const categoryIdBySlug = new Map<string, string>()
+  // slug → the department items in this category bill under. Read from
+  // the live category row (the source of truth) so pass 2 never has to
+  // guess, and a department edited in HQ survives a re-seed.
+  const categoryDeptBySlug = new Map<string, LineItemDepartment>()
 
   for (let i = 0; i < seed.categories.length; i++) {
     const c = seed.categories[i]
     const sortOrder = i + 1
     const existing = await prisma.inventoryCategory.findUnique({
       where: { slug: c.slug },
-      select: { id: true, name: true, sortOrder: true, isActive: true },
+      select: { id: true, name: true, sortOrder: true, isActive: true, department: true },
     })
     if (!existing) {
       console.log(`  [create-cat] ${c.slug.padEnd(28)} sortOrder=${sortOrder}  name="${c.name}"`)
       if (!dryRun) {
         const created = await prisma.inventoryCategory.create({
-          data: { slug: c.slug, name: c.name, sortOrder, isActive: true },
-          select: { id: true },
+          data: {
+            slug: c.slug,
+            name: c.name,
+            sortOrder,
+            isActive: true,
+            ...(c.department ? { department: c.department } : {}),
+          },
+          select: { id: true, department: true },
         })
         categoryIdBySlug.set(c.slug, created.id)
+        categoryDeptBySlug.set(c.slug, created.department)
       } else {
         categoryIdBySlug.set(c.slug, `<dry-run-${c.slug}>`)
+        categoryDeptBySlug.set(c.slug, c.department ?? 'PRO_SUPPLIES')
       }
       catCreated++
       continue
     }
     categoryIdBySlug.set(c.slug, existing.id)
+    // An existing category's department is DB-owned — never overwritten
+    // from the JSON. Items filed here inherit whatever it currently is.
+    categoryDeptBySlug.set(c.slug, existing.department)
     const needsUpdate = existing.name !== c.name || existing.sortOrder !== sortOrder || !existing.isActive
     if (!needsUpdate) {
       catUnchanged++
@@ -119,6 +148,11 @@ async function main() {
       continue
     }
     const liType: 'EQUIPMENT' | 'EXPENDABLE' = it.unit === 'ea' ? 'EXPENDABLE' : 'EQUIPMENT'
+    // The category owns the department. Was hardcoded PRO_SUPPLIES,
+    // which is what put generators and ladders in the Pro Supplies
+    // billing lane. Falls back to PRO_SUPPLIES only if pass 1 somehow
+    // didn't see the category (it always does — same slug map).
+    const itemDept: LineItemDepartment = categoryDeptBySlug.get(it.categorySlug) ?? 'PRO_SUPPLIES'
 
     const existing = await prisma.inventoryItem.findUnique({
       where: { code: it.code },
@@ -136,7 +170,7 @@ async function main() {
     })
 
     if (!existing) {
-      console.log(`  [create-item] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}`)
+      console.log(`  [create-item] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}`)
       if (!dryRun) {
         await prisma.inventoryItem.create({
           data: {
@@ -144,7 +178,7 @@ async function main() {
             description: it.description,
             categoryId,
             dailyRate: it.rate,
-            department: 'PRO_SUPPLIES',
+            department: itemDept,
             type: liType,
             aliases: it.aliases,
             publicVisible: true,
@@ -164,7 +198,7 @@ async function main() {
       existing.description !== it.description ||
       existing.categoryId !== categoryId ||
       Number(existing.dailyRate) !== it.rate ||
-      existing.department !== 'PRO_SUPPLIES' ||
+      existing.department !== itemDept ||
       existing.type !== liType ||
       !aliasSame ||
       existing.publicVisible !== true ||
@@ -174,7 +208,7 @@ async function main() {
       itemUnchanged++
       continue
     }
-    console.log(`  [update-item] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}`)
+    console.log(`  [update-item] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}${existing.department !== itemDept ? ` (was ${existing.department})` : ''}`)
     if (!dryRun) {
       await prisma.inventoryItem.update({
         where: { code: it.code },
@@ -182,7 +216,7 @@ async function main() {
           description: it.description,
           categoryId,
           dailyRate: it.rate,
-          department: 'PRO_SUPPLIES',
+          department: itemDept,
           type: liType,
           aliases: it.aliases,
           publicVisible: true,
