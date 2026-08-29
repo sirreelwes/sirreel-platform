@@ -156,7 +156,7 @@ async function main(): Promise<void> {
   const { deriveWalkieKit, spareBatteryCount, chargingBankCount } = await import(
     '../../src/lib/sales/walkieKit'
   )
-  check(spareBatteryCount(15) === 8, '15 radios → 8 spare batteries (half, rounded up)')
+  check(spareBatteryCount(15) === 8, '15 radios → 8 batteries (half the radio count, rounded up)')
   check(chargingBankCount(15) === 1, '15 radios → 1 charging bank')
   check(chargingBankCount(24) === 2, '24 radios → 2 charging banks')
   check(chargingBankCount(35) === 2, '35 radios → 2 banks (rounds down)')
@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   ])
   check(kit.length === 2, 'a radio line pulls in both kit lines')
   check(kit[0].quantity === 1 && /charging bank/i.test(kit[0].description), '  → 1 charging bank')
-  check(kit[1].quantity === 8 && /batter/i.test(kit[1].description), '  → 8 spare batteries')
+  check(kit[1].quantity === 8 && /batter/i.test(kit[1].description), '  → 8 batteries')
 
   check(
     deriveWalkieKit([{ description: 'sandbags', quantity: 10 }]).length === 0,

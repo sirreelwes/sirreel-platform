@@ -11,13 +11,13 @@
  * kit piece in the inventory drawer.
  *
  * Radios are useless on day two without power, so SirReel has always sent
- * charging banks and spare batteries alongside them, at no charge. That was
+ * charging banks and extra batteries alongside them, at no charge. That was
  * knowledge living in Hugo's and Julian's heads: nothing in a parsed quote
  * carried it, so the accessories reached the warehouse only when someone
  * remembered, and the pick list was short whenever they didn't.
  *
  * The ratios are Wes's, 2026-08-17:
- *   - spare batteries = 50% of the radio count
+ *   - batteries = 50% of the radio count
  *   - one charging bank per 12 radios, rounded down
  *
  * Two judgment calls the ratios don't cover, both erring toward the truck
@@ -32,7 +32,7 @@
  */
 
 export const WALKIE_KIT = {
-  /** Spare batteries per radio. */
+  /** Extra batteries per radio. */
   sparesPerRadio: 0.5,
   /** Radios covered by a single charging bank. */
   radiosPerChargingBank: 12,
@@ -123,9 +123,9 @@ export function deriveWalkieKit(lines: KitInputLine[]): KitLineSpec[] {
   if (!hasBattery(lines)) {
     const qty = spareBatteryCount(radios)
     out.push({
-      description: 'Spare walkie batteries',
+      description: 'Walkie batteries',
       quantity: qty,
-      note: `Included with ${radios} radios — 50% spares, no charge`,
+      note: `Included with ${radios} radios — one per two, no charge`,
     })
   }
   return out

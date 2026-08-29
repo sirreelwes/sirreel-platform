@@ -4,15 +4,24 @@
  *   npx tsx scripts/seed-walkie-kit-pieces.ts          # dry run
  *   npx tsx scripts/seed-walkie-kit-pieces.ts --write
  *
- * Why this isn't already done: the charging bank and the spare battery
- * have never existed as catalog rows. The kit shipped as hardcoded text
+ * Why this isn't already done: the charging bank and the battery have
+ * never existed as catalog rows. The kit shipped as hardcoded text
  * lines (src/lib/sales/walkieKit.ts), so there was nothing to link. This
  * script creates the two rows — quantities and replacement costs are
  * arguments, NOT guesses — and hangs them off all three CP200 rows with
- * Wes's ratios (2026-08-17): 50% spare batteries, one bank per 12.
+ * Wes's ratios (2026-08-17): batteries at 50% of the radio count, one
+ * bank per 12.
+ *
+ * NAMING (Wes 2026-08-29): the row is "Motorola CP200 Battery", not
+ * "Spare Battery". It is the battery the radio takes — "spare" describes
+ * the REASON a second one ships, not the part. Crews still ask for a
+ * spare battery, so that wording lives on as an alias instead of in the
+ * name. Aliases are set here rather than in scripts/seed-catalog-aliases.ts
+ * because that script pins its targets by id and this row does not exist
+ * yet; once it does, further aliases belong there.
  *
  *   --bank-qty N        units of the 6-bank charger owned
- *   --battery-qty N     spare batteries owned
+ *   --battery-qty N     batteries owned
  *   --bank-cost N       replacement cost each (optional)
  *   --battery-cost N    replacement cost each (optional)
  *
@@ -49,17 +58,23 @@ const PIECES = [
   {
     code: 'CP200-CHARGER-6BANK',
     description: 'Motorola CP200 6-Bank Charger',
+    aliases: ['charging bank', 'charge bank', 'walkie charger', 'radio charger'],
     qty: numArg('--bank-qty'),
     cost: numArg('--bank-cost'),
     // One per 12 radios, rounded down, but a small order still gets one.
     kit: { qtyPer: 1, perUnits: 12, rounding: 'FLOOR' as const, minQty: 1 },
   },
   {
-    code: 'CP200-BATTERY-SPARE',
-    description: 'Motorola CP200 Spare Battery',
+    code: 'CP200-BATTERY',
+    description: 'Motorola CP200 Battery',
+    // How crews ask for it. Feeds both the AI catalog snippet and the
+    // fallback matcher, so "8 spare batteries" on a client's email
+    // resolves to this row instead of one of the seventeen unrelated
+    // battery rows in the catalog.
+    aliases: ['spare battery', 'spare batteries', 'walkie battery', 'radio battery'],
     qty: numArg('--battery-qty'),
     cost: numArg('--battery-cost'),
-    // 50% spares, rounded up — 15 radios get 8.
+    // One per two radios, rounded up — 15 radios get 8.
     kit: { qtyPer: 0.5, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 },
   },
 ]
@@ -82,7 +97,7 @@ async function main() {
   for (const piece of PIECES) {
     const existing = await prisma.inventoryItem.findUnique({
       where: { code: piece.code },
-      select: { id: true, qtyOwned: true },
+      select: { id: true, qtyOwned: true, aliases: true },
     })
 
     if (!existing && piece.qty == null) {
@@ -115,6 +130,7 @@ async function main() {
       weeklyRate: 0,
       includedFree: true,
       qtyOwned: piece.qty ?? 0,
+      aliases: piece.aliases,
       ...(piece.cost != null ? { replacementCost: piece.cost } : {}),
     }
     const item = existing
@@ -123,6 +139,9 @@ async function main() {
           data: {
             ...(piece.qty != null ? { qtyOwned: piece.qty } : {}),
             ...(piece.cost != null ? { replacementCost: piece.cost } : {}),
+            // UNION, never replace — same contract as seed-catalog-aliases.ts.
+            // A re-run must not drop an alias someone curated by hand.
+            aliases: [...new Set([...existing.aliases, ...piece.aliases])],
           },
           select: { id: true },
         })
