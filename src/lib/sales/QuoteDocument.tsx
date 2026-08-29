@@ -217,6 +217,26 @@ function fmtMoney(n: number): string {
   }).format(n)
 }
 
+/**
+ * The item code as a CLIENT should see it, or nothing.
+ *
+ * `InventoryItem.code` is two populations wearing one field. RentalWorks
+ * rows carry a real catalog number a client can quote back at us
+ * ("104387"); HQ-native rows carry an internal slug
+ * ("COM--SURVEILLANCE-KIT", "TAB--DIRECTORS-CHAIRS-LOW") that means
+ * nothing outside this database. The slugs are also long enough to
+ * truncate, and a code shown as "TAB-DIRECTOR-..." is worse than no code
+ * - it looks like the document is broken.
+ *
+ * So: collapse the doubled separators, and print it only if it fits
+ * whole. The description already names the item.
+ */
+function clientItemCode(code: string | null | undefined): string {
+  const compact = (code ?? '').replace(/-{2,}/g, '-').trim()
+  if (!compact) return '\u2014'
+  return compact.length <= 14 ? compact : '\u2014'
+}
+
 function rateUnit(rateType: QuoteLineItem['rateType']): string {
   if (rateType === 'WEEKLY') return '/wk'
   if (rateType === 'DAILY') return '/day'
@@ -428,14 +448,17 @@ const styles = StyleSheet.create({
   },
   rowAlt: { backgroundColor: C.zebra },
   // Column widths sum to 100
-  colCode: { width: '11%', fontSize: 9, paddingRight: 4 },
+  colCode: { width: '14%', fontSize: 9, paddingRight: 4 },
+  codeText: { fontSize: 8, color: C.muted, maxLines: 1, textOverflow: 'ellipsis' },
   colDesc: { width: '40%', fontSize: 9, paddingRight: 4 },
   /** Same column, inset — partner ancillaries under their unit. */
   colDescChild: { width: '40%', fontSize: 9, paddingRight: 4, paddingLeft: 10, color: C.muted },
   colQty: { width: '7%', fontSize: 9, textAlign: 'right' },
   colDays: { width: '8%', fontSize: 9, textAlign: 'right' },
+  /** The calendar span next to the billed days — "1 / 5". */
+  daysSpan: { fontSize: 7, color: C.faint },
   colRate: { width: '15%', fontSize: 9, textAlign: 'right' },
-  colTotal: { width: '19%', fontSize: 9, textAlign: 'right' },
+  colTotal: { width: '16%', fontSize: 9, textAlign: 'right' },
   qualifier: { fontSize: 8, color: C.muted, fontStyle: 'italic', marginTop: 1 },
   dateNote: { fontSize: 8, color: C.faint, marginTop: 1 },
   subtotalRow: {
@@ -464,7 +487,7 @@ const styles = StyleSheet.create({
   subtotalValue: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 9,
-    width: '19%',
+    width: '16%',
     textAlign: 'right',
     backgroundColor: C.moneyFill,
     paddingVertical: 4,
@@ -478,7 +501,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   discountLabel: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: C.amber },
-  discountValue: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: C.amber, width: '19%', textAlign: 'right' },
+  discountValue: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: C.amber, width: '16%', textAlign: 'right' },
   // Totals
   totals: {
     marginTop: 12,
@@ -701,11 +724,6 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.colTotal}>Total</Text>
             </View>
             {items.map((item, idx) => {
-              const sameAsHeaderRange =
-                props.startDate &&
-                props.endDate &&
-                fmtDay(item.pickupDate) === fmtDay(props.startDate) &&
-                fmtDay(item.returnDate) === fmtDay(props.endDate)
               return (
                 <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
                   {/* Wrap the inventory code in a View (mirrors colDesc)
@@ -715,7 +733,11 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                       edge and over the next cell — the symptom this
                       patch is fixing. */}
                   <View style={styles.colCode}>
-                    <Text>{item.inventoryCode || '—'}</Text>
+                    {/* Capped to a single line. HQ-native codes are slugs
+                        ("VEH--STRAPS--RATCHET") that wrapped to three lines
+                        and set the height of the whole row — three lines of
+                        internal SKU next to a two-word description. */}
+                    <Text style={styles.codeText}>{clientItemCode(item.inventoryCode)}</Text>
                   </View>
                   <View style={item.isChild ? styles.colDescChild : styles.colDesc}>
                     <Text>{item.isChild ? `\u2514  ${item.description}` : item.description}</Text>
@@ -723,21 +745,31 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                     {item.notes && item.notes.trim().length > 0 && (
                       <Text style={styles.qualifier}>{item.notes}</Text>
                     )}
-                    {!sameAsHeaderRange && (
-                      <Text style={styles.dateNote}>
-                        {fmtDay(item.pickupDate)} – {fmtDay(item.returnDate)}
-                      </Text>
-                    )}
+                    {/* The per-line date range and the "Billable days: N
+                        (rental period …)" sentence used to live here, three
+                        wrapped lines under EVERY item. Both were saying what
+                        the document already says: the usage period is in the
+                        header, and the billed-vs-calendar split now rides in
+                        the Days column as "1 / 5" — the same shorthand the
+                        order page uses.
+
+                        The per-line date range is gone outright (Wes, 8/29),
+                        not just when it matched the header. It almost never
+                        matched — the order header carries the USAGE period
+                        (Sep 5–8) while lines carry the RENTAL window that
+                        brackets it (Sep 4–9) — so the "only show it when it
+                        differs" guard printed it on virtually every line. A
+                        date under all 22 items is noise, not information. */}
+                  </View>
+                  <Text style={styles.colQty}>{item.quantity}</Text>
+                  <Text style={styles.colDays}>
+                    {item.billableDays ?? 'TBD'}
                     {item.billableDays != null &&
                       item.computedDays != null &&
                       item.billableDays !== item.computedDays && (
-                        <Text style={styles.dateNote}>
-                          Billable days: {item.billableDays} (rental period {fmtDay(item.pickupDate)} – {fmtDay(item.returnDate)}, {item.computedDays} days)
-                        </Text>
+                        <Text style={styles.daysSpan}> / {item.computedDays}</Text>
                       )}
-                  </View>
-                  <Text style={styles.colQty}>{item.quantity}</Text>
-                  <Text style={styles.colDays}>{item.billableDays ?? 'TBD'}</Text>
+                  </Text>
                   <Text style={styles.colRate}>
                     {item.isIncludedAccessory && item.rate === 0
                       ? 'Included'
