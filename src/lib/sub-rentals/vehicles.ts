@@ -90,6 +90,23 @@ export function formatFeeRate(fee: FeeLike): string {
  * priced labor. Returns null when there's nothing to add, so callers
  * can skip the element entirely rather than render an empty node.
  */
+/**
+ * How a driver's covered hours are counted (Wes 2026-08-28).
+ *
+ * "Portal to portal" means the clock starts when the driver leaves our yard
+ * and stops when they get back — not when they reach the client's location.
+ * On a 10-hour covered day with a distant location that is the difference
+ * between a shift that fits and one that goes into overtime, so it belongs
+ * beside the rate everywhere the rate appears, not in a rep's head.
+ *
+ * Keyed off `coversHours` rather than the label "Driver": coversHours is
+ * exactly the marker for shift-priced labor, so a second labor line picks the
+ * note up automatically and a renamed driver fee cannot lose it.
+ */
+export const PORTAL_TO_PORTAL_QUAL = 'portal to portal from Sun Valley, CA'
+export const PORTAL_TO_PORTAL_SENTENCE =
+  'Driver hours are portal to portal from Sun Valley, CA.'
+
 export function coversHoursNote(fee: FeeLike): string | null {
   if (fee.coversHours == null || fee.coversHours === '') return null
   const h = Number(fee.coversHours)

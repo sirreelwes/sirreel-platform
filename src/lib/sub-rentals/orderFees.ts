@@ -27,6 +27,7 @@
  * margin cannot leak into a client document through here.
  */
 import { prisma } from '@/lib/prisma'
+import { PORTAL_TO_PORTAL_SENTENCE } from '@/lib/sub-rentals/vehicles'
 import type { FeeUnit, Prisma } from '@prisma/client'
 
 /** The wording the client reads under an estimated line, on every surface. */
@@ -167,7 +168,10 @@ export function buildFeeLines(
         rateType: 'DAILY',
         quantity: 1,
         billableDays: days,
-        notes: null,
+        // Shift-priced labor carries the portal-to-portal term on the quote:
+        // the clock is our yard to our yard, which decides whether a covered
+        // 10-hour day actually covers the job.
+        notes: fee.coversHours ? PORTAL_TO_PORTAL_SENTENCE : null,
         usageEstimated: false,
         lineTotal: amount.mul(days),
       })

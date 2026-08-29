@@ -385,7 +385,11 @@ export async function GET(req: NextRequest) {
       isSubItem: !!li.parentLineItemId,
     })),
     paperwork: {
-      quotePdfUrl: order.quotePdfUrl,
+      // The GATED route, never the raw blob URL. quotePdfUrl is a private
+      // blob that 403s in the client's browser — same contract as the DOT
+      // sheet below. The value stays truthy/null so the "Available" vs
+      // "Pending" status on the paperwork row is unchanged.
+      quotePdfUrl: order.quotePdfUrl ? '/api/portal/job/quote-pdf' : null,
       quotePdfGeneratedAt: order.quotePdfGeneratedAt,
       // DOT info packet — served through the gated portal proxy (never the
       // raw private-blob URL). Present only once generated.

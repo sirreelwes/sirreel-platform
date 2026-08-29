@@ -30,6 +30,7 @@ import {
   fmtMoney,
   formatFeeRate,
   coversHoursNote,
+  PORTAL_TO_PORTAL_QUAL,
   UNION_SCOPE_LABEL,
   type SubFeeUnit,
   type SubFeeUnionScope,
@@ -184,7 +185,12 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
         coversHours: f.coversHours ? String(f.coversHours) : null,
       })
       const scope = f.unionScope as SubFeeUnionScope
-      const quals = [covers, scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null].filter(Boolean).join(' · ')
+      const quals = [
+        covers,
+        // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
+        covers ? PORTAL_TO_PORTAL_QUAL : null,
+        scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
+      ].filter(Boolean).join(' · ')
       return `
               <tr>
                 <td style="padding: 9px 16px; font-size: 14px; color: ${TEXT}; border-top: 1px solid #f0f0f0;">
@@ -368,7 +374,12 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
         coversHours: f.coversHours ? String(f.coversHours) : null,
       })
       const scope = f.unionScope as SubFeeUnionScope
-      const quals = [covers, scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null].filter(Boolean).join(' · ')
+      const quals = [
+        covers,
+        // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
+        covers ? PORTAL_TO_PORTAL_QUAL : null,
+        scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
+      ].filter(Boolean).join(' · ')
       textParts.push(`  ${f.label}: ${rate}${quals ? ` (${quals})` : ''}`)
     }
   }
