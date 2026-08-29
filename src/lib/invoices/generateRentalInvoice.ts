@@ -45,6 +45,7 @@
  */
 
 import { catalogInvoiceLabel } from '@/lib/catalog/display'
+import { discountDisplayLabel } from '@/lib/orders/discountLabel'
 import React from 'react'
 import { randomUUID } from 'crypto'
 import { put, del } from '@vercel/blob'
@@ -261,19 +262,29 @@ export async function generateRentalInvoice(args: {
   const discountLines: { label: string; amount: number }[] = []
   let postDeptSubtotal = order.lineItems.reduce((s, l) => s + Number(l.lineTotal), 0)
   for (const d of order.discounts.filter((x) => x.scope === 'DEPARTMENT' && x.departmentKey)) {
+    // Expendables are a sale, not a rental — never discounted, at either
+    // scope. Mirrors computeOrderTotals; without it this generator would
+    // print a discount line the invoice's own total doesn't contain.
+    if (d.departmentKey === 'EXPENDABLES') continue
     const deptSub = round2(deptLineMap.get(d.departmentKey!) ?? 0)
     if (deptSub <= 0) continue
     const raw = d.type === 'PERCENT' ? deptSub * (Number(d.value) / 100) : Number(d.value)
     const amount = round2(Math.max(0, Math.min(raw, deptSub)))
     if (amount <= 0) continue
     discountLines.push({
-      label: `${d.label || 'Discount'} — ${d.departmentKey}`,
+      label: `${discountDisplayLabel({ label: d.label, type: d.type, value: Number(d.value) })} — ${d.departmentKey}`,
       amount,
     })
     postDeptSubtotal -= amount
   }
+  // The order-scope discount is computed on, and clamped to, the
+  // DISCOUNTABLE subtotal — everything except expendables. Same carve-out
+  // as computeOrderTotals; these two must agree or the invoice shows a
+  // discount line that doesn't reconcile against its own total.
+  const expendablesSubtotal = round2(deptLineMap.get('EXPENDABLES') ?? 0)
+  const discountableSubtotal = round2(Math.max(0, postDeptSubtotal - expendablesSubtotal))
   const orderRow = order.discounts.find((x) => x.scope === 'ORDER')
-  if (orderRow && postDeptSubtotal > 0) {
+  if (orderRow && discountableSubtotal > 0) {
     // FLAT_TOTAL is live-pinned to the target grand total — derive the
     // implied discount from the current post-dept subtotal so the
     // invoice's order-discount line stays in lockstep with what
@@ -284,13 +295,21 @@ export async function generateRentalInvoice(args: {
       const preTaxFromTarget = Number(orderRow.value) / (1 + taxRate)
       raw = postDeptSubtotal - preTaxFromTarget
     } else if (orderRow.type === 'PERCENT') {
-      raw = postDeptSubtotal * (Number(orderRow.value) / 100)
+      raw = discountableSubtotal * (Number(orderRow.value) / 100)
     } else {
       raw = Number(orderRow.value)
     }
-    const amount = round2(Math.max(0, Math.min(raw, postDeptSubtotal)))
+    const amount = round2(Math.max(0, Math.min(raw, discountableSubtotal)))
     if (amount > 0) {
-      discountLines.push({ label: orderRow.label || 'Order discount', amount })
+      discountLines.push({
+        label: discountDisplayLabel({
+          label: orderRow.label,
+          type: orderRow.type,
+          value: Number(orderRow.value),
+          fallback: 'Order discount',
+        }),
+        amount,
+      })
     }
   }
 

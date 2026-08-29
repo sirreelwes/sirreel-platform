@@ -4,6 +4,8 @@ import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 import { LINE_ITEM_DEPARTMENT_ORDER } from '@/lib/orders/lineItemDepartments'
+import { PDF_BRAND } from '@/lib/pdf/brand'
+import { discountDisplayLabel } from '@/lib/orders/discountLabel'
 
 // Hyphenation is registered ONCE in lib/pdf/hyphenation (it's a global,
 // last-registration-wins setting — see that module for the policy and
@@ -301,15 +303,9 @@ function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: SectionKey; it
 // Styles
 // ─────────────────────────────────────────────────────────────────────
 
-const C = {
-  ink: '#111111',
-  muted: '#555555',
-  faint: '#888888',
-  rule: '#cccccc',
-  ruleSoft: '#e5e5e5',
-  zebra: '#fafafa',
-  amber: '#b45309',
-}
+/** Shared brand palette — see lib/pdf/brand.ts. Quote and Invoice must
+ *  not drift apart; a client sees both. */
+const C = PDF_BRAND
 
 const styles = StyleSheet.create({
   page: {
@@ -338,13 +334,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     fontSize: 22,
     letterSpacing: 2,
+    color: C.accent,
   },
   meta: { flexDirection: 'column', alignItems: 'flex-end' },
-  metaNum: { fontFamily: 'Helvetica-Bold', fontSize: 12 },
+  metaNum: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 12,
+    color: C.accent,
+    backgroundColor: C.accentFill,
+    borderWidth: 0.5,
+    borderColor: C.accentEdge,
+    borderRadius: 2,
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+  },
   metaLine: { fontSize: 9, color: C.muted, marginTop: 2 },
   hrThick: {
     borderBottomWidth: 1.5,
-    borderBottomColor: C.ink,
+    borderBottomColor: C.accentDeep,
     marginTop: 6,
     marginBottom: 12,
   },
@@ -357,20 +364,21 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     borderWidth: 0.5,
-    borderColor: C.rule,
+    borderColor: C.accentEdge,
     borderRadius: 3,
     marginBottom: 12,
+    backgroundColor: C.accentFillSoft,
   },
   infoSection: { padding: 8 },
   infoSectionCustomer:   { width: '25%' },
-  infoSectionProduction: { width: '45%', borderLeftWidth: 0.5, borderLeftColor: C.rule },
-  infoSectionAgent:      { width: '30%', borderLeftWidth: 0.5, borderLeftColor: C.rule },
+  infoSectionProduction: { width: '45%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
+  infoSectionAgent:      { width: '30%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
   infoTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    color: C.muted,
+    color: C.accent,
     marginBottom: 4,
   },
   infoLine: { flexDirection: 'row', marginBottom: 1.5 },
@@ -382,32 +390,39 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     marginTop: 10,
-    marginBottom: 4,
-    paddingBottom: 3,
-    borderBottomWidth: 0.75,
-    borderBottomColor: C.ink,
+    marginBottom: 0,
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingHorizontal: 6,
+    backgroundColor: C.accentFill,
+    borderBottomWidth: 1,
+    borderBottomColor: C.accentDeep,
   },
   sectionTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+    color: C.accent,
   },
   sectionSub: { fontSize: 8, color: C.muted },
   tableHead: {
     flexDirection: 'row',
     paddingVertical: 3,
+    paddingHorizontal: 6,
+    backgroundColor: C.accentFillSoft,
     borderBottomWidth: 0.5,
-    borderBottomColor: C.rule,
+    borderBottomColor: C.accentEdge,
     fontFamily: 'Helvetica-Bold',
     fontSize: 8,
-    color: C.muted,
+    color: C.accent,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   row: {
     flexDirection: 'row',
     paddingVertical: 3.5,
+    paddingHorizontal: 6,
     borderBottomWidth: 0.25,
     borderBottomColor: C.ruleSoft,
   },
@@ -426,20 +441,35 @@ const styles = StyleSheet.create({
   subtotalRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingVertical: 4,
+    alignItems: 'stretch',
     marginTop: 1,
     borderTopWidth: 0.5,
-    borderTopColor: C.rule,
+    borderTopColor: C.accentEdge,
   },
   subtotalLabel: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 9,
-    color: C.muted,
+    color: C.accent,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginRight: 16,
+    // Fixed width so every tinted label block lines up with the ones
+    // above and below it. Auto-width left the section subtotal and the
+    // discount row ragged against each other.
+    width: 150,
+    textAlign: 'right',
+    backgroundColor: C.accentFill,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  subtotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 9, width: '19%', textAlign: 'right' },
+  subtotalValue: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9,
+    width: '19%',
+    textAlign: 'right',
+    backgroundColor: C.moneyFill,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
   // Discount row
   discountRow: {
     flexDirection: 'row',
@@ -454,37 +484,58 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: C.ink,
+    borderTopColor: C.accentDeep,
     alignItems: 'flex-end',
   },
-  totalsRow: { flexDirection: 'row', marginBottom: 2 },
+  totalsRow: { flexDirection: 'row', marginBottom: 2, alignItems: 'stretch' },
   totalsLabel: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 9,
-    color: C.muted,
+    color: C.accent,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginRight: 16,
     width: 110,
     textAlign: 'right',
+    backgroundColor: C.accentFill,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
   },
-  totalsValue: { fontSize: 10, width: 100, textAlign: 'right' },
+  totalsValue: {
+    fontSize: 10,
+    width: 100,
+    textAlign: 'right',
+    backgroundColor: C.moneyFill,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+  },
   grandLabel: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
-    marginRight: 16,
     width: 110,
     textAlign: 'right',
+    color: C.accent,
+    backgroundColor: C.accentFill,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
   },
-  grandValue: { fontFamily: 'Helvetica-Bold', fontSize: 13, width: 100, textAlign: 'right' },
+  grandValue: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 13,
+    width: 100,
+    textAlign: 'right',
+    backgroundColor: C.moneyFill,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+  },
   grandRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     marginTop: 5,
     paddingTop: 5,
     borderTopWidth: 0.5,
-    borderTopColor: C.ink,
+    borderTopColor: C.accentDeep,
   },
   notesBlock: {
     marginTop: 16,
@@ -622,12 +673,26 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
 
         {/* Line items per department */}
         {grouped.map(({ dept, items, subtotal }) => (
-          <View key={dept} wrap={false}>
-            <View style={styles.sectionHeader}>
+          // The section must be allowed to SPLIT across pages. It used to
+          // carry wrap={false}, which tells react-pdf "never break this" —
+          // fine for a 3-line department, catastrophic for an 18-line one:
+          // once the block is taller than a page, react-pdf gives up on
+          // laying it out (the "Node of type VIEW can't wrap between pages"
+          // warning) and renders the rows ON TOP OF EACH OTHER. Clients
+          // were receiving quotes with the description, the date note and
+          // the next row all overprinted.
+          //
+          // wrap={false} belongs on the ROW — a single line item should
+          // never be split down the middle — which is exactly what
+          // InvoiceDocument and PickListDocument already do.
+          <View key={dept}>
+            {/* minPresenceAhead keeps the band from being orphaned at the
+                foot of a page with its rows stranded overleaf. */}
+            <View style={styles.sectionHeader} wrap={false} minPresenceAhead={60}>
               <Text style={styles.sectionTitle}>{sectionLabel(dept)}</Text>
               <Text style={styles.sectionSub}>{items.length} {items.length === 1 ? 'item' : 'items'}</Text>
             </View>
-            <View style={styles.tableHead}>
+            <View style={styles.tableHead} wrap={false} minPresenceAhead={40}>
               <Text style={styles.colCode}>Item</Text>
               <Text style={styles.colDesc}>Description</Text>
               <Text style={styles.colQty}>Qty</Text>
@@ -642,7 +707,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                 fmtDay(item.pickupDate) === fmtDay(props.startDate) &&
                 fmtDay(item.returnDate) === fmtDay(props.endDate)
               return (
-                <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]}>
+                <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
                   {/* Wrap the inventory code in a View (mirrors colDesc)
                       so the column acts as a hard layout container.
                       Without this, a Text whose content is wider than
@@ -704,7 +769,9 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               if (amt <= 0) return null
               return (
                 <View style={styles.subtotalRow}>
-                  <Text style={styles.subtotalLabel}>{d.label || 'Discount'}</Text>
+                  <Text style={styles.subtotalLabel}>
+                    {discountDisplayLabel({ label: d.label, type: d.type, value: d.value })}
+                  </Text>
                   <Text style={styles.subtotalValue}>-{fmtMoney(amt)}</Text>
                 </View>
               )
@@ -770,7 +837,17 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                   section subtotals above. */}
               {breakdown.orderDiscount > 0 && (
                 <View style={styles.totalsRow}>
-                  <Text style={styles.totalsLabel}>{breakdown.orderDiscountLabel || 'Order discount'}</Text>
+                  <Text style={styles.totalsLabel}>
+                    {(() => {
+                      const row = (props.discounts ?? []).find((x) => x.scope === 'ORDER')
+                      return discountDisplayLabel({
+                        label: breakdown.orderDiscountLabel,
+                        type: row?.type ?? 'FIXED',
+                        value: row ? row.value : 0,
+                        fallback: 'Order discount',
+                      })
+                    })()}
+                  </Text>
                   <Text style={styles.totalsValue}>-{fmtMoney(breakdown.orderDiscount)}</Text>
                 </View>
               )}
