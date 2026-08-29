@@ -178,6 +178,33 @@ fallback was replaced by Job-as-root + JobResolverModal.)
 - Inquiry conversion now always closes the inquiry: new Job →
   convertedJobId; attach-to-existing-Job → convertedOrderId.
 
+## /jobs list scope (2026-08-29 — Wes)
+- Wes: "we really don't need to have old jobs that accessible. just
+  archived. Anything older than 30 days is unnecessary to be on the
+  main access page."
+- **Default sort is `recent` (Recently touched)**, ordering on
+  `lastActivityAt` = newest of `Job.updatedAt` and every order's
+  `updatedAt`/`quoteSentAt`. The old default sorted by JOB creation, so
+  sending a quote (which touches the ORDER) never moved the job —
+  SR-JOB-0219 sat at position 37 the morning it was quoted. The old
+  behaviour survives as "Newest job".
+- **Dormancy is NOT a date cut.** `scripts/archive-dormant-jobs.ts`
+  archives only when ALL of: no activity in 30 days, no future dates on
+  the job / its orders / its live bookings, no order outside
+  CANCELLED-CLOSED, and no non-void invoice with a balance. Measured
+  2026-08-29: 52 jobs were stale but FOUR were still live (Extended
+  Stay + Desigual x DL had future dates; two carried open orders). A
+  naive age cut buries real upcoming rentals — do not "simplify" this
+  to `createdAt < 30d`.
+- 48 archived on 2026-08-29 (Planyo-era, last touched 07-19); reversible
+  by captured id in `tmp/archive-dormant-jobs-*.json` + AuditLog action
+  `job.archive_dormant`. Archived jobs stay reachable via the toolbar's
+  Archived filter.
+- List cap raised 200 -> 300 as a BACKSTOP only. It was silently
+  truncating (250 live jobs, take:200 — the 50 oldest were unreachable
+  while the header read "200 JOBS"). Re-run the sweep rather than
+  raising the cap again; a truncated list gives no sign it was truncated.
+
 ## /jobs redesign (2026-08-28 — Wes's design session)
 - **JobsToolbar** (rendered by the jobs LAYOUT above the list|detail
   split) carries the page title + Incoming pill + search + status/sort
