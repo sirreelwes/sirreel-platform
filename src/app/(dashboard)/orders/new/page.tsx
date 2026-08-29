@@ -11,6 +11,7 @@ import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { IntegerInput } from '@/components/ui/IntegerInput';
 import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
 
 const PRODUCTION_TYPES: ProductionType[] = [
@@ -282,11 +283,35 @@ interface DraftState {
   emailText: string;
   job: JobPickerValue;
   candidateJobs: AttachableJob[];
+  /** Legacy single order-wide dollar discount. Kept so a draft saved before
+   *  the per-department discounts shipped still restores; migrated into
+   *  `discounts` on load. */
   discountAmount: string;
   discountLabel: string;
+  discounts?: DraftDiscount[];
   newJobProductionType: ProductionType;
   newJobProductionTypeProfileId: string | null;
   newJobNotes: string;
+}
+
+/**
+ * A discount the rep sets up BEFORE the order exists.
+ *
+ * Mirrors OrderDiscount exactly (scope + departmentKey + type + value) so the
+ * draft rows POST straight through after the order is created, and the saved
+ * order's DiscountsPanel shows precisely what the draft previewed. Percent is
+ * the reason this exists: the draft form only ever offered one order-wide
+ * DOLLAR discount, so "10% off vehicles" had to be done after saving, by hand,
+ * on another screen.
+ */
+interface DraftDiscount {
+  localId: string;
+  scope: 'ORDER' | 'DEPARTMENT';
+  departmentKey: LineItemDepartment | null;
+  type: 'PERCENT' | 'FIXED';
+  /** PERCENT: 0-100. FIXED: a positive dollar amount (sign is applied here). */
+  value: number;
+  label: string;
 }
 
 const DRAFT_TTL_MS = 30 * 60_000; // entries older than 30 min are stale
@@ -552,8 +577,7 @@ function NewQuotePageInner() {
   }, [contacts, confirmedLeadPersonId]);
 
   const [creating, setCreating] = useState(false);
-  const [discountAmount, setDiscountAmount] = useState('');
-  const [discountLabel, setDiscountLabel] = useState('');
+  const [discounts, setDiscounts] = useState<DraftDiscount[]>([]);
 
   // Person-first anchor (STEP 1A) — leads the Review Quote when the
   // AI-extracted contacts include an `existing` match. Possible_match
@@ -719,8 +743,23 @@ function NewQuotePageInner() {
     setEmailText(draft.emailText);
     setJob(draft.job ?? EMPTY_JOB_PICKER_VALUE);
     setCandidateJobs(draft.candidateJobs);
-    setDiscountAmount(draft.discountAmount);
-    setDiscountLabel(draft.discountLabel);
+    // Legacy drafts carried one order-wide dollar amount; lift it into the
+    // list rather than dropping the rep's number on the floor.
+    const legacy = parseFloat(draft.discountAmount ?? '');
+    setDiscounts(
+      draft.discounts?.length
+        ? draft.discounts
+        : Number.isFinite(legacy) && legacy !== 0
+          ? [{
+              localId: 'legacy',
+              scope: 'ORDER' as const,
+              departmentKey: null,
+              type: 'FIXED' as const,
+              value: Math.abs(legacy),
+              label: draft.discountLabel || 'Discount',
+            }]
+          : [],
+    );
     setNewJobProductionType(draft.newJobProductionType ?? 'OTHER');
     setNewJobProductionTypeProfileId(draft.newJobProductionTypeProfileId ?? null);
     setNewJobNotes(draft.newJobNotes ?? '');
@@ -1381,22 +1420,67 @@ function NewQuotePageInner() {
     addRowToDept(committed.department);
   }, [items, editing.startDate, editing.endDate]);
 
-  const orderTotal = useMemo(() => {
-    const lineSum = items.reduce(
-      (sum, it) =>
-        sum +
+  /** Per-department line subtotals — the base a DEPARTMENT discount applies to. */
+  const departmentSubtotals = useMemo(() => {
+    const out: Partial<Record<LineItemDepartment, number>> = {};
+    for (const it of items) {
+      out[it.department] =
+        (out[it.department] ?? 0) +
         computeLineTotal({
           quantity: it.quantity,
           rate: it.rate,
           billableDays: it.billableDays,
           rateType: it.rateType,
           department: it.department,
-        }),
-      0,
+        });
+    }
+    return out;
+  }, [items]);
+
+  /**
+   * What each discount actually takes off, in dollars.
+   *
+   * Department discounts resolve against THEIR department's subtotal and are
+   * applied first; the order-scope discount then works on what's left. Same
+   * order of operations as the saved order (discountedTotals.ts), so the
+   * draft preview and the created order agree. Each is clamped to its own
+   * base so a 120%-off typo can't invert the total.
+   */
+  const discountBreakdown = useMemo(() => {
+    const lineSum = Object.values(departmentSubtotals).reduce((a, b) => a + (b ?? 0), 0);
+    const rows = discounts.map((d) => {
+      const base =
+        d.scope === 'DEPARTMENT' && d.departmentKey
+          ? departmentSubtotals[d.departmentKey] ?? 0
+          : lineSum;
+      const raw = d.type === 'PERCENT' ? (base * d.value) / 100 : d.value;
+      return { ...d, base, applied: Math.min(Math.max(raw, 0), base) };
+    });
+    const deptTaken = rows
+      .filter((r) => r.scope === 'DEPARTMENT')
+      .reduce((a, r) => a + r.applied, 0);
+    const afterDept = Math.max(0, lineSum - deptTaken);
+    // Re-clamp order-scope against the post-department remainder.
+    const withOrder = rows.map((r) =>
+      r.scope === 'ORDER'
+        ? {
+            ...r,
+            base: afterDept,
+            applied: Math.min(
+              r.type === 'PERCENT' ? (afterDept * r.value) / 100 : r.value,
+              afterDept,
+            ),
+          }
+        : r,
     );
-    const discount = parseFloat(discountAmount) || 0;
-    return lineSum + discount;
-  }, [items, discountAmount]);
+    const total = withOrder.reduce((a, r) => a + r.applied, 0);
+    return { lineSum, rows: withOrder, total };
+  }, [discounts, departmentSubtotals]);
+
+  const orderTotal = useMemo(
+    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total),
+    [discountBreakdown],
+  );
 
   // Save is allowed when there's at least one line item AND the user
   // has made a definite Job choice:
@@ -1606,22 +1690,22 @@ function NewQuotePageInner() {
       // jobId for downstream inquiry-PATCH — always the resolved Job.
       const jobId: string = existingJobId;
 
-      if (discountAmount && parseFloat(discountAmount) !== 0) {
-        // ORDER-scoped OrderDiscount, NOT a legacy DISCOUNT line item. The
-        // old line-item version multiplied like any other line — qty × rate
-        // × billableDays — so a "-$85" discount silently became -$425 the
-        // moment the order's dates spread days onto its lines (Oliver,
-        // 2026-08-20). OrderDiscount is day-proof by construction, clamped
-        // to the subtotal, and shows in the DISCOUNTS section where it can
-        // be edited or made a percentage later.
+      // Draft discounts POST through unchanged — same shape as OrderDiscount,
+      // so what the draft previewed is what the saved order holds. Sequential
+      // rather than parallel: the order-scope one is computed against the
+      // department ones on read, and a partial failure should leave a
+      // prefix, not a random subset.
+      for (const d of discounts) {
+        if (!d.value) continue;
         await fetch(`/api/orders/${order.id}/discounts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            scope: 'ORDER',
-            type: 'FIXED',
-            value: Math.abs(parseFloat(discountAmount)),
-            label: discountLabel || 'Discount',
+            scope: d.scope,
+            departmentKey: d.scope === 'DEPARTMENT' ? d.departmentKey : null,
+            type: d.type,
+            value: Math.abs(d.value),
+            label: d.label || (d.scope === 'DEPARTMENT' ? `${DEPARTMENT_LABEL[d.departmentKey!]} discount` : 'Discount'),
           }),
         });
       }
@@ -2269,30 +2353,118 @@ function NewQuotePageInner() {
         )}
       </div>
 
-      {/* Discount */}
-      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-2">
-        <div className="text-[11px] uppercase tracking-wider text-lt-fg3 font-bold">Discount (optional)</div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-lt-fg3 mb-1">Label</label>
-            <input
-              type="text" value={discountLabel}
-              onChange={(e) => setDiscountLabel(e.target.value)}
-              placeholder="e.g. Loyalty discount"
-              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-lt-fg3 mb-1">Amount (negative)</label>
-            <CurrencyInput
-              value={Number(discountAmount) || 0}
-              onChange={(next) => setDiscountAmount(next === 0 ? '' : String(next))}
-              placeholder="-500.00"
-              inputClassName="px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
-              ariaLabel="Discount amount"
-            />
-          </div>
+      {/* Discounts — % or $, whole order or one category. */}
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] uppercase tracking-wider text-lt-fg3 font-bold">Discounts (optional)</div>
+          {discountBreakdown.total > 0 && (
+            <div className="text-xs text-lt-fg2 font-mono">−${discountBreakdown.total.toFixed(2)}</div>
+          )}
         </div>
+
+        {discounts.length === 0 && (
+          <div className="text-xs text-lt-fg3">No discounts. Add one for the whole order or a single category.</div>
+        )}
+
+        {discounts.map((d, i) => {
+          const row = discountBreakdown.rows[i];
+          const patch = (next: Partial<DraftDiscount>) =>
+            setDiscounts((prev) => prev.map((x) => (x.localId === d.localId ? { ...x, ...next } : x)));
+          // Only departments that actually have lines are worth discounting.
+          const availableDepts = DEPARTMENTS.filter((dep) => (departmentSubtotals[dep] ?? 0) > 0);
+          return (
+            <div key={d.localId} className="grid grid-cols-[minmax(0,1.1fr)_auto_minmax(0,0.7fr)_minmax(0,1.2fr)_auto] gap-2 items-center">
+              <select
+                value={d.scope === 'ORDER' ? 'ORDER' : (d.departmentKey ?? '')}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch(v === 'ORDER'
+                    ? { scope: 'ORDER', departmentKey: null }
+                    : { scope: 'DEPARTMENT', departmentKey: v as LineItemDepartment });
+                }}
+                className="px-2 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+              >
+                <option value="ORDER">Whole order</option>
+                {availableDepts.map((dep) => (
+                  <option key={dep} value={dep}>{DEPARTMENT_LABEL[dep]}</option>
+                ))}
+              </select>
+
+              <div className="flex border border-lt-hairline rounded-lg overflow-hidden text-sm">
+                {(['PERCENT', 'FIXED'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => patch({ type: t })}
+                    className={`px-2.5 py-2 ${d.type === t ? 'bg-lt-fg text-white' : 'bg-lt-inner text-lt-fg2'}`}
+                  >
+                    {t === 'PERCENT' ? '%' : '$'}
+                  </button>
+                ))}
+              </div>
+
+              {d.type === 'PERCENT' ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={d.value === 0 ? '' : String(d.value)}
+                  onChange={(e) => {
+                    const n = parseFloat(e.target.value.replace(/[^\d.]/g, ''));
+                    patch({ value: Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0 });
+                  }}
+                  placeholder="10"
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
+                />
+              ) : (
+                <CurrencyInput
+                  value={d.value}
+                  onChange={(next) => patch({ value: Math.abs(next) })}
+                  min={0}
+                  inputClassName="px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
+                  ariaLabel="Discount amount"
+                />
+              )}
+
+              <input
+                type="text"
+                value={d.label}
+                onChange={(e) => patch({ label: e.target.value })}
+                placeholder={d.scope === 'DEPARTMENT' && d.departmentKey ? `${DEPARTMENT_LABEL[d.departmentKey]} courtesy` : 'e.g. Loyalty discount'}
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+              />
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-lt-fg3 font-mono w-20 text-right">
+                  {row && row.applied > 0 ? `−$${row.applied.toFixed(2)}` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDiscounts((prev) => prev.filter((x) => x.localId !== d.localId))}
+                  className="px-2 py-1 text-lt-fg3 hover:text-rose-600"
+                  title="Remove discount"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() =>
+            setDiscounts((prev) => [
+              ...prev,
+              {
+                localId: `d${prev.length}-${prev.reduce((a, x) => a + x.localId.length, 0)}`,
+                scope: 'ORDER', departmentKey: null, type: 'PERCENT', value: 0, label: '',
+              },
+            ])
+          }
+          className="text-xs font-semibold text-amber-600 hover:text-amber-500"
+        >
+          + Add discount
+        </button>
       </div>
 
       {/* Footer actions */}
@@ -2593,9 +2765,11 @@ function LineItemRow({
     <div className={`px-3 py-2 hover:bg-lt-card/30 ${isMember ? 'bg-violet-50/30 pl-8' : ''}`}>
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
         {/* QTY — primary scan target; bigger digit, no extra height */}
-        <input
-          type="number" min={1} step={1} value={item.quantity}
-          onChange={(e) => onChange(id, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+        <IntegerInput
+          value={item.quantity}
+          onChange={(next) => onChange(id, { quantity: next })}
+          min={1}
+          ariaLabel="Quantity"
           className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
         />
 

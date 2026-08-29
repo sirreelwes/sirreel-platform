@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { tokenVariants } from '@/lib/sales/catalogMatcher'
+import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,7 +58,9 @@ export async function GET(req: NextRequest) {
   // in the singular and crews ask in the plural. Matching "tables"
   // literally excluded "Table, 6' Folding" — every AND-ed token has to hit,
   // so one plural was enough to empty the whole dropdown.
-  const tokens = q.split(/\s+/).filter(Boolean)
+  // "4 ft table" → ["4ft", "table"] before variants, so the bare unit word
+  // isn't its own AND-ed token with nothing to hit.
+  const tokens = mergeMeasureTokens(q.split(/\s+/).filter(Boolean))
   const variants = tokens.map(tokenVariants)
 
   const [invItems, packages] = await Promise.all([
