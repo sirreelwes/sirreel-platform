@@ -22,6 +22,69 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-08-29
+
+### `mobile-stage-1` — HQ on a phone: responsive visibility + PWA shell
+
+`80875b4` shell · `2689133` jobs + gantt · `ab7cab7` detail + dialogs + tables · `55ce175` sweep
+
+**Why it matters.** The dashboard shell had no responsive rule anywhere: a
+240px sidebar with no breakpoint left 118px of content on a 390px phone, so
+all 76 authenticated routes were unreachable from a phone regardless of what
+the page itself did. Nav now collapses to a left-edge sheet rendering the
+same `getNavSections()` through a shared `NavList` (one code path, both
+viewports); the Action Items count is mirrored onto the hamburger; "+ New
+Job" gets a mobile bar of its own because the /jobs toolbar that owns it
+yields the viewport on a phone. `viewport` is declared explicitly (themeColor
++ notch safe-area; maximumScale deliberately untouched — HQ is dense and
+pinch-zoom is how you read it), and `src/app/manifest.ts` makes it
+installable. **No service worker, on purpose:** a stale hold or a stale
+balance in an ops tool is worse than no cache.
+
+Two findings worth recording. `sr_job_board_overrides` was still being
+written and honored by `rowState()`, but the retired kanban had been the only
+UI that could SET or CLEAR an override — a hand-placed job had no way back to
+its computed state and the override kept overriding. The ‹ › moves and
+`manual · reset` are restored on the row (endpoint was live the whole time).
+And 32 pages cancel `<main>`'s padding with `-m-6` while `<main>` pads FOUR —
+an 8px-a-side over-bleed that is where the app's stubborn sliver of
+horizontal scroll came from, on desktop as well.
+
+**Not done, deliberately:** the gantt is not squeezed onto a phone. Phones
+get an AGENDA (`?view=agenda`, same `/api/timeline-native`, same status
+tokens, day-grouped by what moves) behind a "best viewed on desktop" note;
+`?view=timeline` forces the grid anyway. The client portal and the public
+marketing site were not touched — both have their own mobile builds.
+
+**Per-page status.** Verdicts are for content at 390px. Every route was
+additionally *unusable* before, from the shell alone.
+
+| Route | Before | After | What changed |
+|---|---|---|---|
+| **all 76 `(dashboard)` routes** | unusable (shell) | OK | sidebar → sheet; `<main>` gains `overflow-x-hidden`; page bleed matches shell padding |
+| `/jobs` | degraded | OK | phase panes (Prejob/Out/Back) below `md`; toolbar 44px targets, 16px inputs; ‹ › + manual·reset restored |
+| `/jobs/[id]` | unusable | OK | paired grids stack; dialogs capped at 85svh |
+| `/gantt` | unusable | OK (agenda) | mobile agenda view; gantt desktop-only behind a note |
+| `/calendar` | unusable | OK | month grid keeps 7 columns behind a 640px floor + its own scroller |
+| `/dashboard`, `/reporting` | unusable | OK | KPI strips two-up, panel grids stack, `col-span` guarded |
+| `/collections` | degraded | OK | same treatment via `CollectionsDashboard` |
+| `/orders/[id]` | unusable | OK | 12-col line-item + payment editors stack one field per row |
+| `/orders`, `/crm`, `/crm/[id]`, `/crm/people/[id]`, `/inventory`, `/incidents`, `/incidents/[id]`, `/inquiries/[id]`, `/hr`, `/stale-holds`, `/planyo-cancellations`, `/sub-rentals*`, `/fleet/guest-drivers`, `/warehouse/pick*`, `/admin/*` (13) | unusable | OK | 23 tables wrapped in scrollers; 3/4-col blocks two-up; fixed widths guarded |
+| `/inbox` | unusable | OK | 400px list → full-width, reading pane stacks under |
+| `/dispatch`, `/maintenance`, `/fleet`, `/outreach`, `/scheduling`, `/orders/new`, `/claims/[id]`, `/rentalworks/*`, `/tools/contract-review*`, `/exec/*`, `/inventory/wizard` | degraded | OK | grid breakpoints + dialog height caps + type floor |
+| `/fleet/today`, `/fleet/inspection/*`, `/fleet/pickup/*` | OK | OK (untouched) | already mobile-first, outside the shell |
+| `/action-items`, `/inquiries`, `/sales/pipeline`, `/claims`, `/orders/new-quote` | n/a | n/a | redirects |
+
+Sub-11px type is floored at 11px below `md`, scoped to `.hq-shell` so the
+marketing site and client portal keep their own scales; desktop renders
+byte-identically. 23 modal panels had no height cap at all — with a keyboard
+up the submit button was off-screen and nothing scrolled.
+
+**Not verified in a browser.** Port 3000 was held by a concurrent session and
+the browser pane isn't signed in, so authenticated routes couldn't be
+rendered at 390px here. `npm run build` green, `tsc --noEmit` clean; the
+changes are layout classes, and the hand-verify list is in the handoff.
+
 ## 2026-07-19
 
 - `payment-info-billing-notify-trim` — dropped the billing@ notification on the KNOWN/auto-sent path of `/api/public/payment-info` (Wes confirmed the BILLING-split DESIGN-CHECK). That path is now a sales FYI, not billing work, so pinging billing@ there only diluted their signal. billing@ now fires ONLY on the unmatched/no-match and internal-exception paths (unchanged). No signal lost: a failed auto-send is still `console.error`'d and its Action-Queue alert body flags "email delivery FAILED, follow up manually"; dropped attachments are still recorded in the audit row. Untouched: the client-facing email, the auto-send gate, the Action Items FYI, and the structured fields. tsc clean, build green.
