@@ -7,14 +7,14 @@
  * response is neutral by design (we never confirm or deny whether
  * the email matches a Person), so the UI message is also neutral.
  *
- * TSX cohesion: dark hero (white wordmark + gold "PRESENTS / TSX"
+ * Portal cohesion: dark hero (white wordmark + gold rule
  * lockup + serif welcome), light cream body, gold CTA. Matches the
- * /portal/[token] page so a client who arrives here from any TSX
+ * /portal/[token] page so a client who arrives here from any portal
  * touchpoint sees the same shell.
  */
 
 import { useState } from 'react'
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens'
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
 
 export default function PortalSignInPage() {
   const [email, setEmail] = useState('')
@@ -54,8 +54,8 @@ export default function PortalSignInPage() {
     <div className="min-h-screen bg-[#F8F7F4] flex flex-col">
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* TSX dark hero — mirrors /portal/[token]/page.tsx */}
-      <div className="w-full" style={{ backgroundColor: TSX.dark }}>
+      {/* Dark hero — mirrors /portal/[token]/page.tsx */}
+      <div className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-md mx-auto px-5 pt-7 pb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -64,17 +64,10 @@ export default function PortalSignInPage() {
             width={180}
             style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
           />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
-          <div
-            className="mt-3 text-[10px] uppercase font-semibold"
-            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
-          >
-            Presents
-          </div>
-          <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
           <h1
-            className="mt-4 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: TSX_SERIF }}
+            className="mt-5 text-white text-[24px] font-light italic leading-tight"
+            style={{ fontFamily: PORTAL_SERIF }}
           >
             Sign in to your portal.
           </h1>
@@ -117,7 +110,7 @@ export default function PortalSignInPage() {
                   placeholder="you@example.com"
                   className="w-full px-3 py-2.5 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none"
                   style={{ borderColor: '#d4d4d4' }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = TSX.gold }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = PORTAL.gold }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#d4d4d4' }}
                 />
               </div>
@@ -125,9 +118,9 @@ export default function PortalSignInPage() {
                 type="submit"
                 disabled={submitting || !email.trim()}
                 className="w-full px-4 py-2.5 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: submitting || !email.trim() ? '#bfbfbf' : TSX.gold }}
-                onMouseEnter={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = TSX.goldHover }}
-                onMouseLeave={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = TSX.gold }}
+                style={{ backgroundColor: submitting || !email.trim() ? '#bfbfbf' : PORTAL.gold }}
+                onMouseEnter={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = PORTAL.goldHover }}
+                onMouseLeave={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = PORTAL.gold }}
               >
                 {submitting ? 'Sending…' : 'Send sign-in link'}
               </button>
@@ -138,18 +131,22 @@ export default function PortalSignInPage() {
 
       <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-md mx-auto px-5 py-6 text-center">
-          <div
-            className="text-[18px]"
-            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
-          >
-            SirReel
-          </div>
+          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
+              same treatment as /portal/job/[slug]. Black variant; every
+              portal footer band is light. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={30}
+            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { TSX, TSX_SERIF } from "@/lib/brand/tsxTokens";
+import { PORTAL, PORTAL_SERIF } from "@/lib/brand/portalTokens";
 import { SignaturePad } from "@/components/portal/SignaturePad";
 
 /**
@@ -115,7 +115,7 @@ export default function StageContractSignPage() {
     <div className="min-h-screen bg-[#F8F7F4]">
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-3xl mx-auto px-6 py-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -124,16 +124,16 @@ export default function StageContractSignPage() {
             width={160}
             style={{ display: 'inline-block', maxWidth: 160, height: 'auto' }}
           />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
           <div
             className="mt-3 text-[10px] uppercase font-semibold"
-            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+            style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
           >
             Stage Booking Agreement
           </div>
           <h1
             className="mt-1 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: TSX_SERIF }}
+            style={{ fontFamily: PORTAL_SERIF }}
           >
             Countersign your booking.
           </h1>
@@ -248,18 +248,22 @@ export default function StageContractSignPage() {
 
       <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-3xl mx-auto px-6 py-6 text-center">
-          <div
-            className="text-[18px]"
-            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
-          >
-            SirReel
-          </div>
+          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
+              same treatment as /portal/job/[slug]. Black variant; every
+              portal footer band is light. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={30}
+            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

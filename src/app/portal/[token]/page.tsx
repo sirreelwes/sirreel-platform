@@ -4,7 +4,7 @@ import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, LCDW_WAIVED_DAMAGE_LIMIT, usd, usd2 } from '@/lib/contracts/fees';
 // Imported rather than kept as a private copy. These two strings existed here
 // as literals AND in portal-v2/terms.ts, and the two drifted: this page still
@@ -17,7 +17,7 @@ import { CC_SURCHARGE_TEXT, CC_ACK_TEXT } from '@/components/portal-v2/terms';
 
 /**
  * Visual restyle pass (May 2026) — see commit history for the version
- * that swapped the white sticky header for the TSX dark hero. The tab
+ * that swapped the white sticky header for the dark hero. The tab
  * navigation, conditional rendering, canvas refs, and CardPointe
  * iframe init are all intentionally untouched. A separate follow-up
  * branch will collapse tabs into single-scroll sections with full
@@ -395,11 +395,11 @@ export default function ClientPortal() {
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-      {/* TSX dark hero. Matches the welcome email's visual language —
-          white SirReel wordmark, gold "PRESENTS / TSX" lockup, serif
-          headline. The tab bar lives in its own sticky strip below;
+      {/* Dark hero. Matches the welcome email's visual language —
+          white SirReel wordmark, gold rule, tagline, serif headline.
+          The tab bar lives in its own sticky strip below;
           functionality + tab-switching logic are unchanged. */}
-      <div className="w-full" style={{ backgroundColor: TSX.dark }}>
+      <div className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-2xl mx-auto px-5 pt-7 pb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -408,20 +408,15 @@ export default function ClientPortal() {
             width={180}
             style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
           />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
-          <div className="mt-3 text-[10px] uppercase font-semibold" style={{ color: TSX.gold, letterSpacing: '2.5px' }}>
-            Presents
-          </div>
-          <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
-          {/* Brand expansion — sits tight to the TSX mark as one lockup,
-              wider gap before the welcome row below. Gold for visual
-              contrast against the dark hero; smaller than TSX but
-              larger than the welcome line for hierarchy. */}
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
+          {/* Tagline — this is a SirReel line, not the retired TSX
+              sub-brand, so it stays. Gold for contrast against the dark
+              hero; larger than the welcome line below for hierarchy. */}
           <div
-            className="mt-1 italic"
+            className="mt-3 italic"
             style={{
-              fontFamily: TSX_SERIF,
-              color: TSX.gold,
+              fontFamily: PORTAL_SERIF,
+              color: PORTAL.gold,
               fontSize: 15,
               letterSpacing: '0.5px',
               fontWeight: 400,
@@ -431,7 +426,7 @@ export default function ClientPortal() {
           </div>
           <h1
             className="mt-5 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: TSX_SERIF }}
+            style={{ fontFamily: PORTAL_SERIF }}
           >
             {booking.person?.firstName
               ? `Welcome, ${booking.person.firstName}.`
@@ -498,12 +493,12 @@ export default function ClientPortal() {
             each flow has its own extracted route. */}
         <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-5 pt-5 pb-3">
-            <div className="text-[10px] font-bold uppercase tracking-[2px]" style={{ color: TSX.gold }}>
+            <div className="text-[10px] font-bold uppercase tracking-[2px]" style={{ color: PORTAL.gold }}>
               Paperwork
             </div>
             <div
               className="text-[13px] italic mt-0.5"
-              style={{ fontFamily: TSX_SERIF, color: '#1e3a5f' }}
+              style={{ fontFamily: PORTAL_SERIF, color: '#1e3a5f' }}
             >
               Complete in any order
             </div>
@@ -517,7 +512,7 @@ export default function ClientPortal() {
               const isFail = color === 'fail';
               const isActive = activeTab === tab.id;
               const statusLabel = isDone ? 'Complete' : isFail ? 'Action needed' : isAmber ? 'Pending review' : isPending ? 'Required' : 'Required';
-              const statusColor = isDone ? '#10b981' : isFail ? '#dc2626' : isAmber ? '#d97706' : TSX.gold;
+              const statusColor = isDone ? '#10b981' : isFail ? '#dc2626' : isAmber ? '#d97706' : PORTAL.gold;
               return (
                 <li key={tab.id}>
                   <button
@@ -1604,25 +1599,29 @@ export default function ClientPortal() {
         )}
       </div>
 
-      {/* TSX-branded footer — mirrors the muted footer band on the
+      {/* Footer — mirrors the muted footer band on the
           booking-welcome email so the portal feels like part of the
           same conversation. After-hours line lives here because
           it's the surface a client reaches for when something
           urgent happens on set. */}
       <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-2xl mx-auto px-5 py-6 text-center">
-          <div
-            className="text-[18px]"
-            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
-          >
-            SirReel
-          </div>
+          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
+              same treatment as /portal/job/[slug]. Black variant; every
+              portal footer band is light. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={30}
+            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

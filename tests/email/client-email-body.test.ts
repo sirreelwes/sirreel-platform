@@ -20,7 +20,7 @@
  *
  * Pure rendering — no DB.
  */
-import { buildTsxWelcomeEmail } from '../../src/lib/email/templates/tsxWelcomeTemplate'
+import { buildWelcomeEmail } from '../../src/lib/email/templates/welcomeTemplate'
 import { buildCardAuthRequestEmail } from '../../src/lib/email/templates/cardAuthRequest'
 import { defaultEmailBody } from '../../src/lib/email/standardOpening'
 
@@ -34,7 +34,7 @@ const has = (label: string, haystack: string, needle: string) => eq(label, hayst
 const lacks = (label: string, haystack: string, needle: string) => eq(label, haystack.includes(needle), false)
 
 const render = (customBody: string | null) =>
-  buildTsxWelcomeEmail({
+  buildWelcomeEmail({
     mode: 'welcome-with-quote',
     customBody,
     clientFirstName: 'Colin',

@@ -9,7 +9,7 @@ import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -466,9 +466,8 @@ export default function JobPortalPage() {
           surface, the hero is the brand anchor.
 
           "Presents / TSX" removed 2026-08-29 (Wes): the portal reads as
-          SirReel to the client, not a sub-brand. The TSX tokens stay —
-          they are this page's palette and serif, not a name. */}
-      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+          SirReel to the client, not a sub-brand. */}
+      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -477,10 +476,10 @@ export default function JobPortalPage() {
             width={170}
             style={{ display: 'inline-block', maxWidth: 170, height: 'auto' }}
           />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
           <h1
             className="mt-5 text-white text-[22px] sm:text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: TSX_SERIF }}
+            style={{ fontFamily: PORTAL_SERIF }}
           >
             {data.company.name}
           </h1>
@@ -1199,7 +1198,7 @@ export default function JobPortalPage() {
 
       </main>
 
-      {/* TSX footer — same band the welcome email + /portal/[token] use */}
+      {/* Footer — same band the welcome email + /portal/[token] use */}
       <footer className="mt-4 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-center">
           {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29).
@@ -1215,8 +1214,8 @@ export default function JobPortalPage() {
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

@@ -24,7 +24,7 @@ import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { schedulingCategoryId } from '@/lib/catalog/resolve'
 import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
 import { getCategoryUtilization } from '@/lib/fleet/utilization'
-import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
+import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
 
 // Re-exported for back-compat with existing importers; the canonical home is
@@ -289,11 +289,11 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
   const end = fmtDate(args.ret)
   const dateRange = start && end ? `${start} – ${end}` : start ? `starting ${start}` : null
 
-  // Reuse Send Quote's branded shell (buildTsxWelcomeEmail) in 'availability'
+  // Reuse Send Quote's branded shell (buildWelcomeEmail) in 'availability'
   // mode — one template, both flows. The supply link renders as a styled
   // button inside the shell; the tier message is the ONLY availability
   // statement in the email — no counts, no category names.
-  return buildTsxWelcomeEmail({
+  return buildWelcomeEmail({
     mode: 'availability',
     clientFirstName: args.recipientName ?? null,
     clientFullName: args.recipientName ?? null,

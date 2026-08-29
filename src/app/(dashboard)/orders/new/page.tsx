@@ -1506,7 +1506,7 @@ function NewQuotePageInner() {
   // there afterward so the agent never edits in two places. `send`
   // is the finishing move — same create flow, then lands on the
   // detail page with ?send=1 which auto-opens the existing review
-  // gate against the TSX welcome+quote template.
+  // gate against the welcome+quote template.
   type CreateAction = 'draft' | 'preview' | 'download' | 'send';
 
   // ── Job-as-root (step 4): the resolver replaces inline job creation.
@@ -2508,7 +2508,7 @@ function NewQuotePageInner() {
             onClick={() => createQuote('send')}
             disabled={!canCreate || creating}
             className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg"
-            title="Create the quote, generate the PDF, then open the TSX welcome+quote review gate"
+            title="Create the quote, generate the PDF, then open the welcome+quote review gate"
           >
             {creating ? 'Saving…' : 'Send quote →'}
           </button>

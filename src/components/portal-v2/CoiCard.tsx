@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
 import type { V2Paperwork } from './types'
 
@@ -147,7 +147,7 @@ export function CoiCard({
                   }}
                   disabled={!coiFile || coiReviewing}
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
-                  style={{ backgroundColor: TSX.ink }}
+                  style={{ backgroundColor: PORTAL.ink }}
                 >
                   {coiReviewing ? '🔍 Reviewing COI…' : 'Upload & Review →'}
                 </button>
@@ -259,7 +259,7 @@ export function CoiCard({
                   }}
                   disabled={!wcFile || wcReviewing}
                   className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
-                  style={{ backgroundColor: TSX.ink }}
+                  style={{ backgroundColor: PORTAL.ink }}
                 >
                   {wcReviewing ? '🔍 Reviewing…' : 'Upload & Review →'}
                 </button>

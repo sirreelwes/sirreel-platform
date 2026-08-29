@@ -48,7 +48,7 @@ import { SignaturePad } from "@/components/portal/SignaturePad";
 import { RentalAgreementBody } from '@/components/contracts/RentalAgreementBody';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
 
 const ACKNOWLEDGEMENT_TEXT =
   'I have read and agree to the Rental Agreement above. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.';
@@ -264,8 +264,8 @@ export default function RentalAgreementSignPage() {
           (public) layout, which the portal does not share. */}
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Archivo:wght@400;700;900&display=swap" rel="stylesheet" />
 
-      {/* TSX dark hero — same shell as /portal/[token] + /portal/account */}
-      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+      {/* Dark hero — same shell as /portal/[token] + /portal/account */}
+      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-3xl mx-auto px-6 py-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -274,16 +274,16 @@ export default function RentalAgreementSignPage() {
             width={160}
             style={{ display: 'inline-block', maxWidth: 160, height: 'auto' }}
           />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
           <div
             className="mt-3 text-[10px] uppercase font-semibold"
-            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+            style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
           >
             Rental Agreement
           </div>
           <h1
             className="mt-1 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: TSX_SERIF }}
+            style={{ fontFamily: PORTAL_SERIF }}
           >
             {isSigned ? 'Signed.' : isRedlinePending ? 'Under review.' : 'Review and sign.'}
           </h1>
@@ -523,18 +523,22 @@ export default function RentalAgreementSignPage() {
 
       <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-3xl mx-auto px-6 py-6 text-center">
-          <div
-            className="text-[18px]"
-            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
-          >
-            SirReel
-          </div>
+          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
+              same treatment as /portal/job/[slug]. Black variant; every
+              portal footer band is light. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={30}
+            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

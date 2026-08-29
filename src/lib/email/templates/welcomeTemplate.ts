@@ -1,7 +1,7 @@
 /**
- * TSX welcome email — two modes, same brand shell.
+ * Welcome email — two modes, same brand shell.
  *
- *   mode = 'welcome-only'        — first-touch welcome to TSX with
+ *   mode = 'welcome-only'        — first-touch welcome with
  *                                  no quote attached (e.g., generic
  *                                  intro after a referral / event).
  *   mode = 'welcome-with-quote'  — welcome + quote snapshot block
@@ -183,7 +183,7 @@ function rangeLine(start: string | null, end: string | null): string {
   return 'Dates TBD'
 }
 
-export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail {
+export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail {
   // First-name only, from whichever field is present. Always take the first
   // whitespace token (so a full name passed as clientFirstName still yields
   // just the first name). Fall back to "there" for empty OR email-looking
@@ -209,19 +209,18 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
 
   // Subject — reviewed by Wes 2026-08-23.
   //
-  // The quote subject says SIRREEL, not TSX (Wes, from a live client
-  // reply reading "Re: Your TSX quote for The Watch Party"): TSX is the
-  // name of the client PORTAL experience, and a quote is not a portal
-  // thing. A subject line is also often the first words a new client
-  // ever reads from us — it has to be the name they recognize. The
-  // follow-up cadence templates already said "SirReel quote"; this was
-  // the one outlier. The welcome-only subject keeps TSX on purpose —
-  // that email exists to introduce the portal brand.
+  // The quote subject says SIRREEL (Wes, from a live client reply
+  // reading "Re: Your TSX quote for The Watch Party"). A subject line
+  // is often the first words a new client ever reads from us — it has
+  // to be the name they recognize. The follow-up cadence templates
+  // already said "SirReel quote"; this was the one outlier. As of
+  // 2026-08-29 the welcome-only subject drops TSX too — the sub-brand
+  // is retired, so there is no longer a portal brand to introduce.
   const subject = withAvailability
     ? `Re: ${av!.jobName} — availability${av!.dateRange ? ` for ${av!.dateRange}` : ''}`
     : withQuote
       ? `Your SirReel quote for ${q!.jobName}`
-      : `Welcome to TSX — The SirReel Experience`
+      : `Welcome to The SirReel Experience`
 
   // [[PLACEHOLDER]] body copy — Wes review.
   const greeting = `Hi ${safeFirst},`
@@ -239,7 +238,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // box is seeded from the same function, so what a rep is handed to edit and
   // what a client receives cannot drift.
   const quoteDefault = defaultEmailBody({ kind: 'quote' })
-  const welcomeOpener = `${escapeHtml(PRE_JOB_OPENING_LINE)} <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
+  const welcomeOpener = `${escapeHtml(PRE_JOB_OPENING_LINE)} <strong>The SirReel Experience</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = toParas(quoteDefault)
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
   // Custom-message mode: the rep's own prose REPLACES the templated opener —
@@ -414,16 +413,13 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // The logo now spans the full header width on every mode, which is what the
   // Quick Reply email already did.
 
-  // TSX tagline — identical small-caps treatment as the thank-you
+  // Tagline — identical small-caps treatment as the thank-you
   // template; same widths and offsets so the two emails feel like
   // they live in the same envelope system.
   const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
   const smCap = (c: string) => `<span style="font-size:10px;">${c}</span>`
   const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
-  const dashGap = `<span style="font-size:11px;color:rgba(212,165,71,0.6);margin:0 6px;">&ndash;</span>`
-  const tsxTagline = [
-    bigCap('T'), bigCap('S'), bigCap('X'),
-    dashGap,
+  const brandTagline = [
     bigCap('T'), smCap('H'), smCap('E'),
     wordGap,
     bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'),
@@ -499,7 +495,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
                 color: ${ACCENT};
                 margin: 0;
                 line-height: 1.4;
-              ">${tsxTagline}</p>
+              ">${brandTagline}</p>
             </td>
           </tr>
           <tr>
@@ -537,7 +533,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         ? repBody
         : withQuote
           ? quoteDefault
-          : `${PRE_JOB_OPENING_LINE} TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
+          : `${PRE_JOB_OPENING_LINE} The SirReel Experience is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
@@ -613,7 +609,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     `& Team SirReel`,
     ...(input.agentPhone ? [input.agentPhone] : []),
     '',
-    `TSX — The SirReel Experience`,
+    `The SirReel Experience`,
     `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,
   )
 

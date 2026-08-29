@@ -404,7 +404,7 @@ export default function OrderDetailPage() {
     : false;
   // ?send=1 — set by new-quote's "Send quote" finishing-move CTA. The
   // detail page loads, hydrates the order, then auto-opens the review
-  // gate against the TSX welcome+quote template. One continuous motion
+  // gate against the welcome+quote template. One continuous motion
   // from new-quote → preview → send.
   const autoOpenSend = searchParams?.get('send') === '1';
 

@@ -127,19 +127,17 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     ? `Order ${escapeHtml(input.orderNumber)} · Wrapped ${escapeHtml(wrap)}`
     : `Order ${escapeHtml(input.orderNumber)}`
 
-  // TSX tagline — "T S X - T H E  S I R R E E L  E X P E R I E N C E"
-  // with letters that are lowercase in the natural casing rendered as
-  // smaller capitals (mimics small-caps without relying on
+  // Tagline — "T H E  S I R R E E L  E X P E R I E N C E" with letters
+  // that are lowercase in the natural casing rendered as smaller
+  // capitals (mimics small-caps without relying on
   // `font-variant-caps`, which Gmail and Outlook don't honor
-  // reliably). Big letters mirror the natural uppercases in TSX +
-  // The + SirReel + Experience.
+  // reliably). Big letters mirror the natural uppercases in
+  // The + SirReel + Experience. The leading "TSX –" was dropped
+  // 2026-08-29 (Wes) along with the rest of the sub-brand.
   const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
   const smCap  = (c: string) => `<span style="font-size:10px;">${c}</span>`
   const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
-  const dashGap = `<span style="font-size:11px;color:rgba(212,165,71,0.6);margin:0 6px;">&ndash;</span>`
-  const tsxTagline = [
-    bigCap('T'), bigCap('S'), bigCap('X'),
-    dashGap,
+  const brandTagline = [
     bigCap('T'), smCap('H'), smCap('E'),
     wordGap,
     bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'),
@@ -232,14 +230,14 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
           </tr>
           <tr>
             <td style="padding: 18px 32px 0;">
-              <!-- Upper gold rule — frames the TSX tagline together
+              <!-- Upper gold rule — frames the tagline together
                    with the lower rule below. -->
               <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
             </td>
           </tr>
           <tr>
             <td align="center" style="padding: 8px 32px 6px;">
-              <!-- TSX tagline. Modern thin sans, widely letter-
+              <!-- Tagline. Modern thin sans, widely letter-
                    spaced, all-caps with small-caps for letters that
                    are lowercase in natural casing. -->
               <p style="
@@ -249,7 +247,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
                 color: ${ACCENT};
                 margin: 0;
                 line-height: 1.4;
-              ">${tsxTagline}</p>
+              ">${brandTagline}</p>
             </td>
           </tr>
           <tr>
@@ -299,7 +297,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     '',
     `— ${textSignOff}${textPhone}`,
     '',
-    'TSX — The SirReel Experience',
+    'The SirReel Experience',
     '---',
     `${orderLine}`,
     `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,

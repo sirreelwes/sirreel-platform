@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatPhone } from '@/lib/format/phone'
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import type { V2Intake } from './types'
 
 /**
@@ -97,7 +97,7 @@ export function DetailsCard({
           ) : (
             <span
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide"
-              style={{ borderColor: TSX.gold, color: '#8a6a1f', backgroundColor: 'rgba(212,165,71,0.10)' }}
+              style={{ borderColor: PORTAL.gold, color: '#8a6a1f', backgroundColor: 'rgba(212,165,71,0.10)' }}
             >
               {complete ? 'Confirm' : 'Start here'}
             </span>
@@ -149,7 +149,7 @@ export function DetailsCard({
             }}
             disabled={saving}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
-            style={{ backgroundColor: TSX.ink }}
+            style={{ backgroundColor: PORTAL.ink }}
           >
             {saving ? 'Saving…' : 'Save my details'}
           </button>

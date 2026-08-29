@@ -73,7 +73,7 @@ export function defaultEmailBody(input: {
     return [
       STANDARD_OPENING_LINE,
       '',
-      `We're excited to take care of your team on ${project}. Everything you'll need over the course of this project lives in one place — your TSX portal.`,
+      `We're excited to take care of your team on ${project}. Everything you'll need over the course of this project lives in one place — your SirReel portal.`,
     ].join('\n')
   }
   return STANDARD_OPENING_LINE

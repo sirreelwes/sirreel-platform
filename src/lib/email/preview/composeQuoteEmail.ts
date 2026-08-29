@@ -21,7 +21,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
-import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
+import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 
@@ -165,7 +165,7 @@ export async function composeQuoteEmail(
   // API back-compat; it's just empty.
   const attachments: AttachmentMeta[] = []
 
-  const { subject, html, text } = buildTsxWelcomeEmail({
+  const { subject, html, text } = buildWelcomeEmail({
     mode: 'welcome-with-quote',
     customBody: args.customMessage?.trim() || null,
     clientFirstName: to.name.split(' ')[0] || null,

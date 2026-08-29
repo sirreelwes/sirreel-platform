@@ -7,11 +7,11 @@
  * the same discipline as composeQuoteEmail.
  *
  * ── Brand ─────────────────────────────────────────────────────────────────
- * The envelope is the TSX shell every client email already arrives in (slate
- * header, SirReel logo, gold rules, "TSX — The SirReel Experience" tagline,
+ * The envelope is the shell every client email already arrives in (slate
+ * header, SirReel logo, gold rules, "The SirReel Experience" tagline,
  * "& Team SirReel" sign-off). The estimate INSIDE it is SirReel-branded and
- * says SirReel throughout: TSX is the portal brand, never the name on a
- * quote or an estimate (Wes, 2026-08-23).
+ * says SirReel throughout. TSX was barred from quotes and estimates on
+ * 2026-08-23 and retired entirely on 2026-08-29 (Wes).
  *
  * ── The money rule ────────────────────────────────────────────────────────
  * The client is quoted the VENDOR'S LIST RATE and nothing else (Wes,
@@ -395,7 +395,7 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
     '& Team SirReel',
     ...(args.agentPhone ? [args.agentPhone] : []),
     '',
-    'TSX — The SirReel Experience',
+    'The SirReel Experience',
     '8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335',
   )
 

@@ -29,7 +29,7 @@ import {
   verifyPersonSessionCookieValue,
 } from '@/lib/portal/personSession'
 import { RequestAddOnButton } from '@/components/portal/RequestAddOnButton'
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens'
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -208,10 +208,10 @@ export default async function PortalAccountPage() {
     <div className="min-h-screen bg-[#F8F7F4]">
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* TSX dark hero. Mirrors /portal/[token]/page.tsx so the
+      {/* Dark hero. Mirrors /portal/[token]/page.tsx so the
           signed-in account view feels like the same touchpoint family
           as the per-order portal and the welcome email. */}
-      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-4xl mx-auto px-6 py-7 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1 text-center sm:text-left">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -221,16 +221,16 @@ export default async function PortalAccountPage() {
               width={160}
               style={{ display: 'inline-block', maxWidth: 160, height: 'auto' }}
             />
-            <div className="mt-3 sm:mx-0 mx-auto" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+            <div className="mt-3 sm:mx-0 mx-auto" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
             <div
               className="mt-3 text-[10px] uppercase font-semibold"
-              style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+              style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
             >
               Your portal
             </div>
             <h1
               className="mt-1 text-white text-[24px] font-light italic leading-tight"
-              style={{ fontFamily: TSX_SERIF }}
+              style={{ fontFamily: PORTAL_SERIF }}
             >
               Hi {person.firstName}.
             </h1>
@@ -399,18 +399,22 @@ export default async function PortalAccountPage() {
 
       <footer className="border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-4xl mx-auto px-6 py-6 text-center">
-          <div
-            className="text-[18px]"
-            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
-          >
-            SirReel
-          </div>
+          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
+              same treatment as /portal/job/[slug]. Black variant; every
+              portal footer band is light. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={30}
+            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services<br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
+            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

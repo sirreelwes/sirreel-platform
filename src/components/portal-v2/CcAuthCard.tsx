@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { formatPhone } from '@/lib/format/phone'
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Intake } from './types'
@@ -430,7 +430,7 @@ export function CcAuthCard({
               submitting
             }
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
-            style={{ backgroundColor: TSX.ink }}
+            style={{ backgroundColor: PORTAL.ink }}
           >
             {submitting ? 'Submitting…' : 'Authorize & Complete ✓'}
           </button>

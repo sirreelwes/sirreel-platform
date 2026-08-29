@@ -29,8 +29,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div style={{ background: DARK }} className="px-8 pt-9 pb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/sirreel-logo-white.png" alt="SirReel Studio Services" className="h-9 w-auto inline-block" />
-          <div style={{ color: GOLD }} className="mt-4 text-[10px] font-semibold uppercase tracking-[0.25em]">Presents</div>
-          <div className="mt-1 text-white text-[28px] font-light tracking-[6px]">TSX</div>
+          <div style={{ background: GOLD }} className="mx-auto mt-4 h-[2px] w-12" />
         </div>
         <div className="px-8 py-8 text-center">{children}</div>
       </div>

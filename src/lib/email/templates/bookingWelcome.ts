@@ -1,12 +1,12 @@
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 /**
- * Booking-welcome email — the second TSX-branded HTML email in the
+ * Booking-welcome email — the second branded HTML email in the
  * platform (sibling to portalInvite.ts). Fires when a SirReel rep
  * clicks "Send Email" on the Booking Created success modal. Replaces
  * the old mailto-pop-Mail flow, which couldn't carry HTML styling.
  *
  * Visual language mirrors src/lib/email/templates/portalInvite.ts —
- * shared brand tokens, dark hero, "Presents / TSX" lockup, gold
+ * shared brand tokens, dark hero, gold
  * accent. Copy is different: this is the project kickoff note, not
  * the magic-link invite.
  *
@@ -53,7 +53,7 @@ export interface BookingWelcomeEmailInput {
   personalNote?: string | null
   /** Write-my-own mode: the rep's prose, rendered BELOW the standard opening
    *  line rather than replacing it. Greeting, benefits, CTA and sign-off stay
-   *  intact. When empty, the templated TSX-portal paragraph is used instead. */
+   *  intact. When empty, the templated portal paragraph is used instead. */
   customMessage?: string | null
   /**
    * Quick Respond mode (Wes 2026-08-25) — a reply to someone who has only
@@ -63,10 +63,10 @@ export interface BookingWelcomeEmailInput {
    *      silently fall back to the default copy — otherwise the rep sees
    *      blank and the client receives the standard welcome.
    *   2. No portal PITCH. "drop the portal button for quick respond" took
-   *      out the whole apparatus that sells the portal — the "Your TSX
-   *      portal" bullet, the preheader, the TSX brand framing — because an
+   *      out the whole apparatus that sells the portal — the "Your SirReel
+   *      portal" bullet, the preheader, the brand framing — because an
    *      email that advertises a portal it never links to reads as broken.
-   *      TSX is the portal brand ONLY (Wes 8/23), so what is left says
+   *      the TSX sub-brand is retired (Wes 2026-08-29), so what is left says
    *      SirReel. A single "Start your order" button came back afterwards
    *      (same day): one next step, offered without the sales pitch.
    *
@@ -109,7 +109,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const repName = escapeHtml(input.repName || 'the SirReel team')
   const repEmail = input.repEmail ? escapeHtml(input.repEmail) : ''
   const portalLink = input.portalLink
-  const ctaLabel = escapeHtml(input.ctaLabel || 'Click here for your TSX portal')
+  const ctaLabel = escapeHtml(input.ctaLabel || 'Click here for your SirReel portal')
   const secondaryCta = input.secondaryCtaLabel ? escapeHtml(input.secondaryCtaLabel) : ''
   const noteRaw = (input.personalNote || '').trim()
   const customRaw = (input.customMessage || '').trim()
@@ -127,7 +127,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   // sentence changed depending on who typed it. Greeting, benefits, CTA and
   // sign-off are unchanged.
   //
-  // The templated TSX-portal prose is still the fallback when a rep writes
+  // The templated portal prose is still the fallback when a rep writes
   // nothing — it is "the rest" in that case.
   // The rep's text is the WHOLE body when present. It is not appended to a
   // fixed preamble, because the rep is given that preamble prefilled and may
@@ -160,7 +160,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     : `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
   const text = [
-    ...(quick ? [] : [`Welcome to TSX — The SirReel Experience.`, ``]),
+    ...(quick ? [] : [`Welcome to The SirReel Experience.`, ``]),
     `Hi ${input.firstName || 'there'},`,
     ``,
     ...(introText ? [introText] : []),
@@ -174,10 +174,10 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
         ]
       : [
           `Everything you'll need lives in one place:`,
-          `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
+          `  ✓ Your SirReel portal — paperwork, schedule, equipment, all in one place`,
           `  ✓ The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
           ``,
-          `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
+          `${input.ctaLabel || 'Click here for your SirReel portal'}: ${portalLink}`,
           ``,
           `Your progress saves automatically, so feel free to come back any time.`,
         ]),
@@ -230,12 +230,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                   <td style="width:48px;height:2px;background-color:${GOLD};line-height:2px;font-size:0;">&nbsp;</td>
                 </tr>
               </table>
-              ${quick ? '' : `<div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
-                Presents
-              </div>
-              <div style="margin-top:6px;color:#ffffff;font-size:32px;letter-spacing:6px;font-weight:300;">
-                TSX
-              </div>`}
+
             </td>
           </tr>
 
@@ -243,7 +238,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
               <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
-                ${quick ? 'Thanks for reaching out.' : 'Welcome to TSX &mdash; The SirReel Experience.'}
+                ${quick ? 'Thanks for reaching out.' : 'Welcome to The SirReel Experience.'}
               </h1>
             </td>
           </tr>
@@ -266,7 +261,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                       <tr>
                         <td valign="top" width="32" style="color:${GOLD};font-size:18px;font-weight:bold;padding-top:1px;">&#10003;</td>
                         <td style="font-size:14px;line-height:1.55;color:#333333;">
-                          <strong style="color:#1a1a1a;">Your TSX portal.</strong>
+                          <strong style="color:#1a1a1a;">Your SirReel portal.</strong>
                           Paperwork, schedule, equipment list &mdash; all in one place, saved automatically.
                         </td>
                       </tr>

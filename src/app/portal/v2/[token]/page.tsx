@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { isPortalPaperworkLocked } from '@/lib/bookings/status'
 import { useParams } from 'next/navigation'
-import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens'
+import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
 import { DetailsCard, intakeComplete } from '@/components/portal-v2/DetailsCard'
 import { RentalAgreementCard } from '@/components/portal-v2/RentalAgreementCard'
 import { LcdwCard } from '@/components/portal-v2/LcdwCard'
@@ -227,15 +227,15 @@ export default function ClientPortalV2() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* Branded header — S mark + job context */}
-      <div className="w-full" style={{ backgroundColor: TSX.dark }}>
+      <div className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-xl mx-auto px-5 pt-8 pb-6 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/s-logo-white.png" alt="SirReel" width={44} style={{ display: 'inline-block', maxWidth: 44, height: 'auto' }} />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
-          <div className="mt-3 text-[10px] uppercase font-semibold" style={{ color: TSX.gold, letterSpacing: '2.5px' }}>
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
+          <div className="mt-3 text-[10px] uppercase font-semibold" style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}>
             SirReel Studio Services
           </div>
-          <h1 className="mt-3 text-white text-[24px] font-light italic leading-tight" style={{ fontFamily: TSX_SERIF }}>
+          <h1 className="mt-3 text-white text-[24px] font-light italic leading-tight" style={{ fontFamily: PORTAL_SERIF }}>
             {booking.person?.firstName ? `Welcome, ${booking.person.firstName}.` : 'Welcome to your portal.'}
           </h1>
           <p className="mt-2 text-white/70 text-[13px] font-semibold">{booking.jobName}</p>
@@ -243,7 +243,7 @@ export default function ClientPortalV2() {
             {booking.company?.name && <span>{booking.company.name}</span>}
             {booking.startDate && (
               <>
-                <span style={{ color: TSX.gold }}>·</span>
+                <span style={{ color: PORTAL.gold }}>·</span>
                 <span>
                   {fmtShort(booking.startDate)}
                   {booking.endDate ? ` – ${fmtShort(booking.endDate)}` : ''}
@@ -292,7 +292,7 @@ export default function ClientPortalV2() {
               className="h-full rounded-full transition-all duration-500"
               style={{
                 width: `${total ? Math.max((doneCount / total) * 100, 4) : 0}%`,
-                backgroundColor: allDone ? '#10b981' : TSX.gold,
+                backgroundColor: allDone ? '#10b981' : PORTAL.gold,
               }}
             />
           </div>
@@ -437,9 +437,9 @@ export default function ClientPortalV2() {
             <br />
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
-          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
+          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
             After-hours:{' '}
-            <a href="tel:+18884777335" style={{ color: TSX.gold }}>
+            <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>
               (888) 477-7335
             </a>
           </p>

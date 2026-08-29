@@ -1,6 +1,6 @@
 'use client'
 
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import type { V2CardStatus } from './types'
 
 /**
@@ -22,7 +22,7 @@ export function ContextChip({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border"
-      style={{ borderColor: TSX.gold, color: '#8a6a1f', backgroundColor: 'rgba(212,165,71,0.10)' }}
+      style={{ borderColor: PORTAL.gold, color: '#8a6a1f', backgroundColor: 'rgba(212,165,71,0.10)' }}
     >
       {children}
     </span>
@@ -79,7 +79,7 @@ export function CardShell({
           {status === 'todo' && !open && (
             <span
               className="hidden sm:inline-flex px-3 py-1.5 rounded-lg text-[11px] font-bold text-white"
-              style={{ backgroundColor: TSX.ink }}
+              style={{ backgroundColor: PORTAL.ink }}
             >
               {actionLabel}
             </span>

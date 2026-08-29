@@ -1,12 +1,13 @@
 /**
- * TSX portal invitation email — the first email a new client receives
+ * Portal invitation email — the first email a new client receives
  * after being added to the SirReel Job Page portal. Aims for the
  * Amex-Platinum-welcome / Stripe-onboarding register rather than a
  * transactional "your access is ready" tone.
  *
  * Brand framing:
- *   - "SirReel presents TSX" — TSX is the platform-as-product.
  *   - "The SirReel Experience" — the overall service philosophy.
+ *   - The TSX sub-brand was retired 2026-08-29 (Wes: "stop branding
+ *     that"). The portal is simply the client's SirReel portal.
  *
  * HTML rules (all enforced below):
  *   - Table-based layout (no flexbox / grid; email clients lack support).
@@ -81,7 +82,7 @@ export function buildPortalInviteEmail(input: PortalInviteEmailInput): PortalInv
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
-    `SirReel presents TSX — your portal to your current and past projects.`,
+    `Your SirReel portal — one place for your current and past projects.`,
     ``,
     `From this single portal you can:`,
     `  ✓ Sign your rental agreement and upload your COI`,
@@ -126,7 +127,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <!-- Preheader (hidden in body, shown in inbox preview) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    SirReel presents TSX — your online portal to The SirReel Experience.
+    Your online portal to The SirReel Experience.
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">
@@ -146,12 +147,6 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                   <td style="width:48px;height:2px;background-color:${GOLD};line-height:2px;font-size:0;">&nbsp;</td>
                 </tr>
               </table>
-              <div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
-                Presents
-              </div>
-              <div style="margin-top:6px;color:#ffffff;font-size:32px;letter-spacing:6px;font-weight:300;">
-                TSX
-              </div>
             </td>
           </tr>
 
@@ -169,7 +164,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             <td style="padding:24px 36px 12px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
               <p style="margin:0 0 16px;">
-                We&rsquo;re glad to be working with you on <strong>${projectName}</strong>. SirReel presents <strong>TSX</strong> &mdash; your portal to your current and past projects. One place for everything you&rsquo;ll need while you&rsquo;re with us.
+                We&rsquo;re glad to be working with you on <strong>${projectName}</strong>. Your SirReel portal is one place for your current and past projects &mdash; everything you&rsquo;ll need while you&rsquo;re with us.
               </p>
             </td>
           </tr>
@@ -230,12 +225,12 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:220px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
                 <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Portal to TSX</center>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Open your portal</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:6px;">
-                Portal to TSX
+                Open your portal
               </a>
               <!--<![endif]-->
               <p style="margin:18px 0 0;font-size:12px;color:#888888;">

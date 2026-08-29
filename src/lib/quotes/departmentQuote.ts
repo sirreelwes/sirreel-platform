@@ -359,7 +359,7 @@ export async function composeDepartmentQuote(
     'Quote only — not a reservation. Rates are subject to availability and confirmation, and exclude applicable taxes.',
     '', `— ${args.agentName}`, '& Team SirReel',
     ...(args.agentPhone ? [args.agentPhone] : []),
-    '', 'TSX — The SirReel Experience',
+    '', 'The SirReel Experience',
     '8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335',
   )
 

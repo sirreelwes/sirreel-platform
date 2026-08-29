@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import { RENTAL_TERMS } from './terms'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
 import type { V2AgreementState, V2Booking, V2Intake } from './types'
@@ -236,7 +236,7 @@ export function RentalAgreementCard({
             <button
               onClick={beginSigning}
               className="flex-1 py-3 text-white rounded-xl text-xs font-semibold"
-              style={{ backgroundColor: TSX.ink }}
+              style={{ backgroundColor: PORTAL.ink }}
             >
               ✍️ Review & sign now
             </button>
@@ -339,7 +339,7 @@ export function RentalAgreementCard({
             <button
               onClick={() => setStep('ack')}
               className="py-2 px-4 text-white rounded-xl text-xs font-semibold"
-              style={{ backgroundColor: TSX.ink }}
+              style={{ backgroundColor: PORTAL.ink }}
             >
               Continue →
             </button>
@@ -419,7 +419,7 @@ export function RentalAgreementCard({
               className="py-2 px-4 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
               style={
                 acknowledged && signerName && signerTitle && signerEmail && signerCompany.trim()
-                  ? { backgroundColor: TSX.ink }
+                  ? { backgroundColor: PORTAL.ink }
                   : undefined
               }
             >

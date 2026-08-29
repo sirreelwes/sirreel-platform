@@ -28,7 +28,7 @@ for (const line of envFile.split('\n')) {
 
 async function main() {
   const { requestedItemLabels } = await import('../../src/lib/sales/quickReply')
-  const { buildTsxWelcomeEmail } = await import('../../src/lib/email/templates/tsxWelcomeTemplate')
+  const { buildWelcomeEmail } = await import('../../src/lib/email/templates/welcomeTemplate')
 
   let fail = 0
   const eq = (label: string, got: unknown, want: unknown) => {
@@ -65,7 +65,7 @@ async function main() {
 
   // ── the email ──
   const render = (over: Record<string, unknown>) =>
-    buildTsxWelcomeEmail({
+    buildWelcomeEmail({
       mode: 'availability',
       clientFirstName: 'Maggie',
       clientFullName: 'Maggie',

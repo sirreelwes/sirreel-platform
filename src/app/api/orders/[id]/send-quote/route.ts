@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? ranked.filter((r) => r.email !== primary.email && ccOverride.includes(r.email))
     : ranked.slice(1)
 
-  // Quote PDF is no longer attached — the TSX welcome template's
+  // Quote PDF is no longer attached — the welcome template's
   // primary CTA links to the portal job page where "Download quote
   // PDF" is one click away. Smaller email = better deliverability
   // and a less intimidating first touch from a new sales contact.

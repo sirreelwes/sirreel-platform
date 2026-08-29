@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
-import { TSX } from '@/lib/brand/tsxTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import { STUDIO_TERMS } from './terms'
 import {
   stageAreaContractLabel,
@@ -411,7 +411,7 @@ export function StudioContractCard({
             }}
             disabled={!agreed || !strykerComplete || !sig || submitting}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
-            style={{ backgroundColor: TSX.ink }}
+            style={{ backgroundColor: PORTAL.ink }}
           >
             {submitting ? 'Saving…' : 'Sign Studio Contract ✓'}
           </button>
