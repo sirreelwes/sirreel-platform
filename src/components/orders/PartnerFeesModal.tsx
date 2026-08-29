@@ -134,6 +134,15 @@ export default function PartnerFeesModal({
   }
   const total = fees.reduce((sum, f) => sum + lineTotal(f), 0)
 
+  /**
+   * Metered fees the rep hasn't estimated. These are DROPPED on submit, and
+   * that silence is what lost the generator charge on S260828-001 — the fee
+   * simply wasn't on the quote and nothing said so. Omitting is still the
+   * right default (a $0 line reads as "included"), but it has to be a visible
+   * choice rather than an invisible one.
+   */
+  const omitted = meteredFees.filter((f) => !(Number(estimates[f.id]) > 0))
+
   async function submit() {
     setSaving(true)
     setError(null)
@@ -275,6 +284,15 @@ export default function PartnerFeesModal({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {omitted.length > 0 && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span className="font-semibold">Won&apos;t be on the quote:</span>{' '}
+                  {omitted.map((f) => f.label).join(', ')}. With no estimate the charge is left off
+                  entirely, so the client won&apos;t know it&apos;s billable. Leave blank only if it
+                  genuinely doesn&apos;t apply to this job.
                 </div>
               )}
 
