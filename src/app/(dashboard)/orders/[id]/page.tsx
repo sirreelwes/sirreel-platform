@@ -489,6 +489,13 @@ export default function OrderDetailPage() {
   // order" (sortOrder) is the old behaviour, kept for the rare case
   // where the build sequence is what you're checking.
   const [lineGrouping, setLineGrouping] = useState<'department' | 'entry'>('department');
+  // Bulk billable-days, per department band. Days are stored per line but
+  // decided per department ("Pro Supplies bills 3 of the 5 calendar
+  // days") — re-deciding that used to mean editing every row, and one
+  // row missed is invisible in a long list.
+  const [bulkDaysDept, setBulkDaysDept] = useState<string | null>(null);
+  const [bulkDaysValue, setBulkDaysValue] = useState("");
+  const [bulkDaysSaving, setBulkDaysSaving] = useState(false);
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
   // Fee-catalog picker state (liType === "FEE"). The picker lists
@@ -1686,6 +1693,44 @@ export default function OrderDetailPage() {
     }
   };
 
+  /** Section day-state: the single value every billed line shares, or
+   *  'mixed' when they've drifted apart. FLAT lines are excluded — days
+   *  don't price them. */
+  const sectionDays = (items: LineItem[]): number | 'mixed' | null => {
+    const values = new Set(
+      items
+        .filter((l) => l.rateType !== 'FLAT' && l.department !== 'EXPENDABLES')
+        .map((l) => l.billableDays)
+        .filter((d): d is number => d != null),
+    );
+    if (values.size === 0) return null;
+    if (values.size > 1) return 'mixed';
+    return [...values][0];
+  };
+
+  const applyBulkDays = async (department: string) => {
+    const parsed = Math.floor(Number(bulkDaysValue));
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      alert('Days must be a whole number of 1 or more.');
+      return;
+    }
+    setBulkDaysSaving(true);
+    const res = await fetch(`/api/orders/${orderId}/line-items/bulk-days`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ department, days: parsed }),
+    });
+    setBulkDaysSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.reason || data.error || `Bulk day update failed (HTTP ${res.status})`);
+      return;
+    }
+    setBulkDaysDept(null);
+    setBulkDaysValue('');
+    fetchOrder();
+  };
+
   const cancelEditLine = () => {
     setEditingLineId(null);
     setSavingLineId(null);
@@ -2786,20 +2831,82 @@ export default function OrderDetailPage() {
                 <Fragment key={section.key}>
                   {/* Department band. Suppressed in entry-order mode,
                       where there is exactly one unlabeled section. */}
-                  {section.key !== 'ENTRY' && (
-                    <tr className="bg-lt-inner/60 border-y border-lt-hairline">
-                      <td colSpan={6} className="px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lt-fg2">
-                        {lineItemSectionLabel(section.key)}
-                        <span className="ml-2 font-normal normal-case tracking-normal text-lt-fg3">
-                          {section.items.length} {section.items.length === 1 ? 'line' : 'lines'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-1.5 text-right text-[11px] font-semibold text-lt-fg2 font-mono">
-                        {fmt(section.items.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0))}
-                      </td>
-                      <td className="px-4 py-1.5" />
-                    </tr>
-                  )}
+                  {section.key !== 'ENTRY' && (() => {
+                    // Days are a per-department decision, so the band owns
+                    // them: it reports the section's shared value, says
+                    // "mixed" when the rows have drifted apart, and sets
+                    // the whole section in one write.
+                    const days = sectionDays(section.items);
+                    const dayEditable =
+                      section.key !== 'FEES' &&
+                      section.key !== 'EXPENDABLES' &&
+                      days !== null &&
+                      isLineItemEditableFn(order.status as OrderStatus, section.key as LineItemDepartment);
+                    const open = bulkDaysDept === section.key;
+                    return (
+                      <tr className="bg-lt-inner/60 border-y border-lt-hairline">
+                        <td colSpan={5} className="px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lt-fg2">
+                          {lineItemSectionLabel(section.key)}
+                          <span className="ml-2 font-normal normal-case tracking-normal text-lt-fg3">
+                            {section.items.length} {section.items.length === 1 ? 'line' : 'lines'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 text-center whitespace-nowrap">
+                          {open ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="1"
+                                autoFocus
+                                value={bulkDaysValue}
+                                onChange={(e) => setBulkDaysValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); void applyBulkDays(section.key); }
+                                  if (e.key === 'Escape') { e.preventDefault(); setBulkDaysDept(null); }
+                                }}
+                                className="w-12 px-1.5 py-0.5 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center"
+                                aria-label={`Billable days for ${lineItemSectionLabel(section.key)}`}
+                              />
+                              <button
+                                onClick={() => applyBulkDays(section.key)}
+                                disabled={bulkDaysSaving}
+                                className="px-1.5 py-0.5 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[10px] font-semibold"
+                              >
+                                {bulkDaysSaving ? '…' : 'Set'}
+                              </button>
+                              <button
+                                onClick={() => setBulkDaysDept(null)}
+                                className="text-lt-fg3 hover:text-lt-fg2 text-[10px]"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ) : dayEditable ? (
+                            <button
+                              onClick={() => {
+                                setBulkDaysDept(section.key);
+                                setBulkDaysValue(days === 'mixed' ? '' : String(days));
+                              }}
+                              title={
+                                days === 'mixed'
+                                  ? 'Lines in this department bill different day counts — click to set them all'
+                                  : `Set billable days for all ${lineItemSectionLabel(section.key)} lines`
+                              }
+                              className={`text-[11px] font-semibold px-1.5 py-0.5 rounded hover:bg-lt-hairline ${
+                                days === 'mixed' ? 'text-amber-600' : 'text-lt-fg3 hover:text-lt-fg2'
+                              }`}
+                            >
+                              {days === 'mixed' ? 'mixed ✎' : `${days}d ✎`}
+                            </button>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-1.5 text-right text-[11px] font-semibold text-lt-fg2 font-mono">
+                          {fmt(section.items.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0))}
+                        </td>
+                        <td className="px-4 py-1.5" />
+                      </tr>
+                    );
+                  })()}
                   {section.items.map((li) => renderLineRow(li))}
                 </Fragment>
               ))
