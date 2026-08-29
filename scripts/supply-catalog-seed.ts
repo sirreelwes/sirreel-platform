@@ -16,11 +16,23 @@
  *   department = the CATEGORY's department (see below),
  *   type = EQUIPMENT (unit=day) | EXPENDABLE (unit=ea),
  *   aliases (replace),
- *   publicVisible = true, isActive = true.
+ *   publicVisible = true, isActive = true — but see Archiving.
  *
  * Anything NOT in the JSON is untouched — never written, never
  * deleted. The reconciliation report at the end lists what
  * changed.
+ *
+ * Archiving (2026-08-29). Archiving a seed-owned item used to be
+ * pointless: the next run wrote isActive=true unconditionally, so the
+ * row came straight back publicVisible (COM-MOTOROLA-CP200-RADIO was
+ * archived 2026-07-03 and this script would have resurrected it). The
+ * archive flag is an OPERATOR decision and the seed no longer
+ * overrules it — an archived row keeps isActive=false, archivedAt and
+ * its publicVisible value. Its data fields (description, category,
+ * rate, department, type, aliases) are still refreshed so the row is
+ * current if someone restores it from the Archived view. Deleting a
+ * code from the JSON does NOT archive anything — archiving is done in
+ * HQ, and the footer reports which seed items are currently archived.
  *
  * Department (2026-08-29). This script used to stamp
  * `department: 'PRO_SUPPLIES'` on every row it wrote, regardless of
@@ -139,6 +151,9 @@ async function main() {
   let itemUpdated = 0
   let itemUnchanged = 0
   let missingCategory = 0
+  // Seed-owned codes an operator has archived. Counted, reported, and
+  // never un-archived — the seed refreshes their data and moves on.
+  const archivedKept: string[] = []
 
   for (const it of seed.items) {
     const categoryId = categoryIdBySlug.get(it.categorySlug)
@@ -194,6 +209,10 @@ async function main() {
     const aliasSame =
       existing.aliases.length === it.aliases.length &&
       existing.aliases.every((a) => it.aliases.includes(a))
+    // An archived row's isActive/publicVisible are the operator's, not
+    // the seed's — excluded from both the comparison and the write.
+    const archived = !existing.isActive
+    if (archived) archivedKept.push(it.code)
     const needsUpdate =
       existing.description !== it.description ||
       existing.categoryId !== categoryId ||
@@ -201,14 +220,13 @@ async function main() {
       existing.department !== itemDept ||
       existing.type !== liType ||
       !aliasSame ||
-      existing.publicVisible !== true ||
-      existing.isActive !== true
+      (!archived && existing.publicVisible !== true)
 
     if (!needsUpdate) {
       itemUnchanged++
       continue
     }
-    console.log(`  [update-item] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}${existing.department !== itemDept ? ` (was ${existing.department})` : ''}`)
+    console.log(`  [${archived ? 'update-archived' : 'update-item'}] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}${existing.department !== itemDept ? ` (was ${existing.department})` : ''}${archived ? '  [stays archived]' : ''}`)
     if (!dryRun) {
       await prisma.inventoryItem.update({
         where: { code: it.code },
@@ -219,14 +237,20 @@ async function main() {
           department: itemDept,
           type: liType,
           aliases: it.aliases,
-          publicVisible: true,
-          isActive: true,
+          // Archive state is operator-owned — an archived row keeps
+          // isActive=false, its archivedAt, and its publicVisible.
+          ...(archived ? {} : { publicVisible: true, isActive: true }),
         },
       })
     }
     itemUpdated++
   }
   console.log(`  items — created: ${itemCreated}, updated: ${itemUpdated}, unchanged: ${itemUnchanged}, orphan-skipped: ${missingCategory}\n`)
+  if (archivedKept.length) {
+    console.log(`  ${archivedKept.length} seed item(s) archived in HQ — left archived, data refreshed:`)
+    for (const c of archivedKept) console.log(`    ${c}`)
+    console.log('')
+  }
 
   // ── Footer / sanity ──
   const totalPublic = await prisma.inventoryItem.count({ where: { publicVisible: true } })
