@@ -36,6 +36,7 @@ import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompa
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
+import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
@@ -2118,6 +2119,13 @@ const driverTone = (d: any): string => {
         onChanged={load}
       />
       )}
+
+      {/* Sub-rentals — the partner-sourced units on this job. Self-hides
+          when there are none, and self-fetches: it has its own mutations
+          and most jobs never have one. Sits under Drivers because the
+          block above covers OUR units and this is the rest of what's
+          going out. */}
+      <JobSubRentalsSection jobId={job.id} />
 
       {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
           per-order delivery/pickup arrangements an agent needs at a

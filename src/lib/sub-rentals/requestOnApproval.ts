@@ -60,6 +60,118 @@ function isoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null
 }
 
+/**
+ * Ask ONE partner to hold, and record whether they were really told.
+ *
+ * Extracted so the HQ job panel's "resend" button and the approval hook are
+ * the same code path — a second copy would drift, and the thing that would
+ * drift first is the conduit rule (what the notice is allowed to name).
+ *
+ * `flip` is false on a resend: the row is already REQUESTED and re-stamping
+ * the status would be a lie about when the client said yes.
+ */
+export async function sendHoldRequest(args: {
+  subRentalId: string
+  jobCode: string | null
+  agentName: string | null
+  agentEmail: string | null
+  /** Anchors the EmailDelivery row when the sub-rental belongs to an order. */
+  orderId: string | null
+  /** Move ESTIMATED → REQUESTED first. False when re-sending. */
+  flip: boolean
+}): Promise<HoldRequestOutcome | null> {
+  const s = await prisma.subRental.findUnique({
+    where: { id: args.subRentalId },
+    select: {
+      id: true,
+      itemDescription: true,
+      quantity: true,
+      startDate: true,
+      endDate: true,
+      vendorToken: true,
+      subcontractedVehicle: { select: { name: true } },
+      vendor: { select: { id: true, name: true, email: true, poEmail: true } },
+    },
+  })
+  if (!s) return null
+
+  const vehicleName = s.subcontractedVehicle?.name ?? s.itemDescription
+  const startDate = isoDate(s.startDate)
+  const endDate = isoDate(s.endDate)
+
+  // Mint a token if this row somehow has none (an ad-hoc sub-rental that was
+  // switched to ESTIMATED by hand). The notice is worthless without a page to
+  // point at, and the vendor page IS the credential — there is no login.
+  let token = s.vendorToken
+  if (!token) {
+    token = randomBytes(TOKEN_BYTES).toString('hex')
+    await prisma.subRental.update({
+      where: { id: s.id },
+      data: { vendorToken: token, vendorTokenMintedAt: new Date() },
+    })
+  }
+
+  // The durable half. Done before the send, and never rolled back by it.
+  if (args.flip) {
+    await prisma.subRental.update({ where: { id: s.id }, data: { status: 'REQUESTED' } })
+  }
+
+  const outcome: HoldRequestOutcome = {
+    subRentalId: s.id,
+    vendorName: s.vendor.name,
+    vehicleName,
+    startDate,
+    endDate,
+    quantity: s.quantity,
+    notified: false,
+    warning: null,
+  }
+
+  // poEmail is where ordering goes when the partner keeps a separate desk —
+  // same precedence the estimate notice uses.
+  const to = s.vendor.poEmail ?? s.vendor.email
+  if (!to) {
+    outcome.warning = `${s.vendor.name} has no email on file — nobody has been asked to hold ${vehicleName}.`
+  } else if (!startDate || !endDate) {
+    outcome.warning = `${vehicleName} was quoted without dates, so ${s.vendor.name} could not be asked to hold anything.`
+  } else {
+    const notice = buildVendorHoldRequest({
+      vendorName: s.vendor.name,
+      vehicleName,
+      startDate,
+      endDate,
+      quantity: s.quantity,
+      reference: args.jobCode,
+      vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(token)}`,
+      agentName: args.agentName ?? 'Team SirReel',
+    })
+    // rentals@ is CC'd for the same reason the estimate CCs it: a hold commits
+    // a partner's unit and the desk must see that it went out.
+    const res = await sendAgreementEmail({
+      to: [to],
+      cc: withTeamCc([], to),
+      replyTo: agentReplyTo(args.agentEmail) ?? undefined,
+      subject: notice.subject,
+      html: notice.html,
+      text: notice.text,
+      label: 'sub-rental-hold-request',
+      orderId: args.orderId,
+    }).catch((err: any) => ({ ok: false as const, reason: err?.message || 'send threw' }))
+
+    if (res.ok) {
+      outcome.notified = true
+      await prisma.subRental.update({
+        where: { id: s.id },
+        data: { vendorHoldRequestedAt: new Date() },
+      })
+    } else {
+      outcome.warning = `${s.vendor.name} could not be asked to hold ${vehicleName}: ${res.reason}`
+    }
+  }
+
+  return outcome
+}
+
 export async function requestSubRentalsOnApproval(args: {
   orderId: string
   jobId: string | null
@@ -77,106 +189,35 @@ export async function requestSubRentalsOnApproval(args: {
         ...(args.jobId ? [{ orderId: null, jobId: args.jobId }] : []),
       ],
     },
-    select: {
-      id: true,
-      itemDescription: true,
-      quantity: true,
-      startDate: true,
-      endDate: true,
-      vendorToken: true,
-      subcontractedVehicle: { select: { name: true } },
-      vendor: { select: { id: true, name: true, email: true, poEmail: true } },
-    },
+    select: { id: true },
   })
 
   const requested: HoldRequestOutcome[] = []
 
-  for (const s of subs) {
-    const vehicleName = s.subcontractedVehicle?.name ?? s.itemDescription
-    const startDate = isoDate(s.startDate)
-    const endDate = isoDate(s.endDate)
-
-    // Mint a token if this row somehow has none (an ad-hoc sub-rental that was
-    // switched to ESTIMATED by hand). The notice is worthless without a page
-    // to point at, and the vendor page IS the credential — there is no login.
-    let token = s.vendorToken
-    if (!token) {
-      token = randomBytes(TOKEN_BYTES).toString('hex')
-      await prisma.subRental.update({
-        where: { id: s.id },
-        data: { vendorToken: token, vendorTokenMintedAt: new Date() },
-      })
-    }
-
-    // The durable half. Done before the send, and never rolled back by it.
-    await prisma.subRental.update({ where: { id: s.id }, data: { status: 'REQUESTED' } })
-
-    const outcome: HoldRequestOutcome = {
-      subRentalId: s.id,
-      vendorName: s.vendor.name,
-      vehicleName,
-      startDate,
-      endDate,
-      quantity: s.quantity,
-      notified: false,
-      warning: null,
-    }
-
-    // poEmail is where ordering goes when the partner keeps a separate desk —
-    // same precedence the estimate notice uses.
-    const to = s.vendor.poEmail ?? s.vendor.email
-    if (!to) {
-      outcome.warning = `${s.vendor.name} has no email on file — nobody has been asked to hold ${vehicleName}.`
-    } else if (!startDate || !endDate) {
-      outcome.warning = `${vehicleName} was quoted without dates, so ${s.vendor.name} could not be asked to hold anything.`
-    } else {
-      const notice = buildVendorHoldRequest({
-        vendorName: s.vendor.name,
-        vehicleName,
-        startDate,
-        endDate,
-        quantity: s.quantity,
-        reference: args.jobCode,
-        vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(token)}`,
-        agentName: args.agentName ?? 'Team SirReel',
-      })
-      // rentals@ is CC'd for the same reason the estimate CCs it: a hold
-      // commits a partner's unit and the desk must see that it went out.
-      const res = await sendAgreementEmail({
-        to: [to],
-        cc: withTeamCc([], to),
-        replyTo: agentReplyTo(args.agentEmail) ?? undefined,
-        subject: notice.subject,
-        html: notice.html,
-        text: notice.text,
-        label: 'sub-rental-hold-request',
-        orderId: args.orderId,
-      }).catch((err: any) => ({ ok: false as const, reason: err?.message || 'send threw' }))
-
-      if (res.ok) {
-        outcome.notified = true
-        await prisma.subRental.update({
-          where: { id: s.id },
-          data: { vendorHoldRequestedAt: new Date() },
-        })
-      } else {
-        outcome.warning = `${s.vendor.name} could not be asked to hold ${vehicleName}: ${res.reason}`
-      }
-    }
+  for (const { id } of subs) {
+    const outcome = await sendHoldRequest({
+      subRentalId: id,
+      jobCode: args.jobCode,
+      agentName: args.agentName,
+      agentEmail: args.agentEmail,
+      orderId: args.orderId,
+      flip: true,
+    })
+    if (!outcome) continue
 
     await prisma.auditLog.create({
       data: {
         action: 'sub_rental.hold_requested',
         entityType: 'SubRental',
-        entityId: s.id,
+        entityId: id,
         // No userId: the actor is the client approving in the portal.
         oldValues: { status: 'ESTIMATED' },
         newValues: {
           status: 'REQUESTED',
-          vendor: s.vendor.name,
-          vehicle: vehicleName,
-          startDate,
-          endDate,
+          vendor: outcome.vendorName,
+          vehicle: outcome.vehicleName,
+          startDate: outcome.startDate,
+          endDate: outcome.endDate,
           notified: outcome.notified,
           via: 'portal-quote-approval',
           orderId: args.orderId,
