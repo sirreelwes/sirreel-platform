@@ -29,12 +29,16 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useJobsList } from './JobsListProvider'
 import {
+  BOARD_PHASES,
+  PHASE_META,
   STATE,
   fmtDate,
   fmtMoney,
+  jobPhase,
   jobWindow,
   rowValue,
   stateLabel,
+  type BoardPhase,
   type JobRow,
   type RowState,
 } from '@/lib/jobs/listRow'
@@ -57,6 +61,13 @@ export function JobsSidebar() {
   // Keep the selected job in view when it's reached from elsewhere
   // (a link, a reload) rather than by clicking it in this list.
   const [collapsed, setCollapsed] = useState(false)
+  // Mobile pane switcher. The retired board's three columns can't sit
+  // side by side on a 390px screen, so they become panes over the one
+  // list — same placement rule (jobPhase), one column of cards at a
+  // time. `null` = All, and it is the default: the rail is also the
+  // primary way around HQ on a phone, and a search that silently
+  // excluded two thirds of its matches would be a trap.
+  const [phaseTab, setPhaseTab] = useState<BoardPhase | null>(null)
 
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -64,6 +75,15 @@ export function JobsSidebar() {
     const el = listRef.current?.querySelector(`[data-job-id="${selectedId}"]`)
     el?.scrollIntoView({ block: 'nearest' })
   }, [selectedId, rows.length])
+
+  // Counts come from the full filtered list, so a tab's number is the
+  // same whether or not that tab is the one showing.
+  const phaseCounts = new Map<BoardPhase, number>()
+  for (const r of rows) {
+    const p = jobPhase(r.state)
+    phaseCounts.set(p, (phaseCounts.get(p) ?? 0) + 1)
+  }
+  const paneRows = phaseTab ? rows.filter((r) => jobPhase(r.state) === phaseTab) : rows
 
   if (collapsed && selected) {
     return (
@@ -90,7 +110,7 @@ export function JobsSidebar() {
           control moved up into JobsToolbar. */}
       <div className="px-3 py-1.5 border-b border-zinc-200 bg-zinc-50 flex items-baseline gap-2">
         <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-          {loading ? 'Loading…' : error ? 'Error' : `${rows.length} ${rows.length === 1 ? 'job' : 'jobs'}`}
+          {loading ? 'Loading…' : error ? 'Error' : `${paneRows.length} ${paneRows.length === 1 ? 'job' : 'jobs'}`}
         </span>
         {selected && (
           <button
@@ -103,21 +123,47 @@ export function JobsSidebar() {
         )}
       </div>
 
+      {/* Phase panes — PHONE ONLY. Desktop keeps the single colour-coded
+          list; three columns were retired there on purpose. */}
+      <div className="md:hidden flex border-b border-zinc-200 bg-white">
+        {([null, ...BOARD_PHASES] as (BoardPhase | null)[]).map((p) => {
+          const on = phaseTab === p
+          const count = p === null ? rows.length : (phaseCounts.get(p) ?? 0)
+          return (
+            <button
+              key={p ?? 'all'}
+              onClick={() => setPhaseTab(p)}
+              title={p === null ? 'Every job in the current filter' : PHASE_META[p].hint}
+              className={`flex-1 min-h-[44px] px-1 text-[11px] font-semibold border-b-2 transition-colors ${
+                on
+                  ? 'border-amber-500 text-zinc-900 bg-amber-50'
+                  : 'border-transparent text-zinc-500 active:bg-zinc-100'
+              }`}
+            >
+              {p === null ? 'All' : PHASE_META[p].title}
+              <span className={`ml-1 tabular-nums ${on ? 'text-amber-700' : 'text-zinc-400'}`}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <div ref={listRef} className="flex-1 overflow-y-auto py-1">
         {loading && rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-[11px] text-zinc-400">Loading…</div>
         ) : error ? (
           <div className="px-3 py-6 text-center text-[11px] text-red-600">{error}</div>
-        ) : rows.length === 0 ? (
+        ) : paneRows.length === 0 ? (
           <div className="px-3 py-6 text-center text-[11px] text-zinc-400">
-            {status === 'orphans'
-              ? 'No abandoned quotes. Good housekeeping.'
-              : status === 'archived'
-                ? 'Nothing archived.'
-                : 'No jobs match.'}
+            {phaseTab
+              ? `Nothing in ${PHASE_META[phaseTab].title}.`
+              : status === 'orphans'
+                ? 'No abandoned quotes. Good housekeeping.'
+                : status === 'archived'
+                  ? 'Nothing archived.'
+                  : 'No jobs match.'}
           </div>
         ) : (
-          rows.map(({ job, state }) => (
+          paneRows.map(({ job, state }) => (
             <JobsSidebarItem key={job.id} job={job} state={state} selected={job.id === selectedId} />
           ))
         )}
@@ -145,21 +191,74 @@ function JobsSidebarItem({
   // HQ day-to-day, this keeps the red band from re-accreting one row
   // at a time.
   const [marking, setMarking] = useState(false)
-  const markReturned = async (e: MouseEvent) => {
+
+  const phase = jobPhase(state)
+
+  /**
+   * Phase moves — the retired board's ‹ › and manual·reset, restored on
+   * the row. They were the only UI that could write or clear
+   * sr_job_board_overrides; when the board went, a job someone had
+   * manually placed had no way back to its computed state, and the
+   * override kept overriding.
+   *
+   * Semantics are the board's, unchanged: PREJOB↔OUT is the
+   * presentation-only override; a move INTO Back is the semantic
+   * mark-returned (the gear is physically here) and a move OUT of Back
+   * is unmark-returned. Never Job.status — that stays the three human
+   * off-ramps.
+   */
+  const move = async (e: MouseEvent, target: BoardPhase | null) => {
     e.preventDefault()
     e.stopPropagation()
     if (marking) return
     setMarking(true)
     try {
-      const r = await fetch(`/api/jobs/${j.id}/mark-returned`, { method: 'POST' })
+      let r: Response
+      if (target === 'BACK') {
+        r = await fetch(`/api/jobs/${j.id}/mark-returned`, { method: 'POST' })
+      } else if (phase === 'BACK') {
+        // Any move off a returned row clears the physical-return mark;
+        // the row reverts to its computed state — usually Not returned.
+        r = await fetch(`/api/jobs/${j.id}/unmark-returned`, { method: 'POST' })
+      } else {
+        r = await fetch(`/api/jobs/${j.id}/board-phase`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phase: target }),
+        })
+      }
       if (r.ok) refresh()
-      else alert('Failed to mark returned')
+      else alert('Move failed')
     } catch {
-      alert('Failed to mark returned')
+      alert('Move failed')
     } finally {
       setMarking(false)
     }
   }
+
+  const markReturned = (e: MouseEvent) => move(e, 'BACK')
+
+  // ‹ steps back a phase, › steps forward. Prejob has no left, Back
+  // has no right.
+  const leftTarget: BoardPhase | null = phase === 'OUT' ? 'PREJOB' : phase === 'BACK' ? 'OUT' : null
+  const rightTarget: BoardPhase | null = phase === 'PREJOB' ? 'OUT' : phase === 'OUT' ? 'BACK' : null
+  const overridden = !!j.boardPhaseOverride && phase !== 'BACK'
+
+  const moveBtn = (target: BoardPhase, glyph: string) => (
+    <button
+      onClick={(e) => move(e, target)}
+      disabled={marking}
+      title={`Move to ${PHASE_META[target].title} — ${PHASE_META[target].hint}`}
+      aria-label={`Move to ${PHASE_META[target].title}`}
+      className={`flex items-center justify-center rounded border leading-none disabled:opacity-40 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-5 text-[15px] md:text-[12px] ${
+        selected
+          ? 'border-zinc-900/25 text-zinc-900/70 hover:bg-white/60'
+          : 'border-zinc-200 text-zinc-400 hover:border-zinc-400 hover:text-zinc-700'
+      }`}
+    >
+      {glyph}
+    </button>
+  )
 
   // The pill keeps its hue in both selection states; only the plate
   // behind it changes, so a selected row stays readable on amber
@@ -225,7 +324,7 @@ function JobsSidebarItem({
               onClick={markReturned}
               disabled={marking}
               title="The gear is back — confirm the return and clear Not returned"
-              className="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap bg-white border border-red-300 text-red-700 hover:bg-red-600 hover:border-red-600 hover:text-white disabled:opacity-50"
+              className="text-[10px] md:text-[8.5px] font-bold uppercase tracking-wider px-2.5 md:px-1.5 min-h-[44px] md:min-h-0 md:py-0.5 rounded whitespace-nowrap bg-white border border-red-300 text-red-700 hover:bg-red-600 hover:border-red-600 hover:text-white disabled:opacity-50"
             >
               {marking ? '…' : '✓ returned'}
             </button>
@@ -291,6 +390,30 @@ function JobsSidebarItem({
             </span>
           )
         })()}
+
+        {/* Line 5 — phase controls. Board vocabulary, on the row rather
+            than in columns: ‹ › step the job between Prejob / Out /
+            Back, and manual·reset drops a hand placement so the row goes
+            back to reading its own cadence. 44px targets on a phone;
+            they shrink to the old glyph size on a mouse. */}
+        <span className="flex items-center gap-1.5 mt-1 md:mt-0.5">
+          {overridden && (
+            <button
+              onClick={(e) => move(e, null)}
+              disabled={marking}
+              title="Clear manual placement — the row returns to its computed state"
+              className={`text-[10px] md:text-[9px] underline underline-offset-2 disabled:opacity-40 min-h-[44px] md:min-h-0 pr-1 ${
+                selected ? 'text-zinc-900/60 hover:text-zinc-900' : 'text-zinc-400 hover:text-zinc-700'
+              }`}
+            >
+              manual · reset
+            </button>
+          )}
+          <span className="ml-auto flex items-center gap-1.5">
+            {leftTarget && moveBtn(leftTarget, '‹')}
+            {rightTarget && moveBtn(rightTarget, '›')}
+          </span>
+        </span>
       </span>
     </Link>
   )

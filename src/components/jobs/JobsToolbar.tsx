@@ -121,7 +121,7 @@ export function JobsToolbar() {
             the queue lives. Count = pending inbound, both streams. */}
         <Link
           href="/jobs?panel=incoming"
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[44px] md:min-h-0 rounded-lg border transition-colors ${
             incomingOverdue > 0
               ? 'border-red-300 bg-red-50 hover:bg-red-100'
               : incomingCount !== null && incomingCount > 0
@@ -155,13 +155,13 @@ export function JobsToolbar() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search job, code, company, contact…"
-          className="flex-1 min-w-[180px] max-w-md px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500"
+          className="order-last md:order-none w-full md:w-auto flex-1 md:min-w-[180px] max-w-full md:max-w-md px-2.5 py-2 md:py-1.5 min-h-[44px] md:min-h-0 bg-white border border-zinc-300 rounded-lg text-[16px] md:text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500"
         />
 
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as StatusFilter)}
-          className="px-2 py-1.5 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
+          className="px-2 py-2 md:py-1.5 min-h-[44px] md:min-h-0 bg-white border border-zinc-300 rounded-md text-[16px] md:text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
         >
           {STATUS_OPTIONS.map((o) => (
             <option key={o.id} value={o.id} className="bg-white">
@@ -173,7 +173,7 @@ export function JobsToolbar() {
           value={sort}
           onChange={(e) => setSort(e.target.value as Sort)}
           title="Sort order"
-          className="px-2 py-1.5 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
+          className="px-2 py-2 md:py-1.5 min-h-[44px] md:min-h-0 bg-white border border-zinc-300 rounded-md text-[16px] md:text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
         >
           {SORT_OPTIONS.map((o) => (
             <option key={o.id} value={o.id} className="bg-white">
@@ -182,7 +182,7 @@ export function JobsToolbar() {
           ))}
         </select>
 
-        <label className="flex items-center gap-1.5 text-[11px] text-zinc-500 cursor-pointer">
+        <label className="flex items-center gap-1.5 px-1 min-h-[44px] md:min-h-0 text-[12px] md:text-[11px] text-zinc-500 cursor-pointer">
           <input
             type="checkbox"
             checked={mine}
@@ -195,12 +195,15 @@ export function JobsToolbar() {
         {/* The ONE create entry point — moved here from the (deleted)
             global shell header (Wes 2026-08-28: "just have new job on
             the jobs page"). */}
-        <NewJobLauncher buttonClassName="ml-auto bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
+        {/* Hidden on a phone: the shell's mobile top bar carries the same
+            launcher on every route, and two "+ New Job" buttons on one
+            screen is one too many. */}
+        <NewJobLauncher buttonClassName="hidden md:block ml-auto bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
       </div>
 
       {/* Row 2 — color key: legend for the rails, and a one-click narrow. */}
       {keyStates.length > 0 && (
-        <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+        <div className="flex items-center gap-x-2 gap-y-1 flex-wrap overflow-x-auto">
           {keyStates.map((s) => {
             const on = stateFilter === s
             return (
@@ -208,7 +211,7 @@ export function JobsToolbar() {
                 key={s}
                 onClick={() => setStateFilter(on ? null : s)}
                 title={`${STATE[s].label} — click to show only these`}
-                className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
+                className={`flex items-center gap-1 text-[11px] md:text-[10px] rounded px-1.5 md:px-1 py-1.5 md:py-0.5 whitespace-nowrap ${
                   on ? 'bg-zinc-900 text-white font-bold' : 'text-zinc-500 hover:bg-zinc-200'
                 }`}
               >
@@ -222,7 +225,7 @@ export function JobsToolbar() {
             <button
               onClick={() => setStateFilter(stateFilter === 'not-ready' ? null : 'not-ready')}
               title="Outbound jobs still missing paperwork, a card, a driver, or a unit — click to show only these"
-              className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
+              className={`flex items-center gap-1 text-[11px] md:text-[10px] rounded px-1.5 md:px-1 py-1.5 md:py-0.5 whitespace-nowrap ${
                 stateFilter === 'not-ready'
                   ? 'bg-zinc-900 text-white font-bold'
                   : 'text-rose-700 hover:bg-zinc-200'

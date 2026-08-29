@@ -180,6 +180,49 @@ export const URGENCY: RowState[] = [
   'lost',
 ]
 
+// ─── Board phase ─────────────────────────────────────────────────
+//
+// The retired three-column board (PREJOB / OUT / RETURNED) is not
+// coming back on desktop — cycle position is COLOR here, not a column.
+// But the phase itself never went away: `sr_job_board_overrides` is
+// still written and still honored by rowState() below, and
+// POST /api/jobs/[id]/board-phase still serves it. What went away was
+// every UI that could SET or CLEAR an override, which left a manually
+// placed job stuck with no way to reset it.
+//
+// So phase is re-exported as a derivation over RowState — one source,
+// no second placement rule — and used for two things: the mobile pane
+// tabs (a phone can't show three columns side by side, so the columns
+// become panes) and the ‹ › / manual·reset controls on the row.
+export type BoardPhase = 'PREJOB' | 'OUT' | 'BACK'
+
+export const BOARD_PHASES: BoardPhase[] = ['PREJOB', 'OUT', 'BACK']
+
+export const PHASE_META: Record<BoardPhase, { title: string; hint: string }> = {
+  PREJOB: { title: 'Prejob', hint: 'quotes, leads & booked — nothing out yet' },
+  OUT:    { title: 'Out',    hint: 'items with the client' },
+  BACK:   { title: 'Back',   hint: 'physically returned' },
+}
+
+/**
+ * Which column this row would have sat in. Mirrors the retired board's
+ * deriveColumn() exactly — including that a `picking-*` row is PREJOB
+ * even when the date test says the window has opened: the gear has not
+ * left the yard until someone takes it out.
+ */
+export function jobPhase(state: RowState): BoardPhase {
+  if (state === 'back') return 'BACK'
+  if (
+    state === 'overdue' ||
+    state === 'returning-today' ||
+    state === 'returning-tmw' ||
+    state === 'on-rental'
+  ) {
+    return 'OUT'
+  }
+  return 'PREJOB'
+}
+
 /** Effective window: the Job's own dates, else the booking envelope. */
 export function jobWindow(j: JobRow): { start: string | null; end: string | null } {
   return {

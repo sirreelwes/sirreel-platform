@@ -17,14 +17,14 @@
 
 import Link from 'next/link'
 
-type View = 'month' | 'gantt'
+type View = 'month' | 'gantt' | 'agenda'
 
 export function ScheduleViewToggle({ current }: { current: View }) {
   return (
     <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-xs font-semibold">
       <Link
         href="/gantt"
-        className={`px-3 py-1.5 ${
+        className={`px-3 py-1.5 min-h-[44px] md:min-h-0 flex items-center ${
           current === 'gantt'
             ? 'bg-gray-900 text-white'
             : 'bg-white text-gray-600 hover:text-gray-900'
@@ -33,8 +33,19 @@ export function ScheduleViewToggle({ current }: { current: View }) {
         Timeline
       </Link>
       <Link
+        href="/gantt?view=agenda"
+        className={`px-3 py-1.5 min-h-[44px] md:min-h-0 flex items-center ${
+          current === 'agenda'
+            ? 'bg-gray-900 text-white'
+            : 'bg-white text-gray-600 hover:text-gray-900'
+        }`}
+        title="Day-by-day list — the phone reading of the same reservations"
+      >
+        Agenda
+      </Link>
+      <Link
         href="/calendar"
-        className={`px-3 py-1.5 ${
+        className={`px-3 py-1.5 min-h-[44px] md:min-h-0 flex items-center ${
           current === 'month'
             ? 'bg-gray-900 text-white'
             : 'bg-white text-gray-600 hover:text-gray-900'
