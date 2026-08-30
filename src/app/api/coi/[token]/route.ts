@@ -6,6 +6,7 @@ import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { hqNotifyInbox } from '@/lib/email/copyRecipients'
 
 export const dynamic = 'force-dynamic'
 // The AI review of a multi-page certificate can outrun the default budget;
@@ -17,10 +18,9 @@ const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
 const COI_TEAM_INBOX = 'rentals@sirreel.com'
 // hq@ rides along on the SAME send (Wes, 2026-08-30): every client COI has
 // to reach the HQ distribution group with the PDF attached, and one email to
-// both inboxes beats a second near-identical notification. Outbound-only
-// group — see src/lib/email/notifyHqDocument.ts for the shared path the
-// other client paperwork routes use.
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
+// both inboxes beats a second near-identical notification — jose@/oliver@ are
+// on hq@, so a separate send lands twice in the same mailbox. Same reasoning
+// collapsed the signed-agreement notification onto its client email.
 
 /**
  * POST /api/coi/[token] — client-facing COI drop (no login; the signed
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const who = uploaderName || uploaderEmail || 'A client'
 
   const emailResult = await sendAgreementEmail({
-    to: [COI_TEAM_INBOX, HQ_INBOX],
+    to: [COI_TEAM_INBOX, hqNotifyInbox()],
     // Same convention as notifyPublicSubmission: Reply-To is the client
     // so a staff Reply answers the uploader directly instead of landing
     // in the unmonitored notifications@ sender. Guarded — the field is

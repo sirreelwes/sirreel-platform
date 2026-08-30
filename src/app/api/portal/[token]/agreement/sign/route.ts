@@ -6,8 +6,7 @@ import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
-import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
-import { COPY_RECIPIENTS } from '@/lib/email/copyRecipients'
+import { COPY_RECIPIENTS, hqNotifyInbox } from '@/lib/email/copyRecipients'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import type { AgreementStatus } from '@prisma/client'
@@ -15,7 +14,6 @@ import type { AgreementStatus } from '@prisma/client'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 const PDF_MIME = 'application/pdf'
 
 interface SignRequestBody {
@@ -121,7 +119,11 @@ async function sendSignedCopies(args: {
     label: 'portal/agreement/sign',
     to: [args.signerEmail],
     replyTo: args.agentEmail ?? undefined,
-    cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing],
+    // hq@ rides on THIS email rather than getting its own notification:
+    // the PDF is already attached here, and jose@/oliver@ sit on both the
+    // sales list and the hq@ group, so a second send is the same document
+    // arriving twice in the same two mailboxes (Wes, 2026-08-30).
+    cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing, hqNotifyInbox()],
     subject: `Signed: ${args.companyName} · ${subjectLabel}`,
     html,
     attachments: [{ filename: args.attachmentName, content: args.pdfBuffer }],
@@ -178,7 +180,7 @@ export async function POST(
       // could state dates the order never had.
       startDate: true,
       endDate: true,
-      job: { select: { id: true, jobCode: true, name: true } },
+      job: { select: { jobCode: true, name: true } },
       agent: { select: { email: true } },
       bookingId: true,
     },
@@ -309,35 +311,6 @@ export async function POST(
   } catch (err) {
     console.warn('[portal/agreement/sign] legacy paperwork sync failed:', err)
   }
-
-  // hq@ copy of the signed PDF. The signed-copies email above goes to the
-  // CLIENT (sales + billing on CC); hq@ is a separate outbound-only group
-  // that was never on it, so the team's shared view of "what got signed
-  // today" had a hole in it. Fire-and-forget — the signature is committed.
-  notifyHqDocument({
-    kind: 'rental-agreement',
-    companyName: orderRow.company.name,
-    jobName: orderRow.job?.name ?? null,
-    rows: [
-      { label: 'Job', value: orderRow.job?.name || '—' },
-      { label: 'Job code', value: orderRow.job?.jobCode || '—' },
-      { label: 'Company', value: orderRow.company.name },
-      { label: 'Order', value: orderRow.orderNumber || '—' },
-      { label: 'Signed by', value: body.signerName },
-      { label: 'Signer email', value: body.signerEmail || '—' },
-      {
-        label: 'Document',
-        value: agreement.documentType === 'NEGOTIATED' ? 'Negotiated agreement' : 'Baseline agreement',
-      },
-    ],
-    document: {
-      filename: `sirreel-rental-agreement-${orderRow.job?.jobCode || orderRow.orderNumber}.pdf`,
-      content: pdfBuffer,
-    },
-    href: orderRow.job?.id ? `${HQ_APP_URL}/jobs/${orderRow.job.id}` : undefined,
-    replyTo: body.signerEmail || undefined,
-    label: 'portal/token',
-  })
 
   const emailResult = await sendSignedCopies({
     companyName: orderRow.company.name,

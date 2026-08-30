@@ -1,4 +1,5 @@
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { hqNotifyInbox } from '@/lib/email/copyRecipients'
 import {
   renderEmailShell,
   renderEmailText,
@@ -32,8 +33,6 @@ import {
  * and same reasoning as src/lib/email/notifyPublicSubmission.ts.
  */
 
-/** Override per-environment so staging never mails the real team. */
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 /**
@@ -130,7 +129,7 @@ async function send(ev: HqDocumentEvent): Promise<void> {
 
   const replyTo = ev.replyTo?.trim()
   await sendAgreementEmail({
-    to: [HQ_INBOX],
+    to: [hqNotifyInbox()],
     subject,
     html,
     text,
