@@ -331,9 +331,9 @@ const C = PDF_BRAND
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 56,
-    paddingHorizontal: 40,
+    paddingTop: 30,
+    paddingBottom: 40,
+    paddingHorizontal: 36,
     fontFamily: 'Helvetica',
     fontSize: 10,
     lineHeight: 1.35,
@@ -374,8 +374,8 @@ const styles = StyleSheet.create({
   hrThick: {
     borderBottomWidth: 1.5,
     borderBottomColor: C.accentDeep,
-    marginTop: 6,
-    marginBottom: 12,
+    marginTop: 5,
+    marginBottom: 9,
   },
   // Single consolidated info card with three internal sections divided
   // by 1px vertical rules. Sections stretch to the full card height
@@ -388,10 +388,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: C.accentEdge,
     borderRadius: 3,
-    marginBottom: 12,
+    marginBottom: 9,
     backgroundColor: C.accentFillSoft,
   },
-  infoSection: { padding: 8 },
+  infoSection: { padding: 6 },
   infoSectionCustomer:   { width: '25%' },
   infoSectionProduction: { width: '45%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
   infoSectionAgent:      { width: '30%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
@@ -411,10 +411,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 0,
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingTop: 3.5,
+    paddingBottom: 3.5,
     paddingHorizontal: 6,
     backgroundColor: C.accentFill,
     borderBottomWidth: 1,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 3.5,
+    paddingVertical: 2.6,
     paddingHorizontal: 6,
     borderBottomWidth: 0.25,
     borderBottomColor: C.ruleSoft,
@@ -506,8 +506,8 @@ const styles = StyleSheet.create({
   discountValue: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: C.amber, width: '16%', textAlign: 'right' },
   // Totals
   totals: {
-    marginTop: 12,
-    paddingTop: 8,
+    marginTop: 9,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: C.accentDeep,
     alignItems: 'flex-end',
@@ -563,8 +563,8 @@ const styles = StyleSheet.create({
     borderTopColor: C.accentDeep,
   },
   notesBlock: {
-    marginTop: 16,
-    paddingTop: 8,
+    marginTop: 12,
+    paddingTop: 6,
     borderTopWidth: 0.5,
     borderTopColor: C.rule,
   },
@@ -903,7 +903,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
 
         {/* Notes (only if present) */}
         {props.notes && (
-          <View style={styles.notesBlock}>
+          <View style={styles.notesBlock} wrap={false} minPresenceAhead={50}>
             <Text style={styles.notesLabel}>Notes</Text>
             <Text style={styles.notesBody}>{props.notes}</Text>
           </View>

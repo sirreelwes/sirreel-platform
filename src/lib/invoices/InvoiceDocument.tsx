@@ -117,9 +117,9 @@ const C = PDF_BRAND
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 56,
-    paddingHorizontal: 40,
+    paddingTop: 30,
+    paddingBottom: 40,
+    paddingHorizontal: 36,
     fontFamily: 'Helvetica',
     fontSize: 10,
     lineHeight: 1.35,
@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
   hrThick: {
     borderBottomWidth: 1.5,
     borderBottomColor: C.accentDeep,
-    marginTop: 6,
-    marginBottom: 12,
+    marginTop: 5,
+    marginBottom: 9,
   },
 
   // ── Info card (Bill To / Order / Remit To) ──────────────────
@@ -171,10 +171,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: C.accentEdge,
     borderRadius: 3,
-    marginBottom: 12,
+    marginBottom: 9,
     backgroundColor: C.accentFillSoft,
   },
-  infoSection: { padding: 8 },
+  infoSection: { padding: 6 },
   infoSectionBillTo:  { width: '34%' },
   infoSectionOrder:   { width: '36%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
   infoSectionRemitTo: { width: '30%', borderLeftWidth: 0.5, borderLeftColor: C.accentEdge },
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 3.5,
+    paddingVertical: 2.6,
     borderBottomWidth: 0.25,
     borderBottomColor: C.ruleSoft,
   },
@@ -252,8 +252,8 @@ const styles = StyleSheet.create({
 
   // ── Totals block ────────────────────────────────────────────
   totals: {
-    marginTop: 12,
-    paddingTop: 8,
+    marginTop: 9,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: C.accentDeep,
     alignItems: 'flex-end',
