@@ -36,8 +36,11 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
+import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
 
 export const dynamic = 'force-dynamic'
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 interface SignBody {
   signerName?: unknown
@@ -131,6 +134,8 @@ export async function POST(req: NextRequest) {
   const orderForPdf = await prisma.order.findUnique({
     where: { id: resolved.orderId },
     select: {
+      orderNumber: true,
+      jobId: true,
       company: { select: { name: true, billingAddress: true } },
       // "Rental period" on the contract is THIS order's window. It used
       // to come off Job.startDate/endDate — a separately-typed job range
@@ -180,6 +185,32 @@ export async function POST(req: NextRequest) {
       signedDocumentUrl: uploaded.url,
     },
     select: { id: true, status: true, signedAt: true, signedDocumentUrl: true },
+  })
+
+  // hq@ gets the signed PDF. This route rendered and filed the agreement
+  // and told NOBODY — the native portal is the live client surface, so a
+  // countersigned contract could sit unseen until someone opened the job.
+  // Fire-and-forget: the signature is already committed above.
+  notifyHqDocument({
+    kind: 'rental-agreement',
+    companyName: orderForPdf?.company?.name ?? null,
+    jobName: orderForPdf?.job?.name ?? null,
+    rows: [
+      { label: 'Job', value: orderForPdf?.job?.name || '—' },
+      { label: 'Job code', value: orderForPdf?.job?.jobCode || '—' },
+      { label: 'Company', value: orderForPdf?.company?.name || '—' },
+      { label: 'Order', value: orderForPdf?.orderNumber || '—' },
+      { label: 'Signed by', value: [signerName, signerTitle].filter(Boolean).join(', ') },
+      { label: 'Signer email', value: signerEmail || '—' },
+      { label: 'Document', value: documentLabel === 'negotiated' ? 'Negotiated agreement' : 'Baseline agreement' },
+    ],
+    document: {
+      filename: `sirreel-rental-agreement-${orderForPdf?.job?.jobCode || orderForPdf?.orderNumber || resolved.orderId}.pdf`,
+      content: pdfBuffer,
+    },
+    href: orderForPdf?.jobId ? `${APP_URL}/jobs/${orderForPdf.jobId}` : undefined,
+    replyTo: signerEmail ?? undefined,
+    label: 'portal/job',
   })
 
   return NextResponse.json({ ok: true, agreement: updated })

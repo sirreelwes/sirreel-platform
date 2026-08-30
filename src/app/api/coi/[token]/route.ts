@@ -15,6 +15,12 @@ export const maxDuration = 60
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
 // Where the COI lands so the team's current manual workflow is preserved.
 const COI_TEAM_INBOX = 'rentals@sirreel.com'
+// hq@ rides along on the SAME send (Wes, 2026-08-30): every client COI has
+// to reach the HQ distribution group with the PDF attached, and one email to
+// both inboxes beats a second near-identical notification. Outbound-only
+// group — see src/lib/email/notifyHqDocument.ts for the shared path the
+// other client paperwork routes use.
+const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 
 /**
  * POST /api/coi/[token] — client-facing COI drop (no login; the signed
@@ -143,7 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const who = uploaderName || uploaderEmail || 'A client'
 
   const emailResult = await sendAgreementEmail({
-    to: [COI_TEAM_INBOX],
+    to: [COI_TEAM_INBOX, HQ_INBOX],
     // Same convention as notifyPublicSubmission: Reply-To is the client
     // so a staff Reply answers the uploader directly instead of landing
     // in the unmonitored notifications@ sender. Guarded — the field is

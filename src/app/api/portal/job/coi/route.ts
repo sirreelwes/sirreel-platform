@@ -12,9 +12,13 @@ import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
 // One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const ACCEPTED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg'])
@@ -44,7 +48,16 @@ export async function POST(req: NextRequest) {
 
   const order = await prisma.order.findUnique({
     where: { id: resolved.orderId },
-    select: { id: true, jobId: true, companyId: true, agentId: true },
+    select: {
+      id: true,
+      jobId: true,
+      companyId: true,
+      agentId: true,
+      orderNumber: true,
+      company: { select: { name: true } },
+      job: { select: { name: true, jobCode: true } },
+      jobContact: { select: { email: true } },
+    },
   })
   if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -101,6 +114,44 @@ export async function POST(req: NextRequest) {
       coverageVerified: true,
       additionalInsured: true,
     },
+  })
+
+  // hq@ gets the certificate itself. This route filed the COI and emailed
+  // nobody — only the client-drop link (/api/coi/[token]) ever notified a
+  // human, so a certificate uploaded from inside the portal was invisible
+  // until someone opened the job. Same named-insured check the drop link
+  // runs, so a wrong-production certificate is flagged in the email rather
+  // than discovered at review time. Fire-and-forget — the row is written.
+  const insured = evaluateInsuredMatch(
+    typeof aiResponse.namedInsured === 'string' ? aiResponse.namedInsured : null,
+    [order.company?.name, order.job?.name],
+  )
+  notifyHqDocument({
+    kind: 'coi',
+    companyName: order.company?.name ?? null,
+    jobName: order.job?.name ?? null,
+    rows: [
+      { label: 'Job', value: order.job?.name || '—' },
+      { label: 'Job code', value: order.job?.jobCode || '—' },
+      { label: 'Company', value: order.company?.name || '—' },
+      { label: 'Order', value: order.orderNumber || '—' },
+      { label: 'File', value: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)` },
+      { label: 'Named insured', value: aiFields.namedInsured || '—' },
+      {
+        label: 'Policy expiry',
+        value: check.policyExpiryDate
+          ? check.policyExpiryDate.toLocaleDateString('en-US', { timeZone: 'UTC' })
+          : '—',
+      },
+      { label: 'AI risk', value: check.aiRiskLevel || '—' },
+      { label: 'Required checks', value: check.coverageVerified ? 'PASS' : 'REVIEW' },
+      { label: 'Source', value: 'Client portal upload' },
+    ],
+    document: { filename: file.name, content: buffer },
+    href: order.jobId ? `${APP_URL}/jobs/${order.jobId}#coi` : undefined,
+    replyTo: order.jobContact?.email ?? undefined,
+    warning: insured.needsAttention ? insured.message : null,
+    label: 'portal/job',
   })
 
   // CRH Phase 4.1: COI received → schedule COI_RECEIVED_ACK email. Fire
