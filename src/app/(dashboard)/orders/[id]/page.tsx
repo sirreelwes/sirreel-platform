@@ -3271,13 +3271,32 @@ export default function OrderDetailPage() {
                 {regeneratingPdf ? "Regenerating…" : "Regenerate"}
               </button>
               <div className="flex flex-col items-end gap-1">
+                {/* Live as of 2026-08-29. It sat disabled behind "Coming
+                    soon" while the send path it needed (review modal →
+                    /send-quote) had already shipped and was reachable only
+                    from the follow-up panel — so the button a rep reaches
+                    for first was the one that did nothing.
+
+                    Blocked on a STALE PDF as well as a missing contact: the
+                    email links the client to the stored blob rather than
+                    attaching it, so sending against an out-of-date PDF
+                    quotes them old prices. The server refuses this too —
+                    this is the same rule stated where the rep can act on
+                    it, instead of a 400 after they've hit send. */}
                 <button
-                  disabled
-                  className="px-3 py-1.5 bg-lt-inner text-lt-fg3 text-sm font-semibold rounded-lg cursor-not-allowed"
+                  onClick={openSendQuoteReview}
+                  disabled={noRecipient || !!order.quotePdfStale}
+                  className={
+                    noRecipient || order.quotePdfStale
+                      ? "px-3 py-1.5 bg-lt-inner text-lt-fg3 text-sm font-semibold rounded-lg cursor-not-allowed"
+                      : "px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                  }
                   title={
                     noRecipient
                       ? "Add a contact to the job before sending."
-                      : "Coming soon — email the quote PDF to the client"
+                      : order.quotePdfStale
+                        ? "This PDF is older than the order — hit Regenerate first so the client gets current pricing."
+                        : "Review and email the quote to the client"
                   }
                 >
                   Send to Client
