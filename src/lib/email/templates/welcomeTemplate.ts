@@ -29,6 +29,7 @@
  */
 
 import { defaultEmailBody, PRE_JOB_OPENING_LINE } from '@/lib/email/standardOpening'
+import { startsWithGreeting } from '@/lib/email/greeting'
 
 function escapeHtml(s: string): string {
   return s
@@ -268,6 +269,17 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
   // The tier line no longer needs a paragraph of its own — it IS the opener.
   const showAvailabilityMessage = false
 
+  // A rep writing in "Write my own email" can't see the templated
+  // greeting above their box, so they open with one of their own and the
+  // client gets "Hi Kacie," followed by "Hi again, Kacie!". Keep THEIR
+  // line — it's the one a human chose, and it may carry a beat ours
+  // doesn't — and stand ours down. See lib/email/greeting.ts for why this
+  // is the safe direction and how narrowly it matches.
+  const repWroteGreeting = startsWithGreeting(
+    withAvailability ? customBody : repBody,
+    first,
+  )
+
   const closer = withAvailability
     ? '' // the tier message carries its own next step
     : repBody
@@ -458,7 +470,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
           </tr>
           <tr>
             <td style="padding: 28px 32px 4px;">
-              <p style="font-size: 17px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.5;">${greeting}</p>
+              ${repWroteGreeting ? '' : `<p style="font-size: 17px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.5;">${greeting}</p>`}
               <p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${opener}</p>
               ${repBodyHtml ? `<p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${repBodyHtml}</p>` : ''}
             </td>
@@ -525,8 +537,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
   // Plain-text alternative. Mirrors the HTML semantics for clients
   // that strip HTML or for accessibility readers.
   const textParts: string[] = [
-    `Hi ${first},`,
-    '',
+    ...(repWroteGreeting ? [] : [`Hi ${first},`, '']),
     withAvailability
       ? (customBody ?? av!.availabilityMessage)
       : repBody

@@ -808,16 +808,36 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                       Write my own email{' '}
                       <span className="text-zinc-500">
                         {target.kind === 'quote'
-                          ? '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the quote block with its portal button, and the sign-off stay.'
+                          ? '\u2014 the standard wording, yours to edit. Your words are the whole email: the quote block with its portal button and the sign-off stay, and the greeting below unless you open with one of your own.'
                           : target.kind === 'card-auth'
                             ? '— the standard ask, yours to edit. The greeting, the secure button and the sign-off stay, and so does the paragraph telling the client we never take card numbers by email — that one is not editable, it is what keeps this from reading like phishing.'
-                            : '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the “add gear or vehicles” button and the sign-off stay.'}
+                            : '\u2014 the standard wording, yours to edit. Your words are the whole email: the \u201cadd gear or vehicles\u201d button and the sign-off stay, and the greeting below unless you open with one of your own.'}
                       </span>
                     </span>
                   </label>
                   )}
                   {writeOwn && (
                     <div className="mt-2 space-y-2">
+                      {/* Show the greeting that will sit above these words.
+                          Reps couldn't see it, so they wrote their own and
+                          the client got "Hi Kacie," then "Hi again, Kacie!".
+                          The template now stands its greeting down when the
+                          draft opens with one, but the real fix is showing
+                          the rep what precedes them at the moment they
+                          write. */}
+                      {preview?.to?.name && (
+                        <div className="flex items-baseline gap-2 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-zinc-500 shrink-0">
+                            Starts with
+                          </span>
+                          <span className="text-sm text-zinc-300">
+                            Hi {preview.to.name.split(' ')[0]},
+                          </span>
+                          <span className="text-[11px] text-zinc-500 ml-auto text-right">
+                            added automatically — write your own and this one drops
+                          </span>
+                        </div>
+                      )}
                       <textarea
                         value={customMessage}
                         onChange={(e) => setCustomMessage(e.target.value)}
