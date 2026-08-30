@@ -453,15 +453,28 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
             <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
-              <!-- Logo, full width. See the note above about the badge that
-                   used to sit to its right. -->
+              <!-- Logo, centred (Wes, 2026-08-29). It was left-aligned
+                   because a hand-script "Welcome!" badge used to sit to its
+                   right and the pair read as a unit; the badge went in
+                   August (see the note above), which left the mark alone
+                   and hanging off one edge of a full-width bar.
+
+                   thankYouTemplate keeps ITS logo left for the same reason
+                   this one used to be — that header still carries a badge
+                   on the right.
+
+                   Centring an image in email takes both halves: the
+                   align="center" ATTRIBUTE for Outlook's Word engine, which
+                   ignores CSS text-align on a block-level image, and
+                   margin: 0 auto for everyone else. Dropping either one
+                   leaves it left-aligned in some client. -->
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td valign="middle" align="left" style="width: 100%;">
+                  <td valign="middle" align="center" style="width: 100%; text-align: center;">
                     <img
                       src="https://hq.sirreel.com/sirreel-logo-white.png"
                       alt="SirReel"
-                      style="height: 28px; width: auto; display: block;"
+                      style="height: 28px; width: auto; display: block; margin: 0 auto;"
                     />
                   </td>
                 </tr>

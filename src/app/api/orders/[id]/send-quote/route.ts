@@ -25,6 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { get } from '@vercel/blob'
 import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -168,13 +169,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? ranked.filter((r) => r.email !== primary.email && ccOverride.includes(r.email))
     : ranked.slice(1)
 
-  // Quote PDF is no longer attached — the welcome template's
-  // primary CTA links to the portal job page where "Download quote
-  // PDF" is one click away. Smaller email = better deliverability
-  // and a less intimidating first touch from a new sales contact.
-  // The blob still exists; the portal page proxies it through the
-  // auth-gated /api/portal/job/{slug}/quote-pdf route (or wherever
-  // the portal page links it).
+  // ── Attach the quote PDF ─────────────────────────────────────────
+  //
+  // It was unattached for a while, on the reasoning that a smaller email
+  // delivers better and the portal button is one click away. In practice
+  // that click is a real barrier: a producer scanning mail on a phone
+  // wants to SEE the number, not authenticate into a portal first (Wes,
+  // 2026-08-29). So it rides along again, and the portal CTA stays —
+  // they're for different moments. The attachment is for reading now;
+  // the portal is where they approve, sign and pay.
+  //
+  // Non-fatal by design: a blob that won't fetch must not block the
+  // send. The client still gets the quote through the portal button,
+  // which is exactly the state this email was in before.
+  let quoteAttachment: { filename: string; content: Buffer }[] | undefined
+  try {
+    const blob = await get(order.quotePdfKey, { access: 'private' })
+    if (blob && blob.statusCode === 200 && blob.stream) {
+      const buf = Buffer.from(await new Response(blob.stream).arrayBuffer())
+      quoteAttachment = [{ filename: `Quote-${order.orderNumber}.pdf`, content: buf }]
+    } else {
+      console.warn(`[send-quote] blob unavailable for ${order.orderNumber} — sending without the attachment`)
+    }
+  } catch (err) {
+    console.warn('[send-quote] attachment fetch failed, sending without it:', err)
+  }
 
   // ── Refresh or mint the portal magic-link token ──────────
   // One PortalAccess row per (orderId, contactId) — refresh expiresAt
@@ -219,6 +238,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     subject: final.subject,
     html: final.html,
     text: final.text,
+    attachments: quoteAttachment,
     label: `send-quote:${order.orderNumber}`,
   })
 

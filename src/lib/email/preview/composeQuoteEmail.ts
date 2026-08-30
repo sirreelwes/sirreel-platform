@@ -166,13 +166,14 @@ export async function composeQuoteEmail(
     alternatives = ranked.filter((_, i) => i !== idx)
   }
 
-  // Quote PDF is NO LONGER an email attachment. Per the unified
-  // new-quote → send-as-finishing-move flow, the portal page exposes
-  // a "Download quote PDF" affordance once the client clicks in.
-  // Smaller email → better deliverability + a less intimidating first
-  // touch. The attachments array stays in the response shape for
-  // API back-compat; it's just empty.
-  const attachments: AttachmentMeta[] = []
+  // The send route attaches the stored quote PDF (see send-quote), so the
+  // review modal has to say so — a rep approving an email should know
+  // what leaves with it. Filename mirrors the one the send route builds.
+  // No size: that would cost a blob HEAD on every keystroke-triggered
+  // preview, and the field is optional precisely for this case.
+  const attachments: AttachmentMeta[] = [
+    { filename: `Quote-${order.orderNumber}.pdf`, mimeType: 'application/pdf' },
+  ]
 
   const { subject, html, text } = buildWelcomeEmail({
     mode: 'welcome-with-quote',
