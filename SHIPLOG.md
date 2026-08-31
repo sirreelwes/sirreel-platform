@@ -24,6 +24,18 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-08-31
 
+### `write-off-approver` — the last email gate that needed a deploy to change
+
+`5cbbe82` extract + env override
+
+`WRITE_OFF_AUTHORIZED` was an inline const in `api/collections/aging-review/route.ts` and the only email gate in HQ with no env override. Every other one (HR, claims, dedup, export approval) could admit a new address by setting a Vercel var; this one needed a PR. That surfaced during the VerMar handover, where `wes@vermardesign.com` could be granted everything except the ability to write off a debt.
+
+Now `src/lib/collections/writeOffApprover.ts`, mirroring `lib/exports/approver.ts` — including **merge** semantics: `WRITE_OFF_APPROVER_EMAILS` is added to the base list, never replaces it, so setting it can only widen access and a typo cannot lock Wes out of his own tax filing. (Contrast `lib/authDomains.ts`, where the env var deliberately **replaces** the default — a tenancy boundary has to be able to shrink.)
+
+Unset env is byte-identical in behaviour to the previous inline check; verified only `wes@sirreel.com` passes, case-insensitively.
+
+Also corrects the `auth-domains` discovery below, which listed five individual-email gates and missed one: `lib/exports/approver.ts` (`EXPORT_APPROVERS_BASE`, gating data-export approval). It has an `EXPORT_APPROVER_EMAILS` override so it needed no code change. The sweep searched for `*_ALLOWLIST` env names and `.includes(email)` shapes; that gate matches the pattern but neither string. Searching by naming convention rather than by behaviour was the flaw.
+
 ### `auth-domains` — configurable sign-in domain allowlist for the VerMar handover
 
 `4e901f9` helper + both configs + promote-user script
