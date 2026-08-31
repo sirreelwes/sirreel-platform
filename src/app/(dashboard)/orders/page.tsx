@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CopyIntakeLinkButton } from "@/components/intake/CopyIntakeLinkButton";
+import { TodayMovementStrip } from "@/components/jobs/TodayMovementStrip";
 import {
   ORDER_STATUSES,
   ORDER_STATE_CHIP,
@@ -179,6 +180,15 @@ export default function OrdersPage() {
               ✨ New Order
             </button>
           </div>
+        </div>
+
+        {/* What physically moves today, above the list (Wes 2026-08-31:
+            moved here from the /jobs landing). It sits ahead of the
+            filters because it answers a different question than the
+            list does — "what has to happen today" rather than "find me
+            this order" — and reading it should not cost a scroll. */}
+        <div className="mb-6">
+          <TodayMovementStrip />
         </div>
 
         <div className="flex gap-3 mb-4 items-center flex-wrap">

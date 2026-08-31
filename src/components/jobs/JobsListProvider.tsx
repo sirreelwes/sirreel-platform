@@ -11,7 +11,9 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
+  STATE,
   URGENCY,
   keyDate,
   listDays,
@@ -87,7 +89,20 @@ export function useJobsList(): JobsListValue {
   return v
 }
 
+/**
+ * Valid ?state= values. Validated against STATE rather than cast — an
+ * unknown value must land on the unfiltered list, not a rail that
+ * silently matches nothing.
+ */
+function readStateParam(raw: string | null | undefined): ListFilter | null {
+  if (!raw) return null
+  if (raw === 'not-ready') return 'not-ready'
+  return raw in STATE ? (raw as RowState) : null
+}
+
 export function JobsListProvider({ children }: { children: React.ReactNode }) {
+  const searchParams = useSearchParams()
+  const [initialStateFilter] = useState(() => readStateParam(searchParams?.get('state')))
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -101,7 +116,11 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   // when the JOB was created and sending a quote touches the ORDER. The
   // list you look at all day should lead with what you just did.
   const [sort, setSort] = useState<Sort>('recent')
-  const [stateFilter, setStateFilter] = useState<ListFilter | null>(null)
+  // Seeded from ?state= so another page can deep-link into a narrowed
+  // rail — /orders' "N not returned" line is the first caller. Read once
+  // on mount rather than tracked: after landing, the chips own the
+  // filter, and a URL that kept re-asserting itself would fight them.
+  const [stateFilter, setStateFilter] = useState<ListFilter | null>(initialStateFilter)
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
