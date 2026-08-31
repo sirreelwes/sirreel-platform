@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { summariseReply, clientExcerpt } from '@/lib/sales/replySummary';
 import {
   classifyInquiryForPipeline,
   type InquiryClassification,
@@ -319,6 +320,68 @@ export async function GET() {
     }
   }
 
+  // ── Responded tiles: the client's latest words + what we said back ──
+  //
+  // Wes, 2026-08-29: "the viewable tile of the thread should be the
+  // client's last outreach … an AI summary of our agent response."
+  //
+  // Both are looked up BY ADDRESS, not by thread. The card used to render
+  // `snippet` from whichever inbound row happened to be canonical, which
+  // with a fragmented conversation is often the FIRST message rather than
+  // the latest — two different cards showed identical preview text in
+  // Wes's screenshot because both were echoing the original inquiry.
+  const respondedAddresses = [...new Set(respondedIncluded.map((c) => senderAddress(c.email)))];
+  const [clientLatestRows, ourLatestRows] = respondedAddresses.length
+    ? await Promise.all([
+        prisma.emailMessage.findMany({
+          // `contains`, not `in`: fromAddress is stored bare on some rows
+          // and "Name <addr>" on others, so an equality match against the
+          // parsed address silently found nothing — every tile rendered
+          // an empty "They said".
+          where: {
+            direction: 'inbound',
+            duplicateOfId: null,
+            OR: respondedAddresses.map((a) => ({
+              fromAddress: { contains: a, mode: 'insensitive' as const },
+            })),
+          },
+          orderBy: { sentAt: 'desc' },
+          select: { fromAddress: true, sentAt: true, subject: true, snippet: true, bodyText: true },
+        }),
+        prisma.emailMessage.findMany({
+          where: { direction: 'outbound', toAddresses: { hasSome: respondedAddresses } },
+          orderBy: { sentAt: 'desc' },
+          select: { id: true, toAddresses: true, fromAddress: true, sentAt: true, snippet: true, bodyText: true, replySummary: true },
+        }),
+      ])
+    : [[], []];
+
+  // fromAddress is stored bare on some rows and "Name <addr>" on others,
+  // so match on the parsed address rather than the raw column.
+  const clientLatest = new Map<string, (typeof clientLatestRows)[number]>();
+  for (const r of clientLatestRows) {
+    const addr = (r.fromAddress.match(/<([^>]+)>/)?.[1] ?? r.fromAddress).toLowerCase().trim();
+    if (!clientLatest.has(addr)) clientLatest.set(addr, r);
+  }
+  const ourLatest = new Map<string, (typeof ourLatestRows)[number]>();
+  for (const r of ourLatestRows) {
+    for (const raw of r.toAddresses) {
+      const addr = raw.toLowerCase().trim();
+      if (!ourLatest.has(addr)) ourLatest.set(addr, r);
+    }
+  }
+
+  // Summaries run in parallel and are cached on the message, so this is
+  // one Haiku call per reply ever — not one per page load.
+  const replySummaries = new Map<string, string | null>();
+  await Promise.all(
+    respondedAddresses.map(async (addr) => {
+      const reply = ourLatest.get(addr);
+      if (!reply) return;
+      replySummaries.set(addr, await summariseReply(reply));
+    }),
+  );
+
   const toRecord = (e: EmailRow) => ({
     emailId: e.id,
     fromAddress: e.fromAddress,
@@ -378,6 +441,30 @@ export async function GET() {
         // Judged on the deepest sibling thread — the inbox that saw the
         // most of the conversation.
         clientRepliedSince: best?.lastDirection === 'INBOUND',
+        // What the CLIENT most recently said — their own words, since a
+        // paraphrase of a message we already have is both costlier and
+        // less trustworthy than the thing itself.
+        clientLatest: (() => {
+          const row = clientLatest.get(senderAddress(c.email));
+          if (!row) return null;
+          return {
+            sentAt: row.sentAt,
+            subject: row.subject,
+            excerpt: clientExcerpt(row.bodyText, row.snippet),
+          };
+        })(),
+        // What WE said back, summarised — a staff reply is mostly quoted
+        // chain, signature and footer, and the two sentences that matter
+        // are buried in the middle.
+        ourReply: (() => {
+          const row = ourLatest.get(senderAddress(c.email));
+          if (!row) return null;
+          return {
+            sentAt: row.sentAt,
+            fromAddress: row.fromAddress,
+            summary: replySummaries.get(senderAddress(c.email)) ?? null,
+          };
+        })(),
       };
     }),
     hidden: {

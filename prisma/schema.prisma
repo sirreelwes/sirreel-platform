@@ -1958,6 +1958,20 @@ model EmailMessage {
   bodyText        String? @map("body_text") @db.Text
   bodyHtml        String? @map("body_html") @db.Text
   bodySource      String? @map("body_source")
+
+  /// One-line AI summary of THIS message, cached.
+  ///
+  /// EmailThread.aiSummary already exists but summarises a whole thread,
+  /// which is the wrong grain here and unreliable besides: Gmail thread
+  /// ids are per-mailbox and a conversation routinely shatters across
+  /// several of them (see /api/sales/suggested-inquiries). The New inbound
+  /// tile needs "what did our agent actually say back", which is a
+  /// property of one outbound message.
+  ///
+  /// Written lazily on first render and reused forever after — the
+  /// message never changes, so one Haiku call per reply is the whole cost.
+  replySummary   String?   @map("reply_summary") @db.Text
+  replySummaryAt DateTime? @map("reply_summary_at")
   attachmentCount Int     @default(0) @map("attachment_count")
 
   // Routing headers captured from the Gmail payload at ingest time, so

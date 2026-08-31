@@ -111,6 +111,10 @@ interface SuggestionRecord {
   // Responded stream: the client wrote back AFTER our latest reply —
   // the thread is theirs-last. Amber "client replied since" marker.
   clientRepliedSince?: boolean
+  // Responded-stream only. The client's most recent message in their own
+  // words, and a one-line summary of what we said back.
+  clientLatest?: { sentAt: string; subject: string; excerpt: string | null } | null
+  ourReply?: { sentAt: string; fromAddress: string; summary: string | null } | null
 }
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -1005,8 +1009,36 @@ function SuggestionCard({
           )}
         </div>
       )}
-      {suggestion.snippet && (
-        <div className="mt-1 text-[11px] text-gray-500 line-clamp-2">{suggestion.snippet}</div>
+      {/* Responded tiles show the state of the CONVERSATION: what the
+          client last said, then what we said back. `snippet` alone was
+          whichever inbound row happened to be canonical — with a
+          fragmented thread that is usually the ORIGINAL inquiry, which is
+          why two different cards could show identical preview text. */}
+      {suggestion.clientLatest?.excerpt ? (
+        <div className="mt-1.5 space-y-1.5">
+          <div className="rounded-md bg-gray-50 border border-gray-200 px-2 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              They said · {repliedAtLabel(suggestion.clientLatest.sentAt)}
+            </div>
+            <div className="text-[11px] text-gray-600 line-clamp-3 mt-0.5">
+              {suggestion.clientLatest.excerpt}
+            </div>
+          </div>
+          {suggestion.ourReply?.summary && (
+            <div className="rounded-md bg-emerald-50 border border-emerald-100 px-2 py-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                We said · {repliedAtLabel(suggestion.ourReply.sentAt)}
+              </div>
+              <div className="text-[11px] text-emerald-900 line-clamp-2 mt-0.5">
+                {suggestion.ourReply.summary}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        suggestion.snippet && (
+          <div className="mt-1 text-[11px] text-gray-500 line-clamp-2">{suggestion.snippet}</div>
+        )
       )}
 
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
