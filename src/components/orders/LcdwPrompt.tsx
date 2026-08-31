@@ -25,6 +25,11 @@ import { useCallback, useEffect, useState } from 'react'
  * only the eligible lines, a rep would read "waiver added" on an order
  * whose VideoVan is not covered, and would tell the client so in good
  * faith. The exclusion is the part that has to be visible.
+ *
+ * Styled with the LIGHT-theme lt-* tokens: the only mount is the order
+ * detail page, which is light — the original zinc/white-on-sky-950
+ * palette rendered as grey-on-grey there (Wes 2026-08-31, "the lcdw
+ * blurb isn't readable").
  */
 
 interface Verdict {
@@ -113,27 +118,27 @@ export function LcdwPrompt({
     <div
       className={`rounded-lg border p-3 text-sm ${
         cov.applied
-          ? 'border-sky-700 bg-sky-950/40'
+          ? 'border-sky-300 bg-sky-50'
           : nothingCoverable
-            ? 'border-zinc-700 bg-zinc-900'
-            : 'border-amber-700/60 bg-amber-950/20'
+            ? 'border-lt-hairline bg-lt-inner'
+            : 'border-amber-300 bg-amber-50'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-semibold text-white">
+          <div className="font-semibold text-lt-fg">
             Damage waiver (LCDW)
             {cov.perDay != null && (
-              <span className="ml-2 font-normal text-zinc-400">${cov.perDay}/day per vehicle</span>
+              <span className="ml-2 font-normal text-lt-fg2">${cov.perDay}/day per vehicle</span>
             )}
           </div>
-          <div className="mt-0.5 text-zinc-400">{cov.summary}</div>
+          <div className="mt-0.5 text-lt-fg2">{cov.summary}</div>
 
           {cov.excluded.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-[12px] text-zinc-500">
+            <ul className="mt-1.5 space-y-0.5 text-[12px] text-lt-fg3">
               {cov.excluded.map((e) => (
                 <li key={e.id}>
-                  <span className="text-zinc-400">{e.description}</span>
+                  <span className="text-lt-fg2">{e.description}</span>
                   {e.reason && <> — not covered: {WHY[e.reason] ?? e.reason}</>}
                 </li>
               ))}
@@ -141,33 +146,33 @@ export function LcdwPrompt({
           )}
 
           {cov.feeMissing && (
-            <div className="mt-1.5 text-[12px] text-amber-400">
+            <div className="mt-1.5 text-[12px] text-amber-700">
               No active LCDW fee in the catalog — add it under Admin → Fees before offering it.
             </div>
           )}
-          {error && <div className="mt-1.5 text-[12px] text-red-400">{error}</div>}
+          {error && <div className="mt-1.5 text-[12px] text-red-600">{error}</div>}
         </div>
 
         <div className="shrink-0 text-right">
           {cov.applied ? (
             <>
-              <div className="font-mono text-white">
+              <div className="font-mono text-lt-fg">
                 {cov.estimatedTotal != null ? usd(cov.estimatedTotal) : ''}
               </div>
               {canEdit && <button
                 onClick={() => act('DELETE')}
                 disabled={busy}
-                className="mt-1 text-[12px] text-zinc-400 underline hover:text-white disabled:opacity-40"
+                className="mt-1 text-[12px] text-lt-fg2 underline hover:text-lt-fg disabled:opacity-40"
               >
                 {busy ? 'Removing…' : 'Remove'}
               </button>}
             </>
           ) : cov.available ? (
             <>
-              <div className="font-mono text-white">
+              <div className="font-mono text-lt-fg">
                 {cov.estimatedTotal != null ? usd(cov.estimatedTotal) : ''}
               </div>
-              <div className="text-[11px] text-zinc-500">
+              <div className="text-[11px] text-lt-fg3">
                 {cov.vehicleDays} vehicle-day{cov.vehicleDays === 1 ? '' : 's'}
               </div>
               {canEdit && <button
