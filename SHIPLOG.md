@@ -22,6 +22,27 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-08-31
+
+### `auth-domains` — configurable sign-in domain allowlist for the VerMar handover
+
+`4e901f9` helper + both configs + promote-user script
+
+`wes@vermardesign.com` has to be able to sign in to HQ. `AUTH_ALLOWED_EMAIL_DOMAINS` (comma-separated) now drives it, parsed once in `src/lib/authDomains.ts` — the only place domain logic lives. Unset or empty falls back to `['sirreel.com']`, so nothing changes without configuration. Built as a list because the same mechanism becomes per-tenant allowlisting for whitelabel.
+
+**Two NextAuth configs exist and they disagreed.** The route handler at `api/auth/[...nextauth]/route.ts` declares its config inline (`GOOGLE_CLIENT_ID`/`SECRET`) and never imports `authOptions` from `lib/auth.ts` (`AUTH_GOOGLE_ID`/`SECRET`). So the `hd: 'sirreel.com'` on the provider in `lib/auth.ts` was **inert**, and the only live gate was `endsWith('@sirreel.com')` in the route handler. Both now call the same predicate. `hd` was removed regardless — it takes a single domain, so a second allowed domain could never appear in the account picker. Consolidating the two configs is separate, riskier work and was left alone.
+
+**There is no NextAuth adapter, so sign-in does not create `User` rows.** A new address authenticates and then falls through `permissions.ts:274` (`ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.CLIENT`) to CLIENT. `scripts/promote-user.ts` therefore *creates* the row when missing, copying role/location/dataScope/salesOnly from a reference user (default `wes@sirreel.com`, ADMIN) rather than hardcoding a role. It does not merge the two identities.
+
+```
+export DATABASE_URL=$(grep '^DATABASE_URL=' .env.local | grep -v PRISMA | head -1 | cut -d'"' -f2)
+npx tsx scripts/promote-user.ts wes@vermardesign.com
+```
+
+Individual-email allowlists are **unchanged** and are separate from role. `HR_ALLOWLIST`, `CLAIMS_ALLOWLIST` and `DEDUP_ALLOWLIST` all have env overrides, so the VerMar address can be added without a deploy. `WRITE_OFF_AUTHORIZED` in `api/collections/aging-review/route.ts:36` has **no env override** — it needs a code change to admit the new address.
+
+Env var is set in Vercel Production and Development. **Preview could not be set from the CLI** (v50.29.0 returns `git_branch_required` for the all-branches form it documents) — Preview falls back to `sirreel.com` until it is added in the dashboard, which is safe but means VerMar sign-in will not work on preview deployments.
+
 ## 2026-08-29
 
 ### `mobile-stage-1` — HQ on a phone: responsive visibility + PWA shell
