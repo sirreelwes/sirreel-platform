@@ -1,7 +1,7 @@
 /**
  * COI provider (DERIVED). Live query over live bookings whose
  * Certificate of Insurance is not yet settled, scoped to non-cancelled
- * bookings whose rental window hasn't already ended.
+ * bookings whose rental hasn't already started and whose job isn't LOST.
  *
  * It reads BOTH places a COI lives, because they are different tables:
  * `paperwork_requests.coi_received` is set by the paperwork-portal
@@ -55,6 +55,7 @@ export const coiMissingProvider: ActionItemProvider = {
              coi.human_decision AS "coiDecision"
       FROM bookings b
       LEFT JOIN companies c ON b.company_id = c.id
+      LEFT JOIN sr_jobs j ON j.id = b.job_id
       LEFT JOIN paperwork_requests pr ON pr.booking_id = b.id
       -- The job's best certificate: an approved one if it has any,
       -- otherwise the most recent. A job can carry several — a rejected
@@ -71,7 +72,16 @@ export const coiMissingProvider: ActionItemProvider = {
       ) coi ON TRUE
       WHERE b.status NOT IN ('CANCELLED', 'ARCHIVED')
         AND b.archived_at IS NULL
-        AND b.end_date >= now() - interval '1 day'
+        -- Chase a COI only BEFORE the rental starts (Wes 2026-08-31:
+        -- "if the start date has passed … the items shouldn't show").
+        -- Once the window opens the gear either left without one (an
+        -- ops conversation, not a checklist row) or the job never ran.
+        -- Start-day itself still shows — the morning of pickup is the
+        -- last moment the ask is actionable.
+        AND b.start_date >= CURRENT_DATE
+        -- A LOST job owes us nothing — its paperwork chase dies with
+        -- the quote (same Wes ruling).
+        AND (j.status IS NULL OR j.status::text <> 'LOST')
         -- Planyo-imported bookings (live book since 2026-08-18) count
         -- only once HQ actually TRACKS their paperwork: a missing
         -- paperwork_request row on an import means "COI state unknown"
