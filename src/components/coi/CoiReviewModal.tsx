@@ -106,15 +106,15 @@ function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
             <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-semibold mb-1">
               {g.label}
             </div>
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {g.rows.map((r) => (
-                <div key={r.key}>
+                <div key={r.key} className="min-w-0">
                   <div className="flex items-baseline gap-2 text-[12px]">
                     <span className={`${CHECK_TONE[r.status]} font-bold w-3 flex-shrink-0`}>
                       {CHECK_MARK[r.status]}
                     </span>
                     <span
-                      className={`flex-1 min-w-0 ${
+                      className={`min-w-0 flex-1 break-words ${
                         r.status === 'FAIL'
                           ? 'text-rose-200'
                           : r.status === 'UNKNOWN'
@@ -124,12 +124,27 @@ function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
                     >
                       {r.label}
                     </span>
-                    <span className="text-[11px] text-zinc-500 text-right truncate max-w-[45%]">
-                      {r.status === 'UNKNOWN' ? 'not checked' : r.found || ''}
-                    </span>
+                    {r.status === 'UNKNOWN' && (
+                      <span className="flex-shrink-0 text-[11px] text-zinc-600">not checked</span>
+                    )}
                   </div>
+                  {/* What the AI actually READ off the certificate. This used
+                      to be a right-aligned `truncate` column, which cost twice:
+                      the evidence was clipped mid-address so it proved nothing,
+                      and `truncate`'s white-space:nowrap made the span's
+                      min-content the whole string — percentage max-width is
+                      ignored during intrinsic sizing, so the 1fr track inflated
+                      past the modal, squeezed the document pane to a sliver and
+                      put a horizontal scrollbar under the whole dialog. */}
+                  {r.status !== 'UNKNOWN' && r.found && (
+                    <div className="ml-5 text-[11px] leading-relaxed text-zinc-500 break-words">
+                      {r.found}
+                    </div>
+                  )}
                   {r.status === 'FAIL' && r.note && (
-                    <div className="ml-5 mt-0.5 text-[11px] leading-relaxed text-rose-300/80">{r.note}</div>
+                    <div className="ml-5 mt-0.5 text-[11px] leading-relaxed text-rose-300/80 break-words">
+                      {r.note}
+                    </div>
                   )}
                 </div>
               ))}
@@ -288,7 +303,7 @@ export function CoiReviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl flex flex-col"
+        className="flex w-full min-w-0 max-w-5xl h-[92vh] flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-zinc-800 px-5 py-4">
@@ -314,25 +329,30 @@ export function CoiReviewModal({
         ) : !data ? (
           <div className="px-5 py-16 text-center text-sm text-rose-300">{error || 'Not found.'}</div>
         ) : (
-          <div className="flex-1 overflow-y-auto grid md:grid-cols-[1.1fr_1fr] gap-0">
+          /* minmax(0,…) rather than bare fr: an fr track's automatic minimum
+             is its content's min-content, so ONE unbreakable child widens the
+             track past the dialog. Below md the panes stack and the whole
+             thing scrolls; at md and up each pane scrolls on its own, so the
+             certificate stays on screen while the findings are read. */
+          <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] md:overflow-hidden">
             {/* The document. Served through the authed private-blob proxy. */}
-            <div className="border-r border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="flex min-w-0 flex-col gap-2 border-b border-zinc-800 bg-zinc-950/60 p-4 md:border-b-0 md:border-r md:overflow-hidden">
               <iframe
                 src={data.downloadUrl}
                 title="Certificate of insurance"
-                className="w-full h-[60vh] rounded-lg border border-zinc-800 bg-white"
+                className="w-full flex-1 min-h-[50vh] rounded-lg border border-zinc-800 bg-white md:min-h-0"
               />
               <a
                 href={data.downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-block text-[12px] font-semibold text-amber-400 hover:text-amber-300"
+                className="flex-shrink-0 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
               >
                 Open in a new tab →
               </a>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="min-w-0 space-y-4 p-5 md:overflow-y-auto">
               {/* Named insured vs production company — the finding this whole
                   screen was built around. Loudest element on the panel when
                   it needs attention. */}
@@ -350,11 +370,11 @@ export function CoiReviewModal({
                     </span>
                   </div>
                   <div className="text-[13px] text-zinc-200 leading-relaxed">{match.message}</div>
-                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                  <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px]">
                     <dt className="text-zinc-500">On the certificate</dt>
-                    <dd className="text-white">{match.namedInsured || '—'}</dd>
+                    <dd className="min-w-0 break-words text-white">{match.namedInsured || '—'}</dd>
                     <dt className="text-zinc-500">On the job</dt>
-                    <dd className="text-white">
+                    <dd className="min-w-0 break-words text-white">
                       {data.companyName || '—'}
                       {data.job?.name && data.job.name !== data.companyName && (
                         <span className="text-zinc-500"> · {data.job.name}</span>
@@ -465,7 +485,7 @@ export function CoiReviewModal({
                       </span>
                     </div>
                     {data.aiNotes && (
-                      <p className="text-[12px] text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      <p className="text-[12px] text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
                         {data.aiNotes}
                       </p>
                     )}
