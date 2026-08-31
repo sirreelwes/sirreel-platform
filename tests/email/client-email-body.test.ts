@@ -102,10 +102,22 @@ const card = (customBody: string | null) =>
     customBody,
   })
 
-const CARD_DEFAULT = defaultEmailBody({ kind: 'card-auth', projectName: 'The Watch Party' })
+// agentFirstName matters now: the "Questions? Just reply" line moved INTO
+// the default body (2026-08-31, always-open compose box), personalized with
+// the agent's name — the seed and the fallback render must use the same one.
+const CARD_DEFAULT = defaultEmailBody({
+  kind: 'card-auth',
+  projectName: 'The Watch Party',
+  agentFirstName: 'Jose',
+})
 const cardTemplated = card(null)
 has('card: plain text renders the seeded ask', cardTemplated.text, CARD_DEFAULT)
-has('card: the ask names the job in bold when templated', cardTemplated.html, '<strong>The Watch Party</strong>')
+has('card: the default carries the Questions line', CARD_DEFAULT, 'Questions? Just reply to this email — Jose will sort it out.')
+// The templated-fallback ask now renders the SAME paragraphs as an untouched
+// compose box (box ⇔ email parity) — which cost the old hardcoded fallback
+// its bold job name. The job still has to be named, just unbolded.
+has('card: the templated ask names the job', cardTemplated.html, 'Before we can send The Watch Party out the door')
+lacks('card: only one Questions line in the text', cardTemplated.text.replace('Questions? Just reply', ''), 'Questions? Just reply')
 
 const cardOwn = card('Ana has the PO — I just need a card behind it so the truck can roll Thursday.')
 has("card: the rep's words are the ask", cardOwn.html, 'so the truck can roll Thursday')

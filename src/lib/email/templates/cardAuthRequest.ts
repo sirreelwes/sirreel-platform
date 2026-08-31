@@ -82,7 +82,6 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
   const firstName = escapeHtml(firstNameRaw)
   const jobName = escapeHtml(jobNameRaw)
   const agentRef = (input.agentFirstName || '').trim() || 'your SirReel agent'
-  const agentRefHtml = escapeHtml(agentRef)
   const note = (input.personalNote || '').trim()
   const link = input.portalLink
   const repBody = (input.customBody || '').trim()
@@ -109,12 +108,14 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
     "This just secures your order — you aren't charged by adding it. If you'd rather pay another way, we also take ACH, Zelle and wire transfer; the details are in your portal, on the button below."
   // The standard ask, from the same function that seeds the compose box, so
   // what a rep is handed to edit is what a client receives when they don't.
-  const askText = repBody || defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw })
-  // Only the templated ask names the job in bold — a rep's own words are
-  // rendered exactly as typed.
-  const askHtml = repBody
-    ? noteHtml(repBody)
-    : `<p style="margin:0 0 16px;">Before we can send <strong>${jobName}</strong> out the door, we need a credit card on file to authorize the rental.</p>`
+  // (The default now carries the "Questions?" line too — see
+  // standardOpening.ts, 2026-08-31 — so the fallback renders the same
+  // paragraphs as an untouched compose box, minus the bold job name the
+  // old hardcoded fallback had.)
+  const askText =
+    repBody ||
+    defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw, agentFirstName: agentRef })
+  const askHtml = noteHtml(askText)
 
   const subject = `Card authorization for ${jobNameRaw}`
 
@@ -130,11 +131,9 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
     ``,
     link ? `Authorize your card: ${link}` : `(The secure portal link is generated when this email is sent.)`,
     ``,
-    // Dropped when the rep wrote the body — their words carry their own
-    // next step, and ours underneath read like a second author. The line
-    // no longer has to hint at "paying another way": PAYMENT_OPTIONS says it
-    // outright, above the button, on every send.
-    ...(repBody ? [] : [`Questions? Just reply to this email — ${agentRef} will sort it out.`, ``]),
+    // The "Questions?" line now travels inside askText (part of the
+    // editable default body) rather than as a separate templated line —
+    // a rep who deletes it meant to, and one who didn't sends it.
     `Thanks,`,
     `The SirReel Team`,
     ``,
@@ -244,7 +243,6 @@ ${ctaBlock}
           <!-- ── Sign-off ──────────────────────────────────────────── -->
           <tr>
             <td style="padding:24px 36px 32px;font-size:14px;line-height:1.55;color:#333333;">
-              ${repBody ? '' : `<p style="margin:0 0 6px;">Questions? Just reply to this email &mdash; ${agentRefHtml} will sort it out.</p>`}
               <p style="margin:12px 0 0;">
                 Thanks,<br />
                 <strong style="color:#1a1a1a;">The SirReel Team</strong>

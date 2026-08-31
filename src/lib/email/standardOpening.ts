@@ -41,25 +41,43 @@ export const PRE_JOB_OPENING_LINE =
 export function defaultEmailBody(input: {
   kind: 'quick-reply' | 'welcome' | 'quick-respond' | 'quote' | 'card-auth'
   projectName?: string | null
+  /** card-auth only: personalizes the "Questions? Just reply" line. */
+  agentFirstName?: string | null
 }): string {
   // The card-authorization request. This is the ASK only — the paragraph
   // explaining that the number goes straight to the processor and that we
   // never take card details by email or phone is NOT here, because a rep
   // cannot edit it away: it is what keeps this email from reading like the
   // phishing attempt it otherwise resembles.
+  //
+  // The "Questions?" line moved IN here (2026-08-31, with the always-open
+  // compose box): the template used to append it only on templated sends
+  // and drop it when a rep wrote their own — but now every send carries
+  // the box's text, so a line living outside the box would never render.
   if (input.kind === 'card-auth') {
     const project = input.projectName?.trim() || 'your production'
-    return `Before we can send ${project} out the door, we need a credit card on file to authorize the rental.`
+    const agent = input.agentFirstName?.trim() || 'your SirReel agent'
+    return [
+      `Before we can send ${project} out the door, we need a credit card on file to authorize the rental.`,
+      '',
+      `Questions? Just reply to this email — ${agent} will sort it out.`,
+    ].join('\n')
   }
   // The quote email. Deliberately names no job and no dates — the quote
   // snapshot block sits directly underneath and carries both. Kept free of
   // the project name so the text a rep is handed in the compose box is
   // character-for-character the text the client receives.
+  //
+  // The "Take a look" closer likewise moved in from welcomeTemplate's
+  // quote branch (2026-08-31): with the compose box always sent, a closer
+  // outside the box would silently vanish from every quote email.
   if (input.kind === 'quote') {
     return [
       PRE_JOB_OPENING_LINE,
       '',
       "I've put together a first pass at your quote; it's waiting for you on your client portal, along with everything else we'll need for the job.",
+      '',
+      "Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.",
     ].join('\n')
   }
   // Quick Respond gets the bare standard line and NOTHING else. Wes

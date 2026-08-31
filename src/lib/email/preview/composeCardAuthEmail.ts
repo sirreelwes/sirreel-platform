@@ -162,7 +162,11 @@ export async function composeCardAuthEmail(
 
   return {
     ok: true,
-    defaultBody: defaultEmailBody({ kind: 'card-auth', projectName: job.name }),
+    defaultBody: defaultEmailBody({
+      kind: 'card-auth',
+      projectName: job.name,
+      agentFirstName: (job.agent?.name || '').split(' ')[0] || null,
+    }),
     to,
     alternatives: candidates,
     from: SEND_FROM,

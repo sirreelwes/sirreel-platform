@@ -285,7 +285,9 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
     : repBody
       ? '' // the rep's words are the whole email — see `customBody`
       : withQuote
-      ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
+      ? '' // the "Take a look" closer lives in defaultEmailBody('quote')
+           // now (2026-08-31) — quoteOpener already carries it, and the
+           // compose box is seeded from the same function.
       : `When you're ready to book something, just send me the details and I'll spin up a quote.`
 
   const personalNoteBlock = safeNote
@@ -453,7 +455,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
             <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
-              <!-- Logo, centred (Wes, 2026-08-29). It was left-aligned
+              ${/* Logo, centred (Wes, 2026-08-29). It was left-aligned
                    because a hand-script "Welcome!" badge used to sit to its
                    right and the pair read as a unit; the badge went in
                    August (see the note above), which left the mark alone
@@ -467,8 +469,11 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
                    align="center" ATTRIBUTE for Outlook's Word engine, which
                    ignores CSS text-align on a block-level image, and
                    margin: 0 auto for everyone else. Dropping either one
-                   leaves it left-aligned in some client. -->
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                   leaves it left-aligned in some client.
+
+                   A JS comment, not an HTML one — an HTML comment rides
+                   into the client's inbox, and this one carried the very
+                   "Welcome!" string the badge test forbids. */ ''}<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td valign="middle" align="center" style="width: 100%; text-align: center;">
                     <img
@@ -624,7 +629,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
     withAvailability || repBody
       ? ''
       : withQuote
-        ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
+        ? '' // lives in defaultEmailBody('quote') now — the opener carries it
         : `When you're ready to book something, just send me the details and I'll spin up a quote.`
   if (closerText) textParts.push('', closerText)
   textParts.push(

@@ -308,16 +308,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // flows into the live preview re-fetch.
   const [customNote, setCustomNote] = useState('');
   const debouncedNote = useDebouncedValue(customNote, 350);
-  // "Write my own email" (quick-reply only): the rep's own prose replaces the
-  // templated body; the branded shell + real availability block stay. Debounced
-  // into the live preview re-fetch like the note.
-  // Some entry points open with NOTHING pre-written (Wes 2026-08-25:
-  // "Quick Respond … not have any prepopulated message in email") — the
-  // rep writes the whole body themselves.
-  // Welcome (and Quick Respond) compose in ONE always-open box — there is no
-  // toggle and no separate "personal note" (Wes 2026-08-25: "no need for two
-  // sections, just have one place to type in").
-  const [writeOwn, setWriteOwn] = useState(true);
+  // The composer box. There is no "Write my own email" toggle any more
+  // (Wes 2026-08-31: "we don't need the extra step … every email preview
+  // should open with suggested text but be editable"): every kind that
+  // has a defaultBody opens with the standard wording prefilled, and the
+  // box's text — edited or not — is what sends. Quick Respond still opens
+  // with only the generic opener; the server picks the default.
   const seededRef = useRef(false);
   // CC typed by the rep (Wes 2026-08-25). Applies to every kind this modal
   // sends; the routes re-parse it server-side.
@@ -326,7 +322,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // rep can strike anyone before sending.
   const [ccInput, setCcInput] = useState(initialCc?.join(', ') ?? '');
   const [customMessage, setCustomMessage] = useState('');
-  const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
+  const debouncedCustom = useDebouncedValue(customMessage, 350);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiFlags, setAiFlags] = useState<string[] | null>(null);
   const [aiPolished, setAiPolished] = useState<string | null>(null);
@@ -380,10 +376,6 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
-    // Welcome/Quick Respond stay in write-my-own across target changes; the
-    // single box IS the composer for them, so resetting to false would hide
-    // the only place to type.
-    setWriteOwn(target.kind === 'welcome' || !!quickRespond);
     setCustomMessage('');
     setCcInput('');
     seededRef.current = false;
@@ -394,12 +386,15 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setSendState('idle');
   }, [target, quickRespond]);
 
-  // Welcome sends compose in one box, seeded once with the standard wording so
-  // "editable" means editing real copy rather than retyping it. Quick Respond
-  // seeds the GENERIC opener only — never anything about availability, units
-  // or dates (Wes 2026-08-25); the server decides which default that is.
+  // Seed the composer once per target with the standard wording, so
+  // "editable" means editing real copy rather than retyping it. Applies to
+  // every kind whose preview supplies a defaultBody (quote, card-auth,
+  // quick-reply, welcome). Quick Respond seeds the GENERIC opener only —
+  // never anything about availability, units or dates (Wes 2026-08-25);
+  // the server decides which default that is. Never overwrites text the
+  // rep has already typed.
   useEffect(() => {
-    if (!target || target.kind !== 'welcome') return;
+    if (!target) return;
     if (seededRef.current || customMessage.trim() || !preview?.defaultBody) return;
     seededRef.current = true;
     setCustomMessage(preview.defaultBody);
@@ -434,7 +429,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!quickRespond, ccValid) as Record<string, unknown>;
+      const sendBody = buildSendBody(target, overrideContactId, customNote, customMessage, !!quickRespond, ccValid) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -522,12 +517,15 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // the rep meant to copy someone, and quietly not doing it is the worse
   // failure. An empty box is fine.
   const ccBlocked = ccInvalid.length > 0 || ccOverLimit;
-  // One composer, no toggle, no second note field.
-  const singleBox = target.kind === 'welcome';
-  // Kinds whose "Write my own email" swallows the whole body — the separate
-  // personal-note box is hidden while it's on, since a note above a
-  // hand-written email is the two-authors problem in miniature.
-  const writeOwnKind = target.kind === 'quote' || target.kind === 'card-auth';
+  // One composer, no toggle, no second note field — every kind that
+  // composes a body gets the same always-open seeded box. Follow-ups are
+  // the exception: they're templated check-ins with only the personal-note
+  // slot, so they keep that field instead.
+  const singleBox =
+    target.kind === 'welcome' ||
+    target.kind === 'quote' ||
+    target.kind === 'card-auth' ||
+    target.kind === 'quick-reply';
 
   return (
     <div
@@ -732,10 +730,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   Optional; empty leaves the email purely templated. The
                   locked brand shell (header, CTAs, footer) is unaffected.
 
-                  NOT shown for welcome/Quick Respond: Wes 2026-08-25, "no
-                  need for two sections, just have one place to type in".
-                  Those kinds get the single composer below instead. */}
-              {!singleBox && !(writeOwnKind && writeOwn) && (
+                  Only shown for follow-ups: every other kind composes in
+                  the single seeded box below (Wes 2026-08-25, "no need for
+                  two sections, just have one place to type in"). */}
+              {!singleBox && (
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -759,65 +757,31 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
               </div>
               )}
 
-              {/* Write my own email — quick-reply + welcome.
-                  For QUICK REPLY the rep's message no longer replaces the
-                  opener: the standard sentence always leads and this text
-                  follows it. Copy says "adds below" so a rep does not open
-                  with their own greeting and produce a doubled "Hi <name>". */}
-              {(target.kind === 'quick-reply' ||
-                target.kind === 'welcome' ||
-                target.kind === 'quote' ||
-                target.kind === 'card-auth') && (
+              {/* The composer — one box, always open, prefilled with the
+                  standard wording (Wes 2026-08-31: no "Write my own email"
+                  step; every preview opens with suggested text, editable).
+                  The hint under the label says what the locked shell adds
+                  around the rep's words, per kind. */}
+              {singleBox && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
-                  {singleBox ? (
-                    /* One box, always open — no checkbox to find, nothing to
-                       toggle. The label says what the shell adds around it. */
-                    <div className="flex items-baseline justify-between">
-                      <label className="text-[10px] uppercase tracking-wider text-zinc-500">
-                        Your message
-                      </label>
-                      {refreshing && (
-                        <span className="text-[10px] text-amber-300 animate-pulse">Updating preview…</span>
-                      )}
-                    </div>
-                  ) : (
-                  <label className="flex items-center gap-2 text-[12px] text-zinc-300 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={writeOwn}
-                      disabled={sendLocked}
-                      onChange={(e) => {
-                        const on = e.target.checked
-                        setWriteOwn(on)
-                        // Seed the box with the standard wording the FIRST time
-                        // it is opened, so "editable" means editing real copy
-                        // rather than retyping it. Never overwrite something
-                        // the rep has already written.
-                        if (on && !customMessage.trim() && preview?.defaultBody) {
-                          setCustomMessage(preview.defaultBody)
-                        }
-                        // The personal-note box is hidden while the rep writes
-                        // the whole quote email — clear it too, so a note typed
-                        // before the toggle can't ride along invisibly.
-                        if (on && writeOwnKind) setCustomNote('')
-                        if (!on) { setAiFlags(null); setAiPolished(null); setAiError(null); }
-                      }}
-                      className="accent-amber-600"
-                    />
-                    <span>
-                      Write my own email{' '}
-                      <span className="text-zinc-500">
-                        {target.kind === 'quote'
-                          ? '\u2014 the standard wording, yours to edit. Your words are the whole email: the quote block with its portal button and the sign-off stay, and the greeting below unless you open with one of your own.'
-                          : target.kind === 'card-auth'
-                            ? '— the standard ask, yours to edit. The greeting, the secure button and the sign-off stay, and so does the paragraph telling the client we never take card numbers by email — that one is not editable, it is what keeps this from reading like phishing.'
-                            : '\u2014 the standard wording, yours to edit. Your words are the whole email: the \u201cadd gear or vehicles\u201d button and the sign-off stay, and the greeting below unless you open with one of your own.'}
-                      </span>
-                    </span>
-                  </label>
-                  )}
-                  {writeOwn && (
-                    <div className="mt-2 space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <label className="text-[10px] uppercase tracking-wider text-zinc-500">
+                      Your message
+                    </label>
+                    {refreshing && (
+                      <span className="text-[10px] text-amber-300 animate-pulse">Updating preview…</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    {target.kind === 'quote'
+                      ? 'The standard wording, yours to edit. Your words are the whole email — the quote block with its portal button and the sign-off stay.'
+                      : target.kind === 'card-auth'
+                        ? 'The standard ask, yours to edit. The secure button and sign-off stay — so does the paragraph saying we never take card numbers by email; it is what keeps this from reading like phishing.'
+                        : target.kind === 'quick-reply'
+                          ? 'The standard wording, yours to edit. Your words are the whole email — the “add gear or vehicles” button and the sign-off stay.'
+                          : 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'}
+                  </p>
+                  <div className="mt-2 space-y-2">
                       {/* Show the greeting that will sit above these words.
                           Reps couldn't see it, so they wrote their own and
                           the client got "Hi Kacie," then "Hi again, Kacie!".
@@ -842,18 +806,16 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         value={customMessage}
                         onChange={(e) => setCustomMessage(e.target.value)}
                         disabled={sendLocked}
-                        rows={singleBox ? 7 : 5}
+                        rows={7}
                         maxLength={5000}
                         placeholder={
                           quickRespond
                             ? 'A generic opener is prefilled — replace or extend it. Nothing specific about availability, units or dates goes out unless you write it.'
-                            : singleBox
-                              ? 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'
-                              : target.kind === 'quote'
-                                ? 'The standard quote wording, yours to edit. The quote total, dates and portal button are added underneath — no need to retype them.'
-                                : target.kind === 'card-auth'
-                                  ? 'The standard ask, yours to edit. The security paragraph and the secure button follow it — don’t retype those, and never ask for the number itself.'
-                                  : 'Write your message to the client. It appears under the greeting, above the real availability block.'
+                            : target.kind === 'quote'
+                              ? 'The standard quote wording, yours to edit. The quote total, dates and portal button are added underneath — no need to retype them.'
+                              : target.kind === 'card-auth'
+                                ? 'The standard ask, yours to edit. The security paragraph and the secure button follow it — don’t retype those, and never ask for the number itself.'
+                                : 'The standard wording, yours to edit. The greeting and sign-off are added around it.'
                         }
                         className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                       />
@@ -895,8 +857,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                           </button>
                         </div>
                       )}
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
 
