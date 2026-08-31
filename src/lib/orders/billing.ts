@@ -118,6 +118,22 @@ function asNumber(r: number | DecimalLike): number {
  * this helper — STAGES bills calendar days directly, EXPENDABLES has no
  * day concept.
  */
+/**
+ * Week-cap choices an agent may pick when estimating billable days for a
+ * 3-day-week department (Wes 2026-08-31: "SirReel agent should have the
+ * ability to change the category from a 3-day week (production supplies)
+ * to a 2-day or 1-day week"). Purely an input aid — picking one writes
+ * billableDays via computeBillableDays(calendarDays, cap); the stored
+ * billableDays remains the authoritative, freely-editable number.
+ */
+export const WEEK_CAP_CHOICES = [3, 2, 1] as const
+
+/** True for departments whose default billing is the 3-day week. */
+export function isThreeDayWeekDept(department: LineItemDepartment): boolean {
+  const rules = BILLING_RULES[department]
+  return rules.model === 'CAP_PER_WEEK' && rules.cap === 3
+}
+
 export function computeBillableDays(actualDays: number, cap: number): number {
   const fullWeeks = Math.floor(actualDays / 7)
   const remainder = actualDays % 7

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { calendarDays, computeBillableDays, isThreeDayWeekDept, WEEK_CAP_CHOICES } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -1989,6 +1990,35 @@ export default function OrderDetailPage() {
           <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
             placeholder="auto"
             className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
+          {/* Week-cap picker for 3-day-week departments (Wes 2026-08-31):
+              each button re-suggests billable days from the line's own
+              calendar range at that cap. The input stays authoritative. */}
+          {isThreeDayWeekDept(editDept as any) && li.pickupDate && li.returnDate && (
+            <div className="mt-1 flex justify-center gap-0.5">
+              {WEEK_CAP_CHOICES.map((cap) => {
+                const suggested = computeBillableDays(
+                  calendarDays(new Date(li.pickupDate), new Date(li.returnDate)),
+                  cap,
+                );
+                const active = Number(editDays) === suggested;
+                return (
+                  <button
+                    key={cap}
+                    type="button"
+                    onClick={() => setEditDays(String(suggested))}
+                    title={`Bill ${cap} day${cap === 1 ? '' : 's'} per 7-day week → ${suggested} day${suggested === 1 ? '' : 's'} for this range`}
+                    className={`px-1.5 py-0.5 text-[9px] font-semibold rounded border ${
+                      active
+                        ? 'bg-lt-fg text-white border-lt-fg'
+                        : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:text-lt-fg'
+                    }`}
+                  >
+                    {cap}d
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </td>
         <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
         <td className="px-4 py-2 whitespace-nowrap text-right">

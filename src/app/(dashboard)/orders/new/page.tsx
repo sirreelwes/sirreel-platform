@@ -36,8 +36,12 @@ import { DEPARTMENT_LABEL, DEPARTMENT_SHORT } from '@/lib/sales/pipeline';
 import {
   availableRateTypes,
   billingBreakdown,
+  calendarDays,
+  computeBillableDays,
   computeLineTotal,
   defaultRateType,
+  isThreeDayWeekDept,
+  WEEK_CAP_CHOICES,
 } from '@/lib/orders/billing';
 
 const DEPARTMENTS: LineItemDepartment[] = [
@@ -2992,6 +2996,34 @@ function LineItemRow({
               }}
               className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-base font-bold tabular-nums text-lt-fg text-center"
             />
+            {/* Week-cap picker — 3-day-week departments only. Each
+                button re-suggests billableDays from the calendar range
+                at that cap (Wes 2026-08-31); the input above stays the
+                authoritative, hand-editable number. Active = the cap
+                whose math matches the current value. */}
+            {!isExpendable && isThreeDayWeekDept(item.department) && (
+              <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
+                {WEEK_CAP_CHOICES.map((cap) => {
+                  const suggested = computeBillableDays(
+                    calendarDays(new Date(item.pickupDate), new Date(item.returnDate)),
+                    cap,
+                  );
+                  const active = item.billableDays === suggested;
+                  return (
+                    <button
+                      key={cap}
+                      onClick={() => onChange(id, { billableDays: suggested })}
+                      title={`Bill ${cap} day${cap === 1 ? '' : 's'} per 7-day week → ${suggested} day${suggested === 1 ? '' : 's'} for this range`}
+                      className={`flex-1 px-1 py-0.5 text-[9px] font-semibold rounded whitespace-nowrap ${
+                        active ? 'bg-lt-fg text-white' : 'text-lt-fg2 hover:text-lt-fg'
+                      }`}
+                    >
+                      {cap}d wk
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {showToggle && (
               <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
                 {visibleRateTypes.map((rt) => {
