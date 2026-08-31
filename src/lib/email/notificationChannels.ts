@@ -34,6 +34,7 @@ export type NotificationChannelKey =
   | 'signed-contract-sales'
   | 'signed-contract-billing'
   | 'coi-team'
+  | 'pickup-picklists'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -81,6 +82,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'Receives the certificate itself when a client uploads a COI through the public COI link (in addition to HQ notifications).',
     defaults: () => ['rentals@sirreel.com'],
+  },
+  {
+    key: 'pickup-picklists',
+    label: 'Pick-up pick lists',
+    description:
+      'The day-before digest: jobs picking up tomorrow with all paperwork and approvals complete, each with a link to print its warehouse pick list — plus a heads-up list of tomorrow’s pickups that are NOT ready. A short-term bridge until picking is fully digital.',
+    defaults: () => [hqNotifyInbox()],
   },
 ]
 
