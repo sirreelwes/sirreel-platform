@@ -1,7 +1,21 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import prisma from './prisma';
+import { isAllowedEmailDomain } from './authDomains';
 
+/**
+ * NOTE — these options do NOT serve sign-in today.
+ *
+ * The NextAuth route handler at src/app/api/auth/[...nextauth]/route.ts
+ * declares its own inline config (different Google client env vars:
+ * GOOGLE_CLIENT_ID/SECRET rather than AUTH_GOOGLE_ID/SECRET) and never
+ * imports this object. So `providers` and `signIn` here are inert; what this
+ * object is actually used for is `getServerSession(authOptions)` in ~66
+ * routes, where only the `session` callback runs.
+ *
+ * Both configs now share the same domain predicate so they cannot diverge,
+ * but consolidating them onto one config is separate, riskier work.
+ */
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -10,7 +24,11 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
-          hd: 'sirreel.com', // Restrict to Google Workspace domain
+          // No `hd` here on purpose. Google's hosted-domain param takes a
+          // SINGLE domain, so it would hide every non-sirreel.com account from
+          // the picker entirely — a second allowed domain could never appear.
+          // Domain enforcement belongs in the signIn callback below, which
+          // reads the full list from src/lib/authDomains.ts.
           prompt: 'consent',
           access_type: 'offline',
           response_type: 'code',
@@ -22,6 +40,12 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (!user.email) return false;
+
+      // Same domain gate as the live handler in
+      // src/app/api/auth/[...nextauth]/route.ts. This config does not
+      // currently serve sign-in (see the note above authOptions), but
+      // leaving it without a domain check is a trap for whoever wires it up.
+      if (!isAllowedEmailDomain(user.email)) return false;
 
       // Check if user exists in our database
       const dbUser = await prisma.user.findUnique({

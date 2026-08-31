@@ -67,3 +67,4 @@ scripts/*
 .vercel
 !scripts/rotate-rw-prod.sh
 !scripts/merge-companies.ts
+!scripts/promote-user.ts

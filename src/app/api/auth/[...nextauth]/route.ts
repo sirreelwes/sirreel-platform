@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { prisma } from '@/lib/prisma';
+import { isAllowedEmailDomain } from '@/lib/authDomains';
 
 const handler = NextAuth({
   providers: [
@@ -17,9 +18,12 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
+    // The live sign-in gate. Domain logic lives in one place —
+    // src/lib/authDomains.ts — so this and authOptions can't drift apart.
+    // Unset AUTH_ALLOWED_EMAIL_DOMAINS falls back to ['sirreel.com'], which
+    // is what the previous endsWith('@sirreel.com') check did.
     async signIn({ user }) {
-      const email = user.email || ''
-      return email.endsWith('@sirreel.com')
+      return isAllowedEmailDomain(user.email)
     },
     async jwt({ token, account }) {
       if (account) {
