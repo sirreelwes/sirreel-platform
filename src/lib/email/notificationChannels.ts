@@ -87,7 +87,7 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'pickup-picklists',
     label: 'Pick-up pick lists',
     description:
-      'The day-before digest: jobs picking up tomorrow with all paperwork and approvals complete, each with a link to print its warehouse pick list — plus a heads-up list of tomorrow’s pickups that are NOT ready. A short-term bridge until picking is fully digital.',
+      'The day-before digest, weekday afternoons: jobs picking up tomorrow with all paperwork and approvals complete, each with a link to print its warehouse pick list — plus a heads-up list of pickups that are NOT ready. Friday’s run covers the weekend and Monday. A short-term bridge until picking is fully digital.',
     defaults: () => [hqNotifyInbox()],
   },
 ]

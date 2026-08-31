@@ -18,9 +18,11 @@ export const maxDuration = 60
  *
  * A SHORT-TERM BRIDGE, explicitly: the digital picking floor
  * (/warehouse/pick) is the destination, and this email exists only
- * until the team works out of it. Runs daily at 20:00 UTC (early
- * afternoon Pacific), finds tomorrow's pickups, and emails the
- * 'pickup-picklists' channel (admin-managed at /admin/notifications):
+ * until the team works out of it. Runs each WEEKDAY at 20:00 UTC (early
+ * afternoon Pacific), finds the pickups between tomorrow and the next
+ * working day inclusive — so Friday's run carries Saturday, Sunday AND
+ * Monday (Wes: "stuff for Monday should go out on Friday") — and emails
+ * the 'pickup-picklists' channel (admin-managed at /admin/notifications):
  *
  *   · READY jobs — all five readiness checks pass (gear · COI ·
  *     agreement · card · driver, the same computeReadiness the /jobs
@@ -29,9 +31,10 @@ export const maxDuration = 60
  *   · NOT-READY pickups ride along with their blockers named, so the
  *     desk chases the right thing with a day in hand.
  *
- * No email when nothing picks up tomorrow. Stateless and idempotent by
- * design — one scheduled run per day; a manual re-run just re-sends
- * the same digest.
+ * No email when nothing picks up in the window. Stateless and idempotent
+ * by design — one scheduled run per weekday, and consecutive windows tile
+ * exactly (no gap, no repeat); a manual re-run just re-sends the same
+ * digest.
  *
  * Trigger manually with:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://hq.sirreel.com/api/cron/pickup-picklist
@@ -55,12 +58,54 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/** Tomorrow as a Pacific-calendar YYYY-MM-DD (dates store UTC midnight). */
-function pacificTomorrowISO(): string {
-  const todayPacific = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
-  const t = new Date(`${todayPacific}T00:00:00.000Z`)
-  t.setUTCDate(t.getUTCDate() + 1)
-  return t.toISOString().slice(0, 10)
+/** Today as a Pacific-calendar YYYY-MM-DD (dates store UTC midnight). */
+function pacificTodayISO(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+}
+
+const isWeekday = (iso: string): boolean => {
+  const dow = new Date(`${iso}T00:00:00.000Z`).getUTCDay()
+  return dow >= 1 && dow <= 5
+}
+
+const addDays = (iso: string, n: number): string => {
+  const d = new Date(`${iso}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The pickup dates this run must cover: tomorrow through the next
+ * WORKING day (Wes 2026-08-31: "stuff for Monday should go out on
+ * Friday").
+ *
+ * Nobody reads this in the warehouse on a Saturday, so a Friday digest
+ * that stopped at Saturday would leave Monday's pickups unannounced
+ * until Monday morning — too late to chase a blocker. Friday therefore
+ * covers Sat + Sun + Mon; Mon–Thu cover just tomorrow. Consecutive
+ * runs tile exactly: no gap, no repeat.
+ *
+ * Deliberately weekday-only, NOT holiday-aware — a holiday calendar is
+ * state nobody maintains, and the failure mode (a holiday-Monday
+ * digest arriving on Friday as usual) is harmless.
+ */
+function coverageWindow(todayISO: string): { start: string; end: string; days: string[] } {
+  const start = addDays(todayISO, 1)
+  let end = start
+  while (!isWeekday(end)) end = addDays(end, 1)
+  const days: string[] = []
+  for (let d = start; ; d = addDays(d, 1)) {
+    days.push(d)
+    if (d === end) break
+  }
+  return { start, end, days }
+}
+
+/** "Tuesday, September 1" — UTC because these are calendar dates. */
+function dayLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00.000Z`).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
+  })
 }
 
 // Mini agreement rollup — the cron needs only SIGNED-or-not. Mirrors
@@ -94,8 +139,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const tomorrowISO = pacificTomorrowISO()
-  const tomorrow = new Date(`${tomorrowISO}T00:00:00.000Z`)
+  const todayISO = pacificTodayISO()
+  const { start, end, days } = coverageWindow(todayISO)
+  const windowSet = new Set(days)
 
   const jobs = await prisma.job.findMany({
     where: {
@@ -103,7 +149,10 @@ export async function GET(req: NextRequest) {
       archivedAt: null,
       orders: {
         some: {
-          startDate: tomorrow,
+          startDate: {
+            gte: new Date(`${start}T00:00:00.000Z`),
+            lte: new Date(`${end}T00:00:00.000Z`),
+          },
           status: { in: [...OUTBOUND_ORDER_STATUSES] },
           archivedAt: null,
         },
@@ -156,6 +205,8 @@ export async function GET(req: NextRequest) {
     jobName: string
     companyName: string
     jobId: string
+    /** Earliest covered pickup date on this job — sorts and labels the row. */
+    pickupDate: string
     orders: { id: string; orderNumber: string; description: string | null }[]
     blockers: string[]
   }
@@ -163,11 +214,12 @@ export async function GET(req: NextRequest) {
   const notReady: DigestRow[] = []
 
   for (const j of jobs) {
-    // Tomorrow's outbound orders that actually have something to pick.
+    // Outbound orders inside the coverage window that actually have
+    // something to pick.
     const pickingOrders = j.orders.filter(
       (o) =>
         o.startDate &&
-        o.startDate.toISOString().slice(0, 10) === tomorrowISO &&
+        windowSet.has(o.startDate.toISOString().slice(0, 10)) &&
         (OUTBOUND_ORDER_STATUSES as readonly string[]).includes(o.status) &&
         o.lineItems.some((li) => li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR'),
     )
@@ -204,6 +256,9 @@ export async function GET(req: NextRequest) {
       jobName: j.name,
       companyName: j.company?.name ?? '',
       jobId: j.id,
+      pickupDate: pickingOrders
+        .map((o) => o.startDate!.toISOString().slice(0, 10))
+        .sort()[0],
       orders: pickingOrders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, description: o.description })),
       blockers: readiness.blockers.map((b) => b.label),
     }
@@ -212,17 +267,25 @@ export async function GET(req: NextRequest) {
   }
 
   if (ready.length === 0 && notReady.length === 0) {
-    return NextResponse.json({ ok: true, tomorrow: tomorrowISO, ready: 0, notReady: 0, sent: false })
+    return NextResponse.json({ ok: true, window: { start, end }, ready: 0, notReady: 0, sent: false })
   }
 
   const to = await channelRecipients('pickup-picklists')
   if (to.length === 0) {
-    return NextResponse.json({ ok: true, tomorrow: tomorrowISO, ready: ready.length, notReady: notReady.length, sent: false, reason: 'channel silenced' })
+    return NextResponse.json({ ok: true, window: { start, end }, ready: ready.length, notReady: notReady.length, sent: false, reason: 'channel silenced' })
   }
 
-  const dateLabel = new Date(`${tomorrowISO}T00:00:00.000Z`).toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
-  })
+  // Sort by the day each job goes out — a Friday digest reads Sat → Mon.
+  const byDate = (a: DigestRow, b: DigestRow) => a.pickupDate.localeCompare(b.pickupDate)
+  ready.sort(byDate)
+  notReady.sort(byDate)
+
+  // Multi-day runs (Friday's) name the day on every row; a one-day run
+  // says "tomorrow" once in the heading and never repeats itself.
+  const multiDay = days.length > 1
+  const dateLabel = multiDay ? `${dayLabel(start)} – ${dayLabel(end)}` : dayLabel(start)
+  const whenChip = (iso: string) =>
+    multiDay ? ` <span style="color:#888;">· ${esc(dayLabel(iso))}</span>` : ''
 
   const readyHtml = ready
     .map((r) => {
@@ -233,7 +296,7 @@ export async function GET(req: NextRequest) {
         )
         .join(' · ')
       return p(
-        `<strong>${esc(r.jobName)}</strong> — ${esc(r.companyName)} <span style="color:#888;">(${esc(r.jobCode)})</span><br/>` +
+        `<strong>${esc(r.jobName)}</strong> — ${esc(r.companyName)} <span style="color:#888;">(${esc(r.jobCode)})</span>${whenChip(r.pickupDate)}<br/>` +
           `All paperwork &amp; approvals ✓ &nbsp; ${orderLinks} &nbsp;·&nbsp; <a href="${HQ_APP_URL}/jobs/${r.jobId}">Open job</a>`,
       )
     })
@@ -241,20 +304,21 @@ export async function GET(req: NextRequest) {
 
   const notReadyHtml = notReady.length
     ? calloutBox(
-        `<strong>Picking up tomorrow but NOT ready yet:</strong><br/>` +
+        `<strong>Picking up ${multiDay ? 'before the next working day' : 'tomorrow'} but NOT ready yet:</strong><br/>` +
           notReady
             .map(
               (r) =>
-                `${esc(r.jobName)} — ${esc(r.companyName)} · missing: ${esc(r.blockers.join(', '))} · <a href="${HQ_APP_URL}/jobs/${r.jobId}">open job</a>`,
+                `${esc(r.jobName)} — ${esc(r.companyName)}${whenChip(r.pickupDate)} · missing: ${esc(r.blockers.join(', '))} · <a href="${HQ_APP_URL}/jobs/${r.jobId}">open job</a>`,
             )
             .join('<br/>'),
       )
     : ''
 
+  const when = multiDay ? `through ${dayLabel(end)}` : 'tomorrow'
   const heading =
     ready.length > 0
-      ? `${ready.length} job${ready.length === 1 ? ' is' : 's are'} picking up tomorrow — print the pick lists?`
-      : `Tomorrow's pickups need attention`
+      ? `${ready.length} job${ready.length === 1 ? ' is' : 's are'} picking up ${when} — print the pick lists?`
+      : `Pickups ${when} need attention`
 
   const html = renderEmailShell({
     heading,
@@ -263,8 +327,11 @@ export async function GET(req: NextRequest) {
     bodyHtml:
       (ready.length > 0
         ? p(
-            `These jobs pick up tomorrow with all paperwork and approvals in place. ` +
-              `Each link prints the warehouse pick list (sign-in required).`,
+            `These jobs pick up ${when} with all paperwork and approvals in place. ` +
+              `Each link prints the warehouse pick list (sign-in required).` +
+              (multiDay
+                ? ` It's the last working day before them — Monday's pickups are included here.`
+                : ''),
           ) + readyHtml
         : '') + notReadyHtml,
     footNote:
@@ -274,7 +341,7 @@ export async function GET(req: NextRequest) {
     `Pickups for ${dateLabel}`,
     '',
     ...ready.flatMap((r) => [
-      `READY: ${r.jobName} — ${r.companyName} (${r.jobCode})`,
+      `READY: ${r.jobName} — ${r.companyName} (${r.jobCode})${multiDay ? ` · ${dayLabel(r.pickupDate)}` : ''}`,
       ...r.orders.map((o) => `  Pick list: ${HQ_APP_URL}/api/orders/${o.id}/pick-list-pdf`),
     ]),
     ...(notReady.length
@@ -286,8 +353,8 @@ export async function GET(req: NextRequest) {
     to,
     subject:
       ready.length > 0
-        ? `Picking up tomorrow: ${ready.length} ready for pick lists${notReady.length ? ` · ${notReady.length} not ready` : ''}`
-        : `Picking up tomorrow: ${notReady.length} job${notReady.length === 1 ? '' : 's'} not ready`,
+        ? `Picking up ${when}: ${ready.length} ready for pick lists${notReady.length ? ` · ${notReady.length} not ready` : ''}`
+        : `Picking up ${when}: ${notReady.length} job${notReady.length === 1 ? '' : 's'} not ready`,
     html,
     text,
     label: 'cron/pickup-picklist',
@@ -295,7 +362,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: result.ok,
-    tomorrow: tomorrowISO,
+    window: { start, end, days },
     ready: ready.length,
     notReady: notReady.length,
     sent: result.ok,
