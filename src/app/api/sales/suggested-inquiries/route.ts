@@ -77,6 +77,9 @@ export async function GET() {
         id: true,
         threadId: true,
         inReplyTo: true,
+        // Cross-inbox collapse key — set by the sending server, identical
+        // on every inbox's copy.
+        rfc822MessageId: true,
         fromAddress: true,
         subject: true,
         snippet: true,
@@ -160,7 +163,9 @@ export async function GET() {
       (best, t) => (!best || t.messageCount > best.messageCount ? t : best),
       null,
     );
-  const respondedTo = (e: EmailRow) =>
+  // Thread-based reply detection. Necessary but NOT sufficient — see
+  // repliedByParticipant below.
+  const respondedOnThread = (e: EmailRow) =>
     threadsOf(e).some((t) => t.lastDirection === 'OUTBOUND' || !!t.lastOutboundAt);
 
   // First in thread = no In-Reply-To header OR the thread has only one message.
@@ -173,6 +178,66 @@ export async function GET() {
   // Per-thread dedup: only keep the most recent inbound per thread. emails is
   // already ordered DESC by sentAt, so first-seen-per-thread wins. Messages
   // without a thread bypass dedup (one row per email).
+  // ── Did we actually write back to this person? ────────────────────
+  //
+  // Thread state alone gets this wrong, and often. Gmail thread ids are
+  // per-mailbox, a reply sent from HQ through Resend lands on a thread of
+  // its own, and cross-inbox dedup does not always link the copies — so
+  // an answered lead can sit on a thread that has never seen an outbound.
+  //
+  // Measured 2026-08-29: of 14 leads the thread logic called unanswered,
+  // EIGHT had been replied to — Wes's own reply to alfonso@ among them.
+  // A queue that is 57% already-handled is one people stop trusting, and
+  // then stop working.
+  //
+  // So: ask the question the rep is actually asking. Has anything gone
+  // OUT to this address since their message came IN? One extra query,
+  // and it does not care how the threading landed.
+  const senderAddress = (e: EmailRow) =>
+    (e.fromAddress.match(/<([^>]+)>/)?.[1] ?? e.fromAddress).toLowerCase().trim();
+
+  const candidateAddresses = [...new Set(emails.map(senderAddress))].filter(Boolean);
+  const outboundToCandidates = candidateAddresses.length
+    ? await prisma.emailMessage.findMany({
+        where: {
+          direction: 'outbound',
+          sentAt: { gte: since },
+          toAddresses: { hasSome: candidateAddresses },
+        },
+        select: { toAddresses: true, sentAt: true },
+      })
+    : [];
+  const latestReplyTo = new Map<string, Date>();
+  for (const o of outboundToCandidates) {
+    for (const raw of o.toAddresses) {
+      const addr = raw.toLowerCase().trim();
+      const cur = latestReplyTo.get(addr);
+      if (!cur || o.sentAt > cur) latestReplyTo.set(addr, o.sentAt);
+    }
+  }
+  const repliedByParticipant = (e: EmailRow) => {
+    const when = latestReplyTo.get(senderAddress(e));
+    return !!when && when > e.sentAt;
+  };
+
+  const respondedTo = (e: EmailRow) => respondedOnThread(e) || repliedByParticipant(e);
+
+  // Dedup by MESSAGE, then by thread.
+  //
+  // The same email lands in several watched inboxes and should collapse
+  // to one card via duplicateOfId — but that linkage is not always
+  // written (alfonso@ arrived as three separate canonical rows sharing
+  // one rfc822MessageId, and showed up twice in the queue). The RFC-822
+  // Message-ID is set by the sending server and is identical across every
+  // copy, so it is the reliable collapse key.
+  const seenMessageIds = new Set<string>();
+  const dedupByMessageId = (e: EmailRow) => {
+    if (!e.rfc822MessageId) return true;
+    if (seenMessageIds.has(e.rfc822MessageId)) return false;
+    seenMessageIds.add(e.rfc822MessageId);
+    return true;
+  };
+
   const seenThreads = new Set<string>();
   const dedupByThread = (e: EmailRow) => {
     if (!e.threadId) return true;
@@ -182,15 +247,22 @@ export async function GET() {
   };
 
   const candidates = emails.filter(
-    (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedupByThread(e),
+    (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedupByMessageId(e) && dedupByThread(e),
   );
 
   // Responded stream — same considered/dedup discipline, opposite
   // direction test. Separate seen-set: a thread is either OUTBOUND-last
   // or not, so the two streams can't overlap.
   const seenRespondedThreads = new Set<string>();
+  const seenRespondedMessageIds = new Set<string>();
   const respondedCandidates = emails.filter((e) => {
     if (!respondedTo(e) || consideredMap.has(e.id)) return false;
+    // Same message-level collapse as the pending stream, or one answered
+    // lead renders once per inbox that received it.
+    if (e.rfc822MessageId) {
+      if (seenRespondedMessageIds.has(e.rfc822MessageId)) return false;
+      seenRespondedMessageIds.add(e.rfc822MessageId);
+    }
     if (e.threadId) {
       if (seenRespondedThreads.has(e.threadId)) return false;
       seenRespondedThreads.add(e.threadId);
