@@ -1,0 +1,139 @@
+/**
+ * Which vehicles may carry the Limited Collision Damage Waiver.
+ *
+ * Wes, 2026-08-29: "we need to have the option to add LCDW coverage on
+ * all vehicles except Video Vans and PopVans."
+ *
+ * That is not a new policy — it is the policy the RENTAL AGREEMENT has
+ * always stated, which nothing in the system enforced. From
+ * src/components/portal-v2/terms.ts (LCDW_ELIGIBILITY_NOTE), signed by
+ * every client:
+ *
+ *   "LCDW is ONLY available for fleet rental vehicles such as: Cube
+ *    Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as
+ *    Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Golf Carts or
+ *    any vehicle requiring a commercial driver's license are NOT
+ *    ELIGIBLE for LCDW."
+ *
+ * So this module is the contract text made executable. If the two ever
+ * disagree, the CONTRACT wins and this file is the bug — a waiver we
+ * charged for but the agreement excludes is money taken for coverage
+ * that does not exist, which is worse than any UI defect.
+ *
+ * ── Deny by code, not by name ──────────────────────────────────────
+ *
+ * Matching on description would break the day someone renames "ProScout
+ * / VideoVan" — and break silently, in the direction of charging for a
+ * waiver the client cannot claim on. Catalog codes are stable and the
+ * two exclusions map to exactly one row each.
+ */
+
+/** Per-vehicle, per-day. Mirrors the LCDW FeeItem and the addendum. */
+export const LCDW_FEE_CODE = 'LCDW'
+
+/**
+ * Catalog codes the agreement excludes.
+ *
+ *   CAT_POPVAN        — PopVan
+ *   CAT_PROSCOUT_VTR  — ProScout / VideoVan (the "VTR/PeopleMover Van"
+ *                       of the addendum)
+ *
+ * Add a code here when a new specialty vehicle is catalogued, and update
+ * LCDW_ELIGIBILITY_NOTE in the same change so the contract and the
+ * system keep saying the same thing.
+ */
+export const LCDW_EXCLUDED_CODES: ReadonlySet<string> = new Set([
+  'CAT_POPVAN',
+  'CAT_PROSCOUT_VTR',
+])
+
+export type LcdwIneligibleReason = 'not-a-vehicle' | 'specialty-vehicle'
+
+export interface LcdwCandidate {
+  /** OrderLineItem id, for the caller's own bookkeeping. */
+  id: string
+  description: string
+  /** Catalog code of the matched inventory item, when there is one. */
+  code: string | null
+  department: string
+  quantity: number
+  billableDays: number | null
+}
+
+export interface LcdwLineVerdict {
+  id: string
+  description: string
+  eligible: boolean
+  reason?: LcdwIneligibleReason
+  /** quantity × days — what the waiver would actually be charged on. */
+  vehicleDays: number
+}
+
+/**
+ * Judge one line.
+ *
+ * A line with no catalog code is treated as eligible when it sits in
+ * VEHICLES: a manually-typed "cube truck" is still a cube truck, and
+ * refusing coverage because a rep typed instead of picked would deny a
+ * waiver the contract grants. The exclusions are specific, catalogued
+ * vehicles — an unmatched line is not one of them by definition.
+ */
+export function judgeLcdwLine(line: LcdwCandidate): LcdwLineVerdict {
+  const vehicleDays = Math.max(0, line.quantity) * Math.max(0, line.billableDays ?? 0)
+
+  if (line.department !== 'VEHICLES') {
+    return { id: line.id, description: line.description, eligible: false, reason: 'not-a-vehicle', vehicleDays }
+  }
+  if (line.code && LCDW_EXCLUDED_CODES.has(line.code)) {
+    return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
+  }
+  return { id: line.id, description: line.description, eligible: true, vehicleDays }
+}
+
+export interface LcdwQuote {
+  /** Lines the waiver would cover. */
+  eligible: LcdwLineVerdict[]
+  /** Vehicle lines the agreement excludes — shown, never silently dropped. */
+  excluded: LcdwLineVerdict[]
+  /** Σ quantity × days across eligible lines. The billable unit. */
+  vehicleDays: number
+  /** True when the order has vehicles but every one of them is excluded. */
+  allExcluded: boolean
+}
+
+/**
+ * What LCDW would cost on this order, and on which lines.
+ *
+ * Excluded vehicles are RETURNED, not filtered away, so the UI can say
+ * "covers 2 of 3 vehicles — PopVan is not eligible" instead of quietly
+ * charging for less than the client thinks they bought. A client who
+ * believes their VideoVan is covered and discovers otherwise at claim
+ * time is the failure this whole module exists to prevent.
+ */
+export function quoteLcdw(lines: LcdwCandidate[]): LcdwQuote {
+  const verdicts = lines.map(judgeLcdwLine)
+  const vehicleLines = verdicts.filter(
+    (v) => v.reason !== 'not-a-vehicle',
+  )
+  const eligible = vehicleLines.filter((v) => v.eligible)
+  const excluded = vehicleLines.filter((v) => !v.eligible)
+  return {
+    eligible,
+    excluded,
+    vehicleDays: eligible.reduce((sum, v) => sum + v.vehicleDays, 0),
+    allExcluded: vehicleLines.length > 0 && eligible.length === 0,
+  }
+}
+
+/** One-line summary for the order UI and the agreement. */
+export function describeLcdwCoverage(q: LcdwQuote): string {
+  if (q.eligible.length === 0 && q.excluded.length === 0) return 'No vehicles on this order.'
+  if (q.allExcluded) {
+    return `Not available — ${q.excluded.map((e) => e.description).join(', ')} ${
+      q.excluded.length === 1 ? 'is' : 'are'
+    } a specialty vehicle and the agreement excludes it from LCDW.`
+  }
+  const covered = `Covers ${q.eligible.length} vehicle line${q.eligible.length === 1 ? '' : 's'} · ${q.vehicleDays} vehicle-day${q.vehicleDays === 1 ? '' : 's'}`
+  if (q.excluded.length === 0) return covered
+  return `${covered}. Not covered: ${q.excluded.map((e) => e.description).join(', ')} (specialty vehicles are excluded by the agreement).`
+}
