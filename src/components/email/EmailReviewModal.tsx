@@ -568,7 +568,11 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {loading && <p className="text-xs text-zinc-500">Loading preview…</p>}
 
-          {!loading && error && (
+          {/* Preview-failure fallback only. With a preview on screen the
+              error renders in the FOOTER, next to the Send button — a rep
+              scrolled down to Send never saw a banner up here, so a
+              blocked send read as "nothing happened" (Wes 2026-08-31). */}
+          {!loading && error && !preview && (
             <div className="text-xs text-red-300 bg-red-900/20 border border-red-900/60 rounded px-3 py-2">
               {error}
             </div>
@@ -983,6 +987,13 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
 
         {/* ── Footer ──────────────────────────────────────────── */}
         <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-end gap-2 flex-shrink-0">
+          {/* Send/preview errors live HERE, beside the button that caused
+              them — the footer is pinned, so it's visible at any scroll. */}
+          {error && preview && (
+            <div className="flex-1 min-w-0 text-xs text-red-300 bg-red-900/20 border border-red-900/60 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
           <button
             onClick={onClose}
             disabled={sendLocked}
