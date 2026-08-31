@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { LostReason } from '@prisma/client';
+import { releaseHoldsOnLost } from '@/lib/orders/holdOnQuoteSend';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const now = new Date();
 
+  let lostOrderIds: string[] = [];
   await prisma.$transaction(async (tx) => {
     // Mark the job itself as LOST.
     await tx.job.update({ where: { id }, data: { status: 'LOST' } });
@@ -70,7 +72,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       where: { orderId: { in: openOrders.map((o) => o.id) }, status: 'PENDING' },
       data: { status: 'EXPIRED' },
     });
+    lostOrderIds = openOrders.map((o) => o.id);
   });
+
+  // Release each lost quote's rank-2 soft holds (Wes 2026-08-31) —
+  // outside the transaction and non-fatal, same contract as the order-
+  // level route. WON siblings' promoted (rank-1) holds are untouched.
+  for (const orderId of lostOrderIds) {
+    const releaseResult = await releaseHoldsOnLost(orderId);
+    if (releaseResult.error) {
+      console.error('[jobs/mark-lost] hold release failed:', orderId, releaseResult.error);
+    }
+  }
 
   return NextResponse.json({ ok: true, reason });
 }

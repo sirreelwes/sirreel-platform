@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
+import { holdOnQuoteSend, releaseHoldsOnLost } from '@/lib/orders/holdOnQuoteSend'
 import type { LostReason } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -98,6 +99,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     } catch (err) {
       console.error('[orders/mark-lost] undo cadence transition failed:', err)
     }
+    // A reopened quote implies its hold again — same idempotent path the
+    // send runs (it also resurrects the booking releaseHoldsOnLost
+    // cancelled). DRAFT orders never had a hold; nothing to restore.
+    if (order.status !== 'DRAFT') {
+      const holdResult = await holdOnQuoteSend(id)
+      if (holdResult.error) {
+        console.error('[orders/mark-lost] undo hold restore failed:', holdResult.error)
+      }
+    }
     return NextResponse.json({ ok: true, lostAt: null })
   }
 
@@ -152,6 +162,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     await transitionCadenceState(id, 'LOST')
   } catch (err) {
     console.error('[orders/mark-lost] cadence transition failed:', err)
+  }
+
+  // A dead quote must not keep a unit spoken-for (Wes 2026-08-31):
+  // release its rank-2 soft holds. Non-fatal like the cadence step —
+  // the classification already landed.
+  const releaseResult = await releaseHoldsOnLost(id)
+  if (releaseResult.error) {
+    console.error('[orders/mark-lost] hold release failed:', releaseResult.error)
   }
 
   return NextResponse.json({ ok: true, lostAt: order.lostAt ?? now, lostReason: reason })

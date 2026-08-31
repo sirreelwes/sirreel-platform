@@ -93,10 +93,24 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       const existing = order.jobId
         ? await prisma.booking.findFirst({
             where: { jobId: order.jobId, source: 'AGENT_DIRECT' },
+            orderBy: { createdAt: 'desc' },
             select: { id: true },
           })
         : null
       if (existing) bookingId = existing.id
+    }
+    // A booking releaseHoldsOnLost() cancelled comes back to life when
+    // the quote does (mark-lost undo, or a re-send): flip it to REQUEST
+    // before appending fresh items, or the new hold would hang off a
+    // CANCELLED booking every board filters out.
+    if (bookingId) {
+      const existingBooking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { status: true },
+      })
+      if (existingBooking?.status === 'CANCELLED') {
+        await prisma.booking.update({ where: { id: bookingId }, data: { status: 'REQUEST' } })
+      }
     }
     if (!bookingId) {
       // A Booking needs a contact. Try the JOB's contacts first — the
@@ -201,5 +215,82 @@ export async function promoteHoldsOnApproval(orderId: string): Promise<{ promote
     return { promoted: res.count, error: null }
   } catch (e) {
     return { promoted: 0, error: e instanceof Error ? e.message : 'promote failed' }
+  }
+}
+
+/**
+ * Release a quote's soft holds when the quote is marked LOST
+ * (Wes 2026-08-31: a dead quote must not keep a unit spoken-for).
+ *
+ * Releases ONLY rank-2 REQUESTED items — the unpromoted quote-send
+ * holds. Rank-1 or ASSIGNED items were promoted/assigned by a human
+ * (or belong to a WON sibling order sharing the job booking) and are
+ * never silently released here. Uses the canonical release recipe
+ * (item → UNFULFILLED, active assignments → SWAPPED — see
+ * /api/scheduling/booking-items/[id]/release). A booking left with no
+ * live items is CANCELLED iff it is still in REQUEST, so the board and
+ * the action-items worklist stop reading it as a live reservation;
+ * holdOnQuoteSend() resurrects it if the quote reopens.
+ *
+ * NON-FATAL by the same contract as the rest of this module.
+ */
+export async function releaseHoldsOnLost(orderId: string): Promise<{
+  released: number
+  bookingsCancelled: number
+  error: string | null
+}> {
+  const out = { released: 0, bookingsCancelled: 0, error: null as string | null }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { bookingId: true, jobId: true },
+    })
+    if (!order) return { ...out, error: 'order not found' }
+
+    const bookingIds: string[] = []
+    if (order.bookingId) bookingIds.push(order.bookingId)
+    else if (order.jobId) {
+      const rows = await prisma.booking.findMany({
+        where: { jobId: order.jobId, source: 'AGENT_DIRECT', status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+        select: { id: true },
+      })
+      bookingIds.push(...rows.map((r) => r.id))
+    }
+    if (bookingIds.length === 0) return out
+
+    for (const bookingId of bookingIds) {
+      const items = await prisma.bookingItem.findMany({
+        where: { bookingId, holdRank: 2, status: 'REQUESTED' },
+        select: { id: true },
+      })
+      for (const item of items) {
+        await prisma.$transaction([
+          prisma.bookingAssignment.updateMany({
+            where: { bookingItemId: item.id, status: 'ASSIGNED' },
+            data: { status: 'SWAPPED' },
+          }),
+          prisma.bookingItem.update({
+            where: { id: item.id },
+            data: { status: 'UNFULFILLED' },
+          }),
+        ])
+        out.released++
+      }
+      // Cancel the booking only when it is still a bare request with
+      // nothing live left on it.
+      const liveLeft = await prisma.bookingItem.count({
+        where: { bookingId, status: { in: ['REQUESTED', 'ASSIGNED'] } },
+      })
+      if (liveLeft === 0) {
+        const res = await prisma.booking.updateMany({
+          where: { id: bookingId, status: 'REQUEST' },
+          data: { status: 'CANCELLED' },
+        })
+        out.bookingsCancelled += res.count
+      }
+    }
+    return out
+  } catch (e) {
+    return { ...out, error: e instanceof Error ? e.message : 'release failed' }
   }
 }
