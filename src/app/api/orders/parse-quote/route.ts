@@ -84,7 +84,8 @@ If the input is plain text without those header lines, treat it as a single mess
       "rateType": "DAILY" | "WEEKLY",
       "pickupDate": "YYYY-MM-DD",
       "returnDate": "YYYY-MM-DD",
-      "billableDays": 1
+      "billableDays": 1,
+      "daysPerWeek": null
     }
   ],
   "contacts": [
@@ -259,6 +260,16 @@ best estimate of actual rental duration in pickupDate/returnDate, and set
 billableDays to the inclusive day count between those dates as a safe
 starting value (the server will override with the dept-specific cap default).
 
+WEEK CADENCE (daysPerWeek)
+
+Set \`daysPerWeek\` ONLY when the client explicitly states how many days per
+week they will use the item — phrasing like "2 days a week", "we only shoot
+Tuesdays and Thursdays" (= 2), "3 shoot days per week for a month". Return
+the integer 1–7. This is a pricing concession signal, so DO NOT infer it:
+total duration ("a 4-day shoot"), vague usage ("occasionally"), or your own
+guess must all leave it null. When in doubt, null — the server only ever
+uses it to LOWER the suggested billable days, and a human reviews every line.
+
 CLIENT NAME EXTRACTION
 
 Prefer signals in this order:
@@ -300,6 +311,9 @@ interface AiItem {
   pickupDate?: string | null
   returnDate?: string | null
   billableDays: number
+  /** Explicit client-stated usage cadence ("2 days a week") — null unless
+   *  the email says it outright. Only ever LOWERS the suggested days. */
+  daysPerWeek?: number | null
 }
 
 // What the AI returns per contact (raw, pre-enrichment).
@@ -518,9 +532,25 @@ async function resolveItem(
   // The rep can override this freely in the UI.
   const actualDays = inclusiveDayCount(pickupDate, returnDate) ?? 1
   const rules = BILLING_RULES[department]
+  // Explicit week-cadence phrasing in the email ("2 days a week for
+  // 3 weeks") lowers the effective week cap (Wes 2026-08-31). Never
+  // raises it — "4 days a week" on a 3-day-week dept still bills the
+  // 3-day week; concessions only run downward, and the agent sees the
+  // warning + the week-cap picker on the line either way.
+  const aiCadence =
+    typeof raw.daysPerWeek === 'number' && Number.isFinite(raw.daysPerWeek) &&
+    raw.daysPerWeek >= 1 && raw.daysPerWeek <= 7
+      ? Math.floor(raw.daysPerWeek)
+      : null
   let suggestedDays = 1
   if (rules.model === 'CAP_PER_WEEK') {
-    suggestedDays = computeBillableDays(actualDays, rules.cap)
+    const effectiveCap = aiCadence != null ? Math.min(aiCadence, rules.cap) : rules.cap
+    suggestedDays = computeBillableDays(actualDays, effectiveCap)
+    if (effectiveCap < rules.cap) {
+      warnings.push(
+        `Priced at a ${effectiveCap}-day week — the email states a ${aiCadence}-day-per-week cadence (dept default: ${rules.cap}-day week). Verify before sending.`,
+      )
+    }
   } else if (rules.model === 'PERCENT_DISCOUNT') {
     suggestedDays = actualDays
   }
