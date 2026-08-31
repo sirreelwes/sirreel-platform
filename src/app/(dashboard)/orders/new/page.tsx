@@ -16,6 +16,7 @@ import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } fr
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
+import { AddItemModal, type CreatedInventoryItem } from '@/components/inventory/AddItemModal';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { IntegerInput } from '@/components/ui/IntegerInput';
 import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
@@ -1297,6 +1298,45 @@ function NewQuotePageInner() {
     );
   };
 
+  // ── Promote a custom line into the catalog (Wes 2026-08-31: "when
+  //    there is a custom item, there should be a prompt to add the
+  //    item"). The "+ add" chip on an unbound line opens AddItemModal
+  //    seeded from the line; on create the line binds to the new item.
+  const [addCatalogForId, setAddCatalogForId] = useState<string | null>(null);
+  const [catalogMeta, setCatalogMeta] = useState<{
+    categories: { id: string; name: string; department?: string }[];
+    locations: { id: string; name: string; code: string }[];
+  } | null>(null);
+  const openAddToCatalog = (id: string) => {
+    setAddCatalogForId(id);
+    if (!catalogMeta) {
+      // Same payload the inventory page reads — one light fetch, cached
+      // for the session.
+      fetch('/api/inventory/items?limit=1')
+        .then((r) => r.json())
+        .then((d) => setCatalogMeta({ categories: d.categories || [], locations: d.locations || [] }))
+        .catch(() => setCatalogMeta({ categories: [], locations: [] }));
+    }
+  };
+  const handleCatalogCreated = (created?: CreatedInventoryItem) => {
+    if (!created || !addCatalogForId) return;
+    updateItem(addCatalogForId, {
+      catalogProductId: created.id,
+      catalogType: 'INVENTORY',
+      department: (created.department as LineItemDepartment) || undefined,
+      matchedProduct: {
+        id: created.id,
+        type: 'INVENTORY',
+        name: created.description || created.code,
+      },
+      matchSource: null,
+      // The modal may have carried a rate the line didn't have.
+      ...(Number(created.dailyRate) > 0 && !(items.find((i) => i.localId === addCatalogForId)?.rate)
+        ? { rate: Number(created.dailyRate) }
+        : {}),
+    });
+  };
+
   /** Section-level week cap (Wes 2026-08-31: "selectable by section and
    *  applied to whole section"): reprice EVERY dated line in the
    *  department at `cap` days per 7-day week, from each line's own
@@ -2314,6 +2354,23 @@ function NewQuotePageInner() {
             {/* Job-as-root: save-time resolver. Ranked candidates for
                 this client + dates; the agent picks or creates, then
                 the save continues automatically with the real jobId. */}
+            {/* Promote-a-custom-line modal — seeded from the row whose
+                "+ add" chip opened it; on create the line binds to the
+                new catalog item. */}
+            {addCatalogForId && (() => {
+              const row = items.find((i) => i.localId === addCatalogForId);
+              return (
+                <AddItemModal
+                  open
+                  onClose={() => setAddCatalogForId(null)}
+                  onCreated={handleCatalogCreated}
+                  categories={catalogMeta?.categories ?? []}
+                  locations={catalogMeta?.locations ?? []}
+                  defaultDescription={row?.description || undefined}
+                  defaultDailyRate={row?.rate && row.rate > 0 ? row.rate : undefined}
+                />
+              );
+            })()}
             {jobResolverOpen && (
               <JobResolverModal
                 // Carry the rep's answer into the modal so they are not
@@ -2499,6 +2556,7 @@ function NewQuotePageInner() {
                 onAdd={() => addRowToDept(dept)}
                 onBulkApply={setBulkForDept}
                 onApplyWeekCap={applyWeekCapToDept}
+                onAddToCatalog={openAddToCatalog}
                 onCommit={handleRowCommit}
                 onPickPackage={handlePickPackage}
                 registerDescriptionRef={registerDescriptionRef}
@@ -2687,7 +2745,7 @@ function NewQuotePageInner() {
 const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_64px]';
 
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onCommit, onPickPackage, registerDescriptionRef,
+  department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
   companyId,
 }: {
   department: LineItemDepartment;
@@ -2703,6 +2761,7 @@ function DepartmentGroup({
     patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
   ) => void;
   onApplyWeekCap: (dept: LineItemDepartment, cap: number) => void;
+  onAddToCatalog?: (id: string) => void;
   onCommit?: (id: string) => void;
   onPickPackage?: (id: string, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   registerDescriptionRef?: (id: string) => (el: HTMLInputElement | null) => void;
@@ -2845,6 +2904,7 @@ function DepartmentGroup({
             key={it.localId}
             item={it}
             onChange={onChange}
+            onAddToCatalog={onAddToCatalog}
             onDelete={onDelete}
             onCommit={onCommit}
             onPickPackage={onPickPackage}
@@ -2879,9 +2939,11 @@ function DepartmentGroup({
 }
 
 function LineItemRow({
-  item, onChange, onDelete, onCommit, onPickPackage, descriptionRef, companyId,
+  item, onChange, onDelete, onCommit, onPickPackage, onAddToCatalog, descriptionRef, companyId,
 }: {
   item: ResolvedItem;
+  /** Custom-line promotion: opens the add-to-catalog modal for this row. */
+  onAddToCatalog?: (id: string) => void;
   /** Passed to the description combobox so a picked row pre-fills the
    *  client's negotiated rate instead of list. */
   companyId: string | null;
@@ -3001,6 +3063,7 @@ function LineItemRow({
             companyId={companyId}
             value={item.description}
             onChange={(next) => onChange(id, { description: next })}
+            onAddToCatalog={onAddToCatalog ? () => onAddToCatalog(id) : undefined}
             onPickCatalog={(hit) => applyMatch(hit as CatalogSearchResult)}
             catalogBinding={
               item.catalogProductId && item.matchedProduct

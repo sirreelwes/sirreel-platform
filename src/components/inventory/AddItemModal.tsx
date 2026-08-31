@@ -34,10 +34,21 @@ const DEPARTMENT_LABEL: Record<string, string> = {
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
 };
 
+/** The API's 201 body — handed to onCreated so a caller (the quote
+ *  builder's add-custom-item flow) can bind the new item immediately. */
+export interface CreatedInventoryItem {
+  id: string;
+  code: string;
+  description: string | null;
+  department: string;
+  dailyRate?: unknown;
+  weeklyRate?: unknown;
+}
+
 interface AddItemModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (item?: CreatedInventoryItem) => void;
   categories: CategoryOption[];
   locations: LocationOption[];
   // Pre-fill values from the inventory page's current filter state so
@@ -45,6 +56,11 @@ interface AddItemModalProps {
   // the same view by default.
   defaultCategoryId?: string;
   defaultLocationId?: string;
+  /** Quote-builder entry point: seed the form from the custom line the
+   *  rep is promoting into the catalog. Code is suggested from the
+   *  description (editable — it must be unique). */
+  defaultDescription?: string;
+  defaultDailyRate?: number;
 }
 
 export function AddItemModal({
@@ -55,6 +71,8 @@ export function AddItemModal({
   locations,
   defaultCategoryId,
   defaultLocationId,
+  defaultDescription,
+  defaultDailyRate,
 }: AddItemModalProps) {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
@@ -73,7 +91,21 @@ export function AddItemModal({
     if (!open) return;
     setCategoryId(defaultCategoryId || '');
     setLocationId(defaultLocationId || (locations[0]?.id ?? ''));
-  }, [open, defaultCategoryId, defaultLocationId, locations]);
+    if (defaultDescription) {
+      setDescription(defaultDescription);
+      // Suggested code: the description, uppercased and slugged. Shown
+      // in the (required, unique) code field for the rep to accept or
+      // edit — never submitted invisibly.
+      setCode(
+        defaultDescription
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 48),
+      );
+    }
+    if (defaultDailyRate && defaultDailyRate > 0) setDailyRate(String(defaultDailyRate));
+  }, [open, defaultCategoryId, defaultLocationId, locations, defaultDescription, defaultDailyRate]);
 
   // Department is DERIVED, never typed. Shown back as a hint so the
   // operator can see which billing lane the category puts the item in.
@@ -124,8 +156,9 @@ export function AddItemModal({
         setError(data.error || `Failed to create item (HTTP ${res.status}).`);
         return;
       }
+      const created = (await res.json().catch(() => undefined)) as CreatedInventoryItem | undefined;
       reset();
-      onCreated();
+      onCreated(created);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error.');

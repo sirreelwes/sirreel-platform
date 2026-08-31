@@ -109,6 +109,11 @@ export interface LineItemDescriptionComboboxProps {
    *  — useful inside the order-detail modal which has its own
    *  status pills. Defaults to false. */
   hideCustomChip?: boolean
+  /** When set, the "custom" chip gains an "+ add" action that invites
+   *  the rep to promote the typed line into a real catalog item
+   *  (Wes 2026-08-31: "when there is a custom item, there should be a
+   *  prompt to add the item"). */
+  onAddToCatalog?: () => void
   /** Restrict search results by type — defaults to all. The admin
    *  package builder uses `['INVENTORY']` so the picker doesn't show
    *  asset categories or other packages while building. */
@@ -134,7 +139,7 @@ function LineItemDescriptionComboboxInner(
 ) {
   const {
     value, onChange, onPickCatalog, catalogBinding, onClearCatalog, onCommit,
-    placeholder, autoFocus, className, hideCustomChip, types, companyId,
+    placeholder, autoFocus, className, hideCustomChip, onAddToCatalog, types, companyId,
   } = props
 
   const [results, setResults] = useState<CatalogHit[]>([])
@@ -374,6 +379,17 @@ function LineItemDescriptionComboboxInner(
           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-lt-inner text-lt-fg3 border border-lt-hairline" title="No catalog binding — sent as a custom line item">
             custom
           </span>
+        )}
+        {showCustomChip && onAddToCatalog && (
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onClick={(e) => { e.stopPropagation(); onAddToCatalog(); }}
+            title="This item isn't in the catalog — add it, and this line binds to the new item"
+            className="pointer-events-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+          >
+            + add
+          </button>
         )}
         {loading && (
           <span className="text-[10px] text-lt-fg3 animate-pulse">…</span>
