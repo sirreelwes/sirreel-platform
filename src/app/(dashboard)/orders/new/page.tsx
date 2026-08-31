@@ -35,6 +35,7 @@ const PRODUCTION_TYPE_LABEL: Record<ProductionType, string> = {
 import { DEPARTMENT_LABEL, DEPARTMENT_SHORT } from '@/lib/sales/pipeline';
 import {
   availableRateTypes,
+  BILLING_RULES,
   billingBreakdown,
   calendarDays,
   computeBillableDays,
@@ -1072,6 +1073,23 @@ function NewQuotePageInner() {
     }
   };
 
+  /** Fill the department-default billable-days suggestion once a row has
+   *  BOTH dates and no rep-entered value yet (Wes 2026-08-31: "no way to
+   *  apply the start/end dates and then have the option on 1d 2d week" —
+   *  dates used to land on a line and leave days at TBD, so the week-cap
+   *  picker had nothing to stand on). Never overwrites a non-null value;
+   *  the picker and the input remain the override paths. */
+  function suggestDaysIfReady(it: ResolvedItem): ResolvedItem {
+    if (it.billableDays != null) return it;
+    if (!it.pickupDate || !it.returnDate) return it;
+    const rules = BILLING_RULES[it.department];
+    if (rules.model === 'PURCHASE') return it;
+    const cal = calendarDays(new Date(it.pickupDate), new Date(it.returnDate));
+    if (!Number.isFinite(cal)) return it;
+    const days = rules.model === 'CAP_PER_WEEK' ? computeBillableDays(cal, rules.cap) : cal;
+    return { ...it, billableDays: days };
+  }
+
   const updateItem = (id: string, patch: Partial<ResolvedItem>) => {
     setItems((prev) => {
       const target = prev.find((it) => it.localId === id);
@@ -1123,7 +1141,12 @@ function NewQuotePageInner() {
   // Pulled out so the header-cascade and member-edit paths can reuse
   // the same rateType-normalization logic.
   function applyRowPatch(it: ResolvedItem, patch: Partial<ResolvedItem>): ResolvedItem {
-        const next: ResolvedItem = { ...it, ...patch };
+        let next: ResolvedItem = { ...it, ...patch };
+        // Dates just became (or changed while) complete → seed the
+        // suggested day count if the rep hasn't typed one.
+        if (patch.pickupDate !== undefined || patch.returnDate !== undefined || patch.department !== undefined) {
+          next = suggestDaysIfReady(next);
+        }
 
         // Department change: normalize rateType to keep stored data consistent.
         // - EXPENDABLES → FLAT (with note; toggle disappears anyway).
@@ -1266,7 +1289,9 @@ function NewQuotePageInner() {
         if (patch.pickupDate) next.pickupDate = patch.pickupDate;
         if (patch.returnDate) next.returnDate = patch.returnDate;
         if (patch.billableDays && patch.billableDays > 0) next.billableDays = patch.billableDays;
-        return next;
+        // Bulk dates with no explicit day count → seed the department
+        // default so the week-cap picker has a value to stand on.
+        return suggestDaysIfReady(next);
       }),
     );
   };
@@ -1277,12 +1302,17 @@ function NewQuotePageInner() {
   const updateQuoteDate = (field: 'startDate' | 'endDate', newValue: string) => {
     const oldValue = editing[field] || '';
     setEditing((prev) => ({ ...prev, [field]: newValue }));
-    if (!newValue || !oldValue || newValue === oldValue) return;
+    // First-time entry used to early-return on empty oldValue, so the
+    // window NEVER reached lines added before the dates were typed —
+    // "no way to apply the start/end dates" (Wes 2026-08-31). Cascade
+    // to lines still on the old quote date AND lines with no date yet;
+    // a per-line custom date is left alone either way.
+    if (!newValue || newValue === oldValue) return;
     setItems((prev) =>
       prev.map((it) => {
         const lineField = field === 'startDate' ? 'pickupDate' : 'returnDate';
-        if (it[lineField] === oldValue) {
-          return { ...it, [lineField]: newValue };
+        if (it[lineField] === oldValue || !it[lineField]) {
+          return suggestDaysIfReady({ ...it, [lineField]: newValue });
         }
         return it;
       }),
@@ -3002,7 +3032,7 @@ function LineItemRow({
                 the input above stays the authoritative, hand-editable
                 number. Active = the cap whose math matches the
                 current value. */}
-            {!isExpendable && weekCapChoices(item.department).length > 0 && (
+            {!isExpendable && !!item.pickupDate && !!item.returnDate && weekCapChoices(item.department).length > 0 && (
               <div className="flex flex-wrap bg-lt-card border border-lt-hairline rounded p-0.5">
                 {weekCapChoices(item.department).map((cap) => {
                   const suggested = computeBillableDays(
