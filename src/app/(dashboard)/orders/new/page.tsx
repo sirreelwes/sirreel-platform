@@ -40,8 +40,7 @@ import {
   computeBillableDays,
   computeLineTotal,
   defaultRateType,
-  isThreeDayWeekDept,
-  WEEK_CAP_CHOICES,
+  weekCapChoices,
 } from '@/lib/orders/billing';
 
 const DEPARTMENTS: LineItemDepartment[] = [
@@ -2996,14 +2995,16 @@ function LineItemRow({
               }}
               className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-base font-bold tabular-nums text-lt-fg text-center"
             />
-            {/* Week-cap picker — 3-day-week departments only. Each
-                button re-suggests billableDays from the calendar range
-                at that cap (Wes 2026-08-31); the input above stays the
-                authoritative, hand-editable number. Active = the cap
-                whose math matches the current value. */}
-            {!isExpendable && isThreeDayWeekDept(item.department) && (
-              <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
-                {WEEK_CAP_CHOICES.map((cap) => {
+            {/* Week-cap picker — cap-per-week departments below the
+                7-day (GE) cap: 3d/2d/1d for the supplies-style depts,
+                5d…1d for vehicles. Each button re-suggests billableDays
+                from the calendar range at that cap (Wes 2026-08-31);
+                the input above stays the authoritative, hand-editable
+                number. Active = the cap whose math matches the
+                current value. */}
+            {!isExpendable && weekCapChoices(item.department).length > 0 && (
+              <div className="flex flex-wrap bg-lt-card border border-lt-hairline rounded p-0.5">
+                {weekCapChoices(item.department).map((cap) => {
                   const suggested = computeBillableDays(
                     calendarDays(new Date(item.pickupDate), new Date(item.returnDate)),
                     cap,

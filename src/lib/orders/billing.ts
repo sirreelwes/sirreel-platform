@@ -119,19 +119,22 @@ function asNumber(r: number | DecimalLike): number {
  * day concept.
  */
 /**
- * Week-cap choices an agent may pick when estimating billable days for a
- * 3-day-week department (Wes 2026-08-31: "SirReel agent should have the
- * ability to change the category from a 3-day week (production supplies)
- * to a 2-day or 1-day week"). Purely an input aid — picking one writes
- * billableDays via computeBillableDays(calendarDays, cap); the stored
- * billableDays remains the authoritative, freely-editable number.
+ * Week-cap choices an agent may pick when estimating billable days
+ * (Wes 2026-08-31: "SirReel agent should have the ability to change the
+ * category from a 3-day week (production supplies) to a 2-day or 1-day
+ * week" — extended to VEHICLES' 5-day week the same day). The options
+ * run from the department's default cap down to a 1-day week. GE stays
+ * cap-7 (no week discounting) and returns none. Purely an input aid —
+ * picking one writes billableDays via computeBillableDays(calendarDays,
+ * cap); the stored billableDays remains the authoritative,
+ * freely-editable number.
  */
-export const WEEK_CAP_CHOICES = [3, 2, 1] as const
-
-/** True for departments whose default billing is the 3-day week. */
-export function isThreeDayWeekDept(department: LineItemDepartment): boolean {
+export function weekCapChoices(department: LineItemDepartment): number[] {
   const rules = BILLING_RULES[department]
-  return rules.model === 'CAP_PER_WEEK' && rules.cap === 3
+  if (rules.model !== 'CAP_PER_WEEK' || rules.cap >= 7) return []
+  const out: number[] = []
+  for (let cap = rules.cap; cap >= 1; cap--) out.push(cap)
+  return out
 }
 
 export function computeBillableDays(actualDays: number, cap: number): number {
