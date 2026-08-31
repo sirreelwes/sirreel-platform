@@ -6,6 +6,12 @@ import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
+// selectedClientId is usually a Company id but is sometimes an ANSWER
+// ('__new__' / '__unknown__'). Anything wanting a real id asks through
+// realCompanyId — see the module for why that is not spelled inline.
+import {
+  COMPANY_SENTINEL_NEW, COMPANY_SENTINEL_UNKNOWN, realCompanyId,
+} from '@/lib/companies/pickerSentinels';
 import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } from '@/components/shared/CompanyPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
@@ -382,6 +388,7 @@ function withLocalIds(items: IncomingItem[]): ResolvedItem[] {
   return items.map((it) => ({ ...it, localId: it.localId ?? newLocalId() }));
 }
 
+
 export default function NewQuotePage() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-lt-fg2">Loading…</div>}>
@@ -498,15 +505,24 @@ function NewQuotePageInner() {
   const setConfirmedLeadPersonId = setConfirmedLeadPersonIdEarly;
 
   // CompanyPicker → selectedClientId sync (STEP 1B). The picker's
-  // three modes map cleanly:
+  // four modes map cleanly:
   //   selected_existing  → selectedClientId = companyId
   //   creating_new       → selectedClientId = '__new__'
+  //   unknown            → selectedClientId = '__unknown__'
   //   searching          → selectedClientId = ''
+  //
+  // '__unknown__' is a real answer, not an empty one — that is the whole
+  // point of it. It unblocks the save (a company we do not have yet must
+  // not hold a quote hostage) and the resolver turns it into a per-job
+  // provisional placeholder. Both sentinels are filtered out of every
+  // place that expects a genuine company id; see NOT_A_COMPANY_ID.
   useEffect(() => {
     if (companyPick.mode === 'selected_existing' && companyPick.companyId) {
       setSelectedClientId(companyPick.companyId);
     } else if (companyPick.mode === 'creating_new') {
-      setSelectedClientId('__new__');
+      setSelectedClientId(COMPANY_SENTINEL_NEW);
+    } else if (companyPick.mode === 'unknown') {
+      setSelectedClientId(COMPANY_SENTINEL_UNKNOWN);
     } else {
       setSelectedClientId('');
     }
@@ -657,7 +673,7 @@ function NewQuotePageInner() {
   // candidate when there's exactly one strong match (same customer +
   // >50% date overlap); otherwise the default "Create new Job" stays.
   useEffect(() => {
-    if (!parsed || !selectedClientId || selectedClientId === '__new__') {
+    if (!parsed || !realCompanyId(selectedClientId)) {
       setCandidateJobs([]);
       return;
     }
@@ -1495,6 +1511,9 @@ function NewQuotePageInner() {
     (job.mode === 'selected_existing'
       ? !!job.jobId
       : job.mode === 'creating_new'
+        // '__unknown__' counts: a company we do not have yet must not
+        // hold the quote hostage. The resolver stands up a provisional
+        // one and Quick Reply asks the client for the real name.
         ? !!selectedClientId && job.name.trim().length > 0
         : false);
 
@@ -1606,7 +1625,10 @@ function NewQuotePageInner() {
       const eff =
         resolvedJob ??
         (job.mode === 'selected_existing' && job.jobId
-          ? { jobId: job.jobId, name: job.name, companyId: job.company?.id ?? selectedClientId, created: false }
+          // realCompanyId, not the raw value: `??` only falls through on
+          // null, so a '__unknown__' sentinel would have sailed straight
+          // into companyDecision as if it were an id.
+          ? { jobId: job.jobId, name: job.name, companyId: job.company?.id ?? realCompanyId(selectedClientId), created: false }
           : null);
       if (!eff) {
         // Materialize Person rows for included contacts first — the
@@ -1671,7 +1693,15 @@ function NewQuotePageInner() {
         return; // finally{} clears `creating`; onResolved re-enters
       }
       const existingJobId = eff.jobId;
-      const companyId = eff.companyId ?? selectedClientId;
+      // The resolved Job's own company is authoritative — including the
+      // provisional one it just minted for an unknown-company lead.
+      // Falling back to selectedClientId must never hand a sentinel to
+      // the API, so it goes through realCompanyId.
+      const companyId = eff.companyId ?? realCompanyId(selectedClientId);
+      if (!companyId) {
+        alert('Could not resolve a company for this order. Pick one, or choose "I don\'t know the company yet".');
+        return;
+      }
 
       // ATOMIC create — Order + ALL line items in ONE transaction via
       // /api/orders/from-parse (replaced the old create-order-then-loop-
@@ -2192,7 +2222,7 @@ function NewQuotePageInner() {
                 <p className="text-[11px] text-lt-fg3">
                   {candidateJobs.length > 0
                     ? `${candidateJobs.length} existing Job${candidateJobs.length === 1 ? '' : 's'} for this client — pick one, or type a new name.`
-                    : selectedClientId && selectedClientId !== '__new__'
+                    : realCompanyId(selectedClientId)
                       ? 'No matching Jobs — a typed name opens the Job check on save (pick or create there).'
                       : 'Pick a Client Company first to surface matching Jobs.'}
                 </p>
@@ -2221,7 +2251,7 @@ function NewQuotePageInner() {
             <JobPicker
               value={job}
               onChange={setJob}
-              companyId={selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null}
+              companyId={realCompanyId(selectedClientId)}
               placeholder={
                 job.name
                   ? `Search jobs by name or code…`
@@ -2234,8 +2264,11 @@ function NewQuotePageInner() {
                 the save continues automatically with the real jobId. */}
             {jobResolverOpen && (
               <JobResolverModal
+                // Carry the rep's answer into the modal so they are not
+                // asked the same question twice.
+                seedCompanyUnknown={companyPick.mode === 'unknown'}
                 context={{
-                  companyId: selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null,
+                  companyId: realCompanyId(selectedClientId),
                   companyName:
                     companyPick.mode === 'creating_new'
                       ? companyPick.name
@@ -2405,7 +2438,7 @@ function NewQuotePageInner() {
             if (group.length === 0) return null;
             return (
               <DepartmentGroup
-                companyId={selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null}
+                companyId={realCompanyId(selectedClientId)}
                 key={dept}
                 department={dept}
                 rows={group}

@@ -80,10 +80,14 @@ interface ResolveResult {
 export function JobResolverModal({
   context,
   draftExtras,
+  seedCompanyUnknown = false,
   onResolved,
   onClose,
 }: {
   context: ResolverContext
+  /** The caller already asked "do you know the company?" and the rep
+   *  said no — start with the box ticked rather than asking twice. */
+  seedCompanyUnknown?: boolean
   /** Extra JobDraft fields (productionType, profile, notes,
    *  estimatedValue, contacts[{personId,role,isPrimary}]) merged into
    *  the create-new POST by wizard callers. Never affects ranking or
@@ -201,7 +205,7 @@ export function JobResolverModal({
   // no production company, and the reply shouldn't be blocked on it. The
   // agent enters it when they have it, or ticks this and the Quick Reply
   // asks the client — which that modal already knows how to do.
-  const [companyUnknown, setCompanyUnknown] = useState(false)
+  const [companyUnknown, setCompanyUnknown] = useState(seedCompanyUnknown)
 
   const createNew = async () => {
     setSubmitting(true)

@@ -18,6 +18,26 @@
  *   - When `recentCompanyIds` is provided, those hits rank first
  *     ("rep's recently-touched companies") above the alphabetical
  *     /api/crm/companies result order.
+ *
+ * ── The fourth mode: `unknown` ─────────────────────────────────────
+ *
+ * Wes, 2026-08-31: "I need the option to select 'I don't know company
+ * yet..' like in Quick Reply."
+ *
+ * An inbound call often gives you a person, a date and a truck, and no
+ * production company at all. The Job resolver has had that escape hatch
+ * since 2026-08-25, but Review Quote's save button is disabled without a
+ * company — so the rep could never reach the checkbox that would have
+ * unblocked them. The picker has to offer it itself.
+ *
+ * It is offered WITHOUT typing. The dropdown only opens once there is a
+ * query, and a rep who does not know the company has nothing to type;
+ * hiding the escape hatch behind the search box is hiding it from
+ * exactly the person who needs it.
+ *
+ * `unknown` is not `creating_new` with a blank name. The parent has to
+ * send `companyUnknown` so the server mints a per-job provisional
+ * placeholder — see src/lib/companies/provisional.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -26,7 +46,7 @@ import { companyNameKey } from '@/lib/companies/normalize'
 export interface CompanyPickerValue {
   companyId: string | null
   name: string
-  mode: 'searching' | 'selected_existing' | 'creating_new'
+  mode: 'searching' | 'selected_existing' | 'creating_new' | 'unknown'
   /** Picked company's tier (display-only). */
   tier?: string | null
   /** Picked company's COI flag (display-only). */
@@ -169,6 +189,31 @@ export function CompanyPicker({
     )
   }
 
+  const markUnknown = () => {
+    onChange({ companyId: null, name: '', mode: 'unknown', tier: null, coiOnFile: null })
+    setQuery('')
+    setHits([])
+    setOpen(false)
+  }
+
+  if (value.mode === 'unknown') {
+    return (
+      <div className="flex items-center justify-between border border-sky-300 bg-sky-50 rounded-xl px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-gray-900">Company not known yet</div>
+          <div className="text-[11px] text-sky-700">
+            A placeholder is created with the job — set the real company from the job page when they tell you.
+          </div>
+        </div>
+        {allowReset && (
+          <button type="button" onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 ml-2 flex-shrink-0">
+            Change
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (value.mode === 'creating_new') {
     return (
       <div className="flex items-center justify-between border border-blue-300 bg-blue-50 rounded-xl px-3 py-2.5">
@@ -234,8 +279,24 @@ export function CompanyPicker({
                 : 'Creates a new Company when this form is submitted'}
             </div>
           </button>
+          <button
+            type="button"
+            onClick={markUnknown}
+            className="w-full text-left px-4 py-2 bg-white hover:bg-sky-50 border-t border-gray-100"
+          >
+            <div className="text-[13px] font-semibold text-sky-700">I don&rsquo;t know the company yet…</div>
+          </button>
         </div>
       )}
+      {/* Offered with no query typed, because that is the state the rep
+          is actually in when they do not know the company. */}
+      <button
+        type="button"
+        onClick={markUnknown}
+        className="mt-1.5 text-[11px] text-sky-700 hover:text-sky-900 hover:underline"
+      >
+        I don&rsquo;t know the company yet…
+      </button>
     </div>
   )
 }
