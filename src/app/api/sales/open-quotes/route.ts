@@ -4,6 +4,7 @@ import { resolveDataScope } from '@/lib/auth/scope';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere';
+import { compareByPickupUrgency } from '@/lib/sales/quoteUrgency';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +14,14 @@ export const dynamic = 'force-dynamic';
  * stage of OrderQuoteStatus: DRAFT → SENT → WON → LOST → EXPIRED — so this
  * excludes WON/booked, LOST, EXPIRED, and DRAFT), with the job not in a
  * terminal state (a WRAPPED/LOST job's leftover SENT order isn't a live
- * quote). Sorted by age — oldest sentAt first — so the most at-risk money is
- * on top. Honors scope=my|team. Returns ALL matches (not a top-N).
+ * quote). Honors scope=my|team. Returns ALL matches (not a top-N).
+ *
+ * Sorted by PICKUP URGENCY (Wes 2026-08-31), not by age. Age answers
+ * "how long have we been waiting"; the pickup date answers "how long is
+ * there left to win it", and only the second one decides what a rep
+ * should open next. Ordering is by what is still winnable — past-pickup
+ * quotes sort last, because a job that already went cannot be missed.
+ * See compareByPickupUrgency in src/lib/sales/quoteUrgency.
  *
  * Also returns `pickupDate` — the order's own startDate when it has one,
  * else the earliest line-item pickup. That is the clock that decides
@@ -36,8 +43,10 @@ export async function GET(req: NextRequest) {
       ...ACTIONABLE_ORDER_WHERE,
       ...(mine ? { agentId: mine } : {}),
     },
-    // Stalest first. Nulls (a SENT order with no sentAt — shouldn't happen)
-    // sort last so real, aged quotes stay on top.
+    // Stalest first here only as a STABLE TIE-BREAK. The real ordering is
+    // by pickup urgency and happens below, in JS: it depends on the
+    // effective pickup date, which can come from a line item, so Postgres
+    // cannot express it in one ORDER BY.
     orderBy: { sentAt: { sort: 'asc', nulls: 'last' } },
     select: {
       id: true,
@@ -60,9 +69,7 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    scope: effectiveScope,
-    quotes: orders.map((o) => ({
+  const quotes = orders.map((o) => ({
       id: o.id,
       orderNumber: o.orderNumber,
       total: Number(o.total),
@@ -72,6 +79,16 @@ export async function GET(req: NextRequest) {
       company: o.company,
       job: o.job,
       agent: o.agent,
-    })),
-  });
+  }));
+
+  // Sorted after mapping, because the key is the EFFECTIVE pickup — the
+  // order's own startDate or the earliest line's, resolved just above.
+  quotes.sort((a, b) =>
+    compareByPickupUrgency(
+      { pickupDate: a.pickupDate ? new Date(a.pickupDate).toISOString() : null },
+      { pickupDate: b.pickupDate ? new Date(b.pickupDate).toISOString() : null },
+    ),
+  );
+
+  return NextResponse.json({ scope: effectiveScope, quotes });
 }

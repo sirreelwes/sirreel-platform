@@ -123,3 +123,55 @@ export function fmtPickup(pickupIso: string | null | undefined): string | null {
     month: 'short', day: 'numeric', timeZone: 'UTC',
   })
 }
+
+/**
+ * Sort rank for the Quotes Out list. Lower sorts first.
+ *
+ * Wes, 2026-08-31: "sort the quotes out list by pickup urgency."
+ *
+ * Urgency is NOT the same as chronology. Sorting purely by pickup date
+ * puts the most overdue quote on top — and a quote nine days past its
+ * pickup cannot be missed, because it already was. On the live book that
+ * ordering would have stacked four dead rows above the job picking up
+ * TODAY and the one picking up tomorrow, which are the only two anyone
+ * can still act on.
+ *
+ * That mistake has already been made once on this codebase, on the jobs
+ * rail: "Urgency-first sounded right and reads wrong on the real book —
+ * ~90 Planyo-era rentals nobody ever marked back pin themselves to the
+ * top as 'Not returned', burying the work of the week."
+ * (JobsListProvider). So the order here is by what a rep can still WIN.
+ *
+ * `past` sorts last but is not hidden, and keeps its red tint — a quote
+ * whose job has already gone still needs someone to chase it or mark it
+ * lost. It just does not get to sit on top of the live work.
+ */
+const BAND_RANK: Record<QuoteUrgency, number> = {
+  today: 0,      // leaves today or not at all — the last moment to act
+  critical: 1,   // 1–2 days
+  soon: 2,       // inside the week
+  open: 3,       // a week or more of runway
+  unknown: 4,    // no date — worth a look, but nothing to count down
+  past: 5,       // already gone; chase or close it, but not from the top
+}
+
+/**
+ * Comparator for two quotes by pickup urgency.
+ *
+ * Within a band, whichever is closest to today comes first — so among
+ * past quotes, yesterday's outranks last week's, being the one still
+ * plausibly salvageable.
+ */
+export function compareByPickupUrgency(
+  a: { pickupDate: string | null },
+  b: { pickupDate: string | null },
+  now = new Date(),
+): number {
+  const ra = BAND_RANK[quoteUrgency(a.pickupDate, now)]
+  const rb = BAND_RANK[quoteUrgency(b.pickupDate, now)]
+  if (ra !== rb) return ra - rb
+  const da = daysUntil(a.pickupDate, now)
+  const db = daysUntil(b.pickupDate, now)
+  if (da === null || db === null) return 0
+  return Math.abs(da) - Math.abs(db)
+}
