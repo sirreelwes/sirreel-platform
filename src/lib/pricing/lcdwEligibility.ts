@@ -11,9 +11,9 @@
  *
  *   "LCDW is ONLY available for fleet rental vehicles such as: Cube
  *    Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as
- *    Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Golf Carts or
- *    any vehicle requiring a commercial driver's license are NOT
- *    ELIGIBLE for LCDW."
+ *    Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Restroom
+ *    Trailers, Scissor Lifts, Golf Carts or any vehicle requiring a
+ *    commercial driver's license are NOT ELIGIBLE for LCDW."
  *
  * So this module is the contract text made executable. If the two ever
  * disagree, the CONTRACT wins and this file is the bug — a waiver we
@@ -45,6 +45,18 @@ export const LCDW_FEE_CODE = 'LCDW'
 export const LCDW_EXCLUDED_CODES: ReadonlySet<string> = new Set([
   'CAT_POPVAN',
   'CAT_PROSCOUT_VTR',
+  // Wes, 2026-08-31, after the shipped rule offered these three: "exclude
+  // the restroom trailer and scissor lift too."
+  //
+  //   CAT_DLUX         — 2 Unit Restroom Trailer (Sprinter-based)
+  //   CAT_DLUX_NORCAL  — the same DLUX product in NORCAL. Excluded with
+  //                      its LA twin: one product cannot be coverable in
+  //                      one region and not the other, and nobody would
+  //                      think to keep the two lists in sync later.
+  //   CAT_SCISSOR_LIFT — a lift, not a fleet rental vehicle
+  'CAT_DLUX',
+  'CAT_DLUX_NORCAL',
+  'CAT_SCISSOR_LIFT',
 ])
 
 export type LcdwIneligibleReason = 'not-a-vehicle' | 'specialty-vehicle' | 'partner-vehicle'

@@ -15,6 +15,7 @@ import {
   judgeLcdwLine, quoteLcdw, describeLcdwCoverage, LCDW_EXCLUDED_CODES,
   type LcdwCandidate,
 } from '../../src/lib/pricing/lcdwEligibility'
+import { LCDW_ELIGIBILITY_NOTE } from '../../src/components/portal-v2/terms'
 
 const failures: string[] = []
 const check = (c: boolean, why: string) => {
@@ -111,8 +112,39 @@ console.log('\nNo vehicles at all')
 check(describeLcdwCoverage(quoteLcdw([line({ department: 'GE' })])) === 'No vehicles on this order.',
   'says so rather than showing an empty offer')
 
-console.log('\nThe exclusion set is exactly the two the agreement names')
-check(LCDW_EXCLUDED_CODES.size === 2, 'two codes excluded')
+console.log('\nThe exclusion set and the signed contract text agree')
+{
+  // Naming the codes, not counting them. A size check still passes when
+  // someone swaps one exclusion for another — which is the mistake that
+  // would actually cost money.
+  const expected = [
+    'CAT_DLUX',          // 2 Unit Restroom Trailer
+    'CAT_DLUX_NORCAL',   // the same product, NORCAL
+    'CAT_POPVAN',
+    'CAT_PROSCOUT_VTR',  // ProScout / VideoVan
+    'CAT_SCISSOR_LIFT',
+  ]
+  const actual = [...LCDW_EXCLUDED_CODES].sort()
+  check(JSON.stringify(actual) === JSON.stringify(expected),
+    `excluded codes are exactly ${expected.join(', ')} — got ${actual.join(', ')}`)
+
+  // The invariant the module header promises and nothing enforced: a
+  // vehicle the CODE refuses to cover must be named as excluded in the
+  // text the client SIGNS. Otherwise we decline a claim on a vehicle the
+  // agreement told them was covered.
+  const mustAppear: Record<string, string> = {
+    CAT_POPVAN: 'PopVan',
+    CAT_PROSCOUT_VTR: 'VTR/PeopleMover',
+    CAT_DLUX: 'Restroom Trailer',
+    CAT_DLUX_NORCAL: 'Restroom Trailer',
+    CAT_SCISSOR_LIFT: 'Scissor Lift',
+  }
+  for (const code of actual) {
+    const phrase = mustAppear[code]
+    check(!!phrase && LCDW_ELIGIBILITY_NOTE.includes(phrase),
+      `${code} is named as excluded in the signed agreement ("${phrase}")`)
+  }
+}
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} failure(s):`)

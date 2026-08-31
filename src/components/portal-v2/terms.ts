@@ -61,7 +61,7 @@ export const LCDW_TERMS: { heading: string; text: string }[] = [
   { heading: 'LIMITED COLLISION DAMAGE WAIVER:', text: `By accepting LCDW herein, Lessee agrees to pay the sum of $24.00/day/vehicle for a Limited Collision Damage Waiver and also agrees to pay all costs above $1,000 as stated in paragraph 4. In exchange, SirReel waives the claim to the first $1,000 in damages caused to the vehicle by collision with another vehicle or property. This waiver does NOT apply to: Prohibited Uses in Paragraph 5, intentional acts, damage due to insufficient height or clearance, improper loading, abusive handling, towing without written permission, unlicensed or revoked drivers, or theft of the vehicle or components.` },
 ]
 
-export const LCDW_ELIGIBILITY_NOTE = `** LCDW is ONLY available for fleet rental vehicles such as: Cube Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Golf Carts or any vehicle requiring a commercial driver's license are NOT ELIGIBLE for LCDW.`
+export const LCDW_ELIGIBILITY_NOTE = `** LCDW is ONLY available for fleet rental vehicles such as: Cube Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Restroom Trailers, Scissor Lifts, Golf Carts or any vehicle requiring a commercial driver's license are NOT ELIGIBLE for LCDW.`
 
 export const STUDIO_TERMS: { heading: string; text: string }[] = [
   { heading: '1. Grant.', text: `Licensor grants Producer the non-assignable and non-exclusive right to enter upon the Premises at 8500 Lankershim Blvd, Sun Valley, CA and to use designated Sets for the purpose of making still and motion pictures, commercials, trailers and soundtrack recordings.` },

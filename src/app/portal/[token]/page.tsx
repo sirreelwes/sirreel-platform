@@ -1,5 +1,6 @@
 'use client';
 import { formatCalendarDate } from '@/lib/dates/calendarDate';
+import { LCDW_ELIGIBILITY_NOTE } from '@/components/portal-v2/terms'
 import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
@@ -1160,7 +1161,12 @@ export default function ClientPortal() {
                   <p><strong>10. Liability Insurance and Indemnity.</strong> You warrant that you have and will maintain automobile liability insurance with limits equal to or greater than those required by law. In the event of an accident, your insurance shall be primary and Non-Contributory.</p>
                   <p><strong>11. Loss of Use.</strong> In the event of damage or destruction of a vehicle, you will pay for loss of use without regard to fleet utilization, plus an administrative fee, plus towing and storage charges.</p>
                   <p><strong>LIMITED COLLISION DAMAGE WAIVER:</strong> By accepting LCDW herein, Lessee agrees to pay the sum of {usd2(LCDW_DAILY_RATE)}/day/vehicle for a Limited Collision Damage Waiver and also agrees to pay all costs above {usd(LCDW_WAIVED_DAMAGE_LIMIT)} as stated in paragraph 4. In exchange, SirReel waives the claim to the first {usd(LCDW_WAIVED_DAMAGE_LIMIT)} in damages caused to the vehicle by collision with another vehicle or property. This waiver does NOT apply to: Prohibited Uses in Paragraph 5, intentional acts, damage due to insufficient height or clearance, improper loading, abusive handling, towing without written permission, unlicensed or revoked drivers, or theft of the vehicle or components.</p>
-                  <p className="font-semibold text-gray-700">** LCDW is ONLY available for fleet rental vehicles such as: Cube Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Golf Carts or any vehicle requiring a commercial driver's license are NOT ELIGIBLE for LCDW.</p>
+                  {/* One copy of the eligibility sentence, shared with
+                      the v2 card. It was hardcoded here and drifted the
+                      moment the exclusion list changed — this page kept
+                      telling clients a Scissor Lift was coverable after
+                      the rule stopped covering it. */}
+                  <p className="font-semibold text-gray-700">{LCDW_ELIGIBILITY_NOTE}</p>
                 </div>
                 <div className="space-y-2">
                   <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border-2 transition-all" style={{borderColor: lcdwAccepted ? '#111827' : '#e5e7eb', background: lcdwAccepted ? '#f9fafb' : 'white'}}>
