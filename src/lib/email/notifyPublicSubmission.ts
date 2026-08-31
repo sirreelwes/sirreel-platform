@@ -28,6 +28,7 @@
  * widening the capture gate for an alias that never sends buys nothing.
  */
 
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import {
   renderEmailShell,
@@ -39,7 +40,8 @@ import {
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 /** Override per-environment so staging never mails the real team. */
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
+// Audience: the 'hq-documents' notification channel (admin-managed at
+// /admin/notifications; defaults to HQ_NOTIFY_INBOX / hq@sirreel.com).
 
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
@@ -205,7 +207,7 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
   ])
 
   const res = await sendAgreementEmail({
-    to: [HQ_INBOX],
+    to: await channelRecipients('hq-documents'),
     subject,
     html,
     text,
@@ -256,7 +258,7 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
     // No agent exists yet on a public submission, so replies route to
     // the watched HQ inbox instead of the unmonitored notifications@
     // sender — "change my dates" replies were previously lost.
-    replyTo: HQ_INBOX,
+    replyTo: (await channelRecipients('hq-documents'))[0] || 'hq@sirreel.com',
     subject: copy.clientSubject,
     html,
     text,

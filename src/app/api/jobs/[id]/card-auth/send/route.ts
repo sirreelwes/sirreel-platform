@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   if (!composition.ok) return bad(composition.status, composition.error)
 
-  const cc = withTeamCc(manualCc, composition.to.email)
+  const cc = await withTeamCc(manualCc, composition.to.email)
 
   const result = await sendAgreementEmail({
     to: [composition.to.email],

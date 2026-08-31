@@ -149,7 +149,7 @@ export async function sendHoldRequest(args: {
     // a partner's unit and the desk must see that it went out.
     const res = await sendAgreementEmail({
       to: [to],
-      cc: withTeamCc([], to),
+      cc: await withTeamCc([], to),
       replyTo: agentReplyTo(args.agentEmail) ?? undefined,
       subject: notice.subject,
       html: notice.html,

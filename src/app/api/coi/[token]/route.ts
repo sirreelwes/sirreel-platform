@@ -6,7 +6,7 @@ import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { hqNotifyInbox } from '@/lib/email/copyRecipients'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 
 export const dynamic = 'force-dynamic'
 // The AI review of a multi-page certificate can outrun the default budget;
@@ -14,8 +14,9 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
-// Where the COI lands so the team's current manual workflow is preserved.
-const COI_TEAM_INBOX = 'rentals@sirreel.com'
+// Where the COI lands: the 'coi-team' notification channel (admin-managed
+// at /admin/notifications; defaults to rentals@ so the team's manual
+// workflow is preserved).
 // hq@ rides along on the SAME send (Wes, 2026-08-30): every client COI has
 // to reach the HQ distribution group with the PDF attached, and one email to
 // both inboxes beats a second near-identical notification — jose@/oliver@ are
@@ -149,7 +150,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const who = uploaderName || uploaderEmail || 'A client'
 
   const emailResult = await sendAgreementEmail({
-    to: [COI_TEAM_INBOX, hqNotifyInbox()],
+    to: dedupeEmails([
+      ...(await channelRecipients('coi-team')),
+      ...(await channelRecipients('hq-documents')),
+    ]),
     // Same convention as notifyPublicSubmission: Reply-To is the client
     // so a staff Reply answers the uploader directly instead of landing
     // in the unmonitored notifications@ sender. Guarded — the field is

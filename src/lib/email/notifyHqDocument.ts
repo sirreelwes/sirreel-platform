@@ -1,5 +1,5 @@
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { hqNotifyInbox } from '@/lib/email/copyRecipients'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import {
   renderEmailShell,
   renderEmailText,
@@ -129,7 +129,7 @@ async function send(ev: HqDocumentEvent): Promise<void> {
 
   const replyTo = ev.replyTo?.trim()
   await sendAgreementEmail({
-    to: [hqNotifyInbox()],
+    to: await channelRecipients('hq-documents'),
     subject,
     html,
     text,

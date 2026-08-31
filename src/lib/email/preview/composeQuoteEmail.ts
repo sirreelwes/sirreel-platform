@@ -20,11 +20,11 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
-import { teamInboxEmail } from '@/lib/email/teamVisibility'
 
 export interface AttachmentMeta {
   filename: string
@@ -196,13 +196,15 @@ export async function composeQuoteEmail(
   })
 
   // Same two inputs the send route composes its `cc` from: the ranked
-  // non-primary contacts, then the shared desk.
-  const team = teamInboxEmail()
+  // non-primary contacts, then the sales-team channel (admin-managed at
+  // /admin/notifications; may be one group address or several people).
+  const team = await channelRecipients('sales-team-cc')
   const autoCc: { email: string; name: string | null; reason: 'job-contact' | 'sales-team' }[] =
     alternatives.map((a) => ({ email: a.email, name: a.name ?? null, reason: 'job-contact' as const }))
-  if (team && !autoCc.some((c) => c.email.toLowerCase() === team.toLowerCase())
-      && to.email.toLowerCase() !== team.toLowerCase()) {
-    autoCc.push({ email: team, name: 'Sales team', reason: 'sales-team' })
+  for (const teamEmail of team) {
+    if (autoCc.some((c) => c.email.toLowerCase() === teamEmail.toLowerCase())) continue
+    if (to.email.toLowerCase() === teamEmail.toLowerCase()) continue
+    autoCc.push({ email: teamEmail, name: 'Sales team', reason: 'sales-team' })
   }
 
   return {

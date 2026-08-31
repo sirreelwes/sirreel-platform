@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   //     a bounce. Agent mailboxes ARE ingested by HQ, so the reply reaches
   //     a person and flows back in. Previously there was no Reply-To at
   //     all and replies went to notifications@, which nobody works.
-  const ccList = withTeamCc(manualCc, payload.recipientEmail)
+  const ccList = await withTeamCc(manualCc, payload.recipientEmail)
   const replyTo = agentReplyTo(session.user.email)
 
   const result = await sendAgreementEmail({

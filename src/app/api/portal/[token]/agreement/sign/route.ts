@@ -6,7 +6,7 @@ import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
-import { COPY_RECIPIENTS, hqNotifyInbox } from '@/lib/email/copyRecipients'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import type { AgreementStatus } from '@prisma/client'
@@ -123,7 +123,11 @@ async function sendSignedCopies(args: {
     // the PDF is already attached here, and jose@/oliver@ sit on both the
     // sales list and the hq@ group, so a second send is the same document
     // arriving twice in the same two mailboxes (Wes, 2026-08-30).
-    cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing, hqNotifyInbox()],
+    cc: dedupeEmails([
+      ...(await channelRecipients('signed-contract-sales')),
+      ...(await channelRecipients('signed-contract-billing')),
+      ...(await channelRecipients('hq-documents')),
+    ]),
     subject: `Signed: ${args.companyName} · ${subjectLabel}`,
     html,
     attachments: [{ filename: args.attachmentName, content: args.pdfBuffer }],

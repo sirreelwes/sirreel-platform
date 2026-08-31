@@ -1,9 +1,12 @@
 /**
- * Internal copy-recipient roster for signed-contract notifications.
+ * Built-in DEFAULT internal copy rosters.
  *
- * Single source — extracted from /api/portal/[token]/agreement/sign
- * (rental flow) so the stage-contract flow and any future signing
- * surface share one list instead of duplicating addresses.
+ * Since 2026-08-31 these are no longer read directly by any send path —
+ * they are the fallback defaults for the notification channels
+ * ('signed-contract-sales' / 'signed-contract-billing' / 'hq-documents')
+ * in src/lib/email/notificationChannels.ts, which /admin/notifications
+ * can override per channel. Edit recipients THERE, not here; this file
+ * only defines what applies when no override row exists.
  */
 export const COPY_RECIPIENTS = {
   sales: ['jose@sirreel.com', 'oliver@sirreel.com'],
@@ -19,9 +22,4 @@ export const COPY_RECIPIENTS = {
  */
 export function hqNotifyInbox(): string {
   return process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
-}
-
-/** Flat internal roster (sales + billing) for TO/CC lines. */
-export function internalCopyRecipients(): string[] {
-  return [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing]
 }

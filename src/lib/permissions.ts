@@ -615,6 +615,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },
+        { id: 'notifications', label: 'Notifications', icon: 'Mail', href: '/admin/notifications' },
         { id: 'assistant', label: 'Assistant', icon: 'Bot', href: '/admin/assistant' },
         { id: 'who-we-are', label: 'Who We Are', icon: 'Users', href: '/admin/who-we-are' },
         { id: 'dedup', label: 'Duplicates', icon: 'Copy', href: '/admin/dedup' },

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
 import { renderStageSignedCopyPdf } from '@/lib/contracts/renderStageSignedCopy'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { internalCopyRecipients } from '@/lib/email/copyRecipients'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { buildStageSignedConfirmationEmail } from '@/lib/email/templates/stageSignedConfirmation'
 import { firstNameOf } from '@/lib/email/names'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
@@ -222,7 +222,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 </body></html>`
         const result = await sendAgreementEmail({
           label: 'portal/v2/stage-sign internal copy',
-          to: internalCopyRecipients(),
+          to: dedupeEmails([
+            ...(await channelRecipients('signed-contract-sales')),
+            ...(await channelRecipients('signed-contract-billing')),
+          ]),
           cc: agentEmail ? [agentEmail] : undefined,
           subject: `Signed: ${companyName} · Stage Contract${requiresStryker ? ' + Stryker MMA' : ''}`,
           html,

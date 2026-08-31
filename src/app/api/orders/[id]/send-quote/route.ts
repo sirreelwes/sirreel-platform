@@ -234,7 +234,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // exactly why HQ can't watch it and why a client's reply must never be
     // aimed at it (groups reject non-member mail). Reply-To stays the agent
     // + the hello@ ingest anchor.
-    cc: withTeamCc(mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? [], primary.email),
+    cc: await withTeamCc(mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? [], primary.email),
     subject: final.subject,
     html: final.html,
     text: final.text,

@@ -1955,9 +1955,9 @@ model EmailMessage {
   // the May 2026 backfill). bodyText is preferred; bodyHtml is kept for
   // display fidelity; bodySource records which path produced bodyText
   // ('plain' = text/plain part directly, 'html-converted' = html-to-text).
-  bodyText        String? @map("body_text") @db.Text
-  bodyHtml        String? @map("body_html") @db.Text
-  bodySource      String? @map("body_source")
+  bodyText   String? @map("body_text") @db.Text
+  bodyHtml   String? @map("body_html") @db.Text
+  bodySource String? @map("body_source")
 
   /// One-line AI summary of THIS message, cached.
   ///
@@ -1970,9 +1970,9 @@ model EmailMessage {
   ///
   /// Written lazily on first render and reused forever after — the
   /// message never changes, so one Haiku call per reply is the whole cost.
-  replySummary   String?   @map("reply_summary") @db.Text
-  replySummaryAt DateTime? @map("reply_summary_at")
-  attachmentCount Int     @default(0) @map("attachment_count")
+  replySummary    String?   @map("reply_summary") @db.Text
+  replySummaryAt  DateTime? @map("reply_summary_at")
+  attachmentCount Int       @default(0) @map("attachment_count")
 
   // Routing headers captured from the Gmail payload at ingest time, so
   // forwarded mail (e.g. claims@ → ana@) can be classified by its ORIGINAL
@@ -6504,6 +6504,27 @@ model PlanyoSyncEvent {
 // ═══════════════════════════════════════
 // SITE SETTINGS (public marketing surface)
 // ═══════════════════════════════════════
+/// Admin-managed override of who receives a class of internal HQ
+/// notification email. One row per channel `key` — the channel registry
+/// (labels, descriptions, built-in defaults) lives in
+/// src/lib/email/notificationChannels.ts, NOT here.
+///
+/// Row ABSENT  → the channel's built-in default applies (env var or the
+///               hardcoded roster the channel shipped with).
+/// Row PRESENT → its `emails` list is the WHOLE audience. An empty list
+///               deliberately silences the channel (meaningful for
+///               CC-type channels like the sales-team copy).
+///
+/// Managed at /admin/notifications (requireAdmin); every change is
+/// audit-logged (action: notification_channel.update).
+model NotificationChannel {
+  key            String   @id
+  emails         String[]
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedByEmail String?  @map("updated_by_email")
+
+  @@map("sr_notification_channels")
+}
 
 /// Singleton config for the public marketing site (sirreel.com). One
 /// row, keyed by the fixed id "singleton" — every read/write goes

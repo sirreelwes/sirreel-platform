@@ -30,7 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { composeEstimateEmail } from '@/lib/sub-rentals/estimateEmail'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { withTeamCc, agentReplyTo, teamInboxEmail } from '@/lib/email/teamVisibility'
+import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { createPotentialSubRental, vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { buildVendorEstimateNotice } from '@/lib/sub-rentals/vendorNotice'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
@@ -64,7 +64,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     unitUrl: composed.unitUrl,
     vehicle: composed.vehicle,
     replyTo: agentReplyTo(user.email),
-    teamCc: teamInboxEmail(),
+    // Display-only: the channel-resolved copy list, joined for the modal's
+    // "CC ..." line. May be several individual addresses under an admin
+    // override rather than the one group.
+    teamCc: (await withTeamCc([])).join(', ') || null,
   })
 }
 
@@ -92,9 +95,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: composed.error }, { status: composed.status })
   }
 
+  const teamCc = await withTeamCc([], to)
   const result = await sendAgreementEmail({
     to: [to],
-    cc: withTeamCc([], to),
+    cc: teamCc,
     // agentReplyTo, not user.email raw — it restricts to our own domain so a
     // session with an odd address can't redirect a client's reply off-domain.
     replyTo: agentReplyTo(user.email) ?? undefined,
@@ -113,7 +117,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       entityType: 'SubcontractedVehicle',
       entityId: params.id,
       userId: user.id,
-      newValues: { to, cc: withTeamCc([], to), vehicleName: composed.vehicle.name, resendMessageId: result.id },
+      newValues: { to, cc: teamCc, vehicleName: composed.vehicle.name, resendMessageId: result.id },
     },
   })
 

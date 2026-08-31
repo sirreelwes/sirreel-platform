@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, detailTable, calloutBox } from '@/lib/email/templates/shell'
 
@@ -26,7 +27,8 @@ import { renderEmailShell, renderEmailText, detailTable, calloutBox } from '@/li
  * request path for the same reason.
  */
 
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
+// Audience: the 'hq-documents' notification channel (admin-managed at
+// /admin/notifications; defaults to HQ_NOTIFY_INBOX / hq@sirreel.com).
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 export type PaperworkStep = 'agreement' | 'lcdw' | 'cc' | 'studio'
@@ -117,7 +119,7 @@ async function send(ev: PortalPaperworkEvent): Promise<void> {
 
   const clientEmail = request.sentTo?.trim()
   await sendAgreementEmail({
-    to: [HQ_INBOX],
+    to: await channelRecipients('hq-documents'),
     subject,
     html,
     text,

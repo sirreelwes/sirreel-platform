@@ -47,16 +47,31 @@ export function teamInboxEmail(): string | null {
 }
 
 /**
- * Merge the shared inbox into a rep-typed CC list without duplicating it
- * (case-insensitively) or shadowing the recipient.
+ * Merge the sales-team copy list into a rep-typed CC list without
+ * duplicating entries (case-insensitively) or shadowing the recipient.
+ *
+ * Async since 2026-08-31: the audience is now the 'sales-team-cc'
+ * notification channel (admin-managed at /admin/notifications), which
+ * defaults to the TEAM_INBOX_EMAIL / rentals@ behavior above when no
+ * override row exists. An admin override may hold several individual
+ * addresses instead of the one group — every entry is merged.
  */
-export function withTeamCc(existing: string[], recipient?: string | null): string[] {
-  const team = teamInboxEmail()
-  if (!team) return existing
+export async function withTeamCc(existing: string[], recipient?: string | null): Promise<string[]> {
+  // Late import — teamVisibility is a dependency of the channel
+  // registry's defaults, so a top-level import would be circular.
+  const { channelRecipients } = await import('@/lib/email/notificationChannels')
+  const team = await channelRecipients('sales-team-cc')
+  if (team.length === 0) return existing
   const seen = new Set(existing.map((e) => e.toLowerCase()))
-  if (recipient && recipient.toLowerCase() === team.toLowerCase()) return existing
-  if (seen.has(team.toLowerCase())) return existing
-  return [...existing, team]
+  if (recipient) seen.add(recipient.toLowerCase())
+  const out = [...existing]
+  for (const t of team) {
+    const norm = t.trim().toLowerCase()
+    if (!norm || seen.has(norm)) continue
+    seen.add(norm)
+    out.push(t.trim())
+  }
+  return out
 }
 
 /**
