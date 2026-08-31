@@ -1520,6 +1520,44 @@ function NewQuotePageInner() {
   // job details (production type, profile, notes, contacts) into the
   // create draft so nothing the rep filled in is lost.
   const [jobResolverOpen, setJobResolverOpen] = useState(false);
+
+  // "Ask client for job name" — sends the existing signed details link
+  // (src/lib/intake/detailsToken) rather than inventing a second
+  // mechanism. The client's answer comes back as a ClientDetailReply for
+  // a human to accept; it never renames anything on its own.
+  const [askingJobName, setAskingJobName] = useState(false);
+  const [askJobNameNote, setAskJobNameNote] = useState<string | null>(null);
+  const askClientForJobName = async () => {
+    if (!inquiryId || askingJobName) return;
+    const toEmail = contacts.find((c) => c.include && c.email)?.email || parsed?.contactEmail || null;
+    if (!toEmail) {
+      setAskJobNameNote('No client email on this quote yet — add a contact below first.');
+      return;
+    }
+    setAskingJobName(true);
+    setAskJobNameNote(null);
+    try {
+      const res = await fetch(`/api/inquiries/${inquiryId}/ask-job-name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail,
+          toName: contacts.find((c) => c.include && c.email)?.name || null,
+          askForCompany: companyPick.mode === 'creating_new',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAskJobNameNote(data.error || `Could not send (HTTP ${res.status}).`);
+        return;
+      }
+      setAskJobNameNote(`Asked ${data.sentTo} — their answer lands on this inquiry.`);
+    } catch (e) {
+      setAskJobNameNote(e instanceof Error ? e.message : 'Could not send.');
+    } finally {
+      setAskingJobName(false);
+    }
+  };
   const pendingActionRef = useRef<CreateAction>('draft');
   const pendingJobExtrasRef = useRef<Record<string, unknown> | null>(null);
 
@@ -2150,14 +2188,36 @@ function NewQuotePageInner() {
           <div>
             <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
               <label className="block text-xs text-lt-fg3">Job</label>
-              <p className="text-[11px] text-lt-fg3">
-                {candidateJobs.length > 0
-                  ? `${candidateJobs.length} existing Job${candidateJobs.length === 1 ? '' : 's'} for this client — pick one, or type a new name.`
-                  : selectedClientId && selectedClientId !== '__new__'
-                    ? 'No matching Jobs — a typed name opens the Job check on save (pick or create there).'
-                    : 'Pick a Client Company first to surface matching Jobs.'}
-              </p>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <p className="text-[11px] text-lt-fg3">
+                  {candidateJobs.length > 0
+                    ? `${candidateJobs.length} existing Job${candidateJobs.length === 1 ? '' : 's'} for this client — pick one, or type a new name.`
+                    : selectedClientId && selectedClientId !== '__new__'
+                      ? 'No matching Jobs — a typed name opens the Job check on save (pick or create there).'
+                      : 'Pick a Client Company first to surface matching Jobs.'}
+                </p>
+                {/* The alternative to asking is what the book already
+                    shows: jobs called "TBD", "QUOTE" and "New Job" —
+                    placeholders invented at quote time that nobody goes
+                    back and fixes, and that make every later search
+                    worse. Only offered when the name is actually
+                    missing; once something is typed, asking is noise. */}
+                {inquiryId && !job.name?.trim() && (
+                  <button
+                    type="button"
+                    onClick={askClientForJobName}
+                    disabled={askingJobName}
+                    title="Email the client a one-tap link asking what to call this production"
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 disabled:text-lt-fg3 underline underline-offset-2"
+                  >
+                    {askingJobName ? 'Sending…' : 'Ask client for job name'}
+                  </button>
+                )}
+              </div>
             </div>
+            {askJobNameNote && (
+              <p className="text-[11px] text-chip-good-fg mb-1">{askJobNameNote}</p>
+            )}
             <JobPicker
               value={job}
               onChange={setJob}
