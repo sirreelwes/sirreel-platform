@@ -99,18 +99,32 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       if (existing) bookingId = existing.id
     }
     if (!bookingId) {
-      // A Booking needs a contact; fall back to the job's primary or any
-      // person on the company rather than failing the hold outright.
-      const person = await prisma.person.findFirst({
-        where: { affiliations: { some: { companyId: order.companyId, isCurrent: true } } },
-        select: { id: true },
-      })
-      if (!person) return { ...out, error: 'no contact on the company to attach a booking to' }
+      // A Booking needs a contact. Try the JOB's contacts first — the
+      // person the quote actually went to lives there — then fall back
+      // to anyone affiliated with the company. The original version
+      // checked ONLY company affiliations, and a company with zero
+      // Affiliation rows (Wild Goats Creative, 2026-08-29) silently
+      // dropped the entire hold: S260828-003's SuperCube read as free
+      // on the board while a live quote committed it.
+      const jobContact = order.jobId
+        ? await prisma.jobContact.findFirst({
+            where: { jobId: order.jobId },
+            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+            select: { personId: true },
+          })
+        : null
+      const person =
+        jobContact ??
+        (await prisma.person.findFirst({
+          where: { affiliations: { some: { companyId: order.companyId, isCurrent: true } } },
+          select: { id: true },
+        }).then((p) => (p ? { personId: p.id } : null)))
+      if (!person) return { ...out, error: 'no contact on the job or company to attach a booking to' }
       const created = await prisma.booking.create({
         data: {
           bookingNumber: `SR-Q-${Date.now()}`,
           companyId: order.companyId,
-          personId: person.id,
+          personId: person.personId,
           agentId: order.agentId,
           jobId: order.jobId,
           jobName: order.job?.name ?? 'Quote hold',

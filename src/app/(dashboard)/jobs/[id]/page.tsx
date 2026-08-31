@@ -28,6 +28,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
 const SHOW_AGREEMENT_ON_FILE = false;
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
+import { AddAssetButton } from '@/components/jobs/AddAssetButton';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
@@ -1002,7 +1003,7 @@ const driverTone = (d: any): string => {
   const pendingHolds = (() => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    const out: { bookingItemId: string; category: string; quantity: number; startDate: string | null }[] = []
+    const out: { bookingItemId: string; category: string; quantity: number; startDate: string | null; endDate: string | null }[] = []
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       // Live dates only — a wrapped job's UNFULFILLED line is history,
@@ -1016,6 +1017,7 @@ const driverTone = (d: any): string => {
             category: it.category.name,
             quantity: it.quantity,
             startDate: b.startDate ?? null,
+            endDate: b.endDate ?? null,
           })
         }
       }
@@ -2025,10 +2027,19 @@ const driverTone = (d: any): string => {
       <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
-          <span className="text-[12px] text-zinc-500">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] text-zinc-500">
+              {reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}
+              {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
+            </span>
+            <AddAssetButton
+              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, startDate: job.startDate, endDate: job.endDate }}
+              onCreated={load}
+            />
+          </div>
         </div>
-        {reservedAssets.length === 0 ? (
-          <div className="mt-3 text-[15px] text-zinc-300">No units reserved on this job yet.</div>
+        {reservedAssets.length === 0 && pendingHolds.length === 0 ? (
+          <div className="mt-3 text-[15px] text-zinc-300">No units reserved on this job yet — use + Add asset to hold one.</div>
         ) : (
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {reservedAssets.map((a) => (
@@ -2096,6 +2107,34 @@ const driverTone = (d: any): string => {
                   )}
                 </div>
                 <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
+              </Link>
+            ))}
+            {/* Category-level holds with no unit picked yet. These are
+                REAL reservations (the quote-send soft hold lands here) —
+                before this they only surfaced in the Drivers card, so a
+                held category read as "nothing reserved" on this panel. */}
+            {pendingHolds.map((h) => (
+              <Link
+                key={h.bookingItemId}
+                href={h.startDate ? `/gantt?date=${h.startDate.slice(0, 10)}` : '/gantt'}
+                title="Held at category level — open the calendar to assign a specific unit"
+                className="group rounded-xl border border-dashed border-amber-700/50 bg-amber-950/15 hover:border-amber-500/70 hover:bg-amber-950/25 p-3 transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
+                    {h.category}
+                    {h.quantity > 1 && <span className="ml-1.5 text-zinc-400 font-normal">× {h.quantity}</span>}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-950/40 text-amber-300 border-amber-900/70">
+                    Held · no unit
+                  </span>
+                </div>
+                {h.startDate && (
+                  <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">
+                    {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
+                  </div>
+                )}
+                <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Assign a unit on the calendar →</div>
               </Link>
             ))}
           </div>
