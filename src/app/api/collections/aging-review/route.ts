@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
+import { canWriteOff } from '@/lib/collections/writeOffApprover'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,15 +27,10 @@ export const dynamic = 'force-dynamic'
 const DECISIONS = ['STILL_OWED', 'DISPUTE', 'WRITE_OFF', 'CLEAR'] as const
 const MIN_AGE_DAYS = 60
 
-/**
- * Who may write off a debt — and undo a write-off. A write-off is a tax
- * event with the owner's name on the filing, so it is the owner's call
- * (Wes, 2026-08-19). Explicit email allowlist, same pattern and reasoning
- * as the collections allowlist: the blast radius stays with the person
- * actually named, not a role someone might be granted later.
- */
-const WRITE_OFF_AUTHORIZED = ['wes@sirreel.com']
-const canWriteOff = (email: string) => WRITE_OFF_AUTHORIZED.includes(email.toLowerCase())
+// Who may write off a debt — and undo one. Moved to
+// src/lib/collections/writeOffApprover.ts so it can be widened via
+// WRITE_OFF_APPROVER_EMAILS without a deploy, like every other email gate.
+// The rationale for it being an email rather than a role lives there.
 
 export async function GET() {
   const user = await requireCollectionsUser()
