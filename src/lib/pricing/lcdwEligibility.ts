@@ -47,7 +47,7 @@ export const LCDW_EXCLUDED_CODES: ReadonlySet<string> = new Set([
   'CAT_PROSCOUT_VTR',
 ])
 
-export type LcdwIneligibleReason = 'not-a-vehicle' | 'specialty-vehicle'
+export type LcdwIneligibleReason = 'not-a-vehicle' | 'specialty-vehicle' | 'partner-vehicle'
 
 export interface LcdwCandidate {
   /** OrderLineItem id, for the caller's own bookkeeping. */
@@ -58,6 +58,17 @@ export interface LcdwCandidate {
   department: string
   quantity: number
   billableDays: number | null
+  /**
+   * True when this line is fulfilled by a partner's vehicle (a
+   * SubRental). Wes, 2026-08-29: "partner vehicles not included."
+   *
+   * We cannot waive damage to a vehicle we do not own. The waiver is
+   * SirReel giving up its own claim on its own asset; on a King Kong
+   * unit the claim belongs to King Kong, so selling LCDW on it would be
+   * selling something we have no standing to give — and the client
+   * would only discover that after an accident.
+   */
+  isPartnerVehicle?: boolean
 }
 
 export interface LcdwLineVerdict {
@@ -83,6 +94,9 @@ export function judgeLcdwLine(line: LcdwCandidate): LcdwLineVerdict {
 
   if (line.department !== 'VEHICLES') {
     return { id: line.id, description: line.description, eligible: false, reason: 'not-a-vehicle', vehicleDays }
+  }
+  if (line.isPartnerVehicle) {
+    return { id: line.id, description: line.description, eligible: false, reason: 'partner-vehicle', vehicleDays }
   }
   if (line.code && LCDW_EXCLUDED_CODES.has(line.code)) {
     return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
@@ -128,12 +142,46 @@ export function quoteLcdw(lines: LcdwCandidate[]): LcdwQuote {
 /** One-line summary for the order UI and the agreement. */
 export function describeLcdwCoverage(q: LcdwQuote): string {
   if (q.eligible.length === 0 && q.excluded.length === 0) return 'No vehicles on this order.'
+  const why = (v: LcdwLineVerdict) =>
+    v.reason === 'partner-vehicle' ? 'partner vehicle' : 'specialty vehicle'
   if (q.allExcluded) {
-    return `Not available — ${q.excluded.map((e) => e.description).join(', ')} ${
-      q.excluded.length === 1 ? 'is' : 'are'
-    } a specialty vehicle and the agreement excludes it from LCDW.`
+    const parts = q.excluded.map((e) => `${e.description} (${why(e)})`).join(', ')
+    return `Not available — ${parts}. LCDW covers SirReel's own fleet vehicles only.`
   }
   const covered = `Covers ${q.eligible.length} vehicle line${q.eligible.length === 1 ? '' : 's'} · ${q.vehicleDays} vehicle-day${q.vehicleDays === 1 ? '' : 's'}`
   if (q.excluded.length === 0) return covered
-  return `${covered}. Not covered: ${q.excluded.map((e) => e.description).join(', ')} (specialty vehicles are excluded by the agreement).`
+  return `${covered}. Not covered: ${q.excluded.map((e) => `${e.description} (${why(e)})`).join(', ')}.`
+}
+
+/**
+ * Can a CATALOG item carry LCDW, before any line exists?
+ *
+ * Wes, 2026-08-29: the waiver "should be suggested as an option when
+ * adding any eligible vehicle … to either the agent or the client who is
+ * building an order."
+ *
+ * Suggesting at the moment of choosing is the only point where the
+ * client is actually thinking about that vehicle. Offered later, on a
+ * finished quote, it reads as an upsell bolted on at checkout; offered
+ * here it reads as part of choosing the truck. It also means a declined
+ * waiver is a decision someone made rather than a box nobody saw.
+ *
+ * `isPartner` covers sub-rental catalog entries — a partner's unit is
+ * never eligible, whatever its type, because the claim we would be
+ * waiving is not ours to waive.
+ */
+export function catalogItemSupportsLcdw(item: {
+  code?: string | null
+  department?: string | null
+  isPartner?: boolean
+}): boolean {
+  if (item.isPartner) return false
+  if (item.department !== 'VEHICLES') return false
+  if (item.code && LCDW_EXCLUDED_CODES.has(item.code)) return false
+  return true
+}
+
+/** The one-line offer shown next to an eligible vehicle. */
+export function lcdwOfferLabel(perDay: number): string {
+  return `Add damage waiver — $${perDay}/day per vehicle`
 }

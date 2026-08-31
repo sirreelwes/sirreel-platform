@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { catalogItemSupportsLcdw } from '@/lib/pricing/lcdwEligibility'
 import { aliasesAnswerQuery } from '@/lib/sales/aliasMatch'
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
@@ -230,6 +231,10 @@ export async function GET(req: NextRequest) {
     // inventoryItemId and never assetCategoryId.
     ...ranked.map((i) => {
       const deal = negotiatedById.get(i.id)
+      // Whether the damage waiver may be offered alongside this item —
+      // computed here so the agent builder and the client-facing one
+      // cannot drift on the rule. See src/lib/pricing/lcdwEligibility.
+      const lcdwEligible = catalogItemSupportsLcdw({ code: i.code, department: i.department })
       const listDaily = Number(i.dailyRate)
       const listWeekly = Number(i.weeklyRate)
       return {
@@ -241,6 +246,7 @@ export async function GET(req: NextRequest) {
         // What the line should bill at for this client.
         dailyRate: deal?.daily ?? listDaily,
         weeklyRate: deal?.weekly ?? listWeekly,
+        lcdwEligible,
         listDailyRate: listDaily,
         listWeeklyRate: listWeekly,
         negotiated: !!deal,

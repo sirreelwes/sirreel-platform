@@ -46,6 +46,8 @@ async function loadCoverage(orderId: string) {
           billableDays: true, type: true, feeItemId: true,
           pickupDate: true, returnDate: true,
           inventoryItem: { select: { code: true } },
+          // A line fulfilled by a partner's unit is not ours to waive.
+          subRentals: { select: { id: true }, take: 1 },
         },
       },
     },
@@ -62,6 +64,7 @@ async function loadCoverage(orderId: string) {
       department: l.department,
       quantity: l.quantity,
       billableDays: l.billableDays,
+      isPartnerVehicle: l.subRentals.length > 0,
     }))
 
   const fee = await prisma.feeItem.findFirst({

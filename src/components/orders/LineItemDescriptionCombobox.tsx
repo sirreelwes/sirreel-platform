@@ -69,6 +69,10 @@ export interface CatalogHit {
   listWeeklyRate?: number
   /** True when this client's rate card priced the row. */
   negotiated?: boolean
+  /** True when the damage waiver may be offered on this item. Computed
+   *  server-side from the rental agreement's exclusions so the picker
+   *  and the order page cannot disagree about what is coverable. */
+  lcdwEligible?: boolean
   /** Present only when type === 'PACKAGE'. Lists the inventory
    *  members that should be inserted as $0 child rows under the
    *  header. */
@@ -429,6 +433,21 @@ function LineItemDescriptionComboboxInner(
                     </span>
                   )}
                   <div className="text-lt-fg font-medium whitespace-normal break-words">{r.name}</div>
+                  {/* Wes, 2026-08-29: the waiver should be "suggested as
+                      an option when adding any eligible vehicle." Marking
+                      it here — at the moment of choosing — is the only
+                      point where the rep is thinking about THAT vehicle;
+                      raised later on a finished quote it reads as a
+                      checkout upsell. Excluded vehicles carry no chip, so
+                      a PopVan never looks coverable. */}
+                  {r.lcdwEligible && (
+                    <span
+                      title="Eligible for the Limited Collision Damage Waiver — add it from the order's LCDW row"
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200"
+                    >
+                      LCDW ok
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-lt-fg3 whitespace-normal">
                   {r.department.replace(/_/g, ' ')}

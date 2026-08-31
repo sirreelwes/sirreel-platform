@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { LCDW_TERMS, LCDW_ELIGIBILITY_NOTE } from './terms'
@@ -32,10 +32,30 @@ export function LcdwCard({
   onSigned: (accepted: boolean) => void
 }) {
   const [choice, setChoice] = useState<'accept' | 'decline' | null>(null)
+  // Which of THEIR vehicles this covers. The addendum's eligibility
+  // paragraph is generic; a client reading it cannot tell whether their
+  // own order is covered, and the expensive way to find out is a claim.
+  const [coverage, setCoverage] = useState<{
+    covered: string[]
+    excluded: Array<{ description: string; reason?: string }>
+    allExcluded: boolean
+    hasVehicles: boolean
+  } | null>(null)
   const [fuelAcknowledged, setFuelAcknowledged] = useState(false)
   const [sig, setSig] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    fetch(`/api/portal/${token}/lcdw`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d && !d.error) setCoverage(d) })
+      // The generic terms still render without this; the per-vehicle
+      // list is an improvement on them, not a prerequisite.
+      .catch(() => undefined)
+    return () => { live = false }
+  }, [token])
 
   const status = done ? 'done' : locked ? 'locked' : 'todo'
 
@@ -63,6 +83,34 @@ export function LcdwCard({
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
             <div className="text-sm font-bold text-amber-800">Limited Collision Damage Waiver — $24.00 / day / vehicle</div>
           </div>
+          {coverage?.hasVehicles && (
+            <div className="rounded-xl border border-gray-200 p-3 text-xs">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                On your order
+              </div>
+              {coverage.covered.length > 0 ? (
+                <ul className="space-y-0.5 text-gray-700">
+                  {coverage.covered.map((c) => (
+                    <li key={c}>✓ {c} — covered</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-gray-700 font-semibold">
+                  None of the vehicles on your order are eligible for LCDW.
+                </div>
+              )}
+              {coverage.excluded.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5 text-gray-500">
+                  {coverage.excluded.map((e) => (
+                    <li key={e.description}>
+                      — {e.description}: not eligible
+                      {e.reason === 'partner-vehicle' ? ' (partner vehicle)' : ' (specialty vehicle)'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <div className="space-y-2 max-h-56 overflow-y-auto pr-1 border border-gray-100 rounded-xl p-3 bg-gray-50 text-xs text-gray-600 leading-relaxed">
             {LCDW_TERMS.map((t) => (
               <p key={t.heading}>

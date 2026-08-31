@@ -46,6 +46,23 @@ for (const [code, desc] of [
   check(judgeLcdwLine(line({ code, description: desc })).eligible, `${desc} is eligible`)
 }
 
+console.log('\nPartner vehicles are not ours to waive')
+check(!judgeLcdwLine(line({ isPartnerVehicle: true, description: 'King Kong PV' })).eligible,
+  'a sub-rented partner unit is NOT eligible')
+check(judgeLcdwLine(line({ isPartnerVehicle: true })).reason === 'partner-vehicle',
+  'and the reason says partner-vehicle, not specialty — different facts, different explanation')
+check(!judgeLcdwLine(line({ isPartnerVehicle: true, code: 'CAT_CUBE_TRUCK' })).eligible,
+  'even a cube truck is excluded when it is the partner\'s cube truck — the waiver gives up OUR claim on OUR asset, and on their unit the claim is theirs')
+{
+  const q = quoteLcdw([
+    line({ id: 'a', code: 'CAT_CUBE_TRUCK', description: 'SuperCube Truck', quantity: 1, billableDays: 2 }),
+    line({ id: 'b', isPartnerVehicle: true, code: 'CAT_CUBE_TRUCK', description: 'King Kong cube', quantity: 1, billableDays: 2 }),
+  ])
+  check(q.vehicleDays === 2, 'the partner unit is not in the billable vehicle-days')
+  const text = describeLcdwCoverage(q)
+  check(text.includes('partner vehicle'), `and the copy names WHY: "${text}"`)
+}
+
 console.log('\nNon-vehicle lines are not vehicles')
 check(judgeLcdwLine(line({ department: 'GE', description: 'Grip package' })).reason === 'not-a-vehicle',
   'a G&E line is not a vehicle')

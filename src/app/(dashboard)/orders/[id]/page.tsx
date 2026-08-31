@@ -9,6 +9,7 @@ import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
+import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -2923,6 +2924,15 @@ export default function OrderDetailPage() {
             line content AND no existing discounts ("no discounts =
             layout unchanged" per the spec). isEditable mirrors the
             line-item editability rule. */}
+        {/* The damage-waiver offer. Sits with the line items rather
+            than in the fee picker because it is a QUESTION about this
+            order's vehicles, not another fee to look up by name — and
+            because a rep who never thinks to search "LCDW" is exactly
+            who it needs to reach. */}
+        <div className="px-6 pb-4">
+          <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+        </div>
+
         <DiscountsPanel
           orderId={orderId}
           // Discounts are money-only — no hold/pick consequence. Use the
