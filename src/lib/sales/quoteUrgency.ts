@@ -114,13 +114,22 @@ export function pickupLabel(pickupIso: string | null | undefined, now = new Date
  * "Aug 22" — the date itself, so the relative label never has to be
  * trusted on its own. Formatted from the same ten characters daysUntil
  * reads, so the two can never disagree by a day.
+ *
+ * The YEAR is shown whenever it is not the current one. Found the hard
+ * way on 2026-08-31: order S260831-004, created that morning, carried a
+ * startDate of 2024-09-17 — a year typo. The row rendered "Pickup Sep 17
+ * · picked up 713d ago", where the date read as three weeks out and only
+ * the countdown gave it away. A bare month-and-day quietly asserts "this
+ * year", and on a wrong-year date that assertion is the lie.
  */
-export function fmtPickup(pickupIso: string | null | undefined): string | null {
+export function fmtPickup(pickupIso: string | null | undefined, now = new Date()): string | null {
   if (!pickupIso) return null
   const day = String(pickupIso).slice(0, 10)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
+  const sameYear = day.slice(0, 4) === todayPacific(now).slice(0, 4)
   return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', timeZone: 'UTC',
+    ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
 

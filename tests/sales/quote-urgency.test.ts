@@ -69,6 +69,13 @@ check(fmtPickup('2026-08-22T00:00:00.000Z') === 'Aug 22',
   'Aug 22 prints as Aug 22 — not Aug 21, which local parsing would give')
 check(fmtPickup('2026-09-01T00:00:00.000Z') === 'Sep 1', 'Sep 1 prints as Sep 1')
 check(fmtPickup(null) === null, 'no date prints nothing')
+check(fmtPickup('2024-09-17T00:00:00.000Z', PACIFIC_MORNING) === 'Sep 17, 2024',
+  'a wrong-YEAR date shows its year — real case: order S260831-004 was created ' +
+  'on 2026-08-31 carrying a 2024-09-17 start, and "Sep 17" read as three weeks out')
+check(fmtPickup('2026-09-17T00:00:00.000Z', PACIFIC_MORNING) === 'Sep 17',
+  'but a date this year stays short — the year is a signal, not decoration')
+check(fmtPickup('2027-01-04T00:00:00.000Z', PACIFIC_MORNING) === 'Jan 4, 2027',
+  'and next year shows too, so a far-future typo is just as visible')
 
 console.log('\nSorting leads with what can still be won')
 {
