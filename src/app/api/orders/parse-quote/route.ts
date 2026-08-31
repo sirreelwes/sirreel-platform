@@ -346,6 +346,9 @@ interface ResolvedItem {
   pickupDate: string  // ISO date
   returnDate: string  // ISO date
   billableDays: number
+  /** Client-stated usage cadence extracted from the email, if any —
+   *  consumed by applySectionCadence, then informational. */
+  statedDaysPerWeek: number | null
   rate: number
   matchedProduct: { id: string; type: CatalogType; name: string; lineType: LineItemType } | null
   matchSource: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null
@@ -374,6 +377,46 @@ interface ResolvedItem {
  * whichever accessory the catalog already supplied, so configuring the
  * CP200 kit doesn't put two chargers on the quote.
  */
+/**
+ * Spread a client-stated week cadence over its whole department section
+ * (Wes 2026-08-31: "the parser should apply the week cadence to the whole
+ * section too" — mirrors the builder's section-level Week control). When
+ * any line in a department carries statedDaysPerWeek, EVERY line in that
+ * department is repriced at that cadence (the most conservative one, if
+ * several lines state different numbers), each from its own date range.
+ * Cadence only ever LOWERS the week below the department default, and
+ * every repriced line carries a warning so the rep sees it before send.
+ */
+function applySectionCadence(items: ResolvedItem[]): ResolvedItem[] {
+  const cadenceByDept = new Map<LineItemDepartment, number>()
+  for (const it of items) {
+    if (it.statedDaysPerWeek == null) continue
+    const prev = cadenceByDept.get(it.department)
+    cadenceByDept.set(it.department, prev == null ? it.statedDaysPerWeek : Math.min(prev, it.statedDaysPerWeek))
+  }
+  if (cadenceByDept.size === 0) return items
+
+  return items.map((it) => {
+    const cadence = cadenceByDept.get(it.department)
+    if (cadence == null) return it
+    const rules = BILLING_RULES[it.department]
+    if (rules.model === 'PURCHASE') return it
+    const deptDefault = rules.model === 'CAP_PER_WEEK' ? rules.cap : 7
+    const effectiveCap = Math.min(cadence, deptDefault)
+    if (effectiveCap >= deptDefault) return it
+    const actualDays = inclusiveDayCount(it.pickupDate, it.returnDate)
+    if (actualDays == null) return it
+    return {
+      ...it,
+      billableDays: computeBillableDays(actualDays, effectiveCap),
+      warnings: [
+        ...it.warnings,
+        `Priced at a ${effectiveCap}-day week — the email states a ${cadence}-day-per-week cadence, applied to the whole ${it.department} section (default: ${deptDefault}-day week). Verify before sending.`,
+      ],
+    }
+  })
+}
+
 async function appendKitPieces(items: ResolvedItem[]): Promise<ResolvedItem[]> {
   const kit = await deriveKitPieceLines(
     items.map((i) => ({
@@ -400,6 +443,7 @@ async function appendKitPieces(items: ResolvedItem[]): Promise<ResolvedItem[]> {
       pickupDate: anchor.pickupDate,
       returnDate: anchor.returnDate,
       billableDays: anchor.billableDays,
+      statedDaysPerWeek: null,
       rate: k.rate,
       matchedProduct: {
         id: k.pieceItemId,
@@ -446,6 +490,7 @@ async function appendKitPieces(items: ResolvedItem[]): Promise<ResolvedItem[]> {
       pickupDate: radioLine.pickupDate,
       returnDate: radioLine.returnDate,
       billableDays: radioLine.billableDays,
+      statedDaysPerWeek: null,
       rate: 0,
       matchedProduct: null,
       matchSource: 'AUTO_KIT' as const,
@@ -532,11 +577,11 @@ async function resolveItem(
   // The rep can override this freely in the UI.
   const actualDays = inclusiveDayCount(pickupDate, returnDate) ?? 1
   const rules = BILLING_RULES[department]
-  // Explicit week-cadence phrasing in the email ("2 days a week for
-  // 3 weeks") lowers the effective week cap (Wes 2026-08-31). Never
-  // raises it — "4 days a week" on a 3-day-week dept still bills the
-  // 3-day week; concessions only run downward, and the agent sees the
-  // warning + the week-cap picker on the line either way.
+  // Explicit week-cadence phrasing ("2 days a week for 3 weeks") is
+  // carried OUT of the line as statedDaysPerWeek and applied to the
+  // line's whole department section afterwards (applySectionCadence)
+  // — mirroring the builder's section-level Week control (Wes
+  // 2026-08-31). This step prices at the department default.
   const aiCadence =
     typeof raw.daysPerWeek === 'number' && Number.isFinite(raw.daysPerWeek) &&
     raw.daysPerWeek >= 1 && raw.daysPerWeek <= 7
@@ -544,13 +589,7 @@ async function resolveItem(
       : null
   let suggestedDays = 1
   if (rules.model === 'CAP_PER_WEEK') {
-    const effectiveCap = aiCadence != null ? Math.min(aiCadence, rules.cap) : rules.cap
-    suggestedDays = computeBillableDays(actualDays, effectiveCap)
-    if (effectiveCap < rules.cap) {
-      warnings.push(
-        `Priced at a ${effectiveCap}-day week — the email states a ${aiCadence}-day-per-week cadence (dept default: ${rules.cap}-day week). Verify before sending.`,
-      )
-    }
+    suggestedDays = computeBillableDays(actualDays, rules.cap)
   } else if (rules.model === 'PERCENT_DISCOUNT') {
     suggestedDays = actualDays
   }
@@ -584,6 +623,7 @@ async function resolveItem(
     pickupDate,
     returnDate,
     billableDays,
+    statedDaysPerWeek: aiCadence,
     rate,
     matchedProduct: matchedProduct
       ? { id: matchedProduct.id, type: matchedProduct.type, name: matchedProduct.name, lineType: matchedProduct.lineType }
@@ -780,7 +820,8 @@ export async function POST(req: NextRequest) {
         resolveItem(it, { startDate: parsed.startDate, endDate: parsed.endDate })
       )
     )
-    const items = await appendKitPieces(resolved)
+    // Runs BEFORE kit expansion so kit pieces copy already-capped days.
+    const items = await appendKitPieces(applySectionCadence(resolved))
 
     // Contacts: dedupe + filter at the gateway, then enrich with Person
     // table match status. The AI is asked to filter @sirreel/noreply too
