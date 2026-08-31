@@ -15,6 +15,11 @@ export const dynamic = 'force-dynamic';
  * terminal state (a WRAPPED/LOST job's leftover SENT order isn't a live
  * quote). Sorted by age — oldest sentAt first — so the most at-risk money is
  * on top. Honors scope=my|team. Returns ALL matches (not a top-N).
+ *
+ * Also returns `pickupDate` — the order's own startDate when it has one,
+ * else the earliest line-item pickup. That is the clock that decides
+ * whether a quote is still winnable; `sentAt` only says how long we have
+ * been waiting. See src/lib/sales/quoteUrgency.
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -39,9 +44,19 @@ export async function GET(req: NextRequest) {
       orderNumber: true,
       total: true,
       sentAt: true,
+      startDate: true,
       company: { select: { id: true, name: true } },
       job: { select: { id: true, jobCode: true, name: true } },
       agent: { select: { id: true, name: true } },
+      // Effective pickup falls back to the earliest scheduled line when
+      // the order has no startDate of its own — measured 2026-08-31,
+      // that was 4 of the 9 live quotes, so keying on the column alone
+      // would blank the date on the rows most in need of a decision.
+      lineItems: {
+        select: { pickupDate: true },
+        orderBy: { pickupDate: 'asc' },
+        take: 1,
+      },
     },
   });
 
@@ -52,6 +67,8 @@ export async function GET(req: NextRequest) {
       orderNumber: o.orderNumber,
       total: Number(o.total),
       sentAt: o.sentAt,
+      /** Order's own start, else the first thing scheduled to leave. */
+      pickupDate: o.startDate ?? o.lineItems[0]?.pickupDate ?? null,
       company: o.company,
       job: o.job,
       agent: o.agent,

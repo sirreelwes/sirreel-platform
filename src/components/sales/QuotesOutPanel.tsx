@@ -10,11 +10,23 @@
  * per quote: the money, how long it's been quiet, and — when the
  * follow-up cron has a nag drafted — a Nudge button that opens the
  * same ThreadDrawer the old panel used. Rows link to the order.
+ *
+ * Colored by PICKUP date, not by age (Wes 2026-08-31: "I want to see
+ * when the Pickup Date was … color code this list so that it's obvious
+ * when we are likely to miss a job because of when the job starts").
+ * Age was the only clock here before, and it is the wrong one — a quote
+ * sent eight days ago for an October job is fine; one sent this morning
+ * for a pickup tomorrow is the emergency. On the day this shipped, four
+ * of the nine open quotes were already PAST their pickup and the list
+ * gave no sign of it. Bands live in src/lib/sales/quoteUrgency.
  */
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ThreadDrawer } from '@/components/sales/ThreadDrawer';
+import {
+  URGENCY_STYLE, fmtPickup, pickupLabel, quoteUrgency,
+} from '@/lib/sales/quoteUrgency';
 
 type Scope = 'my' | 'team';
 
@@ -23,6 +35,8 @@ interface OpenQuote {
   orderNumber: string;
   total: number;
   sentAt: string | null;
+  /** Order's own start, else the first line scheduled to leave. */
+  pickupDate: string | null;
   company: { id: string; name: string } | null;
   job: { id: string; name: string; jobCode: string } | null;
   agent: { id: string; name: string } | null;
@@ -107,8 +121,17 @@ export function QuotesOutPanel({ scope, refreshKey = 0 }: { scope: Scope; refres
       <div className="divide-y divide-gray-100">
         {(quotes ?? []).map((q) => {
           const nudge = nudges.get(q.id);
+          const urgency = quoteUrgency(q.pickupDate);
+          const style = URGENCY_STYLE[urgency];
+          const pickupOn = fmtPickup(q.pickupDate);
           return (
-            <div key={q.id} className="py-2.5 flex items-center gap-3">
+            <div
+              key={q.id}
+              className={`py-2.5 pr-1 flex items-center gap-3 ${style.row}`}
+            >
+              {/* Left edge marker — same vocabulary as the jobs rail, so
+                  the color means the same thing on both surfaces. */}
+              <span className={`w-1 self-stretch rounded-sm flex-none ${style.rail}`} />
               <div className="min-w-0 flex-1">
                 <Link href={`/orders/${q.id}`} className="text-[13px] font-semibold text-gray-900 hover:text-amber-700 truncate block">
                   {q.job?.name || q.orderNumber}
@@ -119,6 +142,14 @@ export function QuotesOutPanel({ scope, refreshKey = 0 }: { scope: Scope; refres
                   {q.agent?.name ? ` · ${q.agent.name}` : ''}
                   {' · '}
                   <span className={ageTone(q.sentAt)}>{sentAge(q.sentAt)}</span>
+                </div>
+                {/* The pickup date AND the countdown. The date alone
+                    makes you do the arithmetic; the countdown alone
+                    asks you to trust it. Both, and neither has to be
+                    taken on faith. */}
+                <div className={`text-[11px] truncate ${style.text}`}>
+                  {pickupOn ? `Pickup ${pickupOn} · ` : ''}
+                  {pickupLabel(q.pickupDate)}
                 </div>
               </div>
               <div className="text-[13px] font-bold text-gray-900 tabular-nums">{fmtMoney(q.total)}</div>
