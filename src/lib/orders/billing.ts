@@ -131,10 +131,22 @@ function asNumber(r: number | DecimalLike): number {
  */
 export function weekCapChoices(department: LineItemDepartment): number[] {
   const rules = BILLING_RULES[department]
-  if (rules.model !== 'CAP_PER_WEEK' || rules.cap >= 7) return []
+  // Every department except EXPENDABLES (purchase-only) gets the picker
+  // (Wes 2026-08-31). Options run from the department's default week down
+  // to 1 day: 3d…1d for the supplies-style depts, 5d…1d for VEHICLES,
+  // 7d…1d for GE and STAGES (whose default is the full calendar week).
+  if (rules.model === 'PURCHASE') return []
+  const top = rules.model === 'CAP_PER_WEEK' ? rules.cap : 7
   const out: number[] = []
-  for (let cap = rules.cap; cap >= 1; cap--) out.push(cap)
+  for (let cap = top; cap >= 1; cap--) out.push(cap)
   return out
+}
+
+/** The department's standard week — the cap its default suggestion uses. */
+export function defaultWeekCap(department: LineItemDepartment): number | null {
+  const rules = BILLING_RULES[department]
+  if (rules.model === 'PURCHASE') return null
+  return rules.model === 'CAP_PER_WEEK' ? rules.cap : 7
 }
 
 export function computeBillableDays(actualDays: number, cap: number): number {

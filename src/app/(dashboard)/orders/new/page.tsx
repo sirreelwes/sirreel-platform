@@ -41,6 +41,7 @@ import {
   computeBillableDays,
   computeLineTotal,
   defaultRateType,
+  defaultWeekCap,
   weekCapChoices,
 } from '@/lib/orders/billing';
 
@@ -1296,6 +1297,24 @@ function NewQuotePageInner() {
     );
   };
 
+  /** Section-level week cap (Wes 2026-08-31: "selectable by section and
+   *  applied to whole section"): reprice EVERY dated line in the
+   *  department at `cap` days per 7-day week, from each line's own
+   *  calendar range. Overwrites existing day counts — that is the point
+   *  of a section-wide control; per-line dissent goes through the days
+   *  input afterwards. Undated (TBD) lines are skipped, not guessed. */
+  const applyWeekCapToDept = (dept: LineItemDepartment, cap: number) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.department !== dept) return it;
+        if (!it.pickupDate || !it.returnDate) return it;
+        const cal = calendarDays(new Date(it.pickupDate), new Date(it.returnDate));
+        if (!Number.isFinite(cal)) return it;
+        return { ...it, billableDays: computeBillableDays(cal, cap) };
+      }),
+    );
+  };
+
   // Quote-level date change: propagate to line items whose pickupDate /
   // returnDate currently matches the old quote-level value (i.e., haven't
   // been individually overridden). Lines with custom dates stay as-is.
@@ -2479,6 +2498,7 @@ function NewQuotePageInner() {
                 onDelete={removeItem}
                 onAdd={() => addRowToDept(dept)}
                 onBulkApply={setBulkForDept}
+                onApplyWeekCap={applyWeekCapToDept}
                 onCommit={handleRowCommit}
                 onPickPackage={handlePickPackage}
                 registerDescriptionRef={registerDescriptionRef}
@@ -2667,7 +2687,7 @@ function NewQuotePageInner() {
 const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_64px]';
 
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onAdd, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
+  department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onCommit, onPickPackage, registerDescriptionRef,
   companyId,
 }: {
   department: LineItemDepartment;
@@ -2682,6 +2702,7 @@ function DepartmentGroup({
     dept: LineItemDepartment,
     patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
   ) => void;
+  onApplyWeekCap: (dept: LineItemDepartment, cap: number) => void;
   onCommit?: (id: string) => void;
   onPickPackage?: (id: string, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   registerDescriptionRef?: (id: string) => (el: HTMLInputElement | null) => void;
@@ -2690,6 +2711,14 @@ function DepartmentGroup({
   const [bulkReturn, setBulkReturn] = useState('');
   const [bulkDays, setBulkDays] = useState('');
   const [appliedFlash, setAppliedFlash] = useState(false);
+  // Section week-cap select. Uncontrolled-ish: '' = nothing chosen yet;
+  // choosing a cap applies it to every dated line in the section
+  // immediately and keeps the choice displayed. Per-line edits after
+  // that can diverge — the select shows the last section-wide action,
+  // not a claim that every row still matches it.
+  const [weekCap, setWeekCap] = useState('');
+  const capChoices = weekCapChoices(department);
+  const stdCap = defaultWeekCap(department);
   const isExpendable = department === 'EXPENDABLES';
   const showBulk = !isExpendable;
 
@@ -2735,6 +2764,30 @@ function DepartmentGroup({
         {showBulk && (
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="text-lt-fg3">Apply to category:</span>
+            {capChoices.length > 0 && (
+              <select
+                value={weekCap}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setWeekCap(v);
+                  const cap = parseInt(v, 10);
+                  if (Number.isFinite(cap)) {
+                    onApplyWeekCap(department, cap);
+                    setAppliedFlash(true);
+                    setTimeout(() => setAppliedFlash(false), 1800);
+                  }
+                }}
+                title="Billing week for this whole section — every dated line is repriced at this many days per 7-day week"
+                className="bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg"
+              >
+                <option value="">Week…</option>
+                {capChoices.map((cap) => (
+                  <option key={cap} value={cap}>
+                    {cap}-day wk{cap === stdCap ? ' (std)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="date" value={bulkPickup}
               onChange={(e) => setBulkPickup(e.target.value)}
@@ -3025,36 +3078,6 @@ function LineItemRow({
               }}
               className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-base font-bold tabular-nums text-lt-fg text-center"
             />
-            {/* Week-cap picker — cap-per-week departments below the
-                7-day (GE) cap: 3d/2d/1d for the supplies-style depts,
-                5d…1d for vehicles. Each button re-suggests billableDays
-                from the calendar range at that cap (Wes 2026-08-31);
-                the input above stays the authoritative, hand-editable
-                number. Active = the cap whose math matches the
-                current value. */}
-            {!isExpendable && !!item.pickupDate && !!item.returnDate && weekCapChoices(item.department).length > 0 && (
-              <div className="flex flex-wrap bg-lt-card border border-lt-hairline rounded p-0.5">
-                {weekCapChoices(item.department).map((cap) => {
-                  const suggested = computeBillableDays(
-                    calendarDays(new Date(item.pickupDate), new Date(item.returnDate)),
-                    cap,
-                  );
-                  const active = item.billableDays === suggested;
-                  return (
-                    <button
-                      key={cap}
-                      onClick={() => onChange(id, { billableDays: suggested })}
-                      title={`Bill ${cap} day${cap === 1 ? '' : 's'} per 7-day week → ${suggested} day${suggested === 1 ? '' : 's'} for this range`}
-                      className={`flex-1 px-1 py-0.5 text-[9px] font-semibold rounded whitespace-nowrap ${
-                        active ? 'bg-lt-fg text-white' : 'text-lt-fg2 hover:text-lt-fg'
-                      }`}
-                    >
-                      {cap}d wk
-                    </button>
-                  );
-                })}
-              </div>
-            )}
             {showToggle && (
               <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
                 {visibleRateTypes.map((rt) => {
