@@ -185,6 +185,11 @@ export function NewInboundColumn({
   // Suggestion threads the team already replied to — kept visible in the
   // muted "Responded" block with attribution instead of vanishing.
   const [respondedSuggestions, setRespondedSuggestions] = useState<SuggestionRecord[]>([])
+  // Collapsed by default — the panel is called New inbound, and answered
+  // leads should not be the first thing you scroll past to reach live
+  // work. Component state only: CLAUDE.md forbids localStorage here, and
+  // resetting to collapsed each visit is the behaviour we want anyway.
+  const [respondedOpen, setRespondedOpen] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null)
   // Quick Reply launched straight from a suggestion row (same modal the
@@ -412,6 +417,8 @@ export function NewInboundColumn({
   const pendingInquiries = (inquiries ?? []).filter((i) => !i.respondedAt)
   const respondedInquiries = (inquiries ?? []).filter((i) => !!i.respondedAt)
   const respondedCount = respondedInquiries.length + respondedSuggestions.length
+  // Clients who replied AFTER our reply — the ball is back with us.
+  const clientWroteBackCount = respondedSuggestions.filter((r) => r.clientRepliedSince).length
   const pendingCount = pendingInquiries.length + (suggestions?.length ?? 0)
   const totalCount = pendingCount + respondedCount
   // Inquiries (web form or email) past the first-response SLA — a
@@ -525,16 +532,34 @@ export function NewInboundColumn({
                 split the suggested-inquiries stream uses for follow-ups. */}
             {respondedCount > 0 && (
               <>
-                <div className="pt-2 pb-0.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRespondedOpen((v) => !v)}
+                  aria-expanded={respondedOpen}
+                  className="w-full pt-2 pb-0.5 flex items-center gap-2 text-left group"
+                >
+                  <span className="text-[10px] text-gray-400 transition-transform group-hover:text-gray-600">
+                    {respondedOpen ? '▾' : '▸'}
+                  </span>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                    Responded
+                    Responded · {respondedCount}
                   </span>
-                  <span className="text-[10px] text-gray-400">
-                    team replied — awaiting next step
-                  </span>
+                  {/* A client who wrote back after our reply is arguably
+                      live work, so that count stays visible even while the
+                      section is shut — collapsing must not bury it. */}
+                  {clientWroteBackCount > 0 && (
+                    <span className="text-[10px] font-semibold text-amber-700">
+                      {clientWroteBackCount} wrote back
+                    </span>
+                  )}
+                  {!respondedOpen && (
+                    <span className="text-[10px] text-gray-400 group-hover:text-gray-600">
+                      show
+                    </span>
+                  )}
                   <div className="flex-1 border-t border-gray-100" />
-                </div>
-                {(() => {
+                </button>
+                {respondedOpen && (() => {
                   type RespondedItem =
                     | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
                     | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
