@@ -59,6 +59,15 @@ export const LCDW_EXCLUDED_CODES: ReadonlySet<string> = new Set([
   'CAT_SCISSOR_LIFT',
 ])
 
+/**
+ * Deliberately NOT excluded, recorded because the name invites the
+ * mistake: Camera Cube. Wes, 2026-08-31 — "Camera Cube is an F550 box
+ * truck just like super cube trucks. it can offer LCDW."
+ *
+ * "Cube" reads like specialty kit, and a future cleanup that judges by
+ * name rather than by what the unit IS would drop it. Pinned by a test.
+ */
+
 export type LcdwIneligibleReason = 'not-a-vehicle' | 'specialty-vehicle' | 'partner-vehicle'
 
 export interface LcdwCandidate {

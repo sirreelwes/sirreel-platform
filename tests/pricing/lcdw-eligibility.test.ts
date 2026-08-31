@@ -112,6 +112,12 @@ console.log('\nNo vehicles at all')
 check(describeLcdwCoverage(quoteLcdw([line({ department: 'GE' })])) === 'No vehicles on this order.',
   'says so rather than showing an empty offer')
 
+console.log('\nA specialty-sounding name is not a specialty vehicle')
+check(judgeLcdwLine(line({ code: 'CAT_CAMERA_CUBE', description: 'Camera Cube' })).eligible,
+  'Camera Cube IS covered — Wes 2026-08-31: an F550 box truck like the SuperCube')
+check(!LCDW_EXCLUDED_CODES.has('CAT_CAMERA_CUBE'),
+  'and it stays out of the exclusion set — judge the unit, not the word "cube"')
+
 console.log('\nThe exclusion set and the signed contract text agree')
 {
   // Naming the codes, not counting them. A size check still passes when
