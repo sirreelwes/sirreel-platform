@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { withTeamCc } from '@/lib/email/teamVisibility'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
@@ -92,9 +93,15 @@ export async function sendPortalInvite(args: {
     repPhone: order.agent?.phone || null,
     repEmail: order.agent?.email || null,
   })
+  // The desk sees every invite go out (Wes 2026-08-31: card-auth asks
+  // were CC'd but portal/paperwork asks — the COI request surface —
+  // were not). Same admin-managed 'sales-team-cc' channel as the quote
+  // and card-auth sends; an empty channel list turns this off with them.
+  const teamCc = await withTeamCc([], person.email)
   const emailResult = await sendAgreementEmail({
     label: 'portal/invite',
     to: [person.email],
+    cc: teamCc.length ? teamCc : undefined,
     // The invite names the rep; a reply should reach their watched
     // inbox, not the unmonitored notifications@ sender.
     replyTo: order.agent?.email ?? undefined,
