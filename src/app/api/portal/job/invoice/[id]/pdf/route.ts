@@ -32,6 +32,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { renderPreInvoice } from '@/app/api/invoices/[id]/pre-invoice-pdf/route'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       invoiceNumber: true,
       pdfBlobKey: true,
       status: true,
+      preSentAt: true,
     },
   })
   // Either-or: a 404 covers both "no such invoice" and "invoice
@@ -62,10 +64,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!invoice || invoice.orderId !== resolved.orderId) {
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
   }
+  // A DRAFT that has been sent for review is the PRE-INVOICE: render
+  // that variant live rather than serving the stored blob, which is
+  // titled INVOICE and carries the payment blocks. Same document, same
+  // number — the presentation is what differs (Wes 2026-09-01).
+  if (invoice.status === 'DRAFT' && invoice.preSentAt) {
+    return renderPreInvoice(params.id)
+  }
   if (!invoice.pdfBlobKey) {
     return NextResponse.json({ error: 'Invoice PDF not generated' }, { status: 404 })
   }
-  // Don't surface DRAFT or VOID invoices to the client.
+  // A DRAFT nobody sent, and anything voided, stays invisible.
   if (invoice.status === 'DRAFT' || invoice.status === 'VOID') {
     return NextResponse.json({ error: 'Invoice not available' }, { status: 404 })
   }

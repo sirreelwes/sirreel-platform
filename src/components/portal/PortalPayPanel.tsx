@@ -45,7 +45,7 @@ interface PortalInvoice {
   id: string
   invoiceNumber: string
   type: 'RENTAL' | 'LD'
-  status: 'SENT' | 'PARTIAL' | 'PAID'
+  status: 'DRAFT' | 'SENT' | 'PARTIAL' | 'PAID'
   total: string
   amountPaid: string
   balanceDue: string
@@ -53,6 +53,13 @@ interface PortalInvoice {
   paidAt: string | null
   createdAt: string
   payable: boolean
+  /** The pre-invoice round: a DRAFT sent for review. Never payable —
+   *  the client agrees the figure here, and the payable invoice
+   *  follows (Wes 2026-09-01). */
+  isPreInvoice?: boolean
+  preSentAt?: string | null
+  approvedAt?: string | null
+  changesRequestedAt?: string | null
 }
 
 const ACH_ENABLED = process.env.NEXT_PUBLIC_ACH_ENABLED === 'true'
@@ -61,7 +68,14 @@ function fmtUsd(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function PortalPayPanel() {
+export function PortalPayPanel({
+  onStatus,
+}: {
+  /** Lets the wrapping PaperworkRow label itself honestly — a row
+   *  headed "Invoice · Issued" beside a pre-invoice is simply wrong
+   *  (Wes 2026-09-01). Optional: the panel works standalone. */
+  onStatus?: (s: { hasPreInvoice: boolean; awaitingReview: boolean }) => void
+} = {}) {
   const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
@@ -97,6 +111,13 @@ export function PortalPayPanel() {
   if (invoices === null) {
     return <div className="text-xs text-gray-500">Loading invoices…</div>
   }
+  // Report upward whenever the listing changes.
+  const pre = invoices?.find((i) => i.isPreInvoice) ?? null
+  useEffect(() => {
+    onStatus?.({ hasPreInvoice: !!pre, awaitingReview: !!pre && !pre.approvedAt })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre?.id, pre?.approvedAt])
+
   if (invoices.length === 0) {
     // No invoices yet — Job Page already shows "Issued 24-48 hours
     // after equipment return" elsewhere. Panel renders nothing.
@@ -134,20 +155,28 @@ function InvoiceRow({
         </span>
         <span
           className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-            invoice.status === 'PAID'
-              ? 'bg-emerald-100 text-emerald-700'
-              : invoice.status === 'PARTIAL'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-blue-100 text-blue-700'
+            invoice.isPreInvoice
+              ? invoice.approvedAt
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-indigo-100 text-indigo-700'
+              : invoice.status === 'PAID'
+                ? 'bg-emerald-100 text-emerald-700'
+                : invoice.status === 'PARTIAL'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-blue-100 text-blue-700'
           }`}
         >
-          {invoice.status}
+          {invoice.isPreInvoice
+            ? invoice.approvedAt
+              ? 'APPROVED'
+              : 'PRE-INVOICE'
+            : invoice.status}
         </span>
         <span className="text-sm font-semibold text-gray-900 ml-auto">{fmtUsd(total)}</span>
         {paid > 0 && (
           <span className="text-[11px] text-emerald-600">−{fmtUsd(paid)} paid</span>
         )}
-        {balance > 0 && (
+        {balance > 0 && !invoice.isPreInvoice && (
           <span className="text-[11px] text-amber-700 font-semibold">
             {fmtUsd(balance)} due
           </span>
@@ -158,7 +187,7 @@ function InvoiceRow({
           rel="noreferrer"
           className="text-[11px] font-semibold text-amber-700 hover:text-amber-900"
         >
-          PDF →
+          {invoice.isPreInvoice ? 'Review PDF →' : 'PDF →'}
         </a>
         {invoice.payable && (
           <button
@@ -169,9 +198,130 @@ function InvoiceRow({
           </button>
         )}
       </div>
+      {invoice.isPreInvoice && (
+        <PreInvoiceReview invoice={invoice} onAnswered={onPaid} />
+      )}
       {expanded && invoice.payable && (
         <div className="px-4 py-4 bg-gray-50">
           <PayForm invoice={invoice} onPaid={onPaid} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Pre-invoice review ───────────────────────────────────────────
+/**
+ * The client's side of the pre-invoice round: read the charges, then
+ * approve them or say what is wrong. Approving is what wraps the job
+ * (Wes 2026-09-01) — it does NOT pay anything, and the copy says so,
+ * because "approve" next to a dollar figure reads like a payment
+ * authorisation unless it is spelled out.
+ */
+function PreInvoiceReview({
+  invoice,
+  onAnswered,
+}: {
+  invoice: PortalInvoice
+  onAnswered: () => void | Promise<void>
+}) {
+  const [busy, setBusy] = useState<'APPROVE' | 'CHANGES' | null>(null)
+  const [showNote, setShowNote] = useState(false)
+  const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const answer = async (decision: 'APPROVE' | 'CHANGES') => {
+    if (busy) return
+    if (decision === 'CHANGES' && !note.trim()) {
+      setError('Let us know what needs changing.')
+      return
+    }
+    setBusy(decision)
+    setError(null)
+    try {
+      const res = await fetch(`/api/portal/job/invoice/${invoice.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, note: note.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data?.error || 'Something went wrong — please try again.')
+        return
+      }
+      await onAnswered()
+    } catch {
+      setError('Something went wrong — please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (invoice.approvedAt) {
+    return (
+      <div className="px-4 py-3 bg-emerald-50 border-t border-emerald-100 text-[13px] text-emerald-800">
+        Thanks — you approved these charges on{' '}
+        {new Date(invoice.approvedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.
+        We&rsquo;ll send the invoice shortly. Nothing further is needed from you right now.
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-4 bg-indigo-50/60 border-t border-indigo-100 space-y-3">
+      <p className="text-[13px] text-gray-700">
+        <strong>Please review these charges.</strong> This is a pre-invoice, not a bill — nothing is
+        due yet. If it all looks right, approve it and we&rsquo;ll issue the invoice.
+      </p>
+      {invoice.changesRequestedAt && !showNote && (
+        <p className="text-[12px] text-amber-800">
+          You asked us for changes — we&rsquo;re on it. Approve below once the updated figures look right.
+        </p>
+      )}
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
+      {showNote ? (
+        <div className="space-y-2">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="What doesn't look right? (e.g. we returned the generator a day early)"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-[13px] focus:border-gray-500 focus:outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => answer('CHANGES')}
+              disabled={busy != null}
+              className="rounded-lg bg-gray-900 hover:bg-gray-800 disabled:opacity-50 px-4 py-2 text-[13px] font-semibold text-white"
+            >
+              {busy === 'CHANGES' ? 'Sending…' : 'Send to SirReel'}
+            </button>
+            <button
+              onClick={() => { setShowNote(false); setError(null) }}
+              disabled={busy != null}
+              className="px-3 py-2 text-[13px] text-gray-600 hover:text-gray-900"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => answer('APPROVE')}
+            disabled={busy != null}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-5 py-2 text-[13px] font-bold text-white"
+          >
+            {busy === 'APPROVE' ? 'Approving…' : 'Approve these charges'}
+          </button>
+          <button
+            onClick={() => setShowNote(true)}
+            disabled={busy != null}
+            className="rounded-lg border border-gray-300 bg-white hover:border-gray-500 px-4 py-2 text-[13px] font-semibold text-gray-700"
+          >
+            Something&rsquo;s not right
+          </button>
         </div>
       )}
     </div>

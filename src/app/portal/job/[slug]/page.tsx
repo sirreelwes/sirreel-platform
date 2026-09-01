@@ -253,6 +253,13 @@ export default function JobPortalPage() {
     'idle',
   );
   const [activityOpen, setActivityOpen] = useState(false);
+  // Reported by PortalPayPanel so the paperwork row can name what is
+  // actually there — "Invoice · Issued" beside a pre-invoice awaiting
+  // the client's approval is a lie the client would act on.
+  const [invoiceRowState, setInvoiceRowState] = useState<{
+    hasPreInvoice: boolean
+    awaitingReview: boolean
+  }>({ hasPreInvoice: false, awaitingReview: false });
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiUploading, setCoiUploading] = useState(false);
   const [coiError, setCoiError] = useState<string>('');
@@ -1046,8 +1053,18 @@ export default function JobPortalPage() {
                   null), so the "Issued 24-48 hours" copy still applies
                   in that case via the surrounding context — keeping the
                   PaperworkRow as a fallback for the no-invoice state. */}
-              <PaperworkRow label="Invoice" status="Issued" statusKind="success">
-                <PortalPayPanel />
+              <PaperworkRow
+                label={invoiceRowState.hasPreInvoice ? 'Pre-invoice' : 'Invoice'}
+                status={
+                  invoiceRowState.awaitingReview
+                    ? 'Needs your review'
+                    : invoiceRowState.hasPreInvoice
+                      ? 'Approved'
+                      : 'Issued'
+                }
+                statusKind={invoiceRowState.awaitingReview ? 'pending' : 'success'}
+              >
+                <PortalPayPanel onStatus={setInvoiceRowState} />
               </PaperworkRow>
               {/* Bank details live HERE, not in an email. See
                   api/portal/job/payment-details for why that ruling changed. */}
