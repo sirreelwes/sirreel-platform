@@ -32,7 +32,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
-import { renderPreInvoice } from '@/app/api/invoices/[id]/pre-invoice-pdf/route'
+import { renderPreInvoice } from '@/lib/invoices/renderPreInvoice'
 
 export const dynamic = 'force-dynamic'
 
