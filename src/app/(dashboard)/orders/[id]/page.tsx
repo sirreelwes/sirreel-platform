@@ -3552,6 +3552,79 @@ export default function OrderDetailPage() {
         );
       })()}
 
+      {/* Invoice — the live document once one exists (Wes 2026-09-01:
+          "the Invoice pdf should be prominent once it's been created").
+          Sits ABOVE the quote card because after invoicing it is the
+          document that matters; the quote stays below as history. */}
+      {(() => {
+        const live = (invoices ?? []).filter((i) => i.status !== 'VOID' && i.type === 'RENTAL');
+        const inv = live[0];
+        if (!inv) return null;
+        const isDraft = inv.status === 'DRAFT';
+        // The invoice is a SNAPSHOT: editing the order afterwards does
+        // not move it. Silence here is how a client ends up holding a
+        // figure the order no longer agrees with — so say it plainly.
+        const orderTotal = Number(order.total);
+        const invTotal = Number(inv.total);
+        const drift = Math.round((invTotal - orderTotal) * 100) / 100;
+        const driftsFromOrder = Math.abs(drift) >= 0.01;
+        return (
+          <div className={`rounded-xl px-6 py-4 mb-4 border ${
+            driftsFromOrder ? 'border-amber-400 bg-amber-50' : 'border-lt-hairline bg-lt-card'
+          }`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-lt-fg">
+                    {isDraft ? 'Pre-invoice / draft invoice' : 'Invoice'}
+                  </span>
+                  <span className="font-mono text-[11px] text-lt-fg2">{inv.invoiceNumber}</span>
+                  <span className="text-sm font-bold text-lt-fg">
+                    ${invTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                  {inv.clientApprovedAt && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">
+                      Client approved
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-lt-fg3 mt-0.5">
+                  {inv.sentAt
+                    ? `Sent to the client ${new Date(inv.sentAt).toLocaleString()}`
+                    : inv.preSentAt
+                      ? `Pre-invoice sent ${new Date(inv.preSentAt).toLocaleString()} — awaiting approval`
+                      : 'Not sent yet'}
+                </div>
+                {driftsFromOrder && (
+                  <div className="mt-2 text-[12px] text-amber-800 max-w-2xl">
+                    <strong>This invoice no longer matches the order.</strong> The order is now{' '}
+                    ${orderTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })} — a difference of{' '}
+                    ${Math.abs(drift).toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
+                    {drift > 0 ? 'MORE on the invoice than the order' : 'less on the invoice than the order'}.
+                    An invoice is a snapshot and does not follow later edits
+                    {inv.sentAt ? ' — and the client already has this one.' : '.'}{' '}
+                    Void it and generate a fresh one to bill the corrected figure.
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap items-center">
+                <a
+                  href={isDraft ? `/api/invoices/${inv.id}/pre-invoice-pdf` : `/api/invoices/${inv.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-semibold rounded-lg"
+                >
+                  {isDraft ? 'View pre-invoice' : 'View invoice PDF'}
+                </a>
+                <a href="#invoices" className="text-[12px] font-semibold text-lt-fg2 hover:text-lt-fg">
+                  Invoice actions ↓
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Quote PDF actions */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl px-6 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0">
@@ -4004,7 +4077,7 @@ export default function OrderDetailPage() {
 
       {/* Phase 5 commit 1 — Invoices block. RW billing off-ramp:
           generate a native RENTAL invoice from the booked snapshot. */}
-      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
+      <div id="invoices" className="scroll-mt-4 bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
           <div>
             <h2 className="text-lg font-semibold text-lt-fg">Invoices</h2>
