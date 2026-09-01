@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -613,6 +614,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             <span className="text-zinc-500">Actions are recorded as {operatorName}.</span>
           </p>
         </div>
+        {/* Wes 2026-09-01: the how-to belongs where the work is, not only
+            in the nav. Sits beside the title rather than in the body so
+            it is findable on the first visit and ignorable on the
+            hundredth. */}
+        <Link
+          href="/guides/collecting"
+          className="flex-none inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+        >
+          How to collect
+          <span aria-hidden="true">→</span>
+        </Link>
       </div>
 
       {/* ── tracker stats — stamped rows only, no vibes ─────────────── */}
