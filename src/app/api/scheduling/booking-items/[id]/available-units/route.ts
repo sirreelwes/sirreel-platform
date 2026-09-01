@@ -36,7 +36,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       quantity: true,
       status: true,
       booking: {
-        select: { id: true, bookingNumber: true, jobName: true, startDate: true, endDate: true },
+        select: { id: true, bookingNumber: true, jobName: true, jobId: true, startDate: true, endDate: true },
       },
       category: { select: { name: true, slug: true } },
       assignments: {
@@ -91,6 +91,43 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   // the client portal are Order-scoped.
   const order = await prisma.order.findFirst({ where: { bookingId: bookingItem.booking.id }, select: { id: true } })
 
+  // WHAT WAS QUOTED against this hold (Wes 2026-09-01: "it should tell
+  // the agent what was quoted and the dates"). Assigning a unit is a
+  // promise about a specific line on a specific quote, and the modal
+  // showed only a category name — so the agent had to leave, open the
+  // order, and remember the dates.
+  //
+  // Matched the same way holdOnQuoteSend created the hold: a line points
+  // at this category either directly (legacy assetCategoryId) or through
+  // its catalog row's legacyAssetCategoryId. Line dates are returned
+  // rather than the booking window because a line may legitimately
+  // differ from it, and the line is what the client was quoted.
+  const quotedLines = await prisma.orderLineItem.findMany({
+    where: {
+      order: {
+        jobId: bookingItem.booking.jobId ?? undefined,
+        status: { notIn: ['CANCELLED'] },
+        archivedAt: null,
+      },
+      OR: [
+        { assetCategoryId: bookingItem.categoryId },
+        { inventoryItem: { legacyAssetCategoryId: bookingItem.categoryId } },
+      ],
+    },
+    select: {
+      id: true,
+      description: true,
+      quantity: true,
+      rate: true,
+      rateType: true,
+      billableDays: true,
+      pickupDate: true,
+      returnDate: true,
+      order: { select: { id: true, orderNumber: true, status: true } },
+    },
+    orderBy: { pickupDate: 'asc' },
+  })
+
   return NextResponse.json({
     ok: true,
     bookingItem: {
@@ -102,6 +139,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     },
     booking: bookingItem.booking,
     orderId: order?.id ?? null,
+    quotedLines: quotedLines.map((l) => ({
+      id: l.id,
+      description: l.description,
+      quantity: l.quantity,
+      rate: Number(l.rate),
+      rateType: l.rateType,
+      billableDays: l.billableDays,
+      pickupDate: l.pickupDate,
+      returnDate: l.returnDate,
+      orderId: l.order.id,
+      orderNumber: l.order.orderNumber,
+      orderStatus: l.order.status,
+    })),
     category: { id: bookingItem.categoryId, ...bookingItem.category },
     currentAssignments,
     candidates,

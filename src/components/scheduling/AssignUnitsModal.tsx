@@ -40,6 +40,21 @@ interface PickerData {
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
   orderId: string | null
   category: { id: string; name: string; slug: string }
+  /** The order line(s) this hold was raised from — what the client was
+   *  actually quoted, and on which dates. */
+  quotedLines?: {
+    id: string
+    description: string
+    quantity: number
+    rate: number
+    rateType: string
+    billableDays: number | null
+    pickupDate: string
+    returnDate: string
+    orderId: string
+    orderNumber: string
+    orderStatus: string
+  }[]
   currentAssignments: CurrentAssignment[]
   candidates: Candidate[]
   summary: {
@@ -67,6 +82,15 @@ const ITEM_STATUS_LABEL: Record<string, string> = {
 }
 const ASSIGN_STATUS_LABEL: Record<string, string> = {
   ASSIGNED: 'Assigned', CHECKED_OUT: 'Checked out', RETURNED: 'Returned', SWAPPED: 'Swapped',
+}
+
+/** Calendar dates — UTC, never local (see src/lib/dates/calendarDate.ts):
+ *  these are @db.Date values and rendering them in Pacific prints the
+ *  day before. */
+function fmtDay(d: string): string {
+  const dt = new Date(d)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
 // Category representative image (ad20659) via its existing gated proxy.
@@ -230,6 +254,58 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
 
           {data && (
             <>
+              {/* WHAT WAS QUOTED. Assigning a unit is a promise about a
+                  specific line on a specific quote; without this the
+                  agent had a category name and had to go and look the
+                  rest up (Wes 2026-09-01). Line dates are shown, not the
+                  booking window — a line may differ from it, and the
+                  line is what the client agreed to. */}
+              {data.quotedLines && data.quotedLines.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1.5">
+                    Quoted
+                  </div>
+                  <div className="space-y-1.5">
+                    {data.quotedLines.map((q) => (
+                      <div key={q.id} className="flex items-baseline gap-2 flex-wrap text-sm">
+                        <span className="font-semibold text-zinc-900">
+                          {q.quantity} × {q.description}
+                        </span>
+                        <span className="text-zinc-700">
+                          {fmtDay(q.pickupDate)} → {fmtDay(q.returnDate)}
+                        </span>
+                        <span className="text-zinc-600">
+                          ${q.rate.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {q.rateType === 'DAILY' ? '/day' : q.rateType === 'WEEKLY' ? '/wk' : ''}
+                          {q.billableDays != null && ` · ${q.billableDays} day${q.billableDays === 1 ? '' : 's'}`}
+                        </span>
+                        <a
+                          href={`/orders/${q.orderId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-auto font-mono text-[11px] text-amber-800 hover:text-amber-900 underline underline-offset-2"
+                        >
+                          {q.orderNumber}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                  {/* The hold window and the quoted window can disagree —
+                      the hold is what blocks the calendar, so say so
+                      rather than letting the agent assume they match. */}
+                  {data.quotedLines.some(
+                    (q) =>
+                      q.pickupDate.slice(0, 10) !== data.booking.startDate.slice(0, 10) ||
+                      q.returnDate.slice(0, 10) !== data.booking.endDate.slice(0, 10),
+                  ) && (
+                    <div className="mt-2 text-[12px] text-amber-800">
+                      The hold runs {fmtDay(data.booking.startDate)} → {fmtDay(data.booking.endDate)}, which
+                      differs from the quoted dates above. The hold is what blocks the calendar.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm flex items-center gap-2">
                 <span className="font-semibold text-zinc-900">{Math.max(0, data.summary.availableToHold)}</span>
                 <span className="text-zinc-600">of {data.summary.serviceableCount} units available these dates</span>
