@@ -1,5 +1,5 @@
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import {
   CANONICAL_CLAUSES,
   RENTAL_POLICIES,
@@ -7,6 +7,7 @@ import {
   LCDW_ADDENDUM,
   type CanonicalClause,
 } from './contractClauses'
+import { WORDMARK_BLACK_DATA_URI } from './brandAssets'
 
 export type ChangeDecisionValue = 'PENDING' | 'ACCEPT' | 'COUNTER' | 'REJECT'
 
@@ -213,6 +214,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   brand: { flexDirection: 'column' },
+  // Source lockup is 1921x693 (ratio 2.772) — both dimensions set so
+  // React-PDF never guesses and squashes it. Sized to carry the optical
+  // weight the old 18pt brandName had in this running header.
+  wordmark: { width: 112, height: 40, objectFit: 'contain', marginBottom: 2 },
   brandName: { fontFamily: 'Helvetica-Bold', fontSize: 18 },
   brandSub: { fontSize: 9, color: C.muted, marginTop: 2 },
   docMeta: { flexDirection: 'column', alignItems: 'flex-end' },
@@ -331,6 +336,23 @@ function clauseBodyStyle(decision?: ChangeDecisionValue) {
   return styles.clauseBody
 }
 
+/**
+ * A section heading that will not be left as the last line of a page.
+ *
+ * The signed copy had exactly this bug (Wes 2026-08-31). Two sections
+ * here are shielded only by an explicit `break`; "Rental Policies" and
+ * the LCDW addendum follow other content and had nothing stopping a
+ * page break directly beneath them. `minPresenceAhead` requires that
+ * much room below the heading, or it moves down with its content.
+ */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <View minPresenceAhead={64} wrap={false}>
+      <Text style={styles.sectionTitle}>{children}</Text>
+    </View>
+  )
+}
+
 export const ContractDocument: React.FC<ContractDocumentProps> = ({
   company,
   job,
@@ -356,7 +378,10 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
       <Page size="LETTER" style={styles.page}>
         <View style={styles.brandRow} fixed>
           <View style={styles.brand}>
-            <Text style={styles.brandName}>SirReel</Text>
+            {/* The wordmark, not the word (Wes 2026-08-31) — matching the
+                signed copy. The legal-entity line stays: it names who the
+                client is contracting WITH, which the lockup does not. */}
+            <Image src={WORDMARK_BLACK_DATA_URI} style={styles.wordmark} />
             <Text style={styles.brandSub}>SirReel Production Vehicles, Inc.</Text>
           </View>
           <View style={styles.docMeta}>
@@ -397,7 +422,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rental Policies</Text>
+          <SectionTitle>Rental Policies</SectionTitle>
           {RENTAL_POLICIES.map((p) => (
             <View key={p.title} style={styles.policy} wrap={false}>
               <Text style={styles.policyTitle}>{p.title}</Text>
@@ -407,7 +432,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         </View>
 
         <View style={styles.section} break>
-          <Text style={styles.sectionTitle}>Equipment and/or Vehicle Terms & Conditions</Text>
+          <SectionTitle>Equipment and/or Vehicle Terms & Conditions</SectionTitle>
           <Text style={styles.sectionLede}>
             Please read carefully. You are liable for our equipment and vehicles from the time
             they leave our premises until the time they are returned to us and we sign for them.
@@ -428,13 +453,13 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         </View>
 
         <View style={styles.section} break>
-          <Text style={styles.sectionTitle}>{FLEET_AGREEMENT.title}</Text>
+          <SectionTitle>{FLEET_AGREEMENT.title}</SectionTitle>
           <Text style={styles.sectionLede}>{FLEET_AGREEMENT.intro}</Text>
           <Text style={styles.fleetBody}>{FLEET_AGREEMENT.fuelPolicy}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{LCDW_ADDENDUM.title}</Text>
+          <SectionTitle>{LCDW_ADDENDUM.title}</SectionTitle>
           <Text style={[styles.fleetBody, { fontFamily: 'Helvetica-Bold' }]}>
             {LCDW_ADDENDUM.rate}
           </Text>
@@ -446,7 +471,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
 
         {unmapped.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Additional Negotiated Items</Text>
+            <SectionTitle>Additional Negotiated Items</SectionTitle>
             <Text style={styles.sectionLede}>
               The following items refer to provisions outside the numbered clause list above
               (e.g., Fleet sub-clauses or grouped sections).
@@ -480,7 +505,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
 
         {grantedScope && grantedScope.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Facility access granted under this agreement</Text>
+            <SectionTitle>Facility access granted under this agreement</SectionTitle>
             <Text style={styles.scopeIntro}>
               The {grantedScope.packageName} on this order grants access to the following areas
               for the rental period. Areas not listed here are not included in this agreement.
