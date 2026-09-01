@@ -33,6 +33,7 @@ import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
+import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
@@ -64,17 +65,23 @@ import { computeReadiness } from '@/lib/jobs/readiness';
 const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
 
-const OFF_RAMPS = [
-  { value: 'OPEN',    label: 'Open',    hint: 'Position follows the orders' },
-  { value: 'HOLD',    label: 'On hold', hint: 'Client paused it — overrides the orders' },
-  { value: 'WRAPPED', label: 'Wrapped', hint: 'Closed by hand — overrides the orders' },
-  { value: 'LOST',    label: 'Lost',    hint: "Didn't win it — overrides the orders" },
-] as const;
-type OffRamp = (typeof OFF_RAMPS)[number]['value'];
-
-function currentOffRamp(status: JobStatus): OffRamp {
-  return status === 'HOLD' || status === 'WRAPPED' || status === 'LOST' ? status : 'OPEN';
-}
+/**
+ * The manual status dropdown is GONE (Wes 2026-09-01: "we need to
+ * remove the job status that can be moved manually. It isn't helpful in
+ * any way").
+ *
+ * It offered four positions and none of them earned the click:
+ *   · Open / hold — HOLD had ZERO jobs on it in production.
+ *   · Wrapped — now a consequence of the client approving the
+ *     pre-invoice, not something anyone remembers to toggle.
+ *   · Lost — always better served by Mark lost (More ▾), which captures
+ *     WHY, expires the follow-up ladder and releases the quote's holds.
+ *     The dropdown just flipped a column and did none of that.
+ *
+ * Where a job is now reads from its orders (lib/jobs/cadence.ts), which
+ * is the only answer that cannot go stale. Legacy ACTIVE/HOLD rows are
+ * harmless — the rollup ignores the value whenever live orders exist.
+ */
 
 const CADENCE_BADGE: Record<CadenceState, string> = {
   new:              'bg-sky-900/40 text-sky-300 border-sky-800',
@@ -376,7 +383,10 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusSaving, setStatusSaving] = useState(false);
+  // Replaces the dropdown's "Lost" position with the real flow — it
+  // records WHY, expires the follow-up ladder and releases the quote's
+  // holds, none of which a status flip did.
+  const [markLostOpen, setMarkLostOpen] = useState(false);
   const [returnSaving, setReturnSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
@@ -524,24 +534,6 @@ export default function JobDetailPage() {
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  const updateStatus = async (status: JobStatus) => {
-    if (!job) return;
-    setStatusSaving(true);
-    try {
-      const res = await fetch(`/api/jobs/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error('Failed to update status');
-      load();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to update status');
-    } finally {
-      setStatusSaving(false);
-    }
-  };
 
   // Physical-return toggle — mirrors the board's INTO/OUT-of-RETURNED
   // moves. mark sets returnedAt + who; unmark is the undo.
@@ -747,7 +739,6 @@ export default function JobDetailPage() {
   // the fallback only covers a stale client that fetched before the API
   // started returning it.
   const cadenceState: CadenceState = job.cadence?.state ?? 'quoted';
-  const offRamp = currentOffRamp(job.status);
 
   // Who signs, and therefore who gets the link. PRODUCER first to match
   // buildStageContractProps — the contract names the Producer as the
@@ -1142,9 +1133,9 @@ const driverTone = (d: any): string => {
               <span
                 className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
                 title={
-                  offRamp === 'OPEN'
-                    ? "Derived from this job's orders — same reading as the Jobs board"
-                    : `Set by hand to ${offRamp} — this overrides what the orders say`
+                  job.status === 'LOST' || job.status === 'WRAPPED'
+                    ? `Job is ${job.status.toLowerCase()} — that overrides what the orders say`
+                    : "Derived from this job's orders — same reading as the Jobs board"
                 }
               >
                 {formatCadenceLabel(cadenceState, job.cadence?.partial ?? false)}
@@ -1265,17 +1256,6 @@ const driverTone = (d: any): string => {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
             <div className="flex items-center gap-2">
-              <select
-                value={offRamp}
-                disabled={statusSaving}
-                onChange={(e) => updateStatus(e.target.value === 'OPEN' ? 'QUOTED' : (e.target.value as JobStatus))}
-                className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-                title={OFF_RAMPS.find((o) => o.value === offRamp)?.hint}
-              >
-                {OFF_RAMPS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
               <div className="relative">
                 <button
                   onClick={() => { setConfirmArchive(false); setMenuOpen((o) => !o); }}
@@ -1297,6 +1277,14 @@ const driverTone = (d: any): string => {
                       <button onClick={openEdit} className="w-full text-left text-[14px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
                         Edit job details
                       </button>
+                      {job.status !== 'LOST' && (
+                        <button
+                          onClick={() => { setMenuOpen(false); setMarkLostOpen(true); }}
+                          className="w-full text-left text-[14px] text-rose-300 hover:bg-zinc-800 rounded-lg px-2.5 py-2"
+                        >
+                          Mark job lost…
+                        </button>
+                      )}
                       <button onClick={copyJobLink} className="w-full text-left text-[14px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
                         Copy job link
                       </button>
@@ -2790,6 +2778,19 @@ const driverTone = (d: any): string => {
             })}
           </ul>
         </div>
+      )}
+
+      {markLostOpen && (
+        <MarkLostModal
+          job={{
+            id: job.id,
+            name: job.name,
+            jobCode: job.jobCode,
+            company: { name: job.company?.name ?? '' },
+          }}
+          onClose={() => setMarkLostOpen(false)}
+          onMarked={() => { setMarkLostOpen(false); load(); }}
+        />
       )}
 
       {reviewCoiId && (
