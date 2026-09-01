@@ -1539,6 +1539,45 @@ export default function OrderDetailPage() {
    * the document.
    */
   const [voidingInvoice, setVoidingInvoice] = useState(false);
+  const [updatingInvoice, setUpdatingInvoice] = useState(false);
+  /**
+   * Rewrite an invoice from the order, keeping its number — the first
+   * remedy for a drifted invoice while HQ is not the accounting book of
+   * record (Wes 2026-09-01: "can we simply replace and keep the inv
+   * number?"). Void stays for a document that must actually be withdrawn.
+   */
+  const updateInvoiceInPlace = async (
+    invoiceId: string,
+    invoiceNumber: string,
+    wasSent: boolean,
+  ) => {
+    if (
+      wasSent &&
+      !window.confirm(
+        `Update ${invoiceNumber} in place?\n\n` +
+          'It keeps its number. The client already has the old figure — re-send it ' +
+          'afterwards and tell them it was corrected.',
+      )
+    ) {
+      return;
+    }
+    setUpdatingInvoice(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        alert(data.reason || data.error || `Update failed (HTTP ${res.status})`);
+        return;
+      }
+      await Promise.all([fetchOrder(), fetchInvoices()]);
+    } finally {
+      setUpdatingInvoice(false);
+    }
+  };
   const voidInvoice = async (invoiceId: string, invoiceNumber: string, wasSent: boolean) => {
     const reason = window.prompt(
       `Void ${invoiceNumber}?\n\n` +
@@ -3645,7 +3684,8 @@ export default function OrderDetailPage() {
                     {drift > 0 ? 'MORE on the invoice than the order' : 'less on the invoice than the order'}.
                     An invoice is a snapshot and does not follow later edits
                     {inv.sentAt ? ' — and the client already has this one.' : '.'}{' '}
-                    Void it and generate a fresh one to bill the corrected figure.
+                    <strong>Update to match order</strong> rewrites it and keeps the number; void it
+                    instead if the document has to be withdrawn outright.
                   </div>
                 )}
               </div>
@@ -3662,6 +3702,20 @@ export default function OrderDetailPage() {
                     figures have actually diverged — otherwise it's a quiet
                     control, since withdrawing a document the client holds
                     should never be the obvious click. */}
+                {inv.type === 'RENTAL' && (
+                  <button
+                    onClick={() => void updateInvoiceInPlace(inv.id, inv.invoiceNumber, !!inv.sentAt)}
+                    disabled={updatingInvoice || voidingInvoice}
+                    title="Rewrite this invoice from the order, keeping its number"
+                    className={`px-4 py-2 text-sm font-semibold rounded-lg disabled:opacity-50 ${
+                      driftsFromOrder
+                        ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                        : 'bg-lt-inner hover:bg-lt-hairline text-lt-fg'
+                    }`}
+                  >
+                    {updatingInvoice ? 'Updating…' : 'Update to match order'}
+                  </button>
+                )}
                 <button
                   onClick={() => void voidInvoice(inv.id, inv.invoiceNumber, !!inv.sentAt)}
                   disabled={voidingInvoice}

@@ -115,6 +115,28 @@ export function JobInvoicesPanel({
     await act(inv.id, `/api/invoices/${inv.id}/void`, { reason: reason.trim() })
   }
 
+  /**
+   * Rewrite the invoice from the order, keeping its number.
+   *
+   * The primary fix for a drifted invoice while HQ is not yet the
+   * accounting book of record (Wes 2026-09-01) — the client keeps the
+   * number they already have. Void + reissue stays for the cases where the
+   * document really must be withdrawn.
+   */
+  const updateInvoice = async (inv: JobPanelInvoice) => {
+    if (
+      inv.sentAt &&
+      !window.confirm(
+        `Update ${inv.invoiceNumber} in place?\n\n` +
+          `It keeps its number. The client already has the old figure — ` +
+          `re-send it afterwards and tell them it was corrected.`,
+      )
+    ) {
+      return
+    }
+    await act(inv.id, `/api/invoices/${inv.id}/regenerate`, null)
+  }
+
   const sendInvoice = async (inv: JobPanelInvoice) => {
     if (
       inv.sentAt &&
@@ -205,8 +227,9 @@ export function JobInvoicesPanel({
                       {money(order.total)} — {money(Math.abs(drift))}{' '}
                       {drift > 0 ? 'MORE on the invoice' : 'less on the invoice'}. An invoice is a
                       snapshot and does not follow later edits
-                      {inv.sentAt ? ' — and the client already has this one.' : '.'} Void it and
-                      generate a fresh one to bill the corrected figure.
+                      {inv.sentAt ? ' — and the client already has this one.' : '.'}{' '}
+                      <strong>Update to match order</strong> rewrites it and keeps the number; void
+                      it instead if the document has to be withdrawn outright.
                     </div>
                   )}
 
@@ -219,10 +242,28 @@ export function JobInvoicesPanel({
                     >
                       {isDraft ? 'View pre-invoice' : 'View invoice PDF'}
                     </a>
+                    {inv.type === 'RENTAL' && (
+                      <button
+                        onClick={() => void updateInvoice(inv)}
+                        disabled={busyId === inv.id}
+                        title="Rewrite this invoice from the order, keeping its number"
+                        className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${
+                          drifts
+                            ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                        }`}
+                      >
+                        {busyId === inv.id ? 'Working…' : 'Update to match order'}
+                      </button>
+                    )}
                     <button
                       onClick={() => void sendInvoice(inv)}
                       disabled={busyId === inv.id}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[12px] font-bold"
+                      className={`px-3 py-1.5 rounded-lg disabled:opacity-50 text-[12px] font-bold ${
+                        drifts
+                          ? 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                          : 'bg-amber-600 hover:bg-amber-500 text-white'
+                      }`}
                     >
                       {busyId === inv.id ? 'Working…' : inv.sentAt ? 'Send again' : 'Send to client'}
                     </button>

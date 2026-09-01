@@ -78,8 +78,30 @@ export async function generateRentalInvoice(args: {
   /** Default due is issuedAt + 30 days unless caller provides one. */
   dueDate?: Date | null
   notes?: string | null
+  /**
+   * Rewrite THIS invoice in place instead of cutting a new one — same
+   * invoice number, refreshed figures, snapshots and PDF.
+   *
+   * Wes 2026-09-01: "because this isn't the official accounting software
+   * yet, can we simply replace and keep the inv number?" Void-and-reissue
+   * is the correct instrument once HQ is the book of record — it leaves
+   * the withdrawn document on the record and gives the correction its own
+   * number. Until then a client holding SR-INV-30001 should get a
+   * corrected SR-INV-30001, not a second number to reconcile.
+   *
+   * The old figures are not lost: the AuditLog row carries the before and
+   * after totals, and a dated line is appended to the invoice's notes.
+   *
+   * Refused when money has been applied — see the guard below.
+   */
+  replaceInvoiceId?: string | null
 }): Promise<GenerateRentalInvoiceResult> {
-  const { orderId, dueDate: dueDateOverride = null, notes = null } = args
+  const {
+    orderId,
+    dueDate: dueDateOverride = null,
+    notes = null,
+    replaceInvoiceId = null,
+  } = args
 
   // ── Load order + line items + agent + company + job ─────────────
   const order = await prisma.order.findUnique({
@@ -117,7 +139,7 @@ export async function generateRentalInvoice(args: {
 
   // ── Guard: one active RENTAL invoice at a time ──────────────────
   const existingActiveRental = order.invoices.find(
-    (i) => i.type === 'RENTAL' && i.status !== 'VOID',
+    (i) => i.type === 'RENTAL' && i.status !== 'VOID' && i.id !== replaceInvoiceId,
   )
   if (existingActiveRental) {
     return {
@@ -237,7 +259,53 @@ export async function generateRentalInvoice(args: {
   // dueDate = issuedAt so downstream aging/overdue math (anything past
   // dueDate by N days) keeps working without special-casing null.
   const dueDate = dueDateOverride ?? issuedAt
-  const invoiceNumber = await nextInvoiceNumber('RENTAL')
+  // Replacing keeps the number the client already has; a fresh cut draws
+  // the next one. nextInvoiceNumber is deliberately NOT called in replace
+  // mode — burning a number on a correction would leave a permanent gap in
+  // the sequence for a document that never existed.
+  const replacing = replaceInvoiceId
+    ? await prisma.invoice.findUnique({
+        where: { id: replaceInvoiceId },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          status: true,
+          total: true,
+          notes: true,
+          pdfBlobKey: true,
+          amountPaid: true,
+          orderId: true,
+          payments: { select: { id: true, voidedAt: true } },
+        },
+      })
+    : null
+  if (replaceInvoiceId && !replacing) {
+    return { ok: false, status: 404, error: 'invoice to replace not found' }
+  }
+  if (replacing && replacing.orderId !== orderId) {
+    return { ok: false, status: 400, error: 'that invoice belongs to a different order' }
+  }
+  if (replacing && replacing.status === 'VOID') {
+    return {
+      ok: false,
+      status: 409,
+      error: `${replacing.invoiceNumber} is voided — generate a fresh invoice instead of rewriting a withdrawn one`,
+    }
+  }
+  // Money already applied means the total is not ours to move: a payment
+  // was taken against a stated figure. Rewriting it underneath would leave
+  // the payment reconciling to a number that no longer exists anywhere.
+  if (replacing) {
+    const livePayments = replacing.payments.filter((p) => !p.voidedAt)
+    if (Number(replacing.amountPaid) > 0 || livePayments.length > 0) {
+      return {
+        ok: false,
+        status: 409,
+        error: `${replacing.invoiceNumber} has payments applied — void it and issue a corrected invoice instead of rewriting this one`,
+      }
+    }
+  }
+  const invoiceNumber = replacing ? replacing.invoiceNumber : await nextInvoiceNumber('RENTAL')
   // Invoice math: subtotal = booked + accepted damages. Tax still
   // anchored to the booked tax amount (damages are pass-through repair
   // costs; not a new tax computation here). Total = subtotal + tax.
@@ -367,31 +435,77 @@ export async function generateRentalInvoice(args: {
   }
 
   // ── Persist the Invoice row + tag billed damages ───────────────
+  // Shared by both modes — the figures, snapshots and PDF are the same
+  // work whether they land on a new row or an existing one.
+  const figures = {
+    subtotal: invoiceSubtotal,
+    taxAmount: bookedTaxAmount,
+    total: invoiceTotal,
+    balanceDue: invoiceTotal,
+    pdfBlobKey: blobKey,
+    pdfUrl: blob.url,
+    pdfGeneratedAt: issuedAt,
+    // Cast for Prisma Json input — runtime is an array of structured
+    // entries, but Prisma's JsonValue type is unioned wide.
+    lineSnapshot: snapshot as unknown as object,
+    // Captured with the lines: the pre-invoice view re-renders from these
+    // rather than re-deriving discounts off the live order, which could
+    // print a breakdown that disagrees with `total`.
+    discountSnapshot: discountLines as unknown as object,
+  }
+
   const invoice = await prisma.$transaction(async (tx) => {
+    if (replacing) {
+      // Same number, same row, refreshed content. status and sentAt are
+      // left exactly as they were: this invoice's history is real, and a
+      // rewrite does not un-send a document the client received. What it
+      // changes is recorded on the row and in the audit log.
+      const stamp = issuedAt.toISOString().slice(0, 16).replace('T', ' ')
+      const priorTotal = Number(replacing.total)
+      const line =
+        `[UPDATED ${stamp} UTC] Figures refreshed from the order: ` +
+        `${priorTotal.toFixed(2)} → ${invoiceTotal.toFixed(2)}.`
+      const inv = await tx.invoice.update({
+        where: { id: replacing.id },
+        data: {
+          ...figures,
+          dueDate,
+          notes: notes ?? (replacing.notes ? `${replacing.notes}\n${line}` : line),
+        },
+        select: { id: true },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: 'invoice.regenerated',
+          entityType: 'Invoice',
+          entityId: replacing.id,
+          oldValues: { total: priorTotal, status: replacing.status },
+          newValues: {
+            total: invoiceTotal,
+            invoiceNumber,
+            orderId,
+            note: 'rewritten in place, number retained',
+          },
+        },
+      })
+      if (billNowDamageIds.length > 0) {
+        await tx.damageItem.updateMany({
+          where: { id: { in: billNowDamageIds } },
+          data: { invoiceId: inv.id },
+        })
+      }
+      return inv
+    }
     const inv = await tx.invoice.create({
       data: {
         invoiceNumber,
         orderId,
         type: 'RENTAL',
         status: 'DRAFT',
-        subtotal: invoiceSubtotal,
-        taxAmount: bookedTaxAmount,
-        total: invoiceTotal,
         amountPaid: 0,
-        balanceDue: invoiceTotal,
         dueDate,
         notes,
-        pdfBlobKey: blobKey,
-        pdfUrl: blob.url,
-        pdfGeneratedAt: issuedAt,
-        // Cast for Prisma Json input — runtime is an array of
-        // structured entries, but Prisma's JsonValue type is unioned
-        // wide.
-        lineSnapshot: snapshot as unknown as object,
-        // Captured with the lines: the pre-invoice view re-renders from
-        // these rather than re-deriving discounts off the live order,
-        // which could print a breakdown that disagrees with `total`.
-        discountSnapshot: discountLines as unknown as object,
+        ...figures,
       },
       select: { id: true },
     })
@@ -403,6 +517,18 @@ export async function generateRentalInvoice(args: {
     }
     return inv
   })
+
+  // The superseded PDF, once the row points at the new one. Same
+  // replace-on-regenerate discipline the quote PDF uses — an invoice
+  // carries exactly one document. Non-fatal: an orphaned blob is litter,
+  // a failed request over it would be a real problem.
+  if (replacing?.pdfBlobKey && replacing.pdfBlobKey !== blobKey) {
+    try {
+      await del(replacing.pdfBlobKey)
+    } catch (err) {
+      console.warn('[generateRentalInvoice] failed to delete prior PDF (non-fatal):', err)
+    }
+  }
 
   return {
     ok: true,
