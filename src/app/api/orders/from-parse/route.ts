@@ -64,7 +64,7 @@ import { computeDays, isClaimEligible, sanitizeClaimedDays } from '@/lib/orders/
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
-import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
+import { resolveLineRate, resolveFeeLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 
 
 export const dynamic = 'force-dynamic'
@@ -127,6 +127,11 @@ interface ResolvedItemInput {
   packageId?: string | null
   isPackageHeader?: boolean
   isPackageModified?: boolean
+  /** Fee-catalog line (Delivery / Pickup / any active FeeItem). When
+   *  set, the line prices from FeeItem.amount server-side and every
+   *  other pricing field is ignored — same trust model as the order
+   *  page's line-items POST. */
+  feeItemId?: string | null
   /** How the preview matched this line. 'AUTO_KIT' means the parser
    *  added it as an included accessory — skipped on persist and rebuilt
    *  by the kit reconciler, which stamps the provenance the preview
@@ -360,6 +365,61 @@ export async function POST(req: NextRequest) {
         // the reconciler, so a later quantity edit on the radios would
         // leave a stale battery count sitting on the quote forever.
         if (raw.matchSource === 'AUTO_KIT') continue
+
+        // ── Fee-catalog lines ───────────────────────────────────────
+        // Priced from FeeItem.amount by the same helper the order
+        // page's line-items POST uses — the builder sends an id and a
+        // quantity, never a trusted price. Only FLAT-unit fees can
+        // reach here (the builder's Fees section offers Delivery and
+        // Pickup); a PER_DAY or PERCENT fee needs day/base handling
+        // this create path does not do, so it is refused rather than
+        // silently mispriced.
+        if (raw.feeItemId) {
+          const feeRes = await resolveFeeLineRate(
+            { feeItemId: raw.feeItemId, clientRate: raw.rate }, tx,
+          )
+          if (!feeRes) throw new Error(`invalid or inactive fee on line "${raw.description}"`)
+          if (feeRes.fee.unit !== 'FLAT') {
+            throw new Error(`fee ${feeRes.fee.code} is ${feeRes.fee.unit} — only FLAT fees can be added at quote time`)
+          }
+          const feeQty = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
+          const feeTotal = feeQty * feeRes.rate.toNumber()
+          const feeLine = await tx.orderLineItem.create({
+            data: {
+              orderId: order.id,
+              sortOrder: sortOrder++,
+              type: 'FEE',
+              description: raw.description || feeRes.fee.name,
+              feeItemId: feeRes.fee.id,
+              // Fees are not gear: PRO_SUPPLIES + FLAT + one "day" is
+              // the shape the order page writes, and what keeps the
+              // quote PDF's Fees section and the totals math agreeing.
+              department: 'PRO_SUPPLIES',
+              rateType: 'FLAT',
+              rate: feeRes.rate,
+              resolvedRate: feeRes.resolvedRate,
+              rateOverridden: feeRes.rateOverridden,
+              quantity: feeQty,
+              billableDays: 1,
+              pickupDate: orderStart ?? new Date(),
+              returnDate: orderEnd ?? orderStart ?? new Date(),
+              lineTotal: Math.round(feeTotal * 100) / 100,
+            },
+            select: { id: true },
+          })
+          if (feeRes.rateOverridden && feeRes.resolvedRate) {
+            await logRateOverride(tx, {
+              orderId: order.id,
+              orderLineItemId: feeLine.id,
+              resolvedRate: feeRes.resolvedRate,
+              overrideRate: feeRes.rate,
+              rateType: 'FLAT',
+              userId: callingUser.id,
+            })
+          }
+          continue
+        }
+
         const quantity = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
         const rateType = (raw.rateType ?? 'DAILY') as RateType
         // Sprint 1 — a parsed-PDF rate is an override REQUEST like any

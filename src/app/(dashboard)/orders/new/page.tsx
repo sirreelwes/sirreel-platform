@@ -1338,6 +1338,77 @@ function NewQuotePageInner() {
     });
   };
 
+  // ── Fees (Wes 2026-08-31: "add delivery and pickup to the quote
+  //    builder fee section"). The builder had no fee surface at all —
+  //    fees could only be added on /orders/[id] after the order
+  //    existed, so a quote that included a delivery run went out
+  //    without it. Deliberately the two RUN fees rather than the whole
+  //    31-fee catalog: those are what a quote needs at build time, and
+  //    the order page keeps the full picker for everything else.
+  //    Amounts come from the catalog (so /admin/fees stays the price
+  //    authority) but are editable here as an override request the
+  //    server re-checks and audits, exactly like a gear rate.
+  const FEE_CODES = ['DEL', 'PICKUP'] as const;
+  interface BuilderFee {
+    id: string;
+    code: string;
+    name: string;
+    catalogAmount: number;
+    description: string | null;
+  }
+  const [feeCatalog, setFeeCatalog] = useState<BuilderFee[] | null>(null);
+  // code → { on, rate, quantity }. Absent = not on the quote.
+  const [feeSelections, setFeeSelections] = useState<
+    Record<string, { on: boolean; rate: number; quantity: number }>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/fees')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => {
+        if (cancelled) return;
+        const all: any[] = Array.isArray(d) ? d : d.fees || [];
+        const picked: BuilderFee[] = FEE_CODES.map((code) => {
+          const f = all.find((x) => x.code === code);
+          return f
+            ? { id: f.id, code: f.code, name: f.name, catalogAmount: Number(f.amount), description: f.description ?? null }
+            : null;
+        }).filter(Boolean) as BuilderFee[];
+        setFeeCatalog(picked);
+        setFeeSelections((prev) => {
+          const next = { ...prev };
+          for (const f of picked) {
+            if (!next[f.code]) next[f.code] = { on: false, rate: f.catalogAmount, quantity: 1 };
+          }
+          return next;
+        });
+      })
+      // A fee-catalog outage must not break the builder — the section
+      // just doesn't render, and fees stay addable on the order page.
+      .catch(() => { if (!cancelled) setFeeCatalog([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  /** Fee lines destined for the save payload. */
+  const activeFees = useMemo(
+    () =>
+      (feeCatalog ?? [])
+        .map((f) => ({ fee: f, sel: feeSelections[f.code] }))
+        .filter((x) => x.sel?.on)
+        .map((x) => ({
+          feeItemId: x.fee.id,
+          description: x.fee.name,
+          quantity: Math.max(1, Math.floor(x.sel!.quantity || 1)),
+          rate: x.sel!.rate,
+        })),
+    [feeCatalog, feeSelections],
+  );
+  const feeTotal = useMemo(
+    () => activeFees.reduce((sum, f) => sum + f.quantity * f.rate, 0),
+    [activeFees],
+  );
+
   /** Section-level week cap (Wes 2026-08-31: "selectable by section and
    *  applied to whole section"): reprice EVERY dated line in the
    *  department at `cap` days per 7-day week, from each line's own
@@ -1589,8 +1660,11 @@ function NewQuotePageInner() {
   }, [discounts, departmentSubtotals]);
 
   const orderTotal = useMemo(
-    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total),
-    [discountBreakdown],
+    // Fees are added AFTER discounts on purpose: a gear discount
+    // discounts gear, not a delivery run. Same order the order page
+    // and the quote PDF use.
+    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total) + feeTotal,
+    [discountBreakdown, feeTotal],
   );
 
   // Save is allowed when there's at least one line item AND the user
@@ -1941,7 +2015,17 @@ function NewQuotePageInner() {
             packageId: it.packageId ?? null,
             isPackageHeader: !!it.isPackageHeader,
             isPackageModified: !!it.isPackageModified,
-          })),
+          })).concat(
+            // Fee lines ride the same items array — the server prices
+            // them from FeeItem.amount and ignores everything else, so
+            // only the id, the count and the (override) rate travel.
+            activeFees.map((f) => ({
+              description: f.description,
+              quantity: f.quantity,
+              rate: f.rate,
+              feeItemId: f.feeItemId,
+            })) as never[],
+          ),
           parsed: {
             startDate: editing.startDate || null,
             endDate: editing.endDate || null,
@@ -2676,6 +2760,94 @@ function NewQuotePageInner() {
           })
         )}
       </div>
+
+      {/* Fees — the delivery/pickup runs a quote has to price up front
+          (Wes 2026-08-31). Catalog-driven: the amount comes from
+          /admin/fees and is editable here as an override the server
+          re-resolves and audits. */}
+      {feeCatalog && feeCatalog.length > 0 && (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] uppercase tracking-wider text-lt-fg3 font-bold">Fees (optional)</div>
+            {feeTotal > 0 && (
+              <div className="text-xs text-lt-fg2 font-mono">+{fmtMoney(feeTotal)}</div>
+            )}
+          </div>
+          <div className="space-y-2">
+            {feeCatalog.map((f) => {
+              const sel = feeSelections[f.code] ?? { on: false, rate: f.catalogAmount, quantity: 1 };
+              const overridden = sel.on && sel.rate !== f.catalogAmount;
+              return (
+                <div key={f.code} className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-2 cursor-pointer select-none min-w-[190px]">
+                    <input
+                      type="checkbox"
+                      checked={sel.on}
+                      onChange={(e) =>
+                        setFeeSelections((prev) => ({
+                          ...prev,
+                          [f.code]: { ...sel, on: e.target.checked },
+                        }))
+                      }
+                      className="accent-amber-600"
+                    />
+                    <span className="text-sm text-lt-fg font-medium">{f.name}</span>
+                  </label>
+                  {sel.on && (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-lt-fg3">Qty</span>
+                        <IntegerInput
+                          value={sel.quantity}
+                          onChange={(next) =>
+                            setFeeSelections((prev) => ({
+                              ...prev,
+                              [f.code]: { ...sel, quantity: Math.max(1, next) },
+                            }))
+                          }
+                          min={1}
+                          ariaLabel={`${f.name} quantity`}
+                          className="w-14 bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm tabular-nums text-lt-fg text-center"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-lt-fg3">Each</span>
+                        <CurrencyInput
+                          value={sel.rate}
+                          onChange={(next) =>
+                            setFeeSelections((prev) => ({
+                              ...prev,
+                              [f.code]: { ...sel, rate: next },
+                            }))
+                          }
+                          min={0}
+                          className="w-28"
+                          inputClassName="px-2 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg text-right font-mono"
+                          ariaLabel={`${f.name} amount`}
+                        />
+                      </div>
+                      <div className="ml-auto text-sm font-bold tabular-nums text-chip-good-fg">
+                        {fmtMoney(sel.quantity * sel.rate)}
+                      </div>
+                    </>
+                  )}
+                  {!sel.on && (
+                    <span className="text-[11px] text-lt-fg3 font-mono">{fmtMoney(f.catalogAmount)}</span>
+                  )}
+                  {overridden && (
+                    <span
+                      className="basis-full text-[11px] text-amber-700"
+                      title="The server records this as a rate override against the catalog price"
+                    >
+                      Overriding the catalog price of {fmtMoney(f.catalogAmount)}.
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Discounts — % or $, whole order or one category. */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
