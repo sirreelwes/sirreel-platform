@@ -4970,8 +4970,6 @@ model Job {
   // over writers and deprecate the enum.
   productionTypeProfileId String?        @map("production_type_profile_id")
   status                  JobStatus      @default(QUOTED)
-  startDate               DateTime?      @map("start_date") @db.Date
-  endDate                 DateTime?      @map("end_date") @db.Date
   agentId                 String         @map("agent_id")
   planyoCartId            String?        @unique @map("planyo_cart_id")
   estimatedValue          Decimal?       @map("estimated_value") @db.Decimal(12, 2)

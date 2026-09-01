@@ -21,6 +21,7 @@
  */
 
 import { cookies } from 'next/headers'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import type { BookingStatus } from '@prisma/client'
@@ -106,13 +107,13 @@ export default async function PortalAccountPage() {
           jobCode: true,
           name: true,
           status: true,
-          startDate: true,
-          endDate: true,
           productionType: true,
+          // Derived — job dates dropped 2026-08-31.
+          bookings: { select: { startDate: true, endDate: true, status: true } },
           company: { select: { name: true } },
           _count: { select: { orders: true } },
           orders: {
-            select: { subtotal: true, status: true },
+            select: { subtotal: true, status: true, startDate: true, endDate: true },
           },
         },
       },
@@ -121,14 +122,20 @@ export default async function PortalAccountPage() {
   const activeJobs = jobContacts
     .map((jc) => jc.job)
     .filter((j) => ACTIVE_JOB_STATUSES.includes(j.status as (typeof ACTIVE_JOB_STATUSES)[number]))
+    // Newest-starting first, on the derived window rather than a stored
+    // job date. A job with nothing scheduled sorts last, as it did when
+    // its startDate was null.
     .sort((a, b) => {
-      const aT = a.startDate ? new Date(a.startDate).getTime() : 0
-      const bT = b.startDate ? new Date(b.startDate).getTime() : 0
+      const aT = deriveJobDateRange(a.orders, a.bookings).start?.getTime() ?? 0
+      const bT = deriveJobDateRange(b.orders, b.bookings).start?.getTime() ?? 0
       return bT - aT
     })
     .slice(0, 10)
     .map((j) => ({
       ...j,
+      // Carried onto the row so the render doesn't derive a second time.
+      startDate: deriveJobDateRange(j.orders, j.bookings).start,
+      endDate: deriveJobDateRange(j.orders, j.bookings).end,
       orderTotal: j.orders
         .filter((o) => o.status !== 'CANCELLED')
         .reduce((s, o) => s + Number(o.subtotal || 0), 0),

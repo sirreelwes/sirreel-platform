@@ -39,7 +39,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
               jobCode: true,
               name: true,
               status: true,
-              startDate: true,
+              // Derived, not stored — job dates dropped 2026-08-31.
+              orders: { select: { startDate: true, endDate: true, status: true } },
+              bookings: { select: { startDate: true, endDate: true, status: true } },
               company: { select: { id: true, name: true, tier: true } },
             },
           },

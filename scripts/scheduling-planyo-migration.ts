@@ -350,8 +350,9 @@ async function main() {
             companyId: args.companyId,
             agentId: args.agentId,
             status,
-            startDate: args.startDate,
-            endDate: args.endDate,
+            // Job date columns were dropped 2026-08-31. The window comes
+            // from the Booking this same run creates against the cart —
+            // args.startDate/endDate still drive THAT.
             planyoCartId: args.cartId,
             notes: `Auto-created by Planyo migration on ${startedAt.toISOString().slice(0, 10)}`,
           },

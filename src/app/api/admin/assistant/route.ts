@@ -47,8 +47,10 @@ export async function GET() {
       name: true,
       assistantAuthCode: true,
       status: true,
-      startDate: true,
-      endDate: true,
+      // Job dates were dropped 2026-08-31 — derived from what is
+      // scheduled. See src/lib/jobs/dateRange.
+      orders: { select: { startDate: true, endDate: true, status: true } },
+      bookings: { select: { startDate: true, endDate: true, status: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 200,

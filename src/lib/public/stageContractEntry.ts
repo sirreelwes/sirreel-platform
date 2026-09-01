@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -102,13 +103,16 @@ async function openStageJobsForPerson(personId: string): Promise<StageJob[]> {
     select: {
       id: true,
       name: true,
-      startDate: true,
-      endDate: true,
       company: { select: { name: true } },
+      // Derived window — job dates were dropped 2026-08-31.
+      bookings: { select: { startDate: true, endDate: true, status: true } },
       orders: {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
           signedAgreements: {
             where: { contractType: 'STAGE_CONTRACT' },
             select: { status: true, documentToSignUrl: true },
@@ -135,12 +139,13 @@ async function openStageJobsForPerson(personId: string): Promise<StageJob[]> {
       // back to the one with stage lines, then the first order.
       const withContract = j.orders.find((o) => o.signedAgreements.length > 0)
       const withStage = j.orders.find((o) => o.lineItems.some((li) => isStageLineItem(li)))
+      const span = deriveJobDateRange(j.orders, j.bookings)
       return {
         id: j.id,
         name: j.name,
         company: j.company.name,
-        startDate: j.startDate,
-        endDate: j.endDate,
+        startDate: span.start,
+        endDate: span.end,
         orderId: (withContract ?? withStage ?? j.orders[0])?.id ?? null,
         ready: agreements.some((a) => READY.has(a.status) && a.documentToSignUrl),
         signed: agreements.some((a) => SIGNED.has(a.status)),

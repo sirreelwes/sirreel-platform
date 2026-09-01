@@ -6,6 +6,7 @@ import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 // Re-exported so server callers can reach it from the module they
 // already import; the definition is Prisma-free because the Review Quote
 // page is a client component. See jobDisambiguation.ts.
@@ -186,24 +187,44 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
     const pad = 7 * 86_400_000
     const winStart = new Date(new Date(ctx.dates.start + 'T00:00:00Z').getTime() - pad)
     const winEnd = new Date(new Date(ctx.dates.end + 'T00:00:00Z').getTime() + pad)
+    // Overlap is asked of what is actually SCHEDULED — the job's own
+    // date columns were dropped 2026-08-31. An order or a live booking
+    // straddling the window is the same evidence the column used to
+    // stand for, and it cannot go stale the way the column did.
+    const overlap = { startDate: { lte: winEnd }, endDate: { gte: winStart } }
     const hits = await prisma.job.findMany({
       where: {
         companyId: resolvedCompany.id,
         status: { notIn: EXCLUDED },
         OR: [
-          { startDate: { lte: winEnd }, endDate: { gte: winStart } },
-          // date-less leads at the same company still deserve a look
-          { startDate: null },
+          { orders: { some: overlap } },
+          { bookings: { some: overlap } },
+          // Date-less leads at the same company still deserve a look:
+          // nothing scheduled anywhere, which is what `startDate: null`
+          // used to mean.
+          {
+            AND: [
+              { orders: { none: { startDate: { not: null } } } },
+              // Booking.startDate is non-nullable, so "no booking dates"
+              // is simply "no bookings".
+              { bookings: { none: {} } },
+            ],
+          },
         ],
       },
-      select: { id: true, startDate: true },
+      select: {
+        id: true,
+        orders: { select: { startDate: true, endDate: true, status: true } },
+        bookings: { select: { startDate: true, endDate: true, status: true } },
+      },
       take: 10,
     })
     for (const h of hits) {
+      const dated = deriveJobDateRange(h.orders, h.bookings).start !== null
       add(
         h.id,
-        RUNG_SCORES.companyDates - (h.startDate ? 0 : 20),
-        h.startDate
+        RUNG_SCORES.companyDates - (dated ? 0 : 20),
+        dated
           ? `same company with overlapping dates (±7d of ${ctx.dates.start}–${ctx.dates.end})`
           : 'same company, job has no dates yet',
       )
@@ -270,7 +291,8 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
         where: { id: { in: ids } },
         select: {
           id: true, jobCode: true, name: true, status: true,
-          startDate: true, endDate: true,
+          orders: { select: { startDate: true, endDate: true, status: true } },
+          bookings: { select: { startDate: true, endDate: true, status: true } },
           company: { select: { id: true, name: true } },
           agent: { select: { name: true } },
         },
@@ -284,8 +306,8 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
       status: j.status,
       companyId: (j.company as { id?: string } | null)?.id ?? null,
       companyName: j.company?.name ?? null,
-      startDate: fmtDate(j.startDate),
-      endDate: fmtDate(j.endDate),
+      startDate: fmtDate(deriveJobDateRange(j.orders, j.bookings).start),
+      endDate: fmtDate(deriveJobDateRange(j.orders, j.bookings).end),
       agentName: j.agent?.name ?? null,
       score: bag.get(j.id)!.score,
       reasons: bag.get(j.id)!.reasons,
@@ -455,8 +477,10 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
           ? draft.productionTypeProfileId
           : null,
       status: draft.status || 'NEW',
-      startDate: draft.startDate ? new Date(draft.startDate) : null,
-      endDate: draft.endDate ? new Date(draft.endDate) : null,
+      // draft.startDate/endDate are no longer written to the Job — the
+      // columns were dropped 2026-08-31 and the dates belong to the
+      // order that gets created right after. A Job created with no order
+      // simply has no dates yet, which is the honest state.
       agentId,
       notes:
         [draft.notes, companyResolution ? `[company: ${companyResolution}]` : null].filter(Boolean).join('\n') || null,

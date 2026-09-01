@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { getPermissions } from '@/lib/permissions'
@@ -44,7 +45,13 @@ export async function GET(_req: NextRequest) {
       },
     },
     select: {
-      id: true, jobCode: true, name: true, startDate: true,
+      id: true, jobCode: true, name: true,
+      // The RW matcher scores on how close a job's start is to an
+      // invoice's billing date. Job dates were dropped 2026-08-31, so
+      // that start is derived from what is scheduled — which is also
+      // more accurate than the stale column ever was here.
+      orders: { select: { startDate: true, endDate: true, status: true } },
+      bookings: { select: { startDate: true, endDate: true, status: true } },
       agent: { select: { name: true } },
       company: { select: { id: true, name: true, rentalworksCustomerId: true } },
     },
@@ -146,7 +153,11 @@ export async function GET(_req: NextRequest) {
     let best: { g: Group; score: number; reasons: string[]; distanceDays: number | null } | null = null
     for (const g of orders.values()) {
       const m = scoreOrderMatch(
-        { name: j.name, agentName: j.agent?.name, startDate: j.startDate },
+        {
+          name: j.name,
+          agentName: j.agent?.name,
+          startDate: deriveJobDateRange(j.orders, j.bookings).start,
+        },
         { dealName: g.dealName, agent: g.agent, billingStartDate: g.billingStartDate, firstInvoiceDate: g.firstInvoiceDate },
       )
       if (!isSuggestable(m)) continue

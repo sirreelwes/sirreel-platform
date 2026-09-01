@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { prisma } from '@/lib/prisma'
 import { resolveDefaultSalesAgent } from '@/lib/sales/defaultAgent'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
@@ -87,27 +88,34 @@ async function openJobsForPerson(personId: string): Promise<OpenJob[]> {
     select: {
       id: true,
       name: true,
-      startDate: true,
-      endDate: true,
       company: { select: { name: true } },
+      // Job dates were dropped 2026-08-31 — the window is derived from
+      // what is actually scheduled. See src/lib/jobs/dateRange.
+      bookings: { select: { startDate: true, endDate: true, status: true } },
       orders: {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
           signedAgreements: { where: { contractType: 'RENTAL_AGREEMENT' }, select: { status: true } },
         },
       },
     },
   })
-  return jobs.map((j) => ({
+  return jobs.map((j) => {
+    const span = deriveJobDateRange(j.orders, j.bookings)
+    return {
     id: j.id,
     name: j.name,
     company: j.company.name,
-    startDate: j.startDate,
-    endDate: j.endDate,
+    startDate: span.start,
+    endDate: span.end,
     firstOrderId: j.orders[0]?.id ?? null,
     signed: j.orders.some((o) => o.signedAgreements.some((a) => SIGNED.has(a.status))),
-  }))
+    }
+  })
 }
 
 const fmtD = (d: Date | null) =>

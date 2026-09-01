@@ -10,9 +10,21 @@
  * matcher and printing on signed contracts.
  *
  * Where a range genuinely is needed (ranking RW candidates, a rollup for
- * display), derive it from the orders rather than storing a fourth
- * opinion. The columns stay in the database per the additive-only rule —
- * they are simply no longer read or written.
+ * display), derive it from what is scheduled rather than storing a
+ * fourth opinion.
+ *
+ * The columns were DROPPED on 2026-08-31 (Wes: "let the dates only be
+ * with the individual orders … I don't think we need it"). Values for
+ * all 229 dated jobs are snapshotted in tmp/job-dates-backup-*.json.
+ *
+ * ── Why bookings count too ─────────────────────────────────────────
+ *
+ * 223 of those 229 jobs had NO orders at all — they are Planyo-era
+ * imports whose only schedule is a Booking. Deriving from orders alone
+ * would have blanked the date on every one of them and emptied the Going
+ * out / Coming back strip. So the range spans orders AND live bookings;
+ * measured before the drop, that left exactly 2 jobs with no date
+ * anywhere, and neither had anything scheduled to have a date about.
  *
  * NOTE for per-order documents: a contract or invoice covers ONE order,
  * so it should print THAT order's dates, not the job-wide span. This
@@ -39,20 +51,39 @@ const toDate = (v: Date | string | null): Date | null => {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+/** Bookings that shouldn't drag the range around either. */
+const IGNORED_BOOKING_STATUSES = new Set(['CANCELLED', 'ARCHIVED'])
+
 /**
- * Earliest order start → latest order end, ignoring cancelled/lost
- * orders. Returns nulls when nothing dated remains, which callers should
- * render as "—" rather than substituting today.
+ * Earliest start → latest end across everything scheduled on the job,
+ * ignoring cancelled/lost orders and cancelled/archived bookings.
+ *
+ * Returns nulls when nothing dated remains, which callers should render
+ * as "—" rather than substituting today. A job with no schedule has no
+ * dates, and saying so is more useful than inventing one.
  */
-export function deriveJobDateRange(orders: OrderDates[]): JobDateRange {
-  const live = orders.filter((o) => !o.status || !IGNORED_STATUSES.has(o.status))
-  const starts = live.map((o) => toDate(o.startDate)).filter((d): d is Date => d !== null)
-  const ends = live.map((o) => toDate(o.endDate)).filter((d): d is Date => d !== null)
+export function deriveJobDateRange(
+  orders: OrderDates[],
+  bookings: OrderDates[] = [],
+): JobDateRange {
+  const liveOrders = orders.filter((o) => !o.status || !IGNORED_STATUSES.has(o.status))
+  const liveBookings = bookings.filter(
+    (b) => !b.status || !IGNORED_BOOKING_STATUSES.has(b.status),
+  )
+  const all = [...liveOrders, ...liveBookings]
+  const starts = all.map((o) => toDate(o.startDate)).filter((d): d is Date => d !== null)
+  const ends = all.map((o) => toDate(o.endDate)).filter((d): d is Date => d !== null)
   return {
     start: starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : null,
     end: ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : null,
   }
 }
+
+/** The select both sides of a derived range need. */
+export const JOB_DATE_SOURCE_SELECT = {
+  orders: { select: { startDate: true, endDate: true, status: true } },
+  bookings: { select: { startDate: true, endDate: true, status: true } },
+} as const
 
 /** ISO yyyy-MM-dd for a derived bound, or null. Dates are @db.Date, so
  *  slice the UTC calendar date rather than formatting in local time. */

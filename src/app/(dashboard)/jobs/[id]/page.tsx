@@ -2033,7 +2033,11 @@ const driverTone = (d: any): string => {
               {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
             </span>
             <AddAssetButton
-              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, startDate: job.startDate, endDate: job.endDate }}
+              // Derived span, same as JobQuickActions above. This read
+              // job.startDate/endDate, which the API stopped sending long
+              // before the columns were dropped — so the hold picker was
+              // silently defaulting to today on every job.
+              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
               onCreated={load}
             />
           </div>
