@@ -543,6 +543,14 @@ export default function OrderDetailPage() {
   // Delivery/pickup marking — local toggles seeded from the order; dirty until
   // Save. Task creation is a later step; this only flips the flags.
   const [showPartnerFees, setShowPartnerFees] = useState(false);
+  // Who this order belongs to. Wes, 2026-09-01: "how does a sales agent
+  // make sure their name is in the emails and communications" — after a
+  // quote Jose sent went out signed "Wes Bailey". It goes out under the
+  // ORDER's agent (both the footer and the Reply-To), and until now
+  // nothing in the UI could change that: the API took agentId, no screen
+  // sent one, so the name was fixed at whoever created the order.
+  const [agents, setAgents] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [savingAgent, setSavingAgent] = useState(false);
   const [deliveryRequested, setDeliveryRequested] = useState(false);
   const [pickupRequested, setPickupRequested] = useState(false);
   const [dispatchDirty, setDispatchDirty] = useState(false);
@@ -911,6 +919,7 @@ export default function OrderDetailPage() {
     fetchOrder();
     fetch("/api/orders/lookups").then((r) => r.json()).then((data) => {
       setAssetCats(data.assetCategories || []);
+      setAgents(data.agents || []);
     });
   }, [fetchOrder]);
 
@@ -2309,7 +2318,48 @@ export default function OrderDetailPage() {
         )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-sm">
           <div><span className="text-lt-fg3">Company</span><p className="text-lt-fg mt-0.5">{order.company.name}</p></div>
-          <div><span className="text-lt-fg3">Agent</span><p className="text-lt-fg mt-0.5">{order.agent.name}</p></div>
+          <div>
+            <span className="text-lt-fg3">Agent</span>
+            {/* The client sees this name at the bottom of every email on
+                this order, and replies land in this person's inbox. */}
+            {agents.length > 0 ? (
+              <select
+                value={order.agent.id}
+                disabled={savingAgent}
+                onChange={async (e) => {
+                  const agentId = e.target.value;
+                  if (agentId === order.agent.id) return;
+                  setSavingAgent(true);
+                  try {
+                    const r = await fetch(`/api/orders/${orderId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ agentId }),
+                    });
+                    if (!r.ok) {
+                      const d = await r.json().catch(() => ({}));
+                      alert(d?.error || "Could not reassign this order.");
+                      return;
+                    }
+                    await fetchOrder();
+                  } finally {
+                    setSavingAgent(false);
+                  }
+                }}
+                className="mt-0.5 w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg disabled:opacity-50"
+                title="Whose name signs the client emails on this order, and where replies go"
+              >
+                {agents.some((a) => a.id === order.agent.id) ? null : (
+                  <option value={order.agent.id}>{order.agent.name}</option>
+                )}
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-lt-fg mt-0.5">{order.agent.name}</p>
+            )}
+          </div>
           <div>
             <span className="text-lt-fg3">Dates</span>
             <p className="text-lt-fg mt-0.5">

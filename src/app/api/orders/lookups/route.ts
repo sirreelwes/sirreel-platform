@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
       take: 50,
     }),
     prisma.user.findMany({
-      where: { role: { in: ["ADMIN", "AGENT"] } },
+      // MANAGER included: Hugo, Julian and Albert run orders, and an
+      // order's agent is whose name and reply-to reach the client.
+      // Leaving them out meant an order they handle could not be
+      // assigned to them.
+      where: { role: { in: ["ADMIN", "AGENT", "MANAGER"] } },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
