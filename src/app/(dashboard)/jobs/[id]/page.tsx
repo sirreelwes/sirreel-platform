@@ -2702,7 +2702,14 @@ const driverTone = (d: any): string => {
       {/* Job notes — THIS job only */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Job notes</h2>
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+            Job notes
+            {/* Wes wrote crew instructions here and expected them on the
+                client's quote. They are internal and always were; the
+                quote prints the ORDER's notes. Saying so on both fields
+                is cheaper than the round trip. */}
+            <span className="text-[11px] font-medium text-zinc-500">internal — not on client documents</span>
+          </h2>
           <button
             onClick={saveNotes}
             disabled={!notesDirty || notesSaving}
@@ -2718,7 +2725,7 @@ const driverTone = (d: any): string => {
             setNotesDirty(e.target.value !== (job.notes || ''));
           }}
           rows={6}
-          placeholder="Notes for this job only — logistics, deal specifics…"
+          placeholder="Internal notes for this job — logistics, deal specifics. For text the client should see on the quote, use Notes on the order."
           className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 resize-y"
         />
       </div>

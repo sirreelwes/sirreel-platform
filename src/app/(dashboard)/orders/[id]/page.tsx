@@ -490,6 +490,14 @@ export default function OrderDetailPage() {
   // cell rendered outside the editing branch, so the one field you need
   // when a parsed date lands wrong was the one field you could not touch.
   const [editPickupDate, setEditPickupDate] = useState("");
+  // The order's Notes. Wes, 2026-09-01: "the notes have been changed on
+  // the job page, but they aren't making it onto the PDF quote." They
+  // never could: the quote PDF prints ORDER notes, and this field was
+  // read-only, so the only notes anyone could edit were the Job's —
+  // which the PDF does not read. Editable here, and labelled with where
+  // it ends up.
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const [notesSaving, setNotesSaving] = useState(false);
   const [editReturnDate, setEditReturnDate] = useState("");
   // Inline-save in flight. Before this the Save control was a bare text
   // link with no pressed/working state, so a slow PUT read as "nothing
@@ -2413,8 +2421,10 @@ export default function OrderDetailPage() {
                   if (agentId === order.agent.id) return;
                   setSavingAgent(true);
                   try {
+                    // PUT, not PATCH — this route exports PUT only, and
+                    // a PATCH silently 405s.
                     const r = await fetch(`/api/orders/${orderId}`, {
-                      method: "PATCH",
+                      method: "PUT",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ agentId }),
                     });
@@ -3152,8 +3162,69 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-lt-fg mb-3">Notes</h2>
-        <p className="text-lt-fg2 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
+        <div className="flex items-baseline justify-between mb-1">
+          <h2 className="text-lg font-semibold text-lt-fg">Notes</h2>
+          {notesDraft === null ? (
+            <button
+              onClick={() => setNotesDraft(order.notes ?? "")}
+              className="text-[13px] font-semibold text-lt-fg2 hover:text-lt-fg"
+            >
+              Edit
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setNotesDraft(null)}
+                disabled={notesSaving}
+                className="text-[13px] text-lt-fg3 hover:text-lt-fg2 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setNotesSaving(true);
+                  try {
+                    const r = await fetch(`/api/orders/${orderId}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ notes: notesDraft }),
+                    });
+                    if (!r.ok) {
+                      const d = await r.json().catch(() => ({}));
+                      alert(d?.error || "Could not save the notes.");
+                      return;
+                    }
+                    setNotesDraft(null);
+                    await fetchOrder();
+                  } finally {
+                    setNotesSaving(false);
+                  }
+                }}
+                disabled={notesSaving}
+                className="text-[13px] font-semibold bg-lt-fg hover:bg-black text-white px-3 py-1 rounded-lg disabled:opacity-40"
+              >
+                {notesSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          )}
+        </div>
+        {/* Says where it goes. The Job's notes are internal and never
+            reach the client; these are printed on the quote the client
+            downloads, which is the distinction that cost Wes a round
+            trip. */}
+        <p className="text-xs text-lt-fg3 mb-2">Printed on the client&rsquo;s quote PDF.</p>
+        {notesDraft === null ? (
+          <p className="text-lt-fg2 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
+        ) : (
+          <textarea
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            rows={4}
+            autoFocus
+            placeholder="Anything the client should read on the quote — call times, access notes, what is included."
+            className="w-full bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
+          />
+        )}
         <p className="text-xs text-lt-fg3 mt-4">
           Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
