@@ -158,8 +158,7 @@ export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpS
   // The client sees who they are, not our internal order number. Falls back
   // to the order number only when a company name is genuinely missing —
   // better an opaque code than an empty hero line.
-  const clientLabelRaw = (input.companyName || '').trim() || input.orderNumber
-  const clientLabel = escapeHtml(clientLabelRaw)
+  const clientLabel = escapeHtml((input.companyName || '').trim() || input.orderNumber)
 
   // Rep-written body. When the box has words in it they ARE the email: the
   // stage lead/close stand down and only the shell (greeting, CTAs, sign-off)
@@ -188,7 +187,9 @@ export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpS
 
   const portalUrl = input.portalUrl ?? null
 
-  const subject = `${input.jobName || 'Your quote'} (${clientLabelRaw}) — ${stageCopy.subjectSuffix}`
+  // No identifier in the subject at all (Wes 2026-09-01) — the job name
+  // and the check-in read as a sentence; the parenthetical was noise.
+  const subject = `${input.jobName || 'Your quote'} — ${stageCopy.subjectSuffix}`
 
   const text = [
     repWroteGreeting ? null : `Hi ${input.firstName || 'there'},`,
