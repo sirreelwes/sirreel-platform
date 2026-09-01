@@ -27,6 +27,20 @@ export const dynamic = 'force-dynamic'
 const OPEN_STATES = ['DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED', 'LOADED', 'CHECKING_IN'] as const
 const ALL_STATES = [...OPEN_STATES, 'CHECKED_IN', 'CANCELLED'] as const
 
+// The picking floor is a POST-BOOK surface — a PickList is meant to be
+// minted at book time (see the schema note on the model). But
+// syncPickListOnLineAdd files one on every warehouse line add
+// "regardless of order status", so quotes and approved-but-unbooked
+// orders were growing lists too: on 2026-09-01, 19 of the 20 open lists
+// belonged to orders nobody had booked, including DRAFT quotes. The
+// warehouse was being shown work that does not exist yet.
+//
+// Gated on order STATUS, not bookedAt — one legitimately booked order
+// carries a null bookedAt, and hiding a real list is the worse error.
+const BOOKED_ORDER_STATES = [
+  'BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED',
+] as const
+
 export async function GET(req: NextRequest) {
   const auth = await requirePickerRole()
   if (!auth.ok) return auth.response
@@ -35,7 +49,10 @@ export async function GET(req: NextRequest) {
   const statuses = includeTerminal ? ALL_STATES : OPEN_STATES
 
   const rows = await prisma.pickList.findMany({
-    where: { status: { in: [...statuses] } },
+    where: {
+      status: { in: [...statuses] },
+      order: { status: { in: [...BOOKED_ORDER_STATES] } },
+    },
     select: {
       id: true,
       status: true,

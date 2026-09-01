@@ -189,29 +189,58 @@ export async function bookOrder(args: {
         }
       }
 
-      // Phase 2 warehouse lane: spin up a PickList (DRAFT) with one
+      // Phase 2 warehouse lane: ensure a PickList (DRAFT) with one
       // PickListItem per WAREHOUSE-routed line. Skip when the order has
       // zero warehouse lines (vehicles-and-stage-only orders).
       //
-      // PARKING LOT (Phase 2.x): post-book line-item edits (add or
-      // remove during ON_JOB) do NOT currently propagate into the
-      // PickList. A new line added after this point won't appear in the
-      // picking floor view, and a removed line will orphan its
-      // PickListItem. Sync needs to happen at the OrderLineItem POST/
-      // DELETE endpoints — see src/app/api/orders/[id]/line-items.
+      // FIND-OR-CREATE, not create (Wes 2026-09-01: "failed to create a
+      // pick list"). syncPickListOnLineAdd fires on every line add
+      // "regardless of order status", so any order that gained a
+      // warehouse line BEFORE it was booked already owns a PickList.
+      // PickList.orderId is @unique, so the blind create threw and took
+      // the whole book transaction down with it — the order could never
+      // be booked at all. S260828-003 sat APPROVED with a 24-item DRAFT
+      // list from three days earlier.
       let pickListId: string | null = null
       if (warehouseLineIds.length > 0) {
-        const pickList = await tx.pickList.create({
-          data: { orderId, status: 'DRAFT' },
-          select: { id: true },
+        const existing = await tx.pickList.findUnique({
+          where: { orderId },
+          select: { id: true, status: true },
         })
-        pickListId = pickList.id
-        await tx.pickListItem.createMany({
-          data: warehouseLineIds.map((orderLineItemId) => ({
-            pickListId: pickList.id,
-            orderLineItemId,
-          })),
+        if (existing) {
+          pickListId = existing.id
+          // A list emptied by line deletions is parked CANCELLED
+          // (syncPickListOnLineDelete). Booking is a fresh start for the
+          // floor, so bring it back to DRAFT rather than handing the
+          // warehouse a cancelled list.
+          if (existing.status === 'CANCELLED') {
+            await tx.pickList.update({ where: { id: existing.id }, data: { status: 'DRAFT' } })
+          }
+        } else {
+          const created = await tx.pickList.create({
+            data: { orderId, status: 'DRAFT' },
+            select: { id: true },
+          })
+          pickListId = created.id
+        }
+
+        // Append only what is missing. PickListItem.orderLineItemId is
+        // @unique too, so re-adding a line the pre-book sync already
+        // filed would throw the same way.
+        const alreadyFiled = await tx.pickListItem.findMany({
+          where: { orderLineItemId: { in: warehouseLineIds } },
+          select: { orderLineItemId: true },
         })
+        const have = new Set(alreadyFiled.map((r) => r.orderLineItemId))
+        const missing = warehouseLineIds.filter((id) => !have.has(id))
+        if (missing.length > 0) {
+          await tx.pickListItem.createMany({
+            data: missing.map((orderLineItemId) => ({
+              pickListId: pickListId!,
+              orderLineItemId,
+            })),
+          })
+        }
       }
 
       // AuditLog. action is `order.booked`; oldValues capture pre-book
