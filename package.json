@@ -47,7 +47,8 @@
     "coi:rerun": "tsx scripts/rerun-coi-reviews.ts",
     "test:company-rate": "tsx tests/pricing/company-rate.test.ts",
     "test:quote-urgency": "tsx tests/sales/quote-urgency.test.ts",
-    "test:company-sentinels": "tsx tests/companies/picker-sentinels.test.ts"
+    "test:company-sentinels": "tsx tests/companies/picker-sentinels.test.ts",
+    "test:job-disambiguation": "tsx tests/jobs/job-disambiguation.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

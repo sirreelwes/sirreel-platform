@@ -6,11 +6,12 @@ import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
+import { needsJobDisambiguation } from '@/lib/jobs/jobDisambiguation';
 // selectedClientId is usually a Company id but is sometimes an ANSWER
 // ('__new__' / '__unknown__'). Anything wanting a real id asks through
 // realCompanyId — see the module for why that is not spelled inline.
 import {
-  COMPANY_SENTINEL_NEW, COMPANY_SENTINEL_UNKNOWN, realCompanyId,
+  COMPANY_SENTINEL_NEW, COMPANY_SENTINEL_UNKNOWN, isUnknownCompany, realCompanyId,
 } from '@/lib/companies/pickerSentinels';
 import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } from '@/components/shared/CompanyPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
@@ -1669,6 +1670,10 @@ function NewQuotePageInner() {
       setAskingJobName(false);
     }
   };
+  // The lead the Job should be created against — the first included
+  // contact with an email. One definition, used by the headless resolve
+  // and by the modal, so the two cannot disagree about who the client is.
+  const leadContactForResolver = contacts.find((c) => c.include && c.email) ?? null;
   const pendingActionRef = useRef<CreateAction>('draft');
   const pendingJobExtrasRef = useRef<Record<string, unknown> | null>(null);
 
@@ -1781,6 +1786,106 @@ function NewQuotePageInner() {
           contacts: jobContacts,
         };
         pendingActionRef.current = action;
+
+        // ── Only ask when there is something to ask ──────────────────
+        //
+        // Wes, 2026-08-31: "after I parse an email and go to send the
+        // quote, it opens a redundant page, which asks for the client
+        // info again (she uploaded it herself) as well as asks about job
+        // and company again."
+        //
+        // The modal's question is "new Job, or does this belong to an
+        // existing one?" That is a real question only when there IS a
+        // candidate. With none, every field in it is already filled from
+        // this page and the rep is re-confirming their own typing — a
+        // dialog whose only honest answer is the one it opened with.
+        //
+        // So resolve HEADLESSLY first and ask needsJobDisambiguation
+        // whether there is a question. No candidate — or nothing scoring
+        // above the bare "open job at the same company" rung, which
+        // fires for every repeat client and whose jobs this page already
+        // lists inline — means create the Job from what we hold and go
+        // straight on to the order. Real same-job evidence still stops
+        // and asks, because the duplicate guard is why the modal exists.
+        //
+        // Fails OPEN: if the resolve or the create errors, the modal
+        // still appears. Silently dropping the rep into no-UI on a
+        // network blip would be worse than one extra dialog.
+        const leadForJob = leadContactForResolver;
+        const resolverContext = {
+          companyId: realCompanyId(selectedClientId),
+          companyName:
+            companyPick.mode === 'creating_new'
+              ? companyPick.name
+              : companyPick.name || parsed?.clientName || null,
+          contactEmail: leadForJob?.email || parsed?.contactEmail || null,
+          contactName: leadForJob?.name || null,
+          contactPhone: leadForJob?.phone || null,
+          jobNameHint: job.name?.trim() || null,
+          dates:
+            editing.startDate && editing.endDate
+              ? { start: editing.startDate, end: editing.endDate }
+              : null,
+          sourceRef: 'orders:new',
+        };
+
+        if (job.name?.trim()) {
+          try {
+            const rr = await fetch('/api/jobs/resolve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(resolverContext),
+            });
+            const rd = await rr.json();
+            if (rr.ok && rd?.bucket && !needsJobDisambiguation(rd)) {
+              const jr = await fetch('/api/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...(pendingJobExtrasRef.current ?? {}),
+                  name: job.name.trim(),
+                  companyId: resolverContext.companyId ?? undefined,
+                  companyName: isUnknownCompany(selectedClientId)
+                    ? ''
+                    : resolverContext.companyName ?? '',
+                  companyUnknown: isUnknownCompany(selectedClientId),
+                  contactName: resolverContext.contactName ?? '',
+                  contactEmail: resolverContext.contactEmail ?? '',
+                  contactPhone: resolverContext.contactPhone ?? '',
+                  startDate: editing.startDate || undefined,
+                  endDate: editing.endDate || undefined,
+                  status: 'NEW',
+                }),
+              });
+              // POST /api/jobs answers { job: {...} }, not a bare job —
+              // same unwrap the resolver modal does.
+              const jd = await jr.json();
+              const created = jd?.job;
+              if (jr.ok && created?.id) {
+                const createdCompanyId = created.company?.id ?? created.companyId ?? null;
+                setJob({
+                  jobId: created.id,
+                  jobCode: created.jobCode,
+                  name: created.name,
+                  mode: 'selected_existing',
+                  company: createdCompanyId
+                    ? { id: createdCompanyId, name: created.company?.name || '' }
+                    : job.company,
+                });
+                void createQuote(action, {
+                  jobId: created.id,
+                  name: created.name,
+                  companyId: createdCompanyId,
+                  created: true,
+                });
+                return;
+              }
+            }
+          } catch {
+            // fall through to the modal
+          }
+        }
+
         setJobResolverOpen(true);
         return; // finally{} clears `creating`; onResolved re-enters
       }
@@ -2382,7 +2487,13 @@ function NewQuotePageInner() {
                     companyPick.mode === 'creating_new'
                       ? companyPick.name
                       : companyPick.name || parsed?.clientName || null,
-                  contactEmail: contacts.find((c) => c.include && c.email)?.email || parsed?.contactEmail || null,
+                  // Name and phone as well as the email. The page already
+                  // has the lead — often because the CLIENT filled it in —
+                  // and the modal was re-asking for all three because only
+                  // the email was ever handed over.
+                  contactEmail: leadContactForResolver?.email || parsed?.contactEmail || null,
+                  contactName: leadContactForResolver?.name || null,
+                  contactPhone: leadContactForResolver?.phone || null,
                   jobNameHint: job.name?.trim() || null,
                   dates: editing.startDate && editing.endDate ? { start: editing.startDate, end: editing.endDate } : null,
                   sourceRef: 'orders:new',

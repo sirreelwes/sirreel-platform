@@ -6,6 +6,10 @@ import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
+// Re-exported so server callers can reach it from the module they
+// already import; the definition is Prisma-free because the Review Quote
+// page is a client component. See jobDisambiguation.ts.
+export { needsJobDisambiguation, SAME_JOB_EVIDENCE_SCORE } from '@/lib/jobs/jobDisambiguation'
 
 /**
  * The Job-as-root keystone: every entry point (gantt drag, email
