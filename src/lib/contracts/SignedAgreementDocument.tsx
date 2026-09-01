@@ -2,6 +2,7 @@ import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import { CANONICAL_CLAUSES, RENTAL_POLICIES, FLEET_AGREEMENT, LCDW_ADDENDUM } from './contractClauses'
 import { GREAT_VIBES_TTF_BASE64 } from './fonts/greatVibes'
+import { WORDMARK_BLACK_DATA_URI } from './brandAssets'
 
 // Register the handwriting font used for the client's typed signature name.
 // Inlined as a base64 data-URI (decoded by @react-pdf/font via fontkit at
@@ -53,22 +54,23 @@ const styles = StyleSheet.create({
     lineHeight: 1.45,
   },
   header: {
-    textAlign: 'center',
+    alignItems: 'center',
     marginBottom: 18,
   },
-  brand: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    letterSpacing: 0.5,
+  // 2.772 is the source lockup's width:height ratio (1921x693) — set
+  // both so React-PDF never guesses and squashes the wordmark.
+  wordmark: {
+    width: 150,
+    height: 54,
+    objectFit: 'contain',
   },
   subtitle: {
     fontSize: 9,
     color: '#6b7280',
-    marginTop: 2,
+    marginTop: 6,
   },
   badge: {
     marginTop: 8,
-    alignSelf: 'center',
     paddingVertical: 3,
     paddingHorizontal: 8,
     backgroundColor: '#dcfce7',
@@ -245,6 +247,34 @@ function fmtDateTime(d: Date): string {
   })
 }
 
+/**
+ * A section heading that refuses to be the last thing on a page.
+ *
+ * These were bare <Text> nodes, so React-PDF was free to set
+ * "Terms and Conditions" as the final line of page 1 and start the
+ * clauses on page 2 (Wes 2026-08-31) — a heading pointing at nothing.
+ * `minPresenceAhead` demands that much room BELOW the heading on the
+ * same page; short of it, the whole group (rule included, so the rule
+ * never strands either) moves down with its content.
+ *
+ * Same device as StageSignedCopyDocument's SectionTitle, with more
+ * headroom: these sections open with body copy rather than a table.
+ */
+function SectionHeading({
+  children,
+  divider = false,
+}: {
+  children: React.ReactNode
+  divider?: boolean
+}) {
+  return (
+    <View minPresenceAhead={72} wrap={false}>
+      {divider ? <View style={styles.divider} /> : null}
+      <Text style={styles.blockTitle}>{children}</Text>
+    </View>
+  )
+}
+
 export function SignedAgreementDocument({
   company,
   job,
@@ -260,7 +290,11 @@ export function SignedAgreementDocument({
     >
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.brand}>SIRREEL STUDIO RENTALS</Text>
+          {/* The wordmark, not the words. This header used to type
+              "SIRREEL STUDIO RENTALS" — a name the company does not use
+              (Wes 2026-08-31). The lockup ships as a data URI in
+              brandAssets.ts, so it cannot 404 in a serverless render. */}
+          <Image src={WORDMARK_BLACK_DATA_URI} style={styles.wordmark} />
           <Text style={styles.subtitle}>Equipment and Vehicle Rental Agreement</Text>
           <Text style={styles.badge}>SIGNED · {docLabel.toUpperCase()}</Text>
         </View>
@@ -290,7 +324,7 @@ export function SignedAgreementDocument({
           </View>
         </View>
 
-        <Text style={styles.blockTitle}>Rental Policies</Text>
+        <SectionHeading>Rental Policies</SectionHeading>
         {RENTAL_POLICIES.map((policy, i) => (
           <View key={`policy-${i}`} style={styles.policyBlock}>
             <Text style={styles.policyTitle}>{policy.title}</Text>
@@ -298,9 +332,7 @@ export function SignedAgreementDocument({
           </View>
         ))}
 
-        <View style={styles.divider} />
-
-        <Text style={styles.blockTitle}>Terms and Conditions</Text>
+        <SectionHeading divider>Terms and Conditions</SectionHeading>
         {CANONICAL_CLAUSES.map((clause) => (
           <View key={`clause-${clause.ref}`} style={styles.clauseBlock} wrap={false}>
             <Text style={styles.clauseTitle}>
@@ -310,15 +342,11 @@ export function SignedAgreementDocument({
           </View>
         ))}
 
-        <View style={styles.divider} />
-
-        <Text style={styles.blockTitle}>{FLEET_AGREEMENT.title}</Text>
+        <SectionHeading divider>{FLEET_AGREEMENT.title}</SectionHeading>
         <Text style={styles.clauseBody}>{FLEET_AGREEMENT.intro}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{FLEET_AGREEMENT.fuelPolicy}</Text>
 
-        <View style={styles.divider} />
-
-        <Text style={styles.blockTitle}>{LCDW_ADDENDUM.title}</Text>
+        <SectionHeading divider>{LCDW_ADDENDUM.title}</SectionHeading>
         <Text style={styles.clauseBody}>{LCDW_ADDENDUM.rate}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.coverage}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.exclusions}</Text>
