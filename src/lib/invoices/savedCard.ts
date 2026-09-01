@@ -47,15 +47,40 @@ export async function resolveSavedCardForInvoice(
 ): Promise<SavedCard | null> {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { id: true, order: { select: { bookingId: true } } },
+    select: { id: true, order: { select: { bookingId: true, jobId: true } } },
   })
-  const bookingId = invoice?.order?.bookingId
-  if (!bookingId) return null
+  if (!invoice?.order) return null
 
-  // Latest paperwork row for this booking that carries a CC token.
+  // ── Which bookings might hold the card ─────────────────────────────
+  //
+  // The order's own bookingId first, then every booking on its JOB.
+  //
+  // Wes, 2026-09-01: "the dreambear team was unable to pay via hq payment
+  // options." Their card WAS on file — VISA ····7654, authorized through
+  // the portal on 2026-08-25 — but it hangs off the job's booking
+  // (SR-2026-0204) while order S260825-002 carries bookingId NULL. This
+  // resolver read only the order's own link, returned null, and the
+  // charge-a-card-on-file path reported hasCard:false. Staff could not
+  // charge a card the client had already given them.
+  //
+  // Not a one-off: measured that day, of every order carrying an invoice,
+  // ZERO had bookingId set. The Job is the root the booking hangs from
+  // (Job-as-root, 2026-08), so the job is where the card actually lives.
+  const bookingIds = new Set<string>()
+  if (invoice.order.bookingId) bookingIds.add(invoice.order.bookingId)
+  if (invoice.order.jobId) {
+    const jobBookings = await prisma.booking.findMany({
+      where: { jobId: invoice.order.jobId },
+      select: { id: true },
+    })
+    jobBookings.forEach((b) => bookingIds.add(b.id))
+  }
+  if (bookingIds.size === 0) return null
+
+  // Latest paperwork row across those bookings that carries a CC token.
   const pw = await prisma.paperworkRequest.findFirst({
     where: {
-      bookingId,
+      bookingId: { in: [...bookingIds] },
       creditCardAuth: true,
       ccCardNumberEncrypted: { not: null },
     },
