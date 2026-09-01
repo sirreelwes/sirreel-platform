@@ -2522,10 +2522,20 @@ const driverTone = (d: any): string => {
                     )}
                   </div>
                   <div className="text-[13px] text-zinc-300 truncate flex items-center gap-3 flex-wrap">
-                    {jc.person.email && (
+                    {/* An address that cannot receive mail is worse than
+                        a missing one: it looks answered. SR-JOB-0268's
+                        primary had the literal string "martinez" here and
+                        rendered as a normal mailto. */}
+                    {jc.person.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(jc.person.email) ? (
                       <a href={`mailto:${jc.person.email}`} className="hover:text-amber-500">
                         {jc.person.email}
                       </a>
+                    ) : jc.person.email ? (
+                      <span className="text-red-400" title="Not a valid email address — mail to this contact will not arrive">
+                        {jc.person.email} · not a valid email
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500">no email</span>
                     )}
                     {jc.person.phone && (
                       <a
@@ -2538,9 +2548,47 @@ const driverTone = (d: any): string => {
                   </div>
                   </div>
                 </div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300 bg-zinc-800 px-2 py-1 rounded">
-                  {jc.role}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Wes 2026-08-31: a wrong primary was permanent, and
+                      since 2026-08-18 the primary decides who gets the
+                      payment-options email. Both actions live on the row
+                      so fixing it is where you notice it. */}
+                  {!jc.isPrimary && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await fetch(`/api/jobs/${job.id}/contacts/${jc.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ isPrimary: true }),
+                        });
+                        load();
+                      }}
+                      className="text-[11px] font-semibold text-zinc-400 hover:text-amber-400"
+                      title="Route this job's client mail to this contact"
+                    >
+                      Make primary
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const who = `${jc.person.firstName} ${jc.person.lastName}`.trim() || jc.person.email || 'this contact';
+                      // Names the consequence precisely: the CRM record
+                      // survives, only the link to this job goes.
+                      if (!confirm(`Remove ${who} from ${job.jobCode}?\n\nTheir contact record stays in the CRM — this only unlinks them from this job.`)) return;
+                      await fetch(`/api/jobs/${job.id}/contacts/${jc.id}`, { method: 'DELETE' });
+                      load();
+                    }}
+                    className="text-[11px] font-semibold text-zinc-500 hover:text-red-400"
+                    title="Unlink from this job (keeps the CRM record)"
+                  >
+                    Remove
+                  </button>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300 bg-zinc-800 px-2 py-1 rounded">
+                    {jc.role}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
