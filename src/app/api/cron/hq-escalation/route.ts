@@ -85,31 +85,36 @@ function buildHtml(desk: EscalationDesk, rows: Row[]): string {
             : `picks up in ${r.days}d`
     return `
       <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;">
-          <a href="https://hq.sirreel.com/jobs/${r.job.id}" style="color:#111;font-weight:600;text-decoration:none;">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e5e5;background:#ffffff;">
+          <a href="https://hq.sirreel.com/jobs/${r.job.id}" style="color:#111111;font-weight:600;text-decoration:none;">
             ${esc(r.job.name || r.job.jobCode)}
           </a>
-          <div style="font-size:12px;color:#666;margin-top:2px;">
+          <div style="font-size:12px;color:#555555;margin-top:2px;">
             ${esc(r.job.jobCode)} · ${esc(r.job.company?.name || 'no company')} · ${esc(w.start || '—')}
           </div>
         </td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:${r.days <= 0 ? '#b91c1c' : r.days <= 2 ? '#c2410c' : '#a16207'};font-weight:700;white-space:nowrap;">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e5e5;background:#ffffff;font-size:12px;color:${r.days <= 0 ? '#b91c1c' : r.days <= 2 ? '#c2410c' : '#a16207'};font-weight:700;white-space:nowrap;">
           ${esc(when)}
         </td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:#111;white-space:nowrap;">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e5e5;background:#ffffff;font-size:12px;color:#111111;font-weight:700;white-space:nowrap;">
           ${r.blockers.map((b) => esc(b)).join(' · ')}
         </td>
       </tr>`
   }
+  // Every colour is stated against an explicit white ground. Mail
+  // clients in dark mode do NOT invert author-set text, so #111 on an
+  // unstated background renders black-on-black — which is exactly how
+  // the first preview reached Wes: the job names and the blocker column,
+  // the two things the email exists to say, were invisible.
   return `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;">
-      <h2 style="font-size:16px;margin:0 0 4px;">Booked in HQ — still not ready</h2>
-      <p style="font-size:13px;color:#555;margin:0 0 14px;">
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;background:#ffffff;color:#111111;padding:16px;">
+      <h2 style="font-size:16px;margin:0 0 4px;color:#111111;">Booked in HQ — still not ready</h2>
+      <p style="font-size:13px;color:#555555;margin:0 0 14px;">
         ${esc(DESK_LABEL[desk])}. These were booked in SirReel HQ, so nothing else is chasing them.
       </p>
-      <table style="border-collapse:collapse;width:100%;border:1px solid #eee;">${rows.map(line).join('')}</table>
-      <p style="font-size:12px;color:#888;margin-top:14px;">
-        Filter the board yourself: <a href="https://hq.sirreel.com/jobs">HQ → Jobs → “Booked in HQ”</a>.
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e5e5;background:#ffffff;">${rows.map(line).join('')}</table>
+      <p style="font-size:12px;color:#666666;margin-top:14px;">
+        Filter the board yourself: <a href="https://hq.sirreel.com/jobs" style="color:#0b5cad;">HQ → Jobs → “Booked in HQ”</a>.
       </p>
     </div>`
 }
@@ -144,11 +149,34 @@ export async function GET(req: NextRequest) {
   }
   const { today: t, tomorrow } = listDays()
 
+  // Jobs with at least one order the business has actually committed to.
+  //
+  // The rail's "Booked" band is generous — SR-JOB-0205 read Booked with
+  // nothing but a QUOTE_SENT order, and escalated a missing COI and card
+  // for a quote the client never approved. Chasing paperwork for an
+  // unapproved quote is exactly the noise Wes objected to in the first
+  // preview. Same gate the warehouse desk already used.
+  const hqJobIds = jobs.filter((j) => j.origin === 'HQ').map((j) => j.id)
+  const committedOrders = hqJobIds.length
+    ? await prisma.order.findMany({
+        where: { jobId: { in: hqJobIds }, status: { in: COMMITTED_ORDER_STATUSES as never } },
+        select: {
+          id: true, orderNumber: true, jobId: true, startDate: true,
+          pickList: { select: { status: true } },
+          lineItems: { select: { pickupDate: true }, orderBy: { pickupDate: 'asc' }, take: 1 },
+        },
+      })
+    : []
+  const committedJobIds = new Set(committedOrders.map((o) => o.jobId).filter(Boolean) as string[])
+
   const byDesk = new Map<EscalationDesk, Row[]>()
   for (const job of jobs) {
     // HQ-origin only. An imported job has its own workflow — chasing it
     // here is exactly the noise that would make this ignorable.
     if (job.origin !== 'HQ') continue
+    // Nothing committed on this job — no order anyone has approved — so
+    // there is nothing to chase paperwork for yet.
+    if (!committedJobIds.has(job.id)) continue
     const state = rowState(job, t, tomorrow)
     // Readiness only means something on outbound rows; a quoted job with
     // no COI is a normal quote, not a deficiency.
@@ -176,18 +204,7 @@ export async function GET(req: NextRequest) {
   // joined onto the same escalation.
   const hqJobById = new Map(jobs.filter((j) => j.origin === 'HQ').map((j) => [j.id, j]))
   if (hqJobById.size > 0) {
-    const orders = await prisma.order.findMany({
-      where: {
-        jobId: { in: [...hqJobById.keys()] },
-        // Committed orders only — the floor does not pull quotes.
-        status: { in: COMMITTED_ORDER_STATUSES as never },
-      },
-      select: {
-        id: true, orderNumber: true, jobId: true, startDate: true,
-        pickList: { select: { status: true } },
-        lineItems: { select: { pickupDate: true }, orderBy: { pickupDate: 'asc' }, take: 1 },
-      },
-    })
+    const orders = committedOrders
     const stagingRows: Row[] = []
     for (const o of orders) {
       if (!needsStaging(o.pickList?.status)) continue

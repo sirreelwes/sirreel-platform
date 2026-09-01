@@ -108,10 +108,20 @@ export const COMMITTED_ORDER_STATUSES: readonly string[] = [
  *
  * A quote with a mistyped year sat 714 days "overdue" and led the first
  * dry run. Nobody is staging that today; it is a data-entry bug, not a
- * loadout. Two weeks is long enough to cover a genuinely missed pickup
- * and short enough that one bad date cannot own the top of the digest.
+ * loadout.
+ *
+ * Wes, seeing the first real preview: "why are emails in this list that
+ * would have started 5 days ago … those should be ignored for these
+ * email notifications." He is right about the noise even though he was
+ * wrong about the cause — none of those rows were Planyo imports, they
+ * were HQ jobs whose pickup simply came and went.
+ *
+ * So the window is essentially FORWARD-LOOKING. Yesterday still counts,
+ * because a pickup that slipped one day is a thing you can still fix
+ * this morning. Anything older is a closeout or a data problem, and the
+ * rail already carries those as "Not returned".
  */
-export const MAX_OVERDUE_DAYS = 14
+export const MAX_OVERDUE_DAYS = 1
 
 /** Inside the window this escalation speaks about at all. */
 export function withinEscalationWindow(daysToPickup: number | null): boolean {
