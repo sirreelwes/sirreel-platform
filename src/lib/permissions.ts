@@ -435,6 +435,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
           { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
           { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
+          // The how-to sits with the work it describes rather than in a
+          // docs section of its own — there is one guide, and a nav
+          // branch for one page is worse than the page.
+          { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
         ],
       },
       {
@@ -505,6 +509,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
             label: 'Billing & Collections',
             items: [
               { id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' },
+              { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
             ],
           }]
         : []),
@@ -582,6 +587,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // the rw_sync_failure alert.
         { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
         { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
+        // Everyone who can take money should be able to find out how.
+        { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
       ],
     },
     {
