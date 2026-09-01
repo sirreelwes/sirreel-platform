@@ -415,6 +415,11 @@ export default function OrderDetailPage() {
     ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).subRentals
     : false;
   // Marking an order for delivery/pickup is a SALES action.
+  // Reopening a finished order is a money correction — same gate as the
+  // rest of billing (ADMIN / AGENT / BILLING).
+  const canReopenOrder = sessionRole
+    ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).billing
+    : false;
   const canMarkDispatch = sessionRole
     ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).canCreateBooking
     : false;
@@ -1396,7 +1401,7 @@ export default function OrderDetailPage() {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.ok) {
-        setBookErr(data.error || `HTTP ${r.status}`);
+        setBookErr(`Book it failed: ${data.error || `HTTP ${r.status}`}`);
         return;
       }
       await fetchOrder();
@@ -2237,6 +2242,39 @@ export default function OrderDetailPage() {
   );
 
 
+  // Reopen a finished order (Wes 2026-09-01). CLOSED/INVOICED render no
+  // lifecycle buttons at all, so a mistake found after closing had no
+  // way back in. Asks for a reason (it lands in the audit trail) and,
+  // when a live invoice exists, makes the caller confirm that reopening
+  // does not touch the issued document.
+  const reopenOrder = async () => {
+    const reason = window.prompt(
+      'Reopen this order back to Returned so it can be edited.\n\nWhat is being corrected? (recorded in the audit trail)',
+    );
+    if (reason === null) return;
+    setBookErr(null);
+    if (!reason.trim()) { setBookErr('A reason is required to reopen an order.'); return; }
+    const post = (confirmInvoiced: boolean) =>
+      fetch(`/api/orders/${orderId}/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim(), confirmInvoiced }),
+      });
+    try {
+      let res = await post(false);
+      let data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data?.needsConfirm) {
+        if (!window.confirm(`${data.reason}\n\nReopen anyway?`)) return;
+        res = await post(true);
+        data = await res.json().catch(() => ({}));
+      }
+      if (!res.ok) { setBookErr(data?.reason || data?.error || 'Could not reopen the order.'); return; }
+      await fetchOrder();
+    } catch (e) {
+      setBookErr(e instanceof Error ? e.message : 'Could not reopen the order.');
+    }
+  };
+
   const actions = STATUS_ACTIONS[order.status] || [];
   // (Phase 1 step 4 → Phase 2) Gate widened to the full editable
   // lifecycle. With Phase 2's holds-sync landed, HOLD_TRACKED_DEPTS
@@ -2349,6 +2387,15 @@ export default function OrderDetailPage() {
                   </button>
                 );
               })}
+              {(order.status === "CLOSED" || order.status === "INVOICED") && canReopenOrder && (
+                <button
+                  onClick={reopenOrder}
+                  title="Put this order back to Returned so line items, discounts and tax can be corrected"
+                  className="px-4 py-2 bg-lt-fg2 hover:bg-lt-fg text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Reopen order
+                </button>
+              )}
               {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
                 <button onClick={cancelOrder} className="px-3 py-2 text-chip-bad-fg hover:opacity-70 text-sm">Cancel</button>
               )}
@@ -2372,9 +2419,12 @@ export default function OrderDetailPage() {
             {order.status === "DRAFT" && (
               <RecipientLine recipients={recipients} onAdd={() => setAddContactOpen(true)} />
             )}
+            {/* Shared lifecycle-action error (book, reopen). Each caller
+                writes the whole sentence — the banner used to hardcode
+                "Book it failed:", which reads wrong for any other action. */}
             {bookErr && (
               <div className="text-xs text-chip-bad-fg mt-1.5 max-w-xs text-right">
-                Book it failed: {bookErr}
+                {bookErr}
               </div>
             )}
           </div>
