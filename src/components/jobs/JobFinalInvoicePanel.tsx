@@ -37,6 +37,8 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [note, setNote] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -73,6 +75,8 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
         setInvoiceNumber('')
         setNote('')
         setFile(null)
+        setFileError(null)
+        setDragging(false)
         setOpen(false)
         load()
       }
@@ -124,15 +128,102 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block">
+            <label
+              htmlFor="final-invoice-pdf"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block"
+            >
               Invoice PDF (optional)
             </label>
+            {/* Drop zone, not a bare "Choose File" (Wes 2026-09-01). The PDF
+                is nearly always already open or sitting in a folder next to
+                the browser, and a file picker makes you navigate back to
+                somewhere you were already looking at. The input is still
+                there and still labelled — clicking works, the keyboard works,
+                and the drop target is the same element. */}
+            <label
+              onDragOver={(e) => {
+                e.preventDefault()
+                if (!dragging) setDragging(true)
+              }}
+              onDragLeave={(e) => {
+                // Ignore the dragleave fired when the pointer crosses onto a
+                // CHILD of the zone — without this the outline flickers as
+                // the cursor moves over the label text.
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+                setDragging(false)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragging(false)
+                setFileError(null)
+                const dropped = Array.from(e.dataTransfer.files)
+                if (dropped.length === 0) return
+                const pdf = dropped.find(
+                  (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+                )
+                if (!pdf) {
+                  setFileError(
+                    dropped.length === 1
+                      ? `"${dropped[0].name}" is not a PDF.`
+                      : 'None of those are PDFs.',
+                  )
+                  return
+                }
+                if (dropped.length > 1) {
+                  setFileError(`Took ${pdf.name} — drop one file at a time.`)
+                }
+                setFile(pdf)
+              }}
+              htmlFor="final-invoice-pdf"
+              className={`flex flex-col items-center justify-center gap-1 w-full rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition ${
+                dragging
+                  ? 'border-amber-500 bg-amber-500/10'
+                  : file
+                    ? 'border-emerald-600/60 bg-emerald-500/5 hover:border-emerald-500'
+                    : 'border-zinc-700 bg-zinc-800/40 hover:border-zinc-600 hover:bg-zinc-800'
+              }`}
+            >
+              {file ? (
+                <>
+                  <span className="text-sm text-white font-semibold break-all">{file.name}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {(file.size / 1024).toFixed(0)} KB · drop another to replace
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // The zone is a <label>, so a click anywhere inside it
+                      // reopens the picker. Remove has to stop that.
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setFile(null)
+                      setFileError(null)
+                    }}
+                    className="mt-1 text-[11px] font-semibold text-zinc-400 hover:text-white underline"
+                  >
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm text-zinc-300">
+                    {dragging ? 'Drop the PDF' : 'Drag a PDF here'}
+                  </span>
+                  <span className="text-[11px] text-zinc-500">or click to choose a file</span>
+                </>
+              )}
+            </label>
             <input
+              id="final-invoice-pdf"
               type="file"
               accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:text-white hover:file:bg-zinc-600"
+              onChange={(e) => {
+                setFileError(null)
+                setFile(e.target.files?.[0] ?? null)
+              }}
+              className="sr-only"
             />
+            {fileError && <div className="mt-1.5 text-[11px] text-amber-300">{fileError}</div>}
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block">
