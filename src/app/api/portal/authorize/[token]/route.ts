@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthorizeToken } from '@/lib/portal/authorizeToken'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
@@ -82,18 +82,19 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     select: { id: true, firstName: true, lastName: true, email: true },
   })
 
-  // Don't double-issue if there's already an active access.
-  const existingAccess = await prisma.portalAccess.findFirst({
-    where: { orderId: order.id, contactId: newPerson.id, revokedAt: null },
-    select: { id: true },
+  // Don't double-issue if there's already an active access — but the link
+  // we mail MUST still carry a token. This branch used to build the URL
+  // with portalJobUrl(order.portalSlug) and no token whenever the contact
+  // already had access, so the invite mailed a bare portal address. The
+  // portal has no way to identify the reader from that, and the client
+  // landed on "this link is missing its access token". refreshOrIssue
+  // reuses the existing row (no double-issue) and pushes its expiry out,
+  // returning the token that row already carries.
+  const issued = await refreshOrIssueJobMagicLink({
+    orderId: order.id,
+    contactId: newPerson.id,
   })
-  let portalUrl: string
-  if (existingAccess) {
-    portalUrl = portalJobUrl(order.portalSlug)
-  } else {
-    const issued = await issueJobMagicLink({ orderId: order.id, contactId: newPerson.id })
-    portalUrl = portalJobUrl(order.portalSlug, issued.token)
-  }
+  const portalUrl = portalJobUrl(order.portalSlug, issued.token)
 
   const jobLabel = order.job?.name || order.company?.name || ''
   const tpl = buildPortalInviteEmail({

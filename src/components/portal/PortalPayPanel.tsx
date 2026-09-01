@@ -101,6 +101,23 @@ export function PortalPayPanel({
     refresh()
   }, [])
 
+  // Report upward whenever the listing changes.
+  //
+  // This MUST stay above the early returns below. It once sat under
+  // them, which meant the first render (invoices === null) ran three
+  // hooks and every later render ran four — React #310, an uncaught
+  // client exception that white-screened the ENTIRE portal for any
+  // client whose invoices had loaded. It never reproduced locally
+  // because a tokenless visit 401s and this panel never mounts.
+  // `invoices` is null until the fetch lands; the optional chain keeps
+  // that render honest (no pre-invoice yet), which is also the state
+  // the parent starts in, so there is no flicker.
+  const pre = invoices?.find((i) => i.isPreInvoice) ?? null
+  useEffect(() => {
+    onStatus?.({ hasPreInvoice: !!pre, awaitingReview: !!pre && !pre.approvedAt })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre?.id, pre?.approvedAt])
+
   if (err) {
     return (
       <div className="rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs px-3 py-2">
@@ -111,13 +128,6 @@ export function PortalPayPanel({
   if (invoices === null) {
     return <div className="text-xs text-gray-500">Loading invoices…</div>
   }
-  // Report upward whenever the listing changes.
-  const pre = invoices?.find((i) => i.isPreInvoice) ?? null
-  useEffect(() => {
-    onStatus?.({ hasPreInvoice: !!pre, awaitingReview: !!pre && !pre.approvedAt })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pre?.id, pre?.approvedAt])
-
   if (invoices.length === 0) {
     // No invoices yet — Job Page already shows "Issued 24-48 hours
     // after equipment return" elsewhere. Panel renders nothing.

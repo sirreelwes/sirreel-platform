@@ -293,7 +293,7 @@ export default function JobPortalPage() {
           router.replace(qs ? `?${qs}` : '?', { scroll: false });
         }
         // Step 2: load the actual portal data.
-        const res = await fetch('/api/portal/job/data');
+        const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
         if (!res.ok) {
           // Distinguish "never had a token in the URL" from "exchanged a
           // token earlier but the session has now expired" — both 401
@@ -338,7 +338,7 @@ export default function JobPortalPage() {
       }
       // Refresh the portal data so the COI section now shows received state.
       setCoiFile(null);
-      const res = await fetch('/api/portal/job/data');
+      const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
       if (res.ok) setData(await res.json());
     } catch {
       setCoiError('Upload failed');
@@ -362,7 +362,7 @@ export default function JobPortalPage() {
       setAgreementReady(!body.agreementError);
       // Refetch so the Rental Agreement row picks up its released state and
       // the header stage advances — the whole point of approving here.
-      const res = await fetch('/api/portal/job/data');
+      const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
       if (res.ok) setData(await res.json());
     } catch {
       setApproveError('Could not approve the quote. Please try again.');

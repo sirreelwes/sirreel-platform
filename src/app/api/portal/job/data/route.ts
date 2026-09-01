@@ -71,6 +71,20 @@ export async function GET(req: NextRequest) {
     return res
   }
 
+  // The session cookie names an order; the URL the client is standing on
+  // names another. Until 2026-09-01 this route read the cookie ALONE, so a
+  // client who had opened one portal and then followed a link to a second
+  // job — a forwarded email, a shared laptop on a production, a rep pasting
+  // the address-bar URL after the token is stripped — was served the FIRST
+  // job's order, schedule, equipment and invoices under the second job's
+  // address. Refusing here (rather than silently swapping jobs) drops the
+  // page onto its recovery screen, where "Email me a secure link" mints a
+  // link for the job actually being asked for.
+  const wantSlug = req.nextUrl.searchParams.get('slug')
+  if (wantSlug && resolved.order.portalSlug !== wantSlug) {
+    return NextResponse.json({ error: 'Session is for a different job' }, { status: 401 })
+  }
+
   // Render the BASELINE approved-clause "document to sign" up front so the
   // client reviews the approved text (and can sign) the moment they land in
   // the portal — not only after an operator opens the dashboard agreement
