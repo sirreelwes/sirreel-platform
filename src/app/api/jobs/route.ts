@@ -469,6 +469,17 @@ export async function GET(req: NextRequest) {
       const activeAssignments = liveItems.flatMap((it) =>
         it.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
       )
+      // Client said yes, nobody has booked it yet (Wes 2026-09-01: an
+      // approved order "should go somewhere more prominent"). APPROVED
+      // is the one status where the ball is entirely in OUR court and
+      // the next move is a single click — but the cadence rollup folds
+      // it into 'booked', so the board showed it as work already locked
+      // in. Carried as its own count rather than a new CadenceState,
+      // which would have to re-tier the colours, legend and sort.
+      const approvedUnbooked = liveOrders.filter(
+        (o) => (o as { status: OrderStatus }).status === 'APPROVED',
+      ).length
+
       const readiness = computeReadiness({
         coi: paperwork.coi.state,
         rental: paperwork.rental.state,
@@ -541,6 +552,7 @@ export async function GET(req: NextRequest) {
         paperwork,
         billing,
         readiness,
+        approvedUnbooked,
         cadence,
         hasLD,
         hasStageScope,

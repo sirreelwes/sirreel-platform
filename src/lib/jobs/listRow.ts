@@ -95,6 +95,10 @@ export interface JobRow {
   /** Five-check "can this job go out" rollup — src/lib/jobs/readiness.ts.
    *  Rendered ONLY on outbound rows (readinessApplies); shipped on all. */
   readiness?: import('./readiness').JobReadiness
+  /** Live orders the client APPROVED that nobody has booked yet. The
+   *  cadence rollup folds APPROVED into 'booked', so without this the
+   *  board cannot tell "locked in" from "one click away". */
+  approvedUnbooked?: number
   cadence?: { state: string; partial: boolean }
   hasLD?: boolean
   hasStageScope?: boolean

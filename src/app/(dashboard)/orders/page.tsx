@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CopyIntakeLinkButton } from "@/components/intake/CopyIntakeLinkButton";
 import { TodayMovementStrip } from "@/components/jobs/TodayMovementStrip";
 import {
@@ -84,6 +85,24 @@ export default function OrdersPage() {
 
   const reqSeq = useRef(0);
   const archivedView = statusFilter === ARCHIVED_VIEW;
+
+  // Approved but not yet booked — the client has said yes and the only
+  // thing standing between them and a booked order is one click (Wes
+  // 2026-09-01: an approved order "should go somewhere more prominent").
+  // Fetched on its own rather than read off `orders`, so it stays visible
+  // no matter what the rep has filtered or paged to.
+  const [awaitingBooking, setAwaitingBooking] = useState<Order[]>([]);
+  const loadAwaitingBooking = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders?status=APPROVED&limit=50', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAwaitingBooking(Array.isArray(data.orders) ? (data.orders as Order[]) : []);
+    } catch {
+      /* A failed strip must never take the orders table down with it. */
+    }
+  }, []);
+  useEffect(() => { void loadAwaitingBooking(); }, [loadAwaitingBooking]);
 
   const fetchOrders = useCallback(async () => {
     const seq = ++reqSeq.current;
@@ -190,6 +209,38 @@ export default function OrdersPage() {
         <div className="mb-6">
           <TodayMovementStrip />
         </div>
+
+        {/* Approved, waiting to be booked. Sits with the Today strip and
+            above the filters because it is a WORKLIST, not a lookup: the
+            client is waiting, and in the table these rows were
+            indistinguishable from everything else. */}
+        {awaitingBooking.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                Approved — ready to book
+              </span>
+              <span className="text-[11px] text-amber-700">
+                {awaitingBooking.length} order{awaitingBooking.length === 1 ? '' : 's'} · the client said yes
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {awaitingBooking.map((o) => (
+                <Link
+                  key={o.id}
+                  href={`/orders/${o.id}`}
+                  className="group flex items-baseline gap-2 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 hover:border-amber-500 transition-colors"
+                >
+                  <span className="font-mono text-[11px] text-lt-fg2 group-hover:text-lt-fg">{o.orderNumber}</span>
+                  <span className="text-[13px] font-semibold text-lt-fg truncate max-w-[15rem]">
+                    {o.job?.name || o.company?.name || o.description || 'Order'}
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-700">Book it →</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3 mb-4 items-center flex-wrap">
           <input

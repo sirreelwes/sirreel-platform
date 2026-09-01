@@ -369,9 +369,27 @@ function JobsSidebarItem({
             scolds normal rows is wallpaper by Friday. */}
         {(() => {
           const r = readinessApplies(state) && j.readiness ? j.readiness : null
-          if (!r && (value == null || value <= 0)) return null
+          // Client approved, nobody booked it — the one state where the
+          // next move is ours and it is a single click. Shown on ANY row
+          // state (an approval three weeks out still needs booking) and
+          // BEFORE readiness, because booking comes first: the readiness
+          // checks describe an order that is already on the books.
+          const toBook = (j.approvedUnbooked ?? 0) > 0
+          if (!r && !toBook && (value == null || value <= 0)) return null
           return (
             <span className="flex items-baseline gap-1.5">
+              {toBook && (
+                <span
+                  title={`${j.approvedUnbooked} approved order${j.approvedUnbooked === 1 ? '' : 's'} waiting to be booked`}
+                  className={`text-[9px] font-bold uppercase tracking-wider px-1 py-px rounded whitespace-nowrap ${
+                    selected
+                      ? 'bg-amber-900 text-amber-50'
+                      : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  Book it{(j.approvedUnbooked ?? 0) > 1 ? ` ×${j.approvedUnbooked}` : ''}
+                </span>
+              )}
               {r && (
                 <span
                   title={
