@@ -79,6 +79,68 @@ export function deriveJobDateRange(
   }
 }
 
+/**
+ * The window ONE order actually covers — for a quote, a contract, an
+ * invoice: anything that speaks about a single order.
+ *
+ * Not the job rollup above. This exists because the order HEADER dates are
+ * optional and reps routinely leave them blank, while the thing being
+ * quoted is pinned to real days anyway:
+ *
+ *   1. the order's own startDate / endDate, when set — always wins;
+ *   2. else the line items, whose pickupDate / returnDate are NOT NULLABLE,
+ *      so any order with lines has real dates;
+ *   3. else the booking this order hangs off — a vehicle hold with no
+ *      lines on it yet still holds specific days;
+ *   4. else any live hold on the job.
+ *
+ * Wes 2026-09-01: "I especially hate when a quote email says dates TBD when
+ * actually we have order or vehicle holding for a specific date." Reading
+ * only (1) was exactly that bug.
+ *
+ * The two bounds resolve independently, so an order with a start typed in
+ * and no end fills the end from its lines rather than dropping to TBD.
+ */
+export interface OrderWindowSource {
+  startDate: Date | string | null
+  endDate: Date | string | null
+  lineItems?: { pickupDate: Date | string | null; returnDate: Date | string | null }[] | null
+  booking?: OrderDates | null
+  job?: { bookings?: OrderDates[] | null } | null
+}
+
+export function deriveOrderWindow(order: OrderWindowSource | null | undefined): JobDateRange {
+  if (!order) return { start: null, end: null }
+
+  const liveHold = (b: OrderDates | null | undefined): boolean =>
+    !!b && (!b.status || !IGNORED_BOOKING_STATUSES.has(b.status))
+
+  const lineStarts = (order.lineItems ?? [])
+    .map((l) => toDate(l.pickupDate))
+    .filter((d): d is Date => d !== null)
+  const lineEnds = (order.lineItems ?? [])
+    .map((l) => toDate(l.returnDate))
+    .filter((d): d is Date => d !== null)
+
+  const jobHolds = (order.job?.bookings ?? []).filter(liveHold)
+  const holds = [
+    ...(liveHold(order.booking) ? [order.booking as OrderDates] : []),
+    ...jobHolds,
+  ]
+  const holdStarts = holds.map((b) => toDate(b.startDate)).filter((d): d is Date => d !== null)
+  const holdEnds = holds.map((b) => toDate(b.endDate)).filter((d): d is Date => d !== null)
+
+  const earliest = (ds: Date[]): Date | null =>
+    ds.length ? new Date(Math.min(...ds.map((d) => d.getTime()))) : null
+  const latest = (ds: Date[]): Date | null =>
+    ds.length ? new Date(Math.max(...ds.map((d) => d.getTime()))) : null
+
+  return {
+    start: toDate(order.startDate) ?? earliest(lineStarts) ?? earliest(holdStarts),
+    end: toDate(order.endDate) ?? latest(lineEnds) ?? latest(holdEnds),
+  }
+}
+
 /** The select both sides of a derived range need. */
 export const JOB_DATE_SOURCE_SELECT = {
   orders: { select: { startDate: true, endDate: true, status: true } },

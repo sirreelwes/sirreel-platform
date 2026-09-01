@@ -34,6 +34,7 @@ import {
   type SubFeeUnionScope,
 } from '@/lib/sub-rentals/vehicles'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
 const ACCENT = '#D4A547'
 const HEADER_BG = '#0f172a'
@@ -211,7 +212,14 @@ export async function composeDepartmentQuote(
     : []
 
   const greetName = args.clientFirstName?.trim() || 'there'
-  const window = dateRange(order.startDate, order.endDate)
+  // Header dates are optional; the department's own lines always carry
+  // real ones, so the subject shows a window instead of dropping it.
+  const derived = deriveOrderWindow({
+    startDate: order.startDate,
+    endDate: order.endDate,
+    lineItems: order.lineItems,
+  })
+  const window = dateRange(derived.start, derived.end)
   const subject = `SirReel — ${title}${window ? ` · ${window}` : ''}`
   const defaultBody =
     `Here's the ${title.toLowerCase()} for your dates. Rates are per the terms below; ` +

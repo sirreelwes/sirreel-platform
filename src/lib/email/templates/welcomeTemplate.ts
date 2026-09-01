@@ -172,7 +172,12 @@ function fmtDate(iso: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (!Number.isFinite(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  // timeZone: 'UTC' is NOT optional here. Order/line dates are @db.Date —
+  // midnight UTC — so formatting in the server's local zone renders the day
+  // BEFORE. Caught 2026-09-01: a pickup stored as Sept 29 went out as
+  // "September 28". The portal page and the quote PDF already format these
+  // in UTC; this was the one that didn't.
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })
 }
 
 function rangeLine(start: string | null, end: string | null): string {

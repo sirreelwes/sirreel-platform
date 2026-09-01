@@ -23,6 +23,7 @@ import { prisma } from '@/lib/prisma'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 
@@ -111,10 +112,15 @@ export async function composeQuoteEmail(
       quotePdfKey: true,
       quotePdfUrl: true,
       portalSlug: true,
+      // Dates the quote actually covers — see deriveOrderWindow. The header
+      // dates are optional and often blank; the lines and the hold are not.
+      lineItems: { select: { pickupDate: true, returnDate: true } },
+      booking: { select: { startDate: true, endDate: true, status: true } },
       agent: { select: { name: true, email: true, phone: true } },
       job: {
         select: {
           name: true,
+          bookings: { select: { startDate: true, endDate: true, status: true } },
           jobContacts: {
             select: {
               role: true,
@@ -175,6 +181,10 @@ export async function composeQuoteEmail(
     { filename: `Quote-${order.orderNumber}.pdf`, mimeType: 'application/pdf' },
   ]
 
+  // "Dates TBD" on a quote for gear we are already holding is the thing
+  // Wes called out (2026-09-01). Fall through header → lines → hold.
+  const quoteWindow = deriveOrderWindow(order)
+
   const { subject, html, text } = buildWelcomeEmail({
     mode: 'welcome-with-quote',
     customBody: args.customMessage?.trim() || null,
@@ -187,8 +197,8 @@ export async function composeQuoteEmail(
     quote: {
       orderNumber: order.orderNumber,
       jobName: order.job?.name ?? 'your production',
-      startDate: order.startDate ? order.startDate.toISOString() : null,
-      endDate: order.endDate ? order.endDate.toISOString() : null,
+      startDate: quoteWindow.start ? quoteWindow.start.toISOString() : null,
+      endDate: quoteWindow.end ? quoteWindow.end.toISOString() : null,
       subtotal: order.subtotal != null ? Number(order.subtotal) : null,
       total: Number(order.total),
       portalUrl: args.portalUrl,

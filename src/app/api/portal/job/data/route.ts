@@ -11,6 +11,7 @@ import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 import { findJobCoverage, coverageSentence } from '@/lib/orders/agreementCoverage'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,9 @@ export async function GET(req: NextRequest) {
         orderNumber: true,
         startDate: true,
         endDate: true,
+        // The hold this order hangs off — dates when the order has no lines
+        // yet (deriveOrderWindow's last fallback).
+        booking: { select: { startDate: true, endDate: true, status: true } },
         status: true,
         cadenceState: true,
         portalSlug: true,
@@ -140,6 +144,11 @@ export async function GET(req: NextRequest) {
             billableDays: true,
             startDate: true,
             endDate: true,
+            // The pair that is actually populated — line startDate/endDate is
+            // null on 172 of 176 rows, pickup/return never is. Feeds the
+            // order window below.
+            pickupDate: true,
+            returnDate: true,
             // Client-facing small print. Carries the partner-fee estimate
             // wording ("actual usage will be invoiced"), which the client must
             // see here as well as on the quote PDF — the portal is where they
@@ -296,8 +305,19 @@ export async function GET(req: NextRequest) {
   }
   activity.sort((a, b) => b.at.localeCompare(a.at))
 
-  const portalCountdownMs = order.startDate
-    ? Math.max(0, order.startDate.getTime() - Date.now())
+  // The window this order covers. The header dates are optional and often
+  // blank, and the client should never read "—" for gear we are holding on
+  // specific days (Wes 2026-09-01) — the Schedule block and the pickup
+  // countdown both run off this.
+  const orderWindow = deriveOrderWindow({
+    startDate: order.startDate,
+    endDate: order.endDate,
+    lineItems: order.lineItems,
+    booking: order.booking,
+  })
+
+  const portalCountdownMs = orderWindow.start
+    ? Math.max(0, orderWindow.start.getTime() - Date.now())
     : null
 
   // Standing-agreement banner context. Only fires when the company
@@ -346,8 +366,8 @@ export async function GET(req: NextRequest) {
     order: {
       id: order.id,
       orderNumber: order.orderNumber,
-      startDate: order.startDate,
-      endDate: order.endDate,
+      startDate: orderWindow.start,
+      endDate: orderWindow.end,
       status: order.status,
       cadenceState: order.cadenceState,
       total: order.total.toString(),
