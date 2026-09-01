@@ -39,7 +39,14 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.invoice.findMany({
     where: {
       orderId: resolved.orderId,
-      status: { in: ['SENT', 'PARTIAL', 'PAID'] },
+      OR: [
+        { status: { in: ['SENT', 'PARTIAL', 'PAID'] } },
+        // The pre-invoice round: a DRAFT is invisible to the client
+        // until it has actually been sent for review. `preSentAt` is
+        // what separates "generated and sitting in HQ" from "we asked
+        // the client to look at this" (Wes 2026-09-01).
+        { status: 'DRAFT', preSentAt: { not: null } },
+      ],
     },
     select: {
       id: true,
@@ -52,6 +59,9 @@ export async function GET(req: NextRequest) {
       sentAt: true,
       paidAt: true,
       createdAt: true,
+      preSentAt: true,
+      clientApprovedAt: true,
+      clientChangeRequestedAt: true,
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -67,6 +77,13 @@ export async function GET(req: NextRequest) {
     sentAt: inv.sentAt,
     paidAt: inv.paidAt,
     createdAt: inv.createdAt,
+    // The review round. `isPreInvoice` drives the portal's copy and
+    // keeps the pay buttons off — a DRAFT is never payable, whatever
+    // else is true of it.
+    isPreInvoice: inv.status === 'DRAFT',
+    preSentAt: inv.preSentAt,
+    approvedAt: inv.clientApprovedAt,
+    changesRequestedAt: inv.clientChangeRequestedAt,
     payable: inv.status === 'SENT' || inv.status === 'PARTIAL',
   }))
 

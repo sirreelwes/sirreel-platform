@@ -3919,15 +3919,41 @@ model Invoice {
   pdfBlobKey     String?       @map("pdf_blob_key")
   pdfUrl         String?       @map("pdf_url")
   pdfGeneratedAt DateTime?     @map("pdf_generated_at")
+
+  /// PRE-INVOICE round (Wes 2026-09-01: "we need to add an extra step
+  /// before final invoice — Send Pre Invoice to client … they can view
+  /// the invoice and hit approve").
+  ///
+  /// The pre-invoice is not a second document: it is THIS invoice while
+  /// still DRAFT, shown to the client for review. A DRAFT invoice is
+  /// invisible in the portal until `preSentAt` is stamped, which is what
+  /// makes "sent for review" distinguishable from "generated and sitting
+  /// there". Approval is a gate on issuing, never on payment — a DRAFT
+  /// invoice is never payable.
+  /// The discount rows exactly as printed, captured at generation
+  /// alongside lineSnapshot. Without it a re-render (the pre-invoice
+  /// view) would have to re-derive discounts from the live order and
+  /// could print a breakdown whose arithmetic disagrees with this
+  /// invoice's own stored total.
+  discountSnapshot        Json?     @map("discount_snapshot")
+  preSentAt               DateTime? @map("pre_sent_at")
+  clientApprovedAt        DateTime? @map("client_approved_at")
+  clientApprovedByName    String?   @map("client_approved_by_name")
+  clientApprovedByEmail   String?   @map("client_approved_by_email")
+  /// The client said something is wrong. Parks the round in
+  /// "changes requested" so the desk can tell "nobody looked" from
+  /// "they looked and objected".
+  clientChangeRequestedAt DateTime? @map("client_change_requested_at")
+  clientChangeNote        String?   @map("client_change_note") @db.Text
   // Structured line-item snapshot at issue time. Array of
   //   { description, category, qty, unitPrice, amount,
   //     kind: 'RENTAL_LINE' | 'ADJUSTMENT' | 'DAMAGE' }
   // Stays queryable for departmental revenue reporting (PostgreSQL
   // jsonb_path), and the shape is promotable to a relational
   // InvoiceLineItem model later without breaking callers.
-  lineSnapshot   Json?         @map("line_snapshot")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  lineSnapshot            Json?     @map("line_snapshot")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   order           Order            @relation(fields: [orderId], references: [id])
   payments        Payment[]

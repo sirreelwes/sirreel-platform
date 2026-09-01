@@ -234,6 +234,12 @@ type InvoiceRow = {
   pdfUrl: string | null;
   pdfGeneratedAt: string | null;
   createdAt: string;
+  // Pre-invoice review round.
+  preSentAt: string | null;
+  clientApprovedAt: string | null;
+  clientApprovedByName: string | null;
+  clientChangeRequestedAt: string | null;
+  clientChangeNote: string | null;
 };
 
 // Phase 5 commit 3 — payments per invoice.
@@ -1028,6 +1034,26 @@ export default function OrderDetailPage() {
   // RETURNED → INVOICED (non-blocking). Re-fetches both the order
   // (status may change) and the invoice list (sentAt + status).
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  // The review round before the real invoice (Wes 2026-09-01). Same
+  // draft, same number — the client sees it titled PRE-INVOICE and
+  // approves, which is also what wraps the job.
+  const [sendingPreInvoice, setSendingPreInvoice] = useState(false);
+  const sendPreInvoice = async () => {
+    if (sendingPreInvoice) return;
+    setSendingPreInvoice(true);
+    setInvoiceErr(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/pre-invoice`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setInvoiceErr(data?.reason || data?.error || 'Could not send the pre-invoice.'); return; }
+      await fetchInvoices();
+    } catch (e) {
+      setInvoiceErr(e instanceof Error ? e.message : 'Could not send the pre-invoice.');
+    } finally {
+      setSendingPreInvoice(false);
+    }
+  };
+
   const sendInvoice = async (invoiceId: string) => {
     if (sendingInvoiceId) return;
     setSendingInvoiceId(invoiceId);
@@ -4084,14 +4110,61 @@ export default function OrderDetailPage() {
                         View PDF →
                       </a>
                     )}
+                    {/* The pre-invoice round. A DRAFT is what the client
+                        reviews; only after that does the real invoice go
+                        out. The review PDF renders on demand — one
+                        invoice, one number, two presentations. */}
+                    {inv.status === 'DRAFT' && (
+                      <a
+                        href={`/api/invoices/${inv.id}/pre-invoice-pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg underline underline-offset-2"
+                      >
+                        Preview pre-invoice
+                      </a>
+                    )}
+                    {inv.status === 'DRAFT' && !inv.clientApprovedAt && (
+                      <button
+                        onClick={sendPreInvoice}
+                        disabled={sendingPreInvoice || noRecipient}
+                        title={noRecipient ? 'Add a contact to the job before sending.' : 'Email the client a review copy to approve'}
+                        className="text-[11px] font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                      >
+                        {sendingPreInvoice ? 'Sending…' : inv.preSentAt ? 'Re-send pre-invoice' : 'Send pre-invoice'}
+                      </button>
+                    )}
+                    {inv.status === 'DRAFT' && inv.clientApprovedAt && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30">
+                        Client approved
+                      </span>
+                    )}
+                    {inv.status === 'DRAFT' && inv.clientChangeRequestedAt && (
+                      <span
+                        title={inv.clientChangeNote ?? undefined}
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg border border-chip-warn-fg/30"
+                      >
+                        Changes requested
+                      </span>
+                    )}
                     {inv.status === 'DRAFT' && (
                       <button
                         onClick={() => sendInvoice(inv.id)}
                         disabled={sendingInvoiceId != null || noRecipient}
-                        title={noRecipient ? 'Add a contact to the job before sending.' : undefined}
-                        className="text-[11px] font-semibold bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                        title={
+                          noRecipient
+                            ? 'Add a contact to the job before sending.'
+                            : inv.clientApprovedAt
+                              ? 'Issue the final invoice'
+                              : 'The client has not approved a pre-invoice — you can still issue this, but they have not agreed the figure.'
+                        }
+                        className={`text-[11px] font-semibold disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded ${
+                          inv.clientApprovedAt
+                            ? 'bg-cadence-on-rental-bar hover:opacity-90'
+                            : 'bg-lt-fg2 hover:bg-lt-fg'
+                        }`}
                       >
-                        {sendingInvoiceId === inv.id ? 'Sending…' : 'Send'}
+                        {sendingInvoiceId === inv.id ? 'Sending…' : 'Send invoice'}
                       </button>
                     )}
                     {inv.sentAt && inv.status !== 'DRAFT' && (

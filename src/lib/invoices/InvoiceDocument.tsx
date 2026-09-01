@@ -78,6 +78,12 @@ export interface InvoiceAgentForRender {
 export interface InvoiceDocumentProps {
   invoiceNumber: string
   invoiceType: 'RENTAL' | 'LD'
+  /** PRE-INVOICE round: this document is a DRAFT sent to the client for
+   *  review, not a demand for payment (Wes 2026-09-01). Retitles the
+   *  document and states plainly that it is not yet payable — a client
+   *  who receives something headed "INVOICE" will reasonably pay it, and
+   *  the whole point of the round is that the figure might still change. */
+  isPreInvoice?: boolean
   orderNumber: string
   issuedAt: Date
   dueDate: Date | null
@@ -139,7 +145,9 @@ const styles = StyleSheet.create({
   brandSub: { fontSize: 8, color: C.muted, marginTop: 3 },
   brandAddress: { fontSize: 8, color: C.muted, marginTop: 1 },
   titleColumn: { flex: 1, alignItems: 'center' },
+  preNote: { fontSize: 8, marginTop: 6, textAlign: 'center', lineHeight: 1.2 },
   docTitle: {
+    lineHeight: 1,
     fontFamily: 'Helvetica-Bold',
     fontSize: 22,
     letterSpacing: 2,
@@ -343,6 +351,10 @@ const styles = StyleSheet.create({
     width: 110,
   },
   termsValue: { fontSize: 10 },
+  // The pre-invoice's next-step sentence is a paragraph, not a label —
+  // without flex:1 it overflows the row and the tail is clipped rather
+  // than wrapped (caught in the first render: "you confirm" vanished).
+  termsValueWrap: { fontSize: 10, flex: 1 },
   paymentBox: {
     marginTop: 10,
     padding: 10,
@@ -441,8 +453,13 @@ export function InvoiceDocument({
   job,
   agent,
   notes,
+  isPreInvoice = false,
 }: InvoiceDocumentProps): React.ReactElement {
-  const docTitle = invoiceType === 'LD' ? 'LOSS & DAMAGE INVOICE' : 'INVOICE'
+  const docTitle = isPreInvoice
+    ? 'PRE-INVOICE'
+    : invoiceType === 'LD'
+      ? 'LOSS & DAMAGE INVOICE'
+      : 'INVOICE'
 
   return (
     <Document>
@@ -461,12 +478,19 @@ export function InvoiceDocument({
           </View>
           <View style={styles.titleColumn}>
             <Text style={styles.docTitle}>{docTitle}</Text>
+            {isPreInvoice && (
+              <Text style={styles.preNote}>For your review — not yet payable</Text>
+            )}
           </View>
           <View style={styles.meta}>
             <Text style={styles.metaNum}>{invoiceNumber}</Text>
             <Text style={styles.metaLine}>Order {orderNumber}</Text>
-            <Text style={styles.metaLine}>Invoice Date · {fmtDate(issuedAt)}</Text>
-            <Text style={styles.metaLine}>Terms · {PAYMENT_TERMS_LABEL}</Text>
+            <Text style={styles.metaLine}>
+              {isPreInvoice ? 'Prepared' : 'Invoice Date'} · {fmtDate(issuedAt)}
+            </Text>
+            {/* Payment terms are a promise about a payable document —
+                suppressed until this one actually is. */}
+            {!isPreInvoice && <Text style={styles.metaLine}>Terms · {PAYMENT_TERMS_LABEL}</Text>}
           </View>
         </View>
         <View style={styles.hrThick} />
@@ -617,25 +641,42 @@ export function InvoiceDocument({
               <Text style={styles.totalsValue}>-{fmtUsd(amountPaid)}</Text>
             </View>
           )}
-          <View style={styles.balanceRow}>
-            <Text style={styles.balanceLabel}>Balance Due</Text>
-            <Text style={styles.balanceValue}>{fmtUsd(balanceDue)}</Text>
-          </View>
+          {/* Everything below is a demand for money. On a PRE-invoice
+              it is all suppressed — "Balance Due", a Zelle QR, payment
+              terms and cheque instructions under a heading that says
+              "not yet payable" is a document that gets paid. The
+              client sees the figure and approves it; the payable
+              version follows. */}
+          {!isPreInvoice && (
+            <View style={styles.balanceRow}>
+              <Text style={styles.balanceLabel}>Balance Due</Text>
+              <Text style={styles.balanceValue}>{fmtUsd(balanceDue)}</Text>
+            </View>
+          )}
         </View>
 
-        {/* ── Zelle pay-by block — right-aligned with the totals,
-            kept on the same page so the client sees the QR + handle
-            the instant their eye lands on Balance Due. ───────── */}
-        <ZellePayBlock />
+        {!isPreInvoice && <ZellePayBlock />}
 
-        {/* ── Payment terms + instructions ────────────────────── */}
-        <View style={styles.termsBox}>
-          <View style={styles.termsRow}>
-            <Text style={styles.termsLabel}>Payment Terms</Text>
-            <Text style={styles.termsValue}>{PAYMENT_TERMS_LABEL} · payable to SirReel Studio Services</Text>
+        {isPreInvoice ? (
+          <View style={styles.termsBox}>
+            <View style={styles.termsRow}>
+              <Text style={styles.termsLabel}>Next step</Text>
+              <Text style={styles.termsValueWrap}>
+                Review these charges in your SirReel portal and approve them. Nothing is due yet —
+                we issue the invoice once you confirm the figures are right.
+              </Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.termsBox}>
+            <View style={styles.termsRow}>
+              <Text style={styles.termsLabel}>Payment Terms</Text>
+              <Text style={styles.termsValue}>{PAYMENT_TERMS_LABEL} · payable to SirReel Studio Services</Text>
+            </View>
+          </View>
+        )}
 
+        {!isPreInvoice && (
         <View style={styles.paymentBox}>
           <Text style={styles.paymentTitle}>Payment Instructions</Text>
           <Text style={styles.paymentLine}>
@@ -652,6 +693,7 @@ export function InvoiceDocument({
             mail to 8500 Lankershim Blvd, Sun Valley, CA 91352. Include invoice number on the memo line.
           </Text>
         </View>
+        )}
 
         {/* ── Notes (optional) ─────────────────────────────────── */}
         {notes && (

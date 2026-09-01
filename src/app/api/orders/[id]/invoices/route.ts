@@ -80,6 +80,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       pdfUrl: true,
       pdfGeneratedAt: true,
       createdAt: true,
+      // Pre-invoice round state — drives the order page's review
+      // controls (sent / approved / changes requested).
+      preSentAt: true,
+      clientApprovedAt: true,
+      clientApprovedByName: true,
+      clientChangeRequestedAt: true,
+      clientChangeNote: true,
     },
     orderBy: { createdAt: 'desc' },
   })

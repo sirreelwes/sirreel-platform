@@ -388,6 +388,10 @@ export async function generateRentalInvoice(args: {
         // structured entries, but Prisma's JsonValue type is unioned
         // wide.
         lineSnapshot: snapshot as unknown as object,
+        // Captured with the lines: the pre-invoice view re-renders from
+        // these rather than re-deriving discounts off the live order,
+        // which could print a breakdown that disagrees with `total`.
+        discountSnapshot: discountLines as unknown as object,
       },
       select: { id: true },
     })
