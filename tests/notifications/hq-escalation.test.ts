@@ -13,7 +13,8 @@
  */
 
 import {
-  BLOCKER_DESK, DESK_CHANNEL, escalationTier, routeBlockers, TIER_RANK,
+  BLOCKER_DESK, COMMITTED_ORDER_STATUSES, DESK_CHANNEL, MAX_OVERDUE_DAYS,
+  escalationTier, needsStaging, routeBlockers, TIER_RANK, withinEscalationWindow,
 } from '../../src/lib/notifications/hqEscalation'
 import { isNotificationChannelKey } from '../../src/lib/email/notificationChannels'
 
@@ -59,8 +60,40 @@ check(escalationTier(null) === null, 'a job with no pickup date raises nothing')
 check(TIER_RANK.overdue < TIER_RANK.today && TIER_RANK.today < TIER_RANK.urgent && TIER_RANK.urgent < TIER_RANK.soon,
   'ranks sort most-urgent first')
 
-console.log('\nBoth desks route to channels that actually exist')
-for (const desk of ['client-facing', 'fleet-prep'] as const) {
+console.log('\nOrders going out — the warehouse half')
+check(needsStaging('DRAFT'), 'a DRAFT list is unstaged — that is what book-time creates, and all 19 live lists are DRAFT')
+check(needsStaging('PICKING'), 'mid-pick is unstaged')
+check(needsStaging('READY_TO_STAGE'), 'ready-to-stage is still not staged')
+check(!needsStaging('STAGED'), 'STAGED is done')
+check(!needsStaging('LOADED'), 'LOADED is past done')
+check(!needsStaging('CHECKED_IN'), 'so is a returned list')
+check(!needsStaging('CANCELLED'), 'a cancelled list is not going out')
+check(needsStaging(null),
+  'a MISSING pick list counts as unstaged — an order nobody started is not a fine one, and reading absence as OK is how it ships empty')
+check(needsStaging(undefined), 'undefined behaves the same as null')
+
+console.log('\nThe floor is only asked to pull committed orders')
+check(!COMMITTED_ORDER_STATUSES.includes('DRAFT'), 'a DRAFT order is not staged')
+check(!COMMITTED_ORDER_STATUSES.includes('QUOTE_SENT'),
+  'nor an unapproved quote — including these ran the first dry run to 28 orders, most going nowhere')
+check(COMMITTED_ORDER_STATUSES.includes('APPROVED') && COMMITTED_ORDER_STATUSES.includes('BOOKED'),
+  'approved and booked orders are')
+check(COMMITTED_ORDER_STATUSES.includes('ON_JOB'), 'and one already out, so a missed pull still surfaces')
+check(!COMMITTED_ORDER_STATUSES.includes('RETURNED') && !COMMITTED_ORDER_STATUSES.includes('CLOSED'),
+  'finished orders are not')
+
+console.log('\nOne bad date cannot own the digest')
+check(withinEscalationWindow(3), '3 days out is in the window')
+check(withinEscalationWindow(0), 'today is')
+check(withinEscalationWindow(-14), `${MAX_OVERDUE_DAYS} days past pickup is the floor`)
+check(!withinEscalationWindow(-15), 'a day beyond it drops out')
+check(!withinEscalationWindow(-714),
+  'the REAL case: order S260831-005 carries a mistyped 2024 date and read 714 days overdue, leading the first dry run')
+check(!withinEscalationWindow(7), 'a week out is still too early to escalate')
+check(!withinEscalationWindow(null), 'no date, no escalation')
+
+console.log('\nEvery desk routes to a channel that actually exists')
+for (const desk of ['client-facing', 'fleet-prep', 'staging'] as const) {
   const key = DESK_CHANNEL[desk]
   check(isNotificationChannelKey(key),
     `${desk} -> "${key}" is a registered channel, so /admin/notifications can edit it`)

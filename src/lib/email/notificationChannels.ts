@@ -37,6 +37,7 @@ export type NotificationChannelKey =
   | 'pickup-picklists'
   | 'hq-escalation-sales'
   | 'hq-escalation-fleet'
+  | 'hq-escalation-warehouse'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -105,6 +106,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The same escalation, for the half only fleet can clear: an HQ-booked job approaching pickup with booking items that have no unit assigned. Hugo and Julian. Deliberately separate from the client-facing list — a desk that gets alerts it cannot act on stops reading them.',
     defaults: () => ['hugo@sirreel.com', 'julian@sirreel.com'],
+  },
+  {
+    key: 'hq-escalation-warehouse',
+    label: 'HQ escalation — orders going out',
+    description:
+      'The floor half: HQ-booked orders approaching pickup whose pick list is still DRAFT / PICKING / READY_TO_STAGE — or missing entirely, which is an order nobody has started rather than one that is fine. Hugo and the warehouse. There are no WAREHOUSE-role users yet, so the default is Hugo plus the hq@ group; point it at the floor once they have logins.',
+    defaults: () => ['hugo@sirreel.com', hqNotifyInbox()],
   },
 ]
 

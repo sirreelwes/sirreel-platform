@@ -27,15 +27,21 @@
  *   gear — which physical unit is assigned to the booking. Fleet's
  *       call.                                          → Hugo + Julian
  *
- * "Orders going out" (the pick list) is a separate signal on the ORDER
- * rather than one of the five job checks, and already has its own
- * pickup-picklists channel for Hugo + warehouse.
+ *   staging — the ORDER's pick list. Wes, 2026-09-01, folding this in:
+ *       "if it's strictly related to orders that are going out, it would
+ *       be hugo and warehouse."      → Hugo + warehouse
+ *
+ * Staging is deliberately NOT a BlockerKey. The five job checks answer
+ * "may this go out"; the pick list answers "has anyone pulled it", which
+ * is a fact about the ORDER and lives on a different model. Forcing it
+ * into the same enum would have made the readiness rollup mean two
+ * things at once.
  */
 
 import type { BlockerKey } from '@/lib/jobs/readiness'
 import type { NotificationChannelKey } from '@/lib/email/notificationChannels'
 
-export type EscalationDesk = 'client-facing' | 'fleet-prep'
+export type EscalationDesk = 'client-facing' | 'fleet-prep' | 'staging'
 
 export const BLOCKER_DESK: Record<BlockerKey, EscalationDesk> = {
   // The client owes us these four.
@@ -50,11 +56,67 @@ export const BLOCKER_DESK: Record<BlockerKey, EscalationDesk> = {
 export const DESK_CHANNEL: Record<EscalationDesk, NotificationChannelKey> = {
   'client-facing': 'hq-escalation-sales',
   'fleet-prep': 'hq-escalation-fleet',
+  staging: 'hq-escalation-warehouse',
 }
 
 export const DESK_LABEL: Record<EscalationDesk, string> = {
   'client-facing': 'Sales & admin',
   'fleet-prep': 'Hugo & Julian',
+  staging: 'Hugo & warehouse',
+}
+
+/**
+ * Pick-list states that mean nobody has staged this order yet.
+ *
+ * STAGED and beyond (LOADED, CHECKING_IN, CHECKED_IN) are done or past
+ * done; CANCELLED is not going out. Everything earlier — including a
+ * DRAFT list, which is what book-time creates and what all 19 live lists
+ * currently are — is gear still sitting on the shelf.
+ */
+const UNSTAGED_PICKLIST: ReadonlySet<string> = new Set([
+  'DRAFT', 'PICKING', 'READY_TO_STAGE',
+])
+
+/**
+ * Does this order still need the floor's attention before it ships?
+ *
+ * A MISSING pick list counts. An order with no list at all is not a
+ * staged order — it is one nobody has started, and reading absence as
+ * "fine" is how it would ship empty.
+ */
+export function needsStaging(pickListStatus: string | null | undefined): boolean {
+  if (!pickListStatus) return true
+  return UNSTAGED_PICKLIST.has(pickListStatus)
+}
+
+/**
+ * Order states the floor is actually expected to pull for.
+ *
+ * Nobody stages an unapproved quote. Without this gate the warehouse
+ * digest ran to 28 orders on its first dry run — mostly DRAFT and
+ * QUOTE_SENT rows that are not going anywhere, which is precisely the
+ * wallpaper this whole design avoids. The other two desks are already
+ * bounded because they only fire on the outbound readiness band; this is
+ * that same idea, expressed on the order.
+ */
+export const COMMITTED_ORDER_STATUSES: readonly string[] = [
+  'APPROVED', 'BOOKED', 'LOADED_READY', 'ON_JOB',
+]
+
+/**
+ * How far past pickup an escalation is still worth sending.
+ *
+ * A quote with a mistyped year sat 714 days "overdue" and led the first
+ * dry run. Nobody is staging that today; it is a data-entry bug, not a
+ * loadout. Two weeks is long enough to cover a genuinely missed pickup
+ * and short enough that one bad date cannot own the top of the digest.
+ */
+export const MAX_OVERDUE_DAYS = 14
+
+/** Inside the window this escalation speaks about at all. */
+export function withinEscalationWindow(daysToPickup: number | null): boolean {
+  if (daysToPickup === null) return false
+  return daysToPickup >= -MAX_OVERDUE_DAYS && escalationTier(daysToPickup) !== null
 }
 
 /**

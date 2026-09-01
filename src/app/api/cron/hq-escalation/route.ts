@@ -32,10 +32,10 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { jobWindow, listDays, rowState, type JobRow } from '@/lib/jobs/listRow'
 import { readinessApplies } from '@/lib/jobs/readiness'
-import type { BlockerKey } from '@/lib/jobs/readiness'
 import {
   DESK_CHANNEL, DESK_LABEL, TIER_PREFIX, TIER_RANK,
-  escalationTier, routeBlockers,
+  COMMITTED_ORDER_STATUSES, escalationTier, needsStaging, routeBlockers,
+  withinEscalationWindow,
   type EscalationDesk, type EscalationTier,
 } from '@/lib/notifications/hqEscalation'
 
@@ -68,7 +68,8 @@ interface Row {
   job: JobRow
   tier: EscalationTier
   days: number
-  blockers: BlockerKey[]
+  /** Job-check blockers, or the pick-list state for the staging desk. */
+  blockers: string[]
 }
 
 const esc = (s: string) =>
@@ -96,7 +97,7 @@ function buildHtml(desk: EscalationDesk, rows: Row[]): string {
           ${esc(when)}
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:#111;white-space:nowrap;">
-          ${r.blockers.map((b) => esc(b.toUpperCase())).join(' · ')}
+          ${r.blockers.map((b) => esc(b)).join(' · ')}
         </td>
       </tr>`
   }
@@ -157,13 +158,51 @@ export async function GET(req: NextRequest) {
 
     const days = daysUntil(jobWindow(job).start, today)
     const tier = escalationTier(days)
-    if (!tier || days === null) continue
+    // Same window on every desk: a mistyped year must not lead a digest.
+    if (!tier || !withinEscalationWindow(days) || days === null) continue
 
     for (const [desk, blockers] of routeBlockers(r.blockers.map((b) => b.key))) {
       const list = byDesk.get(desk) ?? []
-      list.push({ job, tier, days, blockers })
+      list.push({ job, tier, days, blockers: blockers.map((b) => b.toUpperCase()) })
       byDesk.set(desk, list)
     }
+  }
+
+  // ── Orders going out ──────────────────────────────────────────────
+  //
+  // Wes: "if it's strictly related to orders that are going out, it would
+  // be hugo and warehouse." That is a fact about the ORDER's pick list,
+  // not one of the five job checks, so it is gathered separately and
+  // joined onto the same escalation.
+  const hqJobById = new Map(jobs.filter((j) => j.origin === 'HQ').map((j) => [j.id, j]))
+  if (hqJobById.size > 0) {
+    const orders = await prisma.order.findMany({
+      where: {
+        jobId: { in: [...hqJobById.keys()] },
+        // Committed orders only — the floor does not pull quotes.
+        status: { in: COMMITTED_ORDER_STATUSES as never },
+      },
+      select: {
+        id: true, orderNumber: true, jobId: true, startDate: true,
+        pickList: { select: { status: true } },
+        lineItems: { select: { pickupDate: true }, orderBy: { pickupDate: 'asc' }, take: 1 },
+      },
+    })
+    const stagingRows: Row[] = []
+    for (const o of orders) {
+      if (!needsStaging(o.pickList?.status)) continue
+      const pickup = o.startDate ?? o.lineItems[0]?.pickupDate ?? null
+      const d = daysUntil(pickup ? pickup.toISOString() : null, today)
+      const tier = escalationTier(d)
+      if (!tier || !withinEscalationWindow(d) || d === null) continue
+      const job = o.jobId ? hqJobById.get(o.jobId) : undefined
+      if (!job) continue
+      stagingRows.push({
+        job, tier, days: d,
+        blockers: [o.pickList?.status ? `${o.orderNumber} ${o.pickList.status}` : `${o.orderNumber} NO PICK LIST`],
+      })
+    }
+    if (stagingRows.length > 0) byDesk.set('staging', stagingRows)
   }
 
   const sent: Array<Record<string, unknown>> = []
