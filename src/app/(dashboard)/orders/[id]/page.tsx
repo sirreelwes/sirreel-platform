@@ -2978,11 +2978,20 @@ export default function OrderDetailPage() {
                                   ? 'Lines in this department bill different day counts — click to set them all'
                                   : `Set billable days for all ${lineItemSectionLabel(section.key)} lines`
                               }
-                              className={`text-[11px] font-semibold px-1.5 py-0.5 rounded hover:bg-lt-hairline ${
-                                days === 'mixed' ? 'text-amber-600' : 'text-lt-fg3 hover:text-lt-fg2'
+                              /* Bordered, not bare text. This control has
+                                 existed since the department band shipped and
+                                 Wes still asked why he had to retype days line
+                                 by line (2026-09-01) — as flat text in a Days
+                                 column full of flat numbers it read as a
+                                 label, not a button. */
+                              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition ${
+                                days === 'mixed'
+                                  ? 'text-amber-700 border-amber-400 bg-amber-50 hover:bg-amber-100'
+                                  : 'text-lt-fg2 border-lt-hairline bg-lt-card hover:border-amber-400 hover:text-lt-fg'
                               }`}
                             >
-                              {days === 'mixed' ? 'mixed ✎' : `${days}d ✎`}
+                              {days === 'mixed' ? 'mixed' : `${days}d`}
+                              <span aria-hidden className="text-[9px] opacity-70">set all</span>
                             </button>
                           ) : null}
                         </td>
