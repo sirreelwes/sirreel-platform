@@ -249,11 +249,19 @@ export async function GET(req: NextRequest) {
     if (already) { sent.push({ desk, skipped: 'already sent today' }); continue }
 
     const r = await sendAgreementEmail({ to, subject, html: buildHtml(desk, rows) })
-    await prisma.auditLog.create({
-      data: { action: MARKER_ACTION, entityId: markerId, entityType: 'HqEscalation',
-              newValues: { desk, count: rows.length, worst } as never },
-    })
-    sent.push({ desk, to, subject, count: rows.length, ok: r.ok })
+    // The marker means "these people were told", so it is written ONLY on
+    // a successful send. Stamping it regardless burns the day's slot on a
+    // delivery that never happened — which is exactly what the first live
+    // attempt did when the sender key was rejected: three markers, three
+    // emails nobody received, and a retry that would have short-circuited
+    // on them.
+    if (r.ok) {
+      await prisma.auditLog.create({
+        data: { action: MARKER_ACTION, entityId: markerId, entityType: 'HqEscalation',
+                newValues: { desk, count: rows.length, worst } as never },
+      })
+    }
+    sent.push({ desk, to, subject, count: rows.length, ok: r.ok, ...(r.ok ? {} : { reason: r.reason ?? 'send failed' }) })
   }
 
   return NextResponse.json({ ok: true, dryRun, today, desks: sent })
