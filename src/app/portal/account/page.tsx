@@ -133,9 +133,6 @@ export default async function PortalAccountPage() {
     .slice(0, 10)
     .map((j) => ({
       ...j,
-      // Carried onto the row so the render doesn't derive a second time.
-      startDate: deriveJobDateRange(j.orders, j.bookings).start,
-      endDate: deriveJobDateRange(j.orders, j.bookings).end,
       orderTotal: j.orders
         .filter((o) => o.status !== 'CANCELLED')
         .reduce((s, o) => s + Number(o.subtotal || 0), 0),
@@ -274,9 +271,10 @@ export default async function PortalAccountPage() {
                       <div className="text-xs text-zinc-500 mt-0.5">{j.company.name}</div>
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">
-                      <div>
-                        {fmtDay(j.startDate)} → {fmtDay(j.endDate)}
-                      </div>
+                      {/* No job-wide date range: a job has no dates of its
+                          own, and the rolled-up span read as one (Wes
+                          2026-09-01). The real windows are on the orders
+                          and bookings listed below. */}
                       <div className="font-mono text-zinc-700 mt-0.5">
                         {j._count.orders} order{j._count.orders === 1 ? '' : 's'} · {fmtMoney(j.orderTotal)}
                       </div>

@@ -23,7 +23,7 @@ type Bucket = 'ready' | 'needsClient' | 'noMatch' | 'dismissed' | 'linked';
 
 type JobRow = {
   id: string; jobCode: string; name: string; status: string;
-  startDate: string | null; endDate: string | null; createdAt: string;
+  createdAt: string;
   company: { id: string; name: string } | null;
   companyRwLinked: boolean;
   linkedOrders: string[];
@@ -66,7 +66,6 @@ type RwData = {
 
 type JobDetail = {
   jobCode: string; name: string; status: string;
-  startDate: string | null; endDate: string | null;
   company: { id: string; name: string };
   agent: { name: string } | null;
   jobContacts: Array<{ id: string; role: string; isPrimary: boolean;
@@ -476,7 +475,7 @@ function ReconcilePageInner() {
                   </div>
                   <div className="text-[13px] font-semibold text-lt-fg truncate">{j.name}</div>
                   <div className="text-[11px] text-lt-fg3 truncate">
-                    {j.company?.name || '—'} · {j.startDate ? fmtDay(j.startDate) : `created ${fmt(j.createdAt)}`}
+                    {j.company?.name || '—'} · created {fmt(j.createdAt)}
                   </div>
                 </button>
               ))}
@@ -590,7 +589,6 @@ function ReconcilePanel({
           <h2 className="text-lg font-bold text-lt-fg">{job.name}</h2>
           <div className="text-[13px] text-lt-fg2">
             <Link href={`/crm/${job.company.id}`} className="font-semibold hover:underline">{job.company.name}</Link>
-            {' · '}{fmtDay(job.startDate)} – {fmtDay(job.endDate)}
             {job.agent && <> · {job.agent.name}</>}
           </div>
 

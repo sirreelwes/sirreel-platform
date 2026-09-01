@@ -28,7 +28,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  STATE, fmtDate, jobWindow, listDays, rowState, stateLabel,
+  STATE, listDays, rowState, stateLabel,
   type JobRow, type RowState,
 } from '@/lib/jobs/listRow'
 
@@ -107,7 +107,6 @@ export function TodayMovementStrip() {
 
 /** One movement row — shared by the Going out and Coming back sections. */
 function TodayRow({ job, state }: { job: JobRow; state: RowState }) {
-  const w = jobWindow(job)
   return (
     <Link href={`/jobs/${job.id}`} className="flex items-center gap-3 px-4 py-2 hover:bg-lt-inner transition-colors">
       <span className={`w-1.5 h-8 rounded-sm flex-shrink-0 ${STATE[state].rail}`} />
@@ -117,7 +116,7 @@ function TodayRow({ job, state }: { job: JobRow; state: RowState }) {
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-medium text-lt-fg truncate">{job.name}</span>
         <span className="block text-[11px] text-lt-fg2 truncate">
-          {job.company?.name || 'no company'}{' · '}{fmtDate(w.start)} → {fmtDate(w.end)}
+          {job.company?.name || 'no company'}
         </span>
       </span>
       <span className="text-[10px] font-bold uppercase tracking-wider text-lt-fg2 whitespace-nowrap">

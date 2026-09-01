@@ -472,8 +472,6 @@ export async function PATCH(
     const {
       name,
       status,
-      startDate,
-      endDate,
       productionType,
       productionTypeProfileId,
       agentId,
@@ -503,10 +501,9 @@ export async function PATCH(
         ...(Array.isArray(tags) && {
           tags: tags.filter((t: unknown): t is string => typeof t === 'string' && t.trim() !== ''),
         }),
-        // startDate/endDate are deliberately NOT written: a job has no
-        // dates of its own (lib/jobs/dateRange). Callers may still send
-        // them; they're ignored rather than 400'd so older clients don't
-        // break mid-deploy.
+        // No startDate/endDate here or anywhere else: a job has no dates of
+        // its own (lib/jobs/dateRange). A caller that still sends them is
+        // ignored rather than 400'd.
         ...(estimatedValue !== undefined && {
           estimatedValue:
             estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),

@@ -737,6 +737,10 @@ export default function JobDetailPage() {
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
   // A job has no dates of its own — see lib/jobs/dateRange. Show the span
   // its ORDERS cover instead of a separately-typed job range that drifts.
+  // NOT displayed — a job has no dates of its own and HQ no longer shows a
+  // job-wide rollup anywhere (Wes 2026-09-01). This survives only to seed
+  // default dates on the hold pickers below; the dates a person READS come
+  // off the individual orders and bookings.
   const orderSpan = deriveJobDateRange(job.orders);
 
   // Operational position. Server-derived (see src/lib/jobs/cadence.ts);
@@ -1379,15 +1383,6 @@ const driverTone = (d: any): string => {
             yet, and not at all when it would only say zero. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
           <Meta label="Agent" value={job.agent?.name || '—'} />
-          {orderSpan.start || orderSpan.end ? (
-            <Meta
-              label="Order span"
-              value={`${fmtDate(isoDate(orderSpan.start))} – ${fmtDate(isoDate(orderSpan.end))}`}
-              sub="from this job's orders"
-            />
-          ) : (
-            <Meta label="Order span" value="starts with the first quote" dim />
-          )}
           {dealValue != null && dealValue > 0 && (
             <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
           )}

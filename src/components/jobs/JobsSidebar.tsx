@@ -32,10 +32,8 @@ import {
   BOARD_PHASES,
   PHASE_META,
   STATE,
-  fmtDate,
   fmtMoney,
   jobPhase,
-  jobWindow,
   rowValue,
   stateLabel,
   type BoardPhase,
@@ -182,7 +180,6 @@ function JobsSidebarItem({
   selected: boolean
 }) {
   const meta = STATE[state]
-  const w = jobWindow(j)
   const value = rowValue(j)
   const { refresh } = useJobsList()
   // One-click physical-return confirmation on Not-returned rows (Wes
@@ -355,10 +352,12 @@ function JobsSidebarItem({
             selected ? 'text-zinc-900/70' : 'text-zinc-500'
           }`}
         >
+          {/* Company only. The job-wide window used to sit on the right of
+              this line; a job has no dates of its own and the rolled-up
+              span read as if it did (Wes 2026-09-01). The cadence pill
+              above already says WHEN — the real dates are on the orders
+              and bookings inside the job. */}
           <span className="truncate">{j.company?.name || 'no company'}</span>
-          <span className="ml-auto whitespace-nowrap tabular-nums">
-            {w.start || w.end ? `${fmtDate(w.start)} → ${fmtDate(w.end)}` : 'no dates'}
-          </span>
         </span>
 
         {/* Line 4 — readiness (outbound rows only) + value. The chip is
