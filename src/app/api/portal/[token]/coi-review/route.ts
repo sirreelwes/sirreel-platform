@@ -6,7 +6,9 @@ import { prisma } from '@/lib/prisma'
 // the three copies, and the review desk's copy was the thinnest. Everything
 // reads through the shared one now.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
-import { coiFlags } from '@/lib/coi/checks'
+import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
+import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -128,7 +130,7 @@ export async function POST(
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true, agent: true } } }
+      include: { booking: { include: { company: true, agent: true, job: { select: { id: true } } } } }
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -164,6 +166,52 @@ export async function POST(
     review.hardPass = review.criticalPass
     review.requiresAdminApproval = review.criticalPass && !review.alertPass
 
+    // ── Keep the certificate ───────────────────────────────────────
+    //
+    // Wes, 2026-08-31: "the language on the jobs page is misleading. It
+    // looks like they haven't uploaded a COI."
+    //
+    // It was not misleading — it was true, and that was the bug. This
+    // route analysed the client's PDF, emailed the team about it, and
+    // then threw the file away. No blob, no CoiCheck: the only trace was
+    // the AI's verdict on a JSONB column nothing renders. So the job page
+    // said "No certificate on file" about a certificate that had been
+    // uploaded, read, and reported on.
+    //
+    // Storing it as a CoiCheck is also the whole fix for the link Wes
+    // asked for: the job page already renders a Review button per COI,
+    // and a stored row simply appears there.
+    //
+    // Best-effort: a blob or row failure must not lose the review the
+    // client is waiting on, so it is logged and the response still
+    // succeeds. The AI verdict below is written either way.
+    let coiId: string | null = null
+    try {
+      const originalFilename = file.name || 'coi.pdf'
+      const stored = await uploadCoiDocument({
+        filename: originalFilename,
+        contentType: file.type || 'application/pdf',
+        data: buffer,
+      })
+      const created = await prisma.coiCheck.create({
+        data: {
+          fileKey: stored.blobKey,
+          fileUrl: stored.fileUrl,
+          originalFilename,
+          fileSize: file.size,
+          mimeType: file.type || 'application/pdf',
+          jobId: request.booking?.job?.id ?? null,
+          companyId: request.booking?.companyId ?? null,
+          source: 'CLIENT_UPLOAD',
+          ...coiCheckWriteFields(review as never),
+        },
+        select: { id: true },
+      })
+      coiId = created.id
+    } catch (err) {
+      console.error('[coi-review] failed to file the certificate:', err instanceof Error ? err.message : err)
+    }
+
     // Save to DB
     try {
       await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS coi_ai_review JSONB`)
@@ -186,21 +234,35 @@ export async function POST(
     if (!review.overallPass && process.env.RESEND_API_KEY) {
       // Subject splits on criticalPass: red = we cannot accept this,
       // yellow = acceptable but someone should look.
-      const reviewUrl = `https://hq.sirreel.com/jobs/${request.bookingId}`
+      // Was `/jobs/${request.bookingId}` — a BOOKING id in a JOB url, so
+      // every one of these emails linked to a 404. Points at the job's
+      // COI section now, and falls back to the review desk when the
+      // booking has no job attached.
+      const jobId = request.booking?.job?.id ?? null
+      const reviewUrl = jobId
+        ? `https://hq.sirreel.com/jobs/${jobId}#coi`
+        : 'https://hq.sirreel.com/paperwork'
       const html = buildEmailHtml(companyName, jobName, review, reviewUrl)
       const subject = review.criticalPass
         ? `🟡 COI Alert — ${companyName} · ${jobName}`
         : `🔴 COI Critical Issues — ${companyName} · ${jobName}`
 
-      await resend.emails.send({
-        from: 'SirReel HQ <notifications@sirreel.com>',
-        to: ['wes@sirreel.com', 'dani@sirreel.com', 'jose@sirreel.com', 'oliver@sirreel.com'],
-        subject,
-        html,
-      })
+      // The audience is a DB-backed channel, not a hardcoded list — this
+      // one still named four individuals while a 'coi-team' channel
+      // existed and was editable at /admin/notifications, so changing who
+      // gets COI alerts silently did nothing here.
+      const to = await channelRecipients('coi-team')
+      if (to.length > 0) {
+        await resend.emails.send({
+          from: 'SirReel HQ <notifications@sirreel.com>',
+          to,
+          subject,
+          html,
+        })
+      }
     }
 
-    return NextResponse.json({ ok: true, review })
+    return NextResponse.json({ ok: true, review, coiId })
   } catch (err: any) {
     console.error('[coi-review]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
