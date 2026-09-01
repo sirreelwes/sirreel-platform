@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
-import { channelRecipients } from '@/lib/email/notificationChannels'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -251,7 +251,18 @@ export async function POST(
       // one still named four individuals while a 'coi-team' channel
       // existed and was editable at /admin/notifications, so changing who
       // gets COI alerts silently did nothing here.
-      const to = await channelRecipients('coi-team')
+      //
+      // BOTH channels, matching the drop link (/api/coi/[token]). They
+      // had drifted apart: a certificate arriving through the client
+      // PORTAL emailed coi-team only, while the same certificate through
+      // the drop LINK emailed coi-team + hq-documents. So whether HQ
+      // heard about a COI depended on which door the client happened to
+      // walk through — Neko Studio's Unscripted certificate (2026-09-01)
+      // reached rentals@ and oliver@ and nobody on hq@.
+      const to = dedupeEmails([
+        ...(await channelRecipients('coi-team')),
+        ...(await channelRecipients('hq-documents')),
+      ])
       if (to.length > 0) {
         await resend.emails.send({
           from: 'SirReel HQ <notifications@sirreel.com>',
