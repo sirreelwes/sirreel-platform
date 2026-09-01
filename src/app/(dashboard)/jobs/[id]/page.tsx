@@ -44,6 +44,7 @@ import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/Ema
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
+import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
 
@@ -433,7 +434,8 @@ export default function JobDetailPage() {
   useEffect(() => {
     const HASH_TO_SECTION: Record<string, string> = {
       coi: 'coi', wc: 'wc', agreement: 'agreement', 'reserved-assets': 'assets',
-      drivers: 'drivers', orders: 'orders', 'rw-billing': 'money', contacts: 'contacts',
+      drivers: 'drivers', orders: 'orders', 'rw-billing': 'money', invoices: 'money',
+      contacts: 'contacts',
     };
     const apply = () => {
       const h = window.location.hash.replace('#', '');
@@ -1104,7 +1106,9 @@ const driverTone = (d: any): string => {
     { key: 'coi', label: 'Certificate of Insurance', anchor: 'coi' },
     { key: 'wc', label: "Workers' Comp", anchor: 'wc' },
     { key: 'agreement', label: 'Agreement', anchor: 'agreement' },
-    { key: 'money', label: 'Billing & documents', anchor: 'rw-billing' },
+    // Anchors at the HQ invoice, not the RW block below it — the invoice is
+    // what someone opening "Billing" is looking for.
+    { key: 'money', label: 'Billing & documents', anchor: 'invoices' },
     { key: 'contacts', label: 'Contacts', anchor: 'contacts' },
     { key: 'clientNotes', label: 'Client notes', anchor: null },
   ];
@@ -2483,9 +2487,25 @@ const driverTone = (d: any): string => {
       </div>
       )}
 
+      {/* The HQ invoice, first in the money section — it is the document the
+          client actually holds, and until now every action on it (view PDF,
+          send, void, generate) lived one level down inside the order
+          (Wes 2026-09-01). Everything below is RentalWorks-era or manual. */}
+      {showSec('money') && (<>
+      <div id="invoices" className="scroll-mt-4">
+        <JobInvoicesPanel
+          orders={job.orders.map((o) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            total: o.total,
+            bookedTotal: o.bookedTotal,
+            invoices: o.invoices,
+          }))}
+          onChanged={load}
+        />
+      </div>
       {/* RW billing: linked RW order → its invoices + balance. Anchored —
           the gantt's order badge / modal deep-link here for RW-linked jobs. */}
-      {showSec('money') && (<>
       <div id="rw-billing" className="scroll-mt-4">
         <JobRwBillingPanel jobId={job.id} />
       </div>
