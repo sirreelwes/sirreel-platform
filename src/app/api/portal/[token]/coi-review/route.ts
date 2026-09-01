@@ -40,8 +40,15 @@ function buildEmailHtml(
     { label: 'Independent Contractor Coverage', item: review.contractorCoverage },
   ]
 
-  const statusColor = review.criticalPass ? '#f59e0b' : '#dc2626'
-  const statusText = review.criticalPass ? 'ALERT ITEMS NEED REVIEW' : 'CRITICAL ISSUES — ACTION REQUIRED'
+  // Three states now, not two: a clean certificate used to email nobody
+  // at all (Wes 2026-09-01), so "no news" meant either all-clear or a
+  // send that silently failed — indistinguishable from an inbox.
+  const statusColor = review.overallPass ? '#16a34a' : review.criticalPass ? '#f59e0b' : '#dc2626'
+  const statusText = review.overallPass
+    ? 'ALL CHECKS PASSED — NOTHING TO CHASE'
+    : review.criticalPass
+      ? 'ALERT ITEMS NEED REVIEW'
+      : 'CRITICAL ISSUES — ACTION REQUIRED'
 
   const renderRow = (label: string, item: any, isCritical: boolean) => {
     if (!item) return ''
@@ -77,7 +84,7 @@ function buildEmailHtml(
     </div>
 
     <div style="background:${statusColor};padding:16px 24px;">
-      <div style="color:white;font-weight:bold;font-size:15px;">⚠️ ${statusText}</div>
+      <div style="color:white;font-weight:bold;font-size:15px;">${review.overallPass ? '✅' : '⚠️'} ${statusText}</div>
     </div>
 
     <div style="padding:24px;">
@@ -92,7 +99,7 @@ function buildEmailHtml(
         </tr>
       </table>
 
-      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Issues Found:</div>
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">${review.overallPass ? 'Checks' : 'Issues Found:'}</div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
         <thead>
           <tr style="background:#f9fafb;">
@@ -102,13 +109,13 @@ function buildEmailHtml(
           </tr>
         </thead>
         <tbody>
-          ${issueRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#6b7280;font-size:13px;">No issues found</td></tr>'}
+          ${issueRows || `<tr><td colspan="3" style="padding:12px;text-align:center;color:#6b7280;font-size:13px;">${review.overallPass ? 'Every check passed — nothing to chase. Filed on the job; no action needed.' : 'No issues found'}</td></tr>`}
         </tbody>
       </table>
 
       <div style="margin-top:24px;text-align:center;">
         <a href="${reviewUrl}" style="display:inline-block;background:#1a1a1a;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
-          Review COI in SirReel HQ →
+          ${review.overallPass ? 'View COI in SirReel HQ' : 'Review COI in SirReel HQ'} &rarr;
         </a>
       </div>
 
@@ -156,7 +163,30 @@ export async function POST(
       note: match.needsAttention ? match.message : '',
     }
 
-    const flags = coiFlags(review)
+    // A Workers Comp certificate filed on this same paperwork request
+    // satisfies the COI's WC check — WC commonly sits on a payroll
+    // company's own paper. Same rule as the review desk, so the email and
+    // the desk cannot disagree about whether anything is outstanding.
+    const wcReview = (request.wcAiReview ?? null) as Record<string, unknown> | null
+    const wcCtx =
+      wcReview?.pass === true && wcReview?.expired !== true
+        ? {
+            workersCompCoveredElsewhere: true,
+            workersCompNote: `Covered by ${request.wcOriginalFilename || 'a separate Workers Comp certificate'} filed on this job`,
+          }
+        : undefined
+
+    const flags = coiFlags(review, wcCtx)
+    if (wcCtx) {
+      // Reflect it in the stored review too, so every later reader (the
+      // job page, the review desk, this email's own checklist) sees the
+      // same verdict rather than re-deriving it from the PDF alone.
+      review.workersComp = {
+        ...(review.workersComp ?? {}),
+        pass: true,
+        found: wcCtx.workersCompNote,
+      }
+    }
     review.criticalPass = flags.criticalPass && !match.needsAttention
     review.alertPass = flags.alertPass
     review.overallPass = review.criticalPass && review.alertPass
@@ -230,8 +260,11 @@ export async function POST(
       await prisma.booking.update({ where: { id: request.bookingId }, data: { coiReceived: true } })
     }
 
-    // Send internal alert email if any issues found
-    if (!review.overallPass && process.env.RESEND_API_KEY) {
+    // Email the team on EVERY reviewed certificate — including a clean
+    // one (Wes 2026-09-01: "add an all-clear notification for clean COIs
+    // too"). Silence used to mean two different things, all-clear and a
+    // send that failed, and an inbox cannot tell them apart.
+    if (process.env.RESEND_API_KEY) {
       // Subject splits on criticalPass: red = we cannot accept this,
       // yellow = acceptable but someone should look.
       // Was `/jobs/${request.bookingId}` — a BOOKING id in a JOB url, so
@@ -243,9 +276,11 @@ export async function POST(
         ? `https://hq.sirreel.com/jobs/${jobId}#coi`
         : 'https://hq.sirreel.com/paperwork'
       const html = buildEmailHtml(companyName, jobName, review, reviewUrl)
-      const subject = review.criticalPass
-        ? `🟡 COI Alert — ${companyName} · ${jobName}`
-        : `🔴 COI Critical Issues — ${companyName} · ${jobName}`
+      const subject = review.overallPass
+        ? `🟢 COI Clear — ${companyName} · ${jobName}`
+        : review.criticalPass
+          ? `🟡 COI Alert — ${companyName} · ${jobName}`
+          : `🔴 COI Critical Issues — ${companyName} · ${jobName}`
 
       // The audience is a DB-backed channel, not a hardcoded list — this
       // one still named four individuals while a 'coi-team' channel
