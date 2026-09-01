@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { get } from '@vercel/blob'
 import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
+import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
@@ -147,18 +148,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!order.quotePdfKey || !order.quotePdfUrl) {
     return bad(400, 'No quote PDF — regenerate from the order detail page first.')
   }
-  // Nothing re-renders the stored PDF when the order changes, and this
-  // route only ever checked that one EXISTED. A rep could rework an
-  // order all afternoon and send the client that morning's prices. Refuse
-  // rather than send a document that no longer matches the order — the
-  // remedy is one click away on the same page.
+  // A rep can rework an order all afternoon; nothing used to re-render the
+  // stored PDF, so this route refused a stale one and told the rep to hit
+  // Regenerate. Wes 2026-09-01: just re-cut it. Sending is the moment the
+  // document has to be right, and a hard stop here is a wall between a rep
+  // and the thing they asked to do.
+  //
+  // The refusal survives ONLY for the case the rewrite can't fix: the
+  // re-render itself failed, so the blob on file is still the stale one and
+  // sending it would put wrong prices in front of a client.
+  // The blob key to attach. Replaced when the refresh below re-cuts the PDF:
+  // regeneration DELETES the prior blob, so the key read above is dead.
+  let quotePdfKey = order.quotePdfKey
   if (isQuotePdfStale(order)) {
-    return bad(
-      400,
-      `This order changed after the quote PDF was generated${
-        order.quotePdfGeneratedAt ? ` (${order.quotePdfGeneratedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC)` : ''
-      }. Hit Regenerate so the client gets the current line items and totals.`,
-    )
+    const refreshed = await ensureFreshQuotePdf(params.id)
+    if (refreshed.key) quotePdfKey = refreshed.key
+    if (!refreshed.regenerated) {
+      return bad(
+        400,
+        `This order changed after the quote PDF was generated${
+          order.quotePdfGeneratedAt ? ` (${order.quotePdfGeneratedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC)` : ''
+        } and re-rendering it just failed${refreshed.error ? ` (${refreshed.error})` : ''}. Hit Regenerate on the order page before sending.`,
+      )
+    }
   }
 
   const primary = preliminary.to
@@ -184,7 +196,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // which is exactly the state this email was in before.
   let quoteAttachment: { filename: string; content: Buffer }[] | undefined
   try {
-    const blob = await get(order.quotePdfKey, { access: 'private' })
+    const blob = await get(quotePdfKey, { access: 'private' })
     if (blob && blob.statusCode === 200 && blob.stream) {
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer())
       quoteAttachment = [{ filename: `Quote-${order.orderNumber}.pdf`, content: buf }]

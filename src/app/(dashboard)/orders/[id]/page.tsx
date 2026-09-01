@@ -1460,20 +1460,63 @@ export default function OrderDetailPage() {
   // Re-render the Quote PDF off the current Order state (line items,
   // discount, totals). The endpoint replaces the prior blob and updates
   // quotePdfKey/quotePdfUrl/quotePdfGeneratedAt on the Order.
-  const regeneratePdf = async () => {
+  const regeneratePdf = async (opts?: { quiet?: boolean }) => {
     setRegeneratingPdf(true);
     try {
       const res = await fetch(`/api/orders/${orderId}/quote-pdf`, { method: "POST" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Failed to regenerate PDF");
-        return;
+        // The auto-refresh below is not something the rep asked for, so it
+        // must not throw an alert in their face. It leaves the staleness
+        // banner and the manual Regenerate button exactly as they were.
+        if (!opts?.quiet) alert(err.error || "Failed to regenerate PDF");
+        return false;
       }
       await fetchOrder();
+      return true;
     } finally {
       setRegeneratingPdf(false);
     }
   };
+
+  /**
+   * Auto-regenerate the quote PDF after the order is edited.
+   *
+   * Wes 2026-09-01: "can we make it so that when a quote is modified and
+   * saved in HQ, the PDF is auto-regenerated?" Doing it inside each write
+   * would add ~0.5-1.2s to every line save and cut a dozen PDFs across one
+   * editing session, so it rides here instead: every mutation on this page
+   * already ends in fetchOrder(), which reports quotePdfStale, and a 2.5s
+   * debounce collapses a burst of line edits into one render.
+   *
+   * Correctness does not depend on this effect. The server re-cuts on the
+   * two moments that matter anyway — opening the PDF and sending the quote
+   * (see lib/orders/generateQuotePdf). This is what makes the staleness
+   * banner clear itself instead of sitting there waiting for a click.
+   *
+   * A failed attempt is recorded so it doesn't retry in a loop; the banner
+   * and the manual button are the fallback.
+   */
+  const autoPdfFailedRef = useRef(false);
+  const isStale = !!order?.quotePdfStale && !!order?.quotePdfUrl;
+  useEffect(() => {
+    if (!isStale || regeneratingPdf || autoPdfFailedRef.current) return;
+    const t = setTimeout(() => {
+      void regeneratePdf({ quiet: true }).then((ok) => {
+        if (!ok) autoPdfFailedRef.current = true;
+      });
+    }, 2500);
+    return () => clearTimeout(t);
+    // regeneratePdf is redefined every render; depending on it would restart
+    // the debounce on every keystroke and the PDF would never get cut.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStale, regeneratingPdf]);
+
+  // A fresh render clears the "we already tried and it failed" latch, so a
+  // later edit gets a new attempt rather than inheriting the old failure.
+  useEffect(() => {
+    if (!isStale) autoPdfFailedRef.current = false;
+  }, [isStale]);
 
   // Description guard: only auto-fill when the field is empty OR still
   // holds the last value WE auto-filled. If the rep typed something the
@@ -3332,15 +3375,18 @@ export default function OrderDetailPage() {
               ? `Last generated ${order.quotePdfGeneratedAt ? new Date(order.quotePdfGeneratedAt).toLocaleString() : ""}`
               : "Not generated yet"}
           </div>
-          {/* Nothing re-renders the stored PDF when the order changes, so
-              Preview/Download/portal can all be showing the client a
-              document that no longer matches. A bare "Last generated"
-              timestamp doesn't read as a warning — this does. */}
+          {/* The stored PDF now re-cuts itself: this page refreshes it a
+              couple of seconds after an edit settles, and the server
+              re-renders on open and on send regardless. The banner stays
+              because the window between an edit and the new render is real
+              — it just no longer asks the rep to do anything. */}
           {order.quotePdfUrl && order.quotePdfStale && (
             <div className="mt-1.5 inline-flex items-center gap-1.5 rounded bg-amber-500/10 border border-amber-500/40 px-2 py-1">
               <span className="text-amber-600 text-xs leading-none">⚠</span>
               <span className="text-[11px] text-amber-700 font-medium">
-                Out of date — the order changed after this PDF was made. Regenerate before sending.
+                {regeneratingPdf
+                  ? 'The order changed — rebuilding this PDF now…'
+                  : 'The order changed after this PDF was made. Rebuilding it automatically.'}
               </span>
             </div>
           )}
@@ -3363,7 +3409,7 @@ export default function OrderDetailPage() {
                 Download
               </a>
               <button
-                onClick={regeneratePdf}
+                onClick={() => void regeneratePdf()}
                 disabled={regeneratingPdf}
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
                 title="Re-render the PDF off the current line items and totals"
@@ -3395,7 +3441,7 @@ export default function OrderDetailPage() {
                     noRecipient
                       ? "Add a contact to the job before sending."
                       : order.quotePdfStale
-                        ? "This PDF is older than the order — hit Regenerate first so the client gets current pricing."
+                        ? "The PDF is rebuilding to match the order — this clears on its own in a moment."
                         : "Review and email the quote to the client"
                   }
                 >
@@ -3406,7 +3452,7 @@ export default function OrderDetailPage() {
             </>
           ) : (
             <button
-              onClick={regeneratePdf}
+              onClick={() => void regeneratePdf()}
               disabled={regeneratingPdf || order.lineItems.length === 0}
               className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 disabled:bg-lt-inner text-white text-sm font-semibold rounded-lg"
               title={order.lineItems.length === 0 ? "Add at least one line item first" : "Generate the client-facing Quote PDF"}

@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
+import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,12 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'No session' }, { status: 401 })
   const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
   if (!resolved) return NextResponse.json({ error: 'Session no longer valid' }, { status: 401 })
+
+  // The client is about to read this. Re-cut first if the order moved since
+  // the last render — this route hands out the STORED blob, so without it a
+  // client can open a quote that no longer matches the order. No-op when the
+  // PDF is current or absent.
+  await ensureFreshQuotePdf(resolved.orderId)
 
   const order = await prisma.order.findUnique({
     where: { id: resolved.orderId },

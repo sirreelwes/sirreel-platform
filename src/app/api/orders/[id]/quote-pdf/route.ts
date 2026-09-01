@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { randomUUID } from 'crypto'
-import { put, del, get } from '@vercel/blob'
-import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
-import React from 'react'
+import { get } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { QuoteDocument, type Department, type QuoteLineItem } from '@/lib/sales/QuoteDocument'
-import { catalogClientCode } from '@/lib/catalog/display'
+import { generateQuotePdf, ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -24,158 +20,14 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const order = await prisma.order.findUnique({
-    where: { id: params.id },
-    include: {
-      company: true,
-      agent: true,
-      job: true,
-      jobContact: true,
-      lineItems: {
-        include: {
-          inventoryItem: { select: { code: true, rwICode: true, trackingMode: true } },
-        },
-        orderBy: { sortOrder: 'asc' },
-      },
-      // Structured discounts (OrderDiscount). Passed to QuoteDocument
-      // which renders dept discount lines under each section subtotal
-      // and the order discount in the totals block.
-      discounts: true,
-    },
-  })
-  if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-  if (order.lineItems.length === 0) {
-    return NextResponse.json({ error: 'Order has no line items' }, { status: 400 })
-  }
-
-  // CLIENT-FACING — sub-rental fields (vendor name, vendor cost, PO #,
-  // status, receiveMethod) must NEVER be added to this serializer. The
-  // quote shows the client what they're paying, not where SirReel
-  // sourced it from. Internal sub-rental surfaces read OrderLineItem
-  // .subRentals directly and never come through this DTO.
-  const lineItems: QuoteLineItem[] = order.lineItems.map((li) => ({
-    department: li.department as Department,
-    description: li.description,
-    qualifier: li.qualifier,
-    inventoryCode: catalogClientCode(li),
-    quantity: li.quantity,
-    rate: Number(li.rate),
-    rateType: li.rateType as 'DAILY' | 'WEEKLY' | 'FLAT',
-    pickupDate: li.pickupDate,
-    returnDate: li.returnDate,
-    billableDays: li.billableDays,
-    computedDays: li.computedDays ?? null,
-    lineTotal: Number(li.lineTotal),
-    id: li.id,
-    // A partner ancillary hangs under the unit it belongs to, so it renders
-    // inside that unit's section rather than being hoisted into "Fees".
-    parentLineItemId: li.parentLineItemId ?? null,
-    // Included accessory — prints "Included" instead of $0.00 so the
-    // client can see what they are responsible for bringing back.
-    isIncludedAccessory: !!li.autoKitPieceId,
-    isDiscount: li.type === 'DISCOUNT',
-    // Fee-catalog lines render in their own "Fees" section (last), UNLESS
-    // they belong to a parent line — see groupByDepartment.
-    isFee: li.type === 'FEE',
-    // Client-facing note (e.g. LED Wall A/V Tech requirement, seeded
-    // from InventoryItem.clientNote at line-add time). Prints italic
-    // under the description on the quote PDF.
-    notes: li.notes,
-  }))
-
-  const contactFullName = order.jobContact
-    ? `${order.jobContact.firstName} ${order.jobContact.lastName}`.trim()
-    : null
-
-  let pdfBytes: Buffer
-  try {
-    const element = React.createElement(QuoteDocument, {
-      orderNumber: order.orderNumber,
-      description: order.description,
-      notes: order.notes,
-      subtotal: Number(order.subtotal),
-      taxRate: Number(order.taxRate),
-      taxAmount: Number(order.taxAmount),
-      total: Number(order.total),
-      quoteExpDays: order.quoteExpDays,
-      lineItems,
-      discounts: order.discounts.map((d) => ({
-        scope: d.scope,
-        departmentKey: d.departmentKey as Department | null,
-        type: d.type,
-        value: Number(d.value),
-        label: d.label,
-      })),
-      company: {
-        name: order.company.name,
-        billingAddress: order.company.billingAddress,
-        billingEmail: order.company.billingEmail,
-      },
-      jobContact: order.jobContact
-        ? {
-            fullName: contactFullName,
-            email: order.jobContact.email,
-            phone: order.jobContact.phone ?? order.jobContact.mobile ?? null,
-          }
-        : null,
-      agent: {
-        name: order.agent.name,
-        email: order.agent.email,
-        phone: order.agent.phone ?? null,
-      },
-      job: order.job
-        ? { jobCode: order.job.jobCode, name: order.job.name }
-        : null,
-      generatedAt: new Date(),
-    }) as React.ReactElement<DocumentProps>
-    pdfBytes = await renderToBuffer(element)
-  } catch (err) {
-    console.error('[quote-pdf] render error:', err)
-    return NextResponse.json(
-      { error: 'Failed to render quote PDF. See server logs.' },
-      { status: 500 }
-    )
-  }
-
-  const now = new Date()
-  const yyyy = now.getUTCFullYear()
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
-  const blobKey = `quotes/${yyyy}/${mm}/${randomUUID()}-${order.orderNumber}.pdf`
-
-  let blob
-  try {
-    blob = await put(blobKey, pdfBytes, {
-      access: 'private' as 'public', // @vercel/blob types only expose 'public' but private buckets accept the same call
-      contentType: 'application/pdf',
-    })
-  } catch (err) {
-    console.error('[quote-pdf] blob upload error:', err)
-    return NextResponse.json({ error: 'Failed to upload quote PDF.' }, { status: 500 })
-  }
-
-  const previousKey = order.quotePdfKey
-  await prisma.order.update({
-    where: { id: order.id },
-    data: {
-      quotePdfKey: blobKey,
-      quotePdfUrl: blob.url,
-      quotePdfGeneratedAt: now,
-    },
-  })
-
-  if (previousKey && previousKey !== blobKey) {
-    try {
-      await del(previousKey)
-    } catch (err) {
-      console.warn('[quote-pdf] failed to delete prior blob (non-fatal):', err)
-    }
-  }
+  const res = await generateQuotePdf(params.id)
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
 
   return NextResponse.json({
     ok: true,
-    url: blob.url,
-    key: blobKey,
-    generatedAt: now.toISOString(),
+    url: res.url,
+    key: res.key,
+    generatedAt: res.generatedAt.toISOString(),
   })
 }
 
@@ -196,6 +48,12 @@ export async function GET(
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  // Serving the PDF is one of the two moments staleness actually bites, so
+  // re-cut first when the order has moved since the last render. No-ops when
+  // the PDF is current or absent, and never throws — a failed refresh serves
+  // the prior document rather than a 500.
+  await ensureFreshQuotePdf(params.id)
+
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     select: {
