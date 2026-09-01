@@ -213,7 +213,13 @@ export async function GET(req: NextRequest) {
     const subject = `${TIER_PREFIX[worst]} ${rows.length} HQ job${rows.length === 1 ? '' : 's'} not ready — ${DESK_LABEL[desk]}`
 
     if (dryRun) {
-      sent.push({ desk, to, subject, count: rows.length, jobs: rows.map((r) => ({ jobCode: r.job.jobCode, days: r.days, blockers: r.blockers })) })
+      // The rendered HTML too. A preview that shows recipients and a
+      // subject but not the email is not a preview of the email.
+      sent.push({
+        desk, to, subject, count: rows.length,
+        html: buildHtml(desk, rows),
+        jobs: rows.map((r) => ({ jobCode: r.job.jobCode, name: r.job.name, days: r.days, blockers: r.blockers })),
+      })
       continue
     }
     if (to.length === 0) { sent.push({ desk, skipped: 'no recipients configured' }); continue }
