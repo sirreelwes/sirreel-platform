@@ -268,7 +268,7 @@ interface JobDetail {
   company: { id: string; name: string; notes: string | null };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string }>;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; humanDecisionAt: string | null; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string }>;
   agreementAddenda: JobAgreementAddendum[];
   orders: JobOrder[];
   bookings: JobBooking[];
@@ -1652,6 +1652,15 @@ const driverTone = (d: any): string => {
               // name, so correcting a wrong company clears the flag here without
               // re-reviewing the certificate.
               const match = evaluateInsuredMatch(c.namedInsured, [job.company?.name, job.name]);
+              // SETTLED = signed off, in date, and insuring the right
+              // entity. Wes 2026-09-01: an approved certificate kept
+              // offering a prominent "Review", which reads as "this
+              // still needs reviewing" — so an approval never felt
+              // like it finished anything. A settled row states it is
+              // complete and demotes the way back in to a quiet link;
+              // anything unsettled keeps the loud button.
+              const settled =
+                c.humanDecision === 'APPROVED' && !expired && !match.needsAttention;
               return (
                 <div key={c.id} className={`rounded-lg border px-3.5 py-2.5 ${match.needsAttention ? 'border-rose-500/40 bg-rose-500/5' : 'border-zinc-800 bg-zinc-950/60'}`}>
                   <div className="flex items-center gap-3">
@@ -1684,12 +1693,33 @@ const driverTone = (d: any): string => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
-                      <button
-                        onClick={() => setReviewCoiId(c.id)}
-                        className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Review
-                      </button>
+                      {settled ? (
+                        <span
+                          className="text-[12px] font-semibold text-emerald-300 flex items-center gap-1.5"
+                          title={
+                            c.humanDecisionAt
+                              ? `Approved ${fmtDate(c.humanDecisionAt)}`
+                              : 'Approved'
+                          }
+                        >
+                          <span aria-hidden>✓</span> Complete
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setReviewCoiId(c.id)}
+                          className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Review
+                        </button>
+                      )}
+                      {settled && (
+                        <button
+                          onClick={() => setReviewCoiId(c.id)}
+                          className="text-[12px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+                        >
+                          Reopen
+                        </button>
+                      )}
                       <a
                         href={`/api/coi/download/${c.id}`}
                         target="_blank"

@@ -24,6 +24,14 @@ export function UploadCoiModal({
   const [additionalInsured, setAdditionalInsured] = useState(false);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  // The COI the upload just created — lets the result screen approve it
+  // in place (Wes 2026-09-01: "we should have the option to approve in
+  // that window"). Before this the result screen offered only "Done",
+  // so an agent who had just read the AI verdict still had to close,
+  // find the row, and open the review modal to say yes.
+  const [coiId, setCoiId] = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [approved, setApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ overallPass: boolean; riskLevel: string | null; notes: string | null } | null>(null);
 
@@ -49,11 +57,40 @@ export function UploadCoiModal({
         return;
       }
       // Show the AI review result before returning to the page.
+      setCoiId(typeof data.coiId === 'string' ? data.coiId : null);
+      setApproved(verified);
       setResult(data.review ?? { overallPass: false, riskLevel: null, notes: null });
       setSaving(false);
     } catch (e) {
       setError(String(e));
       setSaving(false);
+    }
+  };
+
+  const approveNow = async () => {
+    if (!coiId || approving) return;
+    setApproving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/coi/review/${coiId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DECIDE',
+          decision: 'APPROVED',
+          note: note.trim() || 'Approved at upload after reading the AI review.',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'Could not approve the certificate.');
+        return;
+      }
+      setApproved(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -91,14 +128,37 @@ export function UploadCoiModal({
               </div>
               {result.notes && <p className="text-sm text-zinc-300 leading-relaxed">{result.notes}</p>}
               <p className="text-[11px] text-zinc-500">
-                Filed on the job. {verified ? 'Marked verified.' : 'Left in the review queue for a human decision.'} The full
-                breakdown is available in COI review.
+                Filed on the job.{' '}
+                {approved
+                  ? 'Approved — the job now reads Verified and nothing further is needed.'
+                  : 'Not approved yet: it sits in the review queue until someone signs off.'}{' '}
+                The full breakdown is available in COI review.
               </p>
+              {error && (
+                <p className="text-[12px] text-rose-300">{error}</p>
+              )}
             </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
+            <div className="flex items-center justify-end gap-2 border-t border-zinc-800 px-5 py-4">
+              {/* Approve right here, having just read the verdict above —
+                  the same endpoint the review desk posts to, so there is
+                  one approval path and one audit trail. */}
+              {!approved && coiId && (
+                <button
+                  onClick={approveNow}
+                  disabled={approving}
+                  className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {approving ? 'Approving…' : 'Approve certificate'}
+                </button>
+              )}
+              {approved && (
+                <span className="mr-auto text-[12px] font-semibold text-emerald-300">Approved ✓</span>
+              )}
               <button
                 onClick={onUploaded}
-                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-500"
+                className={`rounded-lg px-4 py-1.5 text-sm font-semibold text-white ${
+                  approved ? 'bg-amber-600 hover:bg-amber-500' : 'bg-zinc-700 hover:bg-zinc-600'
+                }`}
               >
                 Done
               </button>

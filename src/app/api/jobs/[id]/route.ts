@@ -50,6 +50,8 @@ export async function GET(
             coverageVerified: true,
             policyExpiryDate: true,
             humanDecision: true,
+            // Dates the "Complete" state on the job's COI row.
+            humanDecisionAt: true,
             source: true,
             originalFilename: true,
             aiRiskLevel: true,
