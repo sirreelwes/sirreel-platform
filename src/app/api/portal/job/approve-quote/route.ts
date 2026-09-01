@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { promoteHoldsOnApproval } from '@/lib/orders/holdOnQuoteSend'
+import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import {
   JOB_SESSION_COOKIE,
   buildJobSessionCookieHeader,
@@ -149,7 +149,12 @@ export async function POST(req: NextRequest) {
   // so a dead quote can't freeze a truck; approval is the moment it
   // should actually block. Best-effort like the rest of the post-approval
   // work below — the approval is the durable fact.
-  const promotion = await promoteHoldsOnApproval(order.id)
+  // Approval alone no longer makes a hold firm — the client's paperwork
+  // has to be in too (Wes 2026-09-01). reconcile decides and moves it
+  // either way; it re-runs on every paperwork event as well, so an
+  // approval that arrives first is picked up when the COI/agreement/card
+  // land.
+  const promotion = await reconcileHoldFirmness(order.id)
   if (promotion.error) {
     console.error('[approve-quote] hold promotion failed:', promotion.error)
   }

@@ -11,6 +11,7 @@ import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { syncOrderKitPieces } from "@/lib/orders/kitSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, resolveFeeLineRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
@@ -516,6 +517,22 @@ export async function POST(req: NextRequest, { params }: Params) {
     // appended to BookingItem.notes so dispatch's booking-detail view
     // shows the override without a separate query.
     let holdsResult: { bookingItemId: string; quantityBefore: number; quantityAfter: number; created: boolean } | null = null;
+    // A vehicle on a quote is held THE MOMENT IT IS QUOTED (Wes
+    // 2026-09-01: "if a vehicle is quoted with no hold, create one
+    // immediately"). The hold used to wait for the quote to be SENT,
+    // so a draft could carry a truck that read free on the board and
+    // get promised to someone else. Idempotent + non-fatal; it also
+    // mints the Booking this order had none of.
+    if (wantsHoldSync && !parentBookingId) {
+      const raised = await holdOnQuoteSend(orderId);
+      if (raised.error) {
+        console.error('[line-items] immediate hold failed:', raised.error);
+      } else {
+        // Rank follows approval + paperwork, never the mere existence
+        // of the line.
+        await reconcileHoldFirmness(orderId);
+      }
+    }
     if (wantsHoldSync && parentBookingId && assetCategoryId) {
       holdsResult = await syncHoldOnLineAdd(prisma, {
         bookingId: parentBookingId,

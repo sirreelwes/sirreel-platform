@@ -28,6 +28,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import {
@@ -212,6 +213,16 @@ export async function POST(req: NextRequest) {
     replyTo: signerEmail ?? undefined,
     label: 'portal/job',
   })
+
+  // Signing can complete the client's paperwork set, which is half of
+  // what makes a hold firm (Wes 2026-09-01). Non-fatal — the signature
+  // is already stored.
+  try {
+    const r = await reconcileHoldFirmness(resolved.orderId)
+    if (r.error) console.error('[agreement/sign] hold reconcile failed:', r.error)
+  } catch (err) {
+    console.error('[agreement/sign] hold reconcile threw:', err)
+  }
 
   return NextResponse.json({ ok: true, agreement: updated })
 }

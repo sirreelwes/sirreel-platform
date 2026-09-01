@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { coiChecklist, coiFlags } from '@/lib/coi/checks'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
@@ -406,6 +407,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(policyExpiryDate !== undefined ? { policyExpiryDate } : {}),
     },
   })
+
+  // A COI decision can complete (or break) the paperwork set, so the
+  // holds' firmness is re-decided here (Wes 2026-09-01). Non-fatal.
+  if (existing.job?.id) {
+    const orders = await prisma.order.findMany({
+      where: { jobId: existing.job.id, status: { notIn: ['CANCELLED'] } },
+      select: { id: true },
+    })
+    for (const o of orders) {
+      const r = await reconcileHoldFirmness(o.id)
+      if (r.error) console.error('[coi/review] hold reconcile failed:', o.id, r.error)
+    }
+  }
 
   const fresh = await loadCoi(id)
   return NextResponse.json({ ok: true, coi: serialize(fresh!) })

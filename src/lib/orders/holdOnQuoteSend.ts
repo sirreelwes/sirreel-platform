@@ -29,6 +29,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment } from '@prisma/client'
+import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 
 export interface HoldOnQuoteResult {
   created: number
@@ -183,11 +184,141 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
 }
 
 /**
- * Promote a quote's soft holds to firm when the client approves.
+ * Is the CLIENT's paperwork in? (Wes 2026-09-01: a hold "only becomes
+ * booked when client approves quote and has paperwork submitted".)
  *
- * The quote-send hold is rank 2 (spoken-for, non-blocking). Approval is
- * the client saying yes, so the hold becomes rank 1 and blocks properly.
- * Also non-fatal: an approval must land even if the promotion doesn't.
+ * Deliberately the three things the CLIENT owes us — COI, signed rental
+ * agreement, card on file. Driver-named and gear-assigned are OUR work
+ * and appear in job readiness; holding a truck hostage to our own
+ * dispatch admin would be backwards.
+ */
+export async function clientPaperworkIn(orderId: string): Promise<{
+  ok: boolean
+  missing: string[]
+}> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      jobId: true,
+      signedAgreements: { select: { contractType: true, status: true, coveredByAgreementId: true } },
+      job: {
+        select: {
+          coiChecks: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { humanDecision: true, coverageVerified: true, policyExpiryDate: true },
+          },
+          bookings: {
+            where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+            select: { paperworkRequests: { select: { ccCardNumberEncrypted: true } } },
+          },
+        },
+      },
+    },
+  })
+  if (!order) return { ok: false, missing: ['order not found'] }
+
+  const coi = order.job?.coiChecks[0] ?? null
+  const coiExpired = coi?.policyExpiryDate ? coi.policyExpiryDate.getTime() < Date.now() : false
+  const coiOk = !!coi && !coiExpired && coi.humanDecision === 'APPROVED' && coi.coverageVerified
+
+  const rental = order.signedAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT')
+  const signOk =
+    rental.length > 0 &&
+    rental.every((a) => isSignedAgreementStatus(a.status) || !!a.coveredByAgreementId)
+
+  const cardOk = (order.job?.bookings ?? []).some((b) =>
+    b.paperworkRequests.some((p) => !!p.ccCardNumberEncrypted),
+  )
+
+  const missing: string[] = []
+  if (!coiOk) missing.push('COI')
+  if (!signOk) missing.push('signed agreement')
+  if (!cardOk) missing.push('card on file')
+  return { ok: missing.length === 0, missing }
+}
+
+/**
+ * Decide whether this order's holds should be FIRM (rank 1) or stay a
+ * soft backup (rank 2), and move them either way.
+ *
+ * Firm requires BOTH: the client approved the quote, AND their
+ * paperwork is in (Wes 2026-09-01). Approval alone used to promote,
+ * which meant a truck was hard-blocked for a client who had signed
+ * nothing and given us no card.
+ *
+ * Idempotent and safe to call from any event that could change either
+ * input — quote approval, COI sign-off, agreement signature, card
+ * capture. Non-fatal: the triggering act must land even if this does
+ * not.
+ */
+export async function reconcileHoldFirmness(orderId: string): Promise<{
+  promoted: number
+  demoted: number
+  firm: boolean
+  missing: string[]
+  error: string | null
+}> {
+  const out = { promoted: 0, demoted: 0, firm: false, missing: [] as string[], error: null as string | null }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { bookingId: true, jobId: true, quoteStatus: true, status: true },
+    })
+    if (!order) return { ...out, error: 'order not found' }
+
+    // "Client approved the quote" — WON covers the portal approval and
+    // the agent marking it approved; anything at/after BOOKED is past
+    // the question.
+    const approved =
+      order.quoteStatus === 'WON' ||
+      ['APPROVED', 'BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(
+        order.status,
+      )
+
+    const paperwork = await clientPaperworkIn(orderId)
+    const firm = approved && paperwork.ok
+    out.firm = firm
+    out.missing = approved ? paperwork.missing : ['client approval', ...paperwork.missing]
+
+    const bookingIds: string[] = []
+    if (order.bookingId) bookingIds.push(order.bookingId)
+    else if (order.jobId) {
+      const rows = await prisma.booking.findMany({
+        where: { jobId: order.jobId, source: 'AGENT_DIRECT' },
+        select: { id: true },
+      })
+      bookingIds.push(...rows.map((r) => r.id))
+    }
+    if (bookingIds.length === 0) return out
+
+    if (firm) {
+      const res = await prisma.bookingItem.updateMany({
+        where: { bookingId: { in: bookingIds }, holdRank: 2, status: 'REQUESTED' },
+        data: { holdRank: 1 },
+      })
+      out.promoted = res.count
+    } else {
+      // Something lapsed (a COI expired, an agreement was re-issued):
+      // the hold drops back to a backup rather than silently keeping a
+      // firm block it no longer earns.
+      const res = await prisma.bookingItem.updateMany({
+        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED' },
+        data: { holdRank: 2 },
+      })
+      out.demoted = res.count
+    }
+    return out
+  } catch (e) {
+    return { ...out, error: e instanceof Error ? e.message : 'reconcile failed' }
+  }
+}
+
+/**
+ * @deprecated Use reconcileHoldFirmness — approval alone is no longer
+ * enough to make a hold firm (Wes 2026-09-01). Kept as a thin shim so
+ * existing call sites keep compiling while they migrate.
  */
 export async function promoteHoldsOnApproval(orderId: string): Promise<{ promoted: number; error: string | null }> {
   try {

@@ -65,6 +65,7 @@ import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, resolveFeeLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
+import { holdOnQuoteSend, reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 
 
 export const dynamic = 'force-dynamic'
@@ -670,6 +671,19 @@ export async function POST(req: NextRequest) {
       await recalcOrderTotals(result.orderId)
     } catch (err) {
       console.warn('[orders/from-parse] recalc totals failed:', err)
+    }
+
+    // Vehicles quoted here are held IMMEDIATELY (Wes 2026-09-01), not
+    // at send time — a draft carrying a truck that reads free on the
+    // board is how it gets promised twice. Outside the transaction and
+    // non-fatal: the order is committed and a hold hiccup must not
+    // roll it back.
+    try {
+      const raised = await holdOnQuoteSend(result.orderId)
+      if (raised.error) console.error('[orders/from-parse] immediate hold failed:', raised.error)
+      else await reconcileHoldFirmness(result.orderId)
+    } catch (err) {
+      console.error('[orders/from-parse] immediate hold threw:', err)
     }
 
     return NextResponse.json(
