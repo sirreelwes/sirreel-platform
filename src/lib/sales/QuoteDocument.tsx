@@ -129,8 +129,6 @@ export interface QuoteDiscountInput {
 export interface QuoteDocumentProps {
   orderNumber: string
   description: string | null
-  startDate: Date | string | null
-  endDate: Date | string | null
   notes: string | null
   subtotal: number
   taxRate: number      // decimal, e.g. 0.0875
@@ -175,20 +173,6 @@ const DEPT_ORDER: readonly Department[] = LINE_ITEM_DEPARTMENT_ORDER
 // ─────────────────────────────────────────────────────────────────────
 
 
-/**
- * Calendar dates (pickup, return, due) — UTC, never local.
- *
- * Separate from fmtDate() on purpose: that one also renders INSTANTS
- * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
- * would fix the rental dates and break the timestamps. See
- * src/lib/dates/calendarDate.ts.
- */
-function fmtDay(d: string | Date | null | undefined): string {
-  if (!d) return '—'
-  const dt = typeof d === 'string' ? new Date(d) : d
-  if (Number.isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-US', { ...{ year: 'numeric', month: 'short', day: 'numeric' }, timeZone: 'UTC' })
-}
 
 function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return '—'
@@ -197,11 +181,61 @@ function fmtDate(d: Date | string | null | undefined): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-/** Rental usage period — calendar dates, so fmtDay (UTC), not fmtDate. */
-function fmtDateRange(start: Date | string | null, end: Date | string | null): string {
-  if (!start && !end) return '—'
-  if (start && end) return `${fmtDay(start)} – ${fmtDay(end)}`
-  return fmtDay(start || end)
+/**
+ * A line's own rental window, as terse as it can be and still unambiguous.
+ *
+ * Wes 2026-09-01: bring the per-line dates back, but they must not crowd
+ * the row. They were pulled on 8/29 because each line carried a date range
+ * AND a "Billable days: N (rental period …)" sentence — three wrapped lines
+ * under every item. The concession now rides in the Days column as "1 / 5",
+ * so only the window comes back, on ONE short line:
+ *
+ *   Sep 4              single day
+ *   Sep 4 – 5          same month
+ *   Sep 4 – Oct 2      same year
+ *   Sep 4, 2025 – …    year shown whenever it is not the quote's own year,
+ *                      or the two ends disagree
+ *
+ * That last rule is deliberate. The order that prompted this had five lines
+ * mis-typed to 2025 and the only place it showed was a year-long summary
+ * range at the top of the document. A wrong year now reads on the line that
+ * carries it.
+ *
+ * @db.Date values are midnight UTC — every part is read in UTC or the day
+ * slides backwards in a negative-offset zone.
+ */
+function fmtLineWindow(
+  start: string | Date | null | undefined,
+  end: string | Date | null | undefined,
+  quoteYear: number,
+): string {
+  const toDate = (v: string | Date | null | undefined): Date | null => {
+    if (!v) return null
+    const d = typeof v === 'string' ? new Date(v) : v
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  const s = toDate(start)
+  const e = toDate(end)
+  if (!s && !e) return ''
+  const one = (d: Date, withYear: boolean) =>
+    d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(withYear ? { year: 'numeric' } : {}),
+      timeZone: 'UTC',
+    })
+  const dayOnly = (d: Date) => d.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' })
+
+  if (!s || !e) {
+    const d = (s ?? e) as Date
+    return one(d, d.getUTCFullYear() !== quoteYear)
+  }
+  const offYear = s.getUTCFullYear() !== quoteYear || e.getUTCFullYear() !== quoteYear
+  const splitYear = s.getUTCFullYear() !== e.getUTCFullYear()
+  const withYear = offYear || splitYear
+  if (s.getTime() === e.getTime()) return one(s, withYear)
+  if (!withYear && s.getUTCMonth() === e.getUTCMonth()) return `${one(s, false)} \u2013 ${dayOnly(e)}`
+  return `${one(s, withYear)} \u2013 ${one(e, withYear)}`
 }
 
 function fmtTimestamp(d: Date): string {
@@ -462,6 +496,8 @@ const styles = StyleSheet.create({
   colRate: { width: '15%', fontSize: 9, textAlign: 'right' },
   colTotal: { width: '16%', fontSize: 9, textAlign: 'right' },
   qualifier: { fontSize: 8, color: C.muted, fontStyle: 'italic', marginTop: 1 },
+  // Upright, not italic — the qualifier is an aside, the window is a fact.
+  lineWindow: { fontSize: 8, color: C.muted, marginTop: 1 },
   dateNote: { fontSize: 8, color: C.faint, marginTop: 1 },
   subtotalRow: {
     flexDirection: 'row',
@@ -598,7 +634,12 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
   const generatedAt = props.generatedAt ?? new Date()
   const grouped = groupByDepartment(props.lineItems)
   const discountItems = props.lineItems.filter((l) => l.isDiscount)
-  const usagePeriod = fmtDateRange(props.startDate, props.endDate)
+  // No order-wide date row. It was an order-level rollup presented as the
+  // usage period, and when the header dates were blank it filled from the
+  // lines' min/max — a DIFFERENT window under the same label, which on one
+  // mis-typed order read "Sep 4, 2025 – Sep 1, 2026" (Wes 2026-09-01: the
+  // rental period / master dates come off, the per-line dates come back).
+  const quoteYear = generatedAt.getUTCFullYear()
 
   // Expiration line — "Valid for X days from <date>"
   const expiresAt = (() => {
@@ -673,10 +714,6 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                 <Text style={styles.infoValue}>{props.description}</Text>
               </View>
             )}
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLabel}>Usage Period</Text>
-              <Text style={styles.infoValue}>{usagePeriod}</Text>
-            </View>
           </View>
 
           <View style={[styles.infoSection, styles.infoSectionAgent]}>
@@ -747,21 +784,16 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                     {item.notes && item.notes.trim().length > 0 && (
                       <Text style={styles.qualifier}>{item.notes}</Text>
                     )}
-                    {/* The per-line date range and the "Billable days: N
-                        (rental period …)" sentence used to live here, three
-                        wrapped lines under EVERY item. Both were saying what
-                        the document already says: the usage period is in the
-                        header, and the billed-vs-calendar split now rides in
-                        the Days column as "1 / 5" — the same shorthand the
-                        order page uses.
-
-                        The per-line date range is gone outright (Wes, 8/29),
-                        not just when it matched the header. It almost never
-                        matched — the order header carries the USAGE period
-                        (Sep 5–8) while lines carry the RENTAL window that
-                        brackets it (Sep 4–9) — so the "only show it when it
-                        differs" guard printed it on virtually every line. A
-                        date under all 22 items is noise, not information. */}
+                    {/* The line's own window — ONE terse line (see
+                        fmtLineWindow). Pulled 8/29 when it was a date range
+                        plus a "Billable days: N (rental period …)" sentence
+                        under every item; restored 9/1 without the sentence,
+                        because the header no longer carries any date at all
+                        and a line is where a wrong one is worth seeing. */}
+                    {(() => {
+                      const w = fmtLineWindow(item.pickupDate, item.returnDate, quoteYear)
+                      return w ? <Text style={styles.lineWindow}>{w}</Text> : null
+                    })()}
                   </View>
                   <Text style={styles.colQty}>{item.quantity}</Text>
                   <Text style={styles.colDays}>

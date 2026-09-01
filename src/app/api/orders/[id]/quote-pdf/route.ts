@@ -6,7 +6,6 @@ import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import { QuoteDocument, type Department, type QuoteLineItem } from '@/lib/sales/QuoteDocument'
-import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { catalogClientCode } from '@/lib/catalog/display'
 
 export const dynamic = 'force-dynamic'
@@ -88,23 +87,11 @@ export async function POST(
     ? `${order.jobContact.firstName} ${order.jobContact.lastName}`.trim()
     : null
 
-  const pdfWindow = deriveOrderWindow({
-    startDate: order.startDate,
-    endDate: order.endDate,
-    lineItems: order.lineItems,
-  })
-
   let pdfBytes: Buffer
   try {
     const element = React.createElement(QuoteDocument, {
       orderNumber: order.orderNumber,
       description: order.description,
-      // The window the quote covers. Header dates when the rep set them,
-      // otherwise the lines' own — this route already refuses an order
-      // with no lines, so "—" here only ever meant "nobody typed it in
-      // at the top", never "we don't know". See deriveOrderWindow.
-      startDate: pdfWindow.start,
-      endDate: pdfWindow.end,
       notes: order.notes,
       subtotal: Number(order.subtotal),
       taxRate: Number(order.taxRate),
