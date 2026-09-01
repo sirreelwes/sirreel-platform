@@ -1526,6 +1526,48 @@ export default function OrderDetailPage() {
   };
 
   /**
+   * Void an issued invoice so a corrected one can be generated.
+   *
+   * The drift banner has told reps to "void it and generate a fresh one"
+   * since the invoice card shipped, and the generator refuses to re-cut
+   * while a live RENTAL invoice exists — but nothing in the app could
+   * actually void one (Wes 2026-09-01, stuck on a Dreambear invoice that
+   * went out before the discounts were applied). This is that button.
+   *
+   * The reason is required by the route and lands in the AuditLog. The
+   * confirm names the consequence out loud when the client already holds
+   * the document.
+   */
+  const [voidingInvoice, setVoidingInvoice] = useState(false);
+  const voidInvoice = async (invoiceId: string, invoiceNumber: string, wasSent: boolean) => {
+    const reason = window.prompt(
+      `Void ${invoiceNumber}?\n\n` +
+        (wasSent
+          ? 'The client already has this invoice. Voiding withdraws it; the corrected bill goes out as a NEW invoice number.\n\n'
+          : 'This invoice has not been sent.\n\n') +
+        'Why is it being withdrawn? (recorded in the audit trail)',
+      'Superseded — order was corrected after the invoice was issued',
+    );
+    if (reason == null || !reason.trim()) return;
+    setVoidingInvoice(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.reason || data.error || `Void failed (HTTP ${res.status})`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setVoidingInvoice(false);
+    }
+  };
+
+  /**
    * Auto-regenerate the quote PDF after the order is edited.
    *
    * Wes 2026-09-01: "can we make it so that when a quote is modified and
@@ -3616,6 +3658,26 @@ export default function OrderDetailPage() {
                 >
                   {isDraft ? 'View pre-invoice' : 'View invoice PDF'}
                 </a>
+                {/* The way out of a wrong invoice. Loud only when the
+                    figures have actually diverged — otherwise it's a quiet
+                    control, since withdrawing a document the client holds
+                    should never be the obvious click. */}
+                <button
+                  onClick={() => void voidInvoice(inv.id, inv.invoiceNumber, !!inv.sentAt)}
+                  disabled={voidingInvoice}
+                  title={
+                    driftsFromOrder
+                      ? 'Withdraw this invoice so a corrected one can be generated'
+                      : 'Withdraw this invoice'
+                  }
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg border disabled:opacity-50 ${
+                    driftsFromOrder
+                      ? 'border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200'
+                      : 'border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner'
+                  }`}
+                >
+                  {voidingInvoice ? 'Voiding…' : 'Void invoice'}
+                </button>
                 <a href="#invoices" className="text-[12px] font-semibold text-lt-fg2 hover:text-lt-fg">
                   Invoice actions ↓
                 </a>
