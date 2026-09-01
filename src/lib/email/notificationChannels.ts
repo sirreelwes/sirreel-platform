@@ -35,6 +35,8 @@ export type NotificationChannelKey =
   | 'signed-contract-billing'
   | 'coi-team'
   | 'pickup-picklists'
+  | 'hq-escalation-sales'
+  | 'hq-escalation-fleet'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -89,6 +91,20 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The day-before digest, weekday afternoons: jobs picking up tomorrow with all paperwork and approvals complete, each with a link to print its warehouse pick list — plus a heads-up list of pickups that are NOT ready. Friday’s run covers the weekend and Monday. A short-term bridge until picking is fully digital.',
     defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'hq-escalation-sales',
+    label: 'HQ escalation — client-facing',
+    description:
+      'Rising alerts for work SirReel booked in HQ (not imported from Planyo or RentalWorks) that is approaching pickup while the CLIENT still owes us something: a COI, a signature, a card on file, or the name of whoever is driving. Sales and admin, because chasing a client is their work. Silent until a job is inside 6 days of pickup.',
+    defaults: () => ['rentals@sirreel.com', 'wes@sirreel.com'],
+  },
+  {
+    key: 'hq-escalation-fleet',
+    label: 'HQ escalation — vehicle prep',
+    description:
+      'The same escalation, for the half only fleet can clear: an HQ-booked job approaching pickup with booking items that have no unit assigned. Hugo and Julian. Deliberately separate from the client-facing list — a desk that gets alerts it cannot act on stops reading them.',
+    defaults: () => ['hugo@sirreel.com', 'julian@sirreel.com'],
   },
 ]
 

@@ -56,7 +56,21 @@ export async function GET(req: NextRequest) {
 
   // Phase 6.5 — data scope enforcement. OWN users see only their own
   // jobs regardless of client params. ADMIN / MANAGER always TEAM.
-  const scope = await resolveDataScope()
+  //
+  // The one exception is a SERVER-SIDE caller holding CRON_SECRET. An
+  // unauthenticated request resolves to scope OWN with a null userId,
+  // which filters to nothing — correct for the public internet, and a
+  // silent no-op for a cron, which is worse than an error because it
+  // looks like it ran. /api/cron/hq-escalation reads this route rather
+  // than re-deriving readiness, so it needs team scope without a
+  // session. The secret is server-only and already gates every sibling
+  // cron; this widens READ scope on this route and nothing else.
+  const cronSecret = process.env.CRON_SECRET
+  const isCron =
+    !!cronSecret && (req.headers.get('authorization') || '') === `Bearer ${cronSecret}`
+  const scope = isCron
+    ? ({ userId: null, role: null, scope: 'TEAM' } as const)
+    : await resolveDataScope()
   const scopeWhere = jobScopeWhere(scope)
 
   // Legacy mine=1 still resolves to the session user's id (UI may

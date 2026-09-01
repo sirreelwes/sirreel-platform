@@ -36,7 +36,14 @@ interface SeedFee {
 
 const FEES: SeedFee[] = [
   // ── Flat fees (RW pick-list codes) ──────────────────────────────
-  { code: 'DEL',        name: 'Delivery Fee',                              amount: 150,   unit: 'FLAT' },
+  { code: 'DEL',        name: 'Delivery Fee',                              amount: 150,   unit: 'FLAT',
+    description: 'Run out to location. The return run is billed separately as PICKUP; trailers use the combined DLUXNCDP.' },
+  // Added 2026-08-31 (Wes): the catalog had a Delivery fee but no
+  // generic Pickup counterpart — only the trailer-specific DLUXNCDP,
+  // which bundles both legs and is priced for trailers. Mirrors DEL's
+  // $150 as the starting price; adjust at /admin/fees, not here.
+  { code: 'PICKUP',     name: 'Pickup Fee',                                amount: 150,   unit: 'FLAT',
+    description: 'Collection run at end of rental. The outbound run is billed separately as DEL; trailers use the combined DLUXNCDP.' },
   { code: 'DLUXNCDP',   name: 'Trailer Delivery / Pick-Up',                amount: 325,   unit: 'FLAT' },
   { code: 'DLUXNCS',    name: 'Trailer Service (Pump, Restock, Clean)',    amount: 325,   unit: 'FLAT' },
   { code: 'KEYREPLACE', name: 'Replacement of Missing Key',                amount: 210,   unit: 'FLAT' },
