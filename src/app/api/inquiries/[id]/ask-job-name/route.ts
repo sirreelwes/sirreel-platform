@@ -25,6 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { CLIENT_SIGNOFF } from '@/lib/email/signoff'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { signDetailsToken, detailsLinkUrl } from '@/lib/intake/detailsToken'
@@ -97,13 +98,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     `We're putting your quote together. So it lands in the right place, could you tell us ` +
     `${wanted}?\n\n${url}\n\n` +
     `Takes a few seconds — or just reply to this email and we'll add it.\n\n` +
-    `Thanks,\n${agent}\nSirReel Production Vehicles`
+    `Thanks,\n${agent}\n${CLIENT_SIGNOFF}`
   const html =
     `<div style="font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1c1917">` +
     `<p>Hi ${toName},</p>` +
     `<p>We're putting your quote together. So it lands in the right place, could you tell us ${wanted}?</p>` +
     `<p><a href="${url}" style="color:#b45309;font-weight:700">Add ${askForCompany ? 'them' : 'it'} here</a> — takes a few seconds, or just reply to this email and we'll add it.</p>` +
-    `<p>Thanks,<br>${agent}<br>SirReel Production Vehicles</p></div>`
+    `<p>Thanks,<br>${agent}<br>${CLIENT_SIGNOFF}</p></div>`
 
   const result = await sendAgreementEmail({
     to: [toEmail],

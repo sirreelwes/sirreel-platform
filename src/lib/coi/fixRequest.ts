@@ -1,4 +1,5 @@
 import type { InsuredMatchResult } from '@/lib/coi/insuredMatch'
+import { CLIENT_SIGNOFF } from '@/lib/email/signoff'
 import { coiChecklist, hasCoiChecklist } from '@/lib/coi/checks'
 import type { CoiAiResponse } from '@/lib/coi/reviewCoi'
 import { formatCalendarDate } from '@/lib/dates/calendarDate'
@@ -165,7 +166,9 @@ export function buildCoiFixDraft(args: {
   if (args.uploadUrl) {
     lines.push('', `You can upload the corrected certificate here: ${args.uploadUrl}`)
   }
-  lines.push('', 'Thanks,', 'SirReel Production Vehicles')
+  // The legal entity name appears ABOVE, in the requirement text, where
+  // the certificate has to name it exactly. It is not the sign-off.
+  lines.push('', 'Thanks,', CLIENT_SIGNOFF)
 
   return { issues, message: lines.join('\n') }
 }
