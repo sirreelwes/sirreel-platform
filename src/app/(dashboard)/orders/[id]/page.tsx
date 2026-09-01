@@ -484,6 +484,13 @@ export default function OrderDetailPage() {
   // pass it to pickRate (daily vs weekly fallback). The inline editor
   // doesn't expose a rateType toggle — keep the existing value.
   const [editRateType, setEditRateType] = useState<string>("DAILY");
+  // Per-line dates. Wes, 2026-09-01: "the dates on the order in lines are
+  // off and not editable." The API has taken pickupDate/returnDate on the
+  // line PUT all along — with its own inverted-date guard — but the DATES
+  // cell rendered outside the editing branch, so the one field you need
+  // when a parsed date lands wrong was the one field you could not touch.
+  const [editPickupDate, setEditPickupDate] = useState("");
+  const [editReturnDate, setEditReturnDate] = useState("");
   // Inline-save in flight. Before this the Save control was a bare text
   // link with no pressed/working state, so a slow PUT read as "nothing
   // happened" and reps re-clicked (or assumed there was no save at all).
@@ -1701,6 +1708,10 @@ export default function OrderDetailPage() {
     setEditDesc(li.description ?? "");
     setEditDept(li.department);
     setEditRateType(li.rateType ?? "DAILY");
+    // Slice the UTC calendar day — these are @db.Date columns and a local
+    // format would show the day before west of Greenwich.
+    setEditPickupDate((li.pickupDate ?? "").slice(0, 10));
+    setEditReturnDate((li.returnDate ?? "").slice(0, 10));
     // Catalog binding — seed from whichever side the existing row
     // points at. Both nullable in the schema; only one can be set at
     // a time per business rule (handled by the API).
@@ -1801,6 +1812,11 @@ export default function OrderDetailPage() {
       quantity: parseInt(editQty) || 1,
     };
     if (editDays !== "") body.days = parseFloat(editDays);
+    // Canonical per-line pair. The legacy startDate/endDate are set on 4
+    // of 184 rows and agree with these everywhere, so they are left alone
+    // rather than written a second time.
+    if (editPickupDate) body.pickupDate = editPickupDate;
+    if (editReturnDate) body.returnDate = editReturnDate;
     const trimmedDesc = editDesc.trim();
     if (trimmedDesc.length > 0) body.description = trimmedDesc;
     if (editDept) body.department = editDept;
@@ -2016,9 +2032,32 @@ export default function OrderDetailPage() {
     ) : (
       <td className="px-4 py-3 text-lt-fg">{li.description}</td>
     )}
-    <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
-      {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : `${fmtDate(li.pickupDate)} - ${fmtDate(li.returnDate)}`}
-    </td>
+    {editingLineId === li.id ? (
+      <td className="px-4 py-2 whitespace-nowrap">
+        <div className="flex items-center gap-1">
+          <input
+            type="date"
+            value={editPickupDate}
+            onChange={(e) => setEditPickupDate(e.target.value)}
+            className="bg-lt-card border border-lt-hairline rounded px-1.5 py-1 text-xs text-lt-fg"
+            aria-label="Pickup date"
+          />
+          <span className="text-lt-fg3 text-xs">–</span>
+          <input
+            type="date"
+            value={editReturnDate}
+            min={editPickupDate || undefined}
+            onChange={(e) => setEditReturnDate(e.target.value)}
+            className="bg-lt-card border border-lt-hairline rounded px-1.5 py-1 text-xs text-lt-fg"
+            aria-label="Return date"
+          />
+        </div>
+      </td>
+    ) : (
+      <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
+        {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : `${fmtDate(li.pickupDate)} - ${fmtDate(li.returnDate)}`}
+      </td>
+    )}
     {editingLineId === li.id ? (
       <>
         <td className="px-4 py-2">
