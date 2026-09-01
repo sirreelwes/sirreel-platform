@@ -353,7 +353,17 @@ export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   if (isFleetYardRole(role)) return '/fleet/today';
   if (role === 'WAREHOUSE') return '/warehouse/pick';
   if (isBillingRole(role)) return '/collections';
-  // Everyone else — sales AND admin — starts on /jobs. Wes, 2026-08-31:
+  // Wes, 2026-08-31: "julian, hugo, albert should all land on orders."
+  // Those three ARE the MANAGER role — nobody else holds it — so the
+  // role is the right hook rather than an email list that would rot the
+  // first time someone joins or leaves.
+  //
+  // They run the work rather than sell it: Julian on dispatch/fleet,
+  // Hugo as GM, so the ORDER (what actually goes out, when, on which
+  // truck) is their unit of work. Sales think in Jobs, which is why
+  // admin and agents keep landing there.
+  if (role === UserRole.MANAGER) return '/orders';
+  // Everyone else — sales and admin — starts on /jobs. Wes, same day:
   // "it should always go to Jobs if anything." /jobs has been the one
   // stop shop since the 2026-08-27 merge (incoming, active and wrapped);
   // Dashboard is still in the nav for anyone who wants it, it is just no
