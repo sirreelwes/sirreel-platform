@@ -211,7 +211,6 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
 function buildPreviewBody(
   target: EmailReviewTarget,
   overrideContactId: string | null,
-  customNote: string,
   customMessage = '',
   quickRespond = false,
   ccAdd: string[] = [],
@@ -225,7 +224,14 @@ function buildPreviewBody(
   // typed value wins when both are present (the modal IS the review
   // surface — anything typed here is the final word). composers escape
   // + newline-convert before injecting into the body.
-  const finalNote = customNote.trim() || (('message' in target && target.message) || '');
+  // Follow-ups compose in the same single seeded box as every other kind
+  // now (Wes 2026-09-01: the nudge is written from scratch), so the box's
+  // text — not the old personal-note field — is what rides in `message`,
+  // and the template renders it as the whole body.
+  const isFollowUp = target.kind === 'followup-order' || target.kind === 'followup-job';
+  const finalNote =
+    (isFollowUp ? customMessage.trim() : '') ||
+    (('message' in target && target.message) || '');
   if (finalNote) base.message = finalNote;
   if (target.kind === 'followup-order' && target.stage) base.stage = target.stage;
   // Quick Reply has no order/job to key off — it carries its parsed payload
@@ -259,12 +265,11 @@ function buildPreviewBody(
 function buildSendBody(
   target: EmailReviewTarget,
   overrideContactId: string | null,
-  customNote: string,
   customMessage = '',
   quickRespond = false,
   ccAdd: string[] = [],
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customNote, customMessage, quickRespond, ccAdd);
+  return buildPreviewBody(target, overrideContactId, customMessage, quickRespond, ccAdd);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -303,11 +308,6 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   const [dupWarning, setDupWarning] = useState<{ by: string | null; at: string | null } | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  // Personal-note textarea state. Empty = templated-only (the
-  // composers omit the customMessage block). Debounced before it
-  // flows into the live preview re-fetch.
-  const [customNote, setCustomNote] = useState('');
-  const debouncedNote = useDebouncedValue(customNote, 350);
   // The composer box. There is no "Write my own email" toggle any more
   // (Wes 2026-08-31: "we don't need the extra step … every email preview
   // should open with suggested text but be editable"): every kind that
@@ -348,7 +348,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
         const res = await fetch(endpoints.preview, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom, !!quickRespond)),
+          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedCustom, !!quickRespond)),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.ok === false) {
@@ -367,7 +367,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
         setRefreshing(false);
       }
     },
-    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom, quickRespond],
+    [target, endpoints, overrideContactId, debouncedCustom, quickRespond],
   );
 
   // Reset state when target changes (e.g. opening for a different order).
@@ -375,7 +375,6 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     if (!target) return;
     setOverrideContactId(null);
     setShowPicker(false);
-    setCustomNote('');
     setCustomMessage('');
     setCcInput('');
     seededRef.current = false;
@@ -412,7 +411,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     if (!target || preview === null) return;
     void fetchPreview(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overrideContactId, debouncedNote, debouncedCustom]);
+  }, [overrideContactId, debouncedCustom]);
 
   if (!target || !endpoints) return null;
 
@@ -429,7 +428,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customNote, customMessage, !!quickRespond, ccValid) as Record<string, unknown>;
+      const sendBody = buildSendBody(target, overrideContactId, customMessage, !!quickRespond, ccValid) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -517,15 +516,18 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // the rep meant to copy someone, and quietly not doing it is the worse
   // failure. An empty box is fine.
   const ccBlocked = ccInvalid.length > 0 || ccOverLimit;
-  // One composer, no toggle, no second note field — every kind that
-  // composes a body gets the same always-open seeded box. Follow-ups are
-  // the exception: they're templated check-ins with only the personal-note
-  // slot, so they keep that field instead.
+  // One composer, no toggle, no second note field — EVERY kind that composes
+  // a body gets the same always-open seeded box. Follow-ups used to be the
+  // exception (templated check-in + a personal-note slot); Wes 2026-09-01
+  // folded them in: the check-in opens with one starter line and is written
+  // from scratch, same as the rest.
   const singleBox =
     target.kind === 'welcome' ||
     target.kind === 'quote' ||
     target.kind === 'card-auth' ||
-    target.kind === 'quick-reply';
+    target.kind === 'quick-reply' ||
+    target.kind === 'followup-order' ||
+    target.kind === 'followup-job';
 
   return (
     <div
@@ -729,37 +731,6 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                 <div className="text-white text-sm">{preview.subject}</div>
               </div>
 
-              {/* Personal note — flows into the composer's customMessage
-                  slot in BOTH the live preview below and the real send.
-                  Optional; empty leaves the email purely templated. The
-                  locked brand shell (header, CTAs, footer) is unaffected.
-
-                  Only shown for follow-ups: every other kind composes in
-                  the single seeded box below (Wes 2026-08-25, "no need for
-                  two sections, just have one place to type in"). */}
-              {!singleBox && (
-              <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
-                <div className="flex items-baseline justify-between mb-1">
-                  <label className="text-[10px] uppercase tracking-wider text-zinc-500">
-                    Personal note (optional)
-                  </label>
-                  {refreshing && (
-                    <span className="text-[10px] text-amber-300 animate-pulse">
-                      Updating preview…
-                    </span>
-                  )}
-                </div>
-                <textarea
-                  value={customNote}
-                  onChange={(e) => setCustomNote(e.target.value)}
-                  disabled={sendLocked}
-                  rows={3}
-                  maxLength={5000}
-                  placeholder="Add a sentence or two above the standard close. Empty = templated-only."
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
-                />
-              </div>
-              )}
 
               {/* The composer — one box, always open, prefilled with the
                   standard wording (Wes 2026-08-31: no "Write my own email"

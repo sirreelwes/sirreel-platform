@@ -7,6 +7,18 @@ import { QuickReplyModal } from './QuickReplyModal';
 import { buildQuickReplyInputs } from './QuickReplyLauncher';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
 
+/** Delays the live-preview refetch while the rep is typing the follow-up
+ *  body — one request per thought, not per keystroke. Same 350ms the
+ *  EmailReviewModal composer uses. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 interface ExtractedMessage {
   contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
   company: string | null;
@@ -115,6 +127,9 @@ interface FollowUpThreadResponse {
 interface FollowUpPreviewResponse {
   ok: true;
   to: { email: string; name: string };
+  /** One-line starter the composer box opens with. The rep edits it (or
+   *  writes something else entirely) and that text IS the email body. */
+  defaultBody?: string | null;
   subject: string;
   html: string;
   text: string;
@@ -263,6 +278,15 @@ export function ThreadDrawer(props: Props) {
   // recipient will actually see. The text-fallback toggle is there for
   // the multipart-degradation case the spec covers.
   const [previewView, setPreviewView] = useState<'html' | 'text'>('html');
+  // The follow-up body, written from scratch off the composer's one-line
+  // starter (Wes 2026-09-01). Whatever sits here is the email — the drawer
+  // re-previews on it (debounced) and sends it as `message`.
+  const [message, setMessage] = useState('');
+  const debouncedMessage = useDebouncedValue(message, 350);
+  const [previewRefreshing, setPreviewRefreshing] = useState(false);
+  // One seed per opened order — after that the box is the rep's, and a
+  // re-preview must never overwrite what they typed.
+  const seededRef = useRef<string | null>(null);
   const [sending, setSending] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [sendError, setSendError] = useState('');
@@ -320,6 +344,8 @@ export function ThreadDrawer(props: Props) {
         setPreview(null);
         setError('');
         setPreviewError('');
+        setMessage('');
+        seededRef.current = null;
         return;
       }
       setLoading(true);
@@ -328,6 +354,8 @@ export function ThreadDrawer(props: Props) {
       setError('');
       setPreviewError('');
       setSendError('');
+      setMessage('');
+      seededRef.current = null;
       const threadReq = fetch(`/api/sales/follow-ups/thread?orderId=${encodeURIComponent(orderId)}`)
         .then((r) => r.json())
         .then((d: FollowUpThreadResponse | { error: string }) => {
@@ -349,6 +377,54 @@ export function ThreadDrawer(props: Props) {
       Promise.all([threadReq, previewReq]).finally(() => setLoading(false));
     }
   }, [mode, emailId, orderId]);
+
+  // Seed the composer with the stage's starter line the first time a
+  // preview lands for this order. Guarded by orderId so reusing the drawer
+  // for another quote re-seeds, and by the ref so the debounced re-preview
+  // below never clobbers what the rep has typed.
+  useEffect(() => {
+    if (mode !== 'followup' || !orderId) return;
+    if (seededRef.current === orderId) return;
+    const seed = preview?.defaultBody;
+    if (!seed) return;
+    seededRef.current = orderId;
+    setMessage(seed);
+  }, [mode, orderId, preview?.defaultBody]);
+
+  // Live re-preview on the typed body. Skips the very first render (the
+  // initial fetch above already ran) and keeps the previous preview on
+  // screen while refreshing so the iframe doesn't flicker mid-sentence.
+  useEffect(() => {
+    if (mode !== 'followup' || !orderId) return;
+    if (seededRef.current !== orderId) return;
+    let cancelled = false;
+    setPreviewRefreshing(true);
+    fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/send/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: debouncedMessage.trim() || undefined }),
+    })
+      .then((r) => r.json())
+      .then((d: FollowUpPreviewResponse | { ok: false; error: string }) => {
+        if (cancelled) return;
+        if ('ok' in d && d.ok) {
+          setPreview(d);
+          setPreviewError('');
+        } else if ('error' in d) setPreviewError(d.error);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewError('Failed to compose preview.');
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewRefreshing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // preview?.defaultBody is deliberately absent — re-previewing must not
+    // re-trigger itself off its own response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, orderId, debouncedMessage]);
 
   // Suggested-Job lookup for unfiled threads. Same context the attach
   // resolver modal uses; runs once per thread open (or after detach).
@@ -474,7 +550,9 @@ export function ThreadDrawer(props: Props) {
       const r = await fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        // The box is the email. Blank falls back to the stage template
+        // server-side rather than sending an empty body.
+        body: JSON.stringify({ message: message.trim() || undefined }),
       });
       const d = (await r.json()) as
         | { ok: true; recipient: { email: string; name: string }; stage: string }
@@ -495,7 +573,7 @@ export function ThreadDrawer(props: Props) {
     } finally {
       setSending(false);
     }
-  }, [mode, orderId, props, followUpData, onClose]);
+  }, [mode, orderId, props, followUpData, message, onClose]);
 
   const handleSkip = useCallback(async () => {
     if (mode !== 'followup' || !orderId) return;
@@ -758,6 +836,43 @@ export function ThreadDrawer(props: Props) {
                       </span>
                     )}
                   </div>
+                  {/* The composer. Opens with one starter line and is the
+                      whole email — the greeting, portal button and sign-off
+                      are the shell around it (Wes 2026-09-01: "allow the
+                      email to be written from scratch"). Typing re-renders
+                      the preview below. */}
+                  {!previewError && (
+                    <div className="rounded-lg border border-blue-200 bg-white px-2.5 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <label
+                          htmlFor="followup-body"
+                          className="text-[9px] uppercase tracking-widest text-gray-400 font-semibold"
+                        >
+                          Your message
+                        </label>
+                        {previewRefreshing && (
+                          <span className="text-[10px] text-blue-600 animate-pulse">Updating preview…</span>
+                        )}
+                      </div>
+                      {preview?.to?.name && (
+                        <div className="mt-1 text-[10px] text-gray-500">
+                          Starts with{' '}
+                          <span className="text-gray-700">Hi {preview.to.name.split(' ')[0]},</span> — added
+                          automatically; write your own greeting and this one drops.
+                        </div>
+                      )}
+                      <textarea
+                        id="followup-body"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        disabled={sending || skipping}
+                        rows={4}
+                        maxLength={5000}
+                        placeholder="Write the check-in. Blank sends the standard stage wording."
+                        className="mt-1.5 w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-[12px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 resize-y disabled:opacity-50"
+                      />
+                    </div>
+                  )}
                   {previewError ? (
                     <div className="text-[11px] text-red-600">{previewError}</div>
                   ) : preview ? (
@@ -809,7 +924,7 @@ export function ThreadDrawer(props: Props) {
                         </pre>
                       )}
                       <div className="text-[10px] text-gray-400 italic">
-                        Read-only preview. The composer re-renders from the stage template at send time; edits to subject/body are a follow-up change.
+                        Live preview of what the recipient gets. The body above is what sends; the subject and brand shell are composed server-side.
                       </div>
                     </>
                   ) : (

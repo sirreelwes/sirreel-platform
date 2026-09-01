@@ -14,7 +14,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
-import { buildFollowUpSendEmail } from '@/lib/email/templates/followUpSend'
+import { buildFollowUpSendEmail, defaultFollowUpBody } from '@/lib/email/templates/followUpSend'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 import {
   CADENCE_STAGES,
@@ -24,6 +24,10 @@ import {
 
 export interface FollowUpEmailCompositionOk {
   ok: true
+  /** The one-line starter the review composer prefills into "Your message".
+   *  The rep edits it (or replaces it outright) and whatever is in the box
+   *  is the body — same contract as the quote/welcome composers. */
+  defaultBody: string
   to: RankedRecipient
   alternatives: RankedRecipient[]
   from: string
@@ -78,6 +82,7 @@ export async function composeFollowUpEmail(
       quoteExpDays: true,
       portalSlug: true,
       companyId: true,
+      company: { select: { name: true } },
       agent: { select: { name: true, email: true } },
       job: {
         select: {
@@ -187,6 +192,7 @@ export async function composeFollowUpEmail(
     stage: resolvedStage,
     firstName: to.name.split(' ')[0] || 'there',
     orderNumber: order.orderNumber,
+    companyName: order.company?.name ?? null,
     jobName: order.job?.name ?? 'your production',
     agentName: order.agent.name || 'SirReel',
     agentEmail: order.agent.email,
@@ -197,6 +203,7 @@ export async function composeFollowUpEmail(
 
   return {
     ok: true,
+    defaultBody: defaultFollowUpBody(resolvedStage),
     to,
     alternatives,
     from: SEND_FROM,

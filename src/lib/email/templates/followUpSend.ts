@@ -23,6 +23,7 @@
 
 import type { CadenceStage } from '@/lib/sales/quoteCadence'
 import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
+import { startsWithGreeting } from '@/lib/email/greeting'
 
 // See quoteSend.ts for the rationale on routing the email asset URLs
 // through the portal host.
@@ -42,6 +43,11 @@ export interface FollowUpSendEmailInput {
   stage: CadenceStage
   firstName: string
   orderNumber: string
+  /** Client company — what the hero line and the subject show. The order
+   *  number means nothing to a client (Wes 2026-09-01: "replace the weird
+   *  quote number with the name of the company"); it stays in the input
+   *  because it's still the fallback when a company name is missing. */
+  companyName?: string | null
   jobName: string
   agentName: string
   agentEmail?: string | null
@@ -53,7 +59,11 @@ export interface FollowUpSendEmailInput {
    *  token (ensureLiveJobMagicLink) and builds the URL; the composer
    *  only renders it. */
   portalUrl?: string | null
-  /** Optional free-text addition from the agent. */
+  /** The agent's own words. When present this IS the body — the templated
+   *  lead/close stand down and only the greeting, CTAs and sign-off wrap it
+   *  (Wes 2026-09-01: the nudge is written from scratch off a one-line
+   *  starter, see DEFAULT_FOLLOW_UP_BODY). Empty falls back to the stage
+   *  copy so any non-composer caller still sends a complete email. */
   customMessage?: string | null
 }
 
@@ -118,41 +128,87 @@ function copyForStage(stage: CadenceStage, validUntilLabel: string): StageCopy {
   }
 }
 
+/**
+ * The one-line starter the composer prefills into the "Your message" box.
+ *
+ * Wes 2026-09-01: the nudge is written from scratch — the box opens with a
+ * single opening sentence and nothing more, immediately editable. Whatever
+ * is in the box at send time IS the body; these lines are a running start,
+ * not a template the rep is decorating.
+ */
+export function defaultFollowUpBody(stage: CadenceStage): string {
+  switch (stage) {
+    case 'STAGE_1':
+      return 'I wanted to quickly check in with you about this quote I sent.'
+    case 'STAGE_2':
+      return 'I wanted to quickly check in — are you still planning these dates?'
+    case 'STAGE_3':
+      return 'I wanted to quickly check in — the quote window is closing soon.'
+  }
+}
+
 export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpSendEmail {
   const firstName = escapeHtml(input.firstName || 'there')
-  const orderNumber = escapeHtml(input.orderNumber)
   const jobName = escapeHtml(input.jobName || 'your production')
   const agentName = escapeHtml(input.agentName || 'the SirReel team')
   const agentEmail = input.agentEmail ? escapeHtml(input.agentEmail) : ''
   const validUntilLabel = input.validUntil ? escapeHtml(fmtDate(input.validUntil)) : ''
   const stageCopy = copyForStage(input.stage, validUntilLabel)
-  const customHtml = input.customMessage
-    ? `<p style="margin:0 0 16px;">${escapeHtml(input.customMessage).replace(/\n/g, '<br>')}</p>`
+
+  // The client sees who they are, not our internal order number. Falls back
+  // to the order number only when a company name is genuinely missing —
+  // better an opaque code than an empty hero line.
+  const clientLabelRaw = (input.companyName || '').trim() || input.orderNumber
+  const clientLabel = escapeHtml(clientLabelRaw)
+
+  // Rep-written body. When the box has words in it they ARE the email: the
+  // stage lead/close stand down and only the shell (greeting, CTAs, sign-off)
+  // wraps them. Blank box → the stage copy, so a caller that doesn't compose
+  // through the modal still sends something complete.
+  const ownBody = (input.customMessage || '').trim()
+  const repWroteGreeting = ownBody ? startsWithGreeting(ownBody, input.firstName) : false
+  const greetingHtml = repWroteGreeting
+    ? ''
+    : `<p style="margin:0 0 16px;">Hi ${firstName},</p>`
+  const ownBodyHtml = ownBody
+    ? ownBody
+        .split(/\n{2,}/)
+        .map((para, i, arr) =>
+          `<p style="margin:0 0 ${i === arr.length - 1 ? '0' : '16px'};">${escapeHtml(para).replace(/\n/g, '<br>')}</p>`,
+        )
+        .join('\n              ')
     : ''
-  const customText = input.customMessage ? `${input.customMessage}\n\n` : ''
+  const bodyHtml = ownBody
+    ? `${greetingHtml}
+              ${ownBodyHtml}`
+    : `<p style="margin:0 0 16px;">Hi ${firstName},</p>
+              <p style="margin:0 0 16px;">${stageCopy.bodyLead}</p>
+              <p style="margin:0;">${stageCopy.bodyClose}</p>`
+  const preheader = (ownBody || stageCopy.bodyLead).replace(/<[^>]+>/g, '')
 
   const portalUrl = input.portalUrl ?? null
 
-  const subject = `${input.jobName || 'Your quote'} (${input.orderNumber}) — ${stageCopy.subjectSuffix}`
+  const subject = `${input.jobName || 'Your quote'} (${clientLabelRaw}) — ${stageCopy.subjectSuffix}`
 
   const text = [
-    `Hi ${input.firstName || 'there'},`,
+    repWroteGreeting ? null : `Hi ${input.firstName || 'there'},`,
     ``,
-    stageCopy.bodyLead.replace(/<[^>]+>/g, ''),
+    ownBody || stageCopy.bodyLead.replace(/<[^>]+>/g, ''),
     ``,
-    customText,
-    stageCopy.bodyClose,
-    ``,
-    portalUrl ? `Portal: ${portalUrl}` : '',
+    ownBody ? null : stageCopy.bodyClose,
+    ownBody ? null : ``,
+    portalUrl ? `Portal: ${portalUrl}` : null,
     `Need supplies for this shoot? ${SUPPLY_URL}`,
     ``,
     `Thanks,`,
     `${input.agentName || 'the SirReel team'}`,
-    input.agentEmail ? input.agentEmail : '',
+    input.agentEmail ? input.agentEmail : null,
     ``,
     `SirReel Studio Rentals · ${FOOTER_ADDRESS} · ${FOOTER_PHONE}`,
   ]
-    .filter((l) => l !== null && l !== undefined && l !== '')
+    // null = omitted line; '' = a deliberate blank line. The old filter
+    // dropped '' too, so the plain-text part arrived as one solid block.
+    .filter((l): l is string => l !== null)
     .join('\n')
 
   const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -177,7 +233,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <!-- Preheader -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    ${stageCopy.bodyLead.replace(/<[^>]+>/g, '')}
+    ${escapeHtml(preheader)}
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">
@@ -197,8 +253,8 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
                 ${escapeHtml(stageCopy.eyebrow)}
               </div>
-              <div style="margin-top:6px;color:#ffffff;font-size:18px;letter-spacing:2.5px;font-weight:300;">
-                ${orderNumber}
+              <div style="margin-top:6px;color:#ffffff;font-size:16px;letter-spacing:1.5px;font-weight:300;">
+                ${clientLabel}
               </div>
             </td>
           </tr>
@@ -215,10 +271,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Body ──────────────────────────────────────────────── -->
           <tr>
             <td style="padding:24px 36px 8px;font-size:15px;line-height:1.6;color:#333333;">
-              <p style="margin:0 0 16px;">Hi ${firstName},</p>
-              <p style="margin:0 0 16px;">${stageCopy.bodyLead}</p>
-              ${customHtml}
-              <p style="margin:0;">${stageCopy.bodyClose}</p>
+              ${bodyHtml}
             </td>
           </tr>
 
