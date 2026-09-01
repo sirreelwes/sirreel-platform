@@ -82,13 +82,18 @@ check(COMMITTED_ORDER_STATUSES.includes('ON_JOB'), 'and one already out, so a mi
 check(!COMMITTED_ORDER_STATUSES.includes('RETURNED') && !COMMITTED_ORDER_STATUSES.includes('CLOSED'),
   'finished orders are not')
 
-console.log('\nOne bad date cannot own the digest')
-check(withinEscalationWindow(3), '3 days out is in the window')
+console.log('\nThe window looks FORWARD — a pickup that already passed is not a chase')
+check(withinEscalationWindow(6), '6 days out is the far edge')
+check(withinEscalationWindow(3), '3 days out is in')
 check(withinEscalationWindow(0), 'today is')
-check(withinEscalationWindow(-14), `${MAX_OVERDUE_DAYS} days past pickup is the floor`)
-check(!withinEscalationWindow(-15), 'a day beyond it drops out')
+check(MAX_OVERDUE_DAYS === 1, 'the overdue floor is one day')
+check(withinEscalationWindow(-1),
+  'yesterday still counts — a pickup that slipped one day is fixable this morning')
+check(!withinEscalationWindow(-2),
+  'two days past is not. Wes on the first preview: "why are emails in this list that would have started 5 days ago"')
+check(!withinEscalationWindow(-5), 'nor five — that is a closeout, and the rail carries it as Not returned')
 check(!withinEscalationWindow(-714),
-  'the REAL case: order S260831-005 carries a mistyped 2024 date and read 714 days overdue, leading the first dry run')
+  'and certainly not the mistyped 2024 date on S260831-005 that led the very first dry run')
 check(!withinEscalationWindow(7), 'a week out is still too early to escalate')
 check(!withinEscalationWindow(null), 'no date, no escalation')
 
