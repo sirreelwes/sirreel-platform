@@ -35,6 +35,18 @@ export interface CoiChecklistRow {
   /** What the certificate actually says, when the review captured it. */
   found: string | null
   note: string | null
+  /** PASS granted by evidence OUTSIDE this certificate (today: a separate
+   *  Workers Comp cert filed on the job), so a surface can say why rather
+   *  than implying the COI itself carried the coverage. */
+  satisfiedElsewhere?: boolean
+}
+
+/** Evidence from outside this certificate that can satisfy a check. */
+export interface CoiCheckContext {
+  /** A separate WC certificate is on the job and it PASSED (not expired). */
+  workersCompCoveredElsewhere?: boolean
+  /** Human-readable provenance, e.g. "ADP Workers Comp cert, expires …". */
+  workersCompNote?: string | null
 }
 
 export const COI_CHECK_LABELS: Record<string, string> = {
@@ -88,10 +100,32 @@ export function hasCoiChecklist(ai: CoiAiResponse | null | undefined): boolean {
  * judged come back UNKNOWN rather than being dropped — "nobody looked" is
  * the finding that matters on an older review.
  */
-export function coiChecklist(ai: CoiAiResponse | null | undefined): CoiChecklistRow[] {
+export function coiChecklist(
+  ai: CoiAiResponse | null | undefined,
+  ctx?: CoiCheckContext,
+): CoiChecklistRow[] {
   if (!ai) return []
   const build = (key: string, tier: CoiCheckTier): CoiChecklistRow => {
     const item = asItem(ai[key])
+    // Workers' Comp satisfied by a SEPARATE certificate on the job
+    // (Wes 2026-09-01: "a review of the COI work comp section should
+    // not have a warning if a work comp policy was separately uploaded
+    // and passed"). WC legitimately lives on a payroll company's own
+    // certificate — the review prompt says so itself — so the absence
+    // of WC on THIS document is not a gap when the proof is on file
+    // beside it. Only a PASSING, unexpired WC cert satisfies it; one
+    // that failed or expired leaves the warning exactly where it was.
+    if (key === 'workersComp' && ctx?.workersCompCoveredElsewhere) {
+      return {
+        key,
+        label: COI_CHECK_LABELS[key] || key,
+        tier,
+        status: 'PASS',
+        found: ctx.workersCompNote ?? 'Covered by a separate Workers Comp certificate on this job',
+        note: item ? str(item.note) : null,
+        satisfiedElsewhere: true,
+      }
+    }
     return {
       key,
       label: COI_CHECK_LABELS[key] || key,
@@ -128,8 +162,8 @@ export interface CoiFlags {
  * stored summary field — a review whose `overallPass: true` predates half
  * the checks is not a pass, it is an incomplete review.
  */
-export function coiFlags(ai: CoiAiResponse | null | undefined): CoiFlags {
-  const rows = coiChecklist(ai)
+export function coiFlags(ai: CoiAiResponse | null | undefined, ctx?: CoiCheckContext): CoiFlags {
+  const rows = coiChecklist(ai, ctx)
   const hasChecklist = hasCoiChecklist(ai)
 
   if (!hasChecklist) {

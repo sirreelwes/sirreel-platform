@@ -81,6 +81,19 @@ const coiSelect = {
       jobCode: true,
       companyId: true,
       company: { select: { id: true, name: true } },
+      // Separate Workers' Comp certificates filed against this job's
+      // bookings. WC commonly sits on a payroll company's own paper, so
+      // a passing WC cert here satisfies the COI's workersComp check
+      // instead of leaving a warning that nothing can clear.
+      bookings: {
+        select: {
+          paperworkRequests: {
+            where: { wcFileUrl: { not: null } },
+            select: { wcOriginalFilename: true, wcUploadedAt: true, wcAiReview: true },
+            orderBy: { wcUploadedAt: 'desc' },
+          },
+        },
+      },
       // Recipients for "Request fix" — the certificate is the client's to
       // correct, so the ask goes to the job's contacts (primary first).
       jobContacts: {
@@ -116,8 +129,22 @@ function serialize(coi: NonNullable<CoiRow>) {
   const ai = (coi.aiResponse || null) as Record<string, unknown> | null
   const candidates = candidateNames(coi)
   const match = evaluateInsuredMatch(coi.namedInsured, candidates)
-  const flags = coiFlags(ai as never)
-  const checks = coiChecklist(ai as never)
+  // A separate WC certificate counts only when it actually PASSED and is
+  // not expired — a failed or lapsed one leaves the COI warning standing.
+  const wcCerts = (coi.job?.bookings ?? []).flatMap((b) => b.paperworkRequests)
+  const passingWc = wcCerts.find((w) => {
+    const r = (w.wcAiReview ?? null) as Record<string, unknown> | null
+    return r?.pass === true && r?.expired !== true
+  })
+  const wcCtx = passingWc
+    ? {
+        workersCompCoveredElsewhere: true,
+        workersCompNote: `Covered by ${passingWc.wcOriginalFilename || 'a separate Workers Comp certificate'} filed on this job`,
+      }
+    : undefined
+
+  const flags = coiFlags(ai as never, wcCtx)
+  const checks = coiChecklist(ai as never, wcCtx)
 
   // Agreements already signed under the CURRENT company. Surfaced because a
   // name mismatch that is resolved by changing the production company makes
