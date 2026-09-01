@@ -350,10 +350,15 @@ export function isFleetYardRole(role: UserRole): boolean {
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
-  if (isSalesRole(role)) return '/jobs';
   if (isFleetYardRole(role)) return '/fleet/today';
   if (role === 'WAREHOUSE') return '/warehouse/pick';
-  return '/dashboard';
+  if (isBillingRole(role)) return '/collections';
+  // Everyone else — sales AND admin — starts on /jobs. Wes, 2026-08-31:
+  // "it should always go to Jobs if anything." /jobs has been the one
+  // stop shop since the 2026-08-27 merge (incoming, active and wrapped);
+  // Dashboard is still in the nav for anyone who wants it, it is just no
+  // longer what the app opens on.
+  return '/jobs';
 }
 
 export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
