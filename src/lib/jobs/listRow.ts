@@ -76,6 +76,10 @@ export interface JobRow {
   rwInvoicedTotal: number
   rwOrderCount: number
   estimatedValue: number | null
+  /** Where this job came from — see src/lib/provenance. HQ-native work
+   *  is one row in six on a list dominated by Planyo imports, so the
+   *  list has to say which is which. */
+  origin?: 'HQ' | 'PLANYO' | 'RENTALWORKS'
   company: { id: string; name: string } | null
   agent: { id: string; name: string } | null
   primaryContact: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { prisma } from '@/lib/prisma'
+import { isNativeToHq, jobOrigin } from '@/lib/provenance'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { getServerSession } from 'next-auth'
 import type {
@@ -222,6 +223,11 @@ export async function GET(req: NextRequest) {
             endDate: true,
             deliveryAddress: true,
             status: true,
+            // Provenance — is this booking HQ's or an import? See
+            // src/lib/provenance. The list is 83% Planyo, so without
+            // this the work HQ owns is invisible in the crowd.
+            planyoCartId: true,
+            source: true,
             items: {
               select: {
                 status: true,
@@ -485,8 +491,19 @@ export async function GET(req: NextRequest) {
         .filter(Boolean)
         .reduce((max, d) => (d > max ? d : max), j.updatedAt)
 
+      // Where this job came from. The JOB's own cart id is the anchor;
+      // a job with no cart id whose bookings are all imports is still an
+      // import, so the bookings are consulted too.
+      const importedBooking = j.bookings.some((b) => !isNativeToHq(b))
+      const origin = jobOrigin({
+        planyoCartId: j.planyoCartId ?? (importedBooking ? 'imported' : null),
+        hasRwLink: rwNums.length > 0,
+      })
+
       return {
         ...rest,
+        origin,
+        nativeBookingCount: j.bookings.filter((b) => isNativeToHq(b)).length,
         lastActivityAt,
         bookingWindow,
         hasDelivery,

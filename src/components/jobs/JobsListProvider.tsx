@@ -32,7 +32,7 @@ export function rowNotReady(j: JobRow, state: RowState): boolean {
   return readinessApplies(state) && j.readiness != null && !j.readiness.ready
 }
 
-export type StatusFilter = 'all' | JobStatus | 'orphans' | 'archived'
+export type StatusFilter = 'all' | JobStatus | 'orphans' | 'archived' | 'hq'
 export type Sort = 'recent' | 'urgency' | 'dates' | 'value' | 'newest'
 
 export interface ListedRow {
@@ -136,6 +136,10 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams()
     if (status === 'orphans') params.set('orphans', '1')
     else if (status === 'archived') params.set('archived', '1')
+    // 'hq' is not a server filter — origin is DERIVED per row (job cart
+    // id ∪ its bookings' ∪ an RW link), not a column, so it cannot be a
+    // where clause. Fetch normally and narrow below.
+    else if (status === 'hq') { /* narrowed client-side */ }
     else if (status !== 'all') params.set('status', status)
     if (mine) params.set('mine', '1')
     if (debouncedSearch) params.set('search', debouncedSearch)
@@ -169,7 +173,10 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   const { today, tomorrow } = useMemo(() => listDays(), [])
 
   const allRows = useMemo(() => {
-    const withState: ListedRow[] = jobs.map((job) => {
+    // 'hq' narrows to work HQ itself booked — see the fetch effect for
+    // why this is not a server filter.
+    const scoped = status === 'hq' ? jobs.filter((j) => j.origin === 'HQ') : jobs
+    const withState: ListedRow[] = scoped.map((job) => {
       const state = rowState(job, today, tomorrow)
       return { job, state, date: keyDate(job, state) }
     })
@@ -196,7 +203,7 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
       sorted.sort((a, b) => (a.job.createdAt < b.job.createdAt ? 1 : -1))
     }
     return sorted
-  }, [jobs, today, tomorrow, sort])
+  }, [jobs, today, tomorrow, sort, status])
 
   // Counts come from the unfiltered set so the key's numbers don't
   // collapse to "1" the moment you click one of them.

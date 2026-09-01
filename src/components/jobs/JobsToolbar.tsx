@@ -27,6 +27,10 @@ import { inquiryPastResponseSla } from '@/lib/sales/inquirySla'
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'All jobs' },
+  // Wes 2026-09-01. Second in the list, right under "All", because it is
+  // the answer to "what is actually mine to run today" on a board that
+  // is 85% imports.
+  { id: 'hq', label: 'Booked in HQ' },
   { id: 'NEW', label: 'New' },
   { id: 'QUOTED', label: 'Quoted' },
   // No 'Active' option: nothing ever wrote ACTIVE automatically, so it

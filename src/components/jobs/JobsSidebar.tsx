@@ -289,6 +289,21 @@ function JobsSidebarItem({
           >
             {j.jobCode.replace(/^SR-JOB-/, '')}
           </span>
+          {/* HQ-native work, marked. Wes 2026-09-01: imports "have their
+              own workflows" and the native ones "may sneak up on people
+              or get missed" — they are ~30 rows among 219. Only HQ is
+              badged: badging the majority would be noise, and the point
+              is to make the minority findable. */}
+          {j.origin === 'HQ' && (
+            <span
+              className={`text-[8px] font-bold uppercase tracking-wider px-1 rounded ${
+                selected ? 'bg-zinc-900 text-amber-300' : 'bg-amber-500 text-white'
+              }`}
+              title="Booked in HQ — this one is ours to run. Nothing else is tracking it."
+            >
+              HQ
+            </span>
+          )}
           {j.archivedAt && (
             <span
               className={`text-[8px] font-bold uppercase tracking-wider px-1 rounded ${
