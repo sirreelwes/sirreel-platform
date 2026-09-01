@@ -167,8 +167,14 @@ export async function ensureBaselineRentalDocumentToSign(orderId: string): Promi
         select: { name: true, industry: true, billingAddress: true, billingEmail: true, notes: true },
       },
       job: {
-        select: { jobCode: true, name: true, startDate: true, endDate: true },
+        select: { jobCode: true, name: true },
       },
+      // The rental period on a per-order contract is THIS order's, never
+      // the job-wide span — see src/lib/jobs/dateRange. Line dates are
+      // the fallback when the order header has none.
+      startDate: true,
+      endDate: true,
+      lineItems: { select: { pickupDate: true, returnDate: true } },
     },
   })
 
@@ -181,12 +187,35 @@ export async function ensureBaselineRentalDocumentToSign(orderId: string): Promi
         notes: order.company.notes,
       }
     : null
+  // ── The rental period this document commits the client to ────────
+  //
+  // It used to print Job.startDate/endDate. Those columns are no longer
+  // maintained — src/lib/jobs/dateRange retired them in 2026 precisely
+  // because they drifted — so on 2026-08-31 THIRTY of the thirty-five
+  // signed agreements on the book carried a wrong rental period: 28
+  // printed "—" for orders with real windows, and 2 printed dates from
+  // another year entirely (S260720-002 said Jul 2026 for an order that
+  // ran Jan 2025). A signed contract with a blank or wrong rental period
+  // is the worst place for this to have been left.
+  //
+  // dateRange.ts states the rule this now follows: "a contract or
+  // invoice covers ONE order, so it should print THAT order's dates, not
+  // the job-wide span."
+  const lineStarts = (order?.lineItems ?? [])
+    .map((l) => l.pickupDate).filter(Boolean) as Date[]
+  const lineEnds = (order?.lineItems ?? [])
+    .map((l) => l.returnDate).filter(Boolean) as Date[]
+  const rentalStart =
+    order?.startDate ?? (lineStarts.length ? new Date(Math.min(...lineStarts.map(Number))) : null)
+  const rentalEnd =
+    order?.endDate ?? (lineEnds.length ? new Date(Math.max(...lineEnds.map(Number))) : null)
+
   const job = order?.job
     ? {
         jobCode: order.job.jobCode,
         name: order.job.name,
-        startDate: order.job.startDate,
-        endDate: order.job.endDate,
+        startDate: rentalStart,
+        endDate: rentalEnd,
         primaryContact: null,
       }
     : null
