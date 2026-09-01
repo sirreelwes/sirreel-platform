@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { correctImpossibleYear } from '@/lib/orders/parsedDateYear'
 import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -38,7 +39,21 @@ const VALID_DEPARTMENTS: LineItemDepartment[] = [
 ]
 
 function buildSystemPrompt(catalogSnippet: string): string {
+  // The date the model is reading this. Without it, "Sept 4" or "9/17"
+  // has no year and the model supplies one from its own prior — which is
+  // how JUST PONDS was quoted for 2024 and Hulu Chad Powers for 2025,
+  // both created in HQ days apart and both sent to the client with a
+  // rental date in the past.
+  const todayPacific = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
   return `You are a rental quote parser for SirReel Production Vehicles, a film/TV production rental company in Los Angeles.
+
+TODAY IS ${todayPacific} (America/Los_Angeles). Every date you return must be
+consistent with that:
+- A date written without a year ("Sept 4", "9/17", "the 22nd") means the NEXT
+  occurrence on or after today. Never return a date in a past year.
+- Only return a past date if the source explicitly states a past year.
 
 Extract structured data from a quote request (email, spec sheet, order form, OR a multi-turn email thread) into the JSON shape below.
 
@@ -566,10 +581,17 @@ async function resolveItem(
   const isoDate = (d: Date): string => d.toISOString().slice(0, 10)
   const today = new Date()
   const tomorrow = new Date(today.getTime() + 86400000)
+  // Second line of defence behind the prompt's TODAY IS anchor: a prompt
+  // is a request, not a guarantee. A rental date most of a year in the
+  // past is a wrong year, never a booking — see lib/orders/parsedDateYear.
+  const todayYmd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(today)
+  const fixYear = (d: string | null | undefined) => correctImpossibleYear(d, todayYmd)
   const pickupDate =
-    raw.pickupDate || parsedRange.startDate || isoDate(today)
+    fixYear(raw.pickupDate) || fixYear(parsedRange.startDate) || isoDate(today)
   const returnDate =
-    raw.returnDate || parsedRange.endDate || isoDate(tomorrow)
+    fixYear(raw.returnDate) || fixYear(parsedRange.endDate) || isoDate(tomorrow)
 
   // Step 6: billableDays — pre-fill the dept-aware suggested default.
   // Cap-per-week depts get the cap math as a starting point; STAGES gets
@@ -812,6 +834,25 @@ export async function POST(req: NextRequest) {
         { error: "Couldn't read this document — try again, paste the email text, or enter items manually." },
         { status: 500 }
       )
+    }
+
+    // Correct the QUOTE-LEVEL dates once, at the source, so the order
+    // header, the job window and every line all inherit the same repair.
+    // Fixing only the lines would have left the header a year out.
+    {
+      const todayYmd = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date())
+      const s0 = correctImpossibleYear(parsed.startDate, todayYmd)
+      const e0 = correctImpossibleYear(parsed.endDate, todayYmd)
+      if (s0 && s0 !== parsed.startDate) {
+        console.warn(`[parse-quote] impossible year on startDate ${parsed.startDate} -> ${s0}`)
+        parsed.startDate = s0
+      }
+      if (e0 && e0 !== parsed.endDate) {
+        console.warn(`[parse-quote] impossible year on endDate ${parsed.endDate} -> ${e0}`)
+        parsed.endDate = e0
+      }
     }
 
     const rawItems: AiItem[] = Array.isArray(parsed.items) ? parsed.items : []
