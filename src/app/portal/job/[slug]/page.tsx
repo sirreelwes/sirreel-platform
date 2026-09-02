@@ -156,6 +156,12 @@ interface PortalData {
        *  match the production company on this job. Null when it matches or
        *  when there is nothing to compare. */
       insuredNotice: string | null;
+      /** 'JOB' — sent for this job. 'COMPANY' — the account's certificate on
+       *  file, carried forward until it expires. */
+      source: 'JOB' | 'COMPANY';
+      sourceSentence: string;
+      /** Set when a carried policy lapses BEFORE this rental ends. */
+      expiresDuringRental: string | null;
     } | null;
     legacyPaperworkPortalUrl: string | null;
     vehicles: {
@@ -1089,12 +1095,29 @@ export default function JobPortalPage() {
               >
                 {data.paperwork.coi ? (
                   <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500">
-                      Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+    <div className="text-xs text-gray-500">
+                      {data.paperwork.coi.source === 'COMPANY' ? 'On file since ' : 'Received '}
+                      {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       {data.paperwork.coi.policyExpiryDate && (
                         <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
                       )}
                     </div>
+                    {/* Carried from the account's certificate rather than sent
+                        for this job. Said plainly: a client who knows they
+                        never sent one for this job should understand why we
+                        are not asking, and be able to correct us if their
+                        policy has since changed. */}
+                    {data.paperwork.coi.source === 'COMPANY' && (
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+                          data.paperwork.coi.expiresDuringRental
+                            ? 'border-amber-200 bg-amber-50 text-amber-900'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                        }`}
+                      >
+                        {data.paperwork.coi.sourceSentence}
+                      </div>
+                    )}
                     {/* The certificate is on file but insures a different
                         entity than the one this job is booked under. Said
                         here, plainly, because the client is the only one who

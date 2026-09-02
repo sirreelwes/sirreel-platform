@@ -17,6 +17,7 @@ import {
   annualCoverageTitle,
 } from '@/lib/orders/annualCoverage'
 import { summarizeJobLcdwCoverage, effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
+import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
@@ -228,24 +229,11 @@ export async function GET(req: NextRequest) {
   })
 
   const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
-    order.jobId
-      ? prisma.coiCheck.findFirst({
-          where: { jobId: order.jobId, deletedAt: null },
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            fileUrl: true,
-            originalFilename: true,
-            humanDecision: true,
-            aiRiskLevel: true,
-            namedInsured: true,
-            policyExpiryDate: true,
-            coverageVerified: true,
-            additionalInsured: true,
-            createdAt: true,
-          },
-        })
-      : Promise.resolve(null),
+    // The certificate that governs this job: its own upload, else the
+    // account's certificate on file carried forward (Wes, 2026-09-02 — annual
+    // COIs). Resolving by jobId alone made an annual account look uninsured
+    // on every job after the one they uploaded against.
+    order.jobId ? resolveJobCoi(order.jobId) : Promise.resolve(null),
     order.bookingId
       ? prisma.paperworkRequest.findFirst({
           where: { bookingId: order.bookingId },
@@ -565,15 +553,23 @@ export async function GET(req: NextRequest) {
       stageContract,
       coi: latestCoi
         ? {
-            id: latestCoi.id,
-            fileUrl: latestCoi.fileUrl,
-            originalFilename: latestCoi.originalFilename,
-            humanDecision: latestCoi.humanDecision,
-            aiRiskLevel: latestCoi.aiRiskLevel,
-            policyExpiryDate: latestCoi.policyExpiryDate,
-            coverageVerified: latestCoi.coverageVerified,
-            additionalInsured: latestCoi.additionalInsured,
-            uploadedAt: latestCoi.createdAt,
+            id: latestCoi.coi.id,
+            fileUrl: latestCoi.coi.fileUrl,
+            originalFilename: latestCoi.coi.originalFilename,
+            humanDecision: latestCoi.coi.humanDecision,
+            aiRiskLevel: latestCoi.coi.aiRiskLevel,
+            policyExpiryDate: latestCoi.coi.policyExpiryDate,
+            coverageVerified: latestCoi.coi.coverageVerified,
+            additionalInsured: latestCoi.coi.additionalInsured,
+            uploadedAt: latestCoi.coi.createdAt,
+            // Carried from the account rather than uploaded for this job.
+            // Said out loud: a client who never sent a certificate for this
+            // job should understand why we are not asking for one.
+            source: latestCoi.source,
+            sourceSentence: coiSourceSentence(latestCoi, order.company?.name),
+            // Named when the policy lapses mid-rental. NOT silently treated
+            // as coverage — the renewal is still needed before the last day.
+            expiresDuringRental: latestCoi.expiresDuringRental?.toISOString() ?? null,
             // The client is told about a name mismatch on their OWN
             // certificate — Wes, 2026-08-25: "flag it for both SirReel and
             // User side". Only the client-safe sentence crosses the wire;
@@ -581,7 +577,7 @@ export async function GET(req: NextRequest) {
             // Empty string means "nothing to say", so the portal never has
             // to know the verdict vocabulary.
             insuredNotice:
-              evaluateInsuredMatch(latestCoi.namedInsured, [order.company?.name, order.job?.name])
+              evaluateInsuredMatch(latestCoi.coi.namedInsured, [order.company?.name, order.job?.name])
                 .clientMessage || null,
           }
         : null,

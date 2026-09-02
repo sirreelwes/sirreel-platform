@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
@@ -437,9 +438,32 @@ export async function GET(
         }
       : null
 
+    // ── Annual COIs carry forward ─────────────────────────────────
+    //
+    // Wes, 2026-09-02: "COIs are often annual documents... any COI uploaded
+    // for that company [should] be automatically linked to future jobs until
+    // the COI expiration." A job with no certificate of its own shows the
+    // account's, clearly labelled — otherwise staff chase a document HQ
+    // already holds. Only when the job has NONE: a certificate uploaded
+    // against this job was attached deliberately and always wins.
+    const carriedCoi = job.coiChecks.length === 0 ? await resolveJobCoi(job.id) : null
+
     return NextResponse.json({
       job: {
         ...job,
+        coiChecks:
+          carriedCoi?.source === 'COMPANY'
+            ? [
+                {
+                  ...carriedCoi.coi,
+                  // Marked so no surface renders a carried certificate as if
+                  // it had been uploaded for this job.
+                  carriedFromCompany: true,
+                  expiresDuringRental: carriedCoi.expiresDuringRental?.toISOString() ?? null,
+                  sourceSentence: coiSourceSentence(carriedCoi, job.company?.name),
+                },
+              ]
+            : job.coiChecks,
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
         cadence,
