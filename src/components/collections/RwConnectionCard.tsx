@@ -14,6 +14,18 @@ import { useCallback, useEffect, useState } from 'react'
  * exp claim: RentalWorks issues a cosmetic ~300-second exp that it honors for
  * weeks, so a meter keyed to it would read red five minutes after every
  * rotation and teach everyone to ignore it.
+ *
+ * ONE ROW (Wes, 2026-09-02: "doesn't need to be this large"). It shipped as a
+ * four-line card — status, a three-column meta grid, and its own button row —
+ * sitting above Collections, which is the page people actually came for. A
+ * healthy integration is a glance, not a panel: status, when it was last
+ * checked, when it renews next, and the two controls, on one line.
+ *
+ * What was cut is not lost. "Renewed" and "Last changed by" moved into the
+ * row's tooltip — they answer "who touched this and when", which is a question
+ * asked after something looks wrong, not at a glance. The parts that mean
+ * something IS wrong still break the row on purpose: the red "imports are
+ * stopped" line, the env-var chip, and the paste panel.
  */
 
 interface RwStatus {
@@ -109,96 +121,92 @@ export function RwConnectionCard() {
   if (!s) return null
   const tone = TONE[s.health]
 
+  const renewsOn = s.rotateDueAt
+    ? new Date(s.rotateDueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null
+
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 mb-6">
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <span className="text-[13px] font-semibold text-zinc-900">RentalWorks connection</span>
-        <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${tone.text}`}>
+    <div
+      className="rounded-xl border border-zinc-200 bg-white px-3 py-2 mb-4"
+      // The provenance the meta grid used to spell out. Asked after something
+      // looks wrong, so it belongs behind a hover, not in the layout.
+      title={`Renewed ${when(s.lastRotatedAt)}\nLast changed by ${s.updatedByName ?? '—'}`}
+    >
+      <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap text-[12px]">
+        <span className={`inline-flex items-center gap-1.5 font-semibold ${tone.text}`}>
           <span className={`inline-block w-2 h-2 rounded-full ${tone.dot}`} aria-hidden />
           {tone.label}
         </span>
+        <span className="font-semibold text-zinc-900">RentalWorks</span>
+
+        {msg ? (
+          <span className={msg.kind === 'ok' ? 'text-emerald-700' : 'text-rose-700'}>{msg.text}</span>
+        ) : (
+          <span className="text-zinc-500">
+            checked {when(s.lastVerifiedAt)}
+            {renewsOn && ` · renews ${renewsOn}`}
+          </span>
+        )}
+
         {s.usingEnvFallback && (
           <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
             still on the env var
           </span>
         )}
-        <span className="ml-auto text-[12px] text-zinc-600">
-          Checked {when(s.lastVerifiedAt)}
-        </span>
-      </div>
 
-      <div className="mt-2 grid gap-x-6 gap-y-1 text-[12px] text-zinc-600 sm:grid-cols-3">
-        <div>
-          Renewed <span className="text-zinc-800">{when(s.lastRotatedAt)}</span>
-        </div>
-        <div>
-          Renews again{' '}
-          <span className="text-zinc-800">
-            {s.rotateDueAt
-              ? new Date(s.rotateDueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              : '—'}
+        {s.canManage && (
+          <span className="ml-auto flex items-center gap-1">
+            <button
+              onClick={() => void post({ action: 'verify' }, 'verify')}
+              disabled={!!busy}
+              className="px-2 py-1 rounded-md bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 text-[12px] font-semibold text-zinc-800"
+            >
+              {busy === 'verify' ? 'Checking…' : 'Verify'}
+            </button>
+            <button
+              onClick={() => setPasteOpen((v) => !v)}
+              disabled={!!busy}
+              className="px-2 py-1 rounded-md text-[12px] font-semibold text-zinc-500 hover:text-zinc-900"
+            >
+              {pasteOpen ? 'Cancel' : 'Paste token'}
+            </button>
           </span>
-        </div>
-        <div>
-          Last changed by <span className="text-zinc-800">{s.updatedByName ?? '—'}</span>
-        </div>
+        )}
       </div>
 
+      {/* Red earns the extra line — imports are stopped and nothing covers for
+          them, which is worth more than a colored dot. */}
       {s.health === 'red' && (
-        <div className="mt-2.5 text-[12px] text-rose-700">
+        <p className="mt-1.5 text-[12px] text-rose-700">
           Invoice imports are stopped until this is fixed. Nothing falls back to another source.
-        </div>
+        </p>
       )}
 
-      {msg && (
-        <div className={`mt-2.5 text-[12px] ${msg.kind === 'ok' ? 'text-emerald-700' : 'text-rose-700'}`}>
-          {msg.text}
-        </div>
-      )}
-
-      {s.canManage && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+      {s.canManage && pasteOpen && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="eyJ…"
+            autoComplete="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            className="flex-1 min-w-[240px] rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-[12px] font-mono text-zinc-900"
+          />
           <button
-            onClick={() => void post({ action: 'verify' }, 'verify')}
-            disabled={!!busy}
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 text-[12px] font-semibold text-zinc-800"
+            onClick={() => void post({ action: 'paste', token: token.trim() }, 'paste')}
+            disabled={!!busy || !token.trim()}
+            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[12px] font-semibold"
           >
-            {busy === 'verify' ? 'Checking…' : 'Verify now'}
+            {busy === 'paste' ? 'Saving…' : 'Save & verify'}
           </button>
-          <button
-            onClick={() => setPasteOpen((v) => !v)}
-            disabled={!!busy}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-zinc-600 hover:text-zinc-900"
-          >
-            {pasteOpen ? 'Cancel' : 'Paste a token…'}
-          </button>
-          {pasteOpen && (
-            <div className="w-full flex flex-wrap items-center gap-2">
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="eyJ…"
-                autoComplete="off"
-                spellCheck={false}
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
-                className="flex-1 min-w-[240px] rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-[12px] font-mono text-zinc-900"
-              />
-              <button
-                onClick={() => void post({ action: 'paste', token: token.trim() }, 'paste')}
-                disabled={!!busy || !token.trim()}
-                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[12px] font-semibold"
-              >
-                {busy === 'paste' ? 'Saving…' : 'Save & verify'}
-              </button>
-              <p className="w-full text-[11px] text-zinc-500">
-                HQ renews this itself every 45 days. Pasting is the backup for when it cannot —
-                the token is checked against RentalWorks before it is stored, and never shown again.
-              </p>
-            </div>
-          )}
+          <p className="w-full text-[11px] text-zinc-500">
+            HQ renews this itself every 45 days. Pasting is the backup for when it cannot —
+            the token is checked against RentalWorks before it is stored, and never shown again.
+          </p>
         </div>
       )}
     </div>
