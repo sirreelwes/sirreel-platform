@@ -69,7 +69,10 @@ const config: Config = {
           'pre-bar':             '#9CA3AF',
         },
       },
-      fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'] },
+      fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        display: ['var(--font-display)', 'Helvetica Neue', 'Arial Black', 'sans-serif'],
+      },
     },
   },
   plugins: [],

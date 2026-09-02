@@ -1,8 +1,27 @@
 import type { Metadata, Viewport } from 'next';
+import { Archivo_Black } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl';
 import { Analytics } from '@vercel/analytics/react';
+
+/**
+ * SirReel's display face. The wordmark is a very heavy, tightly-set
+ * grotesque — the job title used to be Georgia semibold, which read as
+ * generic editorial serif rather than as SirReel (Wes 2026-09-01).
+ * Archivo Black is the closest free match to the lockup's weight and fit.
+ *
+ * next/font self-hosts it at build time, so there is no runtime request to
+ * Google and no layout shift. Exposed as a variable and wired to Tailwind's
+ * `font-display` so headings opt in — the app's body copy stays on the
+ * system stack.
+ */
+const displayFont = Archivo_Black({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-display',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   // Without metadataBase, Next cannot resolve relative og:image paths and
@@ -43,7 +62,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={displayFont.variable}>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <Providers>{children}</Providers>
         {/* Vercel Web Analytics — page views, referrers, top pages.

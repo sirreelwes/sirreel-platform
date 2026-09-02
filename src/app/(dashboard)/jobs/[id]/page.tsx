@@ -1163,8 +1163,8 @@ const driverTone = (d: any): string => {
               )}
             </div>
             <h1
-              className="text-3xl font-semibold text-zinc-900 mt-2 truncate"
-              style={{ fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: '-0.01em' }}
+              className="font-display text-[30px] leading-tight text-zinc-900 mt-2 truncate"
+              style={{ letterSpacing: '-0.02em' }}
             >
               {job.name}
             </h1>
