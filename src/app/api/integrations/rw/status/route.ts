@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth-admin'
+import { prisma } from '@/lib/prisma'
 import { rwCredentialStatus } from '@/lib/rentalworks/credential'
 
 export const dynamic = 'force-dynamic'
@@ -23,9 +24,24 @@ export async function GET() {
   }
 
   const status = await rwCredentialStatus()
+
+  // updatedBy is a User id (or the literal 'system' for an automatic
+  // renewal). Rendering it raw put "6b1d11bd-96ef-4e3c-86d3-adf37792e2eb"
+  // on the card where a person's name belongs.
+  let updatedByName: string | null = null
+  if (status.updatedBy === 'system') {
+    updatedByName = 'HQ, automatically'
+  } else if (status.updatedBy) {
+    const u = await prisma.user
+      .findUnique({ where: { id: status.updatedBy }, select: { name: true, email: true } })
+      .catch(() => null)
+    updatedByName = u?.name || u?.email || null
+  }
+
   return NextResponse.json({
     ok: true,
     ...status,
+    updatedByName,
     // Paste + Verify are ADMIN-only; the card uses this to decide whether to
     // render the controls at all, and the write routes enforce it again.
     canManage: user.role === 'ADMIN',

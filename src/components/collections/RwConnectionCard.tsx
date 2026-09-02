@@ -23,6 +23,7 @@ interface RwStatus {
   lastVerifyStatus: 'OK' | 'EXPIRED' | 'ERROR' | null
   rotateDueAt: string | null
   updatedBy: string | null
+  updatedByName: string | null
   usingEnvFallback: boolean
   canManage: boolean
 }
@@ -139,7 +140,7 @@ export function RwConnectionCard() {
           </span>
         </div>
         <div>
-          Last changed by <span className="text-zinc-800">{s.updatedBy ?? '—'}</span>
+          Last changed by <span className="text-zinc-800">{s.updatedByName ?? '—'}</span>
         </div>
       </div>
 
