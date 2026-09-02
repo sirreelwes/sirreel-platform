@@ -104,6 +104,32 @@ function readRows(): Row[] {
   })
 }
 
+/**
+ * Hand-confirmed joins between a Cognito company name and the HQ record.
+ *
+ * Wes confirmed these on 2026-09-02 after reviewing the dry run. Each was
+ * checked against the submission's EMAIL DOMAIN, not just the name —
+ * "Neon Productions" is filed in HQ as "Little Dot Studios / Neon
+ * Productions" and its contact writes from littledotstudios.com; "Sun
+ * stages" quotes from novaquotes@ and is filed as "Sun Stages, Inc / Nova
+ * Lighting Inc.". Name similarity alone would not have been enough to file
+ * a binding agreement against either.
+ *
+ * Keyed on the exact Cognito name, valued with the exact HQ name. An entry
+ * whose HQ name no longer resolves is REPORTED, never silently dropped —
+ * a rename must not quietly un-map an agreement.
+ */
+const COMPANY_ALIASES: Record<string, string> = {
+  'Harbor freight tools': 'Harbor Freight',
+  'Tubescience': 'TubeScience USA, Inc.',
+  'north of now': 'North of Now Studios, LLC',
+  'Live Nation, Inc.': 'Live Nation Worldwide, Inc',
+  'Echobend Pictures': 'Echobend',
+  'Neon Productions': 'Little Dot Studios / Neon Productions',
+  'Sun stages': 'Sun Stages, Inc / Nova Lighting Inc.',
+  'Creative P Studio': 'CreativeP Studios',
+}
+
 /** Loose-but-conservative company match. Never fuzzy enough to guess. */
 function normalize(s: string): string {
   return s
@@ -143,7 +169,23 @@ async function main() {
   const ambiguous: { row: Row; candidates: string[] }[] = []
   const unmatched: Row[] = []
 
+  const byExactName = new Map(companies.map((c) => [c.name, c]))
+  const brokenAliases: string[] = []
+
   for (const r of newestByCompany.values()) {
+    // A confirmed alias wins outright — it is a human's answer to exactly
+    // the question the matcher could not settle.
+    const aliasTarget = COMPANY_ALIASES[r.companyName]
+    if (aliasTarget) {
+      const hit = byExactName.get(aliasTarget)
+      if (hit) {
+        matched.push({ row: r, company: hit })
+        continue
+      }
+      brokenAliases.push(`${r.companyName} -> "${aliasTarget}" (no such company in HQ)`)
+      continue
+    }
+
     const hits = byNorm.get(normalize(r.companyName)) ?? []
     if (hits.length === 1) matched.push({ row: r, company: hits[0] })
     else if (hits.length > 1) ambiguous.push({ row: r, candidates: hits.map((h) => h.name) })
@@ -158,6 +200,10 @@ async function main() {
   console.log(`  ambiguous (>1 match):  ${ambiguous.length}`)
   console.log(`  NOT in HQ:             ${unmatched.length}`)
 
+  if (brokenAliases.length) {
+    console.log('\n--- ALIAS TARGET MISSING (renamed or deleted — fix the map) ---')
+    for (const b of brokenAliases) console.log(`  ${b}`)
+  }
   if (ambiguous.length) {
     console.log('\n--- AMBIGUOUS (skipped; a human picks) ---')
     for (const a of ambiguous) console.log(`  "${a.row.companyName}" -> ${a.candidates.join(' | ')}`)
