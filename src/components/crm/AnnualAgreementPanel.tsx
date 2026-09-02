@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { FileDropzone } from '@/components/ui/FileDropzone';
 
 interface Agreement {
   id: string;
@@ -60,6 +61,21 @@ export function AnnualAgreementPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // File-a-master form. Lives here because an annual agreement is a COMPANY
+  // fact: it is signed before the first job exists, and until now the only
+  // way to file one was through a job — so an account like Fox Sports, with
+  // an executed agreement and no jobs yet, could not be set up at all.
+  const [filing, setFiling] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [signerName, setSignerName] = useState('');
+  const [signedDate, setSignedDate] = useState('');
+  const [newLcdw, setNewLcdw] = useState('');
+  const [newAutoCover, setNewAutoCover] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/crm/companies/${companyId}/agreements`);
@@ -98,6 +114,158 @@ export function AnnualAgreementPanel({
     }
   };
 
+  const submitFile = async () => {
+    if (!file) {
+      setError('Attach the signed agreement PDF.');
+      return;
+    }
+    if (newAutoCover && !expiryDate) {
+      setError('An auto-covering agreement needs an expiration date.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('contractType', 'RENTAL_AGREEMENT');
+      // Filed from this panel it is always the annual master — that is what
+      // the panel is for. A one-off attaches to a job, from the job.
+      fd.append('isAnnual', 'true');
+      fd.append('autoCoverJobs', String(newAutoCover));
+      if (title.trim()) fd.append('title', title.trim());
+      if (effectiveDate) fd.append('effectiveDate', effectiveDate);
+      if (expiryDate) fd.append('expiryDate', expiryDate);
+      if (signerName.trim()) fd.append('signerName', signerName.trim());
+      if (signedDate) fd.append('signedDate', signedDate);
+      if (newLcdw) fd.append('standingLcdwDecision', newLcdw);
+
+      const r = await fetch(`/api/crm/companies/${companyId}/agreements`, {
+        method: 'POST',
+        body: fd,
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(j?.error || 'Could not file the agreement.');
+        return;
+      }
+      setFiling(false);
+      setFile(null);
+      setTitle('');
+      setEffectiveDate('');
+      setExpiryDate('');
+      setSignerName('');
+      setSignedDate('');
+      setNewLcdw('');
+      await load();
+    } catch {
+      setError('Could not file the agreement.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fileForm = (
+    <div className="mt-3 rounded-lg border border-lt-hairline p-3 space-y-3">
+      <FileDropzone accept="application/pdf" file={file} onFile={setFile} />
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">Title</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="2026 Annual Rental Agreement"
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">Signed by</span>
+          <input
+            value={signerName}
+            onChange={(e) => setSignerName(e.target.value)}
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">Agreement date</span>
+          <input
+            type="date"
+            value={effectiveDate}
+            onChange={(e) => setEffectiveDate(e.target.value)}
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">
+            Expiration date{newAutoCover ? ' *' : ''}
+          </span>
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">Signed on</span>
+          <input
+            type="date"
+            value={signedDate}
+            onChange={(e) => setSignedDate(e.target.value)}
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] text-lt-fg3 mb-0.5">LCDW on the agreement</span>
+          <select
+            value={newLcdw}
+            onChange={(e) => setNewLcdw(e.target.value)}
+            className="w-full rounded-md border border-lt-hairline px-2 py-1 text-xs"
+          >
+            <option value="">Not recorded — ask per job</option>
+            <option value="ACCEPTED">Accepted for all fleet vehicles</option>
+            <option value="DECLINED">Declined for all fleet vehicles</option>
+          </select>
+        </label>
+      </div>
+      <label className="flex items-start gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={newAutoCover}
+          onChange={(e) => setNewAutoCover(e.target.checked)}
+        />
+        <span className="text-xs text-lt-fg2 leading-relaxed">
+          Auto-cover this company&rsquo;s jobs.{' '}
+          <span className="text-lt-fg3">
+            Clients are never asked to sign per job; each job gets an addendum with its
+            name, dates and the LCDW election.
+          </span>
+        </span>
+      </label>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={submitFile}
+          className="rounded-md bg-lt-fg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+        >
+          {saving ? 'Filing…' : 'File agreement'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setFiling(false);
+            setError(null);
+          }}
+          className="text-xs text-lt-fg2 hover:text-black"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
   if (!agreements) return null;
   if (agreements.length === 0) {
     return (
@@ -105,10 +273,25 @@ export function AnnualAgreementPanel({
         <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3 mb-1">
           Annual agreement
         </div>
-        <p className="text-xs text-lt-fg3">
-          No master agreement on file. File one from any job on this company (Agreements →
-          File new), then set it to auto-cover here.
-        </p>
+        {error && <p className="text-xs text-chip-bad-fg mb-2">{error}</p>}
+        {filing ? (
+          fileForm
+        ) : (
+          <>
+            <p className="text-xs text-lt-fg3">
+              No master agreement on file.
+            </p>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setFiling(true)}
+                className="mt-1.5 text-xs font-medium text-lt-fg hover:text-black"
+              >
+                + File annual agreement
+              </button>
+            )}
+          </>
+        )}
       </div>
     );
   }
@@ -226,6 +409,16 @@ export function AnnualAgreementPanel({
           );
         })}
       </div>
+
+      {canEdit && (filing ? fileForm : (
+        <button
+          type="button"
+          onClick={() => setFiling(true)}
+          className="mt-2 text-xs font-medium text-lt-fg hover:text-black"
+        >
+          + File another agreement
+        </button>
+      ))}
     </div>
   );
 }

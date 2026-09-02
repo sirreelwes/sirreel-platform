@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { put } from '@vercel/blob'
-import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import {
+  ALLOWED_CONTRACT_TYPES as ALLOWED_TYPES,
+  readAgreementPdf as readPdf,
+  storePrivateAgreementPdf as storePrivatePdf,
+} from '@/lib/agreements/storePdf'
 
 export const dynamic = 'force-dynamic'
-
-const MAX_BYTES = 25 * 1024 * 1024
-const ALLOWED_TYPES = new Set(['RENTAL_AGREEMENT', 'STAGE_CONTRACT'])
-
-function safeSeg(s: string): string {
-  return s.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120)
-}
-
-async function readPdf(file: unknown): Promise<{ buffer: Buffer; name: string; size: number } | { error: string }> {
-  if (!(file instanceof File)) return { error: 'Please attach a PDF file.' }
-  if (file.size === 0) return { error: 'That file is empty.' }
-  if (file.size > MAX_BYTES) return { error: `That file is too large (max 25 MB). It is ${(file.size / 1024 / 1024).toFixed(1)} MB.` }
-  const buffer = Buffer.from(await file.arrayBuffer())
-  if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'That doesn’t look like a PDF.' }
-  return { buffer, name: (file.name || 'agreement.pdf').slice(0, 250), size: file.size }
-}
-
-async function storePrivatePdf(prefix: string, filename: string, buffer: Buffer): Promise<{ fileUrl: string; blobKey: string }> {
-  const blobKey = `${prefix}/${randomUUID()}-${safeSeg(filename)}`
-  const blob = await put(blobKey, buffer, { access: 'private' as 'public', contentType: 'application/pdf' })
-  return { fileUrl: blob.url, blobKey }
-}
 
 /**
  * Job-level agreement coverage. A rental/stage agreement lives ON FILE
