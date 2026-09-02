@@ -2590,6 +2590,16 @@ model DailyCollections {
   ordersCreated Decimal  @default(0) @map("orders_created") @db.Decimal(10, 2)
   quotesCreated Decimal  @default(0) @map("quotes_created") @db.Decimal(10, 2)
   rawEmail      String?  @map("raw_email") @db.Text
+  /// Ana's narrative for the day — the judgement no query produces
+  /// ("orders extended into the weekend, so today is light"). Held here
+  /// rather than only in the sent email so the dashboard can show it.
+  note          String?  @db.Text
+  /// Set when the EOD email actually went out FROM HQ. Rows written by the
+  /// Gmail back-fill (/api/admin/backfill-collections, which greps Ana's own
+  /// sent mail) leave this null — that is how the two origins tell apart, and
+  /// how the back-fill can be retired one day at a time.
+  sentAt        DateTime? @map("sent_at")
+  sentBy        String?  @map("sent_by")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -5889,10 +5899,12 @@ model CompanyAgreement {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  addenda JobAgreementAddendum[]
+  addenda          JobAgreementAddendum[]
   /// Order-level agreement rows this master papers. See
   /// SignedAgreement.coveredByCompanyAgreementId.
-  covers  SignedAgreement[]      @relation("AgreementAnnualCoverage")
+  covers           SignedAgreement[]      @relation("AgreementAnnualCoverage")
+  /// Per-job client acknowledgements that this master is on file.
+  acknowledgements LcdwElection[]         @relation("LcdwElectionAcknowledgedAgreement")
 
   @@index([companyId])
   @@index([contractType])
@@ -5917,6 +5929,24 @@ model JobAgreementAddendum {
   addendumFileUrl  String? @map("addendum_file_url")
   addendumFilename String? @map("addendum_filename")
   addendumFileSize Int?    @map("addendum_file_size")
+
+  /// The master and this job's addendum STAPLED into one PDF.
+  ///
+  /// Wes, 2026-09-02. The job file otherwise holds two documents, and
+  /// "send me the agreement for this job" is a question with one answer, not
+  /// two attachments — a client's accounting department asking for it should
+  /// not have to be told which halves to read together.
+  ///
+  /// Derived, never authoritative: the master is the contract and the
+  /// addendum is the amendment; this is the two of them printed together.
+  /// It is re-stapled from scratch on every election change, so it can be
+  /// regenerated and is never repaired in place. A staple failure leaves the
+  /// addendum intact and these null — the parts must survive the convenience.
+  combinedFileKey  String?   @map("combined_file_key")
+  combinedFileUrl  String?   @map("combined_file_url")
+  combinedFilename String?   @map("combined_filename")
+  combinedFileSize Int?      @map("combined_file_size")
+  combinedAt       DateTime? @map("combined_at")
 
   note      String? @db.Text
   addedById String? @map("added_by_id")
@@ -5961,6 +5991,24 @@ model LcdwElection {
 
   decision  LcdwDecision
   decidedAt DateTime     @default(now()) @map("decided_at")
+
+  /// The master the client ACKNOWLEDGED is on file, for this job.
+  ///
+  /// Wes, 2026-09-02: "the client be required to acknowledge the annual
+  /// agreement is on file and the status of the LCDW election."
+  ///
+  /// Without this, an annual account's job was papered entirely by inference
+  /// — real coverage, but nothing on the job showing the client had been told
+  /// which agreement governed it or what their waiver status was. Two years
+  /// on, "they knew" would rest on a flag an operator ticked. This is the
+  /// client saying it, per job, in their own name.
+  ///
+  /// Nullable because it is not always applicable: a company with no annual
+  /// master still elects LCDW, and there is nothing for them to acknowledge.
+  /// Null on a covered job means the acknowledgement is still outstanding.
+  acknowledgedAgreementId String?           @map("acknowledged_agreement_id")
+  acknowledgedAgreement   CompanyAgreement? @relation("LcdwElectionAcknowledgedAgreement", fields: [acknowledgedAgreementId], references: [id], onDelete: SetNull)
+  acknowledgedAt          DateTime?         @map("acknowledged_at")
 
   /// "Acceptance/decline of LCDW must be confirmed in writing per fleet
   /// vehicle rental" (LCDW_ADDENDUM.note). Both directions are signed —

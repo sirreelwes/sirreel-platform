@@ -28,6 +28,7 @@ import {
   recordJobLcdwElection,
   summarizeJobLcdwCoverage,
   effectiveLcdwDecision,
+  annualAcknowledgementText,
   LCDW_ACKNOWLEDGEMENT_TEXT,
 } from '@/lib/lcdw/jobElection'
 import { LCDW_ADDENDUM } from '@/lib/contracts/contractClauses'
@@ -57,7 +58,10 @@ export async function GET(req: NextRequest) {
     summarizeJobLcdwCoverage(ctx.jobId),
     prisma.lcdwElection.findUnique({
       where: { jobId: ctx.jobId },
-      select: { decision: true, decidedAt: true, signerName: true },
+      select: {
+        decision: true, decidedAt: true, signerName: true,
+        acknowledgedAgreementId: true, acknowledgedAt: true,
+      },
     }),
     ctx.companyId ? findCompanyAnnualCoverage(ctx.companyId) : Promise.resolve(null),
   ])
@@ -71,7 +75,14 @@ export async function GET(req: NextRequest) {
       scope: LCDW_ADDENDUM.scope,
       note: LCDW_ADDENDUM.note,
     },
-    acknowledgementText: LCDW_ACKNOWLEDGEMENT_TEXT,
+    // The exact wording the client will agree to, rendered on the page and
+    // stored verbatim with their answer. Built here so the two cannot drift.
+    acknowledgementText: coverage
+      ? annualAcknowledgementText(
+          annualCoverageTitle(coverage),
+          election?.decision ?? coverage.standingLcdwDecision ?? 'DECLINED',
+        )
+      : LCDW_ACKNOWLEDGEMENT_TEXT,
     covered: summary.coveredVehicles,
     excluded: summary.excludedVehicles,
     allExcluded: summary.allExcluded,
@@ -81,8 +92,14 @@ export async function GET(req: NextRequest) {
           decision: election.decision,
           decidedAt: election.decidedAt.toISOString(),
           signerName: election.signerName,
+          acknowledgedAt: election.acknowledgedAt?.toISOString() ?? null,
         }
       : null,
+    // Outstanding when the job is covered by a master the client has not yet
+    // affirmed for THIS job. Coverage is real either way — this is about
+    // whether they have said, in their own name, that they know about it.
+    acknowledgementRequired:
+      !!coverage && election?.acknowledgedAgreementId !== coverage.companyAgreementId,
     // The answer that governs today, and where it came from. An annual
     // client answered on the master ("for all fleet vehicle rentals"), so
     // the page opens on that rather than on a blank question.
@@ -104,6 +121,9 @@ interface ElectBody {
   signerTitle?: unknown
   signerEmail?: unknown
   signatureImageData?: unknown
+  /** The client ticked the "this agreement is on file and my waiver status
+   *  is X" affirmation. Required on a covered job. */
+  acknowledged?: unknown
 }
 
 export async function POST(req: NextRequest) {
@@ -139,6 +159,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // On a covered job the affirmation is REQUIRED, and enforced here rather
+  // than only by a disabled button — any request that skips the UI still
+  // reaches this route, and an acknowledgement recorded without the client
+  // actually making it is worse than none at all.
+  const coverage = ctx.companyId ? await findCompanyAnnualCoverage(ctx.companyId) : null
+  if (coverage && body.acknowledged !== true) {
+    return NextResponse.json(
+      { error: 'Please confirm your annual agreement is on file and your waiver election.' },
+      { status: 400 },
+    )
+  }
+
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
@@ -147,6 +179,10 @@ export async function POST(req: NextRequest) {
   const { election, addendumId } = await recordJobLcdwElection({
     jobId: ctx.jobId,
     decision,
+    acknowledgeAgreementId: coverage?.companyAgreementId ?? null,
+    acknowledgmentText: coverage
+      ? annualAcknowledgementText(annualCoverageTitle(coverage), decision)
+      : null,
     signerName,
     signerTitle: typeof body.signerTitle === 'string' ? body.signerTitle.trim() || null : null,
     signerEmail:
@@ -164,6 +200,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     decision: election.decision,
     decidedAt: election.decidedAt.toISOString(),
+    acknowledged: !!election.acknowledgedAt,
     // Only true when the addendum actually got filed — the client is told
     // "added to your file" only when it is.
     addendumFiled: !!addendumId,

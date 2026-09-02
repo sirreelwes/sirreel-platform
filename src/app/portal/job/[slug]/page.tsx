@@ -44,6 +44,8 @@ interface PortalData {
     expiryDate: string | null;
     sentence: string;
     pdfUrl: string;
+    /** Master + this job's addendum as ONE PDF, once it has been cut. */
+    jobCopyUrl: string | null;
   } | null;
   /** Damage-waiver election for the JOB. `available` is false when nothing
    *  booked can carry the waiver — the row then explains rather than offers. */
@@ -58,6 +60,10 @@ interface PortalData {
     /** The governing answer — the per-job election, else the standing one
      *  signed on the annual agreement. Null = genuinely unanswered. */
     effective: { decision: 'ACCEPTED' | 'DECLINED'; source: 'JOB' | 'ANNUAL' } | null;
+    /** The client still has to affirm, for this job, that the master is on
+     *  file and what their waiver status is. */
+    acknowledgementRequired: boolean;
+    acknowledgedAt: string | null;
   } | null;
   order: {
     id: string;
@@ -753,16 +759,22 @@ export default function JobPortalPage() {
                       {data.annualAgreement.sentence}
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
+                      {/* Prefer the stapled copy: "the agreement for this job"
+                          is one document, and it is the one a client's
+                          accounting department is actually asking for. The
+                          master alone stays available underneath it. */}
                       <a
-                        href={data.annualAgreement.pdfUrl}
+                        href={data.annualAgreement.jobCopyUrl || data.annualAgreement.pdfUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs font-semibold text-amber-700 hover:text-amber-900"
                       >
-                        View agreement
+                        {data.annualAgreement.jobCopyUrl
+                          ? 'View agreement for this job'
+                          : 'View agreement'}
                       </a>
                       <a
-                        href={`${data.annualAgreement.pdfUrl}?download=1`}
+                        href={`${data.annualAgreement.jobCopyUrl || data.annualAgreement.pdfUrl}?download=1`}
                         download
                         className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
                       >
@@ -879,23 +891,47 @@ export default function JobPortalPage() {
                 <PaperworkRow
                   label="Damage Waiver (LCDW)"
                   status={
-                    data.lcdw.effective
-                      ? data.lcdw.effective.decision === 'ACCEPTED'
-                        ? 'Accepted'
-                        : 'Declined'
-                      : data.lcdw.available
-                        ? 'Needs your answer'
-                        : 'Not available'
+                    data.lcdw.acknowledgementRequired
+                      ? 'Needs your confirmation'
+                      : data.lcdw.effective
+                        ? data.lcdw.effective.decision === 'ACCEPTED'
+                          ? 'Accepted'
+                          : 'Declined'
+                        : data.lcdw.available
+                          ? 'Needs your answer'
+                          : 'Not available'
                   }
                   statusKind={
-                    data.lcdw.effective
-                      ? 'success'
-                      : data.lcdw.available
-                        ? 'warning'
-                        : 'pending'
+                    data.lcdw.acknowledgementRequired
+                      ? 'warning'
+                      : data.lcdw.effective
+                        ? 'success'
+                        : data.lcdw.available
+                          ? 'warning'
+                          : 'pending'
                   }
                 >
-                  {data.lcdw.effective && !data.lcdw.election ? (
+                  {data.lcdw.acknowledgementRequired ? (
+                    /* Wes, 2026-09-02: the client must acknowledge the annual
+                       agreement is on file AND their waiver status. Coverage
+                       is already real — this is the affirmation, per job, in
+                       their own name. It outranks the "already answered"
+                       branch below precisely because being covered is not the
+                       same as having said you know you are. */
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        {data.lcdw.effective
+                          ? `Your annual agreement covers this job and ${data.lcdw.effective.decision === 'ACCEPTED' ? 'accepts' : 'declines'} the damage waiver. Please confirm both for this job — it takes a moment, and you can change the waiver here if you want a different answer this time.`
+                          : `Your annual agreement covers this job. Please confirm it, and accept or decline the damage waiver — $${data.lcdw.ratePerDay}/day per eligible vehicle.`}
+                      </p>
+                      <a
+                        href={`/portal/job/${slug}/lcdw`}
+                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      >
+                        Confirm →
+                      </a>
+                    </div>
+                  ) : data.lcdw.effective && !data.lcdw.election ? (
                     /* Answered on the annual agreement, not for this job.
                        Wes, 2026-09-02: an annual client's job should "only
                        require job name and dates, along with LCDW election to

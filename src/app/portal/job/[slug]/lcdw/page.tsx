@@ -35,7 +35,13 @@ interface LcdwData {
   excluded: { description: string; reason: string }[];
   allExcluded: boolean;
   hasVehicles: boolean;
-  election: { decision: 'ACCEPTED' | 'DECLINED'; decidedAt: string; signerName: string | null } | null;
+  election: {
+    decision: 'ACCEPTED' | 'DECLINED';
+    decidedAt: string;
+    signerName: string | null;
+    acknowledgedAt: string | null;
+  } | null;
+  acknowledgementRequired: boolean;
   effective: { decision: 'ACCEPTED' | 'DECLINED'; source: 'JOB' | 'ANNUAL' } | null;
   standingDecision: 'ACCEPTED' | 'DECLINED' | null;
   annualAgreement: {
@@ -78,7 +84,12 @@ export default function LcdwElectionPage() {
         // answer they gave, shown so they can change it in one click. With
         // neither, the choice stays blank, because on a question with money
         // and liability attached, picking one for them is not ours to do.
-        if (l.effective) setChoice(l.effective.decision);
+        // Nothing eligible on the job → the only honest record is DECLINED
+        // (no waiver applies), so the acknowledgement is not blocked behind a
+        // choice the client cannot meaningfully make.
+        const nothingEligible = !l.hasVehicles || l.allExcluded || l.covered.length === 0;
+        if (nothingEligible) setChoice('DECLINED');
+        else if (l.effective) setChoice(l.effective.decision);
         const d = dr.ok ? await dr.json() : null;
         const full = `${d?.contact?.firstName || ''} ${d?.contact?.lastName || ''}`.trim();
         if (full) setSignerName(full);
@@ -105,6 +116,7 @@ export default function LcdwElectionPage() {
           decision: choice,
           signerName: signerName.trim(),
           signerTitle: signerTitle.trim() || null,
+          acknowledged: acknowledged,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -168,19 +180,38 @@ export default function LcdwElectionPage() {
           className="mt-3 text-2xl font-bold text-gray-900"
           style={{ fontFamily: PORTAL_SERIF }}
         >
-          {data.terms.title}
+          {data.annualAgreement ? 'Confirm your agreement' : data.terms.title}
         </h1>
         <p className="mt-1 text-sm text-gray-600">
-          ${data.ratePerDay}/day, per eligible vehicle. Accept or decline — we need your
-          answer either way.
+          {data.annualAgreement
+            ? `Two things to confirm for this job: that your ${data.annualAgreement.title} is on file, and your damage-waiver election.`
+            : `$${data.ratePerDay}/day, per eligible vehicle. Accept or decline — we need your answer either way.`}
         </p>
-        {data.annualAgreement && (
-          <p className="mt-2 text-xs text-gray-500">
-            Your {data.annualAgreement.title} is already on file and covers this job. This
-            election is the only paperwork we need from you.
-          </p>
-        )}
       </div>
+
+      {/* The agreement being acknowledged. Named and readable: a client
+          cannot meaningfully confirm a document is on file if the page will
+          not show them which one. */}
+      {data.annualAgreement && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-2">
+          <h2 className="text-sm font-bold text-emerald-900">Your agreement on file</h2>
+          <p className="text-[13px] leading-relaxed text-emerald-900">
+            {data.annualAgreement.companyName
+              ? `${data.annualAgreement.companyName}'s `
+              : 'Your '}
+            {data.annualAgreement.title} is on file with SirReel and in effect for this job.
+            There is nothing to sign — its terms apply in full.
+          </p>
+          <a
+            href="/api/portal/job/agreement/annual"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-xs font-semibold text-emerald-800 underline hover:text-emerald-900"
+          >
+            Read the agreement
+          </a>
+        </section>
+      )}
 
       {/* What it applies to on THIS job. */}
       <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3 shadow-sm">
@@ -221,7 +252,7 @@ export default function LcdwElectionPage() {
         <p className="text-xs italic text-gray-500">{data.terms.note}</p>
       </section>
 
-      {unavailable ? (
+      {unavailable && !data.annualAgreement ? (
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-600">
             The damage waiver isn&rsquo;t available on the vehicles booked for this job, so
@@ -230,7 +261,9 @@ export default function LcdwElectionPage() {
         </section>
       ) : (
         <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4 shadow-sm">
-          <h2 className="text-sm font-bold text-gray-900">Your election</h2>
+          <h2 className="text-sm font-bold text-gray-900">
+            {data.annualAgreement ? 'Confirm and sign' : 'Your election'}
+          </h2>
 
           {data.election ? (
             <p className="text-xs text-gray-500">
@@ -252,6 +285,17 @@ export default function LcdwElectionPage() {
             </p>
           ) : null}
 
+          {/* Nothing on the job can carry the waiver, but the agreement still
+              has to be acknowledged. Offering accept/decline here would be
+              offering a choice with one real option; the record says DECLINED
+              because no waiver applies, and the copy says why. */}
+          {unavailable ? (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              The damage waiver isn&rsquo;t available on the vehicles booked for this job, so
+              there is nothing to elect — no waiver charge applies. We still need you to
+              confirm your agreement is on file.
+            </p>
+          ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {(
               [
@@ -286,6 +330,7 @@ export default function LcdwElectionPage() {
               );
             })}
           </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
@@ -316,7 +361,16 @@ export default function LcdwElectionPage() {
               className="mt-0.5"
             />
             <span className="text-xs leading-relaxed text-gray-600">
-              {data.acknowledgementText}
+              {/* Recomposed from the LIVE choice, not the server's snapshot,
+                  which was built from whatever answer was current on load. A
+                  client who switches to Decline must not be asked to tick a
+                  box that still says ACCEPTED — the text they agree to has to
+                  be the text describing what they are agreeing. The server
+                  re-composes the same sentence from the submitted decision,
+                  so the stored wording matches this exactly. */}
+              {data.annualAgreement && choice
+                ? `I confirm that ${data.annualAgreement.title} is on file with SirReel and in effect for this job, and that our Limited Collision Damage Waiver election for this job is ${choice === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED'}. By typing my name and submitting, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.`
+                : data.acknowledgementText}
             </span>
           </label>
 
@@ -331,9 +385,11 @@ export default function LcdwElectionPage() {
           >
             {saving
               ? 'Recording…'
-              : choice === 'DECLINED'
-                ? 'Confirm decline'
-                : 'Confirm election'}
+              : data.annualAgreement
+                ? 'Confirm and sign'
+                : choice === 'DECLINED'
+                  ? 'Confirm decline'
+                  : 'Confirm election'}
           </button>
         </section>
       )}

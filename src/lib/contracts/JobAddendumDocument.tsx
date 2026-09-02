@@ -71,6 +71,9 @@ export interface JobAddendumProps {
    *  where it came from, rather than a signature block nobody signed. */
   signature: JobAddendumSignature | null
   masterSignatureNote?: string | null
+  /** The client affirmed, for this job, that the master is on file and what
+   *  their waiver status is. */
+  acknowledgedMaster?: boolean
   generatedAt: Date
 }
 
@@ -203,7 +206,8 @@ export function JobAddendumDocument(props: JobAddendumProps) {
     masterSignerName, masterSignedAt,
     jobName, jobCode, rentalStart, rentalEnd, orderNumbers,
     decision, decisionSource, standingDecision,
-    coveredVehicles, excludedVehicles, signature, masterSignatureNote, generatedAt,
+    coveredVehicles, excludedVehicles, signature, masterSignatureNote,
+    acknowledgedMaster, generatedAt,
   } = props
 
   const accepted = decision === 'ACCEPTED'
@@ -322,7 +326,20 @@ export function JobAddendumDocument(props: JobAddendumProps) {
         <View style={styles.divider} />
 
         <View style={styles.block} wrap={false}>
-          <Text style={styles.blockTitle}>Confirmed in writing</Text>
+          <Text style={styles.blockTitle}>
+            {acknowledgedMaster ? 'Acknowledged and confirmed in writing' : 'Confirmed in writing'}
+          </Text>
+          {acknowledgedMaster ? (
+            /* The affirmation Wes asked for, printed as its own sentence
+               rather than buried in the attestation: a reader of the job file
+               has to be able to see that the client was told which agreement
+               governs this job and what their waiver status is. */
+            <Text style={[styles.body, { marginBottom: 4 }]}>
+              Lessee confirmed that {masterTitle} is on file with SirReel and in effect for
+              this job, and that the Limited Collision Damage Waiver election above is
+              {' '}{accepted ? 'ACCEPTED' : 'DECLINED'}.
+            </Text>
+          ) : null}
           <Text style={[styles.small, { marginBottom: 6 }]}>{LCDW_ADDENDUM.note}</Text>
           {signature ? (
             <>

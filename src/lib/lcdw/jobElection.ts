@@ -33,6 +33,8 @@ import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/ann
 import { generateJobAddendumPdf } from '@/lib/contracts/generateJobAddendumPdf'
 import { quoteLcdw, type LcdwCandidate } from '@/lib/pricing/lcdwEligibility'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+import { stapleAgreementPdfs } from '@/lib/contracts/stapleAgreement'
+import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
 
 /** The exclusion reason, in words a client can act on. Mirrors the phrasing
  *  describeLcdwCoverage uses on the order UI so the addendum and the quote
@@ -67,6 +69,29 @@ export function effectiveLcdwDecision(
   return null
 }
 
+/**
+ * What an annual-account client affirms, per job.
+ *
+ * Wes, 2026-09-02: "the client be required to acknowledge the annual
+ * agreement is on file and the status of the LCDW election."
+ *
+ * Both halves are named, because acknowledging only the agreement leaves the
+ * waiver — the part with money and liability on it — as something they were
+ * merely not stopped from noticing.
+ */
+export function annualAcknowledgementText(
+  masterTitle: string,
+  decision: LcdwDecision,
+): string {
+  return (
+    `I confirm that ${masterTitle} is on file with SirReel and in effect for this job, ` +
+    `and that our Limited Collision Damage Waiver election for this job is ` +
+    `${decision === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED'}. ` +
+    'By typing my name and submitting, I am providing my electronic signature, which has ' +
+    'the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.'
+  )
+}
+
 export const LCDW_ACKNOWLEDGEMENT_TEXT =
   'I confirm the Limited Collision Damage Waiver election above for this job. ' +
   'By typing my name and submitting, I am providing my electronic signature, which has ' +
@@ -75,6 +100,8 @@ export const LCDW_ACKNOWLEDGEMENT_TEXT =
 export interface RecordElectionInput {
   jobId: string
   decision: LcdwDecision
+  /** The client also affirmed the master is on file (annual accounts). */
+  acknowledgeAgreementId?: string | null
   signerName: string
   signerTitle?: string | null
   signerEmail?: string | null
@@ -83,6 +110,10 @@ export interface RecordElectionInput {
   userAgent?: string | null
   source?: 'PORTAL_JOB' | 'STAFF'
   recordedById?: string | null
+  /** The exact wording the client agreed to. Stored verbatim — a stored
+   *  acknowledgement that says something different from what was on screen is
+   *  worse than none. */
+  acknowledgmentText?: string | null
 }
 
 /**
@@ -230,6 +261,7 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
     // No per-job election yet: the answer and the signature both come from
     // the master, and the addendum says so rather than inventing a job-level
     // signature nobody gave.
+    acknowledgedMaster: !!election?.acknowledgedAgreementId,
     signature: election
       ? {
           signerName: election.signerName || 'Client',
@@ -261,6 +293,50 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
     ? `LCDW ${effective.decision === 'ACCEPTED' ? 'accepted' : 'declined'} by ${election.signerName || 'client'}`
     : `LCDW ${effective.decision === 'ACCEPTED' ? 'accepted' : 'declined'} — carried from the annual agreement`
 
+  // ── Staple: the master and this addendum as ONE document ─────────
+  //
+  // Wes, 2026-09-02. Derived and best-effort: the master is the contract and
+  // the addendum is the amendment, and both keep their own stored copies. A
+  // master that cannot be parsed (an odd scan, an encrypted export) must not
+  // take the addendum down with it — losing the convenience copy costs a
+  // second attachment, losing the addendum costs the record of what the
+  // client elected.
+  let combined: { key: string; url: string; filename: string; size: number } | null = null
+  try {
+    const master = await prisma.companyAgreement.findUnique({
+      where: { id: coverage.companyAgreementId },
+      select: { fileUrl: true },
+    })
+    const masterBytes = master?.fileUrl ? await readPrivateBlobBuffer(master.fileUrl) : null
+    if (masterBytes) {
+      const stapled = await stapleAgreementPdfs(masterBytes, pdf)
+      const combinedName = `${safeCode}-rental-agreement.pdf`
+      const combinedKey = `job-agreements/${jobId}/${safeCode}-agreement-${Date.now()}.pdf`
+      const up = await put(combinedKey, stapled.bytes, {
+        access: 'private' as 'public',
+        contentType: 'application/pdf',
+      })
+      combined = {
+        key: combinedKey,
+        url: up.url,
+        filename: combinedName,
+        size: stapled.bytes.length,
+      }
+    }
+  } catch (err) {
+    console.error('[lcdw] staple failed (addendum IS filed):', jobId, err)
+  }
+
+  const combinedFields = combined
+    ? {
+        combinedFileKey: combined.key,
+        combinedFileUrl: combined.url,
+        combinedFilename: combined.filename,
+        combinedFileSize: combined.size,
+        combinedAt: new Date(),
+      }
+    : {}
+
   const row = await prisma.jobAgreementAddendum.upsert({
     where: {
       jobId_companyAgreementId: { jobId, companyAgreementId: coverage.companyAgreementId },
@@ -274,6 +350,7 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
       addendumFileSize: pdf.length,
       note,
       addedById: election?.recordedById ?? null,
+      ...combinedFields,
     },
     update: {
       addendumFileKey: blobKey,
@@ -285,6 +362,7 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
       // job IS covered again, and leaving deletedAt set would hide the
       // current addendum behind a stale removal.
       deletedAt: null,
+      ...combinedFields,
     },
     select: { id: true },
   })
@@ -302,6 +380,7 @@ export async function recordJobLcdwElection(input: RecordElectionInput) {
   const {
     jobId, decision, signerName, signerTitle, signerEmail, signatureData,
     ipAddress, userAgent, source = 'PORTAL_JOB', recordedById,
+    acknowledgeAgreementId,
   } = input
 
   const prior = await prisma.lcdwElection.findUnique({
@@ -317,7 +396,9 @@ export async function recordJobLcdwElection(input: RecordElectionInput) {
     signerTitle: signerTitle ?? null,
     signerEmail: signerEmail ?? null,
     signatureData: signatureData ?? null,
-    acknowledgmentText: LCDW_ACKNOWLEDGEMENT_TEXT,
+    acknowledgmentText: input.acknowledgmentText || LCDW_ACKNOWLEDGEMENT_TEXT,
+    acknowledgedAgreementId: acknowledgeAgreementId ?? null,
+    acknowledgedAt: acknowledgeAgreementId ? new Date() : null,
     ipAddress: ipAddress ?? null,
     userAgent: userAgent ?? null,
     source,

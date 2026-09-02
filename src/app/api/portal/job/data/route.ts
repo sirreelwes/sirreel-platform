@@ -393,7 +393,10 @@ export async function GET(req: NextRequest) {
         summarizeJobLcdwCoverage(order.jobId),
         prisma.lcdwElection.findUnique({
           where: { jobId: order.jobId },
-          select: { decision: true, decidedAt: true, signerName: true },
+          select: {
+            decision: true, decidedAt: true, signerName: true,
+            acknowledgedAgreementId: true, acknowledgedAt: true,
+          },
         }),
       ])
     : [null, null]
@@ -424,8 +427,27 @@ export async function GET(req: NextRequest) {
           lcdwElection,
           annualCoverage?.standingLcdwDecision ?? null,
         ),
+        // Wes, 2026-09-02: a covered client must affirm, per job, that the
+        // master is on file and what their waiver status is. Until they do,
+        // this row is an OPEN item — coverage is real, but nobody has heard
+        // the client say they know about it.
+        acknowledgementRequired:
+          !!annualCoverage &&
+          lcdwElection?.acknowledgedAgreementId !== annualCoverage.companyAgreementId,
+        acknowledgedAt: lcdwElection?.acknowledgedAt?.toISOString() ?? null,
       }
     : null
+
+  // One document for this job — the master with this job's addendum stapled
+  // on. Only offered once it exists; the gated proxy falls back to the
+  // addendum alone if the staple failed.
+  const jobAgreementCopy =
+    annualCoverage && order.jobId
+      ? await prisma.jobAgreementAddendum.findFirst({
+          where: { jobId: order.jobId, deletedAt: null },
+          select: { combinedFileUrl: true, addendumFileUrl: true },
+        })
+      : null
 
   const now = new Date()
   const standingAgreementActive =
@@ -455,6 +477,11 @@ export async function GET(req: NextRequest) {
           sentence: annualCoverageSentence(annualCoverage),
           // Gated proxy, never the raw private blob (it 403s in a browser).
           pdfUrl: '/api/portal/job/agreement/annual',
+          // The stapled master + this job's addendum, when one has been cut.
+          jobCopyUrl:
+            jobAgreementCopy?.combinedFileUrl || jobAgreementCopy?.addendumFileUrl
+              ? '/api/portal/job/agreement/job-copy'
+              : null,
         }
       : null,
     lcdw,
