@@ -580,8 +580,6 @@ export async function POST(req: NextRequest) {
       productionType,
       productionTypeProfileId,
       status,
-      startDate,
-      endDate,
       notes,
       estimatedValue,
       contacts, // [{ personId, role, isPrimary }]
@@ -630,9 +628,9 @@ export async function POST(req: NextRequest) {
         contactName: typeof body.contactName === 'string' ? body.contactName : null,
         contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
         contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,
-        // Job-level dates are no longer written — a job has no dates of
-        // its own; its orders carry them (lib/jobs/dateRange). The columns
-        // remain in the DB per the additive-only rule, unread and unwritten.
+        // No job-level dates: a job has no dates of its own, its orders
+        // carry them (lib/jobs/dateRange), and the columns themselves were
+        // dropped from the schema AND the database on 2026-08-31.
         // legacy callers that omit status keep getting QUOTED; the
         // resolver modal passes NEW explicitly.
         status: status || 'QUOTED',

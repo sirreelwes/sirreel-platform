@@ -138,8 +138,6 @@ export async function resolveJobForImportedBooking(
         companyId: booking.companyId,
         contactName: booking.person ? `${booking.person.firstName} ${booking.person.lastName}`.trim() : null,
         contactEmail: booking.person?.email ?? null,
-        startDate: dates?.start ?? null,
-        endDate: dates?.end ?? null,
         status: 'ACTIVE',
         notes: `Created from Planyo import — cart ${booking.planyoCartId ?? '(none)'}`,
       },

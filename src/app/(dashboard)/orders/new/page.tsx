@@ -1926,8 +1926,6 @@ function NewQuotePageInner() {
                   contactName: resolverContext.contactName ?? '',
                   contactEmail: resolverContext.contactEmail ?? '',
                   contactPhone: resolverContext.contactPhone ?? '',
-                  startDate: editing.startDate || undefined,
-                  endDate: editing.endDate || undefined,
                   status: 'NEW',
                 }),
               });
@@ -2698,24 +2696,6 @@ function NewQuotePageInner() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-lt-fg3 mb-1">Pickup Date</label>
-              <input
-                type="date" value={editing.startDate || ''}
-                onChange={(e) => updateQuoteDate('startDate', e.target.value)}
-                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-lt-fg3 mb-1">Return Date</label>
-              <input
-                type="date" value={editing.endDate || ''}
-                onChange={(e) => updateQuoteDate('endDate', e.target.value)}
-                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
-              />
-            </div>
-          </div>
         </div>
       )}
 
@@ -2733,6 +2713,34 @@ function NewQuotePageInner() {
           <button onClick={addBlankItem} className="text-xs font-semibold text-lt-fg2 hover:text-lt-fg">
             + Add line manually
           </button>
+        </div>
+
+        {/* The rental window. This used to sit in the Client Company /
+            Job card above, where it read as the JOB's dates — and a job
+            has no dates of its own (Wes 2026-09-02; the columns were
+            dropped 2026-08-31). It belongs here because this is what it
+            actually does: it fills in every line's pickup and return,
+            leaving any line you have dated by hand alone. */}
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-lt-hairline bg-lt-inner/40 p-3">
+          <div className="col-span-2 text-xs text-lt-fg3">
+            Rental window &mdash; fills in every line below. A line you dated yourself stays put.
+          </div>
+          <div>
+            <label className="block text-xs text-lt-fg3 mb-1">Pickup Date</label>
+            <input
+              type="date" value={editing.startDate || ''}
+              onChange={(e) => updateQuoteDate('startDate', e.target.value)}
+              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-lt-fg3 mb-1">Return Date</label>
+            <input
+              type="date" value={editing.endDate || ''}
+              onChange={(e) => updateQuoteDate('endDate', e.target.value)}
+              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+            />
+          </div>
         </div>
         {items.length === 0 ? (
           <div className="text-xs text-lt-fg3 text-center py-6">No line items.</div>

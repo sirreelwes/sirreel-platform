@@ -616,8 +616,6 @@ export async function startNewSubmit(
         companyName,
         contactName: [firstName, lastName].filter(Boolean).join(' ') || null,
         contactEmail: entry.email,
-        startDate: form.startDate ?? null,
-        endDate: form.endDate ?? null,
         status: 'QUOTED',
         notes: `Self-serve rental-agreement entry (public form) on ${new Date().toISOString().slice(0, 10)}.`,
       },

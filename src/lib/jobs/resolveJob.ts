@@ -81,8 +81,11 @@ export interface JobDraft {
   contactName?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
-  startDate?: string | null
-  endDate?: string | null
+  /* No startDate/endDate. A job has no dates of its own — its orders and
+     bookings carry them (lib/jobs/dateRange). The columns were dropped
+     2026-08-31; callers kept passing dates that createJobFromDraft
+     silently discarded, which is exactly how the new-quote form ended up
+     showing "Pickup Date / Return Date" in the Job card. */
   status?: JobStatus
   notes?: string | null
   // Passthroughs so the legacy /api/jobs payload can use the same
@@ -337,8 +340,6 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
       contactName: resolvedPerson?.name ?? ctx.contactName?.trim() ?? null,
       contactEmail: resolvedPerson?.email ?? (ctx.contactEmail ? normalizeEmail(ctx.contactEmail) : null),
       contactPhone: ctx.contactPhone?.trim() ?? null,
-      startDate: ctx.dates?.start ?? null,
-      endDate: ctx.dates?.end ?? null,
       status: 'NEW',
     },
   }
