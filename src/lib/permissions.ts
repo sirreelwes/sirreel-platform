@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { canUseCollections } from '@/lib/collections/allowlist';
 import { isExportApprover } from '@/lib/exports/approver';
+import { isAllowedPayrollEmail } from '@/lib/payroll/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
@@ -647,6 +648,15 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'home-tiles', label: 'Home Tiles', icon: 'LayoutDashboard', href: '/admin/home-tiles' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
+        // Payroll. Email-gated like Data Exports, NOT role-gated: ADMIN is
+        // Wes AND Dani today, but the allowlist is the thing that decides,
+        // and it is a separate list from HR's on purpose (personnel files
+        // and compensation are different grants). See
+        // src/lib/payroll/access.ts — the page and every API route enforce
+        // it too; this only hides the nav row.
+        ...(isAllowedPayrollEmail(navEmail)
+          ? [{ id: 'payroll', label: 'Payroll', icon: 'Clock', href: '/payroll' }]
+          : []),
       ],
     },
   ];

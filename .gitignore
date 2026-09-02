@@ -37,6 +37,7 @@ scripts/*
 !scripts/backfill-inferred-form-type.ts
 !scripts/reextract-pipeline-window.ts
 !scripts/scheduling-planyo-migration.ts
+!scripts/seed-payroll-roster.ts
 !scripts/scheduling-add-missing-assets.ts
 !scripts/scheduling-cleanup-empty-categories.ts
 !scripts/seed-catalog-aliases.ts

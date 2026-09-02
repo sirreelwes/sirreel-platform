@@ -51,7 +51,9 @@
     "test:job-disambiguation": "tsx tests/jobs/job-disambiguation.test.ts",
     "test:provenance": "tsx tests/provenance/origin.test.ts",
     "test:hq-escalation": "tsx tests/notifications/hq-escalation.test.ts",
-    "test:parsed-year": "tsx tests/orders/parsed-date-year.test.ts"
+    "test:parsed-year": "tsx tests/orders/parsed-date-year.test.ts",
+    "test:payroll": "tsx tests/payroll/hours.test.ts",
+    "test:payroll-clock": "tsx tests/payroll/clock.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

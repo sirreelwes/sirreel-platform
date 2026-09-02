@@ -22,6 +22,97 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-01
+
+### Payroll v1 — the paper timesheet, keyed once and exported to ADP
+
+`(this commit)` schema + CA overtime math + /payroll grid + CSV export
+
+SirReel runs payroll through ADP TotalSource. The crew fills out a paper weekly
+timesheet (rows = employees, columns = Sat + Mon–Fri, Start/End per day) plus a
+separate paper "Over Time Hours" call-out sheet, and somebody transcribes the
+whole thing by hand. v1 replaces the transcription step, not the paper: an
+admin keys the verified numbers into a grid that mirrors the sheet, HQ does the
+California overtime math, and the result comes out as a CSV that gets keyed
+into ADP. **No ADP API and no auto-anything** — every v1 hour is typed by a
+human.
+
+**The roster is NOT forked.** `Employee` (`hr_employees`) was already the
+payroll/HR identity; a second `PayrollEmployee` table would have guaranteed two
+lists of the same nine people drifting apart. `PayrollProfile` hangs the
+payroll-only facts off that one row (`onPayroll`, and `hourlyRate` which v1
+never renders — the route that feeds every payroll screen cannot return it),
+and `TimeEntry` points straight at `Employee`. Hugo Servin and Julian Ponce were
+already on the roster and were LINKED, not duplicated; the other seven crew are
+new rows in the same table.
+
+**Overtime is per workweek, and the tests are the spec.** `src/lib/payroll/
+hours.ts` is pure and offline; `npm run test:payroll` covers both failure
+directions because they are asymmetric — under-reporting OT is a wage claim
+with California penalties attached, over-reporting is money out the door on
+hours nobody worked. The rules that a "simplification" would get wrong:
+
+- **Sat–Fri weeks, never averaged.** 50 hours then 30 is 16 hours of OT; a
+  period-wide 40/wk average reports zero. The pay period boundary and the
+  workweek boundary have to line up or the 40-hour test straddles two weeks.
+- **The daily and weekly tests take the max, they do not add.** Five 10-hour
+  days is 10 hours of OT, not 20.
+- **No lunch deduction at or under a 6-hour span.** The paper sheet assumes 30
+  unpaid minutes on every row; on a short day no meal was taken and deducting
+  one steals half an hour.
+- **Sick and PTO are paid but are not hours worked** — they never push anyone
+  into overtime. The meal premium is 1.0 hour of PAY on its own line, same
+  treatment. `adjHrs` IS hours worked, because that is what an adjustment means.
+- **The 7th-consecutive-day rule is deliberately NOT implemented** and is
+  flagged in the file rather than approximated.
+
+**Punches are instants, not clock strings.** Crew shoots run past midnight:
+"in 14:00, out 02:00" is a 12-hour day, and letting `outAt` land on the next
+calendar day is the only way to say that without a wrap-around guess. `date`
+stays the day the shift STARTED, matching the paper column. `src/lib/payroll/
+clock.ts` is the only place clock times and instants meet, it asks Intl for the
+real Pacific offset per date rather than assuming −7 or −8, and
+`npm run test:payroll-clock` pins both DST Sundays. No `getHours()` appears
+anywhere in the payroll code.
+
+**One function computes, everything reads it.** `loadPeriodGrid` feeds the
+screen and the CSV, so what an admin locks and what ADP receives cannot
+disagree. The client never does the math. Cell edits save one at a time on blur
+and the response IS the recomputed grid — the weekly Reg/OT/DT update as you
+type, which is how you catch a mistyped out-time.
+
+**Downloading IS the export.** The EXPORTED stamp goes on as the file is handed
+over, not behind a separate button: a period marked exported that nobody
+downloaded, and a file in ADP that HQ still calls merely LOCKED, are both worse
+than a status that follows the file. Reopening an exported period needs an
+explicit confirm and deliberately KEEPS the export stamp — "exported the 3rd,
+reopened the 5th" is the fact you need when ADP and HQ disagree.
+
+Gated by `src/lib/payroll/allowlist.ts` (Wes + Dani), a code-reviewed constant
+and a SEPARATE list from HR's on purpose — personnel files and compensation are
+different grants, so an outside investigator added to `HR_ALLOWLIST` does not
+get the payroll grid. The pure predicate lives apart from the server gate so
+`permissions.ts` can hide the nav row without dragging next-auth into the
+client bundle. Every route enforces it, reads included.
+
+Seeded: the 9 crew + a DRAFT Aug 15–28 2026 period (two Sat–Fri weeks) with
+**no** TimeEntry rows. The grid is sparse by design — a day with no row renders
+as a blank cell, which is what an unkeyed day should look like; pre-creating
+126 zero rows would make every cell read "0.00" and put 126 all-zero lines in
+front of the exceptions strip. `scripts/seed-payroll-roster.ts` is idempotent
+(matches on both the HR and the paper-sheet spelling) and journals every id it
+creates to `tmp/`.
+
+Phase 2 (employee self-punch PWA, photo-OCR of the sheets) is NOT built.
+`TimeEntry.source` is the seam it slots into — a punch writes `APP`, an OCR
+ingest writes `OCR`, and nothing about the grid or the math has to change.
+
+**Open for Wes:** the paper sheet writes names "Lastname Firstname" (Arceo
+Salvador, Pineda Oscar); the HR roster writes "Firstname Lastname". Crew were
+stored the HR way so the two rosters match. **"Franky Blom" fits neither
+pattern and was stored verbatim** — if that is backwards, fix `fullName` on the
+Employee row; nothing else depends on it.
+
 ## 2026-08-31
 
 ### `write-off-approver` — the last email gate that needed a deploy to change

@@ -6206,6 +6206,11 @@ model Employee {
   hrMail        HrMail[]
   hrAttachments HrAttachment[]
 
+  // Payroll v1. The roster is NOT forked — this row IS the payroll
+  // identity; PayrollProfile carries the payroll-only fields.
+  payrollProfile PayrollProfile?
+  timeEntries    TimeEntry[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -7306,4 +7311,153 @@ model ClientDetailReply {
   @@index([bookingId])
   @@index([status])
   @@map("sr_client_detail_replies")
+}
+
+// ---------------------------------------------------------------------------
+// PAYROLL v1 (2026-09-01)
+//
+// SirReel runs payroll through ADP TotalSource (a PEO). The crew fills out a
+// paper weekly timesheet — rows are employees, columns are Sat + Mon–Fri with
+// a Start/End per day — plus a separate paper "Over Time Hours" call-out
+// sheet. v1 replaces the transcription step: an admin keys the verified paper
+// numbers into a grid that mirrors the sheet, HQ does the California overtime
+// math, and the result exports as a CSV that gets keyed into ADP. There is no
+// ADP API here and no automatic anything — every v1 hour is typed by a human.
+//
+// THE ROSTER IS NOT FORKED. Employee (hr_employees) is already the payroll/HR
+// identity for this company; a second "PayrollEmployee" table would guarantee
+// two lists of the same nine people drifting apart. PayrollProfile hangs the
+// payroll-only facts (hourly rate, whether they're on the timesheet at all)
+// off that one row, and TimeEntry points straight at Employee.
+//
+// PHASE 2 SLOTS IN HERE. Employee self-punch from a mobile PWA and photo-OCR
+// of the paper sheets are both deferred, but TimeEntry.source is the seam:
+// a punch writes APP, an OCR ingest writes OCR, and the admin grid keeps
+// writing MANUAL. Nothing about the grid or the math needs to change when
+// they land — the exceptions strip is already the place a low-confidence OCR
+// row would surface.
+// ---------------------------------------------------------------------------
+
+enum PayPeriodStatus {
+  DRAFT // admin is still keying / correcting. The only writable state.
+  LOCKED // numbers agreed; grid is read-only. Reversible (unlock).
+  EXPORTED // CSV has been pulled for ADP. Terminal in v1.
+}
+
+/// How a TimeEntry's numbers got here. v1 only ever writes MANUAL (admin
+/// typing) and PAPER (admin transcribing a specific paper sheet). APP and OCR
+/// exist so the Phase 2 writers have a value to claim without a schema change
+/// — and so "who entered this" stays answerable once they do.
+enum TimeEntrySource {
+  MANUAL
+  PAPER
+  APP
+  OCR
+}
+
+/// Payroll-only facts about an Employee. Separate from Employee so the HR
+/// roster row stays the identity and this stays the payroll opinion of it.
+///
+/// hourlyRate is stored for Phase 2 (gross-pay preview, variance checks) and
+/// is deliberately NOT rendered anywhere in the v1 UI — no column, no export
+/// field, no API select outside an explicit rate-bearing caller. The v1
+/// deliverable is HOURS; ADP holds the rates and does the money.
+model PayrollProfile {
+  id         String   @id @default(uuid())
+  employeeId String   @unique @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// Whether this person appears as a row in the timesheet grid. Distinct
+  /// from Employee.isActive: salaried office staff are active employees who
+  /// do not punch a clock.
+  onPayroll Boolean @default(true) @map("on_payroll")
+
+  hourlyRate Decimal? @map("hourly_rate") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_profiles")
+}
+
+/// A pay period. SirReel's is two Sat–Fri workweeks — which matters for more
+/// than display: California overtime is computed PER WORKWEEK, so the period
+/// boundary and the workweek boundary have to line up or the 40-hour test
+/// straddles two weeks and under-reports OT.
+model PayPeriod {
+  id        String          @id @default(uuid())
+  startDate DateTime        @map("start_date") @db.Date
+  endDate   DateTime        @map("end_date") @db.Date
+  status    PayPeriodStatus @default(DRAFT)
+
+  note String? @db.Text
+
+  lockedAt     DateTime? @map("locked_at")
+  lockedById   String?   @map("locked_by_id")
+  exportedAt   DateTime? @map("exported_at")
+  exportedById String?   @map("exported_by_id")
+
+  entries TimeEntry[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([startDate, endDate])
+  @@index([status])
+  @@map("payroll_pay_periods")
+}
+
+/// One employee-day. Sparse by design — a day nobody worked has no row, so
+/// the grid renders empty cells rather than nine rows of zeros per day.
+///
+/// inAt/outAt are INSTANTS, not clock strings, and that is deliberate: crew
+/// shoots run past midnight. "In 14:00, out 02:00" is a 12-hour day, and the
+/// only way to say that without a wrap-around guess is to let outAt land on
+/// the following calendar day. `date` stays the day the shift STARTED — it is
+/// what the paper sheet's column means and what the workweek buckets on.
+model TimeEntry {
+  id String @id @default(uuid())
+
+  payPeriodId String    @map("pay_period_id")
+  payPeriod   PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// The workday this row belongs to. Calendar date — store/read as UTC
+  /// midnight and format with the calendarDate helpers, never bare
+  /// toLocaleDateString.
+  date DateTime @db.Date
+
+  inAt  DateTime? @map("in_at")
+  outAt DateTime? @map("out_at")
+
+  /// Unpaid meal break, minutes. Defaults to the 30 the paper sheet assumes.
+  /// Not applied to spans of 6h or less — see src/lib/payroll/hours.ts.
+  lunchMin Int @default(30) @map("lunch_min")
+
+  sickHrs Decimal @default(0) @map("sick_hrs") @db.Decimal(6, 2)
+  ptoHrs  Decimal @default(0) @map("pto_hrs") @db.Decimal(6, 2)
+
+  /// Signed correction, in hours. Can be negative. Always paired with a note
+  /// in practice; the exceptions strip surfaces every nonzero one so a silent
+  /// adjustment is not possible.
+  adjHrs Decimal @default(0) @map("adj_hrs") @db.Decimal(6, 2)
+
+  /// California meal-period premium: one hour of PAY owed when a meal break
+  /// was missed or late. It is NOT time worked — it never enters the OT math
+  /// and rides its own column out to ADP.
+  mealPremium Boolean @default(false) @map("meal_premium")
+
+  note   String?         @db.Text
+  source TimeEntrySource @default(MANUAL)
+
+  enteredById String?  @map("entered_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([employeeId, date, payPeriodId])
+  @@index([payPeriodId])
+  @@index([employeeId])
+  @@map("payroll_time_entries")
 }
