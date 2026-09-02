@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { syncRwInvoices } from '@/lib/rentalworks/syncInvoices'
 import { syncRwQuotes } from '@/lib/rentalworks/syncQuotes'
 import { reportRwSyncFailure } from '@/lib/rentalworks/syncAlert'
+import { isRwAuthError } from '@/lib/rentalworks/rwClient'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -29,7 +30,13 @@ export async function GET(req: NextRequest) {
     // queue BEFORE their first invoice. Deliberately non-fatal: the
     // invoice mirror is the money-critical product; a quote-endpoint
     // hiccup must never 502 the cron or block the invoice pull.
-    const quotes = await syncRwQuotes().catch((e) => ({ ok: false as const, pulled: 0, pages: 0, error: String(e) }))
+    // Non-fatal EXCEPT for a dead credential: a quote-endpoint hiccup must
+    // not 502 the cron, but folding RwAuthError in here would re-create
+    // the exact swallow this goal removed one layer down.
+    const quotes = await syncRwQuotes().catch((e) => {
+      if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') throw e
+      return { ok: false as const, pulled: 0, pages: 0, error: String(e) }
+    })
     if (!quotes.ok) console.error('[rw-quote-sync cron] failed (non-fatal):', quotes.error)
     // No "expiring soon" warning: it was derived from the token's `exp`
     // claim, which RentalWorks does not enforce, so it fired on every run
@@ -68,7 +75,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result }, { status: 502 })
   }
   // Quotes ride along — non-fatal (see the cron branch).
-  const quotes = await syncRwQuotes().catch((e) => ({ ok: false as const, pulled: 0, pages: 0, error: String(e) }))
+  // Non-fatal EXCEPT for a dead credential: a quote-endpoint hiccup must
+  // not 502 the cron, but folding RwAuthError in here would re-create
+  // the exact swallow this goal removed one layer down.
+  const quotes = await syncRwQuotes().catch((e) => {
+    if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') throw e
+    return { ok: false as const, pulled: 0, pages: 0, error: String(e) }
+  })
   if (!quotes.ok) console.error('[rw-quote-sync] failed (non-fatal):', quotes.error)
   return NextResponse.json({ ...result, quotes })
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { lookupRwOrderByNumber, warmRwOrderRefsInBackground } from '@/lib/rentalworks/orderRef'
 import { prisma } from '@/lib/prisma'
+import { readRwToken } from '@/lib/rentalworks/credential'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,8 +77,13 @@ export async function GET(_req: NextRequest, { params }: { params: { number: str
   // Live header — the mirror copy is the fallback when RW is down.
   let live: Record<string, unknown> | null = null
   try {
+    // Stored credential, but not rwFetch: same per-record-GET caveat as the
+    // invoice PDF route. RW rejects single-record reads for a bearer its
+    // browse endpoints accept, and this call already degrades to the mirror.
+    // Letting that stamp the credential EXPIRED would redden the meter on a
+    // healthy token.
     const res = await fetch(`https://sirreel.rentalworks.cloud/api/v1/order/${ref.rwOrderId}`, {
-      headers: { Authorization: `Bearer ${process.env.RENTALWORKS_TOKEN ?? ''}`, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${(await readRwToken()) ?? ''}`, Accept: 'application/json' },
     })
     if (res.ok) live = (await res.json()) as Record<string, unknown>
   } catch {

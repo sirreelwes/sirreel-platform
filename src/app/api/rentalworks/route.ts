@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
-
-const BASE_URL = "https://sirreel.rentalworks.cloud"
-const TOKEN = process.env.RENTALWORKS_TOKEN || ""
+import { rwFetch } from "@/lib/rentalworks/rwClient"
 
 async function rwPost(path: string, body: object = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  // rwFetch raises RwAuthError on 401/403 — this route no longer decides
+  // for itself what a rejected token means.
+  const res = await rwFetch(path, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${TOKEN}`,
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -28,7 +24,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   try {
-    if (!TOKEN) return NextResponse.json({ error: "RENTALWORKS_TOKEN not set" }, { status: 500 })
     const { searchParams } = new URL(req.url)
     const page = parseInt(searchParams.get("page") || "1")
     const pageSize = parseInt(searchParams.get("pageSize") || "25")

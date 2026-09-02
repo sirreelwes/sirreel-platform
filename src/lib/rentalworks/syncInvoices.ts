@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { runSpendRollup } from '@/lib/crm/spendRollup'
+import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
 
 /**
  * Bulk-pull RentalWorks invoices into the HQ mirror (sr_rw_invoices).
@@ -17,7 +18,6 @@ import { runSpendRollup } from '@/lib/crm/spendRollup'
  * the mirror.
  */
 
-const BASE_URL = 'https://sirreel.rentalworks.cloud'
 const PAGE_SIZE = 200
 const MAX_PAGES = 60 // 12k invoices — generous backstop against a runaway loop
 
@@ -71,8 +71,9 @@ function date(v: unknown): Date | null {
  */
 
 export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
-  const token = process.env.RENTALWORKS_TOKEN
-  if (!token) return { ok: false, pulled: 0, pages: 0, error: 'RENTALWORKS_TOKEN not set' }
+  // No token read here any more: rwFetch resolves the stored credential
+  // and raises RwNoCredentialError / RwAuthError, which this function
+  // deliberately lets through (see below).
 
   // NO pre-flight expiry check. There used to be one here, refusing to run
   // when the token's `exp` claim was in the past, on the reasonable-sounding
@@ -97,16 +98,16 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
   while (page <= MAX_PAGES) {
     let res: Response
     try {
-      res = await fetch(`${BASE_URL}/api/v1/invoice/browse`, {
+      res = await rwFetch('/api/v1/invoice/browse', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pageNo: page, pageSize: PAGE_SIZE, searchFields: [] }),
       })
     } catch (e) {
+      // An auth failure is NOT a network blip and must not be folded
+      // into {ok:false} for a caller to log and move past — that is the
+      // silent degradation this mirror suffered for 21 days. Rethrow.
+      if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') throw e
       return { ok: false, pulled: 0, pages: page - 1, error: `network: ${(e as Error).message}` }
     }
     if (!res.ok) {
@@ -118,11 +119,9 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
       // because "RW HTTP 401" in an inbox tells a reader nothing about what to
       // do next, and this alert is read by whoever is on call rather than by
       // whoever wrote it.
-      const actionable =
-        res.status === 401 || res.status === 403
-          ? `RentalWorks rejected the token (HTTP ${res.status}) — rotate it: docs/runbooks/rentalworks-token-rotation.md`
-          : `RW HTTP ${res.status}`
-      return { ok: false, pulled: 0, pages: page - 1, error: actionable }
+      // 401/403 cannot reach here any more — rwFetch raises RwAuthError
+      // before this line. What is left is a genuine RW-side failure.
+      return { ok: false, pulled: 0, pages: page - 1, error: `RW HTTP ${res.status}` }
     }
     const body = (await res.json().catch(() => ({}))) as BrowseResponse
     const ci = body.ColumnIndex

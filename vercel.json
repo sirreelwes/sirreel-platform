@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/daily-brief?edition=evening",
       "schedule": "0 0,1 * * *"
+    },
+    {
+      "path": "/api/cron/rw-token-check",
+      "schedule": "0 13,14 * * *"
     }
   ],
   "functions": {

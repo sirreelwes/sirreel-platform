@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
 
 /**
  * Bulk-pull RentalWorks QUOTES into the HQ mirror (sr_rw_quotes).
@@ -21,7 +22,6 @@ import { prisma } from '@/lib/prisma'
  * first; only a fully-successful pull replaces the table.
  */
 
-const BASE_URL = 'https://sirreel.rentalworks.cloud'
 const PAGE_SIZE = 200
 const MAX_PAGES = 40 // 8k quotes — backstop; ~2.8k exist as of 2026-08-22
 
@@ -75,8 +75,9 @@ function date(v: unknown): Date | null {
 }
 
 export async function syncRwQuotes(): Promise<RwQuoteSyncResult> {
-  const token = process.env.RENTALWORKS_TOKEN
-  if (!token) return { ok: false, pulled: 0, pages: 0, error: 'RENTALWORKS_TOKEN not set' }
+  // No token read here any more: rwFetch resolves the stored credential and
+  // raises RwNoCredentialError / RwAuthError, which this function lets
+  // through rather than folding into {ok:false}.
 
   const rows: Array<Record<string, unknown>> = []
   let page = 1
@@ -84,10 +85,11 @@ export async function syncRwQuotes(): Promise<RwQuoteSyncResult> {
   while (page <= MAX_PAGES) {
     let res: Response
     try {
-      res = await fetch(`${BASE_URL}/api/v1/quote?pageNo=${page}&pageSize=${PAGE_SIZE}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      })
+      res = await rwFetch(`/api/v1/quote?pageNo=${page}&pageSize=${PAGE_SIZE}`)
     } catch (e) {
+      // An auth failure is NOT a network blip — rethrow rather than fold
+      // it into {ok:false} for a caller to log and move past.
+      if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') throw e
       return { ok: false, pulled: 0, pages: page - 1, error: `network: ${(e as Error).message}` }
     }
     if (!res.ok) {

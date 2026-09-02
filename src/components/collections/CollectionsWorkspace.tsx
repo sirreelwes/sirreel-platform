@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { RwConnectionCard } from '@/components/collections/RwConnectionCard'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -603,6 +604,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           {result.message}
         </div>
       )}
+      {/* Is the mirror this page reads still being fed? Collections works off
+          the RentalWorks mirror, so a dead token is a collections problem —
+          it used to surface only as an invoice list that stopped growing. */}
+      <RwConnectionCard />
+
       {/* Dark text — this heading sits on the LIGHT dashboard shell, not in
           a card. It rendered text-white for months: an invisible title. */}
       <div className="flex items-baseline justify-between mb-6">

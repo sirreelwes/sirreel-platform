@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/lib/prisma'
 import { RwInvoiceDocument, type RwInvoiceDetail } from '@/lib/rentalworks/RwInvoiceDocument'
+import { readRwToken } from '@/lib/rentalworks/credential'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -29,7 +30,16 @@ export async function GET(_req: NextRequest, { params }: { params: { rwInvoiceId
     return NextResponse.json({ error: 'bad invoice id' }, { status: 400 })
   }
 
-  const token = process.env.RENTALWORKS_TOKEN
+  // Reads the stored credential like everything else, but deliberately does
+  // NOT go through rwFetch — the second and last sanctioned exception.
+  //
+  // RW answers 401/403 on the per-record invoice GET for a session bearer
+  // that list/browse endpoints accept (measured 2026-08-19, same token, same
+  // minutes). rwFetch would read that as a dead credential, stamp
+  // lastVerifyStatus='EXPIRED' and turn the /collections meter red on a
+  // token that is working perfectly. A meter that cries wolf is worse than
+  // no meter. The documented degrade-to-mirror below is preserved exactly.
+  const token = await readRwToken()
   if (!token) return NextResponse.json({ error: 'RentalWorks not configured' }, { status: 500 })
 
   let inv: RwInvoiceDetail | null = null

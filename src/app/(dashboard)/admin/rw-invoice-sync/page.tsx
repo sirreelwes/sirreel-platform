@@ -286,7 +286,6 @@ export default function RwInvoiceSyncPage() {
   // last night proves the token worked last night. Deriving it from the JWT
   // `exp` claim showed EXPIRED permanently, including on working tokens.
   const tokenTone: Tone = mirrorTone
-  const needsRotation = tokenTone !== 'ok'
   const showAffected = mirrorTone !== 'ok'
 
   return (
@@ -361,7 +360,7 @@ export default function RwInvoiceSyncPage() {
               ]}
             />
             <Card
-              label="RENTALWORKS_TOKEN"
+              label="RentalWorks token"
               tone={tokenTone}
               badge={mirrorTone === 'ok' ? 'WORKING' : 'UNVERIFIED'}
               rows={[
@@ -404,68 +403,24 @@ export default function RwInvoiceSyncPage() {
             </div>
           )}
 
+          {/* The hand-rotation runbook used to live here: copy the bearer out
+              of the RW web app, verify it with a script, `vercel env add
+              RENTALWORKS_TOKEN`, redeploy. All of it is gone because none of it
+              is true any more — HQ renews the token itself against /api/v1/jwt
+              and stores it encrypted, and the state of the connection is a
+              meter rather than a paragraph. Printing an env var name and a
+              rotation procedure next to a system that self-renews is how the
+              next person does the manual thing by mistake. */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-white mb-1">
-              {needsRotation ? 'Rotate the token' : 'Rotating the token'}
-            </h2>
-            <p className="text-xs text-zinc-500 mb-4">
-              About 10 minutes, and it has to be done by hand — RentalWorks has no
-              token-issuance UI and no auth API, so the token is the bearer its own web app uses.
-              Full procedure:{' '}
-              <code className="text-zinc-400">docs/runbooks/rentalworks-token-rotation.md</code>
+            <h2 className="text-sm font-semibold text-white mb-1">RentalWorks connection</h2>
+            <p className="text-xs text-zinc-500">
+              The token renews itself and its live state — verified, due, or down — is on the
+              RentalWorks card at{' '}
+              <a href="/collections" className="text-amber-400 hover:text-amber-300 underline">
+                Collections
+              </a>
+              , together with the manual paste for when automatic renewal cannot run.
             </p>
-
-            <ol className="text-xs text-zinc-400 space-y-3 list-decimal ml-4">
-              <li>
-                <span className="text-zinc-300">Copy the bearer from the RW web app.</span> Log into{' '}
-                <a
-                  href="https://sirreel.rentalworks.cloud/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-amber-500 hover:text-amber-400 underline"
-                >
-                  sirreel.rentalworks.cloud
-                </a>{' '}
-                with the admin account (1Password → &ldquo;RentalWorks Admin&rdquo;) and open any
-                module that loads data. Then DevTools → Network → Fetch/XHR → click a{' '}
-                <code>browse</code> request → Headers → Request Headers, and copy{' '}
-                <code>authorization</code> without the leading <code>Bearer </code>.
-                <div className="text-zinc-500 mt-1">
-                  There is no Generate-Token page — the whole Administrator menu was checked on
-                  2026-08-16 and has no API or Token entry. Clear the Network filter box first or
-                  the request list stays empty. Stay logged in until step 5 passes: the token is
-                  tied to that session. It is a bearer credential with full read/write access to
-                  the tenant, so do not save it to a file or paste it into chat.
-                </div>
-              </li>
-              <li>
-                <span className="text-zinc-300">Verify it before deploying.</span> One cheap API
-                call, and it never logs the token. Quote the value and do not type angle brackets —
-                an unquoted <code>&lt;</code> is shell redirection and fails with &ldquo;File name
-                too long&rdquo;:
-                <pre className="mt-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-300 overflow-x-auto">
-                  RENTALWORKS_TOKEN=&apos;eyJ…&apos; npx tsx scripts/verify-rw-token.ts
-                </pre>
-              </li>
-              <li>
-                <span className="text-zinc-300">Set it in Vercel production.</span>
-                <pre className="mt-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-300 overflow-x-auto">
-                  {'vercel env rm RENTALWORKS_TOKEN production\nvercel env add RENTALWORKS_TOKEN production'}
-                </pre>
-                <div className="text-zinc-500 mt-1">Choose Production only, not Preview or Dev.</div>
-              </li>
-              <li>
-                <span className="text-zinc-300">Redeploy.</span> Env-var changes do not reach
-                running functions until a new deploy — push to <code>main</code> (an empty commit is
-                fine) and let the Vercel integration build it. Do not run{' '}
-                <code>vercel --prod</code>; it races the auto-deploy.
-              </li>
-              <li>
-                <span className="text-zinc-300">Come back here and hit Sync now.</span> A green
-                result is proof the new token works and the mirror is current again. Then set a
-                calendar reminder for 50 days out.
-              </li>
-            </ol>
           </div>
         </>
       )}

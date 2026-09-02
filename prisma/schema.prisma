@@ -7641,3 +7641,48 @@ model TimeEntry {
   @@index([employeeId])
   @@map("payroll_time_entries")
 }
+
+/// A credential HQ holds for a third-party integration.
+///
+/// Created 2026-09-02 for the RentalWorks JWT, which lived in the
+/// RENTALWORKS_TOKEN env var and was pasted in by hand. An env var cannot
+/// record who rotated it, when it was last known-good, or whether it is
+/// working right now — so an expired token degraded silently and the only
+/// way to find out was an import returning nothing.
+///
+/// The token is encrypted at rest (AES-256-GCM, key from RW_TOKEN_KEY) and
+/// is never returned to a client, never logged, and never written to an
+/// audit row.
+model IntegrationCredential {
+  id       String @id @default(uuid())
+  /// 'RENTALWORKS'. One live credential per provider.
+  provider String @unique
+
+  /// AES-256-GCM, stored as base64 "iv:authTag:ciphertext".
+  encryptedToken String @map("encrypted_token") @db.Text
+
+  /// When this token was minted or pasted. The YELLOW band is measured from
+  /// here (+45 days), NOT from the JWT's exp claim — see below.
+  lastRotatedAt DateTime? @map("last_rotated_at")
+
+  /// Last time the token was actually exercised against the provider, and
+  /// what happened. Status is driven by THIS, never by a claim in the token.
+  lastVerifiedAt   DateTime? @map("last_verified_at")
+  /// 'OK' | 'EXPIRED' | 'ERROR'
+  lastVerifyStatus String?   @map("last_verify_status")
+
+  /// The JWT's own `exp`, kept for the record only. RentalWorks (a Database
+  /// Works "FW" product) issues a COSMETIC ~300-second exp that it then
+  /// honors for weeks; the real cadence is ~50 days. Driving status off this
+  /// claim would paint the meter red five minutes after every rotation.
+  /// Informational. Never a status input.
+  jwtExpInformational DateTime? @map("jwt_exp_informational")
+
+  /// Who last changed it — a User id, or 'system' for an automatic rotation.
+  updatedBy String? @map("updated_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_credentials")
+}

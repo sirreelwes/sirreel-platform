@@ -1,29 +1,18 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
-
-const BASE_URL = "https://sirreel.rentalworks.cloud"
-const TOKEN = process.env.RENTALWORKS_TOKEN || ""
+import { rwFetch } from "@/lib/rentalworks/rwClient"
 
 async function rwGet(path: string) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      "Authorization": `Bearer ${TOKEN}`,
-      "Accept": "application/json",
-    },
-  })
+  const res = await rwFetch(path)
   if (!res.ok) return { error: `${res.status} ${res.statusText}` }
   return res.json()
 }
 
 async function rwPost(path: string, body: object = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await rwFetch(path, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${TOKEN}`,
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
   if (!res.ok) return { error: `${res.status} ${res.statusText}` }

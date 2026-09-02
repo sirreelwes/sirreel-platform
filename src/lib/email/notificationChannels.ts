@@ -36,6 +36,7 @@ export type NotificationChannelKey =
   | 'coi-team'
   | 'pickup-picklists'
   | 'daily-brief'
+  | 'rw-token'
   | 'hq-escalation-sales'
   | 'hq-escalation-fleet'
   | 'hq-escalation-warehouse'
@@ -86,6 +87,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'Receives the certificate itself when a client uploads a COI through the public COI link (in addition to HQ notifications).',
     defaults: () => ['rentals@sirreel.com'],
+  },
+  {
+    key: 'rw-token',
+    label: 'RentalWorks connection',
+    description:
+      'The RentalWorks token failed to renew, failed to verify, or has been red for a day. Renewing the credential is an admin job rather than a billing one, so this defaults to Wes alone — widen it here if someone else should be able to fix it.',
+    defaults: () => ['wes@sirreel.com'],
   },
   {
     key: 'daily-brief',

@@ -1,7 +1,10 @@
 /**
  * RentalWorks API client (read-only).
  *
- * Auth: Bearer JWT in env var RENTALWORKS_TOKEN.
+ * Auth: the stored IntegrationCredential, via rwClient. This file used to
+ * read process.env.RENTALWORKS_TOKEN itself and throw a generic Error on a
+ * 401; both now live in one place so a dead credential is one named
+ * exception (RwAuthError) rather than ten opinions.
  * Base URL: https://sirreel.rentalworks.cloud
  *
  * Two response shapes coexist in this API:
@@ -12,13 +15,7 @@
  *     PageNo, PageSize }. Used by /api/v1/item.
  */
 
-const BASE_URL = 'https://sirreel.rentalworks.cloud'
-
-function token(): string {
-  const t = process.env.RENTALWORKS_TOKEN
-  if (!t) throw new Error('RENTALWORKS_TOKEN env var not set')
-  return t
-}
+import { rwGetJson } from '@/lib/rentalworks/rwClient'
 
 interface ItemsResponse<T> {
   Items: T[]
@@ -72,16 +69,9 @@ export interface RwItem {
 }
 
 export async function rwGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token()}`,
-      Accept: 'application/json',
-    },
-  })
-  if (!res.ok) {
-    throw new Error(`RW GET ${path} → ${res.status} ${res.statusText}`)
-  }
-  return res.json() as Promise<T>
+  // Same contract as before for every non-auth failure; a 401/403 now
+  // raises RwAuthError instead of a string nobody can branch on.
+  return rwGetJson<T>(path)
 }
 
 /**

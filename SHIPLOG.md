@@ -22,6 +22,72 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-02
+
+### RentalWorks token: encrypted, self-renewing, and loud when it breaks
+
+`(pending)` IntegrationCredential + rwClient + /collections meter + 06:00 PT check
+
+The RW JWT lived in an env var, was pasted in by hand, and had no way to say
+whether it worked. An expired token surfaced as an invoice list that quietly
+stopped growing — Collections and Receivables kept serving balances from a
+mirror nobody was feeding. The upcoming invoice import made that a
+correctness problem rather than an annoyance.
+
+**Status is live verification, never the token's own claim.** RentalWorks (a
+Database Works "FW" product) stamps a cosmetic ~300-second `exp` and then
+honors the token for weeks; the real cadence is ~50 days. STEP 0 caught that
+the goal as written would have parsed `exp` into `expiresAt` and painted the
+meter red five minutes after every rotation, alerting daily and forever.
+Green/yellow/red now comes from `lastVerifyStatus` + `lastVerifiedAt`, yellow
+at `lastRotatedAt + 45d`. The exp claim is stored as
+`jwtExpInformational` and is never a status input.
+
+**It renews itself.** `POST /api/v1/jwt` with RW_USERNAME/RW_PASSWORD was
+already known (discovered 2026-08-20, used by scripts/rotate-rw-token.ts) but
+nothing in the app used it. The daily check verifies, and on failure attempts
+one automatic rotation before going red; it also rotates proactively at 45
+days so yellow is a safety net rather than a routine state. **/jwt answers
+HTTP 200 for bad credentials** — success is `access_token` present AND a
+non-error `statuscode`, never the HTTP status.
+
+**One client, one meaning for 401.** Ten call sites each read the env var and
+each decided for itself what a rejected token meant: a generic Error, an
+`{ok:false}` a caller could ignore, four API routes fetching RW directly. All
+now go through `rwClient`, which raises `RwAuthError` and stamps the
+credential EXPIRED on the spot. syncInvoices/syncQuotes rethrow it rather
+than folding it into `{ok:false}`.
+
+**Two deliberate exceptions, both documented in place.** The health check
+reads the stored credential but does NOT use rwFetch — its job is to report
+"down", and raising would 500 the monitor. The per-record invoice-PDF and
+order-by-number routes also opt out: RW rejects single-record GETs for a
+bearer its browse endpoints accept (measured 2026-08-19, same token, minutes
+apart), and letting that stamp EXPIRED would redden the meter on a healthy
+token. Both already degrade to the mirror; that behaviour is unchanged.
+
+**Alerting is a derived ActionItem, not a stored Alert row.** A stored alert
+needs someone to create exactly one, not recreate it tomorrow, and remember
+to close it — three chances to leave a stale "expired" on a working
+connection. The provider is a live read: always exactly one item, and it
+disappears when Verify goes green. ownerRole is [ADMIN] alone; renewing the
+credential is Wes's job even though Billing feels it. Email goes to the new
+`rw-token` notification channel (wes@sirreel.com), only when there is
+something to do.
+
+Encryption is AES-256-GCM (`src/lib/crypto/secretBox.ts`) — the first secret
+HQ actually holds; `ccCardNumberEncrypted` is a CardSecure token issued by
+CardPointe, so we never needed a cipher before. Key is `RW_TOKEN_KEY`. A
+deployment holding the row but not the key falls back to the env var and logs
+loudly rather than taking RW down.
+
+**Tech debt flagged, deliberately untouched:** `/dashboard` still picks its
+view by matching the signed-in user's NAME against a hardcoded
+`COLLECTIONS_USERS` list and reads the role from
+`localStorage.getItem('sirreel_demo_role')` — which CLAUDE.md forbids. The new
+card and its routes use `getServerSession` instead and do not depend on it,
+but that mechanism still gates a real page and should be replaced.
+
 ## 2026-09-01
 
 ### Payroll v1 — the paper timesheet, keyed once and exported to ADP

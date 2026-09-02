@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { rwFetch } from '@/lib/rentalworks/rwClient'
 
 /**
  * RW order NUMBER → internal OrderId resolution, with header caching.
@@ -20,7 +21,6 @@ import { prisma } from '@/lib/prisma'
  * 2026-08-22).
  */
 
-const BASE_URL = 'https://sirreel.rentalworks.cloud'
 const PAGE_SIZE = 500
 const MAX_PAGES = 40 // 20k orders — generous backstop
 
@@ -40,22 +40,12 @@ export interface RwOrderRefRow {
   orderDate: Date | null
 }
 
-function token(): string {
-  const t = process.env.RENTALWORKS_TOKEN
-  if (!t) throw new Error('RENTALWORKS_TOKEN env var not set')
-  return t
-}
-
 async function scanAllOrders(): Promise<RwOrderRefRow[]> {
   const out: RwOrderRefRow[] = []
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const res = await fetch(`${BASE_URL}/api/v1/order/browse`, {
+    const res = await rwFetch('/api/v1/order/browse', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token()}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pageNo: page, pageSize: PAGE_SIZE }),
     })
     if (!res.ok) throw new Error(`order/browse p${page} → ${res.status}`)

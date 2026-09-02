@@ -54,12 +54,14 @@ import { paymentInfoProvider } from '@/lib/actionItems/providers/paymentInfo'
 import { coiMissingProvider } from '@/lib/actionItems/providers/coiMissing'
 import { quoteAgingProvider } from '@/lib/actionItems/providers/quoteAging'
 import { inquiryUntouchedProvider } from '@/lib/actionItems/providers/inquiryUntouched'
+import { rwTokenProvider } from '@/lib/actionItems/providers/rwToken'
 
 const PROVIDERS: ActionItemProvider[] = [
   paymentInfoProvider,
   coiMissingProvider,
   quoteAgingProvider,
   inquiryUntouchedProvider,
+  rwTokenProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

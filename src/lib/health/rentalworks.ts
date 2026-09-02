@@ -1,4 +1,5 @@
 import type { RentalWorksHealth } from './types'
+import { readRwToken } from '@/lib/rentalworks/credential'
 
 const PING_URL = 'https://sirreel.rentalworks.cloud/api/v1/item?pageNo=1&pageSize=1'
 /** Raised from 8s: RW answered in 356ms when healthy but blew an 8s budget on
@@ -35,11 +36,17 @@ const TIMEOUT_MS = 15000
  * policy change in the cron affecting all six services, not here.
  */
 export async function checkRentalWorks(): Promise<RentalWorksHealth> {
-  const token = process.env.RENTALWORKS_TOKEN
+  // Deliberately NOT rwFetch, and the one sanctioned exception to "all RW
+  // calls go through rwClient". This function's entire job is to REPORT a
+  // dead credential; if it raised RwAuthError the health endpoint would 500
+  // instead of answering "down", which is the opposite of what a monitor is
+  // for. It reads the same stored credential as everything else — only the
+  // reaction differs.
+  const token = await readRwToken()
   if (!token) {
     return {
       status: 'down',
-      error: 'RENTALWORKS_TOKEN is unset',
+      error: 'No RentalWorks token is configured',
       lastChecked: new Date().toISOString(),
     }
   }
