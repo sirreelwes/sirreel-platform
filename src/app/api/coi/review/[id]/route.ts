@@ -10,6 +10,7 @@ import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiUploadUrl } from '@/lib/portal/portalUrl'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { renderEmailShell, renderEmailText, p as emailP, detailTable } from '@/lib/email/templates/shell'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -298,6 +299,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     policyExpiryDate?: unknown
     to?: unknown
     message?: unknown
+    notifyTo?: unknown
   }
   const action = typeof body.action === 'string' ? body.action : 'DECIDE'
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) || null : null
@@ -408,6 +410,68 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
+  // Tell the client their certificate cleared. The desk asked for a fix and
+  // asked for a correction, but approval — the outcome the client is
+  // actually waiting on — told them nothing at all (Wes 2026-09-02).
+  //
+  // Deliberately AFTER the update and best-effort: the decision is the act
+  // here, unlike REQUEST_FIX where the email IS the act. A send failure must
+  // never leave a certificate the reviewer approved sitting un-approved, so
+  // the outcome is reported back rather than thrown.
+  let notified: { ok: boolean; to: string | null; reason?: string } = { ok: false, to: null }
+  const notifyTo = typeof body.notifyTo === 'string' ? body.notifyTo.trim() : ''
+  if (decision === 'APPROVED' && notifyTo) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(notifyTo)) {
+      notified = { ok: false, to: notifyTo, reason: 'not a valid email address' }
+    } else {
+      const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
+      const rows: Array<{ label: string; value: string }> = []
+      if (jobLabel) rows.push({ label: 'Job', value: jobLabel })
+      if (existing.namedInsured) rows.push({ label: 'Named insured', value: existing.namedInsured })
+      const expiry = policyExpiryDate !== undefined ? policyExpiryDate : existing.policyExpiryDate
+      if (expiry) {
+        rows.push({
+          label: 'Policy expires',
+          value: new Date(expiry).toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+          }),
+        })
+      }
+      const bodyHtml =
+        emailP('Your certificate of insurance has been reviewed and <strong>approved</strong>. It is on file for this job &mdash; there is nothing further you need to send.') +
+        (rows.length ? detailTable(rows) : '') +
+        emailP('If anything on the policy changes before the rental, reply to this email and we will get the updated certificate on file.')
+      const sent = await sendAgreementEmail({
+        to: [notifyTo],
+        // The reviewer read the certificate and can answer a broker's
+        // question about it; notifications@ cannot.
+        replyTo: session.user.email,
+        subject: jobLabel
+          ? `Certificate of insurance approved — ${jobLabel}`
+          : 'Certificate of insurance approved',
+        label: 'coi-approved',
+        html: renderEmailShell({
+          eyebrow: 'Insurance',
+          heading: 'Your certificate is approved',
+          preheader: 'Your certificate of insurance has been approved and is on file.',
+          bodyHtml,
+        }),
+        text: renderEmailText([
+          'YOUR CERTIFICATE IS APPROVED',
+          '',
+          'Your certificate of insurance has been reviewed and approved. It is on file for this job - there is nothing further you need to send.',
+          '',
+          ...rows.map((r) => `${r.label}: ${r.value}`),
+          '',
+          'If anything on the policy changes before the rental, reply to this email and we will get the updated certificate on file.',
+        ]),
+      })
+      notified = sent.ok
+        ? { ok: true, to: notifyTo }
+        : { ok: false, to: notifyTo, reason: sent.reason || 'send failed' }
+    }
+  }
+
   // A COI decision can complete (or break) the paperwork set, so the
   // holds' firmness is re-decided here (Wes 2026-09-01). Non-fatal.
   if (existing.job?.id) {
@@ -422,5 +486,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const fresh = await loadCoi(id)
-  return NextResponse.json({ ok: true, coi: serialize(fresh!) })
+  return NextResponse.json({ ok: true, coi: serialize(fresh!), notified })
 }

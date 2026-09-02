@@ -168,11 +168,18 @@ export function CoiReviewModal({
   coiId,
   onClose,
   onChanged,
+  onDecided,
 }: {
   coiId: string;
   onClose: () => void;
   /** Fired after any mutation so the parent can reload its own view. */
   onChanged?: () => void;
+  /**
+   * Fired once the certificate is approved and this modal is closing, with
+   * the line to show the reviewer on the page behind — including whether
+   * the client actually got told.
+   */
+  onDecided?: (message: string) => void;
 }) {
   const [data, setData] = useState<CoiReviewData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,6 +187,14 @@ export function CoiReviewModal({
   // second modal — the reviewer is reading the certificate on the left while
   // they write. Named ask* because fix* already belongs to the
   // fix-the-production-company sub-flow below.
+  // Approve is a two-step: the first click opens a confirm strip naming the
+  // person who gets told. Before this, Approve wrote the decision and left
+  // the reviewer staring at the same review screen — it read as "it bounced
+  // me back and asked again" when in fact the row was already APPROVED
+  // (Wes 2026-09-02).
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [notifyClient, setNotifyClient] = useState(true);
+  const [notifyTo, setNotifyTo] = useState('');
   const [askOpen, setAskOpen] = useState(false);
   const [askTo, setAskTo] = useState('');
   const [askMsg, setAskMsg] = useState('');
@@ -205,6 +220,7 @@ export function CoiReviewModal({
       setAskOpen((open) => {
         if (!open) {
           setAskTo(d.contacts[0]?.email || '');
+          setNotifyTo(d.contacts[0]?.email || '');
           setAskMsg(d.fixDraft?.message || '');
         }
         return open;
@@ -229,7 +245,10 @@ export function CoiReviewModal({
     };
   }, [coiId, apply]);
 
-  const post = async (bodyIn: Record<string, unknown>, label: string) => {
+  const post = async (bodyIn: Record<string, unknown>, label: string) =>
+    (await postRaw(bodyIn, label))?.coi ?? null;
+
+  const postRaw = async (bodyIn: Record<string, unknown>, label: string) => {
     setBusy(label);
     setError(null);
     setFlash(null);
@@ -246,7 +265,7 @@ export function CoiReviewModal({
       }
       apply(d.coi);
       onChanged?.();
-      return d.coi as CoiReviewData;
+      return d as { coi: CoiReviewData; notified?: { ok: boolean; to: string | null; reason?: string } };
     } catch {
       setError('That did not go through.');
       return null;
@@ -255,17 +274,35 @@ export function CoiReviewModal({
     }
   };
 
-  const decide = async (decision: 'APPROVED' | 'REJECTED' | 'PENDING') => {
-    const d = await post({ decision, note, policyExpiryDate: expiry }, decision);
-    if (d) {
-      setFlash(
-        decision === 'APPROVED'
-          ? 'Approved — the job now reads Verified.'
-          : decision === 'REJECTED'
-            ? 'Rejected. The client needs a corrected certificate.'
-            : 'Moved back to pending.',
+  const decide = async (
+    decision: 'APPROVED' | 'REJECTED' | 'PENDING',
+    opts?: { notify?: string },
+  ) => {
+    const res = await postRaw(
+      { decision, note, policyExpiryDate: expiry, ...(opts?.notify ? { notifyTo: opts.notify } : {}) },
+      decision,
+    );
+    if (!res) return;
+    if (decision === 'APPROVED') {
+      // Nothing is left to do on an approved certificate, so leave rather
+      // than re-presenting the review. The parent already reloaded via
+      // onChanged, so the job behind this reads Verified on the way out.
+      const n = res.notified;
+      onDecided?.(
+        n?.ok
+          ? `Certificate approved — ${n.to} was told.`
+          : n?.to
+            ? `Certificate approved, but the note to ${n.to} did not send (${n.reason ?? 'unknown error'}). Let them know directly.`
+            : 'Certificate approved.',
       );
+      onClose();
+      return;
     }
+    setFlash(
+      decision === 'REJECTED'
+        ? 'Rejected. The client needs a corrected certificate.'
+        : 'Moved back to pending.',
+    );
   };
 
   const requestFix = async () => {
@@ -609,13 +646,64 @@ export function CoiReviewModal({
                   </button>
                 )}
 
+                {confirmApprove && (
+                  <div className="rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 space-y-2.5">
+                    <div className="text-[13px] font-semibold text-emerald-200">
+                      Approve this certificate?
+                    </div>
+                    <div className="text-[12px] text-zinc-400 leading-relaxed">
+                      It goes on file as verified coverage and the job reads Verified.
+                    </div>
+                    <label className="flex items-start gap-2 text-[12px] text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={notifyClient}
+                        onChange={(e) => setNotifyClient(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>Email the client that it&rsquo;s approved</span>
+                    </label>
+                    {notifyClient && (
+                      <input
+                        type="email"
+                        value={notifyTo}
+                        onChange={(e) => setNotifyTo(e.target.value)}
+                        placeholder="client@example.com"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[12px] text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+                      />
+                    )}
+                    <div className="flex gap-2 pt-0.5">
+                      <button
+                        onClick={() =>
+                          decide('APPROVED', notifyClient ? { notify: notifyTo.trim() } : undefined)
+                        }
+                        disabled={!!busy || (notifyClient && !notifyTo.trim())}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
+                      >
+                        {busy === 'APPROVED'
+                          ? 'Approving…'
+                          : notifyClient
+                            ? 'Approve & notify'
+                            : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmApprove(false)}
+                        disabled={!!busy}
+                        className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-[13px] font-semibold rounded-lg px-3 py-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button
-                    onClick={() => decide('APPROVED')}
-                    disabled={!!busy}
+                    onClick={() => setConfirmApprove(true)}
+                    disabled={!!busy || confirmApprove}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
                   >
-                    {busy === 'APPROVED' ? 'Saving…' : 'Approve'}
+                    Approve
                   </button>
                   <button
                     onClick={() => decide('REJECTED')}

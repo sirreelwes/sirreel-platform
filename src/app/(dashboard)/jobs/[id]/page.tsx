@@ -2818,6 +2818,10 @@ const driverTone = (d: any): string => {
           coiId={reviewCoiId}
           onClose={() => setReviewCoiId(null)}
           onChanged={load}
+          // Approving closes the modal, so the outcome — including whether
+          // the client's note actually sent — has to land out here or it is
+          // lost with the modal.
+          onDecided={(msg) => flashToast(msg)}
         />
       )}
       {coiModalOpen && (
