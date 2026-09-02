@@ -14,6 +14,14 @@ import { useCallback, useEffect, useState } from 'react'
  * before the document exists, and blocking on the file would push people back
  * to email — which is the behaviour this replaces.
  *
+ * When the job is linked to an RW order, the RW invoice is PICKED rather than
+ * typed. The old free-text "RW invoice #" wrote only `invoiceNumber`, so
+ * `rwInvoiceId` was never set from anywhere in the app — the job page's Final
+ * Invoice tile read "uploaded" on invoices taken straight off RentalWorks, and
+ * collections lost the mirror-balance hint and the double-charge guard it
+ * shares with the RW-invoice list. Typing still works (and the server still
+ * tries to match it); the picker is just the path that can't miss.
+ *
  * Interim: when billing moves into HQ this becomes a "finalize" button next
  * to the HQ invoice and the upload disappears.
  */
@@ -28,6 +36,17 @@ interface FinalInvoice {
   uploadedAt: string
 }
 
+/** An invoice on an RW order linked to this job, from /api/jobs/[id]/rw-orders. */
+interface RwInvoice {
+  rwInvoiceId: string
+  invoiceNumber: string | null
+  invoiceTotal: number
+  remainingTotal: number
+}
+
+/** Sentinel for "the number I have isn't in that list" — reveals the text field. */
+const MANUAL = '__manual__'
+
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
 export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
@@ -35,6 +54,9 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [rwInvoices, setRwInvoices] = useState<RwInvoice[]>([])
+  const [rwLoaded, setRwLoaded] = useState(false)
+  const [rwPick, setRwPick] = useState('')
   const [note, setNote] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -53,6 +75,31 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
     load()
   }, [load])
 
+  // The job's RW invoices, for the picker. Empty whenever no RW order is
+  // linked, which is the common case — the panel falls back to typing.
+  //
+  // Deferred until the form is opened. /rw-orders scores every candidate
+  // order for the client, and JobRwBillingPanel already calls it on this same
+  // page — fetching it again on mount would double that work on every job
+  // view to populate a control almost nobody opens.
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    fetch(`/api/jobs/${jobId}/rw-orders`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { invoices?: RwInvoice[] } | null) => {
+        if (!live) return
+        if (d?.invoices) setRwInvoices(d.invoices)
+        setRwLoaded(true)
+      })
+      .catch(() => {
+        if (live) setRwLoaded(true)
+      })
+    return () => {
+      live = false
+    }
+  }, [jobId, open])
+
   async function submit() {
     const n = Number(amount)
     if (!Number.isFinite(n) || n <= 0) {
@@ -62,9 +109,19 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
     setBusy(true)
     setMsg(null)
     try {
+      const picked = rwPick && rwPick !== MANUAL
+        ? rwInvoices.find((i) => i.rwInvoiceId === rwPick)
+        : undefined
       const fd = new FormData()
       fd.append('amount', String(n))
-      if (invoiceNumber) fd.append('invoiceNumber', invoiceNumber)
+      // A picked invoice carries its own number; the server re-verifies the id
+      // either way and stores null if it doesn't check out.
+      if (picked) {
+        fd.append('rwInvoiceId', picked.rwInvoiceId)
+        if (picked.invoiceNumber) fd.append('invoiceNumber', picked.invoiceNumber)
+      } else if (invoiceNumber) {
+        fd.append('invoiceNumber', invoiceNumber)
+      }
       if (note) fd.append('note', note)
       if (file) fd.append('file', file)
       const r = await fetch(`/api/jobs/${jobId}/final-invoice`, { method: 'POST', body: fd })
@@ -73,6 +130,7 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
       if (d.ok) {
         setAmount('')
         setInvoiceNumber('')
+        setRwPick('')
         setNote('')
         setFile(null)
         setFileError(null)
@@ -127,15 +185,57 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block">
-              RW invoice # (optional)
+            <label
+              htmlFor="final-invoice-rw"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block"
+            >
+              RW invoice (optional)
             </label>
-            <input
-              className={input}
-              placeholder="e.g. 404105"
-              value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)}
-            />
+            {rwInvoices.length > 0 && (
+              <select
+                id="final-invoice-rw"
+                className={`${input} mb-2`}
+                value={rwPick}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setRwPick(v)
+                  // Leaving the manual option hides the text field; keeping
+                  // its value would submit a number nobody can see.
+                  if (v !== MANUAL) setInvoiceNumber('')
+                  const hit = rwInvoices.find((i) => i.rwInvoiceId === v)
+                  // Prefill the balance, but never over a figure already
+                  // typed — the agreed number is often NOT what RW shows,
+                  // which is the entire reason this panel exists.
+                  if (hit && !amount.trim()) {
+                    setAmount(String(hit.remainingTotal > 0 ? hit.remainingTotal : hit.invoiceTotal))
+                  }
+                }}
+              >
+                <option value="">Not settling an RW invoice</option>
+                {rwInvoices.map((i) => (
+                  <option key={i.rwInvoiceId} value={i.rwInvoiceId}>
+                    {i.invoiceNumber || '(no number)'} · {money(i.invoiceTotal)}
+                    {i.remainingTotal > 0.005 ? ` · ${money(i.remainingTotal)} due` : ' · paid'}
+                  </option>
+                ))}
+                <option value={MANUAL}>Type a number instead…</option>
+              </select>
+            )}
+            {(rwInvoices.length === 0 || rwPick === MANUAL) && (
+              <input
+                className={input}
+                placeholder="e.g. 404105"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+              />
+            )}
+            {(rwInvoices.length > 0 || rwLoaded) && (
+              <p className="mt-1.5 text-[11px] text-zinc-500">
+                {rwInvoices.length > 0
+                  ? 'Picking the invoice links this to RentalWorks, so Collections can see its balance and any charge already taken against it.'
+                  : 'No RW order is linked to this job — link one under RentalWorks billing to pick the invoice instead of typing it.'}
+              </p>
+            )}
           </div>
           <div>
             <label

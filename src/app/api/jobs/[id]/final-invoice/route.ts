@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { safeFilenameSegment } from '@/lib/claims/uploadClaimDocument'
 import { sendFinalInvoicePaymentOptions } from '@/lib/payments/sendFinalInvoiceEmail'
+import { resolveRwInvoiceId } from '@/lib/rentalworks/finalInvoiceLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,11 @@ export const dynamic = 'force-dynamic'
  * GET  → the job's final invoices, newest first.
  * POST → multipart: file (PDF, optional) + amount + optional invoiceNumber,
  *        rwInvoiceId, note. Creates a READY row that surfaces on /collections.
+ *
+ * `rwInvoiceId` is RESOLVED, never trusted as sent: the panel may post an id
+ * the operator picked off this job's RW invoices, or only a typed number, and
+ * either way lib/rentalworks/finalInvoiceLink decides whether it really names
+ * an invoice on an RW order linked to this job. Unresolved stays null.
  *
  * Any signed-in staff member may finalize — this is sales work, and gating it
  * to the collections allowlist would stop the person who negotiated the number
@@ -118,12 +124,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
+  const invoiceNumber = str('invoiceNumber', 60)
+  // Link to the RW mirror row this settles, if it demonstrably is one. Drives
+  // the "from RW" reading on the job tile and, in collections, the mirror
+  // balance and the cross-surface double-charge guard.
+  const rwInvoiceId = await resolveRwInvoiceId(
+    job.id,
+    str('rwInvoiceId', 120),
+    invoiceNumber,
+  )
+
   const created = await prisma.jobFinalInvoice.create({
     data: {
       jobId: job.id,
       amount,
-      invoiceNumber: str('invoiceNumber', 60),
-      rwInvoiceId: str('rwInvoiceId', 120),
+      invoiceNumber,
+      rwInvoiceId,
       note: str('note', 1000),
       pdfUrl,
       pdfKey,
