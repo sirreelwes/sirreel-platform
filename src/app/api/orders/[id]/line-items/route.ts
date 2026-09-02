@@ -13,6 +13,7 @@ import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, resolveFeeLineRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -626,6 +627,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         ipAddress: extractIp(req),
       });
     }
+
+    await syncOrderWindowSafe(orderId);
 
     return NextResponse.json({
       lineItem,

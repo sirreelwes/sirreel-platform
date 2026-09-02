@@ -87,12 +87,21 @@ export function deriveJobDateRange(
  * optional and reps routinely leave them blank, while the thing being
  * quoted is pinned to real days anyway:
  *
- *   1. the order's own startDate / endDate, when set — always wins;
- *   2. else the line items, whose pickupDate / returnDate are NOT NULLABLE,
- *      so any order with lines has real dates;
- *   3. else the booking this order hangs off — a vehicle hold with no
+ *   1. the line items, whose pickupDate / returnDate are NOT NULLABLE, so
+ *      any order with lines has real dates;
+ *   2. else the booking this order hangs off — a vehicle hold with no
  *      lines on it yet still holds specific days;
- *   4. else any live hold on the job.
+ *   3. else any live hold on the job.
+ *
+ * The order's OWN startDate / endDate used to sit at the top of that list
+ * and always win. It is no longer consulted at all (Wes 2026-09-02: "let's
+ * just remove the header dates altogether"). A stored header is a second
+ * copy of a fact the lines already carry, and nothing kept the two in step
+ * — edit a line and the header silently kept its old value, which is how
+ * S260901-00x came to say Sep 5–8 in its header while its lines said
+ * Sep 4–9. The column survives ONLY as a mirror written by
+ * syncOrderWindow(), because ~40 surfaces (the signed agreement's "Rental
+ * period" among them) still read it directly; it is never a source here.
  *
  * Wes 2026-09-01: "I especially hate when a quote email says dates TBD when
  * actually we have order or vehicle holding for a specific date." Reading
@@ -102,8 +111,9 @@ export function deriveJobDateRange(
  * and no end fills the end from its lines rather than dropping to TBD.
  */
 export interface OrderWindowSource {
-  startDate: Date | string | null
-  endDate: Date | string | null
+  /** Accepted so existing callers keep compiling; deliberately unread. */
+  startDate?: Date | string | null
+  endDate?: Date | string | null
   lineItems?: { pickupDate: Date | string | null; returnDate: Date | string | null }[] | null
   booking?: OrderDates | null
   job?: { bookings?: OrderDates[] | null } | null
@@ -136,8 +146,8 @@ export function deriveOrderWindow(order: OrderWindowSource | null | undefined): 
     ds.length ? new Date(Math.max(...ds.map((d) => d.getTime()))) : null
 
   return {
-    start: toDate(order.startDate) ?? earliest(lineStarts) ?? earliest(holdStarts),
-    end: toDate(order.endDate) ?? latest(lineEnds) ?? latest(holdEnds),
+    start: earliest(lineStarts) ?? earliest(holdStarts),
+    end: latest(lineEnds) ?? latest(holdEnds),
   }
 }
 

@@ -66,6 +66,7 @@ import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, resolveFeeLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 import { holdOnQuoteSend, reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 
 export const dynamic = 'force-dynamic'
@@ -685,6 +686,8 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('[orders/from-parse] immediate hold threw:', err)
     }
+
+    await syncOrderWindowSafe(result.orderId)
 
     return NextResponse.json(
       { orderId: result.orderId, warnings: result.warnings },

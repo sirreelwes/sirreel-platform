@@ -41,6 +41,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { randomUUID } from 'crypto'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 export const dynamic = 'force-dynamic'
 
@@ -297,6 +298,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const kitSync = await syncOrderKitPieces(prisma, orderId)
 
   const totals = await recalcOrderTotals(orderId)
+  await syncOrderWindowSafe(orderId)
   return NextResponse.json(
     {
       lines: result.lines,

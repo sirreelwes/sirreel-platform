@@ -13,6 +13,7 @@ import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -477,6 +478,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       });
     }
 
+    await syncOrderWindowSafe(orderId);
     return NextResponse.json({ lineItem, totals, kit: kitSync.noop ? null : kitSync });
   } catch (error) {
     console.error("Update line item error:", error);
@@ -657,6 +659,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       ipAddress: extractIp(req),
     });
   }
+
+  await syncOrderWindowSafe(orderId);
 
   return NextResponse.json({
     success: true,

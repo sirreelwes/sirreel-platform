@@ -38,6 +38,7 @@ import { computePushDatesPreview, type CustomItemAction, type PreviewLineItem } 
 import { findAssetConflictsForRange } from '@/lib/scheduling/assetConflicts'
 import { recalcOrderTotals } from '@/lib/orders'
 import { rebaselineCadenceForOrder } from '@/lib/cadence/scheduler'
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 export const dynamic = 'force-dynamic'
 
@@ -242,6 +243,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   } catch (err) {
     console.error('[orders/dates/apply] audit log failed:', err)
   }
+
+  await syncOrderWindowSafe(id)
 
   return NextResponse.json({
     ok: true,

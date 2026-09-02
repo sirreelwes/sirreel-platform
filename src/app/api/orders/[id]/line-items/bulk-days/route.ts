@@ -6,6 +6,7 @@ import { recalcOrderTotals } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +170,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ipAddress: extractIp(req),
     });
 
+    await syncOrderWindowSafe(orderId);
     return NextResponse.json({
       updated: updates.length,
       days: parsedDays,
