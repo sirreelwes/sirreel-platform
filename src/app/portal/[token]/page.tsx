@@ -1,6 +1,7 @@
 'use client';
 import { formatCalendarDate } from '@/lib/dates/calendarDate';
 import { LCDW_ELIGIBILITY_NOTE } from '@/components/portal-v2/terms'
+import { LcdwElection, useLcdwCoverage, lcdwApplies } from '@/components/portal-v2/LcdwElection'
 import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
@@ -62,7 +63,6 @@ type TabId = 'overview' | 'agreement' | 'lcdw' | 'coi' | 'cc' | 'studio';
 const ALL_TABS: { id: TabId; label: string; icon: string; contractTypes: string[] }[] = [
   { id: 'overview', label: 'Overview', icon: '📋', contractTypes: ['vehicles', 'stage', 'both'] },
   { id: 'agreement', label: 'Agreement', icon: '✍️', contractTypes: ['vehicles', 'both'] },
-  { id: 'lcdw', label: 'LCDW', icon: '🛡️', contractTypes: ['vehicles', 'both'] },
   { id: 'studio', label: 'Studio Contract', icon: '🎬', contractTypes: ['stage', 'both'] },
   { id: 'coi', label: 'COI', icon: '📄', contractTypes: ['vehicles', 'stage', 'both'] },
   { id: 'cc', label: 'CC Auth', icon: '💳', contractTypes: ['vehicles', 'stage', 'both'] },
@@ -112,6 +112,11 @@ export default function ClientPortal() {
   // LCDW
   const [lcdwAccepted, setLcdwAccepted] = useState(false);
   const [lcdwDeclined, setLcdwDeclined] = useState(false);
+  // Does this booking have anything the waiver could cover? A stage-only or
+  // supplies-only job does not, and must not be asked.
+  const lcdwCoverage = useLcdwCoverage(token);
+  const lcdwNeeded = lcdwApplies(lcdwCoverage);
+  const lcdwChoice: 'accept' | 'decline' | null = lcdwAccepted ? 'accept' : lcdwDeclined ? 'decline' : null;
   const [fuelAcknowledged, setFuelAcknowledged] = useState(false);
 
   // COI
@@ -182,10 +187,8 @@ export default function ClientPortal() {
   const [ccAcknowledged, setCcAcknowledged] = useState(false);
 
   const mainSigRef = useRef<HTMLCanvasElement>(null);
-  const lcdwSigRef = useRef<HTMLCanvasElement>(null);
   const ccSigRef = useRef<HTMLCanvasElement>(null);
   const [mainSigDrawn, setMainSigDrawn] = useState(false);
-  const [lcdwSigDrawn, setLcdwSigDrawn] = useState(false);
   const [ccSigDrawn, setCcSigDrawn] = useState(false);
   const [cpIframeUrl, setCpIframeUrl] = useState('');
   // null = still asking. Card capture stays HIDDEN until the gateway is in
@@ -310,7 +313,6 @@ export default function ClientPortal() {
   };
 
   useEffect(() => { if (activeTab === 'agreement') setTimeout(() => initCanvas(mainSigRef.current, setMainSigDrawn), 200); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'lcdw') setTimeout(() => initCanvas(lcdwSigRef.current, setLcdwSigDrawn), 200); }, [activeTab]);
   useEffect(() => { if (activeTab === 'cc') setTimeout(() => initCanvas(ccSigRef.current, setCcSigDrawn), 200); }, [activeTab]);
   useEffect(() => {
     if (activeTab !== 'cc' || cpIframeUrl) return;
@@ -367,9 +369,16 @@ export default function ClientPortal() {
   };
 
   const TABS = ALL_TABS.filter(t => t.contractTypes.includes(contractType));
+  // The rows the client actually sees. Drives both the progress pill and the
+  // list below it, so the two can never disagree — the pill used to be a
+  // hardcoded "/4" over a fixed agreement+lcdw+coi+cc list, which counted a
+  // step that no longer exists and was wrong for stage-only jobs besides.
+  const checklist = TABS.filter(t => t.id !== 'overview');
   const showAgreement = contractType === 'vehicles' || contractType === 'both';
   const showStudio = contractType === 'stage' || contractType === 'both';
-  const allDone = (showAgreement ? (done.agreement && done.lcdw) : true) && (showStudio ? done.studio : true) && done.coi && done.cc;
+  // LCDW is folded into the agreement now, and only asked when the booking
+  // has a vehicle to waive — so it can no longer be an unconditional gate.
+  const allDone = (showAgreement ? (done.agreement && (!lcdwNeeded || done.lcdw)) : true) && (showStudio ? done.studio : true) && done.coi && done.cc;
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400 text-sm">Loading...</div></div>;
 
@@ -461,7 +470,7 @@ export default function ClientPortal() {
               color: allDone ? '#86efac' : 'rgba(255,255,255,0.7)',
             }}
           >
-            {[done.agreement, done.lcdw, done.coi, done.cc].filter(Boolean).length}/4 complete
+            {checklist.filter(t => tabColor(t.id) === 'done').length}/{checklist.length} complete
           </div>
         </div>
       </div>
@@ -516,7 +525,7 @@ export default function ClientPortal() {
             </div>
           </div>
           <ul className="divide-y divide-gray-100 border-t border-gray-100">
-            {TABS.filter(t => t.id !== 'overview').map(tab => {
+            {checklist.map(tab => {
               const color = tabColor(tab.id);
               const isDone = color === 'done';
               const isAmber = color === 'pending_admin';
@@ -1127,86 +1136,31 @@ export default function ClientPortal() {
                 </div>
                 <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={termsRead} onChange={e => setTermsRead(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I have read and agree to all terms and conditions.</span></label>
               </div>
+              {/* LCDW lives HERE, not in a step of its own. The agreement
+                  the client is about to sign already contains the addendum in
+                  full, so the election belongs on the same page and under the
+                  same signature. Renders only when the booking actually has a
+                  vehicle to waive. */}
+              {lcdwNeeded && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                  <h2 className="font-bold text-gray-900 mb-1">Damage Waiver (LCDW)</h2>
+                  <p className="text-xs text-gray-500 mb-4">Your choice is recorded with this agreement.</p>
+                  <LcdwElection
+                    coverage={lcdwCoverage}
+                    choice={lcdwChoice}
+                    onChoice={(c) => { setLcdwAccepted(c === 'accept'); setLcdwDeclined(c === 'decline'); }}
+                    fuelAcknowledged={fuelAcknowledged}
+                    onFuelAcknowledged={setFuelAcknowledged}
+                    radioGroupName="legacy-lcdw"
+                  />
+                </div>
+              )}
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-2">Signature</h2>
+                <p className="text-xs text-gray-500 mb-3">One signature covers the rental agreement{lcdwNeeded ? ' and your LCDW election' : ''}.</p>
                 <SigCanvas canvasRef={mainSigRef} drawn={mainSigDrawn} onClear={() => clearSig(mainSigRef, setMainSigDrawn)} />
               </div>
-              <button onClick={async () => { if (await post('sign', { step: 'agreement', signerName, signerTitle, signerEmail, signerPhone, poNumber, dotNumber, additionalContacts, termsRead, signatureData: sigData(mainSigRef) })) { setDone(d => ({ ...d, agreement: true })); setActiveTab('lcdw'); } }} disabled={!signerName || !signerTitle || !signerEmail || !termsRead || !mainSigDrawn || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Saving...' : 'Sign & Save →'}</button>
-            </div>
-          )
-        )}
-
-        {/* LCDW */}
-        {activeTab === 'lcdw' && (
-          locked ? renderLockedCard('LCDW') :
-          done.lcdw ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="text-3xl">✅</div>
-                <div>
-                  <div className="text-emerald-800 font-bold text-base">{lcdwAccepted ? `LCDW Accepted — ${usd(LCDW_DAILY_RATE)}/day/vehicle` : 'LCDW Declined'}</div>
-                  <div className="text-emerald-600 text-sm">{lcdwAccepted ? 'Client accepted LCDW coverage' : 'Client declined LCDW coverage'}</div>
-                </div>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
-                  <span className="text-emerald-500">✓</span>
-                  <span className="text-gray-700">{lcdwAccepted ? `LCDW accepted at ${usd2(LCDW_DAILY_RATE)}/day/vehicle` : 'LCDW declined — client providing own coverage'}</span>
-                </div>
-                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
-                  <span className="text-emerald-500">✓</span>
-                  <span className="text-gray-700">Fuel policy acknowledged — {usd2(FUEL_PER_GALLON)}/gallon</span>
-                </div>
-                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
-                  <span className="text-emerald-500">✓</span>
-                  <span className="text-gray-700">Signed by: <strong>{paperwork?.signerName || signerName || 'Client'}</strong></span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-bold text-gray-900 mb-1">Fleet Vehicle Rental Agreement Terms & Conditions</h2>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4"><div className="text-sm font-bold text-amber-800">Limited Collision Damage Waiver — {usd2(LCDW_DAILY_RATE)} / day / vehicle</div></div>
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1 mb-4 border border-gray-100 rounded-xl p-3 bg-gray-50 text-xs text-gray-600 leading-relaxed">
-                  <p><strong>1. Nature of this Agreement.</strong> The agreement is between you and SirReel Production Vehicles, Inc. DBA SirReel Studio Rentals (SIRREEL). SirReel rents to You the vehicle identified on the Rental Record ("Vehicle") subject to the Rental Record and these Terms and Conditions. You and Authorized Drivers: (a) are not agents of SirReel; (b) may not transfer the Vehicle or any rights or obligations under this Agreement; or (c) may not service or repair the Vehicle without SirReel's prior express approval. SIRREEL MAKES NO EXPRESS OR IMPLIED WARRANTY OF MERCHANTABILITY OR THAT THE VEHICLE IS FIT FOR ANY PARTICULAR PURPOSE.</p>
-                  <p><strong>2. Who may Drive the Vehicle.</strong> Only You, and with Your permission, Your spouse, employer and coworkers incidental to their business with You, and persons listed as Additional Drivers may drive the Vehicle. All Authorized Drivers must be at least 25 years old and have a valid driver's license.</p>
-                  <p><strong>3. Vehicle Returns.</strong> You must return the Vehicle in the same condition as when received (except for ordinary wear) to SirReel's location on the day and time specified. In no event may You keep the Vehicle for more than thirty (30) days. Failure to return the Vehicle when due terminates SirReel's permission to use the Vehicle.</p>
-                  <p><strong>4. Responsibility for Loss of or Damage to the Vehicle.</strong> Regardless of fault, You are responsible for the loss of or damage to the Vehicle except for ordinary wear. (b) If You purchase the Limited Collision Damage Waiver (LCDW) (which is not insurance) at the beginning of the rental, SirReel will not hold You responsible for the first {usd(LCDW_WAIVED_DAMAGE_LIMIT)} in loss of or damage to the Vehicle (including loss of use, towing, storage, impound, and administrative charges) except: (1) when theft occurs or (2) if the Vehicle is used as prohibited in Paragraph 5.</p>
-                  <p><strong>5. Prohibited Uses of the Vehicle.</strong> You and Authorized Drivers may NOT permit the Vehicle to be driven: (a) by anyone under the influence of alcohol or drugs; (b) outside the United States, off road, to tow or push anything without prior written permission; (c) to transport persons for compensation or in any speed test; (d) in connection with conduct that could be charged as a felony; (e) in a willful, wanton, or reckless manner; (f) if obtained by fraudulent statements; (g) to transport hazardous or explosive substances; (h) without using seatbelts; (i) in connection with any illegal conduct.</p>
-                  <p><strong>6. Payment of Charges.</strong> You will pay SirReel on demand all amounts incurred including: (a) a refueling charge at {usd2(FUEL_PER_GALLON)}/gallon if You return the Vehicle with less fuel than received; (b) all fines, penalties, and attorney's fees unless due to SirReel's fault; (c) all charges related to loss or damage to the Vehicle; (d) all time and mileage charges as computed on the Rental Record.</p>
-                  <p><strong>7. Accidents, Theft, Vandalism and Claim Reporting.</strong> You must immediately report any accident, theft, or vandalism to SirReel and to the police. You must promptly deliver to SirReel any papers relating to such incident. FAILURE TO COOPERATE MAY VOID ANY LIABILITY INSURANCE COVERAGE AND ANY LIMITATION OF YOUR RESPONSIBILITY FOR LOSS OF OR DAMAGE TO THE VEHICLE.</p>
-                  <p><strong>8. Personal Property.</strong> SirReel is not responsible for loss or damage to Your personal property left in or about the Vehicle.</p>
-                  <p><strong>9. Additional Terms.</strong> Any modification of this Agreement is null and void unless in writing signed by You and SirReel. If any part of this Agreement is held void or unenforceable, the validity of the remaining parts shall not be affected.</p>
-                  <p><strong>10. Liability Insurance and Indemnity.</strong> You warrant that you have and will maintain automobile liability insurance with limits equal to or greater than those required by law. In the event of an accident, your insurance shall be primary and Non-Contributory.</p>
-                  <p><strong>11. Loss of Use.</strong> In the event of damage or destruction of a vehicle, you will pay for loss of use without regard to fleet utilization, plus an administrative fee, plus towing and storage charges.</p>
-                  <p><strong>LIMITED COLLISION DAMAGE WAIVER:</strong> By accepting LCDW herein, Lessee agrees to pay the sum of {usd2(LCDW_DAILY_RATE)}/day/vehicle for a Limited Collision Damage Waiver and also agrees to pay all costs above {usd(LCDW_WAIVED_DAMAGE_LIMIT)} as stated in paragraph 4. In exchange, SirReel waives the claim to the first {usd(LCDW_WAIVED_DAMAGE_LIMIT)} in damages caused to the vehicle by collision with another vehicle or property. This waiver does NOT apply to: Prohibited Uses in Paragraph 5, intentional acts, damage due to insufficient height or clearance, improper loading, abusive handling, towing without written permission, unlicensed or revoked drivers, or theft of the vehicle or components.</p>
-                  {/* One copy of the eligibility sentence, shared with
-                      the v2 card. It was hardcoded here and drifted the
-                      moment the exclusion list changed — this page kept
-                      telling clients a Scissor Lift was coverable after
-                      the rule stopped covering it. */}
-                  <p className="font-semibold text-gray-700">{LCDW_ELIGIBILITY_NOTE}</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border-2 transition-all" style={{borderColor: lcdwAccepted ? '#111827' : '#e5e7eb', background: lcdwAccepted ? '#f9fafb' : 'white'}}>
-                    <input type="radio" name="lcdw" checked={lcdwAccepted} onChange={() => { setLcdwAccepted(true); setLcdwDeclined(false); }} className="mt-0.5 accent-gray-900" />
-                    <div><div className="text-sm font-semibold text-gray-900">Accept LCDW — {usd2(LCDW_DAILY_RATE)}/day/vehicle</div><div className="text-xs text-gray-500 mt-0.5">SirReel limits my liability for the first {usd(LCDW_WAIVED_DAMAGE_LIMIT)} in physical damage to vehicles</div></div>
-                  </label>
-                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border-2 transition-all" style={{borderColor: lcdwDeclined ? '#111827' : '#e5e7eb', background: lcdwDeclined ? '#f9fafb' : 'white'}}>
-                    <input type="radio" name="lcdw" checked={lcdwDeclined} onChange={() => { setLcdwDeclined(true); setLcdwAccepted(false); }} className="mt-0.5 accent-gray-900" />
-                    <div><div className="text-sm font-semibold text-gray-900">Decline LCDW</div><div className="text-xs text-gray-500 mt-0.5">I will provide my own coverage for vehicle damage</div></div>
-                  </label>
-                </div>
-                <div className="mt-3">
-                  <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={fuelAcknowledged} onChange={e => setFuelAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I acknowledge the {usd2(FUEL_PER_GALLON)}/gallon fuel return policy — vehicles must be returned at the same fuel level as dispatched.</span></label>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-bold text-gray-900 mb-2">Signature</h2>
-                <SigCanvas canvasRef={lcdwSigRef} drawn={lcdwSigDrawn} onClear={() => clearSig(lcdwSigRef, setLcdwSigDrawn)} />
-              </div>
-              <button onClick={async () => { if (await post('sign', { step: 'lcdw', lcdwAccepted, fuelAcknowledged, lcdwSignatureData: sigData(lcdwSigRef) })) { setDone(d => ({ ...d, lcdw: true })); setActiveTab('coi'); } }} disabled={!lcdwSigDrawn || !fuelAcknowledged || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Saving...' : 'Sign & Save →'}</button>
+              <button onClick={async () => { if (await post('sign', { step: 'agreement', signerName, signerTitle, signerEmail, signerPhone, poNumber, dotNumber, additionalContacts, termsRead, signatureData: sigData(mainSigRef), ...(lcdwNeeded ? { lcdwAccepted, fuelAcknowledged } : {}) })) { setDone(d => ({ ...d, agreement: true, ...(lcdwNeeded ? { lcdw: true } : {}) })); setActiveTab('coi'); } }} disabled={!signerName || !signerTitle || !signerEmail || !termsRead || !mainSigDrawn || (lcdwNeeded && (!lcdwChoice || !fuelAcknowledged)) || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Saving...' : 'Sign & Save →'}</button>
             </div>
           )
         )}

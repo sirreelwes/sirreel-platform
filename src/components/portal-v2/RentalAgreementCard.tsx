@@ -5,6 +5,7 @@ import { SigCanvas } from '@/components/portal/SigCanvas'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { RENTAL_TERMS } from './terms'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
+import { LcdwElection, useLcdwCoverage, lcdwApplies } from './LcdwElection'
 import type { V2AgreementState, V2Booking, V2Intake } from './types'
 
 /**
@@ -64,6 +65,13 @@ export function RentalAgreementCard({
   const [signerCompany, setSignerCompany] = useState('')
   const [sig, setSig] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // LCDW is a section of this agreement, not a step after it (Wes
+  // 2026-09-02). The addendum is already printed in the document below; the
+  // election and the one signature belong on the same page.
+  const lcdwCoverage = useLcdwCoverage(token)
+  const lcdwNeeded = lcdwApplies(lcdwCoverage)
+  const [lcdwChoice, setLcdwChoice] = useState<'accept' | 'decline' | null>(null)
+  const [fuelAcknowledged, setFuelAcknowledged] = useState(false)
   const [error, setError] = useState('')
   const [redlineFile, setRedlineFile] = useState<File | null>(null)
   const [redlineUploading, setRedlineUploading] = useState(false)
@@ -114,6 +122,32 @@ export function RentalAgreementCard({
   // the signer actually ticked.
   const ackText = `${ackTerms} ${ackAuthority}`
 
+  /** Post the election for the path that cannot carry it inline. Returns
+   *  false (with the error shown) if it could not be recorded. */
+  const recordLcdwElection = async (): Promise<boolean> => {
+    if (!lcdwNeeded) return true
+    try {
+      const r = await fetch(`/api/portal/${token}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'lcdw',
+          lcdwAccepted: lcdwChoice === 'accept',
+          fuelAcknowledged,
+          lcdwSignatureData: sig || '',
+        }),
+      })
+      if (!r.ok) {
+        setError('Signed, but your damage-waiver choice did not save. Please reopen this step.')
+        return false
+      }
+      return true
+    } catch {
+      setError('Signed, but your damage-waiver choice did not save. Please reopen this step.')
+      return false
+    }
+  }
+
   const submitNative = async () => {
     setError('')
     setSubmitting(true)
@@ -142,6 +176,11 @@ export function RentalAgreementCard({
           statusUpdatedAt: data.signedAt || new Date().toISOString(),
         })
       }
+      // The native path signs an ORDER's agreement; the election lives on the
+      // PaperworkRequest, so it is a second write. Reported loudly if it
+      // fails — a signed agreement with no recorded waiver answer is exactly
+      // the gap this change exists to close.
+      if (!(await recordLcdwElection())) return
       onSigned()
     } catch (err: any) {
       setError(err?.message || 'Failed to sign')
@@ -168,6 +207,8 @@ export function RentalAgreementCard({
           additionalContacts: [],
           termsRead: true,
           signatureData: sig || '',
+          // Same submit, same signature — recorded atomically by the route.
+          ...(lcdwNeeded ? { lcdwAccepted: lcdwChoice === 'accept', fuelAcknowledged } : {}),
         }),
       })
       if (!r.ok) {
@@ -181,6 +222,16 @@ export function RentalAgreementCard({
       setSubmitting(false)
     }
   }
+
+  // Everything the ack step must collect before signing — now including the
+  // waiver election, when the booking has a vehicle to waive.
+  const ackComplete =
+    acknowledged &&
+    !!signerName &&
+    !!signerTitle &&
+    !!signerEmail &&
+    !!signerCompany.trim() &&
+    (!lcdwNeeded || (!!lcdwChoice && fuelAcknowledged))
 
   const useNativeFlow = !!agreementState && ['PORTAL_GENERATED', 'DOWNLOAD_SENT', 'NEGOTIATED_READY'].includes(agreementState.status)
 
@@ -409,19 +460,33 @@ export function RentalAgreementCard({
               <span className="text-xs text-gray-700 leading-relaxed">{ackAuthority}</span>
             </label>
           </div>
+          {/* The waiver election, in the agreement rather than after it. The
+              addendum is already printed in the document above, so this is
+              the client answering a clause of the thing they are signing. */}
+          {lcdwNeeded && (
+            <div className="pt-1 border-t border-gray-100">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 mt-3">
+                Damage waiver election
+              </div>
+              <LcdwElection
+                coverage={lcdwCoverage}
+                choice={lcdwChoice}
+                onChoice={setLcdwChoice}
+                fuelAcknowledged={fuelAcknowledged}
+                onFuelAcknowledged={setFuelAcknowledged}
+                radioGroupName="v2-lcdw"
+              />
+            </div>
+          )}
           <div className="flex justify-between">
             <button onClick={() => setStep('read')} className="text-xs text-gray-500 hover:text-gray-900">
               ← Back
             </button>
             <button
               onClick={() => setStep('sign')}
-              disabled={!acknowledged || !signerName || !signerTitle || !signerEmail || !signerCompany.trim()}
+              disabled={!ackComplete}
               className="py-2 px-4 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
-              style={
-                acknowledged && signerName && signerTitle && signerEmail && signerCompany.trim()
-                  ? { backgroundColor: PORTAL.ink }
-                  : undefined
-              }
+              style={ackComplete ? { backgroundColor: PORTAL.ink } : undefined}
             >
               Continue →
             </button>
@@ -429,7 +494,7 @@ export function RentalAgreementCard({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-gray-500">Step 3 of 3 · Draw your signature and submit.</p>
+          <p className="text-xs text-gray-500">Step 3 of 3 · Draw your signature and submit.{lcdwNeeded ? ' One signature covers the agreement and your LCDW election.' : ''}</p>
           <SigCanvas onChange={setSig} />
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 leading-relaxed">
             By submitting, you create a legally binding electronic signature on behalf of{' '}

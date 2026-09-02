@@ -5,6 +5,49 @@ import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
 import { normalizePaymentPreference, paymentPreferenceLabel } from '@/lib/payments/paymentPreference'
 import { prisma } from '@/lib/prisma'
 
+/**
+ * Record the LCDW accept/decline election.
+ *
+ * Shared by two callers because the election now arrives two ways: folded
+ * into the rental agreement (Wes 2026-09-02 — "LCDW needs to be a part of the
+ * rental agreement"), and via the standalone `lcdw` step, which annual-
+ * agreement clients still use because their RA is signed once at the company
+ * level and never per job.
+ *
+ * `signatureData` is the writing the addendum requires. On the folded path
+ * that is the AGREEMENT's signature — one signature covering a document that
+ * already contains the LCDW addendum in full.
+ */
+async function applyLcdwElection(
+  token: string,
+  opts: { accepted: boolean; fuelAcknowledged: boolean; signatureData?: unknown },
+  now: Date,
+) {
+  await prisma.paperworkRequest.update({
+    where: { token },
+    data: {
+      lcdwDecision: opts.accepted ? 'ACCEPTED' : 'DECLINED',
+      lcdwDecidedAt: now,
+      lcdwSignatureData:
+        typeof opts.signatureData === 'string' && opts.signatureData ? opts.signatureData : null,
+      lcdwFuelAcknowledged: opts.fuelAcknowledged,
+      // Legacy mirror — true ONLY on acceptance, which is what the old
+      // column was always supposed to mean.
+      lcdwAccepted: opts.accepted,
+    },
+  })
+}
+
+/** The team-email line for an election, so both paths word it identically. */
+function lcdwDetail(accepted: boolean) {
+  return {
+    label: 'LCDW',
+    value: accepted
+      ? 'ACCEPTED — $24/day/vehicle'
+      : 'DECLINED — client carries their own coverage',
+  }
+}
+
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
     const request = await prisma.paperworkRequest.findUnique({ where: { token: params.token } })
@@ -21,12 +64,36 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         body.signerName, params.token
       )
       await prisma.booking.update({ where: { id: request.bookingId }, data: { rentalAgreement: true } })
+
+      // The LCDW election rides along with the agreement it belongs to.
+      // Absent stays absent: a booking with no eligible vehicle never shows
+      // the election, posts no `lcdwAccepted`, and keeps a NULL decision —
+      // which is a different fact from declining.
+      const lcdwAnswered = typeof body.lcdwAccepted === 'boolean'
+      if (lcdwAnswered) {
+        await applyLcdwElection(
+          params.token,
+          {
+            accepted: body.lcdwAccepted === true,
+            fuelAcknowledged: body.fuelAcknowledged === true,
+            // One signature. The client signed an agreement that contains the
+            // LCDW addendum in full, so that signature is the addendum's
+            // required writing.
+            signatureData: body.signatureData,
+          },
+          now,
+        )
+      }
+
       // Fire-and-forget hq@ notification with a deep link to the job —
       // mirrors the per-form emails the Cognito flow used to send.
       notifyPortalPaperwork({
         token: params.token,
         step: 'agreement',
-        details: [{ label: 'Signed by', value: String(body.signerName ?? '—') }],
+        details: [
+          { label: 'Signed by', value: String(body.signerName ?? '—') },
+          ...(lcdwAnswered ? [lcdwDetail(body.lcdwAccepted === true)] : []),
+        ],
       })
     }
 
@@ -42,29 +109,21 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // Absent stays absent: a client who never reached this step has a
       // NULL decision, which is a different fact from declining.
       const accepted = body.lcdwAccepted === true
-      await prisma.paperworkRequest.update({
-        where: { token: params.token },
-        data: {
-          lcdwDecision: accepted ? 'ACCEPTED' : 'DECLINED',
-          lcdwDecidedAt: now,
-          lcdwSignatureData:
-            typeof body.lcdwSignatureData === 'string' && body.lcdwSignatureData
-              ? body.lcdwSignatureData
-              : null,
-          lcdwFuelAcknowledged: body.fuelAcknowledged === true,
-          // Legacy mirror — true ONLY on acceptance, which is what the old
-          // column was always supposed to mean.
-          lcdwAccepted: accepted,
+      await applyLcdwElection(
+        params.token,
+        {
+          accepted,
+          fuelAcknowledged: body.fuelAcknowledged === true,
+          signatureData: body.lcdwSignatureData,
         },
-      })
+        now,
+      )
       notifyPortalPaperwork({
         token: params.token,
         step: 'lcdw',
         // The team's email said a decision had been made but never which
         // one, which is half the reason nobody could tell.
-        details: [
-          { label: 'Decision', value: accepted ? 'ACCEPTED — $24/day/vehicle' : 'DECLINED — client carries their own coverage' },
-        ],
+        details: [lcdwDetail(accepted)],
       })
     }
 

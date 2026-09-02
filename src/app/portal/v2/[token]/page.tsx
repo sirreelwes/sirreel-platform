@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation'
 import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
 import { DetailsCard, intakeComplete } from '@/components/portal-v2/DetailsCard'
 import { RentalAgreementCard } from '@/components/portal-v2/RentalAgreementCard'
-import { LcdwCard } from '@/components/portal-v2/LcdwCard'
 import { StudioContractCard } from '@/components/portal-v2/StudioContractCard'
 import { CoiCard } from '@/components/portal-v2/CoiCard'
 import { CcAuthCard } from '@/components/portal-v2/CcAuthCard'
@@ -137,7 +136,10 @@ export default function ClientPortalV2() {
 
   const docKeys = useMemo<V2DocKey[]>(() => {
     const keys: V2DocKey[] = []
-    if (showAgreement) keys.push('agreement', 'lcdw')
+    // 'lcdw' is no longer a card of its own — the election is a section of
+    // the rental agreement (Wes 2026-09-02), so it has no separate done state
+    // to advance to and must not count toward the N-of-M rollup.
+    if (showAgreement) keys.push('agreement')
     if (showStudio) keys.push('studio')
     keys.push('coi', 'cc')
     return keys
@@ -331,22 +333,6 @@ export default function ClientPortalV2() {
             onToggle={() => toggle('agreement')}
             onSigned={() => markDone('agreement')}
             onAgreementStateChange={setAgreementState}
-          />
-        )}
-
-        {showAgreement && (
-          <LcdwCard
-            token={token}
-            done={done.lcdw}
-            accepted={!!paperwork.lcdwAccepted}
-            locked={locked}
-            signerName={paperwork.signerName || intake.fullName}
-            open={openKey === 'lcdw'}
-            onToggle={() => toggle('lcdw')}
-            onSigned={(accepted) => {
-              setPaperwork((p) => (p ? { ...p, lcdwAccepted: accepted } : p))
-              markDone('lcdw')
-            }}
           />
         )}
 
