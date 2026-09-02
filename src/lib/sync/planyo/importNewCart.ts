@@ -37,7 +37,7 @@ import {
   planyoLocalTimeToLADate,
 } from './dateConvention'
 import type { PlanyoLine } from './planyoClient'
-import { normalizePlanyoUnitName, PLANYO_UNIT_CATEGORY_OVERRIDES } from '@/lib/scheduling/planyoNameNormalizer'
+import { resolvePlanyoUnitName, PLANYO_UNIT_CATEGORY_OVERRIDES } from '@/lib/scheduling/planyoNameNormalizer'
 
 export type CrmBucket =
   | 'CLEAN_MATCH'
@@ -358,13 +358,17 @@ export async function planCartImport(
     // carries the normalized candidate.
     const rawUnit = (l.unit_assignment ?? '').trim()
     if (rawUnit) {
-      const { normalized, isBackupHold } = normalizePlanyoUnitName(rawUnit, cat.name)
+      // lookupName, not `normalized`: the alias table is what turns
+      // Planyo's "Scout Van (No MiFi)" into HQ's "Video Van". Without
+      // it the line imports unbound and silently eats the category's
+      // availableToHold (see PLANYO_UNIT_NAME_ALIASES).
+      const { lookupName, isBackupHold } = resolvePlanyoUnitName(rawUnit, cat.name)
       unitBindingDrafts.push({
         planyoReservationId: String(l.reservation_id),
         categoryId: cat.id,
         categoryName: cat.name,
         rawUnit,
-        normalizedUnit: normalized,
+        normalizedUnit: lookupName,
         isBackupHold,
         startLA: planyoLocalTimeToLADate(l.start_time) ?? startLA,
         endLA: planyoLocalTimeToLADate(l.end_time) ?? endLA,

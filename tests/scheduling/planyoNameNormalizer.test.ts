@@ -5,7 +5,12 @@
  *   npx tsx tests/scheduling/planyoNameNormalizer.test.ts
  */
 
-import { normalizePlanyoUnitName } from '../../src/lib/scheduling/planyoNameNormalizer'
+import {
+  normalizePlanyoUnitName,
+  resolvePlanyoUnitName,
+  isUnroutablePlanyoUnit,
+  PLANYO_RESOURCE_NAME_CROSSWALK,
+} from '../../src/lib/scheduling/planyoNameNormalizer'
 
 const failures: string[] = []
 function check(actual: { normalized: string; isBackupHold: boolean }, expected: { normalized: string; isBackupHold?: boolean }, label: string) {
@@ -80,6 +85,50 @@ check(
   { normalized: '', isBackupHold: true },
   'X - 2ND HOLD reduces to "" + isBackupHold=true; both the "X - " slot prefix and the "2ND HOLD" marker are stripped, leaving nothing. Empty string is a deliberate "no real unit" signal for the caller.',
 )
+
+console.log('\nAlias resolution — the step the LIVE importer used to skip')
+function checkLookup(actual: { lookupName: string; isBackupHold: boolean }, expected: string, label: string) {
+  if (actual.lookupName !== expected) {
+    failures.push(`${label}\n    got:      ${actual.lookupName}\n    expected: ${expected}`)
+  } else console.log(`  ok — ${label}`)
+}
+// The two cases that motivated moving the alias table out of
+// scripts/bind-planyo-backfill-units.ts and into the shared module:
+// each one imported unbound and silently ate a unit of availableToHold.
+checkLookup(resolvePlanyoUnitName('Scout Van (No MiFi)', 'ProScout / VideoVan'), 'Video Van', 'Scout Van (No MiFi) → Video Van (one HQ asset, two Planyo resources)')
+checkLookup(resolvePlanyoUnitName('Video Van (w/ MiFi)', 'ProScout / VideoVan'), 'Video Van', 'Video Van (w/ MiFi) → Video Van (no alias needed)')
+checkLookup(resolvePlanyoUnitName('30 (A) Wardrobe', 'Cube Truck'), 'Cube 30', '30 (A) Wardrobe → Cube 30 (Planyo note, not part of unit identity)')
+checkLookup(resolvePlanyoUnitName('36', 'Cube Truck'), 'Cube 36', 'unaliased names pass straight through')
+checkLookup(resolvePlanyoUnitName('A - Standing Sets', 'Studios'), 'Standing Sets', 'slot prefix stripped, no alias')
+
+// Backup-hold detection must survive the alias step — a rank-2 hold
+// is never auto-bound.
+if (!resolvePlanyoUnitName('Lankershim Studio (2ND Hold)', 'Studios').isBackupHold) {
+  failures.push('resolvePlanyoUnitName drops isBackupHold')
+} else console.log('  ok — isBackupHold survives resolution')
+
+console.log('\nUnroutable facility names (no automatic bind is possible)')
+for (const [raw, want] of [
+  ['Lankershim Studio', true],
+  ['Lankershim Studio (2ND Hold)', true],
+  ['A - Standing Sets', false],
+  ['Cube 30', false],
+] as [string, boolean][]) {
+  const got = isUnroutablePlanyoUnit(raw)
+  if (got !== want) failures.push(`isUnroutablePlanyoUnit("${raw}") → ${got}, expected ${want}`)
+  else console.log(`  ok — isUnroutablePlanyoUnit("${raw}") === ${want}`)
+}
+
+console.log('\nResource-name crosswalk (Planyo resource string → HQ category)')
+for (const [raw, want] of [
+  ['Cube Truck', 'SuperCube Truck'],
+  ['ProScout Van / VTR', 'ProScout / VideoVan'],
+  ['Cargo Vans w/o Liftgate', 'Cargo Van w/o Liftgate'],
+] as [string, string][]) {
+  const got = PLANYO_RESOURCE_NAME_CROSSWALK[raw]
+  if (got !== want) failures.push(`crosswalk["${raw}"] → ${got}, expected ${want}`)
+  else console.log(`  ok — "${raw}" → "${want}"`)
+}
 
 console.log('')
 if (failures.length === 0) {

@@ -47,6 +47,67 @@ export const PLANYO_UNIT_CATEGORY_OVERRIDES: Record<string, string> = {
   'Cargo 24': 'Cargo Van w/ Liftgate',
 }
 
+/**
+ * Planyo unit_assignment strings whose normalized form is a DIFFERENT
+ * name in HQ. Distinct from PLANYO_UNIT_CATEGORY_OVERRIDES above: that
+ * one keeps the name and changes the category, this one keeps the
+ * category and changes the NAME.
+ *
+ * Origin: these lived only inside scripts/bind-planyo-backfill-units.ts,
+ * so the one-shot sweep resolved them and the LIVE importer did not —
+ * every ongoing Planyo import re-created the same unbindable hold. An
+ * unbindable hold is not inert: it still subtracts from
+ * `availableToHold`, so the unit reads free on /gantt while
+ * POST /api/scheduling/holds hard-blocks it 409 "over-capacity"
+ * (Wes, 2026-09-02: "you can't make a booking for that vehicle").
+ * Keyed by NORMALIZED name; consulted before the Asset lookup.
+ */
+export const PLANYO_UNIT_NAME_ALIASES: Record<string, string> = {
+  // Planyo carries two resources ("Scout Van (No MiFi)" / "Video Van
+  // (w/ MiFi)") for the one HQ asset in ProScout / VideoVan.
+  'Scout Van': 'Video Van',
+  // The normalizer deliberately preserves multi-letter trailing words
+  // (see SLOT_TRAILING_RE); "Wardrobe" is a Planyo-side note, not part
+  // of the unit's identity.
+  'Cube 30 Wardrobe': 'Cube 30',
+}
+
+/**
+ * Planyo `category` / resource-name strings that don't byte-match
+ * `AssetCategory.name`. The live importer resolves categories through
+ * `resourceCrosswalk` (resource_id → category) and does not need this;
+ * anything reading the stored `Reservation.category` STRING does.
+ */
+export const PLANYO_RESOURCE_NAME_CROSSWALK: Record<string, string> = {
+  'Cargo Vans w/ Liftgate': 'Cargo Van w/ Liftgate',
+  'Cargo Vans w/o Liftgate': 'Cargo Van w/o Liftgate',
+  // 2026-07 HQ category renames (Planyo strings unchanged).
+  'ProScout Van / VTR': 'ProScout / VideoVan',
+  'Cube Truck': 'SuperCube Truck',
+  // Planyo resource 119962 "DLUX" is seeded to the HQ restroom-trailer
+  // category (assets "DLUX 1..4").
+  DLUX: '2 Unit Restroom Trailer',
+  // Planyo files every Lankershim space under one generic "Studios"
+  // resource. When the unit string names a ROOM ("A - Standing Sets")
+  // it binds normally; when it's the bare facility ("Lankershim
+  // Studio") isUnroutablePlanyoUnit catches it first and no bind is
+  // attempted. Without this entry the room-named rows fell out as
+  // "no AssetCategory named Studios" and stayed unbound.
+  Studios: 'Lankershim Studios',
+}
+
+/**
+ * Planyo unit strings that name a FACILITY rather than a bookable
+ * unit. Planyo lumps the Lankershim spaces under a generic "Studios"
+ * resource and never says which room, so no automatic bind is
+ * possible — a human picks Black Box / LED-Volume / Standing Sets.
+ * These are the holds the board must SHOW as needing a unit rather
+ * than swallow.
+ */
+export function isUnroutablePlanyoUnit(rawUnit: string): boolean {
+  return /^lankershim\s+studio\b/i.test(rawUnit ?? '')
+}
+
 const CATEGORY_TO_SHORT: Record<string, string> = {
   'Cube Truck': 'Cube',
   // 2026-07 rename: the HQ category "Cube Truck" became "SuperCube
@@ -127,4 +188,26 @@ export function normalizePlanyoUnitName(planyoUnit: string, categoryName: string
   }
 
   return { normalized: s, isBackupHold }
+}
+
+/**
+ * One-call resolution: normalize, then apply the name alias. The
+ * `lookupName` is what callers should match against `Asset.unitName`;
+ * `normalized` is kept for reporting so an operator can still see the
+ * pre-alias form.
+ */
+export interface ResolvedPlanyoUnit extends NormalizedPlanyoName {
+  /** Alias applied — the string to look up in `Asset.unitName`. */
+  lookupName: string
+  /** True when the raw string names a facility, not a bookable unit. */
+  isUnroutable: boolean
+}
+
+export function resolvePlanyoUnitName(planyoUnit: string, categoryName: string): ResolvedPlanyoUnit {
+  const base = normalizePlanyoUnitName(planyoUnit, categoryName)
+  return {
+    ...base,
+    lookupName: PLANYO_UNIT_NAME_ALIASES[base.normalized] ?? base.normalized,
+    isUnroutable: isUnroutablePlanyoUnit(planyoUnit),
+  }
 }

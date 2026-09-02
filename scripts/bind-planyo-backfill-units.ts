@@ -49,32 +49,20 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import { PrismaClient } from '@prisma/client'
-import { normalizePlanyoUnitName, PLANYO_UNIT_CATEGORY_OVERRIDES } from '../src/lib/scheduling/planyoNameNormalizer'
+import {
+  normalizePlanyoUnitName,
+  PLANYO_UNIT_CATEGORY_OVERRIDES,
+  PLANYO_UNIT_NAME_ALIASES as NAME_ALIASES,
+  PLANYO_RESOURCE_NAME_CROSSWALK as RESOURCE_NAME_CROSSWALK,
+  isUnroutablePlanyoUnit,
+} from '../src/lib/scheduling/planyoNameNormalizer'
 
-// ── Same crosswalk + routing rules as the import script ─────────────
-// Kept in lockstep manually; this script intentionally does NOT import
-// from scheduling-planyo-migration.ts to keep that long file's
-// surface area unchanged.
-
-const NAME_ALIASES: Record<string, string> = {
-  'Scout Van': 'Video Van',
-  'Cube 30 Wardrobe': 'Cube 30',
-}
-
-// Planyo `category` strings (the resource name string on Reservation)
-// that don't byte-match AssetCategory.name. Map → canonical name.
-const RESOURCE_NAME_CROSSWALK: Record<string, string> = {
-  'Cargo Vans w/ Liftgate': 'Cargo Van w/ Liftgate',
-  'Cargo Vans w/o Liftgate': 'Cargo Van w/o Liftgate',
-  // 2026-07 category renames in HQ (Planyo strings unchanged):
-  // "ProScout / VTR" → "ProScout / VideoVan", "Cube Truck" →
-  // "SuperCube Truck" (assets stayed "Cube N").
-  'ProScout Van / VTR': 'ProScout / VideoVan',
-  'Cube Truck': 'SuperCube Truck',
-  // Planyo resource 119962 "DLUX" is seeded to the HQ restroom-trailer
-  // category (assets "DLUX 1..4").
-  DLUX: '2 Unit Restroom Trailer',
-}
+// ── Crosswalk + routing rules ───────────────────────────────────────
+// NAME_ALIASES / RESOURCE_NAME_CROSSWALK used to be local copies here,
+// which is exactly why the live importer never learned them: the
+// one-shot sweep resolved "Scout Van" → "Video Van" and every ongoing
+// import re-created the same unbindable hold. They now live in
+// planyoNameNormalizer.ts and are shared with importNewCart.ts.
 
 // Resource names we deliberately do not bind (per
 // IGNORED_PLANYO_RESOURCE_IDS in src/lib/sync/planyo/reconcile.ts).
@@ -90,7 +78,7 @@ type CategoryRoute = {
 }
 const CATEGORY_ROUTES: CategoryRoute[] = [
   {
-    matches: (raw) => /^lankershim\s+studio\b/i.test(raw),
+    matches: isUnroutablePlanyoUnit,
     forceUnassigned: true,
     reason:
       'Planyo lumps Lankershim spaces under generic "Studios"; specific room not in Planyo data — agent assigns post-import.',
@@ -113,6 +101,7 @@ type Bucket =
   | 'AMBIGUOUS'
   | 'UNMATCHED'
   | 'COLLISION'
+  | 'DOUBLE_BOOK'
   | 'CONFLICT'
 
 type Row = {
@@ -352,6 +341,40 @@ async function main() {
     }
     base.matchedBookingItemId = chosenItem.id
 
+    // 6b. DOUBLE-BOOK guard — the Asset already carries an ACTIVE
+    //     assignment overlapping this reservation's window on a
+    //     DIFFERENT booking. The COLLISION check below only looks
+    //     within one booking; without this, a backfill bind can put
+    //     two productions on the same truck on the same days, which
+    //     is the one failure mode this whole subsystem exists to
+    //     prevent. Flag for a human, never auto-resolve.
+    const clash = await prisma.bookingAssignment.findFirst({
+      where: {
+        assetId: asset.id,
+        status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
+        startDate: { lte: end },
+        endDate: { gte: start },
+        bookingItem: { is: { bookingId: { not: r.bookingId ?? '' } } },
+      },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        bookingItem: { select: { booking: { select: { bookingNumber: true, jobName: true } } } },
+      },
+    })
+    if (clash) {
+      const other = clash.bookingItem.booking
+      rows.push({
+        ...base,
+        bucket: 'DOUBLE_BOOK',
+        reason:
+          `Asset ${asset.unitName} already ASSIGNED to ${other.bookingNumber} (${other.jobName ?? '—'}) ` +
+          `${clash.startDate.toISOString().slice(0, 10)}..${clash.endDate.toISOString().slice(0, 10)} — overlaps this window`,
+      })
+      continue
+    }
+
     // 7. Cross-reservation COLLISION check — same Asset claimed twice
     //    on the same booking in this run.
     const bookingMap =
@@ -375,7 +398,7 @@ async function main() {
 
   // ── Report ─────────────────────────────────────────────────────
   const summary: Record<Bucket, number> = {
-    RESOLVED: 0, AMBIGUOUS: 0, UNMATCHED: 0, COLLISION: 0, CONFLICT: 0,
+    RESOLVED: 0, AMBIGUOUS: 0, UNMATCHED: 0, COLLISION: 0, DOUBLE_BOOK: 0, CONFLICT: 0,
   }
   for (const r of rows) summary[r.bucket]++
 
@@ -415,7 +438,7 @@ async function main() {
   console.log(`  Bad category resolution:        ${assetResAlone.badCategory}`)
 
   // Drift hooks: Lankershim flow + 3RD HOLD collisions.
-  const lankRows = rows.filter((r) => /^lankershim\s+studio\b/i.test(r.rawUnitName))
+  const lankRows = rows.filter((r) => isUnroutablePlanyoUnit(r.rawUnitName))
   const collisions = rows.filter((r) => r.bucket === 'COLLISION')
   console.log('\n──── Drift signals ────')
   console.log(`  Lankershim-routed reservations: ${lankRows.length} (all in CONFLICT/force-unassigned)`)
@@ -427,7 +450,7 @@ async function main() {
   }
 
   // Show first 10 of every non-RESOLVED bucket for human eyeball.
-  for (const b of ['AMBIGUOUS', 'UNMATCHED', 'COLLISION', 'CONFLICT'] as Bucket[]) {
+  for (const b of ['AMBIGUOUS', 'UNMATCHED', 'COLLISION', 'DOUBLE_BOOK', 'CONFLICT'] as Bucket[]) {
     const sample = rows.filter((r) => r.bucket === b).slice(0, 10)
     if (sample.length === 0) continue
     console.log(`\n──── ${b} sample (first ${sample.length}) ────`)
@@ -484,11 +507,21 @@ async function main() {
       // into notes for reversibility — `DELETE FROM booking_assignments
       // WHERE id IN (...)` + reset status would unwind the batch.
       const noteTag = `[UNIT_ASSIGN_BACKFILL ${runId}] reservationId=${r.planyoReservationId ?? r.reservationId}`
+      // APPEND, never `set`. BookingItem.notes carries operator text
+      // (special handling, client asks); an earlier version of this
+      // script overwrote it with the tag, silently destroying whatever
+      // a human had written on the hold.
+      const priorNotes = (
+        await tx.bookingItem.findUnique({
+          where: { id: r.matchedBookingItemId },
+          select: { notes: true },
+        })
+      )?.notes
       await tx.bookingItem.update({
         where: { id: r.matchedBookingItemId },
         data: {
           status: 'ASSIGNED',
-          notes: { set: noteTag },
+          notes: { set: priorNotes ? `${priorNotes}\n${noteTag}` : noteTag },
         },
       })
       itemsAssigned++

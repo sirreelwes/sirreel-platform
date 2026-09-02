@@ -16,6 +16,7 @@
     "db:reset": "prisma migrate reset",
     "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
+    "test:planyo-names": "tsx tests/scheduling/planyoNameNormalizer.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
     "test:alias-match": "tsx tests/sales/alias-match.test.ts",
     "test:quick-reply-items": "tsx tests/sales/quick-reply-items.test.ts",

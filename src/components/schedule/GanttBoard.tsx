@@ -1280,23 +1280,32 @@ export function GanttBoard() {
       return inWindow && matchesCatFilter
     })
     if (visibleUnassigned.length > 0) {
-      // One compact band at the top of the chart: tasks sit on their scheduled
-      // day, and multiple tasks on the SAME day stack vertically in that day's
-      // column. A stronger bottom border delineates the band from the vehicles.
-      const dayCounts = new Map<string, number>()
+      // One compact band at the top of the chart. Two kinds ride it:
+      // one-day delivery/pickup TASKS, and multi-day HOLDS that consume
+      // category capacity while bound to no unit (kind==='hold'). The
+      // latter used to be omitted entirely, which is how an unbindable
+      // Planyo import could block a category with nothing on screen to
+      // explain it.
+      //
+      // Stacking is interval packing over [start, end] rather than a
+      // per-day counter — a task is just a one-day interval, so tasks
+      // sharing a day still land on separate lanes, and two overlapping
+      // holds no longer draw on top of each other.
+      const laneEnds: string[] = []
       const stacked = visibleUnassigned
         .slice()
         .sort((a, b) =>
           String(a.start).localeCompare(String(b.start)) ||
-          String(a.scheduledTime).localeCompare(String(b.scheduledTime)) ||
+          String(a.scheduledTime ?? '').localeCompare(String(b.scheduledTime ?? '')) ||
           String(a.clientName).localeCompare(String(b.clientName)),
         )
         .map((t) => {
-          const stackIndex = dayCounts.get(t.start) ?? 0
-          dayCounts.set(t.start, stackIndex + 1)
+          let stackIndex = laneEnds.findIndex((endDs) => endDs < t.start)
+          if (stackIndex === -1) stackIndex = laneEnds.length
+          laneEnds[stackIndex] = t.end
           return { ...t, stackIndex }
         })
-      const maxStack = Math.max(1, ...Array.from(dayCounts.values()))
+      const maxStack = Math.max(1, laneEnds.length)
       entries.push({ type: 'taskBand', tasks: stacked, bandHeight: maxStack * TASK_SLOT + 6 })
     }
 
@@ -1481,10 +1490,23 @@ export function GanttBoard() {
                       style={{ height: entry.bandHeight }}
                       className="border-b-2 border-gray-300 px-3 flex flex-col justify-center bg-rose-50/40"
                     >
-                      <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wide leading-tight">Tasks</div>
-                      <div className="text-[9px] text-rose-600 italic leading-tight">
-                        {entry.tasks.length} need{entry.tasks.length === 1 ? 's' : ''} assignment
-                      </div>
+                      {(() => {
+                        const holdCount = entry.tasks.filter((t: any) => t.kind === 'hold').length
+                        const taskCount = entry.tasks.length - holdCount
+                        const label = holdCount > 0 && taskCount > 0 ? 'Unassigned' : holdCount > 0 ? 'No unit' : 'Tasks'
+                        const parts = [
+                          holdCount > 0 ? `${holdCount} hold${holdCount === 1 ? '' : 's'} need${holdCount === 1 ? 's' : ''} a unit` : null,
+                          taskCount > 0 ? `${taskCount} task${taskCount === 1 ? '' : 's'} need${taskCount === 1 ? 's' : ''} assignment` : null,
+                        ].filter(Boolean)
+                        return (
+                          <>
+                            <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wide leading-tight">{label}</div>
+                            {parts.map((pText) => (
+                              <div key={pText as string} className="text-[9px] text-rose-600 italic leading-tight">{pText}</div>
+                            ))}
+                          </>
+                        )
+                      })()}
                     </div>
                   )
                 }
@@ -1646,6 +1668,35 @@ export function GanttBoard() {
                         {entry.tasks.map((t: any, k: number) => {
                           const bar = getBar(t.start, t.end)
                           if (!bar) return null
+                          // A hold with no unit: draws its FULL rental span
+                          // (a task is a single day), and clicking it opens
+                          // the same per-BookingItem unit picker a unit-row
+                          // bar would. This is the row that explains a
+                          // category reading "0 available" while its units
+                          // look free.
+                          if (t.kind === 'hold') {
+                            const fromPlanyo = Boolean(t.planyoCartId)
+                            const hint = (t.planyoUnits ?? []).join(', ')
+                            const detail = [
+                              t.jobCode,
+                              t.clientName,
+                              t.needed > 1 ? `${t.needed} needed` : null,
+                              fromPlanyo ? `Planyo cart ${t.planyoCartId}${hint ? ` · "${hint}"` : ''}` : null,
+                            ].filter(Boolean).join(' · ')
+                            return (
+                              <div
+                                key={`uh-${k}`}
+                                className={`absolute rounded border border-dashed flex items-center overflow-hidden bg-rose-100 border-rose-500 text-rose-900 ${canBindUnit ? 'cursor-pointer hover:bg-rose-200 transition-colors' : ''}`}
+                                style={{ left: bar.left, width: bar.width, top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H }}
+                                onClick={canBindUnit ? (ev) => { ev.stopPropagation(); setAssignBookingItemId(t.bookingItemId) } : undefined}
+                                title={`Needs a unit — ${t.categoryName}${detail ? ` · ${detail}` : ''}${canBindUnit ? ' · click to pick a unit' : ''}`}
+                              >
+                                <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
+                                  ⚠ {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
+                                </span>
+                              </div>
+                            )
+                          }
                           const isPickup = t.taskType === 'PICKUP'
                           // The task's own one-line title wins over the bare
                           // type word — "Delivery of Honda Generator" tells

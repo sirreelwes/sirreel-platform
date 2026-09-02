@@ -648,13 +648,18 @@ export async function GET(req: NextRequest) {
     })
 
   // ── Needs-Assignment lane — DELIVERY/PICKUP TASKS awaiting fleet. ──
-  //    Vehicles are intentionally NOT in this lane (Planyo backfill = every
-  //    imported BookingItem is unassigned noise). It now surfaces the
-  //    sales-created delivery/pickup DispatchTasks that still need a fleet
-  //    assignment: PENDING, in the visible window by scheduledDate, and NOT
-  //    yet given a tow vehicle. Assigning a tow vehicle (fleet action) drops
-  //    the task from this lane. Read-only here — assignment is a separate,
-  //    canAssignAssets-gated endpoint.
+  //    Surfaces the sales-created delivery/pickup DispatchTasks that still
+  //    need a fleet assignment: PENDING, in the visible window by
+  //    scheduledDate, and NOT yet given a tow vehicle. Assigning a tow
+  //    vehicle (fleet action) drops the task from this lane. Read-only
+  //    here — assignment is a separate, canAssignAssets-gated endpoint.
+  //
+  //    Vehicles USED to be excluded from this lane ("Planyo backfill =
+  //    every imported BookingItem is unassigned noise"). That exclusion
+  //    is what made an unbindable import invisible: it still subtracts
+  //    from availableToHold, so the unit read free on this board while
+  //    POST /api/scheduling/holds hard-blocked it 409 "over-capacity".
+  //    Capacity-consuming unbound holds are added below.
   const taskRows = await prisma.dispatchTask.findMany({
     where: {
       type: { in: ['DELIVERY', 'PICKUP'] },
@@ -696,11 +701,88 @@ export async function GET(req: NextRequest) {
     }
   })
 
+  // ── Same lane: HOLDS that consume capacity but are bound to no unit. ──
+  //    Only REQUESTED rank-1 items count — those are exactly the rows
+  //    `getCategoryAvailability` subtracts from availableToHold (backups
+  //    queue without consuming; UNFULFILLED was deliberately released).
+  //    A partially-bound item shows its REMAINING uncovered quantity, so
+  //    a qty-3 hold with 1 unit bound reads "2 need a unit" — matching
+  //    the same arithmetic the availability engine does.
+  const unboundItems = await prisma.bookingItem.findMany({
+    where: {
+      status: 'REQUESTED',
+      holdRank: 1,
+      booking: { archivedAt: null, startDate: { lte: to }, endDate: { gte: from } },
+    },
+    select: {
+      id: true,
+      quantity: true,
+      categoryId: true,
+      category: { select: { id: true, name: true, reservableOnGantt: true } },
+      booking: {
+        select: {
+          id: true,
+          bookingNumber: true,
+          jobName: true,
+          startDate: true,
+          endDate: true,
+          planyoCartId: true,
+          source: true,
+          company: { select: { name: true } },
+          agent: { select: { id: true, name: true } },
+          job: { select: { id: true, jobCode: true, name: true } },
+        },
+      },
+      _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } },
+    },
+  })
+  const unboundBookingIds = [...new Set(unboundItems.map((i) => i.booking.id))]
+  const planyoHints = unboundBookingIds.length
+    ? await prisma.reservation.findMany({
+        where: { bookingId: { in: unboundBookingIds }, status: { not: 'CANCELLED' } },
+        select: { bookingId: true, unitName: true, category: true },
+      })
+    : []
+  const hintsByBooking = new Map<string, string[]>()
+  for (const h of planyoHints) {
+    if (!h.bookingId) continue
+    const arr = hintsByBooking.get(h.bookingId) ?? []
+    arr.push(h.unitName)
+    hintsByBooking.set(h.bookingId, arr)
+  }
+
+  const unboundHolds = unboundItems
+    .filter((i) => (i.category?.reservableOnGantt ?? false) && i._count.assignments < i.quantity)
+    .map((i) => ({
+      kind: 'hold' as const,
+      bookingItemId: i.id,
+      bookingId: i.booking.id,
+      cartId: i.booking.bookingNumber,
+      categoryId: i.categoryId,
+      categoryName: i.category?.name ?? '',
+      cat: mapCategoryName(i.category?.name ?? ''),
+      needed: i.quantity - i._count.assignments,
+      quantity: i.quantity,
+      start: ymd(i.booking.startDate),
+      end: ymd(i.booking.endDate),
+      clientName: companyLabel(i.booking.company?.name),
+      jobName: i.booking.job?.name ?? i.booking.jobName ?? '',
+      jobId: i.booking.job?.id ?? null,
+      jobCode: i.booking.job?.jobCode ?? null,
+      agent: i.booking.agent?.name ?? '',
+      // Provenance: a Planyo cart id means "this came in from Planyo and
+      // its unit string didn't resolve", which is a different fix from a
+      // native hold nobody has assigned yet.
+      planyoCartId: i.booking.planyoCartId,
+      planyoUnits: hintsByBooking.get(i.booking.id) ?? [],
+    }))
+
   return NextResponse.json({
     ok: true,
     jobs,
     units,
-    unassignedHolds,
+    unassignedHolds: [...unassignedHolds, ...unboundHolds],
+    unboundHoldCount: unboundHolds.length,
     total: assignments.length,
     window: { from: ymd(from), to: ymd(to) },
   })
