@@ -46,6 +46,8 @@ export type SendInvoiceResult =
       sentTo: string
       cc: string[]
       orderAdvancedToInvoiced: boolean
+      /** dryRun only — the composed message, dispatched nowhere. */
+      preview?: { subject: string; html: string; text: string; attachment: string }
     }
   | {
       ok: false
@@ -70,8 +72,33 @@ export async function sendInvoice(args: {
    *  operator wants to send to a non-primary contact). Must be present
    *  on the order's contact roster. */
   overrideContactId?: string | null
+  /**
+   * Send an invoice the client has ALREADY had.
+   *
+   * The already-sent guard exists so nobody double-bills by clicking twice,
+   * and it stays the default. But correcting an invoice in place and then
+   * telling the client about it is now a first-class flow (Wes 2026-09-01),
+   * and it dead-ends here without this: the invoice is SENT, so the send
+   * refuses, and the corrected figures never reach anyone.
+   *
+   * Deliberate re-send only — the caller has to say so.
+   */
+  resend?: boolean
+  /**
+   * Compose and return the email WITHOUT dispatching. Nothing is sent, no
+   * status moves, and the portal magic link is not minted — the preview
+   * carries the plain sign-in URL where the real send carries a tokenized
+   * one. Everything else is the message that would go out.
+   */
+  dryRun?: boolean
 }): Promise<SendInvoiceResult> {
-  const { invoiceId, cc: ccOverride = null, overrideContactId = null } = args
+  const {
+    invoiceId,
+    cc: ccOverride = null,
+    overrideContactId = null,
+    resend = false,
+    dryRun = false,
+  } = args
 
   // ── Load everything in one query ────────────────────────────────
   const invoice = await prisma.invoice.findUnique({
@@ -122,8 +149,25 @@ export async function sendInvoice(args: {
   if (!invoice.pdfBlobKey) {
     return { ok: false, status: 409, error: 'invoice has no PDF — regenerate first' }
   }
-  if (invoice.status === 'SENT' || invoice.status === 'PARTIAL' || invoice.status === 'PAID') {
-    return { ok: false, status: 409, error: `invoice already ${invoice.status.toLowerCase()}` }
+  if (
+    !resend &&
+    (invoice.status === 'SENT' || invoice.status === 'PARTIAL' || invoice.status === 'PAID')
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: `invoice already ${invoice.status.toLowerCase()} — use Send again if you mean to re-send it`,
+    }
+  }
+  // Re-sending something already part-paid or paid is asking for a
+  // double payment, whatever the caller says. Only a plain SENT invoice
+  // can go again.
+  if (resend && (invoice.status === 'PARTIAL' || invoice.status === 'PAID')) {
+    return {
+      ok: false,
+      status: 409,
+      error: `${invoice.invoiceNumber} is ${invoice.status.toLowerCase()} — re-sending a paid invoice risks a second payment`,
+    }
   }
   if (invoice.status === 'VOID') {
     return { ok: false, status: 409, error: 'cannot send a voided invoice' }
@@ -148,7 +192,7 @@ export async function sendInvoice(args: {
 
   // ── Magic link (reuse the contract pattern) ─────────────────────
   let portalUrl: string | null = null
-  if (invoice.order.portalSlug) {
+  if (invoice.order.portalSlug && !dryRun) {
     try {
       const link = await refreshOrIssueJobMagicLink({
         orderId: invoice.order.id,
@@ -197,8 +241,28 @@ export async function sendInvoice(args: {
     return { ok: false, status: 500, error: 'failed to fetch invoice PDF' }
   }
 
-  // ── Dispatch ────────────────────────────────────────────────────
   const filename = `Invoice-${invoice.invoiceNumber}.pdf`
+
+  // Preview stops here: composed, addressed, PDF confirmed retrievable —
+  // and nothing sent, no status moved.
+  if (dryRun) {
+    return {
+      ok: true,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      sentTo: primary.email,
+      cc: others.map((o) => o.email),
+      orderAdvancedToInvoiced: false,
+      preview: {
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        attachment: `${filename} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`,
+      },
+    }
+  }
+
+  // ── Dispatch ────────────────────────────────────────────────────
   const result = await sendAgreementEmail({
     to: [primary.email],
     // The email is signed by billing (Ana) — a plain Reply ("run my

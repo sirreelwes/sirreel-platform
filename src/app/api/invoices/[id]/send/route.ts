@@ -31,6 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = (await req.json().catch(() => ({}))) as {
     cc?: unknown
     overrideContactId?: unknown
+    resend?: unknown
+    preview?: unknown
   }
   const cc = Array.isArray(body.cc)
     ? (body.cc.filter((v) => typeof v === 'string') as string[])
@@ -42,6 +44,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     invoiceId: params.id,
     cc,
     overrideContactId,
+    // Deliberate re-send of an invoice the client already has — the
+    // correct-in-place flow ends here, and the default guard would
+    // otherwise refuse it. Never inferred; the caller says so.
+    resend: body.resend === true,
+    // Compose and return without dispatching, so a rep can read the exact
+    // email before it goes to a client.
+    dryRun: body.preview === true,
   })
 
   if (!result.ok) {
