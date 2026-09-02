@@ -39,6 +39,8 @@ interface EodData {
       achPendingCount: number
       outstandingTotal: number
       outstandingCount: number
+      rwObservedPaid: number
+      rwObservedCount: number
     }
   }
   recipients: string[]
@@ -48,9 +50,12 @@ interface EodData {
 
 type FieldKey = 'cardpointe' | 'rentalworks' | 'ordersCreated' | 'quotesCreated'
 
+// Total before its parts, matching the email. RentalWorks is the day's whole
+// take and CardPointe is the card slice of it (Wes, 2026-09-02) — listing the
+// card figure first invited reading them as two separate piles.
 const FIELDS: { key: FieldKey; label: string }[] = [
-  { key: 'cardpointe', label: 'CardPointe' },
-  { key: 'rentalworks', label: 'RentalWorks' },
+  { key: 'rentalworks', label: 'Collected today (RentalWorks)' },
+  { key: 'cardpointe', label: 'of which card (CardPointe)' },
   { key: 'ordersCreated', label: 'Value of orders created' },
   { key: 'quotesCreated', label: 'Value of quotes created' },
 ]
@@ -130,6 +135,12 @@ export function EodReportPanel() {
   }
 
   const ctx = data?.figures.context
+  const collectedTotal = Number(vals.rentalworks) || 0
+  const cardPortion = Number(vals.cardpointe) || 0
+  const nonCard = Math.round((collectedTotal - cardPortion) * 100) / 100
+  // Card is part of the total, so this ordering cannot happen. Almost always a
+  // digit typed into the wrong box, and it would go out looking plausible.
+  const cardExceedsTotal = cardPortion > collectedTotal + 0.005
 
   return (
     <div className="mb-4">
@@ -205,6 +216,29 @@ export function EodReportPanel() {
                 })}
               </div>
 
+              {cardExceedsTotal && (
+                <p className="mt-2 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-[12px] text-rose-700">
+                  The card figure is larger than the total collected. Card payments are part of that
+                  total, so one of the two is off.
+                </p>
+              )}
+
+              {!cardExceedsTotal && Math.abs(nonCard) >= 0.01 && (
+                <p className="mt-2 text-[12px] text-zinc-600">
+                  That leaves <span className="font-semibold tabular-nums text-zinc-900">{usd(nonCard)}</span>{' '}
+                  in ACH, wire or cheques — the email works this out and shows it.
+                </p>
+              )}
+
+              {ctx && ctx.rwObservedCount > 0 && (
+                <p className="mt-2 text-[11.5px] text-zinc-500">
+                  Cross-check: RentalWorks shows {ctx.rwObservedCount} invoice
+                  {ctx.rwObservedCount === 1 ? '' : 's'} flipped to paid today, totalling{' '}
+                  <span className="tabular-nums">{usd(ctx.rwObservedPaid)}</span>. Whole invoice
+                  amounts, so a part-payment reads high.
+                </p>
+              )}
+
               {ctx && (
                 <div className="mt-3 rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-2 text-[11.5px] text-zinc-600 leading-relaxed">
                   Also going in the email:{' '}
@@ -218,14 +252,6 @@ export function EodReportPanel() {
                     </>
                   )}
                   .
-                  {ctx.otherReceipts > 0 && (
-                    <>
-                      {' '}
-                      HQ also recorded{' '}
-                      <span className="text-zinc-900 font-semibold tabular-nums">{usd(ctx.otherReceipts)}</span> in
-                      non-card payments today.
-                    </>
-                  )}
                 </div>
               )}
 
@@ -249,7 +275,7 @@ export function EodReportPanel() {
               <div className="mt-3 flex items-center gap-2">
                 <button
                   onClick={() => void send()}
-                  disabled={sending || data.recipients.length === 0}
+                  disabled={sending || data.recipients.length === 0 || cardExceedsTotal}
                   className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[12px] font-semibold"
                 >
                   {sending ? 'Sending…' : data.alreadySentAt ? 'Send again' : 'Send report'}

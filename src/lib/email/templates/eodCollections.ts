@@ -7,11 +7,20 @@ import { renderEmailShell, renderEmailText, detailTable, calloutBox, p } from '@
  * same order, her note in the middle, because Dani and Wes read it every
  * evening and the shape is what makes it scannable.
  *
- * Three things it adds, each of which she was writing out longhand or leaving
+ * Four things it adds, each of which she was writing out longhand or leaving
  * to the reader:
  *   · counts beside the money, so "$8,564.50" is visibly two orders and not ten
+ *   · the non-card remainder, computed (see below)
  *   · open AR, the number the report was always implicitly about
  *   · pending ACH called out on its own — her "straggling ACH's" line, as a figure
+ *
+ * The two collected lines are NESTED and the layout now says so. Wes,
+ * 2026-09-02: RentalWorks is "money that hits the RW collected — sometimes
+ * that is cardpointe payments and sometimes that's an ACH or wire that hits
+ * Bank Account and she marks as paid". So the total leads, the card slice sits
+ * under it, and what is left — ACH, wire, cheques — is subtracted and shown.
+ * Listed flat, as they were, the two figures invite being added together,
+ * which counts the card money twice.
  *
  * The note stays free text. The judgement in "orders extended into the
  * weekend, so today is light" is the part of this email no query produces.
@@ -58,9 +67,18 @@ export function renderEodCollectionsEmail(i: EodEmailInput): {
 } {
   const subject = `EOD Collections — ${longDate(i.date)}`
 
+  // Total first, then what it is made of. The remainder shows only when it is
+  // real money — on an all-card day a "$0.00 other" line is noise.
+  const nonCard = Math.round((i.rentalworks - i.cardpointe) * 100) / 100
   const collected = detailTable([
-    { label: 'CardPointe', value: `${usd(i.cardpointe)}  ·  ${countNote(i.cardCount, 'payment')}` },
-    { label: 'RentalWorks', value: usd(i.rentalworks) },
+    { label: 'Collected (RentalWorks)', value: usd(i.rentalworks) },
+    {
+      label: 'of which card',
+      value: `${usd(i.cardpointe)}  ·  ${countNote(i.cardCount, 'payment')}`,
+    },
+    ...(Math.abs(nonCard) >= 0.01
+      ? [{ label: 'of which ACH / wire / cheque', value: usd(nonCard) }]
+      : []),
   ])
 
   const created = detailTable([
@@ -110,7 +128,8 @@ export function renderEodCollectionsEmail(i: EodEmailInput): {
   const html = renderEmailShell({
     eyebrow: 'Collections',
     heading: `End of day — ${longDate(i.date)}`,
-    preheader: `Collected ${usd(i.cardpointe + i.rentalworks)} · open AR ${usd(i.outstandingTotal)}`,
+    // The total alone — adding the two would double-count the card take.
+    preheader: `Collected ${usd(i.rentalworks)} · open AR ${usd(i.outstandingTotal)}`,
     bodyHtml: [
       p('<strong>Collected today</strong>'),
       collected,
@@ -127,8 +146,9 @@ export function renderEodCollectionsEmail(i: EodEmailInput): {
     `EOD Collections — ${longDate(i.date)}`,
     '',
     'COLLECTED TODAY',
-    `CardPointe: ${usd(i.cardpointe)} (${countNote(i.cardCount, 'payment')})`,
-    `RentalWorks: ${usd(i.rentalworks)}`,
+    `Collected (RentalWorks): ${usd(i.rentalworks)}`,
+    `  of which card: ${usd(i.cardpointe)} (${countNote(i.cardCount, 'payment')})`,
+    ...(Math.abs(nonCard) >= 0.01 ? [`  of which ACH / wire / cheque: ${usd(nonCard)}`] : []),
     ...(i.note.trim() ? ['', i.note.trim()] : []),
     '',
     'WRITTEN TODAY',

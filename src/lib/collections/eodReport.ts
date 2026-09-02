@@ -21,15 +21,29 @@ import { openArTotal } from '@/lib/collections/collectible'
  *   Card receipts        HQ knows exactly. Every card charge runs through
  *                        /api/invoices/[id]/charge-saved-card and lands in
  *                        `Payment`. Solid.
- *   Other receipts       HQ knows what HQ recorded. A check Ana keys into
- *                        RentalWorks and nowhere else is invisible here.
- *   RentalWorks total    NOT a cash figure. The closest HQ has is "RW invoices
- *                        we OBSERVED flip to paid today" — the sync noticing a
- *                        state change, not RW's own daily receipts, and always
- *                        the whole invoice rather than the amount paid. It is a
- *                        starting number, not the answer.
+ *   RentalWorks total    The day's WHOLE take, of which the card figure is a
+ *                        slice — see below. HQ sees the part that flowed
+ *                        through HQ; a wire Ana spots in the bank account and
+ *                        marks paid in RW is invisible here.
  *   Orders / quotes      HQ-native only. Anything still written directly in RW
  *                        is not in these totals.
+ *
+ * ── The two money lines are NESTED, not parallel ───────────────────────────
+ *
+ * Wes, 2026-09-02: RentalWorks is "money that hits the RW collected — sometimes
+ * that is cardpointe payments and sometimes that's an ACH or wire that hits
+ * Bank Account and she marks as paid".
+ *
+ * So RentalWorks ⊇ CardPointe. Every card charge is also recorded against RW,
+ * and the gap between the two lines is the non-card money: ACH, wire, cheques.
+ * Ana's own sample reads $5,251.78 card inside $6,707.57 collected — $1,455.79
+ * of it not on a card.
+ *
+ * This was worth getting right rather than guessing. Read as two independent
+ * figures, the report double-counts the card take when anyone adds them up,
+ * and `cardpointe > rentalworks` — which is impossible — looks like a normal
+ * day. It is now a validation, and the non-card remainder is computed and
+ * shown rather than left to the reader.
  *
  * So every figure arrives pre-filled with its provenance attached and Ana can
  * correct any of them before sending. A number she cannot override is a number
@@ -112,6 +126,11 @@ export interface EodFigures {
     /** Open AR across the RW mirror, for the "where we stand" line. */
     outstandingTotal: number
     outstandingCount: number
+    /** Cross-check for the RentalWorks field: invoices the mirror SAW flip to
+     *  paid today. Whole invoice totals, so it overstates a part-payment —
+     *  offered as a second opinion beside the figure, never as the figure. */
+    rwObservedPaid: number
+    rwObservedCount: number
   }
 }
 
@@ -172,6 +191,8 @@ export async function computeEodFigures(dateISO: string): Promise<EodFigures> {
 
   const cardAmount = money(cardAgg._sum.amount) + money(cardAgg._sum.surchargeAmount)
   const otherReceipts = money(otherAgg._sum.amount)
+  const hqReceipts = Math.round((cardAmount + otherReceipts) * 100) / 100
+  const rwObserved = money(rwPaid._sum.invoiceTotal)
 
   // A quote until it is won: DRAFT and SENT are proposals, everything else is
   // business on the books.
@@ -188,11 +209,25 @@ export async function computeEodFigures(dateISO: string): Promise<EodFigures> {
       partial: false,
     },
     rentalworks: {
-      amount: money(rwPaid._sum.invoiceTotal) || otherReceipts + cardAmount,
-      count: rwPaid._count,
-      source: rwPaid._count
-        ? 'RentalWorks invoices seen paid today (whole invoice, not the amount applied) — check against RW before sending.'
-        : 'Nothing seen paid in RentalWorks today, so this is HQ receipts instead — check against RW before sending.',
+      // The day's TOTAL collected, card included.
+      //
+      // Two imperfect views of it, and the bigger one wins. HQ receipts count
+      // only money that flowed through HQ — a wire Ana spots in the bank and
+      // marks paid in RW never touched this system, and on a day like that HQ
+      // reports $0 against a real six-thousand-dollar take. The RW mirror's
+      // paid observations catch those, at the cost of counting a part-paid
+      // invoice at its full value.
+      //
+      // Neither is authoritative, so the default is whichever is larger and
+      // the source line names which one it used. Defaulting low would have Ana
+      // retyping the figure every evening, which is the habit that makes a
+      // pre-filled form worse than a blank one.
+      amount: Math.max(hqReceipts, rwObserved),
+      count: rwObserved > hqReceipts ? rwPaid._count : cardAgg._count + otherAgg._count,
+      source:
+        rwObserved > hqReceipts
+          ? `From ${rwPaid._count} RentalWorks invoice${rwPaid._count === 1 ? '' : 's'} seen paid today — whole invoice amounts, so a part-payment reads high.`
+          : 'Everything HQ took today, card included. Add anything marked paid in RentalWorks that did not come through HQ.',
       partial: true,
     },
     ordersCreated: {
@@ -213,6 +248,8 @@ export async function computeEodFigures(dateISO: string): Promise<EodFigures> {
       achPendingCount: achAgg._count,
       outstandingTotal: outstanding.total,
       outstandingCount: outstanding.count,
+      rwObservedPaid: rwObserved,
+      rwObservedCount: rwPaid._count,
     },
   }
 }
