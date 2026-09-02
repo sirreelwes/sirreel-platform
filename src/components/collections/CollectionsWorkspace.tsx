@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { RwConnectionCard } from '@/components/collections/RwConnectionCard'
+import { EodReportPanel } from '@/components/collections/EodReportPanel'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -608,6 +609,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           the RentalWorks mirror, so a dead token is a collections problem —
           it used to surface only as an invoice list that stopped growing. */}
       <RwConnectionCard />
+
+      {/* The evening report. Sits above the heading with the connection meter
+          because both are "state of the desk" rather than a working list. */}
+      <EodReportPanel />
 
       {/* Dark text — this heading sits on the LIGHT dashboard shell, not in
           a card. It rendered text-zinc-900 for months: an invisible title. */}

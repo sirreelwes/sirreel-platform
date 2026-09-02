@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { collectibleWhere } from '@/lib/collections/collectible'
 import { requireCollectionsUser } from '@/lib/collections/access'
 
 export const dynamic = 'force-dynamic'
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
       // populated on a void, so "remaining > 0" alone offered Ana cancelled
       // obligations to charge cards against). Search still surfaces them,
       // with the status visible on the row.
-    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: [...paidMarkedIds, ...writtenOff] }, NOT: { status: 'VOID' } }
+    : collectibleWhere([...paidMarkedIds, ...writtenOff])
 
   const invoices = await prisma.rwInvoice.findMany({
     where,

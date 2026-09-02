@@ -40,6 +40,7 @@ export type NotificationChannelKey =
   | 'hq-escalation-sales'
   | 'hq-escalation-fleet'
   | 'hq-escalation-warehouse'
+  | 'eod-collections'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -129,6 +130,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The floor half: HQ-booked orders approaching pickup whose pick list is still DRAFT / PICKING / READY_TO_STAGE — or missing entirely, which is an order nobody has started rather than one that is fine. Hugo and the warehouse. There are no WAREHOUSE-role users yet, so the default is Hugo plus the hq@ group; point it at the floor once they have logins.',
     defaults: () => ['hugo@sirreel.com', hqNotifyInbox()],
+  },
+  {
+    key: 'eod-collections',
+    label: 'End-of-day collections report',
+    description:
+      'The evening collections summary Ana sends from /collections: what came in by card and through RentalWorks, what was written today, open AR, and her note. Wes 2026-09-02 — Dani and Wes for now. Deliberately narrow: it carries the day\u2019s money, not an operational heads-up.',
+    defaults: () => ['dani@sirreel.com', 'wes@sirreel.com'],
   },
 ]
 
