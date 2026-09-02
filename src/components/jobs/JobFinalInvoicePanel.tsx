@@ -88,12 +88,12 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
   }
 
   const input =
-    'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-amber-600'
+    'w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 outline-none focus:border-amber-600'
 
   return (
-    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+    <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Final invoice</h2>
+        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Final invoice</h2>
         <button
           onClick={() => setOpen((v) => !v)}
           className="rounded-lg bg-amber-600 hover:bg-amber-500 text-zinc-900 font-bold px-3 py-1.5 text-xs transition-colors"
@@ -103,9 +103,9 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
       </div>
 
       {open && (
-        <div className="space-y-3 mb-4 border-b border-zinc-800 pb-4">
+        <div className="space-y-3 mb-4 border-b border-zinc-200 pb-4">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block">
+            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block">
               Final amount agreed
             </label>
             <input
@@ -117,7 +117,7 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block">
+            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block">
               RW invoice # (optional)
             </label>
             <input
@@ -130,7 +130,7 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
           <div>
             <label
               htmlFor="final-invoice-pdf"
-              className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block"
             >
               Invoice PDF (optional)
             </label>
@@ -177,16 +177,16 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
               htmlFor="final-invoice-pdf"
               className={`flex flex-col items-center justify-center gap-1 w-full rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition ${
                 dragging
-                  ? 'border-amber-500 bg-amber-500/10'
+                  ? 'border-amber-500 bg-amber-50'
                   : file
-                    ? 'border-emerald-600/60 bg-emerald-500/5 hover:border-emerald-500'
-                    : 'border-zinc-700 bg-zinc-800/40 hover:border-zinc-600 hover:bg-zinc-800'
+                    ? 'border-emerald-600/60 bg-emerald-50 hover:border-emerald-500'
+                    : 'border-zinc-300 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100'
               }`}
             >
               {file ? (
                 <>
-                  <span className="text-sm text-white font-semibold break-all">{file.name}</span>
-                  <span className="text-[11px] text-zinc-400">
+                  <span className="text-sm text-zinc-900 font-semibold break-all">{file.name}</span>
+                  <span className="text-[11px] text-zinc-600">
                     {(file.size / 1024).toFixed(0)} KB · drop another to replace
                   </span>
                   <button
@@ -199,17 +199,17 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
                       setFile(null)
                       setFileError(null)
                     }}
-                    className="mt-1 text-[11px] font-semibold text-zinc-400 hover:text-white underline"
+                    className="mt-1 text-[11px] font-semibold text-zinc-600 hover:text-zinc-900 underline"
                   >
                     Remove
                   </button>
                 </>
               ) : (
                 <>
-                  <span className="text-sm text-zinc-300">
+                  <span className="text-sm text-zinc-700">
                     {dragging ? 'Drop the PDF' : 'Drag a PDF here'}
                   </span>
-                  <span className="text-[11px] text-zinc-500">or click to choose a file</span>
+                  <span className="text-[11px] text-zinc-600">or click to choose a file</span>
                 </>
               )}
             </label>
@@ -223,10 +223,10 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
               }}
               className="sr-only"
             />
-            {fileError && <div className="mt-1.5 text-[11px] text-amber-300">{fileError}</div>}
+            {fileError && <div className="mt-1.5 text-[11px] text-amber-700">{fileError}</div>}
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block">
+            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block">
               Note (optional)
             </label>
             <input
@@ -247,34 +247,34 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
       )}
 
       {msg && (
-        <p className={`text-sm mb-3 ${msg.ok ? 'text-green-400' : 'text-red-400'}`}>{msg.text}</p>
+        <p className={`text-sm mb-3 ${msg.ok ? 'text-green-600' : 'text-red-600'}`}>{msg.text}</p>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-zinc-600">
           No final invoice recorded yet. Upload one once the number is agreed and it will queue for
           collection.
         </p>
       ) : (
-        <div className="divide-y divide-zinc-800">
+        <div className="divide-y divide-zinc-200">
           {rows.map((r) => (
             <div key={r.id} className="py-2.5 flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-white">
+                <div className="text-sm font-semibold text-zinc-900">
                   {money(r.amount)}
                   {r.invoiceNumber ? (
-                    <span className="text-zinc-400 font-normal"> · {r.invoiceNumber}</span>
+                    <span className="text-zinc-600 font-normal"> · {r.invoiceNumber}</span>
                   ) : null}
                 </div>
-                {r.note && <div className="text-xs text-zinc-400 mt-0.5">{r.note}</div>}
-                <div className="text-xs text-zinc-500 mt-0.5">
+                {r.note && <div className="text-xs text-zinc-600 mt-0.5">{r.note}</div>}
+                <div className="text-xs text-zinc-600 mt-0.5">
                   {new Date(r.uploadedAt).toLocaleDateString()}
                   {r.pdfUrl && (
                     <a
                       href={r.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="ml-2 text-amber-500 underline"
+                      className="ml-2 text-amber-700 underline"
                     >
                       PDF
                     </a>
@@ -284,8 +284,8 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
               <span
                 className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap ${
                   r.status === 'COLLECTED'
-                    ? 'bg-green-900/40 text-green-400'
-                    : 'bg-amber-900/40 text-amber-400'
+                    ? 'bg-green-50 text-green-600'
+                    : 'bg-amber-50 text-amber-700'
                 }`}
               >
                 {r.status === 'COLLECTED' ? 'Collected' : 'Awaiting collection'}

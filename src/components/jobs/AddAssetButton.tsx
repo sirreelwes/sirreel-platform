@@ -82,20 +82,20 @@ export function AddAssetButton({
     <div className="relative" ref={wrapperRef}>
       <button
         onClick={() => setPickingCategory((v) => !v)}
-        className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded-lg text-[11px] font-semibold"
+        className="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-900 rounded-lg text-[11px] font-semibold"
         title="Hold fleet units for this job — pick a category, the hold lands attached to this Job"
       >
         + Add asset
       </button>
 
       {pickingCategory && (
-        <div className="absolute right-0 top-full mt-1 z-40 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl w-64 max-h-80 overflow-auto">
-          <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800 flex items-center justify-between">
+        <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-zinc-300 rounded-lg shadow-xl w-64 max-h-80 overflow-auto">
+          <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-600 border-b border-zinc-200 flex items-center justify-between">
             Pick a category
-            <button onClick={() => setPickingCategory(false)} className="text-zinc-500 hover:text-white text-base leading-none">×</button>
+            <button onClick={() => setPickingCategory(false)} className="text-zinc-600 hover:text-zinc-900 text-base leading-none">×</button>
           </div>
           {categories.length === 0 ? (
-            <div className="px-3 py-3 text-xs text-zinc-500">Loading…</div>
+            <div className="px-3 py-3 text-xs text-zinc-600">Loading…</div>
           ) : (
             categories.map((c) => (
               <button
@@ -104,7 +104,7 @@ export function AddAssetButton({
                   setPickingCategory(false)
                   setHoldCategory(c)
                 }}
-                className="block w-full text-left px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-zinc-800"
+                className="block w-full text-left px-3 py-1.5 text-[12px] text-zinc-800 hover:bg-zinc-100"
               >
                 {c.name}
               </button>

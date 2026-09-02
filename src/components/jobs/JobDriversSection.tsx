@@ -142,16 +142,16 @@ export function JobDriversSection({
   if (vehicles.length === 0 && pendingHolds.length === 0) return null
 
   return (
-    <div id="drivers" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+    <div id="drivers" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Drivers</h2>
+        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Drivers</h2>
         <div className="flex items-center gap-3">
-          <span className="text-[12px] text-zinc-400">{vehicles.length} unit{vehicles.length === 1 ? '' : 's'}</span>
+          <span className="text-[12px] text-zinc-600">{vehicles.length} unit{vehicles.length === 1 ? '' : 's'}</span>
           {vehicles.length > 0 && (
             <button
               type="button"
               onClick={() => (formOpen ? closeForm() : openForm())}
-              className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+              className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
             >
               {formOpen ? 'Cancel' : '+ Name a driver'}
             </button>
@@ -159,27 +159,27 @@ export function JobDriversSection({
         </div>
       </div>
 
-      {msg && <div className="mb-2 rounded-lg border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-[12px] text-emerald-200">{msg}</div>}
-      {err && <div className="mb-2 rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-[12px] text-rose-200">{err}</div>}
+      {msg && <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{msg}</div>}
+      {err && <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">{err}</div>}
 
       {/* Driver first, vehicle second — the order the information actually
           arrives in. */}
       {formOpen && vehicles.length > 0 && (
-        <div className="mb-3 rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
+        <div className="mb-3 rounded-xl border border-zinc-300 bg-zinc-50 p-3">
           <div className="flex flex-wrap gap-2">
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Driver email"
-              className="min-w-[180px] flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[13px] text-white placeholder:text-zinc-500" />
+              className="min-w-[180px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
             <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name (optional)"
-              className="min-w-[140px] flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[13px] text-white placeholder:text-zinc-500" />
+              className="min-w-[140px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
           </div>
 
           <div className="mt-2.5">
-            <div className="text-[12px] font-semibold text-zinc-300">Assign this driver to:</div>
+            <div className="text-[12px] font-semibold text-zinc-700">Assign this driver to:</div>
             {only ? (
-              <div className="mt-1 text-[13px] text-white">
+              <div className="mt-1 text-[13px] text-zinc-900">
                 {vehicles[0].unitName}
-                <span className="text-zinc-400"> · {vehicles[0].category}</span>
-                {dateRange(vehicles[0]) && <span className="text-zinc-500"> · {dateRange(vehicles[0])}</span>}
+                <span className="text-zinc-600"> · {vehicles[0].category}</span>
+                {dateRange(vehicles[0]) && <span className="text-zinc-600"> · {dateRange(vehicles[0])}</span>}
               </div>
             ) : (
               <div className="mt-1.5 space-y-1">
@@ -188,8 +188,8 @@ export function JobDriversSection({
                     key={v.bookingAssignmentId}
                     className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors ${
                       target === v.bookingAssignmentId
-                        ? 'border-amber-600/70 bg-amber-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700'
+                        ? 'border-amber-600/70 bg-amber-50 text-zinc-900'
+                        : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-400'
                     }`}
                   >
                     <input
@@ -201,11 +201,11 @@ export function JobDriversSection({
                     />
                     <span className="min-w-0 truncate">
                       {v.unitName}
-                      <span className="text-zinc-500"> · {v.category}</span>
-                      {dateRange(v) && <span className="text-zinc-500"> · {dateRange(v)}</span>}
+                      <span className="text-zinc-600"> · {v.category}</span>
+                      {dateRange(v) && <span className="text-zinc-600"> · {dateRange(v)}</span>}
                     </span>
                     {v.drivers.length > 0 && (
-                      <span className="ml-auto flex-shrink-0 text-[11px] text-zinc-500">
+                      <span className="ml-auto flex-shrink-0 text-[11px] text-zinc-600">
                         {v.drivers.length} named
                       </span>
                     )}
@@ -221,7 +221,7 @@ export function JobDriversSection({
               {busy ? 'Sending…' : 'Send link'}
             </button>
             <button onClick={closeForm} disabled={busy}
-              className="text-[12px] font-semibold text-zinc-400 hover:text-zinc-200 disabled:opacity-40">
+              className="text-[12px] font-semibold text-zinc-600 hover:text-zinc-900 disabled:opacity-40">
               Cancel
             </button>
           </div>
@@ -230,18 +230,18 @@ export function JobDriversSection({
 
       <div className="space-y-2">
         {vehicles.map((v) => (
-          <div key={v.bookingAssignmentId} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+          <div key={v.bookingAssignmentId} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[15px] text-white">{v.unitName}</div>
-                <div className="text-[12px] text-zinc-400">
+                <div className="text-[15px] text-zinc-900">{v.unitName}</div>
+                <div className="text-[12px] text-zinc-600">
                   {v.category}
-                  {dateRange(v) && <span className="text-zinc-500"> · {dateRange(v)}</span>}
+                  {dateRange(v) && <span className="text-zinc-600"> · {dateRange(v)}</span>}
                 </div>
               </div>
               <button
                 onClick={() => openForm(v.bookingAssignmentId)}
-                className="flex-shrink-0 text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                className="flex-shrink-0 text-[13px] font-semibold text-amber-700 hover:text-amber-700"
               >
                 {v.drivers.length ? '+ Another' : '+ Name a driver'}
               </button>
@@ -252,11 +252,11 @@ export function JobDriversSection({
                 {v.drivers.map((d) => {
                   const dr = d.driver
                   const hasImages = !!(dr.licenseFrontUrl || dr.licenseBackUrl)
-                  const tone = d.status === 'PICKED_UP' ? 'bg-violet-500/15 text-violet-300'
-                    : dr.licenseExpired ? 'bg-rose-500/15 text-rose-300'
-                    : dr.licenseVerified ? 'bg-emerald-500/15 text-emerald-300'
-                    : hasImages ? 'bg-amber-500/15 text-amber-300'
-                    : 'bg-zinc-700/40 text-zinc-300'
+                  const tone = d.status === 'PICKED_UP' ? 'bg-violet-100 text-violet-700'
+                    : dr.licenseExpired ? 'bg-rose-100 text-rose-700'
+                    : dr.licenseVerified ? 'bg-emerald-100 text-emerald-700'
+                    : hasImages ? 'bg-amber-100 text-amber-700'
+                    : 'bg-zinc-100 text-zinc-700'
                   // PICKED_UP outranks every licence verdict: the truck is
                   // gone, and "Checked" reads like it's still in the yard.
                   const label = d.status === 'PICKED_UP' ? 'Picked up'
@@ -267,11 +267,11 @@ export function JobDriversSection({
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-[13px] text-white truncate">
+                        <div className="text-[13px] text-zinc-900 truncate">
                           {`${dr.firstName} ${dr.lastName}`.trim() || d.emailSentTo}
-                          {dr.phone && <span className="text-zinc-400"> · {dr.phone}</span>}
+                          {dr.phone && <span className="text-zinc-600"> · {dr.phone}</span>}
                         </div>
-                        <div className="text-[11px] text-zinc-500 truncate">
+                        <div className="text-[11px] text-zinc-600 truncate">
                           {d.emailSentTo}
                           {d.invitedBySource === 'CLIENT' && ' · named by client'}
                         </div>
@@ -279,7 +279,7 @@ export function JobDriversSection({
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {hasImages && (
                           <a href={`/api/drivers/${dr.id}/license/front`} target="_blank" rel="noopener noreferrer"
-                            className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-300 hover:border-amber-600">
+                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700 hover:border-amber-400">
                             Licence ↗
                           </a>
                         )}
@@ -293,7 +293,7 @@ export function JobDriversSection({
                             onClick={() => removeDriver(d.id, `${dr.firstName} ${dr.lastName}`.trim() || d.emailSentTo || 'this driver')}
                             disabled={busy}
                             title="Remove this driver from the vehicle"
-                            className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
+                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600 hover:border-rose-600 hover:text-rose-700 disabled:opacity-40"
                           >
                             Remove
                           </button>
@@ -314,19 +314,19 @@ export function JobDriversSection({
       {pendingHolds.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {pendingHolds.map((h) => (
-            <div key={h.bookingItemId} className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-zinc-800 bg-zinc-950/40 px-3.5 py-2.5">
+            <div key={h.bookingItemId} className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
               <div className="min-w-0">
-                <div className="text-[13px] text-zinc-300 truncate">
+                <div className="text-[13px] text-zinc-700 truncate">
                   {h.category}{h.quantity > 1 ? ` ×${h.quantity}` : ''}
                 </div>
-                <div className="text-[11px] text-zinc-500">
+                <div className="text-[11px] text-zinc-600">
                   No unit assigned yet — pick one on the calendar to name a driver
                 </div>
               </div>
               {h.startDate && (
                 <a
                   href={`/gantt?date=${h.startDate.slice(0, 10)}`}
-                  className="flex-shrink-0 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
+                  className="flex-shrink-0 text-[12px] font-semibold text-amber-700 hover:text-amber-700"
                 >
                   Assign a unit →
                 </a>
@@ -336,7 +336,7 @@ export function JobDriversSection({
         </div>
       )}
 
-      <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-500">
+      <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-600">
         The driver gets their vehicle, dates, gate entry and a licence request. The client can
         also name drivers from their own portal page.
       </p>

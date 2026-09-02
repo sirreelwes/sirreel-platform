@@ -51,13 +51,13 @@ export interface JobBooking {
 const DEAD = ['CANCELLED', 'ARCHIVED']
 
 const STATUS_TONE: Record<string, string> = {
-  REQUEST: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-  PENDING_APPROVAL: 'bg-amber-950/40 text-amber-300 border-amber-900/70',
-  CONFIRMED: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  ACTIVE: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  RETURNED: 'bg-zinc-800 text-zinc-400 border-zinc-700',
-  CANCELLED: 'bg-zinc-900 text-zinc-500 border-zinc-800',
-  ARCHIVED: 'bg-zinc-900 text-zinc-500 border-zinc-800',
+  REQUEST: 'bg-zinc-100 text-zinc-700 border-zinc-300',
+  PENDING_APPROVAL: 'bg-amber-50 text-amber-700 border-amber-200',
+  CONFIRMED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  RETURNED: 'bg-zinc-100 text-zinc-600 border-zinc-300',
+  CANCELLED: 'bg-white text-zinc-600 border-zinc-200',
+  ARCHIVED: 'bg-white text-zinc-600 border-zinc-200',
 }
 
 const day = (iso: string) =>
@@ -153,18 +153,18 @@ export function JobBookingsSection({
   ).length
 
   return (
-    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+    <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
           Reservations
         </h2>
-        <span className="text-[12px] text-zinc-300">
+        <span className="text-[12px] text-zinc-700">
           {liveCount} live{bookings.length !== liveCount && ` · ${bookings.length - liveCount} closed`}
         </span>
       </div>
 
       {dupCount > 0 && (
-        <div className="mt-2.5 rounded-xl border border-amber-900/70 bg-amber-950/30 px-3 py-2 text-[12px] text-amber-200">
+        <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
           <strong className="font-semibold">
             {dupCount === 1 ? 'This job holds the same rental twice.' : `${dupCount} rentals are held twice here.`}
           </strong>{' '}
@@ -174,10 +174,10 @@ export function JobBookingsSection({
         </div>
       )}
       {msg && (
-        <div className="mt-2.5 rounded-xl border border-emerald-900 bg-emerald-950/30 px-3 py-2 text-[12px] text-emerald-200">{msg}</div>
+        <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{msg}</div>
       )}
       {err && (
-        <div className="mt-2.5 rounded-xl border border-rose-900 bg-rose-950/30 px-3 py-2 text-[12px] text-rose-200">{err}</div>
+        <div className="mt-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">{err}</div>
       )}
 
       <div className="mt-3 space-y-2">
@@ -191,16 +191,16 @@ export function JobBookingsSection({
               key={b.id}
               className={`rounded-xl border px-3 py-2.5 ${
                 dead
-                  ? 'border-zinc-800/60 bg-zinc-900/30 opacity-60'
+                  ? 'border-zinc-200 bg-zinc-100 opacity-60'
                   : twin
-                    ? 'border-amber-900/60 bg-amber-950/10'
-                    : 'border-zinc-800 bg-zinc-800/40'
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-zinc-200 bg-zinc-50'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-[12px] text-white">{b.bookingNumber}</span>
+                    <span className="font-mono text-[12px] text-zinc-900">{b.bookingNumber}</span>
                     <span
                       title={
                         b.planyoCartId
@@ -209,29 +209,29 @@ export function JobBookingsSection({
                       }
                       className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
                         b.planyoCartId
-                          ? 'bg-sky-950/40 text-sky-300 border-sky-900'
-                          : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-300'
                       }`}
                     >
                       {b.planyoCartId ? 'Planyo' : 'HQ'}
                     </span>
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                        STATUS_TONE[b.status] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                        STATUS_TONE[b.status] ?? 'bg-zinc-100 text-zinc-700 border-zinc-300'
                       }`}
                     >
                       {b.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="mt-1 text-[12px] text-zinc-300 font-mono">
+                  <div className="mt-1 text-[12px] text-zinc-700 font-mono">
                     {day(b.startDate)} – {day(b.endDate)}
                   </div>
-                  <div className="mt-0.5 text-[12px] text-zinc-400 truncate">
+                  <div className="mt-0.5 text-[12px] text-zinc-600 truncate">
                     {cats.join(', ') || 'no equipment'}
-                    {units.length > 0 && <span className="text-zinc-500"> · {units.join(', ')}</span>}
+                    {units.length > 0 && <span className="text-zinc-600"> · {units.join(', ')}</span>}
                   </div>
                   {twin && !dead && (
-                    <div className="mt-1.5 text-[11px] text-amber-300/90">
+                    <div className="mt-1.5 text-[11px] text-amber-700">
                       Same dates and equipment as{' '}
                       <span className="font-mono">{twin.bookingNumber}</span>
                       {twin.planyoCartId ? ' (Planyo import)' : ' (entered in HQ)'} — likely the same rental.
@@ -244,7 +244,7 @@ export function JobBookingsSection({
                     onClick={() => remove(b)}
                     disabled={busyId != null}
                     title="Cancel this reservation and release its units"
-                    className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[11px] font-semibold text-zinc-400 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
+                    className="shrink-0 rounded border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:border-rose-600 hover:text-rose-700 disabled:opacity-40"
                   >
                     {busyId === b.id ? 'Removing…' : 'Remove'}
                   </button>

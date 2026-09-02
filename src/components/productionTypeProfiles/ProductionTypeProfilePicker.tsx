@@ -78,8 +78,8 @@ export function ProductionTypeProfilePicker({
 
   const compact = size === 'compact';
   const cls = compact
-    ? 'w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white disabled:opacity-50'
-    : 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white disabled:opacity-50';
+    ? 'w-full px-2 py-1.5 bg-zinc-100 border border-zinc-300 rounded text-[12px] text-zinc-900 disabled:opacity-50'
+    : 'w-full px-3 py-2 bg-zinc-100 border border-zinc-300 rounded text-sm text-zinc-900 disabled:opacity-50';
 
   return (
     <div>
@@ -99,7 +99,7 @@ export function ProductionTypeProfilePicker({
             ))}
       </select>
       {error && (
-        <div className="text-[10px] text-red-400 mt-1">Couldn&rsquo;t load profiles: {error}</div>
+        <div className="text-[10px] text-red-600 mt-1">Couldn&rsquo;t load profiles: {error}</div>
       )}
     </div>
   );

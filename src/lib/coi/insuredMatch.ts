@@ -296,6 +296,19 @@ export const INSURED_MATCH_TONE: Record<InsuredMatchVerdict, string> = {
   UNKNOWN: 'bg-zinc-700/60 text-zinc-300',
 }
 
+/**
+ * Light-surface twin of INSURED_MATCH_TONE. The jobs detail page went light
+ * on 2026-09-01; CoiReviewModal is still a dark overlay and keeps the map
+ * above. Same verdicts, same order — change them together.
+ */
+export const INSURED_MATCH_TONE_LIGHT: Record<InsuredMatchVerdict, string> = {
+  MATCH: 'bg-emerald-50 text-emerald-700',
+  CLOSE: 'bg-sky-50 text-sky-700',
+  MISMATCH: 'bg-rose-50 text-rose-700',
+  PLACEHOLDER: 'bg-amber-50 text-amber-800',
+  UNKNOWN: 'bg-zinc-100 text-zinc-700',
+}
+
 export const INSURED_MATCH_LABEL: Record<InsuredMatchVerdict, string> = {
   MATCH: 'Name matches',
   CLOSE: 'Name close',

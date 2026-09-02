@@ -127,20 +127,20 @@ export function LinkJobAgreementModal({
 
   const tabCls = (t: 'link' | 'file') =>
     `flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-      tab === t ? 'bg-amber-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+      tab === t ? 'bg-amber-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900'
     }`;
-  const label = 'mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500';
-  const input = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none';
+  const label = 'mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-600';
+  const input = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-600 focus:border-zinc-400 focus:outline-none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+      <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto w-full max-w-md rounded-2xl border border-zinc-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
           <div>
-            <h3 className="text-base font-bold text-white">Agreement on file</h3>
-            <p className="text-[11px] text-zinc-500">Attach this job to a rental / stage agreement · {companyName}</p>
+            <h3 className="text-base font-bold text-zinc-900">Agreement on file</h3>
+            <p className="text-[11px] text-zinc-600">Attach this job to a rental / stage agreement · {companyName}</p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-700 text-xl leading-none">×</button>
         </div>
 
         <div className="px-5 pt-4">
@@ -153,10 +153,10 @@ export function LinkJobAgreementModal({
         {tab === 'link' ? (
           <div className="space-y-4 px-5 py-4">
             {onFile === null ? (
-              <p className="text-sm text-zinc-500">Loading agreements on file…</p>
+              <p className="text-sm text-zinc-600">Loading agreements on file…</p>
             ) : onFile.length === 0 ? (
-              <p className="text-sm text-zinc-500">
-                No agreements on file for {companyName} yet. Switch to <span className="text-zinc-300">File new</span> to add one.
+              <p className="text-sm text-zinc-600">
+                No agreements on file for {companyName} yet. Switch to <span className="text-zinc-700">File new</span> to add one.
               </p>
             ) : (
               <>
@@ -182,7 +182,7 @@ export function LinkJobAgreementModal({
                 </div>
               </>
             )}
-            {error && <p className="text-sm text-rose-400">{error}</p>}
+            {error && <p className="text-sm text-rose-600">{error}</p>}
           </div>
         ) : (
           <div className="space-y-4 px-5 py-4">
@@ -205,7 +205,7 @@ export function LinkJobAgreementModal({
             </div>
             <label className="flex cursor-pointer items-center gap-2.5">
               <input type="checkbox" checked={isAnnual} onChange={(e) => setIsAnnual(e.target.checked)} className="h-4 w-4 accent-amber-600" />
-              <span className="text-sm text-zinc-300">Annual / standing agreement (covers multiple jobs)</span>
+              <span className="text-sm text-zinc-700">Annual / standing agreement (covers multiple jobs)</span>
             </label>
             {isAnnual && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -233,12 +233,12 @@ export function LinkJobAgreementModal({
               <label className={label}>Note <span className="text-zinc-600">(optional)</span></label>
               <input type="text" value={fileNote} onChange={(e) => setFileNote(e.target.value)} placeholder="e.g. Emailed by production 7/18" className={input} />
             </div>
-            {error && <p className="text-sm text-rose-400">{error}</p>}
+            {error && <p className="text-sm text-rose-600">{error}</p>}
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
-          <button onClick={onClose} disabled={saving} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-400 hover:text-zinc-200 disabled:opacity-50">
+        <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-4">
+          <button onClick={onClose} disabled={saving} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-600 hover:text-zinc-900 disabled:opacity-50">
             Cancel
           </button>
           <button

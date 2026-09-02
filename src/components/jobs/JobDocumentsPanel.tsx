@@ -27,9 +27,9 @@ type JobDoc = {
 };
 
 const KIND_CHIP: Record<JobDoc['kind'], string> = {
-  QUOTE: 'bg-blue-950/40 text-blue-300 border-blue-900',
-  INVOICE: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  OTHER: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+  QUOTE: 'bg-blue-50 text-blue-700 border-blue-200',
+  INVOICE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  OTHER: 'bg-zinc-100 text-zinc-700 border-zinc-300',
 };
 
 function fmtDate(d: string | null) {
@@ -78,26 +78,26 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
   };
 
   return (
-    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+    <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between mb-2.5 gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             Quotes &amp; Invoices
           </h2>
-          <span className="text-[12px] text-zinc-300">PDF documents — attached by hand (RW can’t export them)</span>
+          <span className="text-[12px] text-zinc-700">PDF documents — attached by hand (RW can’t export them)</span>
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+          className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-amber-700 px-3 py-1.5 rounded-lg transition-colors"
         >
           + Attach document
         </button>
       </div>
 
       {docs === null ? (
-        <div className="text-[13px] text-zinc-400">Loading…</div>
+        <div className="text-[13px] text-zinc-600">Loading…</div>
       ) : docs.length === 0 ? (
-        <div className="text-[14px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+        <div className="text-[14px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
           The billing numbers above come straight from RentalWorks — but RW can’t export the
           documents themselves. Export each quote / invoice PDF from RW and attach it here so the
           paper lives with the job.
@@ -107,22 +107,22 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
           {docs.map((d) => (
             <div
               key={d.id}
-              className="flex items-center gap-3 flex-wrap rounded-xl border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5"
+              className="flex items-center gap-3 flex-wrap rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5"
             >
               <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${KIND_CHIP[d.kind]}`}>
                 {d.kind}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {d.refNumber && <span className="text-[14px] text-white font-mono">#{d.refNumber}</span>}
-                  <span className="text-[13px] text-zinc-300 truncate">{d.originalFilename}</span>
+                  {d.refNumber && <span className="text-[14px] text-zinc-900 font-mono">#{d.refNumber}</span>}
+                  <span className="text-[13px] text-zinc-700 truncate">{d.originalFilename}</span>
                   {d.amount != null && (
-                    <span className="text-[13px] text-zinc-100 font-semibold">
+                    <span className="text-[13px] text-zinc-900 font-semibold">
                       ${d.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                   )}
                 </div>
-                <div className="text-[12px] text-zinc-400">
+                <div className="text-[12px] text-zinc-600">
                   {fmtDate(d.documentDate) && <>dated {fmtDate(d.documentDate)} · </>}
                   {d.source === 'RENTALWORKS' ? 'RentalWorks' : d.source} · attached{' '}
                   {fmtDate(d.createdAt)}
@@ -134,13 +134,13 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
                 href={`/api/jobs/documents/${d.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[13px] font-semibold text-amber-400 hover:text-amber-300 shrink-0"
+                className="text-[13px] font-semibold text-amber-700 hover:text-amber-700 shrink-0"
               >
                 View PDF →
               </a>
               <button
                 onClick={() => remove(d.id)}
-                className="text-[12px] text-zinc-400 hover:text-rose-400 shrink-0"
+                className="text-[12px] text-zinc-600 hover:text-rose-600 shrink-0"
                 title="Remove from job"
               >
                 Remove
@@ -155,13 +155,13 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
         const missing = linkedInvoiceNumbers.filter((n2) => !attachedRefs.has(n2));
         if (!missing.length) return null;
         return (
-          <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[12px] text-zinc-400">
+          <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[12px] text-zinc-600">
             <span>PDFs not attached yet for linked invoices:</span>
             {missing.map((n2) => (
               <button
                 key={n2}
                 onClick={() => { setPrefill({ kind: 'INVOICE', refNumber: n2 }); setOpen(true); }}
-                className="font-mono text-[12px] px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-amber-300 hover:border-amber-600/60"
+                className="font-mono text-[12px] px-1.5 py-0.5 rounded border border-zinc-300 bg-zinc-100 text-amber-700 hover:border-amber-400"
                 title={`Attach the PDF for invoice #${n2} (prefills the form)`}
               >
                 #{n2} +
@@ -232,12 +232,12 @@ function AttachModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-2xl p-5 w-full max-w-lg space-y-3"
+        className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white border border-zinc-300 rounded-2xl p-5 w-full max-w-lg space-y-3"
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <h3 className="text-[16px] font-semibold text-white">Attach a RentalWorks document</h3>
-          <p className="text-[12px] text-zinc-400 mt-0.5">
+          <h3 className="text-[16px] font-semibold text-zinc-900">Attach a RentalWorks document</h3>
+          <p className="text-[12px] text-zinc-600 mt-0.5">
             Export the quote or invoice PDF from RentalWorks, then drop it here so it lives with the job.
           </p>
         </div>
@@ -249,8 +249,8 @@ function AttachModal({
               onClick={() => setKind(k)}
               className={`flex-1 px-3 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
                 kind === k
-                  ? 'border-amber-600 bg-amber-950/30 text-amber-300'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-600'
+                  ? 'border-amber-600 bg-amber-50 text-amber-700'
+                  : 'border-zinc-300 bg-zinc-100 text-zinc-700 hover:border-zinc-400'
               }`}
             >
               {k === 'QUOTE' ? 'Quote' : k === 'INVOICE' ? 'Invoice' : 'Other'}
@@ -262,48 +262,48 @@ function AttachModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">RW number</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">RW number</span>
             <input
               value={refNumber}
               onChange={(e) => setRefNumber(e.target.value)}
               placeholder="e.g. 404090"
-              className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[14px] text-white focus:outline-none focus:border-zinc-500"
+              className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Amount ($)</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">Amount ($)</span>
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="optional"
-              className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[14px] text-white focus:outline-none focus:border-zinc-500"
+              className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Document date</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">Document date</span>
             <input
               type="date"
               value={documentDate}
               onChange={(e) => setDocumentDate(e.target.value)}
-              className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[14px] text-white focus:outline-none focus:border-zinc-500"
+              className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Note</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">Note</span>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="optional"
-              className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[14px] text-white focus:outline-none focus:border-zinc-500"
+              className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400"
             />
           </label>
         </div>
 
-        {error && <div className="text-[13px] text-rose-400">{error}</div>}
+        {error && <div className="text-[13px] text-rose-600">{error}</div>}
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-zinc-300 hover:text-white">
+          <button onClick={onClose} className="px-3 py-1.5 text-[13px] text-zinc-700 hover:text-zinc-900">
             Cancel
           </button>
           <button

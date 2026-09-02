@@ -35,7 +35,7 @@ import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
 import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
-import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
+import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
@@ -85,29 +85,29 @@ type JobStatus = (typeof JOB_STATUSES)[number];
  */
 
 const CADENCE_BADGE: Record<CadenceState, string> = {
-  new:              'bg-sky-900/40 text-sky-300 border-sky-800',
-  quoted:           'bg-purple-900/40 text-purple-300 border-purple-800',
-  hold:             'bg-amber-900/40 text-amber-300 border-amber-800',
-  lost:             'bg-red-900/40 text-red-300 border-red-800',
-  booked:           'bg-teal-900/40 text-teal-300 border-teal-800',
-  'picking-tmw':    'bg-teal-900/40 text-teal-300 border-teal-800',
-  'picking-today':  'bg-orange-900/40 text-orange-300 border-orange-800',
-  'on-rental':      'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-  'returning-tmw':  'bg-orange-900/40 text-orange-300 border-orange-800',
-  'returning-today':'bg-red-900/40 text-red-300 border-red-800',
-  returned:         'bg-purple-900/40 text-purple-300 border-purple-800',
-  invoiced:         'bg-blue-900/40 text-blue-300 border-blue-800',
-  wrapped:          'bg-zinc-800 text-zinc-300 border-zinc-700',
+  new:              'bg-sky-50 text-sky-700 border-sky-200',
+  quoted:           'bg-purple-50 text-purple-700 border-purple-200',
+  hold:             'bg-amber-50 text-amber-700 border-amber-300',
+  lost:             'bg-red-50 text-red-700 border-red-200',
+  booked:           'bg-teal-50 text-teal-700 border-teal-200',
+  'picking-tmw':    'bg-teal-50 text-teal-700 border-teal-200',
+  'picking-today':  'bg-orange-50 text-orange-700 border-orange-200',
+  'on-rental':      'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'returning-tmw':  'bg-orange-50 text-orange-700 border-orange-200',
+  'returning-today':'bg-red-50 text-red-700 border-red-200',
+  returned:         'bg-purple-50 text-purple-700 border-purple-200',
+  invoiced:         'bg-blue-50 text-blue-700 border-blue-200',
+  wrapped:          'bg-zinc-100 text-zinc-700 border-zinc-300',
 };
 
 const ORDER_STATUS_BADGE: Record<string, string> = {
-  DRAFT:      'bg-zinc-800 text-zinc-300',
-  QUOTE_SENT: 'bg-blue-900/40 text-blue-300',
-  CONFIRMED:  'bg-amber-900/40 text-amber-300',
-  ACTIVE:     'bg-emerald-900/40 text-emerald-300',
-  RETURNED:   'bg-purple-900/40 text-purple-300',
-  CLOSED:     'bg-zinc-800 text-zinc-300',
-  CANCELLED:  'bg-red-900/40 text-red-300',
+  DRAFT:      'bg-zinc-100 text-zinc-700',
+  QUOTE_SENT: 'bg-blue-50 text-blue-700',
+  CONFIRMED:  'bg-amber-50 text-amber-700',
+  ACTIVE:     'bg-emerald-50 text-emerald-700',
+  RETURNED:   'bg-purple-50 text-purple-700',
+  CLOSED:     'bg-zinc-100 text-zinc-700',
+  CANCELLED:  'bg-red-50 text-red-700',
 };
 
 
@@ -363,16 +363,16 @@ function relativeAge(iso: string): string {
 }
 
 const INQUIRY_SOURCE_BADGE: Record<'MANUAL' | 'GMAIL' | 'WEB_FORM', string> = {
-  MANUAL:   'bg-zinc-800 text-zinc-300 border-zinc-700',
-  GMAIL:    'bg-rose-950/40 text-rose-300 border-rose-900',
-  WEB_FORM: 'bg-sky-950/40 text-sky-300 border-sky-900',
+  MANUAL:   'bg-zinc-100 text-zinc-700 border-zinc-300',
+  GMAIL:    'bg-rose-50 text-rose-700 border-rose-200',
+  WEB_FORM: 'bg-sky-50 text-sky-700 border-sky-200',
 };
 
 const ASSIGN_BADGE: Record<string, string> = {
-  ASSIGNED:    'bg-sky-950/40 text-sky-300 border-sky-900',
-  CHECKED_OUT: 'bg-amber-950/40 text-amber-300 border-amber-900',
-  RETURNED:    'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  SWAPPED:     'bg-zinc-800 text-zinc-300 border-zinc-700',
+  ASSIGNED:    'bg-sky-50 text-sky-700 border-sky-200',
+  CHECKED_OUT: 'bg-amber-50 text-amber-700 border-amber-200',
+  RETURNED:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+  SWAPPED:     'bg-zinc-100 text-zinc-700 border-zinc-300',
 };
 
 export default function JobDetailPage() {
@@ -697,7 +697,7 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-[15px]">Loading…</div>
+      <div className="min-h-[60vh] flex items-center justify-center text-zinc-600 text-[15px]">Loading…</div>
     );
   }
 
@@ -707,7 +707,7 @@ export default function JobDetailPage() {
         <div className="text-zinc-600 text-[15px]">{error || 'Job not found'}</div>
         <button
           onClick={() => router.back()}
-          className="text-[13px] text-amber-500 hover:text-amber-400"
+          className="text-[13px] text-amber-700 hover:text-amber-600"
         >
           ← Back
         </button>
@@ -967,10 +967,10 @@ const driverStateLabel = (d: any): string => {
 
 const driverTone = (d: any): string => {
   const dr = d?.driver
-  if (dr?.licenseExpired) return 'text-rose-300'
-  if (dr?.licenseVerified) return 'text-emerald-300'
-  if (dr?.licenseFrontUrl || dr?.licenseBackUrl) return 'text-amber-300'
-  return 'text-zinc-400'
+  if (dr?.licenseExpired) return 'text-rose-700'
+  if (dr?.licenseVerified) return 'text-emerald-700'
+  if (dr?.licenseFrontUrl || dr?.licenseBackUrl) return 'text-amber-700'
+  return 'text-zinc-600'
 }
 
   const reservedAssets = (() => {
@@ -1117,23 +1117,23 @@ const driverTone = (d: any): string => {
   return (
     <div className="max-w-5xl mx-auto space-y-3 text-[15px]">
       {toast && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-600 text-white text-[15px] px-4 py-2 rounded-lg shadow-xl">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-100 border border-zinc-300 text-zinc-900 text-[15px] px-4 py-2 rounded-lg shadow-xl">
           {toast}
         </div>
       )}
       <button
         onClick={() => router.back()}
-        className="text-[13px] text-zinc-500 hover:text-zinc-900 transition-colors"
+        className="text-[13px] text-zinc-600 hover:text-zinc-900 transition-colors"
       >
         ← Back
       </button>
 
       {/* Header */}
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[14px] font-mono font-bold tracking-wide text-white bg-zinc-800 border border-zinc-600 rounded px-2.5 py-1">{job.jobCode}</span>
+              <span className="text-[14px] font-mono font-bold tracking-wide text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
               <span
                 className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
                 title={
@@ -1146,7 +1146,7 @@ const driverTone = (d: any): string => {
               </span>
               {job.returnedAt && (
                 <span
-                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-emerald-950/40 text-emerald-300 border-emerald-900"
+                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200"
                   title={`Physically returned ${fmtDateTime(job.returnedAt)}${job.returnedBy ? ` · marked by ${job.returnedBy.name}` : ''}`}
                 >
                   Returned
@@ -1154,24 +1154,24 @@ const driverTone = (d: any): string => {
               )}
               {job.assistantAuthCode && (
                 <span
-                  className="inline-flex items-center gap-1.5 text-[14px] font-mono font-bold tracking-[0.15em] text-amber-300 bg-amber-950/40 border border-amber-800/60 rounded px-2.5 py-1"
+                  className="inline-flex items-center gap-1.5 text-[14px] font-mono font-bold tracking-[0.15em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-2.5 py-1"
                   title="Client access code — clients read this to the after-hours assistant to verify their identity"
                 >
-                  <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-amber-500/80">Access</span>
+                  <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-amber-700">Access</span>
                   {job.assistantAuthCode}
                 </span>
               )}
             </div>
             <h1
-              className="text-3xl font-semibold text-white mt-2 truncate"
+              className="text-3xl font-semibold text-zinc-900 mt-2 truncate"
               style={{ fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: '-0.01em' }}
             >
               {job.name}
             </h1>
-            <div className="mt-1 flex items-center gap-2.5 flex-wrap text-[15px] text-zinc-300">
+            <div className="mt-1 flex items-center gap-2.5 flex-wrap text-[15px] text-zinc-700">
               <span>
                 for{' '}
-                <Link href={`/crm/${job.company.id}`} className="text-zinc-200 font-medium hover:text-amber-400">
+                <Link href={`/crm/${job.company.id}`} className="text-zinc-800 font-medium hover:text-amber-600">
                   {job.company.name}
                 </Link>
               </span>
@@ -1182,13 +1182,13 @@ const driverTone = (d: any): string => {
                   on the job page. */}
               <button
                 onClick={() => setCompanyChangeOpen((v) => !v)}
-                className="text-[12px] font-semibold text-zinc-500 hover:text-amber-400 transition-colors"
+                className="text-[12px] font-semibold text-zinc-600 hover:text-amber-600 transition-colors"
               >
                 {companyChangeOpen ? 'Cancel' : 'Change'}
               </button>
             </div>
             {companyChangeOpen && (
-              <div className="mt-2.5 max-w-md rounded-xl border border-amber-500/30 bg-amber-500/[0.04] px-3.5 py-3">
+              <div className="mt-2.5 max-w-md rounded-xl border border-amber-300 bg-amber-500/[0.04] px-3.5 py-3">
                 <ChangeProductionCompany
                   jobId={job.id}
                   currentCompanyName={job.company.name}
@@ -1197,23 +1197,23 @@ const driverTone = (d: any): string => {
               </div>
             )}
             {primaryContact && (
-              <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-800/40 px-3 py-2">
-                <span className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-700/40 flex items-center justify-center text-[12px] font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>
+              <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <span className="w-7 h-7 rounded-full bg-amber-50 border border-amber-300 flex items-center justify-center text-[12px] font-bold text-amber-700" style={{ fontFamily: "Georgia, serif" }}>
                   {(primaryContact.person.firstName?.[0] ?? '') + (primaryContact.person.lastName?.[0] ?? '')}
                 </span>
-                <span className="text-[15px] text-white">
+                <span className="text-[15px] text-zinc-900">
                   {primaryContact.person.firstName} {primaryContact.person.lastName}
                 </span>
                 {primaryContact.isPrimary && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Primary</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Primary</span>
                 )}
                 {primaryContact.person.email && (
-                  <a href={`mailto:${primaryContact.person.email}`} className="text-[13px] text-zinc-300 hover:text-amber-400 truncate">
+                  <a href={`mailto:${primaryContact.person.email}`} className="text-[13px] text-zinc-700 hover:text-amber-600 truncate">
                     · {primaryContact.person.email}
                   </a>
                 )}
                 {extraContacts > 0 && (
-                  <a href="#contacts" className="text-[12px] text-zinc-500 hover:text-amber-400">
+                  <a href="#contacts" className="text-[12px] text-zinc-600 hover:text-amber-600">
                     +{extraContacts} more
                   </a>
                 )}
@@ -1236,11 +1236,11 @@ const driverTone = (d: any): string => {
               />
             </div>
             {job.fromInquiry && (
-              <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-300">
+              <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">
                 <span>Originated from</span>
                 <Link
                   href={`/inquiries/${job.fromInquiry.id}`}
-                  className="text-zinc-300 hover:text-amber-500 underline-offset-2 hover:underline"
+                  className="text-zinc-700 hover:text-amber-600 underline-offset-2 hover:underline"
                 >
                   Inquiry
                 </Link>
@@ -1263,41 +1263,41 @@ const driverTone = (d: any): string => {
               <div className="relative">
                 <button
                   onClick={() => { setConfirmArchive(false); setMenuOpen((o) => !o); }}
-                  className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white hover:border-zinc-500 transition-colors"
+                  className="px-3 py-1.5 bg-zinc-100 border border-zinc-300 rounded-lg text-[15px] text-zinc-900 hover:border-zinc-400 transition-colors"
                 >
                   More ▾
                 </button>
                 {menuOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => { setConfirmArchive(false); setMenuOpen(false); }} />
-                    <div className="absolute right-0 top-full mt-1.5 w-52 z-20 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-1.5">
+                    <div className="absolute right-0 top-full mt-1.5 w-52 z-20 bg-white border border-zinc-300 rounded-xl shadow-xl p-1.5">
                       <button
                         onClick={() => { setMenuOpen(false); setReturned(!job.returnedAt); }}
                         disabled={returnSaving}
-                        className="w-full text-left text-[14px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                        className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2 disabled:opacity-50"
                       >
                         {job.returnedAt ? 'Unmark returned' : '✓ Mark returned'}
                       </button>
-                      <button onClick={openEdit} className="w-full text-left text-[14px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
+                      <button onClick={openEdit} className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2">
                         Edit job details
                       </button>
                       {job.status !== 'LOST' && (
                         <button
                           onClick={() => { setMenuOpen(false); setMarkLostOpen(true); }}
-                          className="w-full text-left text-[14px] text-rose-300 hover:bg-zinc-800 rounded-lg px-2.5 py-2"
+                          className="w-full text-left text-[14px] text-rose-700 hover:bg-zinc-100 rounded-lg px-2.5 py-2"
                         >
                           Mark job lost…
                         </button>
                       )}
-                      <button onClick={copyJobLink} className="w-full text-left text-[14px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
+                      <button onClick={copyJobLink} className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2">
                         Copy job link
                       </button>
-                      <div className="h-px bg-zinc-800 my-1" />
+                      <div className="h-px bg-zinc-100 my-1" />
                       {job.archivedAt ? (
                         <button
                           onClick={archiveJob}
                           disabled={archiving}
-                          className="w-full text-left text-[14px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                          className="w-full text-left text-[14px] text-rose-600 hover:bg-zinc-100 rounded-lg px-2.5 py-2 disabled:opacity-50"
                         >
                           Unarchive job
                         </button>
@@ -1310,13 +1310,13 @@ const driverTone = (d: any): string => {
                           >
                             {archiving ? 'Archiving…' : 'Yes, archive this job'}
                           </button>
-                          <p className="px-2.5 py-1.5 text-[11px] leading-snug text-zinc-500">
+                          <p className="px-2.5 py-1.5 text-[11px] leading-snug text-zinc-600">
                             It drops out of the Jobs list. Still reachable under the list&rsquo;s
                             Archived filter, and you can unarchive it from here.
                           </p>
                           <button
                             onClick={() => setConfirmArchive(false)}
-                            className="w-full text-left text-[13px] text-zinc-400 hover:bg-zinc-800 rounded-lg px-2.5 py-1.5"
+                            className="w-full text-left text-[13px] text-zinc-600 hover:bg-zinc-100 rounded-lg px-2.5 py-1.5"
                           >
                             Cancel
                           </button>
@@ -1325,7 +1325,7 @@ const driverTone = (d: any): string => {
                         <button
                           onClick={() => setConfirmArchive(true)}
                           disabled={archiving}
-                          className="w-full text-left text-[14px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                          className="w-full text-left text-[14px] text-rose-600 hover:bg-zinc-100 rounded-lg px-2.5 py-2 disabled:opacity-50"
                         >
                           Archive job
                         </button>
@@ -1336,30 +1336,30 @@ const driverTone = (d: any): string => {
               </div>
             </div>
             {job.returnedAt && (
-              <div className="text-[12px] text-emerald-400 font-semibold text-right">
+              <div className="text-[12px] text-emerald-600 font-semibold text-right">
                 ✓ Returned {fmtDateTime(job.returnedAt)}
-                {job.returnedBy && <span className="text-zinc-300 font-normal"> · {job.returnedBy.name}</span>}
+                {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
               </div>
             )}
             {job.archivedAt && (
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400 bg-rose-950/40 border border-rose-900 rounded px-2 py-0.5">Archived</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">Archived</span>
             )}
           </div>
         </div>
 
         {/* Inline edit panel (from More ▾ → Edit job details). */}
         {editing && (
-          <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 p-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 rounded-xl border border-zinc-300 bg-zinc-50 p-4 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">Job name</span>
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
+              <span className="text-[11px] uppercase tracking-wider text-zinc-700 font-semibold">Job name</span>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[15px] text-zinc-900 focus:outline-none focus:border-zinc-400" />
             </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">Estimated deal value ($)</span>
-              <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="—" className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
+              <span className="text-[11px] uppercase tracking-wider text-zinc-700 font-semibold">Estimated deal value ($)</span>
+              <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="—" className="px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[15px] text-zinc-900 focus:outline-none focus:border-zinc-400" />
             </label>
             <div className="sm:col-span-2 flex items-center gap-2 justify-end">
-              <button onClick={() => setEditing(false)} className="text-[13px] text-zinc-300 hover:text-zinc-200 px-3 py-1.5">Cancel</button>
+              <button onClick={() => setEditing(false)} className="text-[13px] text-zinc-700 hover:text-zinc-900 px-3 py-1.5">Cancel</button>
               <button onClick={saveEdit} disabled={editSaving} className="text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
                 {editSaving ? 'Saving…' : 'Save changes'}
               </button>
@@ -1423,8 +1423,8 @@ const driverTone = (d: any): string => {
             picker (drives the fleet-assignment optimizer; saving refreshes
             the Company most-common-profile cache) on the left, timestamps
             on the right. One quiet line instead of two hero rows. */}
-        <div className="mt-5 pt-3 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+        <div className="mt-5 pt-3 border-t border-zinc-200 flex items-center gap-3 flex-wrap">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
             Production · {job.productionType.replace('_', ' ')}
           </div>
           <div className="w-64">
@@ -1435,8 +1435,8 @@ const driverTone = (d: any): string => {
               size="compact"
             />
           </div>
-          {profileSaving && <span className="text-[11px] text-zinc-500">Saving…</span>}
-          <div className="ml-auto text-[11px] text-zinc-500">
+          {profileSaving && <span className="text-[11px] text-zinc-600">Saving…</span>}
+          <div className="ml-auto text-[11px] text-zinc-600">
             Created {fmtDate(job.createdAt)} · Updated {relativeAge(job.updatedAt)}
           </div>
         </div>
@@ -1445,54 +1445,54 @@ const driverTone = (d: any): string => {
       {/* Paperwork status strip — glanceable client-paperwork state.
           COI + Rental Agreement jump to their sections; Card Auth carries
           the "Send CC request" action (client authorizes in their portal). */}
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
           {stripScored ? (
-            <span className="text-[12px] text-zinc-500">
+            <span className="text-[12px] text-zinc-600">
               {readiness.done} of {readiness.total} complete
-              {readiness.ready && <span className="text-emerald-300 font-semibold"> · ✓ Ready to go out</span>}
+              {readiness.ready && <span className="text-emerald-700 font-semibold"> · ✓ Ready to go out</span>}
             </span>
           ) : (
-            <span className="text-[12px] text-zinc-500">scoring starts when a reservation or order lands</span>
+            <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
           )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* COI */}
-          <a href="#coi" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Certificate of Insurance</div>
+          <a href="#coi" className="group rounded-lg border border-zinc-200 bg-zinc-50 hover:border-amber-400 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Certificate of Insurance</div>
             {!stripScored && coiStatus === 'Missing' ? (
               <>
                 {/* A new job without a COI is a normal new job — neutral,
                     with the next step, not a rose scolding. */}
-                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-400">
-                  <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-600">
+                  <span className="w-2 h-2 rounded-full bg-zinc-300" />
                   Not yet
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-500">Open to copy the client drop link</div>
+                <div className="mt-1.5 text-[12px] text-zinc-600">Open to copy the client drop link</div>
               </>
             ) : (
               <>
                 <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
-                  coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
+                  coiStatus === 'Verified' ? 'text-emerald-700' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-700' : 'text-amber-700'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-400' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+                  <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-500' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-500' : 'bg-amber-500'}`} />
                   {coiStatus}
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-300">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-700">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
               </>
             )}
           </a>
           {/* Rental Agreement */}
-          <a href="#agreement" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Rental Agreement</div>
+          <a href="#agreement" className="group rounded-lg border border-zinc-200 bg-zinc-50 hover:border-amber-400 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Rental Agreement</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
-              agreementStatus === 'signed' ? 'text-emerald-300' : agreementStatus === 'expired' ? 'text-rose-300' : agreementStatus === 'pending' ? 'text-amber-300' : 'text-zinc-300'
+              agreementStatus === 'signed' ? 'text-emerald-700' : agreementStatus === 'expired' ? 'text-rose-700' : agreementStatus === 'pending' ? 'text-amber-700' : 'text-zinc-700'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-400' : agreementStatus === 'expired' ? 'bg-rose-400' : agreementStatus === 'pending' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
+              <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-500' : agreementStatus === 'expired' ? 'bg-rose-500' : agreementStatus === 'pending' ? 'bg-amber-500' : 'bg-zinc-400'}`} />
               {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : stripScored ? 'Not linked' : 'Not yet'}
             </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">{agreementStatus === 'signed'
+            <div className="mt-1.5 text-[12px] text-zinc-700">{agreementStatus === 'signed'
                 ? 'Coverage on file'
                 : !stripScored && agreementStatus === 'none'
                   ? 'Sends with the quote'
@@ -1502,15 +1502,15 @@ const driverTone = (d: any): string => {
           </a>
           {/* Card Authorization — `id` is the deep-link target for the
               CC Auth chip in the reservation pop-up on /gantt. */}
-          <div id="card-auth" className="scroll-mt-4 rounded-lg border border-zinc-800 bg-zinc-800/40 p-3.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Card Authorization</div>
+          <div id="card-auth" className="scroll-mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Card Authorization</div>
             {cardOnFile ? (
               <>
-                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-700">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-300">
+                <div className="mt-1.5 text-[12px] text-zinc-700">
                   {cardSecurityOnly ? 'Security only — client pays another way' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
               </>
@@ -1518,24 +1518,24 @@ const driverTone = (d: any): string => {
               <>
                 {/* Pre-score: no reservation exists, so the send route
                     would 409 anyway — say what unlocks it instead. */}
-                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-400">
-                  <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-600">
+                  <span className="w-2 h-2 rounded-full bg-zinc-300" />
                   Not yet
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-500">Needs a reservation first</div>
+                <div className="mt-1.5 text-[12px] text-zinc-600">Needs a reservation first</div>
               </>
             ) : (
               <>
                 {/* Status first — same grammar as the other four tiles;
                     the rose dot is the "act here", the action sits below. */}
-                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-rose-300">
-                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-rose-700">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
                   Missing
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-500">
+                <div className="mt-1.5 text-[12px] text-zinc-600">
                   <button
                     onClick={sendCcRequest}
-                    className="font-semibold text-amber-400 hover:text-amber-300"
+                    className="font-semibold text-amber-700 hover:text-amber-700"
                   >
                     ↗ Send CC request
                   </button>
@@ -1543,7 +1543,7 @@ const driverTone = (d: any): string => {
                   <button
                     onClick={copyCcLink}
                     disabled={ccBusy}
-                    className="underline underline-offset-2 hover:text-zinc-200 disabled:opacity-50"
+                    className="underline underline-offset-2 hover:text-zinc-900 disabled:opacity-50"
                   >
                     {ccBusy ? 'copying…' : 'copy link'}
                   </button>
@@ -1552,22 +1552,22 @@ const driverTone = (d: any): string => {
             )}
           </div>
           {/* Driver — a name on every assigned unit. */}
-          <a href="#drivers" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Drivers Named</div>
+          <a href="#drivers" className="group rounded-lg border border-zinc-200 bg-zinc-50 hover:border-amber-400 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Drivers Named</div>
             {activeAssignments.length === 0 ? (
               <>
                 {/* Vacuously true is not "All named" — with zero units the
                     honest reading is that the question hasn't started. */}
-                <div className="mt-2.5 text-[15px] font-semibold text-zinc-500">—</div>
-                <div className="mt-1.5 text-[12px] text-zinc-500">No units yet</div>
+                <div className="mt-2.5 text-[15px] font-semibold text-zinc-600">—</div>
+                <div className="mt-1.5 text-[12px] text-zinc-600">No units yet</div>
               </>
             ) : (
               <>
-                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
-                  <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-700' : 'text-emerald-700'}`}>
+                  <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                   {driverBlocked ? 'Missing drivers' : 'All named'}
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-300">
+                <div className="mt-1.5 text-[12px] text-zinc-700">
                   {driverBlocked ? 'A unit has no driver yet' : 'Every unit has a driver'}
                 </div>
               </>
@@ -1575,20 +1575,20 @@ const driverTone = (d: any): string => {
           </a>
           {/* Gear — units picked for every live hold. Internal (Julian),
               so it jumps to the reservations rather than chasing a client. */}
-          <a href="#reserved-assets" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Gear Assigned</div>
+          <a href="#reserved-assets" className="group rounded-lg border border-zinc-200 bg-zinc-50 hover:border-amber-400 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Gear Assigned</div>
             {liveHoldItems.length === 0 ? (
               <>
-                <div className="mt-2.5 text-[15px] font-semibold text-zinc-500">—</div>
-                <div className="mt-1.5 text-[12px] text-zinc-500">No holds yet</div>
+                <div className="mt-2.5 text-[15px] font-semibold text-zinc-600">—</div>
+                <div className="mt-1.5 text-[12px] text-zinc-600">No holds yet</div>
               </>
             ) : (
               <>
-                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
-                  <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-700' : 'text-emerald-700'}`}>
+                  <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                   {gearBlocked ? 'Units to pick' : 'All assigned'}
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-300">
+                <div className="mt-1.5 text-[12px] text-zinc-700">
                   {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
                 </div>
               </>
@@ -1602,30 +1602,30 @@ const driverTone = (d: any): string => {
           broker, RentalWorks) are attached with "Upload COI" so HQ stays
           the source of truth without a re-sign. */}
       {showSec('coi') && (
-      <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Certificate of Insurance</h2>
+            <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Certificate of Insurance</h2>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-              coiStatus === 'Verified' ? 'bg-emerald-500/15 text-emerald-300'
-                : coiStatus === 'Pending' ? 'bg-amber-500/15 text-amber-300'
-                : 'bg-rose-500/15 text-rose-300'
+              coiStatus === 'Verified' ? 'bg-emerald-100 text-emerald-700'
+                : coiStatus === 'Pending' ? 'bg-amber-100 text-amber-700'
+                : 'bg-rose-100 text-rose-700'
             }`}>{coiStatus}</span>
           </div>
           <div className="flex items-center gap-3">
             <CopyCoiLinkButton jobId={job.id} variant="dark" />
             <button
               onClick={() => setCoiModalOpen(true)}
-              className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-amber-700 px-3 py-1.5 rounded-lg transition-colors"
             >
               + Upload COI
             </button>
           </div>
         </div>
         {job.coiChecks.length === 0 ? (
-          <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+          <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
             No certificate on file. Upload one the client sent by email or broker, or use
-            <span className="text-zinc-300"> Copy COI link</span> to have them drop it in.
+            <span className="text-zinc-700"> Copy COI link</span> to have them drop it in.
           </div>
         ) : (
           <div className="space-y-2">
@@ -1634,9 +1634,9 @@ const driverTone = (d: any): string => {
               const expired = !!c.policyExpiryDate && new Date(c.policyExpiryDate) < new Date();
               const rowStatus = verified ? (expired ? 'Expired' : 'Verified')
                 : c.humanDecision === 'REJECTED' ? 'Rejected' : 'Pending';
-              const rowTone = rowStatus === 'Verified' ? 'text-emerald-300 bg-emerald-500/10'
-                : rowStatus === 'Pending' ? 'text-amber-300 bg-amber-500/10'
-                : 'text-rose-300 bg-rose-500/10';
+              const rowTone = rowStatus === 'Verified' ? 'text-emerald-700 bg-emerald-50'
+                : rowStatus === 'Pending' ? 'text-amber-700 bg-amber-50'
+                : 'text-rose-700 bg-rose-50';
               const src = c.source === 'CLIENT_UPLOAD' ? 'Client upload'
                 : c.source === 'INTERNAL' ? 'Filed by agent' : 'On file';
               // Does the certificate insure the production we papered? Computed
@@ -1654,31 +1654,31 @@ const driverTone = (d: any): string => {
               const settled =
                 c.humanDecision === 'APPROVED' && !expired && !match.needsAttention;
               return (
-                <div key={c.id} className={`rounded-lg border px-3.5 py-2.5 ${match.needsAttention ? 'border-rose-500/40 bg-rose-500/5' : 'border-zinc-800 bg-zinc-950/60'}`}>
+                <div key={c.id} className={`rounded-lg border px-3.5 py-2.5 ${match.needsAttention ? 'border-rose-300 bg-rose-50' : 'border-zinc-200 bg-zinc-50'}`}>
                   <div className="flex items-center gap-3">
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rowTone}`}>{rowStatus}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[15px] text-white truncate">{c.originalFilename}</span>
+                        <span className="text-[15px] text-zinc-900 truncate">{c.originalFilename}</span>
                         {c.aiRiskLevel && (
                           <span
                             title={`AI review: ${c.aiRecommendation === 'accept' ? 'passes checks' : 'needs review'}`}
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${
-                              c.aiRiskLevel === 'low' ? 'bg-emerald-500/10 text-emerald-300'
-                                : c.aiRiskLevel === 'high' ? 'bg-rose-500/10 text-rose-300'
-                                : 'bg-amber-500/10 text-amber-300'
+                              c.aiRiskLevel === 'low' ? 'bg-emerald-50 text-emerald-700'
+                                : c.aiRiskLevel === 'high' ? 'bg-rose-50 text-rose-700'
+                                : 'bg-amber-50 text-amber-700'
                             }`}
                           >
                             AI · {c.aiRiskLevel} risk
                           </span>
                         )}
                         {match.verdict !== 'UNKNOWN' && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${INSURED_MATCH_TONE[match.verdict]}`}>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${INSURED_MATCH_TONE_LIGHT[match.verdict]}`}>
                             {INSURED_MATCH_LABEL[match.verdict]}
                           </span>
                         )}
                       </div>
-                      <div className="text-[12px] text-zinc-300">
+                      <div className="text-[12px] text-zinc-700">
                         {src} · added {fmtDate(c.createdAt)}
                         {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}
                         {c.namedInsured && <> · insures {c.namedInsured}</>}
@@ -1687,7 +1687,7 @@ const driverTone = (d: any): string => {
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {settled ? (
                         <span
-                          className="text-[12px] font-semibold text-emerald-300 flex items-center gap-1.5"
+                          className="text-[12px] font-semibold text-emerald-700 flex items-center gap-1.5"
                           title={
                             c.humanDecisionAt
                               ? `Approved ${fmtDate(c.humanDecisionAt)}`
@@ -1699,7 +1699,7 @@ const driverTone = (d: any): string => {
                       ) : (
                         <button
                           onClick={() => setReviewCoiId(c.id)}
-                          className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                          className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-900 px-3 py-1.5 rounded-lg transition-colors"
                         >
                           Review
                         </button>
@@ -1707,7 +1707,7 @@ const driverTone = (d: any): string => {
                       {settled && (
                         <button
                           onClick={() => setReviewCoiId(c.id)}
-                          className="text-[12px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+                          className="text-[12px] text-zinc-600 hover:text-zinc-700 underline underline-offset-2"
                         >
                           Reopen
                         </button>
@@ -1716,7 +1716,7 @@ const driverTone = (d: any): string => {
                         href={`/api/coi/download/${c.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                        className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
                       >
                         View PDF →
                       </a>
@@ -1726,11 +1726,11 @@ const driverTone = (d: any): string => {
                       insuring somebody else covers nothing if a unit is
                       damaged, and that is not a detail to hide behind a click. */}
                   {match.needsAttention && (
-                    <div className="mt-2 text-[12px] text-rose-200 leading-relaxed">
+                    <div className="mt-2 text-[12px] text-rose-800 leading-relaxed">
                       {match.message}{' '}
                       <button
                         onClick={() => setReviewCoiId(c.id)}
-                        className="font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2"
+                        className="font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2"
                       >
                         Review &amp; fix
                       </button>
@@ -1751,17 +1751,17 @@ const driverTone = (d: any): string => {
           rather than alarming — WC on the main COI is the common case and
           needs no separate upload. */}
       {showSec('wc') && (
-      <div id="wc" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="wc" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center gap-2.5 mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Workers&rsquo; Compensation</h2>
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Workers&rsquo; Compensation</h2>
           {wcCerts.length > 0 && (
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-              wcCerts.some((w) => w.pass) ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+              wcCerts.some((w) => w.pass) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
             }`}>{wcCerts.some((w) => w.pass) ? 'Verified' : 'Needs review'}</span>
           )}
         </div>
         {wcCerts.length === 0 ? (
-          <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+          <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
             No separate certificate on file. Workers&rsquo; Comp is usually carried on the
             main COI above — a separate upload is only needed when the client&rsquo;s payroll
             company (EP, Cast &amp; Crew, ADP&hellip;) issues its own.
@@ -1769,22 +1769,22 @@ const driverTone = (d: any): string => {
         ) : (
           <div className="space-y-2">
             {wcCerts.map((w) => {
-              const tone = w.expired ? 'text-rose-300 bg-rose-500/10'
-                : w.pass ? 'text-emerald-300 bg-emerald-500/10'
-                : 'text-amber-300 bg-amber-500/10';
+              const tone = w.expired ? 'text-rose-700 bg-rose-50'
+                : w.pass ? 'text-emerald-700 bg-emerald-50'
+                : 'text-amber-700 bg-amber-50';
               const label = w.expired ? 'Expired' : w.pass ? 'Verified' : 'Needs review';
               return (
-                <div key={w.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                <div key={w.id} className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${tone}`}>{label}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[15px] text-white truncate">{w.filename}</div>
-                    <div className="text-[12px] text-zinc-300">
+                    <div className="text-[15px] text-zinc-900 truncate">{w.filename}</div>
+                    <div className="text-[12px] text-zinc-700">
                       {w.provider ? `${w.provider}` : 'Client upload'}
                       {w.uploadedAt && <> &middot; added {fmtDate(w.uploadedAt)}</>}
                       {w.expiryDate && <> &middot; expires {w.expiryDate}</>}
                     </div>
                     {w.issues.length > 0 && (
-                      <div className="text-[12px] text-amber-300/90 mt-0.5 truncate" title={w.issues.join(' · ')}>
+                      <div className="text-[12px] text-amber-700 mt-0.5 truncate" title={w.issues.join(' · ')}>
                         {w.issues.join(' · ')}
                       </div>
                     )}
@@ -1793,7 +1793,7 @@ const driverTone = (d: any): string => {
                     href={`/api/wc/download/${w.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[13px] font-semibold text-amber-400 hover:text-amber-300 flex-shrink-0"
+                    className="text-[13px] font-semibold text-amber-700 hover:text-amber-700 flex-shrink-0"
                   >
                     View PDF &rarr;
                   </a>
@@ -1808,15 +1808,15 @@ const driverTone = (d: any): string => {
       {/* Rental / stage agreement — job-level coverage. A job is attached
           as an addendum to an on-file (often annual) master agreement. */}
       {showSec('agreement') && (
-      <div id="agreement" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="agreement" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Rental &amp; Stage Agreement</h2>
+            <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Rental &amp; Stage Agreement</h2>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-              agreementStatus === 'signed' ? 'bg-emerald-500/15 text-emerald-300'
-                : agreementStatus === 'pending' ? 'bg-amber-500/15 text-amber-300'
-                : agreementStatus === 'expired' ? 'bg-rose-500/15 text-rose-300'
-                : 'bg-zinc-700/40 text-zinc-300'
+              agreementStatus === 'signed' ? 'bg-emerald-100 text-emerald-700'
+                : agreementStatus === 'pending' ? 'bg-amber-100 text-amber-700'
+                : agreementStatus === 'expired' ? 'bg-rose-100 text-rose-700'
+                : 'bg-zinc-100 text-zinc-700'
             }`}>{agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -1839,7 +1839,7 @@ const driverTone = (d: any): string => {
               className={`text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 signatureOutstanding
                   ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
               }`}
             >
               {signSendBusy
@@ -1869,14 +1869,14 @@ const driverTone = (d: any): string => {
                   ? 'This job has no live order to file paperwork against'
                   : 'Upload a signed PDF — marks it signed in the client portal'
               }
-              className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-emerald-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {fileSignedBusy ? 'Filing…' : '↑ Upload signed agreement'}
             </button>
             {SHOW_AGREEMENT_ON_FILE && (
               <button
                 onClick={() => setAgreementModalOpen(true)}
-                className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+                className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-amber-700 px-3 py-1.5 rounded-lg transition-colors"
               >
                 + Link agreement
               </button>
@@ -1884,12 +1884,12 @@ const driverTone = (d: any): string => {
           </div>
         </div>
         {fileSignedMsg && (
-          <div className="mb-2.5 text-[12px] text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2">
+          <div className="mb-2.5 text-[12px] text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
             {fileSignedMsg}
           </div>
         )}
         {signSendMsg && (
-          <div className="mb-2.5 text-[12px] text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2 break-all">
+          <div className="mb-2.5 text-[12px] text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 break-all">
             {signSendMsg}
           </div>
         )}
@@ -1898,7 +1898,7 @@ const driverTone = (d: any): string => {
             read empty while the header chip two lines up said On file. The
             empty state now has to be empty on both counts. */}
         {job.agreementAddenda.length === 0 && signedOrderAgreements.length === 0 ? (
-          <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+          <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
             {SHOW_AGREEMENT_ON_FILE
               ? 'This job isn\u2019t linked to an agreement yet. Attach it to an on-file rental / stage agreement (or file a new one) so it reads covered.'
               : 'No signed paperwork on this job yet. Use Send for signature to have the client countersign in their portal.'}
@@ -1909,18 +1909,18 @@ const driverTone = (d: any): string => {
               const ca = ad.companyAgreement;
               const expired = ca.isAnnual && ca.expiryDate && new Date(ca.expiryDate) < new Date();
               return (
-                <div key={ad.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                <div key={ad.id} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${expired ? 'text-rose-300 bg-rose-500/10' : 'text-emerald-300 bg-emerald-500/10'}`}>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${expired ? 'text-rose-700 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}`}>
                       {expired ? 'Expired' : 'On file'}
                     </span>
-                    <span className="text-[15px] text-white font-medium">{ca.title || ca.contractType.replace(/_/g, ' ')}</span>
-                    <span className="text-[11px] uppercase tracking-wider text-zinc-300">{ca.contractType.replace(/_/g, ' ')}</span>
+                    <span className="text-[15px] text-zinc-900 font-medium">{ca.title || ca.contractType.replace(/_/g, ' ')}</span>
+                    <span className="text-[11px] uppercase tracking-wider text-zinc-700">{ca.contractType.replace(/_/g, ' ')}</span>
                     {ca.isAnnual && (
-                      <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 uppercase tracking-wider">Annual</span>
+                      <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase tracking-wider">Annual</span>
                     )}
                   </div>
-                  <div className="mt-1 text-[12px] text-zinc-300">
+                  <div className="mt-1 text-[12px] text-zinc-700">
                     added {fmtDate(ad.createdAt)}
                     {ca.isAnnual && ca.effectiveDate && <> · covers {fmtDay(ca.effectiveDate)}{ca.expiryDate ? ` – ${fmtDay(ca.expiryDate)}` : ''}</>}
                     {ad.note && <> · {ad.note}</>}
@@ -1930,7 +1930,7 @@ const driverTone = (d: any): string => {
                       href={`/api/agreements/company/${ca.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                      className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
                     >
                       View agreement →
                     </a>
@@ -1939,7 +1939,7 @@ const driverTone = (d: any): string => {
                         href={`/api/agreements/addendum/${ad.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                        className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
                       >
                         View addendum →
                       </a>
@@ -1963,22 +1963,22 @@ const driverTone = (d: any): string => {
             {/* "Order agreements", not "Signed by the client" — the list
                 includes rows still waiting on a signature, and each one
                 states its own status. */}
-            <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Order agreements</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Order agreements</div>
             <div className="space-y-2">
               {signedOrderAgreements.map(({ order, agreement: a }) => {
                 const executed = isSignedAgreementStatus(a.status);
                 return (
-                  <div key={a.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                  <div key={a.id} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${executed ? 'text-emerald-300 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10'}`}>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${executed ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
                         {a.status.replace(/_/g, ' ')}
                       </span>
-                      <span className="text-[15px] text-white font-medium">
+                      <span className="text-[15px] text-zinc-900 font-medium">
                         {a.contractType === 'STAGE_CONTRACT' ? 'Stage contract' : 'Rental agreement'}
                       </span>
-                      <span className="text-[11px] font-mono text-zinc-300">{order.orderNumber}</span>
+                      <span className="text-[11px] font-mono text-zinc-700">{order.orderNumber}</span>
                     </div>
-                    <div className="mt-1 text-[12px] text-zinc-300">
+                    <div className="mt-1 text-[12px] text-zinc-700">
                       {a.signedAt ? <>signed {fmtDate(a.signedAt)}</> : 'not signed yet'}
                       {a.signerName && <> · {a.signerName}</>}
                     </div>
@@ -1989,20 +1989,20 @@ const driverTone = (d: any): string => {
                             href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                            className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
                           >
                             View signed PDF →
                           </a>
                           <a
                             href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed&download=1`}
                             download
-                            className="text-[13px] font-semibold text-zinc-300 hover:text-white"
+                            className="text-[13px] font-semibold text-zinc-700 hover:text-zinc-900"
                           >
                             Download
                           </a>
                         </>
                       ) : (
-                        <span className="text-[12px] text-zinc-400">No executed PDF filed for this one.</span>
+                        <span className="text-[12px] text-zinc-600">No executed PDF filed for this one.</span>
                       )}
                     </div>
                   </div>
@@ -2041,11 +2041,11 @@ const driverTone = (d: any): string => {
 
       {/* Reserved assets → each opens its reservation on the calendar */}
       {showSec('assets') && (
-      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
           <div className="flex items-center gap-3">
-            <span className="text-[12px] text-zinc-500">
+            <span className="text-[12px] text-zinc-600">
               {reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}
               {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
             </span>
@@ -2060,7 +2060,7 @@ const driverTone = (d: any): string => {
           </div>
         </div>
         {reservedAssets.length === 0 && pendingHolds.length === 0 ? (
-          <div className="mt-3 text-[15px] text-zinc-300">No units reserved on this job yet — use + Add asset to hold one.</div>
+          <div className="mt-3 text-[15px] text-zinc-700">No units reserved on this job yet — use + Add asset to hold one.</div>
         ) : (
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {reservedAssets.map((a) => (
@@ -2068,16 +2068,16 @@ const driverTone = (d: any): string => {
                 key={a.assetId}
                 href={`/gantt?date=${a.startDate.slice(0, 10)}`}
                 title="Open this reservation on the calendar"
-                className="group rounded-xl border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0">
-                    <svg className="w-4 h-4 shrink-0 text-amber-500/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="w-4 h-4 shrink-0 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
                       <path d="M3.5 7 12 11.6 20.5 7" />
                       <path d="M12 11.6v9.8" />
                     </svg>
-                    <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
+                    <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">{a.unitName}</span>
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {(() => {
@@ -2088,10 +2088,10 @@ const driverTone = (d: any): string => {
                       const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
                       const style =
                         lcdw === 'ACCEPTED'
-                          ? { cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
+                          ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
                           : lcdw === 'DECLINED'
-                            ? { cls: 'bg-zinc-900 text-zinc-400 border-zinc-700', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
-                            : { cls: 'bg-amber-950/40 text-amber-300 border-amber-900/70', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
+                            ? { cls: 'bg-white text-zinc-600 border-zinc-300', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
+                            : { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
                       return (
                         <span
                           title={style.title}
@@ -2106,19 +2106,19 @@ const driverTone = (d: any): string => {
                         </span>
                       );
                     })()}
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-100 text-zinc-700 border-zinc-300'}`}>
                       {a.status.replace('_', ' ')}
                     </span>
                   </div>
                 </div>
-                <div className="mt-0.5 text-[12px] text-zinc-300 truncate">{a.category}</div>
-                <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
+                <div className="mt-0.5 text-[12px] text-zinc-700 truncate">{a.category}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
                 {/* Who's driving it — the question a rep asks while looking
                     at the unit, so answered here rather than only in the
                     Drivers section below. */}
                 <div className="mt-1.5 text-[11px] truncate">
                   {a.drivers.length === 0 ? (
-                    <span className="text-zinc-500">No driver named</span>
+                    <span className="text-zinc-600">No driver named</span>
                   ) : (
                     <span className={driverTone(a.drivers[0])}>
                       🧑‍✈️ {driverName(a.drivers[0])}
@@ -2127,7 +2127,7 @@ const driverTone = (d: any): string => {
                     </span>
                   )}
                 </div>
-                <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
+                <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
             ))}
             {/* Category-level holds with no unit picked yet. These are
@@ -2139,23 +2139,23 @@ const driverTone = (d: any): string => {
                 key={h.bookingItemId}
                 href={h.startDate ? `/gantt?date=${h.startDate.slice(0, 10)}` : '/gantt'}
                 title="Held at category level — open the calendar to assign a specific unit"
-                className="group rounded-xl border border-dashed border-amber-700/50 bg-amber-950/15 hover:border-amber-500/70 hover:bg-amber-950/25 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                className="group rounded-xl border border-dashed border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
+                  <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">
                     {h.category}
-                    {h.quantity > 1 && <span className="ml-1.5 text-zinc-400 font-normal">× {h.quantity}</span>}
+                    {h.quantity > 1 && <span className="ml-1.5 text-zinc-600 font-normal">× {h.quantity}</span>}
                   </span>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-950/40 text-amber-300 border-amber-900/70">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
                     Held · no unit
                   </span>
                 </div>
                 {h.startDate && (
-                  <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">
+                  <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">
                     {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
                   </div>
                 )}
-                <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Assign a unit on the calendar →</div>
+                <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">Assign a unit on the calendar →</div>
               </Link>
             ))}
           </div>
@@ -2212,66 +2212,66 @@ const driverTone = (d: any): string => {
         if (rows.length === 0) return null;
 
         return (
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
             <div className="flex items-center justify-between mb-2.5">
-              <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
-              <span className="text-[11px] text-zinc-300 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
+              <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
+              <span className="text-[11px] text-zinc-700 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
             </div>
             <div className="space-y-4">
               {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
-                <div key={order.id} className="border-l-2 border-amber-900/40 pl-3">
+                <div key={order.id} className="border-l-2 border-amber-200 pl-3">
                   <div className="flex items-center gap-2 mb-1.5 text-[12px]">
                     <Link
                       href={`/orders/${order.id}`}
-                      className="font-mono text-zinc-300 hover:text-amber-400"
+                      className="font-mono text-zinc-700 hover:text-amber-600"
                     >
                       {order.orderNumber}
                     </Link>
                     <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[order.status] || 'bg-zinc-800 text-zinc-300'}`}
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[order.status] || 'bg-zinc-100 text-zinc-700'}`}
                     >
                       {order.status}
                     </span>
-                    <span className="text-zinc-300">
+                    <span className="text-zinc-700">
                       {fmtDay(order.startDate)} – {fmtDay(order.endDate)}
                     </span>
                   </div>
                   {hasNotes && (
                     <div className="mb-2">
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Order notes</div>
-                      <div className="text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">Order notes</div>
+                      <div className="text-[13px] text-zinc-800 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
                     </div>
                   )}
                   {hasStageDetail && order.stageBookingTerms && (
                     <div className="mb-2">
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Stage terms</div>
-                      <div className="text-[13px] text-zinc-300 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">Stage terms</div>
+                      <div className="text-[13px] text-zinc-700 flex flex-wrap gap-x-3 gap-y-0.5">
                         {order.stageBookingTerms.specificSpaces?.length > 0 && (
-                          <span>Spaces: <span className="text-zinc-100">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
+                          <span>Spaces: <span className="text-zinc-900">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
                         )}
                         {order.stageBookingTerms.productionOfficeRental && (
-                          <span className="text-amber-300">+ Production office</span>
+                          <span className="text-amber-700">+ Production office</span>
                         )}
                         {order.stageBookingTerms.securityGuardRequired && (
-                          <span className="text-amber-300">+ Security guard</span>
+                          <span className="text-amber-700">+ Security guard</span>
                         )}
-                        <span>Daily: <span className="font-mono text-zinc-100">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
+                        <span>Daily: <span className="font-mono text-zinc-900">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
                       </div>
                       {hasStageNotes && order.stageBookingTerms.salesNotes && (
-                        <div className="mt-1 text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
+                        <div className="mt-1 text-[13px] text-zinc-800 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
                       )}
                     </div>
                   )}
                   {dateOverrides.length > 0 && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Off-window pickup / return</div>
-                      <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">Off-window pickup / return</div>
+                      <ul className="text-[13px] text-zinc-700 space-y-0.5">
                         {dateOverrides.map((li) => (
                           <li key={li.id} className="flex gap-2">
-                            <span className="text-zinc-300 min-w-[1rem]">·</span>
+                            <span className="text-zinc-700 min-w-[1rem]">·</span>
                             <span className="flex-1">
-                              <span className="text-zinc-100">{li.description}</span>
-                              <span className="ml-2 text-zinc-300">
+                              <span className="text-zinc-900">{li.description}</span>
+                              <span className="ml-2 text-zinc-700">
                                 {li.pickupDate ? fmtDay(li.pickupDate) : '—'} → {li.returnDate ? fmtDay(li.returnDate) : '—'}
                               </span>
                             </span>
@@ -2293,13 +2293,13 @@ const driverTone = (d: any): string => {
           invoice, payment) live on /orders/[id] — this is read-only
           rollup for the live engagement. */}
       {showSec('orders') && (
-      <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
-          <span className="text-[12px] text-zinc-500">{job.orders.length} total</span>
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
+          <span className="text-[12px] text-zinc-600">{job.orders.length} total</span>
         </div>
         {job.orders.length === 0 ? (
-          <div className="text-[15px] text-zinc-300">No orders on this job yet.</div>
+          <div className="text-[15px] text-zinc-700">No orders on this job yet.</div>
         ) : (
           <div className="space-y-2">
             {job.orders.map((o) => {
@@ -2311,52 +2311,52 @@ const driverTone = (d: any): string => {
                   !!li.inventoryItem?.slug && li.inventoryItem.slug === (bi.catalogItem?.slug ?? bi.category.slug))),
               );
               return (
-                <div key={o.id} className="bg-zinc-950/40 border border-zinc-800 rounded-lg">
+                <div key={o.id} className="bg-zinc-50 border border-zinc-200 rounded-lg">
                   <button
                     onClick={() => toggleOrder(o.id)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-100 transition-colors"
                   >
-                    <span className="text-zinc-300 text-[13px] w-3">{expanded ? '▾' : '▸'}</span>
-                    <span className="font-mono text-[15px] font-semibold text-white">{o.orderNumber}</span>
+                    <span className="text-zinc-700 text-[13px] w-3">{expanded ? '▾' : '▸'}</span>
+                    <span className="font-mono text-[15px] font-semibold text-zinc-900">{o.orderNumber}</span>
                     <span
-                      className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-300'}`}
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-100 text-zinc-700'}`}
                     >
                       {o.status}
                     </span>
                     {o.addedToJobAt && (
                       <span
                         title="Added later via inquiry triage"
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-300"
                       >
                         Add-on
                       </span>
                     )}
-                    <span className="text-[13px] text-zinc-300 whitespace-nowrap">
+                    <span className="text-[13px] text-zinc-700 whitespace-nowrap">
                       {fmtDay(o.startDate)} – {fmtDay(o.endDate)}
                     </span>
-                    <span className="text-[11px] text-zinc-300 ml-2">
+                    <span className="text-[11px] text-zinc-700 ml-2">
                       {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
                     </span>
-                    <span className="ml-auto font-mono text-[13px] text-zinc-200">{fmtMoney(o.total)}</span>
+                    <span className="ml-auto font-mono text-[13px] text-zinc-800">{fmtMoney(o.total)}</span>
                     <Link
                       href={`/orders/${o.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="ml-2 shrink-0 rounded-md border border-amber-700/50 bg-amber-950/30 px-2.5 py-1 text-[12px] font-bold text-amber-300 hover:bg-amber-900/40 hover:border-amber-600 transition-colors"
+                      className="ml-2 shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-bold text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors"
                     >
                       Open order →
                     </Link>
                   </button>
 
                   {expanded && (
-                    <div className="border-t border-zinc-800 px-4 py-3 space-y-4">
+                    <div className="border-t border-zinc-200 px-4 py-3 space-y-4">
                       {/* Booked scope */}
                       {o.lineItems.length > 0 && (
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Booked scope</div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Booked scope</div>
                           <div className="overflow-x-auto">
                             <table className="w-full text-[13px]">
-                              <thead className="text-[10px] uppercase tracking-wider text-zinc-400">
-                                <tr className="border-b border-zinc-800">
+                              <thead className="text-[10px] uppercase tracking-wider text-zinc-600">
+                                <tr className="border-b border-zinc-200">
                                   <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
                                   <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
                                   <th className="text-right pb-1.5 pr-2 font-semibold">Days</th>
@@ -2365,13 +2365,13 @@ const driverTone = (d: any): string => {
                                   <th className="text-left pb-1.5 pl-2 font-semibold">Lane / Pick</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-zinc-900">
+                              <tbody className="divide-y divide-zinc-200">
                                 {o.lineItems.map((li) => (
-                                  <tr key={li.id} className="text-zinc-300">
+                                  <tr key={li.id} className="text-zinc-700">
                                     <td className="py-1.5 pr-2">
-                                      <div className="text-zinc-100">{li.description}</div>
+                                      <div className="text-zinc-900">{li.description}</div>
                                       {li.qualifier && (
-                                        <div className="text-[11px] text-zinc-300">{li.qualifier}</div>
+                                        <div className="text-[11px] text-zinc-700">{li.qualifier}</div>
                                       )}
                                     </td>
                                     <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
@@ -2380,10 +2380,10 @@ const driverTone = (d: any): string => {
                                     <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>
                                     <td className="py-1.5 pl-2 text-[11px]">
                                       {li.fulfillmentLane && (
-                                        <span className="text-zinc-300 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
+                                        <span className="text-zinc-700 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
                                       )}
                                       {li.pickStatus && (
-                                        <span className="text-amber-300 uppercase tracking-wider">{li.pickStatus.replace(/_/g, ' ')}</span>
+                                        <span className="text-amber-700 uppercase tracking-wider">{li.pickStatus.replace(/_/g, ' ')}</span>
                                       )}
                                     </td>
                                   </tr>
@@ -2398,20 +2398,20 @@ const driverTone = (d: any): string => {
                           for this order's categories has assignments. */}
                       {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Per-vehicle assignments</div>
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Per-vehicle assignments</div>
+                          <ul className="text-[13px] text-zinc-700 space-y-0.5">
                             {orderBookings.flatMap((b) =>
                               b.items.flatMap((bi) =>
                                 bi.assignments.map((a) => (
                                   <li key={a.id} className="flex gap-2">
-                                    <span className="text-zinc-300 min-w-[1rem]">·</span>
+                                    <span className="text-zinc-700 min-w-[1rem]">·</span>
                                     <span>
-                                      <span className="text-zinc-100">{bi.category.name}</span>
-                                      <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
-                                      <span className="ml-2 text-zinc-300">
+                                      <span className="text-zinc-900">{bi.category.name}</span>
+                                      <span className="ml-2 font-mono text-amber-700">{a.asset.unitName}</span>
+                                      <span className="ml-2 text-zinc-700">
                                         {fmtDay(a.startDate)} → {fmtDay(a.endDate)}
                                       </span>
-                                      <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">{a.status.replace(/_/g, ' ')}</span>
+                                      <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-600">{a.status.replace(/_/g, ' ')}</span>
                                     </span>
                                   </li>
                                 )),
@@ -2426,21 +2426,21 @@ const driverTone = (d: any): string => {
                           section; this is just per-order signing state. */}
                       {o.signedAgreements.length > 0 && (
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Order agreements</div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Order agreements</div>
                           {/* One status line per contract — the full record
                               (dates, signer, PDFs) lives in the job-level
                               Agreement section this links to. */}
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                          <ul className="text-[13px] text-zinc-700 space-y-0.5">
                             {o.signedAgreements.map((a) => {
                               const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
                               return (
                                 <li key={a.id} className="flex items-baseline gap-2">
-                                  <span className="text-zinc-500 min-w-[1rem]">·</span>
-                                  <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
-                                  <span className={`text-[11px] uppercase tracking-wider ${signed ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                  <span className="text-zinc-600 min-w-[1rem]">·</span>
+                                  <span className="text-zinc-900">{a.contractType.replace(/_/g, ' ')}</span>
+                                  <span className={`text-[11px] uppercase tracking-wider ${signed ? 'text-emerald-700' : 'text-amber-700'}`}>
                                     {a.status.replace(/_/g, ' ')}
                                   </span>
-                                  <a href="#agreement" className="text-[12px] text-zinc-500 hover:text-amber-400">
+                                  <a href="#agreement" className="text-[12px] text-zinc-600 hover:text-amber-600">
                                     View in Agreement section ↑
                                   </a>
                                 </li>
@@ -2453,23 +2453,23 @@ const driverTone = (d: any): string => {
                       {/* Invoices */}
                       {o.invoices.length > 0 && (
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Invoices</div>
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Invoices</div>
+                          <ul className="text-[13px] text-zinc-700 space-y-0.5">
                             {o.invoices.map((inv) => (
                               <li key={inv.id} className="flex gap-2">
-                                <span className="text-zinc-300 min-w-[1rem]">·</span>
+                                <span className="text-zinc-700 min-w-[1rem]">·</span>
                                 <span className="flex-1">
-                                  <span className="font-mono text-zinc-100">{inv.invoiceNumber}</span>
-                                  <span className="ml-1.5 text-[10px] text-zinc-300 uppercase tracking-wider">{inv.type}</span>
-                                  <span className="ml-2 text-[11px] uppercase tracking-wider text-amber-300">{inv.status}</span>
-                                  <span className="ml-2 text-zinc-300">
+                                  <span className="font-mono text-zinc-900">{inv.invoiceNumber}</span>
+                                  <span className="ml-1.5 text-[10px] text-zinc-700 uppercase tracking-wider">{inv.type}</span>
+                                  <span className="ml-2 text-[11px] uppercase tracking-wider text-amber-700">{inv.status}</span>
+                                  <span className="ml-2 text-zinc-700">
                                     {fmtMoney(inv.amountPaid)} paid of {fmtMoney(inv.total)}
                                     {inv.balanceDue > 0 && (
-                                      <span className="ml-1 text-amber-300"> · {fmtMoney(inv.balanceDue)} due</span>
+                                      <span className="ml-1 text-amber-700"> · {fmtMoney(inv.balanceDue)} due</span>
                                     )}
                                   </span>
                                   {inv.dueDate && inv.status !== 'PAID' && (
-                                    <span className="ml-2 text-[11px] text-zinc-300">due {fmtDay(inv.dueDate)}</span>
+                                    <span className="ml-2 text-[11px] text-zinc-700">due {fmtDay(inv.dueDate)}</span>
                                   )}
                                 </span>
                               </li>
@@ -2522,58 +2522,58 @@ const driverTone = (d: any): string => {
           after-hours via a single tap. tel: link triggers native
           dialer on mobile / Mac Continuity Calling on desktop. */}
       {showSec('contacts') && (
-      <div id="contacts" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="contacts" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
           <button
             onClick={() => { setAddingContact((v) => !v); setContactError(null); }}
-            className="text-[12px] font-semibold px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+            className="text-[12px] font-semibold px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:bg-zinc-100 transition-colors"
           >
             {addingContact ? 'Cancel' : '+ Add contact'}
           </button>
         </div>
         {job.jobContacts.length === 0 ? (
-          <div className="text-[15px] text-zinc-300">No contacts yet.</div>
+          <div className="text-[15px] text-zinc-700">No contacts yet.</div>
         ) : (
-          <div className="divide-y divide-zinc-800">
+          <div className="divide-y divide-zinc-200">
             {job.jobContacts.map((jc) => (
               <div key={jc.id} className="flex items-center justify-between py-2.5 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className="w-8 h-8 shrink-0 rounded-full bg-amber-500/10 border border-amber-700/40 flex items-center justify-center text-[12px] font-bold text-amber-300"
+                    className="w-8 h-8 shrink-0 rounded-full bg-amber-50 border border-amber-300 flex items-center justify-center text-[12px] font-bold text-amber-700"
                     style={{ fontFamily: 'Georgia, serif' }}
                   >
                     {((jc.person.firstName?.[0] ?? '') + (jc.person.lastName?.[0] ?? '')).toUpperCase()}
                   </span>
                   <div className="min-w-0">
-                  <div className="text-[15px] text-white truncate">
+                  <div className="text-[15px] text-zinc-900 truncate">
                     {jc.person.firstName} {jc.person.lastName}
                     {jc.isPrimary && (
-                      <span className="ml-2 text-[11px] font-bold text-amber-500 uppercase">
+                      <span className="ml-2 text-[11px] font-bold text-amber-700 uppercase">
                         Primary
                       </span>
                     )}
                   </div>
-                  <div className="text-[13px] text-zinc-300 truncate flex items-center gap-3 flex-wrap">
+                  <div className="text-[13px] text-zinc-700 truncate flex items-center gap-3 flex-wrap">
                     {/* An address that cannot receive mail is worse than
                         a missing one: it looks answered. SR-JOB-0268's
                         primary had the literal string "martinez" here and
                         rendered as a normal mailto. */}
                     {jc.person.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(jc.person.email) ? (
-                      <a href={`mailto:${jc.person.email}`} className="hover:text-amber-500">
+                      <a href={`mailto:${jc.person.email}`} className="hover:text-amber-600">
                         {jc.person.email}
                       </a>
                     ) : jc.person.email ? (
-                      <span className="text-red-400" title="Not a valid email address — mail to this contact will not arrive">
+                      <span className="text-red-600" title="Not a valid email address — mail to this contact will not arrive">
                         {jc.person.email} · not a valid email
                       </span>
                     ) : (
-                      <span className="text-zinc-500">no email</span>
+                      <span className="text-zinc-600">no email</span>
                     )}
                     {jc.person.phone && (
                       <a
                         href={`tel:${jc.person.phone.replace(/[^\d+]/g, '')}`}
-                        className="text-zinc-300 hover:text-amber-500 font-mono"
+                        className="text-zinc-700 hover:text-amber-600 font-mono"
                       >
                         {jc.person.phone}
                       </a>
@@ -2597,7 +2597,7 @@ const driverTone = (d: any): string => {
                         });
                         load();
                       }}
-                      className="text-[11px] font-semibold text-zinc-400 hover:text-amber-400"
+                      className="text-[11px] font-semibold text-zinc-600 hover:text-amber-600"
                       title="Route this job's client mail to this contact"
                     >
                       Make primary
@@ -2613,12 +2613,12 @@ const driverTone = (d: any): string => {
                       await fetch(`/api/jobs/${job.id}/contacts/${jc.id}`, { method: 'DELETE' });
                       load();
                     }}
-                    className="text-[11px] font-semibold text-zinc-500 hover:text-red-400"
+                    className="text-[11px] font-semibold text-zinc-600 hover:text-red-600"
                     title="Unlink from this job (keeps the CRM record)"
                   >
                     Remove
                   </button>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300 bg-zinc-800 px-2 py-1 rounded">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-700 bg-zinc-100 px-2 py-1 rounded">
                     {jc.role}
                   </span>
                 </div>
@@ -2627,32 +2627,32 @@ const driverTone = (d: any): string => {
           </div>
         )}
         {addingContact && (
-          <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
+          <div className="mt-3 pt-3 border-t border-zinc-200 space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
                 value={contactForm.email}
                 onChange={(e) => setContactForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="Email *"
                 type="email"
-                className="sm:col-span-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+                className="sm:col-span-2 bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-amber-600"
               />
               <input
                 value={contactForm.firstName}
                 onChange={(e) => setContactForm((f) => ({ ...f, firstName: e.target.value }))}
                 placeholder="First name"
-                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+                className="bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-amber-600"
               />
               <input
                 value={contactForm.lastName}
                 onChange={(e) => setContactForm((f) => ({ ...f, lastName: e.target.value }))}
                 placeholder="Last name"
-                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+                className="bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-amber-600"
               />
             </div>
             <select
               value={contactForm.role}
               onChange={(e) => setContactForm((f) => ({ ...f, role: e.target.value }))}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-amber-600"
+              className="w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 outline-none focus:border-amber-600"
             >
               <option value="PRODUCER">Producer</option>
               <option value="PM">Production Manager</option>
@@ -2662,11 +2662,11 @@ const driverTone = (d: any): string => {
               <option value="OTHER">Other</option>
             </select>
             {/* The role is routing, not just a label — say so where it is picked. */}
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-zinc-600">
               Accounting receives payment emails (final invoices, payment options).
               Without one, they go to the primary contact.
             </p>
-            {contactError && <p className="text-[12px] text-red-400">{contactError}</p>}
+            {contactError && <p className="text-[12px] text-red-600">{contactError}</p>}
             <button
               onClick={submitContact}
               disabled={contactSaving || !contactForm.email.trim()}
@@ -2683,23 +2683,23 @@ const driverTone = (d: any): string => {
           this client, so staff know how they like to work. Authored on
           the client file (Company.notes); this is just the at-a-glance. */}
       {showSec('clientNotes') && (
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-start gap-3 flex-wrap">
-          <h2 className="text-[15px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+          <h2 className="text-[15px] font-semibold text-zinc-900 shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             Client notes
           </h2>
           {job.company.notes?.trim() ? (
-            <div className="flex-1 min-w-[240px] text-[14px] text-zinc-200 whitespace-pre-wrap leading-relaxed">
+            <div className="flex-1 min-w-[240px] text-[14px] text-zinc-800 whitespace-pre-wrap leading-relaxed">
               {job.company.notes}
             </div>
           ) : (
-            <div className="flex-1 min-w-[240px] text-[13px] text-zinc-400 italic">
+            <div className="flex-1 min-w-[240px] text-[13px] text-zinc-600 italic">
               No preferences or quirks recorded for {job.company.name} yet.
             </div>
           )}
           <Link
             href={`/crm/${job.company.id}`}
-            className="shrink-0 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
+            className="shrink-0 text-[12px] font-semibold text-amber-700 hover:text-amber-700"
           >
             Edit on client file →
           </Link>
@@ -2708,15 +2708,15 @@ const driverTone = (d: any): string => {
       )}
 
       {/* Job notes — THIS job only */}
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
         <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             Job notes
             {/* Wes wrote crew instructions here and expected them on the
                 client's quote. They are internal and always were; the
                 quote prints the ORDER's notes. Saying so on both fields
                 is cheaper than the round trip. */}
-            <span className="text-[11px] font-medium text-zinc-500">internal — not on client documents</span>
+            <span className="text-[11px] font-medium text-zinc-600">internal — not on client documents</span>
           </h2>
           <button
             onClick={saveNotes}
@@ -2734,20 +2734,20 @@ const driverTone = (d: any): string => {
           }}
           rows={6}
           placeholder="Internal notes for this job — logistics, deal specifics. For text the client should see on the quote, use Notes on the order."
-          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 resize-y"
+          className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-[15px] text-zinc-900 focus:outline-none focus:border-zinc-400 resize-y"
         />
       </div>
 
       {/* Email threads filed in this Job (email-in-Job, step 6). The
           component hides itself until a thread is filed. */}
-      <JobEmailThreads jobId={job.id} />
+      <JobEmailThreads jobId={job.id} tone="light" />
 
       {/* Not started — every empty section, reachable in one click.
           A chip expands its section in place; a section that gains
           content leaves this strip on the next load automatically. */}
       {foldedChips.length > 0 && (
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-dashed border-zinc-700 rounded-2xl px-4 py-3.5">
-          <div className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-500 mb-2">
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-dashed border-zinc-300 rounded-2xl px-4 py-3.5">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-600 mb-2">
             Not started — opens in place, appears automatically once it has content
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -2755,7 +2755,7 @@ const driverTone = (d: any): string => {
               <button
                 key={m.key}
                 onClick={() => openSection(m.key, m.anchor)}
-                className="text-[11.5px] text-zinc-400 bg-zinc-800/50 border border-zinc-700 rounded-md px-2.5 py-1 hover:border-amber-600 hover:text-amber-400 transition-colors"
+                className="text-[11.5px] text-zinc-600 bg-zinc-50 border border-zinc-300 rounded-md px-2.5 py-1 hover:border-amber-400 hover:text-amber-600 transition-colors"
               >
                 {m.label} <span className="text-zinc-600">+</span>
               </button>
@@ -2772,25 +2772,25 @@ const driverTone = (d: any): string => {
           when oldValues + newValues both have ≤3 entries (otherwise
           fall back to a generic "updated" line). */}
       {job.activity.length > 0 && (
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Activity</h2>
-            <span className="text-[13px] text-zinc-300">{job.activity.length} event{job.activity.length === 1 ? '' : 's'}</span>
+            <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Activity</h2>
+            <span className="text-[13px] text-zinc-700">{job.activity.length} event{job.activity.length === 1 ? '' : 's'}</span>
           </div>
           <ul className="space-y-1.5">
             {job.activity.map((a) => {
               const formatted = formatActivity(a);
               return (
-                <li key={a.id} className="flex gap-3 text-[13px] text-zinc-300 border-l border-zinc-800 pl-3 py-0.5">
-                  <span className="text-zinc-300 whitespace-nowrap min-w-[60px]" title={new Date(a.createdAt).toLocaleString()}>
+                <li key={a.id} className="flex gap-3 text-[13px] text-zinc-700 border-l border-zinc-200 pl-3 py-0.5">
+                  <span className="text-zinc-700 whitespace-nowrap min-w-[60px]" title={new Date(a.createdAt).toLocaleString()}>
                     {relativeAge(a.createdAt)}
                   </span>
                   <span className="flex-1 min-w-0">
-                    <span className="text-zinc-100">{a.user?.name || 'System'}</span>
-                    <span className="text-zinc-300"> {formatted.verb} </span>
-                    <span className="text-zinc-100">{formatted.what}</span>
+                    <span className="text-zinc-900">{a.user?.name || 'System'}</span>
+                    <span className="text-zinc-700"> {formatted.verb} </span>
+                    <span className="text-zinc-900">{formatted.what}</span>
                     {formatted.details && (
-                      <span className="text-zinc-300"> · {formatted.details}</span>
+                      <span className="text-zinc-700"> · {formatted.details}</span>
                     )}
                   </span>
                 </li>
@@ -2899,9 +2899,9 @@ function formatActivity(a: ActivityRow): { verb: string; what: string; details?:
 function Meta({ label, value, sub, dim }: { label: string; value: string; sub?: string; dim?: boolean }) {
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{label}</div>
-      <div className={`mt-0.5 truncate ${dim ? 'text-[13px] text-zinc-500' : 'text-[15px] text-white'}`}>{value}</div>
-      {sub && <div className="text-[11px] text-zinc-500">{sub}</div>}
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">{label}</div>
+      <div className={`mt-0.5 truncate ${dim ? 'text-[13px] text-zinc-600' : 'text-[15px] text-zinc-900'}`}>{value}</div>
+      {sub && <div className="text-[11px] text-zinc-600">{sub}</div>}
     </div>
   );
 }
@@ -2921,10 +2921,10 @@ function RollupChip({
 }) {
   const toneClass =
     tone === 'good'
-      ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
       : tone === 'warn'
-        ? 'border-amber-900/60 bg-amber-950/30 text-amber-200'
-        : 'border-zinc-800 bg-zinc-950 text-zinc-300';
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-zinc-200 bg-zinc-100 text-zinc-700';
   return (
     <div className={`flex items-baseline gap-1.5 px-2.5 py-1 rounded-md border ${toneClass}`}>
       <span className="text-[10px] uppercase tracking-wider font-semibold opacity-80">{label}</span>

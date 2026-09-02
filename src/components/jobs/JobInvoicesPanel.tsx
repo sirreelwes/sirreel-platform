@@ -150,31 +150,31 @@ export function JobInvoicesPanel({
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4">
+    <div className="bg-white border border-zinc-200 rounded-xl p-5 mb-4">
       <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-sm font-bold text-white">Invoices</h2>
-        <span className="text-[11px] text-zinc-500">
+        <h2 className="text-sm font-bold text-zinc-900">Invoices</h2>
+        <span className="text-[11px] text-zinc-600">
           The document the client receives — view, send, or withdraw it here
         </span>
       </div>
 
       {error && (
-        <div className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">
+        <div className="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-700">
           {error}
         </div>
       )}
 
       <div className="space-y-3">
         {rows.map(({ order, live, voided }) => (
-          <div key={order.id} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+          <div key={order.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
             <div className="flex items-baseline gap-2 mb-2">
-              <span className="font-mono text-[12px] text-zinc-300">{order.orderNumber}</span>
-              <span className="text-[11px] text-zinc-500">order total {money(order.total)}</span>
+              <span className="font-mono text-[12px] text-zinc-700">{order.orderNumber}</span>
+              <span className="text-[11px] text-zinc-600">order total {money(order.total)}</span>
             </div>
 
             {live.length === 0 && (
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="text-[12px] text-zinc-400">
+                <span className="text-[12px] text-zinc-600">
                   {voided.length > 0
                     ? `No live invoice — ${voided.length} voided. Generate the corrected one.`
                     : 'No invoice yet.'}
@@ -203,26 +203,26 @@ export function JobInvoicesPanel({
                 <div
                   key={inv.id}
                   className={`rounded border p-2.5 ${
-                    drifts ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-800 bg-zinc-900'
+                    drifts ? 'border-amber-500/50 bg-amber-500/5' : 'border-zinc-200 bg-white'
                   }`}
                 >
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="font-mono text-[12px] text-white">{inv.invoiceNumber}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">{inv.type}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-amber-300">{inv.status}</span>
-                    <span className="text-[13px] font-bold text-white">{money(inv.total)}</span>
+                    <span className="font-mono text-[12px] text-zinc-900">{inv.invoiceNumber}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-600">{inv.type}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-amber-700">{inv.status}</span>
+                    <span className="text-[13px] font-bold text-zinc-900">{money(inv.total)}</span>
                     {inv.balanceDue > 0 && (
-                      <span className="text-[11px] text-amber-300">{money(inv.balanceDue)} due</span>
+                      <span className="text-[11px] text-amber-700">{money(inv.balanceDue)} due</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5">
+                  <div className="text-[11px] text-zinc-600 mt-0.5">
                     {inv.sentAt
                       ? `Sent to the client ${new Date(inv.sentAt).toLocaleString()}`
                       : 'Not sent yet'}
                   </div>
 
                   {drifts && (
-                    <div className="mt-2 text-[12px] text-amber-200">
+                    <div className="mt-2 text-[12px] text-amber-800">
                       <strong>This invoice no longer matches the order.</strong> The order is now{' '}
                       {money(order.total)} — {money(Math.abs(drift))}{' '}
                       {drift > 0 ? 'MORE on the invoice' : 'less on the invoice'}. An invoice is a
@@ -238,7 +238,7 @@ export function JobInvoicesPanel({
                       href={isDraft ? `/api/invoices/${inv.id}/pre-invoice-pdf` : `/api/invoices/${inv.id}/pdf`}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-[12px] font-semibold"
+                      className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-[12px] font-semibold"
                     >
                       {isDraft ? 'View pre-invoice' : 'View invoice PDF'}
                     </a>
@@ -250,7 +250,7 @@ export function JobInvoicesPanel({
                         className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${
                           drifts
                             ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
                         }`}
                       >
                         {busyId === inv.id ? 'Working…' : 'Update to match order'}
@@ -261,7 +261,7 @@ export function JobInvoicesPanel({
                       disabled={busyId === inv.id}
                       className={`px-3 py-1.5 rounded-lg disabled:opacity-50 text-[12px] font-bold ${
                         drifts
-                          ? 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                          ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
                           : 'bg-amber-600 hover:bg-amber-500 text-white'
                       }`}
                     >
@@ -273,8 +273,8 @@ export function JobInvoicesPanel({
                       title="Withdraw this invoice so a corrected one can be generated"
                       className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border disabled:opacity-50 ${
                         drifts
-                          ? 'border-amber-500 text-amber-200 hover:bg-amber-500/15'
-                          : 'border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                          ? 'border-amber-500 text-amber-800 hover:bg-amber-500/15'
+                          : 'border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
                       }`}
                     >
                       Void

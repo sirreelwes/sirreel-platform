@@ -54,19 +54,19 @@ export function FileDropzone({
           compact ? 'px-3 py-3' : 'px-4 py-6'
         } ${
           dragging
-            ? 'border-amber-500 bg-amber-500/10'
+            ? 'border-amber-500 bg-amber-50'
             : file
-              ? 'border-emerald-700/60 bg-emerald-500/[0.06]'
-              : 'border-zinc-700 bg-zinc-800/40 hover:border-zinc-600 hover:bg-zinc-800/70'
+              ? 'border-emerald-300 bg-emerald-50'
+              : 'border-zinc-300 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100'
         }`}
       >
         {file ? (
           <>
-            <div className="flex items-center gap-2 text-sm text-emerald-300">
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
               <span className="max-w-[16rem] truncate font-medium">{file.name}</span>
             </div>
-            <div className="mt-1 text-[11px] text-zinc-500">
+            <div className="mt-1 text-[11px] text-zinc-600">
               {(file.size / 1024 / 1024).toFixed(2)} MB ·{' '}
               <button
                 type="button"
@@ -75,7 +75,7 @@ export function FileDropzone({
                   onFile(null);
                   if (inputRef.current) inputRef.current.value = '';
                 }}
-                className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
+                className="text-amber-700 hover:text-amber-800 underline underline-offset-2"
               >
                 remove
               </button>
@@ -83,11 +83,11 @@ export function FileDropzone({
           </>
         ) : (
           <>
-            <svg className={`text-zinc-500 ${compact ? 'mb-1' : 'mb-1.5'}`} width={compact ? 18 : 22} height={compact ? 18 : 22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-            <div className="text-sm text-zinc-300">
-              <span className="font-semibold text-amber-400">Drag &amp; drop</span> a file, or <span className="font-semibold text-amber-400">browse</span>
+            <svg className={`text-zinc-600 ${compact ? 'mb-1' : 'mb-1.5'}`} width={compact ? 18 : 22} height={compact ? 18 : 22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+            <div className="text-sm text-zinc-700">
+              <span className="font-semibold text-amber-700">Drag &amp; drop</span> a file, or <span className="font-semibold text-amber-700">browse</span>
             </div>
-            <div className="mt-0.5 text-[11px] text-zinc-500">{hint}</div>
+            <div className="mt-0.5 text-[11px] text-zinc-600">{hint}</div>
           </>
         )}
       </div>

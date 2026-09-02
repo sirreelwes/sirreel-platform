@@ -113,14 +113,14 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
   const hasLinks = data.linked.length > 0;
 
   return (
-    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+    <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between mb-2.5 gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             RentalWorks billing
           </h2>
           {hasLinks && (
-            <span className="text-[12px] text-zinc-300">
+            <span className="text-[12px] text-zinc-700">
               order{data.linked.length > 1 ? 's' : ''}{' '}
               {data.linked.map((l) => `#${l.rwOrderNumber}`).join(', ')}
             </span>
@@ -129,7 +129,7 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
         <button
           onClick={() => setPicking((v) => !v)}
           disabled={busy}
-          className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          className="text-[13px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-amber-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
         >
           {picking ? 'Close' : '+ Link RW order'}
         </button>
@@ -147,7 +147,7 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
             <div className="overflow-x-auto mb-2">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-zinc-400 border-b border-zinc-800">
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-zinc-600 border-b border-zinc-200">
                     <th className="py-1.5 pr-3 font-semibold">Invoice</th>
                     <th className="py-1.5 pr-3 font-semibold">Dated</th>
                     <th className="py-1.5 pr-3 font-semibold">Due</th>
@@ -161,28 +161,28 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
                   {data.invoices.map((i) => {
                     const overdue = i.remainingTotal > 0.005 && i.dueDate && new Date(i.dueDate).getTime() < Date.now();
                     return (
-                      <tr key={i.id} className="border-b border-zinc-800/60">
-                        <td className="py-1.5 pr-3 font-mono text-white">{i.invoiceNumber || '—'}</td>
-                        <td className="py-1.5 pr-3 text-zinc-300">{fmt(i.invoiceDate)}</td>
-                        <td className={`py-1.5 pr-3 ${overdue ? 'text-rose-400 font-semibold' : 'text-zinc-300'}`}>{fmtDay(i.dueDate)}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums text-white">{usd(i.invoiceTotal)}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums text-zinc-300">{usd(i.receivedTotal)}</td>
-                        <td className={`py-1.5 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-white' : 'text-zinc-400'}`}>
-                          {i.hqPaid ? <span className="text-[10px] font-bold uppercase text-emerald-300">paid · hq</span> : usd(i.remainingTotal)}
+                      <tr key={i.id} className="border-b border-zinc-200">
+                        <td className="py-1.5 pr-3 font-mono text-zinc-900">{i.invoiceNumber || '—'}</td>
+                        <td className="py-1.5 pr-3 text-zinc-700">{fmt(i.invoiceDate)}</td>
+                        <td className={`py-1.5 pr-3 ${overdue ? 'text-rose-600 font-semibold' : 'text-zinc-700'}`}>{fmtDay(i.dueDate)}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-zinc-900">{usd(i.invoiceTotal)}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-zinc-700">{usd(i.receivedTotal)}</td>
+                        <td className={`py-1.5 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-zinc-900' : 'text-zinc-600'}`}>
+                          {i.hqPaid ? <span className="text-[10px] font-bold uppercase text-emerald-700">paid · hq</span> : usd(i.remainingTotal)}
                         </td>
                         <td className="py-1.5 pl-3 text-right whitespace-nowrap">
                           <a
                             href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[11px] font-semibold text-amber-300 hover:underline mr-2.5"
+                            className="text-[11px] font-semibold text-amber-700 hover:underline mr-2.5"
                           >
                             PDF
                           </a>
                           {i.hqPaid ? (
-                            <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-[11px] text-zinc-400 hover:text-white">Undo</button>
+                            <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-[11px] text-zinc-600 hover:text-zinc-900">Undo</button>
                           ) : i.remainingTotal > 0.005 ? (
-                            <button onClick={() => markPaid(i.rwInvoiceId, true)} disabled={busy} className="text-[11px] font-semibold text-emerald-300 hover:underline">Mark paid</button>
+                            <button onClick={() => markPaid(i.rwInvoiceId, true)} disabled={busy} className="text-[11px] font-semibold text-emerald-700 hover:underline">Mark paid</button>
                           ) : null}
                         </td>
                       </tr>
@@ -192,10 +192,10 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
               </table>
             </div>
           )}
-          <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-400">
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-600">
             {data.syncedAt && <span>synced {fmt(data.syncedAt)}</span>}
             {data.linked.map((l) => (
-              <button key={l.rwOrderNumber} onClick={() => unlink(l.rwOrderNumber)} className="hover:text-rose-400">
+              <button key={l.rwOrderNumber} onClick={() => unlink(l.rwOrderNumber)} className="hover:text-rose-600">
                 Unlink #{l.rwOrderNumber}
               </button>
             ))}
@@ -204,24 +204,24 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
       )}
 
       {!hasLinks && !picking && (
-        <div className="text-[14px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+        <div className="text-[14px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
           No RentalWorks order linked. Link one to pull this job’s invoices and balance in from RW.
         </div>
       )}
 
       {picking && (
-        <div className="mt-1 rounded-xl border border-zinc-700 bg-zinc-950/60 p-3">
+        <div className="mt-1 rounded-xl border border-zinc-300 bg-zinc-50 p-3">
           {!data.companyLinked ? (
-            <div className="text-[13px] text-zinc-300">
+            <div className="text-[13px] text-zinc-700">
               {data.companyName || 'This client'} isn’t linked to a RentalWorks customer, so we can’t
               suggest orders yet.{' '}
-              <a href="/rentalworks/reconcile" className="font-semibold text-amber-300 hover:underline">
+              <a href="/rentalworks/reconcile" className="font-semibold text-amber-700 hover:underline">
                 Link the client in Reconcile →
               </a>{' '}
               (fixes every job for them), or enter the RW order number directly:
             </div>
           ) : (
-            <div className="text-[12px] text-zinc-400 mb-2">
+            <div className="text-[12px] text-zinc-600 mb-2">
               Orders for {data.companyName}, closest to this job’s start date first:
             </div>
           )}
@@ -233,18 +233,18 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
                   key={c.orderNumber}
                   onClick={() => link(c.orderNumber)}
                   disabled={busy}
-                  className="w-full text-left flex items-center gap-3 flex-wrap rounded-lg border border-zinc-800 bg-zinc-900 hover:border-amber-600/60 px-3 py-2 transition-colors disabled:opacity-50"
+                  className="w-full text-left flex items-center gap-3 flex-wrap rounded-lg border border-zinc-200 bg-white hover:border-amber-400 px-3 py-2 transition-colors disabled:opacity-50"
                 >
-                  <span className="font-mono text-[14px] text-white">#{c.orderNumber}</span>
-                  <span className="text-[12px] text-zinc-300">
+                  <span className="font-mono text-[14px] text-zinc-900">#{c.orderNumber}</span>
+                  <span className="text-[12px] text-zinc-700">
                     {c.invoiceCount} invoice{c.invoiceCount === 1 ? '' : 's'} · {usd(c.invoiced)}
                   </span>
                   {c.outstanding > 0.005 && (
-                    <span className="text-[12px] text-amber-300">{usd(c.outstanding)} open</span>
+                    <span className="text-[12px] text-amber-700">{usd(c.outstanding)} open</span>
                   )}
-                  <span className="text-[11px] text-zinc-400">{fmt(c.firstInvoiceDate)}</span>
+                  <span className="text-[11px] text-zinc-600">{fmt(c.firstInvoiceDate)}</span>
                   {c.distanceDays != null && (
-                    <span className="text-[11px] text-zinc-400 ml-auto">
+                    <span className="text-[11px] text-zinc-600 ml-auto">
                       {c.distanceDays === 0 ? 'same day' : `${c.distanceDays}d from job start`}
                     </span>
                   )}
@@ -258,7 +258,7 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
               value={manual}
               onChange={(e) => setManual(e.target.value)}
               placeholder="RW order number, e.g. 304209"
-              className="flex-1 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[14px] text-white focus:outline-none focus:border-zinc-500"
+              className="flex-1 px-3 py-1.5 bg-white border border-zinc-300 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400"
             />
             <button
               onClick={() => link(manual)}
@@ -275,10 +275,10 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
 }
 
 function Tile({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'warn' }) {
-  const cls = tone === 'warn' ? 'text-amber-300' : tone === 'good' ? 'text-emerald-300' : 'text-white';
+  const cls = tone === 'warn' ? 'text-amber-700' : tone === 'good' ? 'text-emerald-700' : 'text-zinc-900';
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">{label}</div>
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold">{label}</div>
       <div className={`mt-1 text-[16px] font-bold tabular-nums ${cls}`}>{value}</div>
     </div>
   );

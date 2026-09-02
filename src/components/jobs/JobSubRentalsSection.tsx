@@ -48,13 +48,13 @@ export interface JobSubRental {
 }
 
 const STATUS_CHIP: Record<string, string> = {
-  ESTIMATED: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-  REQUESTED: 'bg-amber-950/40 text-amber-300 border-amber-900/70',
-  CONFIRMED: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  PICKED_UP: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  ON_RENT: 'bg-emerald-950/40 text-emerald-300 border-emerald-900',
-  RETURNED: 'bg-zinc-800 text-zinc-400 border-zinc-700',
-  CANCELLED: 'bg-zinc-900 text-zinc-500 border-zinc-800',
+  ESTIMATED: 'bg-zinc-100 text-zinc-700 border-zinc-300',
+  REQUESTED: 'bg-amber-50 text-amber-700 border-amber-200',
+  CONFIRMED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  PICKED_UP: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  ON_RENT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  RETURNED: 'bg-zinc-100 text-zinc-600 border-zinc-300',
+  CANCELLED: 'bg-white text-zinc-600 border-zinc-200',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -182,19 +182,19 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
   return (
     <div
       id="sub-rentals"
-      className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70"
+      className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400"
     >
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
           Sub-rentals
         </h2>
-        <span className="text-[12px] text-zinc-300">
+        <span className="text-[12px] text-zinc-700">
           {live.length} live{subs.length !== live.length && ` · ${subs.length - live.length} closed`}
         </span>
       </div>
 
       {unasked.length > 0 && (
-        <div className="mt-2.5 rounded-xl border border-red-900/70 bg-red-950/30 px-3 py-2 text-[12px] text-red-200">
+        <div className="mt-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
           <strong className="font-semibold">
             {unasked.length === 1
               ? 'A partner has NOT been asked to hold their unit.'
@@ -206,12 +206,12 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
       )}
 
       {err && (
-        <div className="mt-2.5 rounded-xl border border-red-900/70 bg-red-950/30 px-3 py-2 text-[12px] text-red-200">
+        <div className="mt-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
           {err}
         </div>
       )}
       {msg && (
-        <div className="mt-2.5 rounded-xl border border-emerald-900 bg-emerald-950/30 px-3 py-2 text-[12px] text-emerald-200">
+        <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
           {msg}
         </div>
       )}
@@ -224,19 +224,19 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
             <div
               key={s.id}
               className={`rounded-xl border px-3 py-2.5 ${
-                unaskedRow ? 'border-red-900/70 bg-red-950/20' : 'border-zinc-800 bg-zinc-900/40'
+                unaskedRow ? 'border-red-200 bg-red-50' : 'border-zinc-200 bg-zinc-50'
               } ${DEAD.includes(s.status) ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[14px] font-semibold text-white">{s.vehicleName}</span>
+                    <span className="text-[14px] font-semibold text-zinc-900">{s.vehicleName}</span>
                     {s.quantity > 1 && (
-                      <span className="text-[12px] text-zinc-400">× {s.quantity}</span>
+                      <span className="text-[12px] text-zinc-600">× {s.quantity}</span>
                     )}
                     <span
                       className={`text-[11px] px-1.5 py-0.5 rounded border ${
-                        STATUS_CHIP[s.status] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                        STATUS_CHIP[s.status] ?? 'bg-zinc-100 text-zinc-700 border-zinc-300'
                       }`}
                     >
                       {STATUS_LABEL[s.status] ?? s.status}
@@ -244,13 +244,13 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                     {s.order && (
                       <Link
                         href={`/orders/${s.order.id}`}
-                        className="text-[11px] px-1.5 py-0.5 rounded border border-violet-900 bg-violet-950/40 text-violet-300 hover:border-violet-700"
+                        className="text-[11px] px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400"
                       >
                         {s.order.orderNumber}
                       </Link>
                     )}
                   </div>
-                  <div className="mt-1 text-[12px] text-zinc-400">
+                  <div className="mt-1 text-[12px] text-zinc-600">
                     {s.vendor.name} · {day(s.startDate)} – {day(s.endDate)}
                     {s.poNumber && ` · PO ${s.poNumber}`}
                     {s.receiveMethod && ` · ${s.receiveMethod === 'PICKUP' ? 'we collect' : 'they deliver'}`}
@@ -259,8 +259,8 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
 
                 {seePricing && (
                   <div className="text-right shrink-0">
-                    <div className="text-[13px] font-semibold text-white">{money(s.clientTotal)}</div>
-                    <div className="text-[11px] text-zinc-500">cost {money(s.vendorTotal)}</div>
+                    <div className="text-[13px] font-semibold text-zinc-900">{money(s.clientTotal)}</div>
+                    <div className="text-[11px] text-zinc-600">cost {money(s.vendorTotal)}</div>
                   </div>
                 )}
               </div>
@@ -268,14 +268,14 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               {/* The hold state, said plainly. */}
               <div className="mt-2 text-[12px]">
                 {unaskedRow ? (
-                  <span className="text-red-300">
+                  <span className="text-red-700">
                     <strong className="font-semibold">Not asked to hold.</strong>{' '}
                     {s.vendor.poEmail || s.vendor.email
                       ? 'The notice never sent.'
                       : `${s.vendor.name} has no email on file — add one on the vendor record, or call ${s.vendor.phone || 'them'}.`}
                   </span>
                 ) : s.vendorHoldRequestedAt ? (
-                  <span className="text-zinc-400">
+                  <span className="text-zinc-600">
                     Asked to hold{' '}
                     {new Date(s.vendorHoldRequestedAt).toLocaleDateString('en-US', {
                       month: 'short',
@@ -284,7 +284,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                     .
                   </span>
                 ) : s.status === 'ESTIMATED' ? (
-                  <span className="text-zinc-500">
+                  <span className="text-zinc-600">
                     {s.vendorNotifiedAt
                       ? 'Told we quoted their dates. Nothing held — the client has not accepted.'
                       : 'Not yet told we quoted their dates.'}
@@ -293,20 +293,20 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               </div>
 
               {/* Driver — the vendor names their own on the vendor page. */}
-              <div className="mt-1 text-[12px] text-zinc-400">
+              <div className="mt-1 text-[12px] text-zinc-600">
                 {s.driverName ? (
                   <>
-                    Driver <span className="text-zinc-200">{s.driverName}</span>
+                    Driver <span className="text-zinc-800">{s.driverName}</span>
                     {s.driverPhone && ` · ${s.driverPhone}`}
                     {s.relayAddress && (
                       <>
                         {' · '}
-                        <span className="text-zinc-500">relay {s.relayAddress}</span>
+                        <span className="text-zinc-600">relay {s.relayAddress}</span>
                       </>
                     )}
                   </>
                 ) : COMMITTED.includes(s.status) ? (
-                  <span className="text-zinc-500">No driver named yet — the partner names theirs on their page.</span>
+                  <span className="text-zinc-600">No driver named yet — the partner names theirs on their page.</span>
                 ) : null}
               </div>
 
@@ -325,7 +325,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                   <>
                     <button
                       onClick={() => copy(s)}
-                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-white"
+                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
                     >
                       {copiedId === s.id ? 'Copied' : 'Copy partner link'}
                     </button>
@@ -333,7 +333,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                       href={s.vendorUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-white"
+                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
                     >
                       Open their page ↗
                     </a>
@@ -347,7 +347,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                       if (e.target.value) void setStatus(s, e.target.value)
                       e.target.value = ''
                     }}
-                    className="text-[12px] px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 disabled:opacity-50"
+                    className="text-[12px] px-2 py-1 rounded-lg bg-zinc-100 border border-zinc-300 text-zinc-700 disabled:opacity-50"
                   >
                     <option value="">Move to…</option>
                     {ADVANCE_TO.filter((v) => v !== s.status).map((v) => (
@@ -363,7 +363,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
         })}
       </div>
 
-      <p className="mt-3 text-[11px] text-zinc-500 leading-relaxed">
+      <p className="mt-3 text-[11px] text-zinc-600 leading-relaxed">
         Partners see their own page only — the unit, the dates, the status and our job code. They
         never learn the production, the company or the contacts, and the client never learns whose
         unit it is. Keep that true of anything added here.
