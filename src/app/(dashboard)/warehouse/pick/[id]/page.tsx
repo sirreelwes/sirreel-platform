@@ -15,10 +15,14 @@
  *                    once every line has a count
  *   CHECKED_IN     → terminal display, with the shortfall summary
  *
- * Scan input matches the typed/scanned code against the items'
- * inventoryItem.code values. First exact-match PENDING_PICK item gets
- * picked; everything else surfaces a mismatch toast. Manual override
- * checkbox per item covers no-SKU lines and scanner-down fallback.
+ * Scan input POSTs the raw keystrokes to /api/picklists/[id]/scan and
+ * lets the server work out what they mean (barcode phase 2). It used to
+ * match against inventoryItem.code here in the browser — which is all it
+ * COULD do, and is why scanning a real label failed: the labels on the
+ * gear carry a per-unit RW barcode (SR004674) that only resolves against
+ * the mirrored unit register. The server resolves either form and comes
+ * back with a reason when the scan lands on nothing. Manual override
+ * checkbox per item still covers no-SKU lines and scanner-down fallback.
  *
  * The inbound pass counts the SAME list back. It exists because LOADED
  * used to be terminal: included accessories — the spare batteries and
@@ -212,25 +216,38 @@ export default function WarehousePickDetailPage() {
   const handleScan = async (e?: React.FormEvent) => {
     e?.preventDefault()
     const code = scanInput.trim()
-    if (!code || !picklist) return
-    // Find the FIRST PENDING_PICK item whose linked inventoryItem.code
-    // matches. Multiple lines for the same SKU pick one at a time.
-    const target = picklist.items.find(
-      (i) =>
-        i.orderLineItem.pickStatus === 'PENDING_PICK' &&
-        i.orderLineItem.inventoryItem?.code === code,
-    )
-    if (!target) {
-      // Scope the error: is the code on the list at all?
-      const onList = picklist.items.some((i) => i.orderLineItem.inventoryItem?.code === code)
-      setToast({
-        kind: 'err',
-        msg: onList ? `All ${code} on this list already picked.` : `${code} isn't on this list.`,
+    if (!code || !picklist || busyAction) return
+    setBusyAction('scan')
+    try {
+      const r = await fetch(`/api/picklists/${id}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
       })
-      return
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok || !json.ok) {
+        // The server's `reason` is written for someone standing at a
+        // shelf holding the thing — show it verbatim rather than
+        // re-phrasing it into a generic failure.
+        setToast({ kind: 'err', msg: json?.reason || json?.error || `HTTP ${r.status}` })
+        // Keep the text so a mis-read can be corrected instead of
+        // retyped; select-all happens on the next keystroke naturally.
+        return
+      }
+      // Name what was picked. A barcode pick echoes the gear, not the
+      // number — the picker already knows the number, they just read it.
+      const m = json.matched ?? {}
+      setToast({
+        kind: 'ok',
+        msg: json.resolution === 'unit'
+          ? `Picked ${m.description || m.barcode}.`
+          : `Picked ${m.code || json.item?.description || 'item'}.`,
+      })
+      setScanInput('')
+      await fetchOne()
+    } finally {
+      setBusyAction(null)
     }
-    await pickItem(target.id, { scannedCode: code })
-    setScanInput('')
   }
 
   const pickItem = async (itemId: string, body: { scannedCode?: string; manualOverride?: true }) => {
@@ -448,12 +465,12 @@ export default function WarehousePickDetailPage() {
       {/* Scan input — visible only while PICKING */}
       {picklist.status === 'PICKING' && (
         <form onSubmit={handleScan} className="mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Scan or type a code</label>
+          <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Scan a barcode, or type an item code</label>
           <input
             ref={scanRef}
             value={scanInput}
             onChange={(e) => setScanInput(e.target.value)}
-            placeholder="e.g. SR-CST-001"
+            placeholder="scan a barcode (SR004674) or type an item code"
             autoFocus
             className="mt-1 w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-base text-white font-mono outline-none focus:border-amber-500"
             disabled={busyAction != null}

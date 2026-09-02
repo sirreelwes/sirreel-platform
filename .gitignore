@@ -25,6 +25,7 @@ scripts/*
 !scripts/create-annual-agreement-companies.ts
 !scripts/harvest-cois-from-email.ts
 !scripts/harvest-annual-agreements-from-email.ts
+!scripts/sync-rw-inventory-units.ts
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
 !scripts/generate-agreement-template.py

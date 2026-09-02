@@ -57,6 +57,10 @@
       "schedule": "0 20 * * 1-5"
     },
     {
+      "path": "/api/cron/rw-inventory-units",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/hq-escalation",
       "schedule": "30 14 * * 1-5"
     },

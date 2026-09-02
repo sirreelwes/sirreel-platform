@@ -3,11 +3,13 @@
  *
  * Marks a single PickListItem as PICKED. Two modes:
  *
- *   { scannedCode: "SR-VEH-001" }   — scan mode. Code must match the
- *                                     underlying OrderLineItem's
- *                                     inventoryItem.code exactly; 409
- *                                     if it doesn't or there's no
- *                                     linked inventoryItem.
+ *   { scannedCode: "SR004674" }     — scan mode. Resolved by
+ *                                     lib/warehouse/resolveScan: either
+ *                                     the line's own catalog code, or a
+ *                                     per-unit RW barcode that resolves
+ *                                     to the same catalog row (barcode
+ *                                     phase 2). 409 when it resolves to
+ *                                     something else, or to nothing.
  *   { manualOverride: true }        — manual check-off fallback. For
  *                                     line items without a scannable
  *                                     SKU (vehicle category rentals,
@@ -36,6 +38,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
+import { resolveScan } from '@/lib/warehouse/resolveScan'
+import { markPicked } from '@/lib/warehouse/markPicked'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,6 +81,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
           id: true,
           pickStatus: true,
           description: true,
+          // The catalog ROW is what a scan has to agree with — a unit
+          // barcode never equals the product code, it resolves to it.
+          inventoryItemId: true,
           inventoryItem: { select: { code: true } },
         },
       },
@@ -112,59 +119,62 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     )
   }
 
-  // Scan-mode verification: code must match the linked InventoryItem.
+  // Scan-mode verification. The scan is RESOLVED rather than compared:
+  // a picker holding a walkie scans `SR004674`, which is that unit's
+  // barcode in RentalWorks and never equals HQ's product code. Both
+  // forms have to land on the same catalog row.
+  let resolvedUnitId: string | null = null
+  let recordedCode = scannedCode
   if (scannedCode) {
-    const expected = item.orderLineItem.inventoryItem?.code
-    if (!expected) {
+    const expectedItemId = item.orderLineItem.inventoryItemId
+    if (!expectedItemId) {
       return NextResponse.json(
         {
           error: 'no scannable code on this line',
-          reason: 'line item has no linked InventoryItem; use manualOverride',
+          reason: 'line item has no linked catalog item; use manualOverride',
         },
         { status: 409 },
       )
     }
-    if (scannedCode !== expected) {
+    const res = await resolveScan(scannedCode)
+    recordedCode = res.scanned
+    const gotItemId =
+      res.kind === 'catalog' || res.kind === 'unit' ? res.inventoryItemId : null
+    if (!gotItemId) {
       return NextResponse.json(
         {
           error: 'scan mismatch',
-          reason: `scanned ${scannedCode} but this line expects ${expected}`,
-          expectedCode: expected,
+          reason:
+            res.kind === 'unlinked-unit'
+              ? `${res.scanned} is a known unit (RW item ${res.unit.rwICode}) but isn't matched to an HQ catalog item — pick it manually and flag it.`
+              : `${res.scanned} isn't a code or a barcode we know.`,
+          resolution: res.kind,
         },
         { status: 409 },
       )
     }
+    if (gotItemId !== expectedItemId) {
+      const expected = item.orderLineItem.inventoryItem?.code
+      return NextResponse.json(
+        {
+          error: 'scan mismatch',
+          reason: `scanned ${res.scanned} but this line expects ${expected ?? 'a different item'}`,
+          expectedCode: expected ?? null,
+          resolution: res.kind,
+        },
+        { status: 409 },
+      )
+    }
+    if (res.kind === 'unit') resolvedUnitId = res.unit.id
   }
 
-  const pickedAt = new Date()
-  await prisma.$transaction(async (tx) => {
-    await tx.orderLineItem.update({
-      where: { id: item.orderLineItem.id },
-      data: { pickStatus: 'PICKED' },
-    })
-    await tx.pickListItem.update({
-      where: { id: item.id },
-      data: {
-        scannedCode: scannedCode ?? null,
-        pickedById: auth.userId,
-        pickedAt,
-      },
-    })
-    await tx.auditLog.create({
-      data: {
-        userId: auth.userId,
-        action: 'picklistitem.picked',
-        entityType: 'PickListItem',
-        entityId: item.id,
-        oldValues: { pickStatus: 'PENDING_PICK' },
-        newValues: {
-          pickStatus: 'PICKED',
-          scannedCode: scannedCode ?? null,
-          manualOverride,
-          pickedAt: pickedAt.toISOString(),
-        },
-      },
-    })
+  const pickedAt = await markPicked({
+    pickListItemId: item.id,
+    orderLineItemId: item.orderLineItem.id,
+    userId: auth.userId,
+    scannedCode: recordedCode ?? null,
+    manualOverride: !!manualOverride,
+    inventoryUnitId: resolvedUnitId,
   })
 
   return NextResponse.json({
@@ -172,7 +182,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     item: {
       id: item.id,
       pickStatus: 'PICKED',
-      scannedCode: scannedCode ?? null,
+      scannedCode: recordedCode ?? null,
       pickedAt,
     },
   })
