@@ -369,7 +369,7 @@ export default function LcdwElectionPage() {
                   re-composes the same sentence from the submitted decision,
                   so the stored wording matches this exactly. */}
               {data.annualAgreement && choice
-                ? `I confirm that ${data.annualAgreement.title} is on file with SirReel and in effect for this job, and that our Limited Collision Damage Waiver election for this job is ${choice === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED'}. By typing my name and submitting, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.`
+                ? `I confirm that the ${data.annualAgreement.title} is on file with SirReel and in effect for this job, and that our Limited Collision Damage Waiver election for this job is ${choice === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED'}. By typing my name and submitting, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.`
                 : data.acknowledgementText}
             </span>
           </label>

@@ -42,6 +42,30 @@ export const LCDW_FEE_CODE = 'LCDW'
  * LCDW_ELIGIBILITY_NOTE in the same change so the contract and the
  * system keep saying the same thing.
  */
+/**
+ * The excluded vehicles as a client or a rep would TYPE them.
+ *
+ * Only consulted for lines with no catalog code (see judgeLcdwLine) — the
+ * codes above remain the rule for anything catalogued. Keep in lockstep with
+ * LCDW_EXCLUDED_CODES and with LCDW_ELIGIBILITY_NOTE.
+ */
+const LCDW_EXCLUDED_NAME_PATTERNS: readonly RegExp[] = [
+  /\bpop\s*van\b/i,
+  /\bpro\s*scout\b/i,
+  /\bvideo\s*van\b/i,
+  /\bvtr\b/i,
+  /\bpeople\s*mover\b/i,
+  /\brestroom\b/i,
+  /\bdlux\b/i,
+  /\bscissor\s*lift\b/i,
+]
+
+/** Does this free-typed description name a vehicle the agreement excludes? */
+export function matchesExcludedName(description: string | null | undefined): boolean {
+  if (!description) return false
+  return LCDW_EXCLUDED_NAME_PATTERNS.some((re) => re.test(description))
+}
+
 export const LCDW_EXCLUDED_CODES: ReadonlySet<string> = new Set([
   'CAT_POPVAN',
   'CAT_PROSCOUT_VTR',
@@ -120,6 +144,26 @@ export function judgeLcdwLine(line: LcdwCandidate): LcdwLineVerdict {
     return { id: line.id, description: line.description, eligible: false, reason: 'partner-vehicle', vehicleDays }
   }
   if (line.code && LCDW_EXCLUDED_CODES.has(line.code)) {
+    return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
+  }
+  // ── Second net: the excluded vehicles BY NAME ──────────────────────
+  //
+  // Deny-by-code is still the primary rule and the comment above still
+  // holds — matching only on description breaks on a rename, silently, in
+  // the direction of charging for a waiver the agreement excludes.
+  //
+  // But an UNCODED line was falling straight through to eligible, and on
+  // 2026-09-02 a portal page listed a hand-typed "PopVan" to a client as
+  // covered by the waiver. That is precisely the outcome this module exists
+  // to prevent, and the "an unmatched line is not one of them by definition"
+  // reasoning above is wrong whenever a rep types the name instead of
+  // picking the catalog row.
+  //
+  // So this is ADDITIVE and one-directional: it can only ever exclude MORE,
+  // never include more. A false positive costs a waiver we decline to sell;
+  // a false negative costs a client money for coverage that does not exist.
+  // The contract wins, and the contract excludes these vehicles by name.
+  if (!line.code && matchesExcludedName(line.description)) {
     return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
   }
   return { id: line.id, description: line.description, eligible: true, vehicleDays }

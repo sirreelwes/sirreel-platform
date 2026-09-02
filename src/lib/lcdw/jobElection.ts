@@ -83,8 +83,12 @@ export function annualAcknowledgementText(
   masterTitle: string,
   decision: LcdwDecision,
 ): string {
+  // "the" is not decoration. Without it the stored attestation reads "I
+  // confirm that 2026 Annual Rental Agreement is on file" — and this string
+  // is kept verbatim as the wording the client signed, so it has to read like
+  // a sentence a person would put their name to.
   return (
-    `I confirm that ${masterTitle} is on file with SirReel and in effect for this job, ` +
+    `I confirm that the ${masterTitle} is on file with SirReel and in effect for this job, ` +
     `and that our Limited Collision Damage Waiver election for this job is ` +
     `${decision === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED'}. ` +
     'By typing my name and submitting, I am providing my electronic signature, which has ' +
