@@ -73,10 +73,15 @@ export function SalesSignalsStrip({ scope, onChange }: { scope: Scope; onChange?
   // Unlinked Emails dropped from the strip (2026-08-21 redesign): the
   // org-wide count was five digits of un-actionable noise on a sales
   // signal row. Inbox triage lives at /inbox on its own terms.
+  // Tones for a LIGHT surface. These were dark-theme values —
+  // text-amber-200 on bg-amber-900/20 — while the strip renders on the
+  // white /jobs landing, so the chips read as pale text on a pale tint:
+  // the count was the least legible thing in the row. Dark ink on a light
+  // tint, with the border carrying the hue.
   const chips: Array<{ key: PanelKey; label: string; tone: string }> = [
-    { key: 'stale',   label: 'Stale Quotes',          tone: 'border-amber-700 text-amber-200 bg-amber-900/20' },
-    { key: 'dormant', label: 'Dormant Clients (60d+)', tone: 'border-zinc-700 text-zinc-200 bg-zinc-900/40' },
-    { key: 'coi',     label: 'Pending COIs',          tone: 'border-purple-800 text-purple-200 bg-purple-900/20' },
+    { key: 'stale',   label: 'Stale Quotes',          tone: 'border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100' },
+    { key: 'dormant', label: 'Dormant Clients (60d+)', tone: 'border-zinc-300 text-zinc-800 bg-zinc-50 hover:bg-zinc-100' },
+    { key: 'coi',     label: 'Pending COIs',          tone: 'border-purple-300 text-purple-900 bg-purple-50 hover:bg-purple-100' },
   ];
 
   const total = counts.stale + counts.dormant + counts.coi;
@@ -84,7 +89,7 @@ export function SalesSignalsStrip({ scope, onChange }: { scope: Scope; onChange?
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Signals</span>
+        <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-wider">Signals</span>
         {data == null && <span className="text-[11px] text-gray-400">Loading…</span>}
         {data != null && total === 0 && (
           <span className="text-[11px] text-gray-400">All clear — nothing needs attention.</span>
@@ -97,9 +102,9 @@ export function SalesSignalsStrip({ scope, onChange }: { scope: Scope; onChange?
             <button
               key={c.key}
               onClick={() => setOpen(active ? null : c.key)}
-              className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${c.tone} ${active ? 'ring-2 ring-amber-500/40' : 'hover:brightness-110'}`}
+              className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${c.tone} ${active ? 'ring-2 ring-zinc-900/25' : ''}`}
             >
-              {c.label} <span className="ml-1 font-mono">{n}</span>
+              {c.label} <span className="ml-1.5 font-mono font-bold tabular-nums">{n}</span>
             </button>
           );
         })}
