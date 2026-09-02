@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
 
-`(pending)` IntegrationCredential + rwClient + /collections meter + 06:00 PT check
+`bd527c9` IntegrationCredential + rwClient + /collections meter + 06:00 PT check
 
 The RW JWT lived in an env var, was pasted in by hand, and had no way to say
 whether it worked. An expired token surfaced as an invoice list that quietly
