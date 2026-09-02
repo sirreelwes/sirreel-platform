@@ -157,8 +157,13 @@ interface Props {
   initialCc?: string[];
   onClose: () => void;
   /** Called after a successful real send. The caller refreshes its
-   *  list / shows a toast / etc. */
-  onSent: (info: { recipient: string; orderNumber: string; stage?: string }) => void;
+   *  list / shows a toast / etc.
+   *
+   *  `note` carries anything that happened ALONGSIDE the send and that the
+   *  rep should see in the toast — today, the outcome of the portal grants
+   *  for CC'd contacts. Optional: a caller that ignores it still gets the
+   *  send confirmation it always got. */
+  onSent: (info: { recipient: string; orderNumber: string; stage?: string; note?: string }) => void;
 }
 
 const STAGE_LABEL: Record<'STAGE_1' | 'STAGE_2' | 'STAGE_3', string> = {
@@ -268,8 +273,18 @@ function buildSendBody(
   customMessage = '',
   quickRespond = false,
   ccAdd: string[] = [],
+  portalAccessFor: string[] = [],
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customMessage, quickRespond, ccAdd);
+  const base = buildPreviewBody(target, overrideContactId, customMessage, quickRespond, ccAdd) as Record<
+    string,
+    unknown
+  >;
+  // Send-only: the preview endpoints don't mint anything, and a portal
+  // grant is a write. Quote is the only kind that carries them today.
+  if (target.kind === 'quote' && portalAccessFor.length > 0) {
+    base.portalAccessFor = portalAccessFor;
+  }
+  return base;
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -321,6 +336,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // group stays on the thread (Wes 2026-08-25). Still fully editable — the
   // rep can strike anyone before sending.
   const [ccInput, setCcInput] = useState(initialCc?.join(', ') ?? '');
+  // Which CC'd people the rep wants ON the portal (Wes 2026-09-02). Off by
+  // default and per-address rather than one blanket switch: a quote often
+  // copies an accounting alias or a coordinator who has no business
+  // signing the rental agreement, and portal access is exactly the
+  // authority to sign it and put a card on file.
+  const [portalGrants, setPortalGrants] = useState<string[]>([]);
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(customMessage, 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -428,7 +449,14 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customMessage, !!quickRespond, ccValid) as Record<string, unknown>;
+      const sendBody = buildSendBody(
+        target,
+        overrideContactId,
+        customMessage,
+        !!quickRespond,
+        ccValid,
+        portalGrantsToSend,
+      ) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -463,10 +491,30 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
       // until then so the "Send" label doesn't briefly flicker back
       // to active right before the modal closes.
       setSendState('sent');
+      // Portal grants ride back on the send response. They're non-fatal
+      // server-side, so a failure surfaces here as a toast note rather
+      // than turning a delivered quote into an error.
+      const grants = Array.isArray(json?.portalGrants)
+        ? (json.portalGrants as { email: string; ok: boolean; error?: string }[])
+        : [];
+      const granted = grants.filter((g) => g.ok);
+      const failed = grants.filter((g) => !g.ok);
+      const noteParts: string[] = [];
+      if (granted.length > 0) {
+        noteParts.push(
+          `Portal access sent to ${granted.map((g) => g.email).join(', ')}.`,
+        );
+      }
+      if (failed.length > 0) {
+        noteParts.push(
+          `Portal invite failed for ${failed.map((g) => g.email).join(', ')} — invite them from the order page.`,
+        );
+      }
       onSent({
         recipient: preview.to.email,
         orderNumber: preview.order.orderNumber,
         stage: preview.stage,
+        note: noteParts.length > 0 ? noteParts.join(' ') : undefined,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Send failed');
@@ -516,6 +564,30 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // the rep meant to copy someone, and quietly not doing it is the worse
   // failure. An empty box is fine.
   const ccBlocked = ccInvalid.length > 0 || ccOverLimit;
+  // Portal-access candidates: everyone this quote copies who is a CLIENT —
+  // the job contacts the send auto-CCs plus whatever the rep typed. The
+  // sales-team CC is excluded by reason, and any sirreel.com address by
+  // domain (a rep copied on their own quote doesn't need a client login).
+  const portalCandidates: { email: string; name: string | null }[] =
+    target.kind === 'quote' && preview
+      ? (() => {
+          const seen = new Set([preview.to.email.toLowerCase()]);
+          const out: { email: string; name: string | null }[] = [];
+          const add = (email: string, name: string | null) => {
+            const e = email.trim().toLowerCase();
+            if (!e || seen.has(e) || /@sirreel\.com$/i.test(e)) return;
+            seen.add(e);
+            out.push({ email: e, name });
+          };
+          for (const c of preview.autoCc ?? []) {
+            if (c.reason === 'job-contact') add(c.email, c.name);
+          }
+          for (const e of ccValid) add(e, null);
+          return out;
+        })()
+      : [];
+  // Never send a grant for an address that has since left the CC box.
+  const portalGrantsToSend = portalGrants.filter((g) => portalCandidates.some((c) => c.email === g));
   // One composer, no toggle, no second note field — EVERY kind that composes
   // a body gets the same always-open seeded box. Follow-ups used to be the
   // exception (templated check-in + a personal-note slot); Wes 2026-09-01
@@ -724,6 +796,61 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   </div>
                 )}
               </div>
+
+              {/* Portal access for the CC'd people (quote only).
+                  The quote's portal button carries the To: contact's token,
+                  so a CC'd producer who clicks it lands in the portal as
+                  someone else. Ticking someone here gives them their own
+                  link, sent to them directly. Off by default — this is the
+                  authority to sign the agreement and put a card on file. */}
+              {target.kind === 'quote' && portalCandidates.length > 0 && (
+                <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                  <div className="flex items-baseline justify-between mb-0.5">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+                      Portal access
+                    </span>
+                    {portalGrantsToSend.length > 0 && (
+                      <span className="text-[10px] text-emerald-300">
+                        {portalGrantsToSend.length} added
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    The portal button in this email signs in as{' '}
+                    <span className="text-zinc-400">{preview.to.name}</span>. Anyone ticked here gets
+                    their own portal link, emailed to them separately.
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {portalCandidates.map((c) => {
+                      const checked = portalGrantsToSend.includes(c.email);
+                      return (
+                        <label
+                          key={c.email}
+                          className="flex items-center gap-2 px-1 py-1 rounded hover:bg-zinc-800/60 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={sendLocked}
+                            onChange={(e) =>
+                              setPortalGrants((prev) =>
+                                e.target.checked
+                                  ? [...prev.filter((p) => p !== c.email), c.email]
+                                  : prev.filter((p) => p !== c.email),
+                              )
+                            }
+                            className="accent-amber-500 disabled:opacity-50"
+                          />
+                          <span className="text-sm text-white truncate">
+                            {c.name && <span className="mr-2">{c.name}</span>}
+                            <span className="font-mono text-[12px] text-zinc-400">{c.email}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Subject */}
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">

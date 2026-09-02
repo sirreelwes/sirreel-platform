@@ -41,9 +41,17 @@ import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { rankRecipients } from '@/lib/email/recipients'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
+import { sendPortalInvite } from '@/lib/portal/sendPortalInvite'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 15
+
+/** Ceiling on portal grants per send — see portalGrantTargets below. */
+const MAX_PORTAL_GRANTS = 5
+// Was 15. The send can now fan out to a portal invite per CC'd contact
+// (each one a Person upsert + a Resend dispatch) on top of a possible
+// PDF re-render — and a timeout here strands a quote that already went
+// out. Same 30s ceiling most of the other send routes use.
+export const maxDuration = 30
 
 interface SendQuoteBody {
   /** Optional plain-text message inserted into the email body above the
@@ -65,6 +73,16 @@ interface SendQuoteBody {
   /** "Write my own email" — the rep's prose REPLACES the templated opener
    *  and closer. Greeting, quote snapshot + portal CTA and sign-off stay. */
   customMessage?: unknown
+  /** Addresses among this email's CC list that the agent chose to put ON
+   *  the portal (Wes 2026-09-02). Everyone CC'd sees the quote, but the
+   *  portal button in it carries the PRIMARY contact's token — a producer
+   *  who clicks it lands in the portal as someone else. Each address here
+   *  gets its own PortalAccess + its own invite email instead.
+   *
+   *  Strictly a SUBSET of who this send actually copies: an address that
+   *  isn't on the CC list is ignored, so this can never become a
+   *  back-door "grant portal access to anyone" endpoint. */
+  portalAccessFor?: unknown
 }
 
 function bad(status: number, error: string) {
@@ -90,6 +108,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body.customMessage === 'string' && body.customMessage.trim().length > 0
       ? body.customMessage.trim().slice(0, 5000)
       : null
+  const portalAccessRequested = Array.isArray(body.portalAccessFor)
+    ? (body.portalAccessFor.filter((v) => typeof v === 'string') as string[]).map((v) =>
+        v.trim().toLowerCase(),
+      )
+    : []
 
   // ── Mint/refresh portal token, then compose with tokenized URL ─
   // Two phases: (1) preview-compose with portalUrl=null to learn the
@@ -231,6 +254,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   if (!final.ok) return bad(final.status, final.error)
 
+  // Everyone this email copies who is a CLIENT — the auto job-contact CCs
+  // plus whatever the rep typed. Computed once because it is also the
+  // allow-list for the portal grants below: the team CC is added after
+  // this line and must never be handed a client portal link.
+  const clientCc = mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? []
+
   const emailResult = await sendAgreementEmail({
     to: [primary.email],
     // Replies route to the agent's watched inbox (the Gmail ingest
@@ -246,7 +275,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // exactly why HQ can't watch it and why a client's reply must never be
     // aimed at it (groups reject non-member mail). Reply-To stays the agent
     // + the hello@ ingest anchor.
-    cc: await withTeamCc(mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? [], primary.email),
+    cc: await withTeamCc(clientCc, primary.email),
     subject: final.subject,
     html: final.html,
     text: final.text,
@@ -273,6 +302,51 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       label: `send-quote:${order.orderNumber}`,
       orderId: order.id,
     })
+  }
+
+  // ── Portal access for the people we CC'd ─────────────────
+  //
+  // Wes 2026-09-02: a quote that goes out to a producer with three people
+  // copied should be able to put those people on the portal too. Until
+  // now only the To: contact got a PortalAccess — the CC'd producer either
+  // clicked the primary's token (and became them) or had to be invited by
+  // hand from the order page afterwards.
+  //
+  // Grants are limited to `clientCc` — the addresses THIS email actually
+  // copied. Anything else the request asked for is dropped silently rather
+  // than 400'd: the email is already gone, and a rejected grant must not
+  // read as a failed send.
+  //
+  // Each grant sends that person their own invite (their own link, their
+  // own audit row). Per-address try/catch and non-fatal by design — the
+  // quote is delivered; a portal invite that fails is a follow-up, not a
+  // rolled-back send.
+  // MAX_CC caps what the rep can TYPE; the auto job-contact CCs are on top
+  // of that, so the grant fan-out gets its own ceiling. Beyond a handful
+  // this is a mailing list, not a production team.
+  const portalGrantTargets = portalAccessRequested
+    .filter((addr) => clientCc.includes(addr))
+    .slice(0, MAX_PORTAL_GRANTS)
+  const portalGrants: { email: string; ok: boolean; error?: string }[] = []
+  for (const addr of portalGrantTargets) {
+    try {
+      const invited = await sendPortalInvite({
+        orderId: order.id,
+        email: addr,
+        // One row per (order, contact): re-sending a quote to the same CC
+        // list refreshes their link instead of stacking duplicates.
+        linkPolicy: 'refresh',
+      })
+      portalGrants.push({
+        email: addr,
+        ok: invited.emailResult.ok,
+        error: invited.emailResult.ok ? undefined : invited.emailResult.reason,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'portal invite failed'
+      console.error(`[send-quote] portal grant failed for ${addr}:`, msg)
+      portalGrants.push({ email: addr, ok: false, error: msg })
+    }
   }
 
   // ── State transition (DRAFT → QUOTE_SENT) ────────────────
@@ -313,5 +387,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     emailId: emailResult.id,
     recipient: { email: primary.email, name: primary.name },
     cc: others.map((o) => ({ email: o.email, name: o.name })),
+    portalGrants,
   })
 }

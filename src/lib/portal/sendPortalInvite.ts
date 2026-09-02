@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { issueJobMagicLink, refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
@@ -29,6 +29,17 @@ export async function sendPortalInvite(args: {
   email: string
   firstName?: string
   lastName?: string
+  /**
+   * 'issue' (default) mints a brand-new PortalAccess row every call — the
+   * historic behaviour for the rep-driven "set this person up" actions,
+   * where a new row IS the intent.
+   *
+   * 'refresh' reuses the contact's live row and just extends its expiry
+   * (see refreshOrIssueJobMagicLink). Used by the quote send's CC grants:
+   * re-sending a quote to the same CC list is routine, and a row per send
+   * would bury the access list under duplicates of the same person.
+   */
+  linkPolicy?: 'issue' | 'refresh'
 }): Promise<PortalInviteResult> {
   const email = normalizeEmail(args.email || '')
   const firstName = (args.firstName || '').trim()
@@ -81,7 +92,10 @@ export async function sendPortalInvite(args: {
     })
   }
 
-  const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
+  const issued =
+    args.linkPolicy === 'refresh'
+      ? await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: person.id })
+      : await issueJobMagicLink({ orderId: order.id, contactId: person.id })
   const portalUrl = portalJobUrl(order.portalSlug, issued.token)
 
   const jobLabel = order.job?.name || order.company?.name || ''

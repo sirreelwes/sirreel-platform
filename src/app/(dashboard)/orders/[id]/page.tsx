@@ -4578,9 +4578,12 @@ export default function OrderDetailPage() {
         onSent={(info) => {
           setEmailReviewTarget(null);
           setSendQuoteFlash(
-            `Quote ${info.orderNumber} sent to ${info.recipient}.`
+            `Quote ${info.orderNumber} sent to ${info.recipient}.${info.note ? ` ${info.note}` : ''}`
           );
           void fetchOrder();
+          // A quote can now hand portal access to the CC'd contacts, so the
+          // access list on this page is stale the moment the send returns.
+          void fetchPortalAccess();
           window.setTimeout(() => setSendQuoteFlash(null), 6000);
         }}
       />
