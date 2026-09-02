@@ -46,7 +46,7 @@
  *   npx tsx scripts/bind-planyo-backfill-units.ts --write     # apply
  */
 
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 import { PrismaClient } from '@prisma/client'
 import {
@@ -475,6 +475,21 @@ async function main() {
 
   let created = 0
   let itemsAssigned = 0
+  // Reversal journal — every row written, by CAPTURED ID. Cleanup and
+  // rollback delete by these ids only; never by pattern, run tag, or
+  // entity scope (SHIPLOG "Hard Rules").
+  const journal: Array<{
+    assignmentId: string
+    bookingItemId: string
+    assetId: string
+    unitName: string | null
+    bookingNumber: string | null
+    planyoReservationId: string | null
+    priorItemStatus: string
+    priorItemNotes: string | null
+    startDate: string
+    endDate: string
+  }> = []
   // Default Prisma interactive-transaction timeout is 5s. With ~89
   // rows × 3 round-trips each, we comfortably blow past that — bump
   // to 60s (still well under the Neon serverless statement-timeout
@@ -492,7 +507,17 @@ async function main() {
         select: { id: true },
       })
       if (exists) continue
-      await tx.bookingAssignment.create({
+      const item = await tx.bookingItem.findUnique({
+        where: { id: r.matchedBookingItemId },
+        select: {
+          quantity: true,
+          status: true,
+          notes: true,
+          _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } },
+        },
+      })
+      if (!item) continue
+      const assignment = await tx.bookingAssignment.create({
         data: {
           bookingItemId: r.matchedBookingItemId,
           assetId: r.matchedAssetId,
@@ -500,8 +525,21 @@ async function main() {
           endDate: r.endDate,
           status: 'ASSIGNED',
         },
+        select: { id: true },
       })
       created++
+      journal.push({
+        assignmentId: assignment.id,
+        bookingItemId: r.matchedBookingItemId,
+        assetId: r.matchedAssetId,
+        unitName: r.matchedAssetUnitName,
+        bookingNumber: r.bookingNumber,
+        planyoReservationId: r.planyoReservationId,
+        priorItemStatus: item.status,
+        priorItemNotes: item.notes,
+        startDate: r.startDate.toISOString().slice(0, 10),
+        endDate: r.endDate.toISOString().slice(0, 10),
+      })
 
       // Flip BookingItem to ASSIGNED. Stamp run id + reservation id
       // into notes for reversibility — `DELETE FROM booking_assignments
@@ -511,28 +549,43 @@ async function main() {
       // (special handling, client asks); an earlier version of this
       // script overwrote it with the tag, silently destroying whatever
       // a human had written on the hold.
-      const priorNotes = (
-        await tx.bookingItem.findUnique({
-          where: { id: r.matchedBookingItemId },
-          select: { notes: true },
-        })
-      )?.notes
+      const priorNotes = item.notes
+      // FULL coverage only. Partial coverage stays REQUESTED so the
+      // stale-holds worklist keeps surfacing it — the same rule as
+      // importNewCart and POST /booking-items/[id]/assign. Flipping a
+      // 3-unit hold to ASSIGNED after binding one unit would hide two
+      // units of unmet demand.
+      const nowCovered = item._count.assignments + 1
+      const fullyCovered = nowCovered >= item.quantity
       await tx.bookingItem.update({
         where: { id: r.matchedBookingItemId },
         data: {
-          status: 'ASSIGNED',
+          ...(fullyCovered ? { status: 'ASSIGNED' as const } : {}),
           notes: { set: priorNotes ? `${priorNotes}\n${noteTag}` : noteTag },
         },
       })
-      itemsAssigned++
+      if (fullyCovered) itemsAssigned++
     }
   }, { timeout: 60_000, maxWait: 10_000 })
 
+  // Journal by CAPTURED ID — the only safe basis for a reversal here.
+  // The previous advice was a time-window DELETE plus a `notes LIKE`
+  // match and `notes=NULL`; that deletes by pattern (forbidden — it
+  // can take out rows this run never created) and destroys operator
+  // text on the way out. Each entry below also carries the item's
+  // PRIOR status and notes, so an unwind restores what was there.
+  const journalPath = path.join(
+    process.cwd(),
+    'tmp',
+    `bind-planyo-units-${runId}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+  )
+  writeFileSync(journalPath, JSON.stringify({ runId, ranAt: new Date().toISOString(), entries: journal }, null, 2))
+
   console.log(`\nWrote ${created} BookingAssignment(s); flipped ${itemsAssigned} BookingItem(s) to ASSIGNED.`)
   console.log(`Run id: ${runId}`)
-  console.log(`Reverse with:`)
-  console.log(`  DELETE FROM booking_assignments WHERE created_at >= NOW() - INTERVAL '1 hour' AND booking_item_id IN (SELECT id FROM booking_items WHERE notes LIKE '[UNIT_ASSIGN_BACKFILL ${runId}]%');`)
-  console.log(`  UPDATE booking_items SET status='REQUESTED', notes=NULL WHERE notes LIKE '[UNIT_ASSIGN_BACKFILL ${runId}]%';`)
+  console.log(`Reversal journal: ${journalPath}`)
+  console.log(`Reverse by CAPTURED ID ONLY — for each entry: delete BookingAssignment`)
+  console.log(`\`assignmentId\`, then restore \`priorItemStatus\` / \`priorItemNotes\` on \`bookingItemId\`.`)
 
   await prisma.$disconnect()
 }
