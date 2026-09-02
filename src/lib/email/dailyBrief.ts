@@ -255,12 +255,26 @@ export async function buildDailyBrief(
   const { rows, today } = await gather(now)
   const focusDay = edition === 'evening' ? addDays(today, 1) : today
 
-  const goingOut = rows.filter((r) => r.start === focusDay)
-  const comingBack = rows.filter((r) => r.end === focusDay && r.start !== focusDay)
+  // A DRAFT is an unsent quote, not a scheduled movement. It was listing
+  // God of Wrath & Ruin as "going out today" on the strength of a draft
+  // dated today, when the rental was in fact already gone (Wes 2026-09-02:
+  // "remove god of Wrath and Ruin because it already left today"). Nothing
+  // in HQ records a departure, so we cannot detect "already left" — what we
+  // can do is stop treating paperwork nobody sent as a truck leaving.
+  // Drafts are not dropped silently; they are counted at the foot of the
+  // brief so a quote someone forgot to send still gets seen.
+  const movable = rows.filter((r) => r.status !== 'DRAFT')
+  const goingOut = movable.filter((r) => r.start === focusDay)
+  const comingBack = movable.filter((r) => r.end === focusDay && r.start !== focusDay)
   // Past its return day and nobody has marked it back. This is the list
   // that quietly grows: 16 of them on the day this was built.
-  const stillOut = rows.filter(
+  const stillOut = movable.filter(
     (r) => r.end !== null && r.end < today && READY_ENOUGH.has(r.status) && r.status !== 'CLOSED',
+  )
+
+  // Unsent quotes whose dates are already in play. One line, not a section.
+  const staleDrafts = rows.filter(
+    (r) => r.status === 'DRAFT' && r.start !== null && r.start <= addDays(focusDay, 7),
   )
 
   // Only the rows that roll on the focus day get a paperwork lookup —
@@ -273,7 +287,7 @@ export async function buildDailyBrief(
   // The rest of the week, so a job that needs paperwork is visible days
   // out rather than the evening before it rolls.
   const weekEnd = addDays(focusDay, 7)
-  const ahead = rows
+  const ahead = movable
     .filter((r) => r.start !== null && r.start > focusDay && r.start <= weekEnd)
     .sort((a, b) => (a.start! < b.start! ? -1 : 1))
 
@@ -295,6 +309,11 @@ export async function buildDailyBrief(
     ${section('Coming back', `${comingBack.length} on ${shortDay(focusDay)}`, comingBack)}
     ${section('Later this week', `${ahead.length} in the next 7 days`, ahead, true, 'none')}
     ${section('Still out', `${stillOut.length} past their return day, not marked back`, stillOut, true, 'overdue')}
+    ${
+      staleDrafts.length
+        ? `<div style="margin:24px 0 0;font-family:${FONT};font-size:13px;color:${MUTED};">${staleDrafts.length} unsent draft${staleDrafts.length === 1 ? '' : 's'} with dates inside the next week &mdash; <a href="${HQ}/orders" style="color:${MUTED};">check they should still be drafts</a>.</div>`
+        : ''
+    }
     <div style="margin:28px 0 0;font-family:${FONT};font-size:13px;">
       <a href="${HQ}/jobs" style="color:${GOLD};font-weight:600;text-decoration:none;">Open the board &rarr;</a>
     </div>`
@@ -316,6 +335,9 @@ export async function buildDailyBrief(
     ...textSection(`Coming back (${comingBack.length})`, comingBack),
     ...textSection(`Later this week (${ahead.length})`, ahead),
     ...textSection(`Still out (${stillOut.length})`, stillOut),
+    staleDrafts.length
+      ? `${staleDrafts.length} unsent draft(s) with dates inside the next week — ${HQ}/orders`
+      : '',
     `Open the board: ${HQ}/jobs`,
   ])
 

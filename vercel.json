@@ -63,6 +63,14 @@
     {
       "path": "/api/cron/hold-firmness",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/daily-brief?edition=morning",
+      "schedule": "0 13,14 * * *"
+    },
+    {
+      "path": "/api/cron/daily-brief?edition=evening",
+      "schedule": "0 0,1 * * *"
     }
   ],
   "functions": {

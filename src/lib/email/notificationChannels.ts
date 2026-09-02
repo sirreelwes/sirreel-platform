@@ -35,6 +35,7 @@ export type NotificationChannelKey =
   | 'signed-contract-billing'
   | 'coi-team'
   | 'pickup-picklists'
+  | 'daily-brief'
   | 'hq-escalation-sales'
   | 'hq-escalation-fleet'
   | 'hq-escalation-warehouse'
@@ -85,6 +86,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'Receives the certificate itself when a client uploads a COI through the public COI link (in addition to HQ notifications).',
     defaults: () => ['rentals@sirreel.com'],
+  },
+  {
+    key: 'daily-brief',
+    label: 'Daily operations brief',
+    description:
+      'The twice-daily "what is coming up" email — 6am (today) and 5pm (tomorrow) Pacific. Going out, coming back, the next seven days, and anything still out past its return day, each linked into HQ. This is the widest internal list: it is meant for everyone who needs to know what is moving.',
+    defaults: () => [hqNotifyInbox()],
   },
   {
     key: 'pickup-picklists',
