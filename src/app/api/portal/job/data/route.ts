@@ -10,6 +10,14 @@ import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 import { findJobCoverage, coverageSentence } from '@/lib/orders/agreementCoverage'
+import {
+  applyAnnualCoverage,
+  findCompanyAnnualCoverage,
+  annualCoverageSentence,
+  annualCoverageTitle,
+} from '@/lib/orders/annualCoverage'
+import { summarizeJobLcdwCoverage } from '@/lib/lcdw/jobElection'
+import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
@@ -347,7 +355,21 @@ export async function GET(req: NextRequest) {
     rentalAgreement?.status === 'SIGNED_BASELINE' ||
     rentalAgreement?.status === 'SIGNED_NEGOTIATED' ||
     rentalAgreement?.status === 'SIGNED_OFFLINE'
-  const jobCoverage = ownSigned ? null : await findJobCoverage(order.id)
+  // Annual master FIRST. An annual account has signed for the year, so the
+  // ask is gone from the moment the order exists — before any sibling could
+  // have been signed. applyAnnualCoverage also re-stamps (or clears) the
+  // pointer on every portal read, so an expired master hands the ask back on
+  // the client's next visit rather than at some later batch.
+  // applyAnnualCoverage stamps the pointer, but it needs a SignedAgreement
+  // row to stamp — and a client can reach the portal before the quote is sent
+  // and that row exists. Fall back to the company lookup so the "you're
+  // covered, nothing to sign" banner is honest from the FIRST visit rather
+  // than appearing later and looking like the rules changed.
+  const annualCoverage = ownSigned
+    ? null
+    : (await applyAnnualCoverage(order.id)) ??
+      (order.company?.id ? await findCompanyAnnualCoverage(order.company.id) : null)
+  const jobCoverage = ownSigned || annualCoverage ? null : await findJobCoverage(order.id)
   const agreementCoverage = jobCoverage
     ? {
         orderNumber: jobCoverage.orderNumber,
@@ -355,6 +377,45 @@ export async function GET(req: NextRequest) {
         signedAt: jobCoverage.signedAt?.toISOString() ?? null,
         signerName: jobCoverage.signerName,
         sentence: coverageSentence(jobCoverage),
+      }
+    : null
+
+  // ── The one thing an annual account is still asked ────────────────
+  //
+  // Wes, 2026-09-01: annual companies are "automatically approved on the
+  // rental agreement and only asked to elect or deny LCDW". So the LCDW row
+  // is surfaced whenever the job has eligible vehicles — the election is a
+  // per-job fact for every client, but for an annual account it is the WHOLE
+  // paperwork ask, which is why it can no longer live only on the old
+  // booking-token portal.
+  const [lcdwSummary, lcdwElection] = order.jobId
+    ? await Promise.all([
+        summarizeJobLcdwCoverage(order.jobId),
+        prisma.lcdwElection.findUnique({
+          where: { jobId: order.jobId },
+          select: { decision: true, decidedAt: true, signerName: true },
+        }),
+      ])
+    : [null, null]
+
+  const lcdw = lcdwSummary
+    ? {
+        // Never offered when nothing on the job can carry it. A client who
+        // accepts a waiver covering none of their vehicles has bought
+        // nothing — see lcdwEligibility.ts.
+        available: lcdwSummary.coveredVehicles.length > 0,
+        hasVehicles: lcdwSummary.hasVehicles,
+        allExcluded: lcdwSummary.allExcluded,
+        ratePerDay: LCDW_DAILY_RATE,
+        covered: lcdwSummary.coveredVehicles,
+        excluded: lcdwSummary.excludedVehicles,
+        election: lcdwElection
+          ? {
+              decision: lcdwElection.decision,
+              decidedAt: lcdwElection.decidedAt.toISOString(),
+              signerName: lcdwElection.signerName,
+            }
+          : null,
       }
     : null
 
@@ -377,6 +438,18 @@ export async function GET(req: NextRequest) {
     portalAccessId: resolved.portalAccessId,
     company: { id: order.company.id, name: order.company.name },
     standingAgreement,
+    annualAgreement: annualCoverage
+      ? {
+          title: annualCoverageTitle(annualCoverage),
+          companyName: annualCoverage.companyName,
+          effectiveDate: annualCoverage.effectiveDate?.toISOString() ?? null,
+          expiryDate: annualCoverage.expiryDate?.toISOString() ?? null,
+          sentence: annualCoverageSentence(annualCoverage),
+          // Gated proxy, never the raw private blob (it 403s in a browser).
+          pdfUrl: '/api/portal/job/agreement/annual',
+        }
+      : null,
+    lcdw,
     order: {
       id: order.id,
       orderNumber: order.orderNumber,

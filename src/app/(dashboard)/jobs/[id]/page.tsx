@@ -12,20 +12,25 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
  * "Agreement on file" — upload a client's own signed PDF (often an annual
  * master) and link jobs to it, instead of sending each job for signature.
  *
- * HIDDEN (Aug 2026). It had never been used: zero CompanyAgreement rows,
- * zero job links, and zero companies with the parallel annualAgreement*
- * fields set — while the portal signing flow is the one reps actually
- * use. Two unused mechanisms for the same idea, surfaced as a modal that
- * exposes the data model ("Link existing / File new / Type / Annual")
- * rather than a task, was the most confusing thing on this page.
+ * Hidden through Aug 2026: it had never been used (zero CompanyAgreement
+ * rows, zero job links), while the portal signing flow was the one reps
+ * actually used. Two unused mechanisms for the same idea, surfaced as a
+ * modal that exposed the data model rather than a task, was the most
+ * confusing thing on this page.
  *
- * Nothing is deleted: the models, the API, the modal component and the
- * chip logic all still work. Flip this to true when a client actually
- * turns up with a standing agreement — and at that point decide whether
- * CompanyAgreement or Company.annualAgreement* is the one to keep,
- * because shipping both is what created the confusion.
+ * VISIBLE AGAIN 2026-09-01 — the condition that comment named ("flip this
+ * to true when a client actually turns up with a standing agreement") is
+ * now the request: Wes is setting companies up on annual agreements where
+ * the client signs once for the year and is asked per job only for the LCDW
+ * election. Filing the master is the first step of that setup.
+ *
+ * The fork it left open is settled: **CompanyAgreement is the one to keep.**
+ * Company.annualAgreement* was read by nothing at all, and coverage has to
+ * name a DOCUMENT (the job addendum cites it by title) which those loose
+ * columns cannot do. Auto-cover therefore hangs off
+ * CompanyAgreement.autoCoverJobs — see src/lib/orders/annualCoverage.ts.
  */
-const SHOW_AGREEMENT_ON_FILE = false;
+const SHOW_AGREEMENT_ON_FILE = true;
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
@@ -40,6 +45,7 @@ import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
+import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
@@ -307,6 +313,25 @@ interface JobDetail {
   // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
   // open question to chase, the other is a settled answer.
   lcdwByBooking: Record<string, 'ACCEPTED' | 'DECLINED' | 'UNANSWERED'>;
+  // The JOB-level damage-waiver election — the client's one answer for the
+  // whole production, and for an annual account the only paperwork they were
+  // asked for. Distinct from lcdwByBooking above, which is the legacy
+  // per-booking record from the old portal.
+  lcdwElection: {
+    decision: 'ACCEPTED' | 'DECLINED';
+    decidedAt: string;
+    signerName: string | null;
+    signerTitle: string | null;
+    source: string;
+  } | null;
+  // Set when the company is on an annual master flagged to auto-cover its
+  // jobs. Its presence is why nobody was asked to sign this job.
+  annualCoverage: {
+    companyAgreementId: string;
+    title: string;
+    effectiveDate: string | null;
+    expiryDate: string | null;
+  } | null;
   // Workers' Comp certificates on file across the job's bookings. `id` is
   // the PaperworkRequest id — the download proxy key, not the file URL.
   wcCerts?: Array<{
@@ -1893,11 +1918,62 @@ const driverTone = (d: any): string => {
             {signSendMsg}
           </div>
         )}
+        {/* Annual account: say WHY nobody was asked to sign, and name the
+            document. Without this line the section reads as a job whose
+            paperwork was never chased. */}
+        {job.annualCoverage && (
+          <div className="mb-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-emerald-700 bg-emerald-50 border border-emerald-200">
+                Annual account
+              </span>
+              <span className="text-[15px] text-zinc-900 font-medium">
+                {job.annualCoverage.title}
+              </span>
+            </div>
+            <div className="mt-1 text-[12px] text-emerald-900">
+              Covered by the company&rsquo;s annual agreement
+              {job.annualCoverage.expiryDate
+                ? ` through ${fmtDay(job.annualCoverage.expiryDate)}`
+                : ''}
+              . The client is not asked to sign a rental agreement for this job — only the
+              damage-waiver election below.
+            </div>
+            <a
+              href={`/api/agreements/company/${job.annualCoverage.companyAgreementId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 inline-block text-[13px] font-semibold text-emerald-800 hover:text-emerald-900"
+            >
+              View agreement →
+            </a>
+          </div>
+        )}
+
+        {/* The waiver election. Rendered whenever the company is on an annual
+            agreement (where it is the whole ask) or an answer already exists;
+            otherwise the per-booking chips still carry it and a second
+            surface would just be two places to disagree. */}
+        {(job.annualCoverage || job.lcdwElection) && (
+          <div className="mb-2.5">
+            <JobLcdwPanel
+              jobId={job.id}
+              election={job.lcdwElection}
+              hasAnnualCoverage={!!job.annualCoverage}
+              onChanged={load}
+            />
+          </div>
+        )}
+
         {/* "No signed paperwork on this job yet" was measured against
             addenda alone, so a job whose client HAD signed in the portal
             read empty while the header chip two lines up said On file. The
             empty state now has to be empty on both counts. */}
-        {job.agreementAddenda.length === 0 && signedOrderAgreements.length === 0 ? (
+        {/* An annual account is covered whether or not an addendum row exists
+            yet — the addendum is cut when the client elects LCDW. Telling
+            staff "this job isn't linked to an agreement" while the banner
+            above says it's covered is the contradiction this guard removes. */}
+        {job.annualCoverage ? null : job.agreementAddenda.length === 0 && signedOrderAgreements.length === 0 ? (
           <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
             {SHOW_AGREEMENT_ON_FILE
               ? 'This job isn\u2019t linked to an agreement yet. Attach it to an on-file rental / stage agreement (or file a new one) so it reads covered.'

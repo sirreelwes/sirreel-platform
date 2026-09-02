@@ -5,6 +5,7 @@ import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/annualCoverage'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,11 +78,25 @@ export async function GET(
                 contractType: true,
                 title: true,
                 isAnnual: true,
+                autoCoverJobs: true,
                 effectiveDate: true,
                 expiryDate: true,
                 originalFilename: true,
               },
             },
+          },
+        },
+        // The client's damage-waiver answer for this job. Read on the job
+        // page next to the agreements, because for an annual account it is
+        // the ONLY paperwork the client was asked for — and if it's missing,
+        // it is the only thing blocking them.
+        lcdwElection: {
+          select: {
+            decision: true,
+            decidedAt: true,
+            signerName: true,
+            signerTitle: true,
+            source: true,
           },
         },
         orders: {
@@ -416,6 +431,16 @@ export async function GET(
       tomorrow,
     )
 
+    const coverage = job.companyId ? await findCompanyAnnualCoverage(job.companyId) : null
+    const annualCoverage = coverage
+      ? {
+          companyAgreementId: coverage.companyAgreementId,
+          title: annualCoverageTitle(coverage),
+          effectiveDate: coverage.effectiveDate,
+          expiryDate: coverage.expiryDate,
+        }
+      : null
+
     return NextResponse.json({
       job: {
         ...job,
@@ -449,6 +474,11 @@ export async function GET(
         cardAuth,
         lcdwByBooking,
         wcCerts,
+        // Annual-account coverage, DERIVED (the flag AND a current window),
+        // so the job page can say "the client was never asked to sign, and
+        // that is deliberate" instead of showing an unsigned agreement as an
+        // outstanding task forever.
+        annualCoverage,
       },
     })
   } catch (error) {

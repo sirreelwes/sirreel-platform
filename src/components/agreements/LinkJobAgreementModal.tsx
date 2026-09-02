@@ -47,6 +47,7 @@ export function LinkJobAgreementModal({
   const [contractType, setContractType] = useState<'RENTAL_AGREEMENT' | 'STAGE_CONTRACT'>('RENTAL_AGREEMENT');
   const [title, setTitle] = useState('');
   const [isAnnual, setIsAnnual] = useState(false);
+  const [autoCoverJobs, setAutoCoverJobs] = useState(false);
   const [effectiveDate, setEffectiveDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [signerName, setSignerName] = useState('');
@@ -105,6 +106,7 @@ export function LinkJobAgreementModal({
       fd.append('file', file);
       fd.append('contractType', contractType);
       fd.append('isAnnual', isAnnual ? 'true' : 'false');
+      fd.append('autoCoverJobs', isAnnual && autoCoverJobs ? 'true' : 'false');
       if (title.trim()) fd.append('title', title.trim());
       if (isAnnual && effectiveDate) fd.append('effectiveDate', effectiveDate);
       if (isAnnual && expiryDate) fd.append('expiryDate', expiryDate);
@@ -208,16 +210,37 @@ export function LinkJobAgreementModal({
               <span className="text-sm text-zinc-700">Annual / standing agreement (covers multiple jobs)</span>
             </label>
             {isAnnual && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>Effective</label>
-                  <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className={input} />
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>Effective</label>
+                    <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className={input} />
+                  </div>
+                  <div>
+                    <label className={label}>Expires</label>
+                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={input} />
+                  </div>
                 </div>
-                <div>
-                  <label className={label}>Expires</label>
-                  <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={input} />
-                </div>
-              </div>
+                {/* The annual-account switch. Nested under `isAnnual` because
+                    auto-cover is meaningless on a one-off master, and stated
+                    in terms of what the CLIENT experiences — the consequence
+                    of this checkbox is that nobody at this company is asked to
+                    sign a rental agreement again until the term ends. */}
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={autoCoverJobs}
+                    onChange={(e) => setAutoCoverJobs(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-amber-600"
+                  />
+                  <span className="text-[13px] leading-relaxed text-amber-900">
+                    <span className="font-semibold">Auto-cover every job for {companyName}.</span>{' '}
+                    Their clients stop being asked to sign a rental agreement — the portal
+                    asks only for the LCDW election, and each job gets an addendum naming
+                    this agreement. Reversible from the client page.
+                  </span>
+                </label>
+              </>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

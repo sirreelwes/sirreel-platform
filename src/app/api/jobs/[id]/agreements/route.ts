@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { companyId: job.companyId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, contractType: true, title: true, isAnnual: true,
+        id: true, contractType: true, title: true, isAnnual: true, autoCoverJobs: true,
         effectiveDate: true, expiryDate: true, originalFilename: true, createdAt: true,
       },
     }),
@@ -58,7 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         id: true, note: true, addendumFileUrl: true, createdAt: true,
         companyAgreement: {
           select: {
-            id: true, contractType: true, title: true, isAnnual: true,
+            id: true, contractType: true, title: true, isAnnual: true, autoCoverJobs: true,
             effectiveDate: true, expiryDate: true, originalFilename: true,
           },
         },
@@ -141,6 +141,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const isAnnual = form.get('isAnnual') === 'true'
+    // Auto-cover only means anything on an ANNUAL master. A one-off filed
+    // for a single job is not a standing instruction to stop asking every
+    // other job for a signature, and letting the flag ride on one would turn
+    // a filing mistake into a company-wide one.
+    const autoCoverJobs = isAnnual && form.get('autoCoverJobs') === 'true'
     const title = (form.get('title') || '').toString().trim().slice(0, 200) || null
     const signerName = (form.get('signerName') || '').toString().trim().slice(0, 200) || null
     const parseDate = (k: string): Date | null => {
@@ -167,6 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           fileSize: parsed.size,
           mimeType: 'application/pdf',
           isAnnual,
+          autoCoverJobs,
           effectiveDate,
           expiryDate,
           signerName,

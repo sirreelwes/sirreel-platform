@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { applyJobCoverage } from '@/lib/orders/agreementCoverage'
+import { applyAnnualCoverage } from '@/lib/orders/annualCoverage'
 import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
 
 /**
@@ -42,8 +43,13 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
     select: { id: true },
   })
   if (existing) {
-    // Already have a row — but the job may have been papered since (a second
-    // order attached to a live job is exactly the case this exists for).
+    // Already have a row — but the coverage picture may have moved since.
+    // Annual FIRST: a company can be switched onto an annual master after
+    // its jobs were already papered, and that master covers from the moment
+    // it is switched on, whereas a sibling signature only exists once
+    // somebody has actually signed. Both are re-derived on every call and
+    // both self-heal, so an expired master hands the ask straight back.
+    await applyAnnualCoverage(orderId)
     await applyJobCoverage(orderId)
     return
   }
@@ -90,7 +96,13 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
     // The baseline branch below picks coverage up via
     // ensureBaselineRentalDocumentToSign; this branch returns before that, so
     // stamp it here or a standing-terms client gets asked twice on one job.
-    await applyJobCoverage(orderId)
+    //
+    // An annual master outranks standing terms when a company carries both.
+    // Standing terms are a negotiated document the client has NOT signed yet;
+    // an auto-covering annual master is one they HAVE. Asking for a signature
+    // on the unsigned version of terms they already executed is the exact ask
+    // this feature exists to remove.
+    if (!(await applyAnnualCoverage(orderId))) await applyJobCoverage(orderId)
     return
   }
 
@@ -104,6 +116,18 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
       baselineVersion: today,
     },
   })
+
+  // ── Annual accounts: papered already, so don't render an ask ──────
+  //
+  // The row above still gets created — it is the per-order storage slot
+  // every read path expects, and it keeps its honest PORTAL_GENERATED
+  // status because no signature exists for THIS order. What changes is
+  // that it carries a coverage pointer, so the portal shows the master
+  // instead of a signature pad. Returning here also skips the ~300ms
+  // baseline render below: rendering a document nobody will be asked to
+  // sign is pure waste, and if coverage is later withdrawn the lazy-fill
+  // paths render it then.
+  if (await applyAnnualCoverage(orderId)) return
 
   // Render the review document UP FRONT (2026-07): the client must be able to
   // review the approved clause text BEFORE signing, so documentToSignUrl is
@@ -153,6 +177,9 @@ export async function ensureBaselineRentalDocumentToSign(orderId: string): Promi
   // Papered by a sibling order on the same job — don't render a document to
   // sign, because nothing is going to ask for it. Re-checked on every read
   // (cheap, and it self-heals if the sibling's signature is later voided).
+  // Papered by the company's annual master — same reasoning, checked first
+  // because it holds from the moment the order exists.
+  if (await applyAnnualCoverage(orderId)) return null
   if (await applyJobCoverage(orderId)) return null
   if (agreement.documentType !== 'BASELINE') return agreement.documentToSignUrl
   if (agreement.documentToSignUrl) return agreement.documentToSignUrl

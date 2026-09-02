@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
+import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
@@ -204,6 +205,21 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         ccPostal || null,
         params.token
       )
+
+      // Put the card in the COMPANY's wallet, so a client who authorizes a
+      // second card ends up with two cards on file instead of one card that
+      // quietly replaced the other on every read (Wes, 2026-09-01). The
+      // paperwork row above stays the record of this authorization; the
+      // wallet row is the record of the card.
+      //
+      // Best-effort: never fail a client's signed paperwork over the mirror.
+      // The row is already written and the legacy read paths still resolve it.
+      if (body.ccToken) {
+        await mirrorPaperworkCardToWallet(request.id).catch((err) =>
+          console.error('[cc-auth] wallet mirror failed (card IS stored):', request.id, err),
+        )
+      }
+
       notifyPortalPaperwork({
         token: params.token,
         step: 'cc',

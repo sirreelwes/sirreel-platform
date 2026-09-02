@@ -19,6 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { resolveCompanyDefaultCard } from '@/lib/payments/companyCards'
 
 export interface SavedCard {
   /** CardSecure token — server-only, charge input. Never send to client. */
@@ -38,8 +39,12 @@ export interface SavedCard {
    *  only). Null = legacy/unspecified (treat as CARD). Informational —
    *  the card is chargeable regardless. */
   paymentPreference: 'CARD' | 'CHECK_WIRE' | null
-  /** The paperwork_requests row the token came from. */
-  paperworkRequestId: string
+  /** The paperwork_requests row the token came from, when it came from one. */
+  paperworkRequestId: string | null
+  /** The company-wallet row the token came from, when it came from one. */
+  companyCardId?: string | null
+  /** Staff-set nickname, when the card is a wallet card. */
+  label?: string | null
 }
 
 export async function resolveSavedCardForInvoice(
@@ -47,9 +52,39 @@ export async function resolveSavedCardForInvoice(
 ): Promise<SavedCard | null> {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { id: true, order: { select: { bookingId: true, jobId: true } } },
+    select: { id: true, order: { select: { bookingId: true, jobId: true, companyId: true } } },
   })
   if (!invoice?.order) return null
+
+  // ── The company's wallet first ───────────────────────────────────
+  //
+  // A company that keeps more than one card on file has told us which one to
+  // charge (Wes, 2026-09-01). Honouring that beats any date-ordered guess
+  // across paperwork rows — charging the wrong card of two is a call from
+  // the client's accounting department, not a UI defect.
+  //
+  // Only an EXPLICIT default short-circuits. A wallet with cards but no
+  // default falls through: with two cards and no instruction, picking one is
+  // the same guess this exists to remove, and the legacy path at least
+  // resolves the card that was authorized for this booking.
+  if (invoice.order.companyId) {
+    const walletCard = await resolveCompanyDefaultCard(invoice.order.companyId)
+    if (walletCard) {
+      return {
+        cardToken: walletCard.cardToken,
+        last4: walletCard.last4,
+        cardType: walletCard.cardType,
+        expiry: walletCard.expiry,
+        postal: walletCard.postal,
+        cardholderName: walletCard.cardholderName,
+        authSignedAt: walletCard.authorizedAt,
+        paymentPreference: walletCard.paymentPreference,
+        paperworkRequestId: walletCard.paperworkRequestId,
+        companyCardId: walletCard.companyCardId,
+        label: walletCard.label,
+      }
+    }
+  }
 
   // ── Which bookings might hold the card ─────────────────────────────
   //

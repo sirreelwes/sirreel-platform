@@ -7,6 +7,8 @@ import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { ClientArPanel } from "@/components/crm/ClientArPanel";
 import { CopyCoiLinkButton } from "@/components/coi/CopyCoiLinkButton";
 import { NegotiatedRatesPanel } from "@/components/crm/NegotiatedRatesPanel";
+import { AnnualAgreementPanel } from "@/components/crm/AnnualAgreementPanel";
+import { CompanyCardsPanel } from "@/components/crm/CompanyCardsPanel";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -385,6 +387,12 @@ export default function CompanyDetailPage() {
       <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
 
       <ClientArPanel companyId={companyId} />
+
+      {/* Cards on file. Next to AR because they answer consecutive
+          questions: what's owed, and what we can charge it to. */}
+      <div className="mb-6">
+        <CompanyCardsPanel companyId={companyId} />
+      </div>
 
       {/* CRM Notes — pinned client relationship notes (Company.notes).
           Same field surfaced on every job for this client. */}
@@ -826,6 +834,15 @@ export default function CompanyDetailPage() {
                 </div>
               );
             })()}
+
+            {/* Annual-account setup. Sits with the standing agreement because
+                they answer the same question — "what paperwork does this
+                account run on" — and a company can be on one, the other, or
+                neither. */}
+            <AnnualAgreementPanel
+              companyId={company.id}
+              canEdit={(session?.user as any)?.role === 'ADMIN'}
+            />
           </>
         )}
       </div>

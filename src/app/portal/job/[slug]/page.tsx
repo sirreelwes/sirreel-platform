@@ -34,6 +34,28 @@ interface PortalData {
     approvedAt: string;
     summary: string | null;
   } | null;
+  /** Set when the company is on an ANNUAL agreement flagged to auto-cover
+   *  its jobs. The client signs nothing for this job — the only ask left is
+   *  the damage-waiver election below. */
+  annualAgreement: {
+    title: string;
+    companyName: string | null;
+    effectiveDate: string | null;
+    expiryDate: string | null;
+    sentence: string;
+    pdfUrl: string;
+  } | null;
+  /** Damage-waiver election for the JOB. `available` is false when nothing
+   *  booked can carry the waiver — the row then explains rather than offers. */
+  lcdw: {
+    available: boolean;
+    hasVehicles: boolean;
+    allExcluded: boolean;
+    ratePerDay: number;
+    covered: string[];
+    excluded: { description: string; reason: string }[];
+    election: { decision: 'ACCEPTED' | 'DECLINED'; decidedAt: string; signerName: string | null } | null;
+  } | null;
   order: {
     id: string;
     orderNumber: string;
@@ -654,6 +676,37 @@ export default function JobPortalPage() {
                 negotiated PDF. Tells the client up front so they
                 aren't surprised to see different terms than the
                 public template. */}
+            {/* Annual-agreement banner. An account on an annual master signs
+                nothing per job, so the portal has to say so up front — a
+                client who expects a signing step and finds none will assume
+                the page is broken and email their rep about it. */}
+            {data.annualAgreement && (
+              <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] leading-relaxed text-emerald-900">
+                <div className="font-bold uppercase tracking-wider text-[10px] text-emerald-700 mb-1">
+                  Annual agreement on file
+                </div>
+                <p>
+                  {data.annualAgreement.companyName
+                    ? `${data.annualAgreement.companyName}'s `
+                    : 'Your '}
+                  {data.annualAgreement.title} covers this job
+                  {data.annualAgreement.expiryDate
+                    ? `, in effect through ${new Date(data.annualAgreement.expiryDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`
+                    : ''}
+                  . There is nothing to sign — we only need your damage-waiver
+                  election below.
+                </p>
+                <a
+                  href={data.annualAgreement.pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1.5 inline-block text-[11px] font-semibold text-emerald-800 underline hover:text-emerald-900"
+                >
+                  Read the agreement
+                </a>
+              </div>
+            )}
+
             {data.standingAgreement && (
               <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] leading-relaxed text-amber-900">
                 <div className="font-bold uppercase tracking-wider text-[10px] text-amber-700 mb-1">
@@ -673,10 +726,48 @@ export default function JobPortalPage() {
               {/* Rental Agreement */}
               <PaperworkRow
                 label="Rental Agreement"
-                status={data.agreementCoverage ? 'Covered' : agreementStatusLabel(data.paperwork.agreement)}
-                statusKind={data.agreementCoverage ? 'success' : agreementStatusKind(data.paperwork.agreement)}
+                status={
+                  data.annualAgreement
+                    ? 'On file'
+                    : data.agreementCoverage
+                      ? 'Covered'
+                      : agreementStatusLabel(data.paperwork.agreement)
+                }
+                statusKind={
+                  data.annualAgreement || data.agreementCoverage
+                    ? 'success'
+                    : agreementStatusKind(data.paperwork.agreement)
+                }
               >
-                {data.agreementCoverage ? (
+                {data.annualAgreement ? (
+                  /* Annual account. Checked BEFORE sibling coverage because
+                     it holds from the moment the order exists — and before
+                     the signing affordances below, so a released-but-unsigned
+                     row can never show a signature pad to a client who has
+                     already signed for the year. */
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-gray-600 leading-relaxed">
+                      {data.annualAgreement.sentence}
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <a
+                        href={data.annualAgreement.pdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                      >
+                        View agreement
+                      </a>
+                      <a
+                        href={`${data.annualAgreement.pdfUrl}?download=1`}
+                        download
+                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                      >
+                        Download PDF
+                      </a>
+                    </div>
+                  </div>
+                ) : data.agreementCoverage ? (
                   /* Papered by another order on the same job. Say WHICH
                      signature and when — a bare "Covered" reads like a
                      glitch to someone who knows they never signed for this
@@ -775,6 +866,85 @@ export default function JobPortalPage() {
                   </span>
                 )}
               </PaperworkRow>
+
+              {/* Damage waiver — the ONE thing an annual account is asked
+                  for, and a real per-job decision for everyone else. Renders
+                  only when the job actually has vehicles: a stage-only or
+                  gear-only job has nothing to waive and an offer there is
+                  noise the client has to work out how to dismiss. */}
+              {data.lcdw && data.lcdw.hasVehicles && (
+                <PaperworkRow
+                  label="Damage Waiver (LCDW)"
+                  status={
+                    data.lcdw.election
+                      ? data.lcdw.election.decision === 'ACCEPTED'
+                        ? 'Accepted'
+                        : 'Declined'
+                      : data.lcdw.available
+                        ? 'Needs your answer'
+                        : 'Not available'
+                  }
+                  statusKind={
+                    data.lcdw.election
+                      ? 'success'
+                      : data.lcdw.available
+                        ? 'warning'
+                        : 'pending'
+                  }
+                >
+                  {data.lcdw.election ? (
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-gray-600 leading-relaxed">
+                        {data.lcdw.election.decision === 'ACCEPTED'
+                          ? `Accepted at $${data.lcdw.ratePerDay}/day per eligible vehicle`
+                          : 'Declined'}
+                        {data.lcdw.election.signerName ? ` by ${data.lcdw.election.signerName}` : ''} on{' '}
+                        {new Date(data.lcdw.election.decidedAt).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                        .
+                      </div>
+                      {/* Changeable until pickup. The election drives a charge
+                          and a liability position — a client who picked the
+                          wrong one should not have to email to fix it. */}
+                      <a
+                        href={`/portal/job/${slug}/lcdw`}
+                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                      >
+                        Change my answer
+                      </a>
+                    </div>
+                  ) : data.lcdw.available ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Accept or decline the Limited Collision Damage Waiver — $
+                        {data.lcdw.ratePerDay}/day per eligible vehicle. We need your
+                        answer either way before pickup.
+                      </p>
+                      <a
+                        href={`/portal/job/${slug}/lcdw`}
+                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      >
+                        Choose →
+                      </a>
+                    </div>
+                  ) : (
+                    /* Vehicles on the job, none of them eligible. Say so
+                       plainly rather than offering a waiver that would cover
+                       nothing — see lcdwEligibility.ts. */
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      The damage waiver isn&rsquo;t available on the vehicles booked for
+                      this job
+                      {data.lcdw.excluded.length > 0
+                        ? ` (${data.lcdw.excluded.map((e) => e.description).join(', ')})`
+                        : ''}
+                      . Nothing for you to do here.
+                    </p>
+                  )}
+                </PaperworkRow>
+              )}
 
               {/* Stage Contract — only renders when one has been generated.
                   Independent signing status from the rental agreement; an

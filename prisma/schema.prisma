@@ -489,6 +489,13 @@ model Company {
   discountNotes      String?          @map("discount_notes") @db.Text
 
   // ── CRH: Company-level paperwork (institutional memory) ────────────────
+  // SUPERSEDED 2026-09-01 by CompanyAgreement + CompanyAgreement.autoCoverJobs.
+  // These six columns were read by NOTHING — no route, no page, no job — and
+  // the paragraph below describes behaviour that was never implemented. Annual
+  // coverage needs to name a DOCUMENT (the job addendum cites the master by
+  // title and term), which loose columns on Company cannot do. Kept, unread,
+  // rather than dropped: this file is additive-only against a live DB.
+  //
   // Annual MSA (Master Services Agreement). When `annualAgreementApprovedAt`
   // is set AND `annualAgreementExpiresAt` is still in the future, new jobs
   // for this company skip the per-job agreement signing flow.
@@ -542,6 +549,7 @@ model Company {
   inquiryCaptures                 InquiryCapture[]       @relation("CaptureCompany")
   outreachActivities              OutreachActivity[]     @relation("CompanyOutreach")
   negotiatedRates                 CompanyRate[]
+  cardsOnFile                     CompanyCard[]
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -2273,6 +2281,8 @@ model User {
   uploadedCompanyAgreements CompanyAgreement[]     @relation("CompanyAgreementUploader")
   uploadedJobDocuments      JobDocument[]          @relation("JobDocumentUploader")
   addedJobAgreementAddenda  JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
+  lcdwElectionsRecorded     LcdwElection[]         @relation("LcdwElectionRecordedBy")
+  companyCardsAdded         CompanyCard[]          @relation("CompanyCardAddedBy")
   reviewClauseMessages      ReviewClauseMessage[]  @relation("ReviewClauseMessageAuthor")
   assignedInquiries         Inquiry[]              @relation("InquiryAssignedTo")
 
@@ -5082,6 +5092,7 @@ model Job {
   finalInvoices         JobFinalInvoice[]
   /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
   subRentals            SubRental[]
+  lcdwElection          LcdwElection?
 
   @@index([companyId])
   @@index([status])
@@ -5611,6 +5622,21 @@ model SignedAgreement {
   coveredBy            SignedAgreement?  @relation("AgreementCoverage", fields: [coveredByAgreementId], references: [id], onDelete: SetNull)
   covers               SignedAgreement[] @relation("AgreementCoverage")
 
+  /// This order is papered by the company's ANNUAL master agreement.
+  ///
+  /// Same shape and the same restraint as coveredByAgreementId above: an
+  /// annual account has signed once, for the year, and asking them to sign
+  /// again per job is asking for a signature they already gave. But the row
+  /// still keeps its own honest status — there is no per-order signature
+  /// here, and every surface that renders a signed COPY must keep saying so.
+  ///
+  /// The two coverage pointers are not redundant. Sibling coverage answers
+  /// "this JOB is already papered"; this answers "this COMPANY is already
+  /// papered" and is checked FIRST, because it holds from the moment the
+  /// order exists — before any sibling could have been signed.
+  coveredByCompanyAgreementId String?           @map("covered_by_company_agreement_id")
+  coveredByCompanyAgreement   CompanyAgreement? @relation("AgreementAnnualCoverage", fields: [coveredByCompanyAgreementId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -5618,6 +5644,7 @@ model SignedAgreement {
   @@index([orderId])
   @@index([contractType])
   @@index([status])
+  @@index([coveredByCompanyAgreementId])
   @@map("sr_signed_agreements")
 }
 
@@ -5818,6 +5845,22 @@ model CompanyAgreement {
   effectiveDate DateTime? @map("effective_date")
   expiryDate    DateTime? @map("expiry_date")
 
+  /// ANNUAL-ACCOUNT AUTO-APPROVAL (Wes, 2026-09-01: "companies set up for
+  /// Annual Agreements... automatically approved on the rental agreement
+  /// and only asked to elect or deny LCDW").
+  ///
+  /// Filing an annual master is NOT by itself a standing instruction to
+  /// stop asking clients to sign — plenty of masters are filed as a record
+  /// of a past deal, or superseded by a newer year. This flag is the
+  /// explicit opt-in: while it is true AND the coverage window is current,
+  /// every job for this company is papered by THIS document and the portal
+  /// asks the client for the LCDW election only.
+  ///
+  /// Deliberately per-AGREEMENT rather than per-Company: a company can
+  /// carry last year's master alongside this year's, and coverage has to
+  /// name the document it flows from — the job addendum cites it by title.
+  autoCoverJobs Boolean @default(false) @map("auto_cover_jobs")
+
   signerName String?   @map("signer_name")
   signedAt   DateTime? @map("signed_at")
   note       String?   @db.Text
@@ -5831,10 +5874,14 @@ model CompanyAgreement {
   deletedAt DateTime? @map("deleted_at")
 
   addenda JobAgreementAddendum[]
+  /// Order-level agreement rows this master papers. See
+  /// SignedAgreement.coveredByCompanyAgreementId.
+  covers  SignedAgreement[]      @relation("AgreementAnnualCoverage")
 
   @@index([companyId])
   @@index([contractType])
   @@index([deletedAt])
+  @@index([autoCoverJobs])
   @@map("sr_company_agreements")
 }
 
@@ -5868,6 +5915,139 @@ model JobAgreementAddendum {
   @@index([companyAgreementId])
   @@index([deletedAt])
   @@map("sr_job_agreement_addenda")
+}
+
+/// The client's LCDW answer for a JOB, with the writing the addendum
+/// requires.
+///
+/// LCDW was already recordable — on PaperworkRequest, keyed to a BOOKING,
+/// reachable only from the old booking-token portal. That is the wrong
+/// anchor for an annual account: Job is the root (Job-as-root, 2026-08),
+/// bookings are a Planyo-era artifact, and measured 2026-09-01 the orders
+/// carrying invoices had bookingId NULL across the board. An election
+/// filed against a booking that does not exist is an election nobody can
+/// read back.
+///
+/// One row per job. LCDW is a per-vehicle-per-day charge, but it is one
+/// DECISION — a client does not accept the waiver on Tuesday's cube and
+/// decline it on Thursday's — and the addendum is a job document. Changing
+/// the answer overwrites this row and re-cuts the addendum; the superseded
+/// answer survives in AuditLog, not here.
+///
+/// Recording the election NEVER moves money. The $24/day fee line stays a
+/// staff action through /api/orders/[id]/lcdw, which is the only path that
+/// applies the eligibility rule per line. Same restraint the booking-token
+/// portal already keeps.
+model LcdwElection {
+  id    String @id @default(uuid())
+  jobId String @unique @map("job_id")
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  decision  LcdwDecision
+  decidedAt DateTime     @default(now()) @map("decided_at")
+
+  /// "Acceptance/decline of LCDW must be confirmed in writing per fleet
+  /// vehicle rental" (LCDW_ADDENDUM.note). Both directions are signed —
+  /// a DECLINE is the half we would actually have to prove.
+  signerName         String? @map("signer_name")
+  signerTitle        String? @map("signer_title")
+  signerEmail        String? @map("signer_email")
+  signatureData      String? @map("signature_data") @db.Text
+  acknowledgmentText String? @map("acknowledgment_text") @db.Text
+  ipAddress          String? @map("ip_address")
+  userAgent          String? @map("user_agent") @db.Text
+
+  /// PORTAL_JOB — the client elected in the portal.
+  /// STAFF       — recorded on their behalf (phone/email), with recordedBy set.
+  source       String  @default("PORTAL_JOB")
+  recordedById String? @map("recorded_by_id")
+  recordedBy   User?   @relation("LcdwElectionRecordedBy", fields: [recordedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([decision])
+  @@map("sr_lcdw_elections")
+}
+
+/// A card an account keeps ON FILE, at the COMPANY.
+///
+/// Wes, 2026-09-01: "some companies like to keep more than one credit card
+/// on file." They could not. The stored CardSecure token lived in
+/// PaperworkRequest.cc_card_number_encrypted — one column, one row per
+/// paperwork request, keyed to a booking — and every reader took
+/// findFirst() ordered by date, so a second card was at best invisible and
+/// at worst silently swapped in for the first.
+///
+/// `cardToken` is a CardSecure TOKEN, never a PAN. SirReel never holds card
+/// numbers; the token is useless off our MID and is the only thing
+/// chargeCard() wants. It must never be returned to a browser — the display
+/// fields below exist so staff surfaces never need it.
+model CompanyCard {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// What accounting calls it — "AmEx (production)", "Line producer's Visa".
+  /// The whole point of a wallet is that staff can tell two cards apart, and
+  /// last4 alone does not do that when both are Visas.
+  label String?
+
+  /// CardSecure token. Server-only.
+  cardToken String @map("card_token")
+
+  last4          String? @map("last4")
+  cardType       String? @map("card_type")
+  /// MMYY. Required on every auth against the token — without an expiry a
+  /// merchant-initiated charge on a card on file declines.
+  expiry         String? @map("expiry")
+  /// Cardholder billing postal. The gateway decides surcharge eligibility
+  /// from the cardholder's region on card-not-present auths.
+  billingPostal  String? @map("billing_postal")
+  cardholderName String? @map("cardholder_name")
+
+  /// 'CARD' = charge this card; 'CHECK_WIRE' = client pays by check/wire and
+  /// this is security only. Informational — the card is chargeable either
+  /// way. Null = unspecified (treat as CARD).
+  paymentPreference String? @map("payment_preference")
+
+  /// The card staff reach for when nothing else is specified. Enforced to at
+  /// most one live default per company by the write path, not by a partial
+  /// unique index (Prisma cannot express one, and a full unique on
+  /// (companyId, isDefault) would forbid a second NON-default card).
+  isDefault Boolean @default(false) @map("is_default")
+
+  /// $0 stored-credential authorization result. The Visa/Mastercard stored-
+  /// credential framework wants later merchant-initiated charges to
+  /// reference the retref that established the credential.
+  authRetref      String?   @map("auth_retref")
+  authRespCode    String?   @map("auth_respcode")
+  authRespStat    String?   @map("auth_respstat")
+  authRespText    String?   @map("auth_resptext")
+  authValidatedAt DateTime? @map("auth_validated_at")
+
+  /// Where it came from: PORTAL_JOB | PAPERWORK | STAFF. `sourceJobId` and
+  /// `sourcePaperworkRequestId` are provenance only — a card on file belongs
+  /// to the COMPANY and is chargeable on any of its jobs.
+  source                   String  @default("STAFF")
+  sourceJobId              String? @map("source_job_id")
+  sourcePaperworkRequestId String? @map("source_paperwork_request_id")
+
+  addedById String? @map("added_by_id")
+  addedBy   User?   @relation("CompanyCardAddedBy", fields: [addedById], references: [id])
+
+  /// Soft-removed. Never hard-delete: a settled charge references this row
+  /// for dispute evidence, and "which card did we run" must stay answerable.
+  removedAt   DateTime? @map("removed_at")
+  removedById String?   @map("removed_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, cardToken])
+  @@index([companyId])
+  @@index([removedAt])
+  @@map("sr_company_cards")
 }
 
 // ============================================================
