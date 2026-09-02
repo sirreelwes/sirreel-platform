@@ -23,6 +23,7 @@ scripts/*
 !scripts/backfill-coi-named-insured.ts
 !scripts/import-annual-agreements.ts
 !scripts/create-annual-agreement-companies.ts
+!scripts/harvest-cois-from-email.ts
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
 !scripts/generate-agreement-template.py
