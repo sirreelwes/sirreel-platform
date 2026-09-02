@@ -81,7 +81,7 @@ export default function DuplicatesPage() {
                     <button
                       onClick={() => merge(d.manual.id, m.id)}
                       disabled={merging === d.manual.id}
-                      className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner text-white text-xs font-medium rounded-lg transition-colors"
+                      className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner text-white text-xs font-medium rounded-lg transition-colors disabled:text-lt-fg3"
                     >
                       {merging === d.manual.id ? "Merging..." : "Merge into this one"}
                     </button>

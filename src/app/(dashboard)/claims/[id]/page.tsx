@@ -471,7 +471,7 @@ export default function ClaimDetailPage() {
                 type="button"
                 onClick={save}
                 disabled={saving}
-                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg"
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg disabled:text-lt-fg3"
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
@@ -682,7 +682,7 @@ export default function ClaimDetailPage() {
                     type="button"
                     onClick={appendNote}
                     disabled={!noteText.trim() || noteSaving}
-                    className="ml-auto text-[11px] font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-3 py-1 rounded"
+                    className="ml-auto text-[11px] font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-3 py-1 rounded disabled:text-lt-fg3"
                   >
                     {noteSaving ? '…' : 'Log'}
                   </button>

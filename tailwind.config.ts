@@ -29,9 +29,16 @@ const config: Config = {
           hairline: '#E7E9ED',
           inner:    '#EEF0F3',
           inner2:   '#F1F2F4',
-          fg:       '#16191D', // primary text + primary CTA bg
-          fg2:      '#687078', // secondary text
-          fg3:      '#9CA3AD', // muted / mono / placeholder
+          fg:       '#16191D', // primary text + primary CTA bg   17.6:1 on white
+          // The muted ramp was set by eye and never measured. fg3 was
+          // #9CA3AD — 2.54:1 on white, 2.23:1 on lt-inner — and it carries
+          // 826 uses across 58 files, including table headers and dates
+          // people actually read. Both steps are now chosen against the
+          // LIGHTEST background in the system (lt-inner #EEF0F3), so they
+          // clear AA on every light surface rather than only on white,
+          // while keeping three visibly distinct levels.
+          fg2:      '#4B535B', // secondary text            7.8:1 / 6.8:1
+          fg3:      '#666E78', // muted / mono / placeholder 5.2:1 / 4.5:1
         },
         pill: {
           'quoted-bg':  '#EEEDFE', 'quoted-fg':  '#3C3489',

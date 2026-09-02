@@ -1137,7 +1137,7 @@ export default function CRMPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={addContact} disabled={!cFirst || !cLast || !cEmail}
-                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg disabled:text-lt-fg3">
                 Add Contact
               </button>
               <button onClick={() => setShowAddContact(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>
@@ -1173,7 +1173,7 @@ export default function CRMPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={addCompany} disabled={!newName}
-                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg disabled:text-lt-fg3">
                 Add Company
               </button>
               <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>

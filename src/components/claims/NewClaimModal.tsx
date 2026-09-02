@@ -413,7 +413,7 @@ export function NewClaimModal({
                 type="button"
                 onClick={parsePaste}
                 disabled={parsing || pasteText.trim().length < 30}
-                className="text-xs font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-4 py-2 rounded-lg"
+                className="text-xs font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-4 py-2 rounded-lg disabled:text-lt-fg3"
               >
                 {parsing ? 'Parsing…' : 'Parse & continue →'}
               </button>
@@ -584,7 +584,7 @@ export function NewClaimModal({
             </button>
             <button type="button" onClick={submit}
               disabled={submitting || !company || !incidentDate || incidentDescription.trim().length < 10 || !filedAgainst.trim()}
-              className="text-xs font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-4 py-2 rounded-lg">
+              className="text-xs font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white px-4 py-2 rounded-lg disabled:text-lt-fg3">
               {submitting ? 'Creating…' : 'Create claim →'}
             </button>
           </div>

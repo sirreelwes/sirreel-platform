@@ -2186,7 +2186,7 @@ function NewQuotePageInner() {
             <button
               onClick={parseEmail}
               disabled={!emailText.trim() || parsing}
-              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg"
+              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg disabled:text-lt-fg3"
             >
               {parsing ? 'AI is parsing…' : 'Parse with AI'}
             </button>
@@ -2237,7 +2237,7 @@ function NewQuotePageInner() {
             <button
               onClick={parsePDF}
               disabled={!pdfFile || parsing}
-              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg"
+              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg disabled:text-lt-fg3"
             >
               {parsing ? 'AI is processing PDF…' : 'Upload & Parse'}
             </button>

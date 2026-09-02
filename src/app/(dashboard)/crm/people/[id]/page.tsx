@@ -687,7 +687,7 @@ export default function PersonDetailPage() {
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg" />
               )}
               <button onClick={addActivity} disabled={!actBody || saving}
-                className="w-full py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg transition-colors">
+                className="w-full py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg transition-colors disabled:text-lt-fg3">
                 {saving ? "Saving..." : "Log"}
               </button>
             </div>
@@ -829,7 +829,7 @@ export default function PersonDetailPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={linkCompany} disabled={!selectedCompanyId}
-                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg disabled:text-lt-fg3">
                 Link Company
               </button>
               <button onClick={() => setShowLinkCompany(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>

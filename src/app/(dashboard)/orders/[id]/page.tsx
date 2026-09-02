@@ -2325,7 +2325,7 @@ export default function OrderDetailPage() {
                       returnDate: li.endDate,
                     })}
                     title="Sub-rent this line from a vendor (internal — never on client docs)"
-                    className="text-lt-fg3 hover:text-amber-600 text-xs mr-2"
+                    className="text-lt-fg3 hover:text-amber-800 text-xs mr-2"
                   >
                     Sub-rent…
                   </button>
@@ -2617,7 +2617,7 @@ export default function OrderDetailPage() {
                 <button
                   type="button"
                   onClick={() => setPushDatesOpen(true)}
-                  className="ml-2 text-xs text-amber-500 hover:text-amber-400"
+                  className="ml-2 text-xs text-amber-700 hover:text-amber-800"
                   title="Move the entire order range — preview cascade first"
                 >
                   Change…
@@ -2673,7 +2673,7 @@ export default function OrderDetailPage() {
         li.inventoryItem?.internalFlags?.includes("REQUIRES_AV_TECH"),
       ) && (
         <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
-          <span className="text-amber-500 text-xl leading-none">⚠</span>
+          <span className="text-amber-700 text-xl leading-none">⚠</span>
           <div className="text-sm text-lt-fg">
             <div className="font-semibold text-amber-600">A/V Tech required</div>
             <div className="text-xs text-lt-fg2 mt-0.5">
@@ -2698,7 +2698,7 @@ export default function OrderDetailPage() {
         const which = needDelivery && needPickup ? "delivery and pickup" : needDelivery ? "delivery" : "pickup";
         return (
           <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <span className="text-amber-500 text-xl leading-none">⚠</span>
+            <span className="text-amber-700 text-xl leading-none">⚠</span>
             <div className="text-sm text-lt-fg flex-1">
               <div className="font-semibold text-amber-600">Create the {which} task</div>
               <div className="text-xs text-lt-fg2 mt-0.5">
@@ -3829,7 +3829,7 @@ export default function OrderDetailPage() {
             <button
               onClick={() => void regeneratePdf()}
               disabled={regeneratingPdf || order.lineItems.length === 0}
-              className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 disabled:bg-lt-inner text-white text-sm font-semibold rounded-lg"
+              className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 disabled:bg-lt-inner text-white text-sm font-semibold rounded-lg disabled:text-lt-fg3"
               title={order.lineItems.length === 0 ? "Add at least one line item first" : "Generate the client-facing Quote PDF"}
             >
               {regeneratingPdf ? "Generating…" : "Generate Quote PDF"}
@@ -4216,7 +4216,7 @@ export default function OrderDetailPage() {
                 onClick={generateRentalInvoice}
                 disabled={!canGenerate || generatingInvoice}
                 title={title}
-                className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg disabled:text-lt-fg3"
               >
                 {generatingInvoice ? 'Generating…' : 'Generate rental invoice'}
               </button>
@@ -4318,7 +4318,7 @@ export default function OrderDetailPage() {
                         onClick={sendPreInvoice}
                         disabled={sendingPreInvoice || noRecipient}
                         title={noRecipient ? 'Add a contact to the job before sending.' : 'Email the client a review copy to approve'}
-                        className="text-[11px] font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                        className="text-[11px] font-semibold bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded disabled:text-lt-fg3"
                       >
                         {sendingPreInvoice ? 'Sending…' : inv.preSentAt ? 'Re-send pre-invoice' : 'Send pre-invoice'}
                       </button>
@@ -5207,7 +5207,7 @@ function PaymentsPanel({
                   ? `Amount exceeds balance due ($${balanceDue.toFixed(2)})`
                   : undefined
               }
-              className="w-full px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
+              className="w-full px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded disabled:text-lt-fg3"
             >
               {recording ? 'Recording…' : 'Record payment'}
             </button>
@@ -5332,7 +5332,7 @@ function CardOnFileCharge({
           type="button"
           onClick={charge}
           disabled={!valid || charging}
-          className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
+          className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded disabled:text-lt-fg3"
         >
           {charging ? 'Charging…' : `Charge ${usd(fee.total)}`}
         </button>
@@ -5511,7 +5511,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
             <button
               type="submit"
               disabled={posting || incidentDescription.trim().length < 10 || !filedAgainst.trim()}
-              className="text-xs font-semibold bg-chip-bad-fg hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 text-white px-3 py-1.5 rounded-lg"
+              className="text-xs font-semibold bg-chip-bad-fg hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 text-white px-3 py-1.5 rounded-lg disabled:text-lt-fg3"
             >
               {posting ? "Opening…" : "Open claim"}
             </button>
