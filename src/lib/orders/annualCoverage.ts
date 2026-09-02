@@ -31,7 +31,7 @@
  * quietly stop asking on the strength of an expired document. Coverage
  * requires the explicit `autoCoverJobs` opt-in AND a current window.
  */
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { LcdwDecision, Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
 import { SIGNED_STATUSES } from '@/lib/orders/agreementCoverage'
 
@@ -47,6 +47,9 @@ export interface AnnualCoverage {
   expiryDate: Date | null
   signerName: string | null
   signedAt: Date | null
+  /// The LCDW answer signed ON the master ("I accept/decline LCDW for all
+  /// fleet vehicle rentals"). The default a job's election starts from.
+  standingLcdwDecision: LcdwDecision | null
 }
 
 /**
@@ -81,6 +84,7 @@ const COMPANY_AGREEMENT_SELECT = {
   expiryDate: true,
   signerName: true,
   signedAt: true,
+  standingLcdwDecision: true,
   createdAt: true,
   company: { select: { name: true } },
 } as const
@@ -118,6 +122,7 @@ export async function findCompanyAnnualCoverage(
     expiryDate: hit.expiryDate,
     signerName: hit.signerName,
     signedAt: hit.signedAt,
+    standingLcdwDecision: hit.standingLcdwDecision,
   }
 }
 

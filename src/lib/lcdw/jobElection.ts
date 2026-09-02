@@ -44,6 +44,29 @@ function ineligibleReason(reason: string | undefined): string {
 /** Orders that are not part of the live picture for a job addendum. */
 const DEAD_ORDER_STATUSES = new Set(['CANCELLED', 'CLOSED', 'VOID'])
 
+/**
+ * The LCDW answer that actually governs a job.
+ *
+ * The per-job election wins when there is one; otherwise the standing answer
+ * signed on the annual master applies. An annual client checked "I accept
+ * LCDW for all fleet vehicle rentals" and signed it — that IS an answer, and
+ * re-asking as though it were not would be asking them to re-decide
+ * something they committed to for the year.
+ *
+ * Returns null when neither exists: an account with no annual and no
+ * election has genuinely not answered, and "unanswered" must never collapse
+ * into "declined" — declining is a liability position somebody has to have
+ * actually taken.
+ */
+export function effectiveLcdwDecision(
+  jobElection: { decision: LcdwDecision } | null | undefined,
+  standing: LcdwDecision | null | undefined,
+): { decision: LcdwDecision; source: 'JOB' | 'ANNUAL' } | null {
+  if (jobElection) return { decision: jobElection.decision, source: 'JOB' }
+  if (standing) return { decision: standing, source: 'ANNUAL' }
+  return null
+}
+
 export const LCDW_ACKNOWLEDGEMENT_TEXT =
   'I confirm the Limited Collision Damage Waiver election above for this job. ' +
   'By typing my name and submitting, I am providing my electronic signature, which has ' +
@@ -170,13 +193,22 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
       lcdwElection: true,
     },
   })
-  if (!job?.lcdwElection) return null
+  if (!job) return null
 
   const coverage = await findCompanyAnnualCoverage(job.companyId)
   if (!coverage) return null
 
-  const summary = await summarizeJobLcdwCoverage(jobId)
+  // The addendum can be cut from the STANDING election alone — that is the
+  // point of an annual account (Wes, 2026-09-02: a job should "only require
+  // job name and dates, along with LCDW election to update"). Job name and
+  // dates come from the job; the waiver answer is already signed on the
+  // master. So a job file gets its addendum the moment it is covered, and a
+  // client who changes their mind re-cuts it.
   const election = job.lcdwElection
+  const effective = effectiveLcdwDecision(election, coverage.standingLcdwDecision)
+  if (!effective) return null
+
+  const summary = await summarizeJobLcdwCoverage(jobId)
 
   const pdf = await generateJobAddendumPdf({
     companyName: job.company?.name ?? null,
@@ -190,18 +222,28 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
     rentalStart: summary.rentalStart,
     rentalEnd: summary.rentalEnd,
     orderNumbers: summary.orderNumbers,
-    decision: election.decision,
+    decision: effective.decision,
+    decisionSource: effective.source,
+    standingDecision: coverage.standingLcdwDecision,
     coveredVehicles: summary.coveredVehicles,
     excludedVehicles: summary.excludedVehicles,
-    signature: {
-      signerName: election.signerName || 'Client',
-      signerTitle: election.signerTitle,
-      signerEmail: election.signerEmail,
-      acknowledgmentText: election.acknowledgmentText || LCDW_ACKNOWLEDGEMENT_TEXT,
-      decidedAt: election.decidedAt,
-      ipAddress: election.ipAddress,
-      userAgent: election.userAgent,
-    },
+    // No per-job election yet: the answer and the signature both come from
+    // the master, and the addendum says so rather than inventing a job-level
+    // signature nobody gave.
+    signature: election
+      ? {
+          signerName: election.signerName || 'Client',
+          signerTitle: election.signerTitle,
+          signerEmail: election.signerEmail,
+          acknowledgmentText: election.acknowledgmentText || LCDW_ACKNOWLEDGEMENT_TEXT,
+          decidedAt: election.decidedAt,
+          ipAddress: election.ipAddress,
+          userAgent: election.userAgent,
+        }
+      : null,
+    masterSignatureNote: election
+      ? null
+      : `Carried from the ${annualCoverageTitle(coverage)}${coverage.signerName ? `, signed by ${coverage.signerName}` : ''}${coverage.signedAt ? ` on ${coverage.signedAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}` : ''}.`,
     generatedAt: new Date(),
   })
 
@@ -215,7 +257,9 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
   })
 
   const filename = `${safeCode}-LCDW-addendum.pdf`
-  const note = `LCDW ${election.decision === 'ACCEPTED' ? 'accepted' : 'declined'} by ${election.signerName || 'client'}`
+  const note = election
+    ? `LCDW ${effective.decision === 'ACCEPTED' ? 'accepted' : 'declined'} by ${election.signerName || 'client'}`
+    : `LCDW ${effective.decision === 'ACCEPTED' ? 'accepted' : 'declined'} — carried from the annual agreement`
 
   const row = await prisma.jobAgreementAddendum.upsert({
     where: {
@@ -229,7 +273,7 @@ export async function fileJobAddendum(jobId: string): Promise<string | null> {
       addendumFilename: filename,
       addendumFileSize: pdf.length,
       note,
-      addedById: election.recordedById,
+      addedById: election?.recordedById ?? null,
     },
     update: {
       addendumFileKey: blobKey,

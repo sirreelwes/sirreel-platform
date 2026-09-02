@@ -56,12 +56,21 @@ export interface JobAddendumProps {
   orderNumbers: string[]
 
   decision: 'ACCEPTED' | 'DECLINED'
+  /** 'JOB' — the client elected for this job; 'ANNUAL' — carried from the
+   *  standing election signed on the master. */
+  decisionSource: 'JOB' | 'ANNUAL'
+  /** What the master itself says, when it says anything. */
+  standingDecision: 'ACCEPTED' | 'DECLINED' | null
   /** Descriptions of the vehicles the waiver would actually cover. */
   coveredVehicles: string[]
   /** Vehicles on the job the waiver excludes, with the reason. */
   excludedVehicles: { description: string; reason: string }[]
 
-  signature: JobAddendumSignature
+  /** The per-job confirmation, when the client made one. Null when the
+   *  answer is carried from the master — then `masterSignatureNote` says
+   *  where it came from, rather than a signature block nobody signed. */
+  signature: JobAddendumSignature | null
+  masterSignatureNote?: string | null
   generatedAt: Date
 }
 
@@ -193,7 +202,8 @@ export function JobAddendumDocument(props: JobAddendumProps) {
     companyName, masterTitle, masterEffectiveDate, masterExpiryDate,
     masterSignerName, masterSignedAt,
     jobName, jobCode, rentalStart, rentalEnd, orderNumbers,
-    decision, coveredVehicles, excludedVehicles, signature, generatedAt,
+    decision, decisionSource, standingDecision,
+    coveredVehicles, excludedVehicles, signature, masterSignatureNote, generatedAt,
   } = props
 
   const accepted = decision === 'ACCEPTED'
@@ -263,6 +273,17 @@ export function JobAddendumDocument(props: JobAddendumProps) {
                 ? `Lessee accepts the Limited Collision Damage Waiver at ${usd2(LCDW_DAILY_RATE)} per day, per eligible vehicle, for the rental period above.`
                 : 'Lessee declines the Limited Collision Damage Waiver and remains responsible for all loss of or damage to the vehicles under the rental agreement.'}
             </Text>
+            {/* Where the answer came from. An annual account already answered
+                on the master ("for all fleet vehicle rentals"), and a reader
+                of the job file has to be able to tell a carried-forward
+                answer from one the client gave for THIS job. */}
+            <Text style={[styles.electionRate, { marginTop: 4, color: '#6b7280' }]}>
+              {decisionSource === 'ANNUAL'
+                ? 'Carried forward from the standing election on the agreement above.'
+                : standingDecision && standingDecision !== decision
+                  ? `Updated for this job. The agreement\u2019s standing election is ${standingDecision === 'ACCEPTED' ? 'ACCEPT' : 'DECLINE'}.`
+                  : 'Confirmed by Lessee for this job.'}
+            </Text>
           </View>
 
           <Text style={styles.body}>{LCDW_ADDENDUM.coverage}</Text>
@@ -303,34 +324,48 @@ export function JobAddendumDocument(props: JobAddendumProps) {
         <View style={styles.block} wrap={false}>
           <Text style={styles.blockTitle}>Confirmed in writing</Text>
           <Text style={[styles.small, { marginBottom: 6 }]}>{LCDW_ADDENDUM.note}</Text>
-          <View style={styles.signatureFrame}>
-            <Text style={styles.typedSignature}>{signature.signerName}</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.small}>
-              {[signature.signerName, signature.signerTitle].filter(Boolean).join(' · ')}
-            </Text>
-            {signature.signerEmail ? (
-              <Text style={styles.small}>{signature.signerEmail}</Text>
-            ) : null}
-            <Text style={styles.attestation}>{signature.acknowledgmentText}</Text>
-          </View>
-
-          <View style={styles.auditTable}>
-            <View style={styles.auditRow}>
-              <Text style={styles.auditLabel}>Elected</Text>
-              <Text style={styles.auditValue}>{fmtDateTime(signature.decidedAt)}</Text>
-            </View>
-            <View style={signature.userAgent ? styles.auditRow : styles.auditRowLast}>
-              <Text style={styles.auditLabel}>IP address</Text>
-              <Text style={styles.auditValue}>{signature.ipAddress || 'not recorded'}</Text>
-            </View>
-            {signature.userAgent ? (
-              <View style={styles.auditRowLast}>
-                <Text style={styles.auditLabel}>Device</Text>
-                <Text style={styles.auditValue}>{signature.userAgent}</Text>
+          {signature ? (
+            <>
+              <View style={styles.signatureFrame}>
+                <Text style={styles.typedSignature}>{signature.signerName}</Text>
+                <View style={styles.signatureLine} />
+                <Text style={styles.small}>
+                  {[signature.signerName, signature.signerTitle].filter(Boolean).join(' · ')}
+                </Text>
+                {signature.signerEmail ? (
+                  <Text style={styles.small}>{signature.signerEmail}</Text>
+                ) : null}
+                <Text style={styles.attestation}>{signature.acknowledgmentText}</Text>
               </View>
-            ) : null}
-          </View>
+
+              <View style={styles.auditTable}>
+                <View style={styles.auditRow}>
+                  <Text style={styles.auditLabel}>Elected</Text>
+                  <Text style={styles.auditValue}>{fmtDateTime(signature.decidedAt)}</Text>
+                </View>
+                <View style={signature.userAgent ? styles.auditRow : styles.auditRowLast}>
+                  <Text style={styles.auditLabel}>IP address</Text>
+                  <Text style={styles.auditValue}>{signature.ipAddress || 'not recorded'}</Text>
+                </View>
+                {signature.userAgent ? (
+                  <View style={styles.auditRowLast}>
+                    <Text style={styles.auditLabel}>Device</Text>
+                    <Text style={styles.auditValue}>{signature.userAgent}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : (
+            /* No job-level signature, and the page does not draw one. The
+               waiver was signed on the master; a signature block here would
+               claim a confirmation the client never gave for this job. */
+            <View style={styles.signatureFrame}>
+              <Text style={styles.body}>{masterSignatureNote || 'Signed on the agreement above.'}</Text>
+              <Text style={styles.small}>
+                No separate confirmation was required for this job.
+              </Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.footer} fixed>

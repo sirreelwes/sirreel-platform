@@ -55,6 +55,9 @@ interface PortalData {
     covered: string[];
     excluded: { description: string; reason: string }[];
     election: { decision: 'ACCEPTED' | 'DECLINED'; decidedAt: string; signerName: string | null } | null;
+    /** The governing answer — the per-job election, else the standing one
+     *  signed on the annual agreement. Null = genuinely unanswered. */
+    effective: { decision: 'ACCEPTED' | 'DECLINED'; source: 'JOB' | 'ANNUAL' } | null;
   } | null;
   order: {
     id: string;
@@ -876,8 +879,8 @@ export default function JobPortalPage() {
                 <PaperworkRow
                   label="Damage Waiver (LCDW)"
                   status={
-                    data.lcdw.election
-                      ? data.lcdw.election.decision === 'ACCEPTED'
+                    data.lcdw.effective
+                      ? data.lcdw.effective.decision === 'ACCEPTED'
                         ? 'Accepted'
                         : 'Declined'
                       : data.lcdw.available
@@ -885,14 +888,34 @@ export default function JobPortalPage() {
                         : 'Not available'
                   }
                   statusKind={
-                    data.lcdw.election
+                    data.lcdw.effective
                       ? 'success'
                       : data.lcdw.available
                         ? 'warning'
                         : 'pending'
                   }
                 >
-                  {data.lcdw.election ? (
+                  {data.lcdw.effective && !data.lcdw.election ? (
+                    /* Answered on the annual agreement, not for this job.
+                       Wes, 2026-09-02: an annual client's job should "only
+                       require job name and dates, along with LCDW election to
+                       update" — so this is a settled answer they can change,
+                       not an outstanding question they already answered when
+                       they signed for the year. */
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-gray-600 leading-relaxed">
+                        {data.lcdw.effective.decision === 'ACCEPTED'
+                          ? `Your annual agreement accepts the waiver for all fleet vehicle rentals — $${data.lcdw.ratePerDay}/day per eligible vehicle applies to this job.`
+                          : 'Your annual agreement declines the waiver for all fleet vehicle rentals, so it does not apply to this job.'}
+                      </div>
+                      <a
+                        href={`/portal/job/${slug}/lcdw`}
+                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                      >
+                        Change it for this job
+                      </a>
+                    </div>
+                  ) : data.lcdw.election ? (
                     <div className="space-y-1.5">
                       <div className="text-xs text-gray-600 leading-relaxed">
                         {data.lcdw.election.decision === 'ACCEPTED'

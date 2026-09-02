@@ -5861,6 +5861,22 @@ model CompanyAgreement {
   /// name the document it flows from — the job addendum cites it by title.
   autoCoverJobs Boolean @default(false) @map("auto_cover_jobs")
 
+  /// The LCDW answer carried ON the annual agreement itself.
+  ///
+  /// The annual rental agreement form asks it directly — "I accept LCDW for
+  /// all fleet vehicle rentals" / "I decline LCDW for all fleet vehicle
+  /// rentals" — with its own signature block. So an annual account has
+  /// ALREADY answered before any job exists, and treating each job as an
+  /// unanswered question would ask a client to re-decide something they
+  /// signed for the year.
+  ///
+  /// This is the STANDING answer, and it is a default, not a lock: the
+  /// per-job LcdwElection overrides it whenever one exists, and the job
+  /// addendum prints both so the file shows what was standing and what was
+  /// chosen. Null means the filed master did not record one — then the job
+  /// election is the only answer there is, and the portal asks.
+  standingLcdwDecision LcdwDecision? @map("standing_lcdw_decision")
+
   signerName String?   @map("signer_name")
   signedAt   DateTime? @map("signed_at")
   note       String?   @db.Text

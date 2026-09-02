@@ -36,7 +36,13 @@ interface LcdwData {
   allExcluded: boolean;
   hasVehicles: boolean;
   election: { decision: 'ACCEPTED' | 'DECLINED'; decidedAt: string; signerName: string | null } | null;
-  annualAgreement: { title: string; companyName: string | null } | null;
+  effective: { decision: 'ACCEPTED' | 'DECLINED'; source: 'JOB' | 'ANNUAL' } | null;
+  standingDecision: 'ACCEPTED' | 'DECLINED' | null;
+  annualAgreement: {
+    title: string;
+    companyName: string | null;
+    standingLcdwDecision: 'ACCEPTED' | 'DECLINED' | null;
+  } | null;
 }
 
 export default function LcdwElectionPage() {
@@ -66,8 +72,13 @@ export default function LcdwElectionPage() {
         const l = (await lr.json()) as LcdwData;
         if (cancelled) return;
         setData(l);
-        // Pre-fill the NAME from the session contact — that is identity we
-        // already hold, not the decision. The decision stays blank.
+        // Open on the answer that already governs — the per-job election if
+        // there is one, otherwise the standing election signed on the annual
+        // agreement. This is NOT a default invented for the client: it is the
+        // answer they gave, shown so they can change it in one click. With
+        // neither, the choice stays blank, because on a question with money
+        // and liability attached, picking one for them is not ours to do.
+        if (l.effective) setChoice(l.effective.decision);
         const d = dr.ok ? await dr.json() : null;
         const full = `${d?.contact?.firstName || ''} ${d?.contact?.lastName || ''}`.trim();
         if (full) setSignerName(full);
@@ -221,7 +232,7 @@ export default function LcdwElectionPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4 shadow-sm">
           <h2 className="text-sm font-bold text-gray-900">Your election</h2>
 
-          {data.election && (
+          {data.election ? (
             <p className="text-xs text-gray-500">
               You previously {data.election.decision === 'ACCEPTED' ? 'accepted' : 'declined'} the
               waiver on{' '}
@@ -232,7 +243,14 @@ export default function LcdwElectionPage() {
               })}
               . Submitting again replaces that answer.
             </p>
-          )}
+          ) : data.standingDecision ? (
+            <p className="text-xs text-gray-500">
+              Your {data.annualAgreement?.title || 'annual agreement'}{' '}
+              {data.standingDecision === 'ACCEPTED' ? 'accepts' : 'declines'} the waiver for all
+              fleet vehicle rentals, so that applies here already. Submit only if you want a
+              different answer for this job — it won&rsquo;t change your annual agreement.
+            </p>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             {(

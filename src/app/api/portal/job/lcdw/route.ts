@@ -27,6 +27,7 @@ import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/ann
 import {
   recordJobLcdwElection,
   summarizeJobLcdwCoverage,
+  effectiveLcdwDecision,
   LCDW_ACKNOWLEDGEMENT_TEXT,
 } from '@/lib/lcdw/jobElection'
 import { LCDW_ADDENDUM } from '@/lib/contracts/contractClauses'
@@ -82,8 +83,17 @@ export async function GET(req: NextRequest) {
           signerName: election.signerName,
         }
       : null,
+    // The answer that governs today, and where it came from. An annual
+    // client answered on the master ("for all fleet vehicle rentals"), so
+    // the page opens on that rather than on a blank question.
+    effective: effectiveLcdwDecision(election, coverage?.standingLcdwDecision ?? null),
+    standingDecision: coverage?.standingLcdwDecision ?? null,
     annualAgreement: coverage
-      ? { title: annualCoverageTitle(coverage), companyName: coverage.companyName }
+      ? {
+          title: annualCoverageTitle(coverage),
+          companyName: coverage.companyName,
+          standingLcdwDecision: coverage.standingLcdwDecision,
+        }
       : null,
   })
 }

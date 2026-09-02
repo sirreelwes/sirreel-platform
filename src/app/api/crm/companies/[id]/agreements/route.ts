@@ -37,6 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       select: {
         id: true, contractType: true, title: true, isAnnual: true, autoCoverJobs: true,
         effectiveDate: true, expiryDate: true, signerName: true, signedAt: true,
+        standingLcdwDecision: true,
         originalFilename: true, createdAt: true, deletedAt: true,
         _count: { select: { addenda: true } },
       },
@@ -58,6 +59,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       expiryDate: a.expiryDate,
       signerName: a.signerName,
       signedAt: a.signedAt,
+      standingLcdwDecision: a.standingLcdwDecision,
       originalFilename: a.originalFilename,
       createdAt: a.createdAt,
       jobsAttached: a._count.addenda,

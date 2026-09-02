@@ -127,7 +127,29 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
   // baseline render below: rendering a document nobody will be asked to
   // sign is pure waste, and if coverage is later withdrawn the lazy-fill
   // paths render it then.
-  if (await applyAnnualCoverage(orderId)) return
+  if (await applyAnnualCoverage(orderId)) {
+    // Cut the job addendum now, so the job file shows the master it is
+    // attached to and the waiver election that applies — without waiting for
+    // the client to touch the portal. For an annual account the job name and
+    // dates are the only new facts, and both exist by the time this runs
+    // (Wes, 2026-09-02). Fires once per order thanks to the `existing` guard
+    // above, and is idempotent per (job, master) so a second order on the
+    // same job refreshes rather than duplicates.
+    //
+    // Best-effort: a render hiccup must never break quote-send. The election
+    // path and the staff re-cut both regenerate it.
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { jobId: true },
+    })
+    if (order?.jobId) {
+      const { fileJobAddendum } = await import('@/lib/lcdw/jobElection')
+      await fileJobAddendum(order.jobId).catch((err) =>
+        console.error('[ensureSignedAgreementForOrder] addendum file failed:', orderId, err),
+      )
+    }
+    return
+  }
 
   // Render the review document UP FRONT (2026-07): the client must be able to
   // review the approved clause text BEFORE signing, so documentToSignUrl is

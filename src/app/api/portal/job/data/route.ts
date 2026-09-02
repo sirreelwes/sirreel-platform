@@ -16,7 +16,7 @@ import {
   annualCoverageSentence,
   annualCoverageTitle,
 } from '@/lib/orders/annualCoverage'
-import { summarizeJobLcdwCoverage } from '@/lib/lcdw/jobElection'
+import { summarizeJobLcdwCoverage, effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
@@ -416,6 +416,14 @@ export async function GET(req: NextRequest) {
               signerName: lcdwElection.signerName,
             }
           : null,
+        // The governing answer. For an annual account this is usually the
+        // standing election signed on the master, so the row reads as
+        // ANSWERED with an option to change — not as an outstanding ask the
+        // client already dealt with when they signed for the year.
+        effective: effectiveLcdwDecision(
+          lcdwElection,
+          annualCoverage?.standingLcdwDecision ?? null,
+        ),
       }
     : null
 

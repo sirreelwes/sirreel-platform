@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     select: {
       id: true, companyId: true, isAnnual: true, autoCoverJobs: true,
-      effectiveDate: true, expiryDate: true, deletedAt: true,
+      effectiveDate: true, expiryDate: true, deletedAt: true, standingLcdwDecision: true,
     },
   })
   if (!existing || existing.deletedAt) {
@@ -62,6 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     effectiveDate?: unknown
     expiryDate?: unknown
     title?: unknown
+    standingLcdwDecision?: unknown
   }
 
   const parseDate = (v: unknown): Date | null | undefined => {
@@ -73,6 +74,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const data: Record<string, unknown> = {}
   if (typeof body.isAnnual === 'boolean') data.isAnnual = body.isAnnual
+  // The waiver answer signed ON the master. '' / null clears it back to "the
+  // agreement doesn't say", which makes the portal ask per job — the honest
+  // state for a master that genuinely carries no election.
+  if (
+    body.standingLcdwDecision === 'ACCEPTED' ||
+    body.standingLcdwDecision === 'DECLINED' ||
+    body.standingLcdwDecision === null ||
+    body.standingLcdwDecision === ''
+  ) {
+    data.standingLcdwDecision = body.standingLcdwDecision || null
+  }
   if (typeof body.title === 'string') data.title = body.title.trim().slice(0, 200) || null
   const eff = parseDate(body.effectiveDate)
   if (eff !== undefined) data.effectiveDate = eff
@@ -102,7 +114,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data,
     select: {
       id: true, title: true, isAnnual: true, autoCoverJobs: true,
-      effectiveDate: true, expiryDate: true,
+      effectiveDate: true, expiryDate: true, standingLcdwDecision: true,
     },
   })
 
@@ -118,12 +130,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           autoCoverJobs: existing.autoCoverJobs,
           effectiveDate: existing.effectiveDate?.toISOString() ?? null,
           expiryDate: existing.expiryDate?.toISOString() ?? null,
+          standingLcdwDecision: existing.standingLcdwDecision,
         },
         newValues: {
           isAnnual: updated.isAnnual,
           autoCoverJobs: updated.autoCoverJobs,
           effectiveDate: updated.effectiveDate?.toISOString() ?? null,
           expiryDate: updated.expiryDate?.toISOString() ?? null,
+          standingLcdwDecision: updated.standingLcdwDecision,
         },
       },
     })

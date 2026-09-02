@@ -33,6 +33,7 @@ interface Agreement {
   signerName: string | null;
   signedAt: string | null;
   originalFilename: string;
+  standingLcdwDecision: 'ACCEPTED' | 'DECLINED' | null;
   jobsAttached: number;
   flaggedButInactive: boolean;
 }
@@ -187,9 +188,9 @@ export function AnnualAgreementPanel({
                       <>
                         Auto-cover this company&rsquo;s jobs.{' '}
                         <span className="text-lt-fg3">
-                          Clients are not asked to sign a rental agreement — the portal asks
-                          only for the LCDW election, and each job gets an addendum naming
-                          this agreement.
+                          Clients are not asked to sign a rental agreement — each job gets an
+                          addendum naming this agreement, its job name and dates, and the LCDW
+                          election.
                         </span>
                       </>
                     ) : (
@@ -198,6 +199,27 @@ export function AnnualAgreementPanel({
                       </span>
                     )}
                   </span>
+                </label>
+              )}
+
+              {canEdit && a.isAnnual && (
+                /* The LCDW answer signed ON the master. The annual rental
+                   agreement form asks it directly ("I accept/decline LCDW for
+                   all fleet vehicle rentals") — record it here and every job
+                   starts from the client's real answer instead of re-asking a
+                   question they signed for the year. */
+                <label className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-lt-fg2">LCDW on the agreement:</span>
+                  <select
+                    value={a.standingLcdwDecision || ''}
+                    disabled={busyId === a.id}
+                    onChange={(e) => patch(a.id, { standingLcdwDecision: e.target.value })}
+                    className="rounded-md border border-lt-hairline px-2 py-1 text-xs"
+                  >
+                    <option value="">Not recorded — ask per job</option>
+                    <option value="ACCEPTED">Accepted for all fleet vehicles</option>
+                    <option value="DECLINED">Declined for all fleet vehicles</option>
+                  </select>
                 </label>
               )}
             </div>
