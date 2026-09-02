@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### Payroll v1 — the paper timesheet, keyed once and exported to ADP
 
-`(this commit)` schema + CA overtime math + /payroll grid + CSV export
+`d8d826a` schema + CA overtime math + /payroll grid + CSV export
 
 SirReel runs payroll through ADP TotalSource. The crew fills out a paper weekly
 timesheet (rows = employees, columns = Sat + Mon–Fri, Start/End per day) plus a
