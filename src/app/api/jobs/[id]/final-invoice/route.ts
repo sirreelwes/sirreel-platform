@@ -55,6 +55,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       pdfUrl: true,
       note: true,
       uploadedAt: true,
+      // The paperwork tile on the job page needs to say whether the client
+      // has actually been told how to pay, and whether this settles an RW
+      // invoice or was uploaded here. Both were already stored; the select
+      // just never returned them.
+      emailedAt: true,
+      emailedTo: true,
+      rwInvoiceId: true,
     },
   })
 

@@ -50,6 +50,7 @@ import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/Ema
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
+import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
@@ -1364,7 +1365,7 @@ const driverTone = (d: any): string => {
               </div>
             </div>
             {job.returnedAt && (
-              <div className="text-[12px] text-emerald-600 font-semibold text-right">
+              <div className="text-[12px] text-emerald-700 font-semibold text-right">
                 ✓ Returned {fmtDateTime(job.returnedAt)}
                 {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
               </div>
@@ -1485,7 +1486,7 @@ const driverTone = (d: any): string => {
             <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* COI */}
           <a href="#coi" className="group rounded-lg border border-zinc-200 bg-zinc-50 hover:border-amber-400 p-3.5 transition-colors">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Certificate of Insurance</div>
@@ -1622,6 +1623,21 @@ const driverTone = (d: any): string => {
               </>
             )}
           </a>
+          {/* Final Invoice — the far end of the same story. The five tiles
+              left of this one ask whether the job can go OUT; this one asks
+              whether it has been billed and whether the client knows how to
+              pay. That state lived only in the panel below and in the
+              Collections queue (Wes 2026-09-02). */}
+          <FinalInvoiceTile
+            jobId={job.id}
+            hqInvoices={liveInvoices.map((i) => ({
+              id: i.id,
+              invoiceNumber: i.invoiceNumber,
+              status: i.status,
+              total: i.total,
+              sentAt: i.sentAt ? String(i.sentAt) : null,
+            }))}
+          />
         </div>
       </div>
 
