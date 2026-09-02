@@ -5051,7 +5051,7 @@ function PaymentsPanel({
   // fields — so staff can see & charge the authorized card without the
   // client re-entering it. null = not yet loaded; false = none on file.
   const [savedCard, setSavedCard] = useState<
-    | { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | null }
+    | { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null }
     | false
     | null
   >(null);
@@ -5258,12 +5258,15 @@ function CardOnFileCharge({
   charging,
   onCharge,
 }: {
-  savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | null };
+  savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null };
   balanceDue: number;
   charging: boolean;
   onCharge: (amount: number, waiveSurcharge: boolean) => void | Promise<void>;
 }) {
   const securityOnly = savedCard.paymentPreference === 'CHECK_WIRE';
+  // They authorized the card but never picked a payment method. Not the same
+  // as electing the card — say so before the fee is added on their behalf.
+  const prefUndecided = savedCard.paymentPreference === 'UNDECIDED';
   const [amount, setAmount] = useState<number>(balanceDue);
   const [waive, setWaive] = useState(false);
   const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
@@ -5303,6 +5306,11 @@ function CardOnFileCharge({
       {securityOnly && (
         <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-1.5 text-[11px] text-chip-warn-fg">
           🛈 Client elected to pay by check / bank transfer — card is on file as <span className="font-semibold">security only</span>. Charge it only as a fallback (e.g. unpaid balance).
+        </div>
+      )}
+      {prefUndecided && (
+        <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-1.5 text-[11px] text-chip-warn-fg">
+          🛈 Client hasn&rsquo;t chosen a payment method yet — the card is on file as a guarantee. Confirm with them before charging it with the processing fee.
         </div>
       )}
       <div className="flex items-end gap-2">

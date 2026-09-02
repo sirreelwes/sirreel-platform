@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { requireCollectionsUser } from '@/lib/collections/access'
 
 export const dynamic = 'force-dynamic'
@@ -81,9 +82,10 @@ export async function GET() {
       last4: r.ccCardLast4,
       authorizedAt: r.ccAuthSignedAt,
       // 'CHECK_WIRE' means the client intends to pay by check and the card is
-      // security only. Still chargeable — surfaced so Ana knows she is going
-      // against their stated preference before she does it.
-      paymentPreference: r.ccPaymentPreference ?? 'CARD',
+      // security only; 'UNDECIDED' means they have not chosen yet. Both are
+      // still chargeable — surfaced so Ana knows she is going against (or
+      // ahead of) their stated preference before she does it.
+      paymentPreference: normalizePaymentPreference(r.ccPaymentPreference) ?? 'CARD',
       jobId: job?.id ?? null,
       jobName: job?.name ?? null,
       jobCode: job?.jobCode ?? null,

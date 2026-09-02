@@ -34,7 +34,7 @@ interface CardOnFile {
   expiry: string | null;
   cardholderName: string | null;
   isDefault: boolean;
-  paymentPreference: 'CARD' | 'CHECK_WIRE' | null;
+  paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null;
   authorizedAt: string | null;
   validated: boolean;
   expired: boolean;
@@ -154,6 +154,14 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
                           title="The $0 validation on this card was not approved."
                         >
                           Unvalidated
+                        </span>
+                      )}
+                      {c.paymentPreference === 'UNDECIDED' && (
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-semibold text-chip-neutral-fg bg-chip-neutral-bg px-2 py-0.5 rounded"
+                          title="Client authorized the card but hasn't said how they'll pay."
+                        >
+                          Method TBD
                         </span>
                       )}
                       {c.paymentPreference === 'CHECK_WIRE' && (

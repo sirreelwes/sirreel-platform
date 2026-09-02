@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { formatPhone } from '@/lib/format/phone'
+import type { PaymentPreference } from '@/lib/payments/paymentPreference'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
@@ -48,7 +49,7 @@ export function CcAuthCard({
   const [cardholderFirst, setCardholderFirst] = useState('')
   const [cardholderLast, setCardholderLast] = useState('')
   const [cardType, setCardType] = useState('')
-  const [paymentPreference, setPaymentPreference] = useState<'CARD' | 'CHECK_WIRE'>('CARD')
+  const [paymentPreference, setPaymentPreference] = useState<PaymentPreference>('CARD')
   const [chargeSummary, setChargeSummary] = useState('')
   const [chargeEstimate, setChargeEstimate] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
@@ -212,6 +213,10 @@ export function CcAuthCard({
               {([
                 { key: 'CARD', title: 'Charge my card on file', sub: 'A processing fee of up to 3% applies to card payments, where permitted.' },
                 { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No processing fee. Your card stays on file as security only.' },
+                // A real answer, not a missing one. Without it the
+                // pre-selected CARD option recorded an undecided client as
+                // having agreed to the processing fee.
+                { key: 'UNDECIDED', title: "I'll decide later", sub: 'No problem — just let us know before your first invoice.' },
               ] as const).map((opt) => (
                 <label
                   key={opt.key}

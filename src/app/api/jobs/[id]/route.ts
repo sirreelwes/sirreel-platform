@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
@@ -345,12 +346,7 @@ export async function GET(
           cardholderName:
             [cardRow.ccCardholderFirst, cardRow.ccCardholderLast].filter(Boolean).join(' ').trim() ||
             null,
-          paymentPreference:
-            cardRow.ccPaymentPreference === 'CHECK_WIRE'
-              ? 'CHECK_WIRE'
-              : cardRow.ccPaymentPreference === 'CARD'
-                ? 'CARD'
-                : null,
+          paymentPreference: normalizePaymentPreference(cardRow.ccPaymentPreference),
         }
       : { onFile: false, last4: null, cardType: null, cardholderName: null, paymentPreference: null }
     // Three states, not two. A vehicle whose client DECLINED the waiver and

@@ -156,7 +156,7 @@ interface ChargeRow {
  * sync stopped for 15 days and nothing on this page said so.
  */
 function SyncAge({ iso }: { iso: string | null }) {
-  if (!iso) return <span className="text-[11px] text-red-400">Balances never synced</span>
+  if (!iso) return <span className="text-[11px] text-red-700">Balances never synced</span>
   const ageMs = Date.now() - new Date(iso).getTime()
   const hours = Math.floor(ageMs / 3_600_000)
   const stale = hours >= 48
@@ -165,7 +165,7 @@ function SyncAge({ iso }: { iso: string | null }) {
     hours < 1 ? 'just now' : hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`
   return (
     <span
-      className={`text-[11px] ${stale ? 'text-red-400 font-semibold' : aging ? 'text-amber-500' : 'text-zinc-500'}`}
+      className={`text-[11px] ${stale ? 'text-red-700 font-semibold' : aging ? 'text-amber-700' : 'text-zinc-600'}`}
       title={new Date(iso).toLocaleString()}
     >
       Balances as of {label}
@@ -190,7 +190,7 @@ function invoiceAge(
   if (!basis) return null
   const days = Math.floor((Date.now() - new Date(basis).getTime()) / 86_400_000)
   const cls =
-    days > 90 ? 'text-red-400' : days > 60 ? 'text-orange-400' : days > 30 ? 'text-amber-500' : 'text-zinc-500'
+    days > 90 ? 'text-red-700' : days > 60 ? 'text-orange-700' : days > 30 ? 'text-amber-700' : 'text-zinc-600'
   const bucket = days > 90 ? '90+ days' : days > 60 ? '61–90 days' : days > 30 ? '31–60 days' : 'Current (≤30d)'
   return { days, cls, bucket }
 }
@@ -586,9 +586,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, source, savedId, cardToken, invoice?.rwInvoiceId])
 
-  const label = 'text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 block'
+  const label = 'text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-1.5 block'
   const input =
-    'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-amber-600'
+    'w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 outline-none focus:border-amber-600'
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -597,8 +597,8 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         <div
           className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 border text-[15px] px-4 py-2 rounded-lg shadow-xl ${
             result.ok
-              ? 'bg-zinc-800 border-zinc-600 text-white'
-              : 'bg-zinc-900 border-red-700 text-red-300'
+              ? 'bg-zinc-100 border-zinc-300 text-zinc-900'
+              : 'bg-white border-red-300 text-red-700'
           }`}
         >
           {result.message}
@@ -610,14 +610,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       <RwConnectionCard />
 
       {/* Dark text — this heading sits on the LIGHT dashboard shell, not in
-          a card. It rendered text-white for months: an invisible title. */}
+          a card. It rendered text-zinc-900 for months: an invisible title. */}
       <div className="flex items-baseline justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Collections</h1>
           <p className="text-sm text-zinc-600 mt-1">
             Everything owed and everything collected — charge a card, send payment options, mark
             money received.{' '}
-            <span className="text-zinc-500">Actions are recorded as {operatorName}.</span>
+            <span className="text-zinc-600">Actions are recorded as {operatorName}.</span>
           </p>
         </div>
         {/* Wes 2026-09-01: the how-to belongs where the work is, not only
@@ -636,19 +636,19 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       {/* ── tracker stats — stamped rows only, no vibes ─────────────── */}
       {stats && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
             {/* The REAL receivable — every open RW invoice not marked paid,
                 same definition as the browse list below. The agent queue is
                 the second line: it is the worked subset, not the total. */}
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Outstanding (RW)</div>
-            <div className="text-xl font-bold text-amber-500">{money(stats.rwOpenTotal)}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Outstanding (RW)</div>
+            <div className="text-xl font-bold text-amber-700">{money(stats.rwOpenTotal)}</div>
             {/* Aging at a glance: one slim bar, dollars-proportional. Hover
                 any segment for the amount. Same palette as the row markers. */}
             {stats.rwAging && stats.rwOpenTotal > 0 && (
-              <div className="flex h-1.5 rounded-full overflow-hidden mt-1.5 mb-0.5 bg-zinc-800">
+              <div className="flex h-1.5 rounded-full overflow-hidden mt-1.5 mb-0.5 bg-zinc-100">
                 {(
                   [
-                    ['≤30d', stats.rwAging.d30, 'bg-zinc-500'],
+                    ['≤30d', stats.rwAging.d30, 'bg-zinc-400'],
                     ['31–60d', stats.rwAging.d60, 'bg-amber-500'],
                     ['61–90d', stats.rwAging.d90, 'bg-orange-500'],
                     ['90d+', stats.rwAging.over, 'bg-red-500'],
@@ -665,12 +665,12 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 )}
               </div>
             )}
-            <div className="text-xs text-zinc-500 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
+            <div className="text-xs text-zinc-600 mt-0.5 flex items-baseline gap-1.5 flex-wrap">
               <span>{stats.rwOpenCount} open invoice{stats.rwOpenCount === 1 ? '' : 's'} ·</span>
               <SyncAge iso={stats.rwSyncedAt} />
             </div>
             {stats.rwInsuranceCount > 0 && (
-              <div className="text-xs text-violet-300 mt-0.5">
+              <div className="text-xs text-violet-700 mt-0.5">
                 {money(stats.rwInsuranceTotal)} awaiting insurance ({stats.rwInsuranceCount}) ·{' '}
                 {money(stats.rwOpenTotal - stats.rwInsuranceTotal)} on clients
               </div>
@@ -678,35 +678,35 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             {/* Queue-status lines used to stack here too — they describe the
                 queue, not the receivable, and live on the queue card now. */}
             {(stats.agingUndecided ?? 0) > 0 ? (
-              <a href="/collections/aging-review" className="text-xs text-amber-500 hover:text-amber-400 font-semibold mt-1 inline-block">
+              <a href="/collections/aging-review" className="text-xs text-amber-700 hover:text-amber-800 font-semibold mt-1 inline-block">
                 Aging review · {stats.agingUndecided} undecided →
               </a>
             ) : (
-              <a href="/collections/aging-review" className="text-xs text-zinc-500 hover:text-zinc-300 mt-1 inline-block">
+              <a href="/collections/aging-review" className="text-xs text-zinc-600 hover:text-zinc-700 mt-1 inline-block">
                 Aging review →
               </a>
             )}
           </div>
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Collected this month</div>
-            <div className="text-xl font-bold text-emerald-500">{money(stats.collectedMonthTotal)}</div>
-            <div className="text-xs text-zinc-400 mt-0.5">
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Collected this month</div>
+            <div className="text-xl font-bold text-emerald-700">{money(stats.collectedMonthTotal)}</div>
+            <div className="text-xs text-zinc-600 mt-0.5">
               {stats.collectedMonthCount} invoice{stats.collectedMonthCount === 1 ? '' : 's'}
             </div>
           </div>
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Avg days to collect</div>
-            <div className="text-xl font-bold text-white">{stats.avgDaysToCollect ?? '—'}</div>
-            <div className="text-xs text-zinc-500 mt-0.5">upload → money in, last 60 days</div>
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Avg days to collect</div>
+            <div className="text-xl font-bold text-zinc-900">{stats.avgDaysToCollect ?? '—'}</div>
+            <div className="text-xs text-zinc-600 mt-0.5">upload → money in, last 60 days</div>
           </div>
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">This week</div>
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">This week</div>
             {stats.operators.length === 0 ? (
-              <div className="text-sm text-zinc-500 mt-1">No collections activity yet.</div>
+              <div className="text-sm text-zinc-600 mt-1">No collections activity yet.</div>
             ) : (
               stats.operators.map((op) => (
-                <div key={op.name} className="text-xs text-zinc-300 mt-0.5">
-                  <span className="font-semibold text-white">{op.name}</span>
+                <div key={op.name} className="text-xs text-zinc-700 mt-0.5">
+                  <span className="font-semibold text-zinc-900">{op.name}</span>
                   {' — '}{op.invoicesCollected} collected ({money(op.collectedTotal)})
                   {op.chargesAttempted > 0 && `, ${op.chargesApproved}/${op.chargesAttempted} charges approved`}
                 </div>
@@ -722,24 +722,24 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         {/* Ready to collect — finalized by an agent on the job page. This is
             the queue Ana works; the RW browse below is the fallback for
             anything finalized outside HQ. */}
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
           <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
-            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Ready to collect</h2>
+            <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Ready to collect</h2>
             {/* The queue's own status, worst first — moved off the
                 Outstanding tile, which is about the receivable. */}
             {stats && stats.queueCount > 0 && (
               <span className="flex items-center gap-2 text-[11px]">
-                <span className="text-zinc-500">
+                <span className="text-zinc-600">
                   {stats.queueCount} · {money(stats.queueTotal)}
                 </span>
                 {stats.queueCount > stats.queueEmailed && (
-                  <span className="font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-orange-700/60 text-orange-400">
+                  <span className="font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-orange-300 text-orange-700">
                     Unsent {stats.queueCount - stats.queueEmailed}
                   </span>
                 )}
                 {stats.queueOldestDays >= 7 && (
                   <span className={`font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                    stats.queueOldestDays >= 14 ? 'border-red-700/60 text-red-400' : 'border-amber-700/60 text-amber-500'
+                    stats.queueOldestDays >= 14 ? 'border-red-300 text-red-700' : 'border-amber-300 text-amber-700'
                   }`}>
                     Oldest {stats.queueOldestDays}d
                   </span>
@@ -747,16 +747,16 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500 mb-3">
+          <p className="text-xs text-zinc-600 mb-3">
             Final amounts agreed with the client and sent over from the job page.
           </p>
           {finals.length === 0 ? (
-            <p className="text-sm text-zinc-500 py-3">
+            <p className="text-sm text-zinc-600 py-3">
               Nothing queued. Agents send invoices here with{' '}
-              <b className="text-zinc-300">Upload final invoice</b> on the job page.
+              <b className="text-zinc-700">Upload final invoice</b> on the job page.
             </p>
           ) : (
-            <div className="divide-y divide-zinc-800 max-h-[260px] overflow-y-auto">
+            <div className="divide-y divide-zinc-200 max-h-[260px] overflow-y-auto">
               {finals.map((fv) => (
                 <div
                   key={fv.id}
@@ -786,7 +786,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     })
                   }}
                   className={`w-full text-left py-2.5 px-2 rounded transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500 ${
-                    finalPick?.id === fv.id ? 'bg-amber-600/20' : 'hover:bg-zinc-800'
+                    finalPick?.id === fv.id ? 'bg-amber-600/20' : 'hover:bg-zinc-100'
                   }`}
                 >
                   <div className="flex justify-between gap-3">
@@ -794,21 +794,21 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       <a
                         href={`/jobs/${fv.jobId}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-sm font-semibold text-white hover:text-amber-400"
+                        className="text-sm font-semibold text-zinc-900 hover:text-amber-800"
                         title="Open the job — contacts, paperwork, history"
                       >
                         {fv.jobName || fv.invoiceNumber || 'Final invoice'}
                       </a>
                     ) : (
-                      <span className="text-sm font-semibold text-white">
+                      <span className="text-sm font-semibold text-zinc-900">
                         {fv.jobName || fv.invoiceNumber || 'Final invoice'}
                       </span>
                     )}
-                    <span className="text-sm text-amber-500 font-semibold">
+                    <span className="text-sm text-amber-700 font-semibold">
                       {money(fv.amount)}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-400 mt-0.5">
+                  <div className="text-xs text-zinc-600 mt-0.5">
                     {fv.companyName || '—'}
                     {fv.invoiceNumber ? ` · ${fv.invoiceNumber}` : ''}
                     {' · '}
@@ -818,7 +818,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-amber-500 hover:text-amber-400"
+                        className="text-amber-700 hover:text-amber-800"
                       >
                         PDF
                       </a>
@@ -826,7 +826,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       'no PDF'
                     )}
                   </div>
-                  {fv.note && <div className="text-xs text-zinc-500 mt-0.5">{fv.note}</div>}
+                  {fv.note && <div className="text-xs text-zinc-600 mt-0.5">{fv.note}</div>}
                   {fv.alreadyCharged > 0 && (
                     <div className="text-xs text-amber-500/90 mt-1">
                       ⚠ {money(fv.alreadyCharged)} already collected against this invoice
@@ -836,24 +836,24 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       balance on the linked invoice. Ana confirms and marks it
                       rather than chasing a client who already paid. */}
                   {fv.rwRemaining === 0 && (
-                    <div className="text-xs text-emerald-400 mt-1 font-semibold">
+                    <div className="text-xs text-emerald-700 mt-1 font-semibold">
                       ✓ RentalWorks shows this invoice PAID — confirm and mark collected
                     </div>
                   )}
                   {/* The row's story: age → emailed → replied. Unsent is the
                       loud case — the client has the number but no how-to-pay. */}
                   <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
-                    <span className={`text-xs ${fv.ageDays >= 14 ? 'text-red-400 font-semibold' : fv.ageDays >= 7 ? 'text-amber-500' : 'text-zinc-500'}`}>
+                    <span className={`text-xs ${fv.ageDays >= 14 ? 'text-red-700 font-semibold' : fv.ageDays >= 7 ? 'text-amber-700' : 'text-zinc-600'}`}>
                       {fv.ageDays === 0 ? 'today' : `${fv.ageDays}d in queue`}
                     </span>
                     {fv.emailedAt ? (
                       <span className="text-xs text-emerald-500/90">✓ emailed {fv.emailedTo}</span>
                     ) : (
-                      <span className="text-xs text-orange-400 font-semibold">NOT emailed</span>
+                      <span className="text-xs text-orange-700 font-semibold">NOT emailed</span>
                     )}
                     {fv.repliedAt && (
                       <span
-                        className="text-xs text-sky-400"
+                        className="text-xs text-sky-700"
                         title={fv.replySubject ?? undefined}
                       >
                         ↩ replied {new Date(fv.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -863,14 +863,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         (n=sample size); until then, current exposure. */}
                     {fv.client && fv.client.avgDaysToPay !== null && (
                       <span
-                        className={`text-xs ${fv.client.avgDaysToPay >= 45 ? 'text-red-400' : fv.client.avgDaysToPay >= 30 ? 'text-amber-500' : 'text-zinc-400'}`}
+                        className={`text-xs ${fv.client.avgDaysToPay >= 45 ? 'text-red-700' : fv.client.avgDaysToPay >= 30 ? 'text-amber-700' : 'text-zinc-600'}`}
                         title={`${fv.client.observedPayments} observed payment(s)`}
                       >
                         client avg {fv.client.avgDaysToPay}d to pay
                       </span>
                     )}
                     {fv.client && fv.client.avgDaysToPay === null && fv.client.openCount > 1 && (
-                      <span className="text-xs text-zinc-500">
+                      <span className="text-xs text-zinc-600">
                         client: {fv.client.openCount} open ({money(fv.client.openTotal)})
                         {fv.client.oldestOpenDays !== null && fv.client.oldestOpenDays > 30
                           ? ` · oldest ${fv.client.oldestOpenDays}d`
@@ -888,7 +888,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         e.stopPropagation()
                         void sendPaymentOptions(fv)
                       }}
-                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 shrink-0"
+                      className="text-xs px-2 py-0.5 rounded border border-zinc-300 text-zinc-700 hover:bg-zinc-100 shrink-0"
                     >
                       {sendingOptions === fv.id ? 'Sending…' : fv.emailedAt ? 'Resend options' : 'Send options'}
                     </button>
@@ -899,7 +899,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                             key={via}
                             type="button"
                             onClick={() => void markCollected(fv, via)}
-                            className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-800/50"
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                           >
                             {collecting ? '…' : via}
                           </button>
@@ -907,7 +907,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         <button
                           type="button"
                           onClick={() => setCollectPicker(null)}
-                          className="text-[11px] px-1.5 py-0.5 text-zinc-500 hover:text-zinc-300"
+                          className="text-[11px] px-1.5 py-0.5 text-zinc-600 hover:text-zinc-700"
                         >
                           ✕
                         </button>
@@ -919,7 +919,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           e.stopPropagation()
                           setCollectPicker(fv.id)
                         }}
-                        className="text-xs px-2 py-0.5 rounded border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 shrink-0"
+                        className="text-xs px-2 py-0.5 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 shrink-0"
                         title="Record a payment that arrived at the bank — wire, ACH, Zelle, or check. Card charges record themselves."
                       >
                         Mark collected
@@ -934,9 +934,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
 
         {/* Collected — the other half of tracking. When, how, by whom, so
             "did that wire ever land" is answered here, not in the bank app. */}
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
           <div className="flex items-baseline justify-between gap-3 mb-3">
-            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">All RentalWorks invoices</h2>
+            <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">All RentalWorks invoices</h2>
             <SyncAge iso={syncedAt} />
           </div>
           <input
@@ -948,9 +948,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
               loadInvoices(e.target.value)
             }}
           />
-          <div className="mt-3 max-h-[320px] overflow-y-auto divide-y divide-zinc-800">
+          <div className="mt-3 max-h-[320px] overflow-y-auto divide-y divide-zinc-200">
             {invoices.length === 0 && (
-              <div className="py-6 text-sm text-zinc-500 text-center">No invoices found.</div>
+              <div className="py-6 text-sm text-zinc-600 text-center">No invoices found.</div>
             )}
             {invoices.map((i, idx) => {
               const a = invoiceAge(i.dueDate, i.invoiceDate)
@@ -964,7 +964,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 {showDivider && (
                   <div className={`flex items-center gap-2 pt-2 pb-1 px-2 text-[10px] font-bold uppercase tracking-wider ${a.cls}`}>
                     <span>{a.bucket}</span>
-                    <span className="flex-1 h-px bg-zinc-800" />
+                    <span className="flex-1 h-px bg-zinc-100" />
                   </div>
                 )}
                 <button
@@ -973,11 +973,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     setAmount(i.remainingTotal > 0 ? String(i.remainingTotal) : '')
                   }}
                   className={`w-full text-left py-2.5 px-2 rounded transition-colors ${
-                    invoice?.rwInvoiceId === i.rwInvoiceId ? 'bg-amber-600/15' : 'hover:bg-zinc-800'
+                    invoice?.rwInvoiceId === i.rwInvoiceId ? 'bg-amber-600/15' : 'hover:bg-zinc-100'
                   }`}
                 >
                 <div className="flex justify-between gap-3">
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-zinc-900">
                     {i.invoiceNumber || '(no number)'}
                     {i.invoiceNumber && (
                       <a
@@ -985,31 +985,31 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="ml-2 text-xs font-normal text-amber-500 hover:text-amber-400"
+                        className="ml-2 text-xs font-normal text-amber-700 hover:text-amber-800"
                       >
                         PDF
                       </a>
                     )}
                   </span>
-                  <span className="text-sm text-amber-500 font-semibold">
+                  <span className="text-sm text-amber-700 font-semibold">
                     {money(i.remainingTotal)} due
                   </span>
                 </div>
                 {/* Partial payments change the phone call — same phrasing the
                     aging review uses. */}
                 {i.invoiceTotal > i.remainingTotal && (
-                  <div className="text-xs text-zinc-500 mt-0.5">
+                  <div className="text-xs text-zinc-600 mt-0.5">
                     {money(i.invoiceTotal - i.remainingTotal)} of {money(i.invoiceTotal)} received
                   </div>
                 )}
                 <div className="flex justify-between gap-3 text-xs mt-0.5">
-                  <span className="text-zinc-400 truncate">
+                  <span className="text-zinc-600 truncate">
                     {i.customerName || '—'}
                     {i.dealName ? ` · ${i.dealName}` : ''}
                     {i.status ? ` · ${i.status}` : ''}
                     {i.insurance && (
                       <span
-                        className="ml-1.5 text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-violet-900/40 border border-violet-700/50 text-violet-300"
+                        className="ml-1.5 text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-violet-50 border border-violet-300 text-violet-700"
                         title={i.insurance.claimNumber ? `Carrier claim ${i.insurance.claimNumber}` : 'Awaiting insurance carrier'}
                       >
                         INS
@@ -1030,7 +1030,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     invoice a colleague already settled is the specific
                     embarrassment this prevents. */}
                 {i.paidMarkedAt && (
-                  <div className="text-xs text-emerald-400 mt-1">
+                  <div className="text-xs text-emerald-700 mt-1">
                     ✓ Already marked paid in HQ on{' '}
                     {new Date(i.paidMarkedAt).toLocaleDateString()}
                     {i.paidMarkNote ? ` · ${i.paidMarkNote}` : ''} — RentalWorks has not caught up
@@ -1051,38 +1051,38 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         {/* Recent charges + reversal. Without this the history was
             write-only: a mis-keyed amount had no path back short of a
             database query, which is not a thing Ana can do mid-call. */}
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-zinc-500/80 mb-1">Recent charges</h2>
-          <p className="text-xs text-zinc-500 mb-3">
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-zinc-500/80 mb-1">Recent charges</h2>
+          <p className="text-xs text-zinc-600 mb-3">
             Void if it hasn&rsquo;t settled yet, refund if it has — the gateway decides which.
           </p>
           {charges.length === 0 ? (
-            <p className="text-sm text-zinc-500 py-2">Nothing charged yet.</p>
+            <p className="text-sm text-zinc-600 py-2">Nothing charged yet.</p>
           ) : (
-            <div className="divide-y divide-zinc-800 max-h-[280px] overflow-y-auto">
+            <div className="divide-y divide-zinc-200 max-h-[280px] overflow-y-auto">
               {charges.map((c) => (
                 <div key={c.id} className="py-2.5 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     {/* A declined charge is NOT money moved — the amount
                         drops to muted and the status becomes a red badge
                         instead of blending into the reference line. */}
-                    <div className={`text-sm font-semibold ${c.status === 'APPROVED' ? 'text-white' : 'text-zinc-400'}`}>
+                    <div className={`text-sm font-semibold ${c.status === 'APPROVED' ? 'text-zinc-900' : 'text-zinc-600'}`}>
                       {money(c.gatewayTotal)}
-                      <span className="text-zinc-400 font-normal">
+                      <span className="text-zinc-600 font-normal">
                         {' '}
                         ····{c.cardLast4 ?? '????'}
                       </span>
                       {c.status !== 'APPROVED' && (
-                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-900/40 border border-red-700/50 text-red-300 align-middle">
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-50 border border-red-300 text-red-700 align-middle">
                           {c.status}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                    <div className="text-xs text-zinc-600 mt-0.5 truncate">
                       {c.customerName || c.invoiceNumber || '—'} ·{' '}
                       {new Date(c.chargedAt).toLocaleString()}
                     </div>
-                    <div className="text-xs text-zinc-500 mt-0.5">
+                    <div className="text-xs text-zinc-600 mt-0.5">
                       {c.status === 'APPROVED' ? 'approved' : null}
                       {c.status === 'APPROVED' && (c.authCode || c.retref) ? ' · ' : ''}
                       {c.authCode ? `auth ${c.authCode}` : ''}
@@ -1093,7 +1093,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         refunded charge has more than one, and showing only
                         the most recent misstates how much came back. */}
                     {(c.reversals ?? []).map((v) => (
-                      <div key={v.id} className="text-xs text-amber-500 mt-0.5">
+                      <div key={v.id} className="text-xs text-amber-700 mt-0.5">
                         {v.kind === 'VOID' ? 'Voided' : 'Refunded'} {money(v.amount)}
                         {v.retref ? ` · ref ${v.retref}` : ''}
                         {v.reason ? ` · ${v.reason}` : ''}
@@ -1101,7 +1101,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     ))}
                     {(c.reversedTotal ?? 0) > 0 &&
                       (c.reversedTotal ?? 0) < c.gatewayTotal && (
-                        <div className="text-xs text-zinc-400 mt-0.5">
+                        <div className="text-xs text-zinc-600 mt-0.5">
                           {money(c.gatewayTotal - (c.reversedTotal ?? 0))} still on the card
                         </div>
                       )}
@@ -1112,7 +1112,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     <button
                       onClick={() => reverse(c)}
                       disabled={reversing === c.id}
-                      className="flex-none rounded-lg border border-zinc-600 hover:border-red-500 hover:text-red-400 text-zinc-300 px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40"
+                      className="flex-none rounded-lg border border-zinc-300 hover:border-red-500 hover:text-red-600 text-zinc-700 px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40"
                     >
                       {reversing === c.id ? 'Reversing…' : 'Void / Refund'}
                     </button>
@@ -1124,25 +1124,25 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         </div>
 
         {collectedRows.length > 0 && (
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+          <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
             <div className="flex items-center justify-between mb-1">
-              <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-emerald-500/80">Collected</h2>
-              <span className="text-[12px] text-zinc-500">last 60 days · newest first</span>
+              <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-emerald-500/80">Collected</h2>
+              <span className="text-[12px] text-zinc-600">last 60 days · newest first</span>
             </div>
-            <div className="divide-y divide-zinc-800 max-h-[220px] overflow-y-auto">
+            <div className="divide-y divide-zinc-200 max-h-[220px] overflow-y-auto">
               {collectedRows.map((cv) => (
                 <div key={cv.id} className="py-2.5 px-2">
                   <div className="flex justify-between gap-3">
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-zinc-900">
                       {cv.jobName || cv.invoiceNumber || 'Final invoice'}
                     </span>
-                    <span className="text-sm text-emerald-500 font-semibold">{money(cv.amount)}</span>
+                    <span className="text-sm text-emerald-700 font-semibold">{money(cv.amount)}</span>
                   </div>
-                  <div className="text-xs text-zinc-400 mt-0.5">
+                  <div className="text-xs text-zinc-600 mt-0.5">
                     {cv.companyName || '—'}
                     {cv.invoiceNumber ? ` · ${cv.invoiceNumber}` : ''}
                   </div>
-                  <div className="text-xs text-zinc-500 mt-0.5">
+                  <div className="text-xs text-zinc-600 mt-0.5">
                     ✓ {cv.collectedVia ? cv.collectedVia.toLowerCase() : 'collected'}
                     {cv.collectedAt &&
                       ` · ${new Date(cv.collectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
@@ -1161,26 +1161,26 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         {/* Sticky: the left column is four cards tall, and the amount +
             Charge button must stay in view while picking from a long list —
             that is also what keeps the overcharge warnings visible. */}
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70 space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Attach, confirm, charge</h2>
+        <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400 space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Attach, confirm, charge</h2>
 
           {!invoice ? (
-            <p className="text-sm text-zinc-500 py-8 text-center">
+            <p className="text-sm text-zinc-600 py-8 text-center">
               Pick an invoice on the left to begin.
             </p>
           ) : (
             <>
-              <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5 text-sm">
-                <div className="font-semibold text-white">
+              <div className="bg-zinc-50 rounded-lg px-3 py-2.5 text-sm">
+                <div className="font-semibold text-zinc-900">
                   {invoice.invoiceNumber || '(no number)'}
                 </div>
-                <div className="text-xs text-zinc-400 mt-0.5">
+                <div className="text-xs text-zinc-600 mt-0.5">
                   {invoice.customerName || '—'} · balance {money(invoice.remainingTotal)}
                 </div>
                 {/* The queue and browse rows flag prior charges, but THIS box
                     is what the operator reads while charging. */}
                 {invoice.alreadyCharged.total > 0 && (
-                  <div className="text-xs text-amber-500 mt-1">
+                  <div className="text-xs text-amber-700 mt-1">
                     ⚠ {money(invoice.alreadyCharged.total)} already charged against this invoice here.
                   </div>
                 )}
@@ -1192,10 +1192,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                   type="file"
                   accept="application/pdf"
                   onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])}
-                  className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:text-white hover:file:bg-zinc-600"
+                  className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:text-zinc-800 hover:file:bg-zinc-200"
                 />
-                {uploading && <p className="text-xs text-zinc-400 mt-1">Uploading…</p>}
-                {pdf && <p className="text-xs text-green-400 mt-1">Attached: {pdf.name}</p>}
+                {uploading && <p className="text-xs text-zinc-600 mt-1">Uploading…</p>}
+                {pdf && <p className="text-xs text-green-700 mt-1">Attached: {pdf.name}</p>}
               </div>
 
               <div>
@@ -1208,14 +1208,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                   onChange={(e) => setAmount(e.target.value)}
                 />
                 {validAmount && invoice.remainingTotal > 0 && base > invoice.remainingTotal && (
-                  <p className="mt-1.5 text-xs text-red-400">
+                  <p className="mt-1.5 text-xs text-red-700">
                     ⚠ {money(base)} is more than the {money(invoice.remainingTotal)} balance on this
                     invoice.
                   </p>
                 )}
                 {validAmount && (
-                  <div className="mt-2 text-xs bg-zinc-800/60 rounded-lg px-3 py-2 space-y-0.5">
-                    <div className="flex justify-between text-zinc-300">
+                  <div className="mt-2 text-xs bg-zinc-50 rounded-lg px-3 py-2 space-y-0.5">
+                    <div className="flex justify-between text-zinc-700">
                       <span>Applied to invoice</span>
                       <span>{money(base)}</span>
                     </div>
@@ -1226,17 +1226,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         and a definite total, which after the switch to
                         gateway-applied surcharging was a promise the charge
                         would not necessarily keep. */}
-                    <div className="flex justify-between text-zinc-400">
+                    <div className="flex justify-between text-zinc-600">
                       <span>Card processing fee (up to 3%)</span>
                       <span>{money(surcharge)}</span>
                     </div>
-                    <div className="flex justify-between text-white font-bold border-t border-zinc-700 pt-1 mt-1">
+                    <div className="flex justify-between text-zinc-900 font-bold border-t border-zinc-300 pt-1 mt-1">
                       <span>Card will be charged</span>
                       <span>
                         {money(base)}–{money(total)}
                       </span>
                     </div>
-                    <p className="text-[11px] text-zinc-500 pt-1">
+                    <p className="text-[11px] text-zinc-600 pt-1">
                       The processor calculates the fee and waives it where
                       surcharging isn&rsquo;t allowed. The exact amount is
                       confirmed after the charge.
@@ -1255,7 +1255,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                         source === s
                           ? 'bg-amber-600 text-zinc-900'
-                          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                       }`}
                     >
                       {s === 'saved' ? `On file (${auths.length})` : 'Key a card'}
@@ -1265,10 +1265,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
 
                 {source === 'saved' ? (
                   auths.length === 0 ? (
-                    <p className="text-xs text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5 leading-relaxed">
+                    <p className="text-xs text-zinc-600 bg-zinc-50 rounded-lg px-3 py-2.5 leading-relaxed">
                       No authorizations on file yet. This fills as clients complete the card
                       authorization step in the portal — historical authorizations live in Cognito
-                      and can&rsquo;t be charged from here. Use <b className="text-zinc-300">Key a
+                      and can&rsquo;t be charged from here. Use <b className="text-zinc-700">Key a
                       card</b> in the meantime.
                     </p>
                   ) : (
@@ -1287,9 +1287,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         ))}
                       </select>
                       {selectedAuth && (
-                        <div className="mt-2 text-xs bg-zinc-800/60 rounded-lg px-3 py-2 space-y-1">
+                        <div className="mt-2 text-xs bg-zinc-50 rounded-lg px-3 py-2 space-y-1">
                           {selectedAuth.authorizedAt && (
-                            <div className="text-zinc-500">
+                            <div className="text-zinc-600">
                               Authorized{' '}
                               {new Date(selectedAuth.authorizedAt).toLocaleDateString('en-US', {
                                 month: 'short',
@@ -1298,28 +1298,34 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                               })}
                             </div>
                           )}
-                          <div className="text-zinc-300">
+                          <div className="text-zinc-700">
                             Rental agreement:{' '}
                             {selectedAuth.rentalAgreement ? (
-                              <span className="text-green-400">
+                              <span className="text-green-700">
                                 {selectedAuth.rentalAgreement.status}
                                 {selectedAuth.rentalAgreement.signedDocumentUrl && (
                                   <a
                                     href={selectedAuth.rentalAgreement.signedDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="ml-2 text-amber-500 underline"
+                                    className="ml-2 text-amber-700 underline"
                                   >
                                     view
                                   </a>
                                 )}
                               </span>
                             ) : (
-                              <span className="text-amber-500">none found on this job</span>
+                              <span className="text-amber-700">none found on this job</span>
                             )}
                           </div>
+                          {selectedAuth.paymentPreference === 'UNDECIDED' && (
+                            <div className="text-amber-700">
+                              ⚠ Client hasn&rsquo;t chosen a payment method yet — this card is on
+                              file as a guarantee, not an election to pay by card.
+                            </div>
+                          )}
                           {selectedAuth.paymentPreference === 'CHECK_WIRE' && (
-                            <div className="text-amber-500">
+                            <div className="text-amber-700">
                               ⚠ Client elected to pay by check/wire — this card was authorized as
                               security only.
                             </div>
@@ -1348,7 +1354,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         className="bg-white rounded-lg"
                       />
                     ) : (
-                      <p className="text-xs text-zinc-500">Loading secure card entry…</p>
+                      <p className="text-xs text-zinc-600">Loading secure card entry…</p>
                     )}
                     {/* Expiry lives here, not in the iframe — the tokenizer
                         doesn't reliably return it. Styled like the rest of the
@@ -1384,10 +1390,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       </select>
                     </div>
                     {cardToken && cardExpiry.length === 4 && (
-                      <p className="text-xs text-green-400 mt-1">Card captured.</p>
+                      <p className="text-xs text-green-700 mt-1">Card captured.</p>
                     )}
                     {cardToken && cardExpiry.length !== 4 && (
-                      <p className="text-xs text-amber-500 mt-1">
+                      <p className="text-xs text-amber-700 mt-1">
                         Choose the expiry month and year to continue.
                       </p>
                     )}
@@ -1400,7 +1406,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
                             cardBrand === b
                               ? 'bg-amber-600 text-zinc-900'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900'
                           }`}
                         >
                           {b === 'MASTERCARD' ? 'MC' : b === 'DISCOVER' ? 'DISC' : b}
@@ -1425,7 +1431,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         a Connecticut production paying for an LA job must not be
                         surcharged — and a job-site ZIP would silently apply the
                         wrong state's rules. */}
-                    <p className="text-xs text-zinc-500 mt-1">
+                    <p className="text-xs text-zinc-600 mt-1">
                       The ZIP on the cardholder&rsquo;s billing statement — not
                       the job location. It decides whether the card fee applies:
                       the fee is waived for debit cards and for cardholders in
@@ -1445,7 +1451,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 />
               </div>
 
-              {err && <p className="text-sm text-red-400">{err}</p>}
+              {err && <p className="text-sm text-red-700">{err}</p>}
 
               <button
                 onClick={() => {
@@ -1477,7 +1483,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       : 'Charge'}
               </button>
               {confirming && !busy && (
-                <p className="text-[11px] text-zinc-400 text-center -mt-2">
+                <p className="text-[11px] text-zinc-600 text-center -mt-2">
                   Click again to charge the card. This is a live charge.
                 </p>
               )}

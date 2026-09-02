@@ -20,6 +20,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { resolveCompanyDefaultCard } from '@/lib/payments/companyCards'
+import { normalizePaymentPreference, type PaymentPreference } from '@/lib/payments/paymentPreference'
 
 export interface SavedCard {
   /** CardSecure token — server-only, charge input. Never send to client. */
@@ -38,7 +39,7 @@ export interface SavedCard {
    *  'CHECK_WIRE' (client pays by check/bank transfer, card is security
    *  only). Null = legacy/unspecified (treat as CARD). Informational —
    *  the card is chargeable regardless. */
-  paymentPreference: 'CARD' | 'CHECK_WIRE' | null
+  paymentPreference: PaymentPreference | null
   /** The paperwork_requests row the token came from, when it came from one. */
   paperworkRequestId: string | null
   /** The company-wallet row the token came from, when it came from one. */
@@ -146,7 +147,7 @@ export async function resolveSavedCardForInvoice(
     postal: pw.ccBillingPostal ?? null,
     cardholderName,
     authSignedAt: pw.ccAuthSignedAt ?? null,
-    paymentPreference: pw.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : pw.ccPaymentPreference === 'CARD' ? 'CARD' : null,
+    paymentPreference: normalizePaymentPreference(pw.ccPaymentPreference),
     paperworkRequestId: pw.id,
   }
 }

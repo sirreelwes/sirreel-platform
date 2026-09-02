@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
+import { normalizePaymentPreference, paymentPreferenceLabel } from '@/lib/payments/paymentPreference'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
@@ -68,9 +69,13 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     if (body.step === 'cc') {
-      // Payment intent: CHECK_WIRE = client will pay by check/bank
-      // transfer, card is on file as SECURITY ONLY. Default CARD.
-      const paymentPreference = body.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : 'CARD'
+      // Payment intent: CHECK_WIRE = client will pay by check/bank transfer,
+      // card is on file as SECURITY ONLY. UNDECIDED = they have not chosen
+      // yet, which is a real answer and must NOT be flattened into CARD —
+      // staff read CARD as consent to the processing fee. Anything else
+      // (including a legacy client that sends nothing) still defaults to CARD.
+      const paymentPreference =
+        normalizePaymentPreference(body.ccPaymentPreference) ?? 'CARD'
 
       // $0 authorization BEFORE storing. Two reasons:
       //  1. It validates the card. Previously a token was saved with no
@@ -243,7 +248,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           },
           {
             label: 'Pays invoices by',
-            value: paymentPreference === 'CHECK_WIRE' ? 'check / wire (card is security only)' : 'card on file',
+            value: paymentPreferenceLabel(paymentPreference),
           },
         ],
       })

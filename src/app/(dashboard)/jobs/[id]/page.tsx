@@ -307,7 +307,7 @@ interface JobDetail {
     last4: string | null;
     cardType: string | null;
     cardholderName: string | null;
-    paymentPreference: 'CARD' | 'CHECK_WIRE' | null;
+    paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null;
   };
   // bookingId → the client's collision-waiver decision, so each reserved
   // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
@@ -1065,6 +1065,9 @@ const driverTone = (d: any): string => {
   const extraContacts = Math.max(0, job.jobContacts.length - 1);
   const cardOnFile = job.cardAuth?.onFile;
   const cardSecurityOnly = job.cardAuth?.paymentPreference === 'CHECK_WIRE';
+  // Distinct from security-only: the client authorized the card but has not
+  // said how they'll pay. Do not read that as consent to the processing fee.
+  const cardPrefUndecided = job.cardAuth?.paymentPreference === 'UNDECIDED';
   // Five-check readiness — SAME helper the /jobs sidebar chip uses
   // (src/lib/jobs/readiness.ts), so the strip and the list agree. The
   // page's own richer statuses are mapped down to the helper's pass/fail
@@ -1536,7 +1539,7 @@ const driverTone = (d: any): string => {
                   On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
                 </div>
                 <div className="mt-1.5 text-[12px] text-zinc-700">
-                  {cardSecurityOnly ? 'Security only — client pays another way' : job.cardAuth.cardholderName || 'Authorized'}
+                  {cardSecurityOnly ? 'Security only — client pays another way' : cardPrefUndecided ? 'Payment method not chosen yet' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
               </>
             ) : !stripScored ? (

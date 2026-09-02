@@ -19,6 +19,7 @@
  *      the only card on file for every existing job.
  */
 import { prisma } from '@/lib/prisma'
+import { normalizePaymentPreference, type PaymentPreference } from '@/lib/payments/paymentPreference'
 
 /** Never includes cardToken. Safe to serialize to a staff browser. */
 export interface CardOnFileSummary {
@@ -31,7 +32,7 @@ export interface CardOnFileSummary {
   expiry: string | null
   cardholderName: string | null
   isDefault: boolean
-  paymentPreference: 'CARD' | 'CHECK_WIRE' | null
+  paymentPreference: PaymentPreference | null
   authorizedAt: Date | null
   /** True when the $0 stored-credential authorization came back approved. */
   validated: boolean
@@ -40,9 +41,7 @@ export interface CardOnFileSummary {
   expired: boolean
 }
 
-function normalizePreference(v: string | null | undefined): 'CARD' | 'CHECK_WIRE' | null {
-  return v === 'CHECK_WIRE' ? 'CHECK_WIRE' : v === 'CARD' ? 'CARD' : null
-}
+const normalizePreference = normalizePaymentPreference
 
 /**
  * Is an MMYY expiry in the past? A card expires at the END of its month.
@@ -153,7 +152,7 @@ export interface ResolvedCardToken {
   companyCardId: string | null
   /** The paperwork row id, when this came from a legacy authorization. */
   paperworkRequestId: string | null
-  paymentPreference: 'CARD' | 'CHECK_WIRE' | null
+  paymentPreference: PaymentPreference | null
   /** When the stored credential was established. */
   authorizedAt: Date | null
 }
