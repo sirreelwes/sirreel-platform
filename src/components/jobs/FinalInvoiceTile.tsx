@@ -45,6 +45,7 @@ export interface HqInvoice {
 export function FinalInvoiceTile({
   jobId,
   hqInvoices = [],
+  onUpload,
 }: {
   jobId: string
   /**
@@ -54,6 +55,14 @@ export function FinalInvoiceTile({
    * SR-INV-30004 before this prop existed.
    */
   hqInvoices?: HqInvoice[]
+  /**
+   * Open the upload form on the panel below. A bare `#final-invoice` link
+   * was NOT enough (Wes 2026-09-02): on a job with no HQ order and no linked
+   * RW order the whole Billing section is folded away, so the anchor didn't
+   * exist and the click did nothing at all — and even when it did exist it
+   * only scrolled, leaving the form collapsed behind its own button.
+   */
+  onUpload?: () => void
 }) {
   const [rows, setRows] = useState<FinalInvoice[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -175,12 +184,13 @@ export function FinalInvoiceTile({
             {busy ? 'Sending…' : sent ? 'Send again' : 'Send to client'}
           </button>
         ) : null}
-        <a
-          href="#final-invoice"
+        <button
+          type="button"
+          onClick={() => (onUpload ? onUpload() : (window.location.hash = 'final-invoice'))}
           className="text-[11px] font-semibold text-amber-700 hover:text-amber-800"
         >
           {inv || hq ? 'Upload another →' : 'Upload →'}
-        </a>
+        </button>
         {inv?.pdfUrl && (
           <a
             href={inv.pdfUrl}

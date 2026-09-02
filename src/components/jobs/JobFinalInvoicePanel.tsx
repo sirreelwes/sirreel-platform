@@ -49,7 +49,18 @@ const MANUAL = '__manual__'
 
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
-export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
+export function JobFinalInvoicePanel({
+  jobId,
+  openSignal = 0,
+}: {
+  jobId: string
+  /**
+   * Bumped by the Final Invoice tile's "Upload →". The tile used to be a
+   * plain `#final-invoice` link, which scrolled here and left the form shut —
+   * so from the strip the button looked dead.
+   */
+  openSignal?: number
+}) {
   const [rows, setRows] = useState<FinalInvoice[]>([])
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
@@ -74,6 +85,17 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
   useEffect(() => {
     load()
   }, [load])
+
+  // Opened from the paperwork strip: reveal the form and bring it into view.
+  useEffect(() => {
+    if (!openSignal) return
+    setOpen(true)
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.getElementById('final-invoice')?.scrollIntoView({ block: 'start' }),
+      ),
+    )
+  }, [openSignal])
 
   // The job's RW invoices, for the picker. Empty whenever no RW order is
   // linked, which is the common case — the panel falls back to typing.

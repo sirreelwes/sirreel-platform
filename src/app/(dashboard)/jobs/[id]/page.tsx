@@ -442,6 +442,11 @@ export default function JobDetailPage() {
   // Progressive disclosure: empty sections fold into the "Not started"
   // strip; this holds the ones the user expanded by hand this visit.
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  // "Upload →" on the Final Invoice tile. Bumping this opens the form on
+  // JobFinalInvoicePanel — which also has to be UNFOLDED first: on a job with
+  // no HQ order and no RW order the Billing section isn't rendered at all, so
+  // the old anchor pointed at an element that didn't exist.
+  const [finalInvoiceOpen, setFinalInvoiceOpen] = useState(0);
   const openSection = (k: string, anchor?: string | null) => {
     setOpenSections((prev) => {
       if (prev.has(k)) return prev;
@@ -461,6 +466,7 @@ export default function JobDetailPage() {
     const HASH_TO_SECTION: Record<string, string> = {
       coi: 'coi', wc: 'wc', agreement: 'agreement', 'reserved-assets': 'assets',
       drivers: 'drivers', orders: 'orders', 'rw-billing': 'money', invoices: 'money',
+      'final-invoice': 'money',
       contacts: 'contacts',
     };
     const apply = () => {
@@ -1630,6 +1636,10 @@ const driverTone = (d: any): string => {
               Collections queue (Wes 2026-09-02). */}
           <FinalInvoiceTile
             jobId={job.id}
+            onUpload={() => {
+              openSection('money');
+              setFinalInvoiceOpen((n) => n + 1);
+            }}
             hqInvoices={liveInvoices.map((i) => ({
               id: i.id,
               invoiceNumber: i.invoiceNumber,
@@ -2606,7 +2616,7 @@ const driverTone = (d: any): string => {
       </div>
       {/* Sales -> collections handoff. Sits under RW billing because the
           agent is already looking at the job's RW invoices here. */}
-      <JobFinalInvoicePanel jobId={job.id} />
+      <JobFinalInvoicePanel jobId={job.id} openSignal={finalInvoiceOpen} />
 
       {/* RW quotes/invoices attached to this job (transitional). */}
       <JobDocumentsPanel jobId={job.id} />
