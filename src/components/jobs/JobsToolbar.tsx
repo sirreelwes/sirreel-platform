@@ -208,7 +208,18 @@ export function JobsToolbar() {
         {/* Hidden on a phone: the shell's mobile top bar carries the same
             launcher on every route, and two "+ New Job" buttons on one
             screen is one too many. */}
-        <NewJobLauncher buttonClassName="hidden md:block ml-auto bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
+        {/* Findable on the first visit, ignorable on the hundredth —
+            the how-to sits next to the button it describes (same
+            treatment Collections gives "How to collect"). */}
+        <div className="ml-auto hidden md:flex items-center gap-2">
+          <Link
+            href="/guides/starting-a-job"
+            className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 underline underline-offset-2 decoration-zinc-300"
+          >
+            How to start a job
+          </Link>
+          <NewJobLauncher buttonClassName="bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
+        </div>
       </div>
 
       {/* Row 2 — color key: legend for the rails, and a one-click narrow. */}

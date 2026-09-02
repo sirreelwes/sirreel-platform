@@ -493,6 +493,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+          // The how-to sits with the work it describes (same rule as
+          // "How to collect"): this is the flow that replaces emailing
+          // the booking package, so it belongs in the sales list the
+          // reps already live in.
+          { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
         ],
       },
       {
@@ -557,6 +562,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // Phase 3 composer. Safe to expose before the sending domain
         // exists — the guard closes every send and the page says so.
         { id: 'outreach', label: 'Outreach', icon: 'Send', href: '/outreach' },
+        // Everyone who can start a job should be able to find out how.
+        { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
       ],
     },
     {
