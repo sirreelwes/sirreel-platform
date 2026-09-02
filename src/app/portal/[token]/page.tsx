@@ -5,6 +5,7 @@ import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
+import type { PaymentPreference } from '@/lib/payments/paymentPreference';
 import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, LCDW_WAIVED_DAMAGE_LIMIT, usd, usd2 } from '@/lib/contracts/fees';
 // Imported rather than kept as a private copy. These two strings existed here
@@ -175,7 +176,7 @@ export default function ClientPortal() {
   const [ccBillingPhone, setCcBillingPhone] = useState('');
   const [ccBillingEmail, setCcBillingEmail] = useState('');
   const [ccCardType, setCcCardType] = useState('');
-  const [ccPaymentPreference, setCcPaymentPreference] = useState<'CARD' | 'CHECK_WIRE'>('CARD');
+  const [ccPaymentPreference, setCcPaymentPreference] = useState<PaymentPreference>('CARD');
   const [ccChargeSummary, setCcChargeSummary] = useState('');
   const [ccChargeEstimate, setCcChargeEstimate] = useState('');
   const [ccAcknowledged, setCcAcknowledged] = useState(false);
@@ -225,15 +226,25 @@ export default function ClientPortal() {
         setBooking(data.booking);
         setPaperwork(data.request);
         setContractType(data.request?.contractType || 'vehicles');
-        if (data.request?.lcdwAccepted) setLcdwAccepted(true);
-        if (data.request?.lcdwAccepted) setLcdwAccepted(true);
+        // Seed the radio from lcdwDecision, the source of truth.
+        // `lcdwAccepted` is the LEGACY mirror and is true only on
+        // acceptance, so a client who DECLINED came back to a blank radio
+        // and a checklist row that still read as outstanding. (The line
+        // below was also duplicated, seeding the same state twice and
+        // covering the decline neither time.)
+        const lcdwDec = (data.request?.lcdwDecision as string | null) ?? null;
+        setLcdwAccepted(lcdwDec ? lcdwDec === 'ACCEPTED' : !!data.request?.lcdwAccepted);
+        setLcdwDeclined(lcdwDec === 'DECLINED');
         setSignerName(data.booking.person?.name || '');
         setSignerEmail(data.booking.person?.email || '');
         if (data.booking.depositAmount) setCcChargeEstimate(String(data.booking.depositAmount));
         const req = data.request as any;
         setDone({
           agreement: req?.rentalAgreement || false,
-          lcdw: req?.lcdwAccepted || false,
+          // A DECISION, not an acceptance — declining LCDW completes the
+          // step. Reading the accepted-only mirror left every client who
+          // declined staring at an unfinished checklist forever.
+          lcdw: !!req?.lcdwDecision || req?.lcdwAccepted || false,
           coi: (req?.coiReceived && req?.wcReceived) || false,
           cc: req?.creditCardAuth || false,
           studio: req?.studioContractSigned || false,
@@ -508,11 +519,20 @@ export default function ClientPortal() {
             {TABS.filter(t => t.id !== 'overview').map(tab => {
               const color = tabColor(tab.id);
               const isDone = color === 'done';
-              const isPending = color === 'pending';
               const isAmber = color === 'pending_admin';
               const isFail = color === 'fail';
               const isActive = activeTab === tab.id;
-              const statusLabel = isDone ? 'Complete' : isFail ? 'Action needed' : isAmber ? 'Pending review' : isPending ? 'Required' : 'Required';
+              // LCDW is a CHOICE, not a requirement: the client may decline
+              // it and be finished. Wes 2026-09-02 — "Required is misleading
+              // for LCDW. Elect or Choose is better. CCA and Agreement and
+              // COI are required."
+              const isLcdw = tab.id === 'lcdw';
+              const statusLabel = isDone
+                ? (isLcdw ? (lcdwAccepted ? 'Accepted' : 'Declined') : 'Complete')
+                : isFail ? 'Action needed'
+                : isAmber ? 'Pending review'
+                : isLcdw ? 'Choose'
+                : 'Required';
               const statusColor = isDone ? '#10b981' : isFail ? '#dc2626' : isAmber ? '#d97706' : PORTAL.gold;
               return (
                 <li key={tab.id}>
@@ -1480,6 +1500,10 @@ export default function ClientPortal() {
                       {([
                         { key: 'CARD', title: 'Charge my card on file', sub: 'A processing fee of up to 3% applies to card payments, where permitted.' },
                         { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No processing fee. Your card stays on file as security only.' },
+                        // A real answer, not a missing one. Without it the
+                        // pre-selected CARD option recorded an undecided
+                        // client as having agreed to the processing fee.
+                        { key: 'UNDECIDED', title: "I'll decide later", sub: 'No problem — just let us know before your first invoice.' },
                       ] as const).map(opt => (
                         <label key={opt.key} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${ccPaymentPreference === opt.key ? 'border-gray-900 bg-gray-50' : 'border-gray-200'}`}>
                           <input type="radio" name="payPref" checked={ccPaymentPreference === opt.key} onChange={() => setCcPaymentPreference(opt.key)} className="mt-0.5 accent-gray-900" />
