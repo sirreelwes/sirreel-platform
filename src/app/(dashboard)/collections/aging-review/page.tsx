@@ -48,9 +48,9 @@ interface WriteOff {
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
 const DECISION_STYLE: Record<string, string> = {
-  STILL_OWED: 'bg-sky-900/40 border-sky-700/50 text-sky-300',
-  DISPUTE: 'bg-orange-900/40 border-orange-700/50 text-orange-300',
-  WRITE_OFF: 'bg-red-900/40 border-red-700/50 text-red-300',
+  STILL_OWED: 'bg-sky-50 border-sky-300 text-sky-700',
+  DISPUTE: 'bg-orange-50 border-orange-300 text-orange-700',
+  WRITE_OFF: 'bg-red-50 border-red-300 text-red-700',
 }
 const DECISION_LABEL: Record<string, string> = {
   STILL_OWED: 'Still owed',
@@ -164,7 +164,7 @@ export default function AgingReviewPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* The only route back used to be the nav sidebar. */}
-      <a href="/collections" className="text-[13px] text-zinc-500 hover:text-zinc-900 transition-colors inline-block mb-2">
+      <a href="/collections" className="text-[13px] text-zinc-600 hover:text-zinc-900 transition-colors inline-block mb-2">
         ← Collections
       </a>
       <h1 className="text-2xl font-semibold text-zinc-900">Aging Review</h1>
@@ -242,16 +242,16 @@ export default function AgingReviewPage() {
             </div>
           )}
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 mb-8">
+          <div className="bg-white border border-zinc-200 rounded-xl divide-y divide-zinc-200 mb-8">
             {rows.length === 0 && (
-              <div className="p-6 text-sm text-zinc-500">Nothing past 60 days. Good book.</div>
+              <div className="p-6 text-sm text-zinc-600">Nothing past 60 days. Good book.</div>
             )}
             {rows.map((r) => (
               <div key={r.rwInvoiceId} className="p-4">
                 <div className="flex justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="text-sm font-semibold text-white">{r.invoiceNumber || '(no number)'}</span>
-                    <span className={`ml-2 text-xs font-semibold ${r.ageDays > 90 ? 'text-red-400' : 'text-orange-400'}`}>
+                    <span className="text-sm font-semibold text-zinc-900">{r.invoiceNumber || '(no number)'}</span>
+                    <span className={`ml-2 text-xs font-semibold ${r.ageDays > 90 ? 'text-red-700' : 'text-orange-700'}`}>
                       {r.ageDays}d
                     </span>
                     {/* NEW = never processed in RW — zero NEW invoices in
@@ -260,7 +260,7 @@ export default function AgingReviewPage() {
                         not "why hasn't the client paid?" */}
                     {r.status === 'NEW' && (
                       <span
-                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 border border-amber-700/50 text-amber-300"
+                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 border border-amber-300 text-amber-700"
                         title="Never processed in RentalWorks — the client may never have received this bill. Check RW before chasing."
                       >
                         Never processed
@@ -268,31 +268,31 @@ export default function AgingReviewPage() {
                     )}
                     {r.insurance && (
                       <span
-                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-900/40 border border-violet-700/50 text-violet-300"
+                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-50 border border-violet-300 text-violet-700"
                         title={r.insurance.claimNumber ? `Carrier claim ${r.insurance.claimNumber}` : 'Awaiting insurance carrier'}
                       >
                         Insurance{r.insurance.claimNumber ? ` · ${r.insurance.claimNumber}` : ''}
                       </span>
                     )}
-                    <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                    <div className="text-xs text-zinc-600 mt-0.5 truncate">
                       {r.customerName || '—'}
                       {r.dealName ? ` · ${r.dealName}` : ''}
                       {r.agent ? ` · ${r.agent}` : ''}
                       {r.invoiceDate ? ` · invoiced ${new Date(r.invoiceDate).toLocaleDateString()}` : ''}
                     </div>
                     {r.receivedTotal > 0 && (
-                      <div className="text-xs text-zinc-500 mt-0.5">
+                      <div className="text-xs text-zinc-600 mt-0.5">
                         {money(r.receivedTotal)} of {money(r.invoiceTotal)} received — balance is the remainder
                       </div>
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-sm text-amber-500 font-semibold">{money(r.remainingTotal)}</div>
+                    <div className="text-sm text-amber-700 font-semibold">{money(r.remainingTotal)}</div>
                     <a
                       href={`/api/rentalworks/invoices/${r.rwInvoiceId}/pdf`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[11px] text-zinc-500 hover:text-zinc-300 mr-2"
+                      className="text-[11px] text-zinc-600 hover:text-zinc-700 mr-2"
                       title="Open the invoice PDF"
                     >
                       PDF
@@ -300,7 +300,7 @@ export default function AgingReviewPage() {
                     <span
                       role="button"
                       onClick={() => void toggleInsurance(r)}
-                      className="text-[11px] text-zinc-500 hover:text-violet-300 cursor-pointer"
+                      className="text-[11px] text-zinc-600 hover:text-violet-700 cursor-pointer"
                       title={r.insurance ? 'Unmark — this is back to waiting on the client (the claim itself is untouched)' : 'Link to an open claim, or open a new claim tracker'}
                     >
                       {r.insurance ? 'not insurance' : 'insurance matter'}
@@ -310,10 +310,10 @@ export default function AgingReviewPage() {
 
                 {r.triage ? (
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${DECISION_STYLE[r.triage.decision] ?? 'border-zinc-700 text-zinc-300'}`}>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${DECISION_STYLE[r.triage.decision] ?? 'border-zinc-300 text-zinc-700'}`}>
                       {DECISION_LABEL[r.triage.decision] ?? r.triage.decision}
                     </span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-zinc-600">
                       {r.triage.decidedBy ?? 'someone'} · {new Date(r.triage.decidedAt).toLocaleDateString()}
                       {r.triage.note ? ` — ${r.triage.note}` : ''}
                     </span>
@@ -321,7 +321,7 @@ export default function AgingReviewPage() {
                       <span
                         role="button"
                         onClick={() => decide(r.rwInvoiceId, 'CLEAR')}
-                        className="text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                        className="text-[11px] text-zinc-600 hover:text-zinc-700 cursor-pointer"
                       >
                         undo
                       </span>
@@ -340,7 +340,7 @@ export default function AgingReviewPage() {
                             ? 'How was it paid? wire ref / check # (optional)'
                             : 'Note (optional)'
                       }
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+                      className="flex-1 bg-white border border-zinc-300 rounded-lg px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-amber-600"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') void decide(r.rwInvoiceId, pendingDecision, noteDraft)
                         if (e.key === 'Escape') setNoteFor(null)
@@ -349,11 +349,11 @@ export default function AgingReviewPage() {
                     <button
                       onClick={() => void decide(r.rwInvoiceId, pendingDecision, noteDraft)}
                       disabled={saving === r.rwInvoiceId || (pendingDecision === 'WRITE_OFF' && !noteDraft.trim())}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-semibold"
+                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-semibold"
                     >
                       {saving === r.rwInvoiceId ? 'Saving…' : `Save ${DECISION_LABEL[pendingDecision]?.toLowerCase() ?? ''}`}
                     </button>
-                    <button onClick={() => setNoteFor(null)} className="text-xs text-zinc-500 hover:text-zinc-300">
+                    <button onClick={() => setNoteFor(null)} className="text-xs text-zinc-600 hover:text-zinc-700">
                       cancel
                     </button>
                   </div>
@@ -369,7 +369,7 @@ export default function AgingReviewPage() {
                         }}
                         className={`text-[11px] font-semibold px-2.5 py-1 rounded border cursor-pointer hover:brightness-125 ${
                           d === 'PAID'
-                            ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                             : DECISION_STYLE[d]
                         }`}
                       >
@@ -399,9 +399,9 @@ export default function AgingReviewPage() {
           </div>
 
           {/* Write-off ledger — the bad-debt tax list. */}
-          <div className="bg-zinc-900 border border-red-900/50 rounded-xl p-5">
-            <h2 className="text-sm font-bold text-white mb-1">Write-off ledger</h2>
-            <p className="text-xs text-zinc-400 mb-3">
+          <div className="bg-white border border-red-300 rounded-xl p-5">
+            <h2 className="text-sm font-bold text-zinc-900 mb-1">Write-off ledger</h2>
+            <p className="text-xs text-zinc-600 mb-3">
               Deemed uncollectible — {writeOffs.length} invoice{writeOffs.length === 1 ? '' : 's'},{' '}
               {money(writeOffTotal)} total
               {[...byYear.entries()].map(([y, amt]) => ` · ${y}: ${money(amt)}`).join('')}.
@@ -410,20 +410,20 @@ export default function AgingReviewPage() {
               cash-basis generally cannot), so confirm treatment before filing.
             </p>
             {writeOffs.length === 0 ? (
-              <p className="text-sm text-zinc-500">Nothing written off yet.</p>
+              <p className="text-sm text-zinc-600">Nothing written off yet.</p>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-zinc-200">
                 {writeOffs.map((w) => (
                   <div key={w.rwInvoiceId} className="py-2 flex justify-between gap-3 text-sm">
                     <div className="min-w-0">
-                      <span className="text-white font-semibold">{w.invoiceNumber || '(no number)'}</span>
-                      <span className="text-zinc-400"> · {w.customerName || '—'}</span>
-                      <div className="text-xs text-zinc-500">
+                      <span className="text-zinc-900 font-semibold">{w.invoiceNumber || '(no number)'}</span>
+                      <span className="text-zinc-600"> · {w.customerName || '—'}</span>
+                      <div className="text-xs text-zinc-600">
                         {new Date(w.decidedAt).toLocaleDateString()} · {w.decidedBy ?? '—'}
                         {w.note ? ` — ${w.note}` : ''}
                       </div>
                     </div>
-                    <span className="text-red-400 font-semibold shrink-0">{money(w.amount)}</span>
+                    <span className="text-red-700 font-semibold shrink-0">{money(w.amount)}</span>
                   </div>
                 ))}
               </div>
