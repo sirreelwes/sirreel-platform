@@ -85,6 +85,10 @@ export default function StartingAJobGuidePage() {
             the rental agreement opens itself for signing — nobody at SirReel has to send a second
             thing. The COI, the card and the drivers all live in that same portal.
           </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-lt-fg2">
+            The warehouse still gets a pick list, and still scans barcodes in RentalWorks. That part of
+            your day does not change — section 5.
+          </p>
         </div>
 
         <section className="mb-10">
@@ -212,7 +216,55 @@ export default function StartingAJobGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">5 · Paperwork moving before a quote is ready</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">5 · Getting it to the warehouse</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            The pick list comes out of HQ now. Checking gear in and out does not change — see the note at
+            the end of this section.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Book the order">
+              <p>
+                A pick list only exists for a <strong>booked</strong> order. Client approved the quote →{' '}
+                <strong>Book it</strong> on the order. Approval is the green light; booking is still a
+                deliberate act by us.
+              </p>
+            </Step>
+            <Step n={2} title="The day-before email goes out on its own">
+              <p>
+                Every weekday afternoon HQ emails tomorrow&rsquo;s pickups to the warehouse list, each with
+                a <strong>Print pick list</strong> link. Friday&rsquo;s run carries Saturday, Sunday{' '}
+                <em>and</em> Monday, so nothing needs sending over the weekend.
+              </p>
+              <p>You do not have to remember to do this. It is a scheduled job.</p>
+            </Step>
+            <Step n={3} title="Ready vs not ready is in that email">
+              <p>
+                Jobs where all five checks pass — gear, COI, agreement, card, driver — go out as ready.
+                Anything short rides along in the same email <strong>with the blocker named</strong>, a day
+                in hand to fix it. That list is the same readiness you see on the job page.
+              </p>
+            </Step>
+            <Step n={4} title="Or print it yourself, any time">
+              <p>
+                You do not have to wait for the email — the pick list is on the order whenever you want it.
+                It is laid out like the RentalWorks pick list the warehouse already reads.
+              </p>
+            </Step>
+          </ol>
+          <Note tone="plain" label="Check-in and check-out do not change">
+            The barcodes live in RentalWorks and they stay there for now. The warehouse scans gear out and
+            back in RW exactly as they do today — HQ is not asking anyone on the floor to change how they
+            handle a piece of equipment. What changes is where the pick list comes from.
+          </Note>
+          <Note tone="warn" label="Don't point anyone at HQ's picking screen with an RW label">
+            HQ has its own picking floor and it does have a scan box, but it matches HQ&rsquo;s own item
+            codes — <strong>not the barcode labels on the gear</strong>. Scanning an RW label into it will
+            read as a mismatch. Until that is reconciled, RW is the only place a barcode means anything.
+          </Note>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Paperwork moving before a quote is ready</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             Sometimes the client wants to sign while you are still pricing it. You can open the portal without
             sending a quote.
@@ -240,7 +292,7 @@ export default function StartingAJobGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Chasing the missing pieces</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · Chasing the missing pieces</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             All of this is on the job page, under the <strong>Paperwork</strong> tiles. Each tile jumps to its
             own section.
@@ -300,6 +352,8 @@ export default function StartingAJobGuidePage() {
                   ['Ask for a COI by email', 'Send the drop link, or let the portal collect it', 'Job → Certificate of Insurance → Copy COI link'],
                   ['Collect card details by form', 'They authorize it themselves in the portal', 'Job → Card Authorization → Send CC request'],
                   ['Keep a list of who sent what back', 'The Paperwork tiles say what is outstanding', 'Job page, top of the page'],
+                  ['Get the warehouse a pick list', 'HQ emails it the day before — or print it yourself', 'Book the order; pick list is on the order'],
+                  ['Scan gear out and back', 'Unchanged — still RentalWorks barcodes', 'Nothing to do'],
                   ['Wonder whether they opened it', 'Portal access shows Invited vs Active', 'Order → Portal access'],
                 ].map(([a, b, c]) => (
                   <tr key={a} className="border-b border-lt-hairline align-top">
