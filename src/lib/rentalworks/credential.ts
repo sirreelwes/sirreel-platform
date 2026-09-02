@@ -162,10 +162,20 @@ export async function isRotationDue(): Promise<boolean> {
 export async function mintRwToken(): Promise<
   { ok: true; token: string } | { ok: false; reason: string }
 > {
-  const username = process.env.RW_USERNAME?.trim()
-  const password = process.env.RW_PASSWORD?.trim()
+  // Two names for the same pair, and both are real. Vercel production has
+  // carried RENTALWORKS_USERNAME / RENTALWORKS_PASSWORD for months;
+  // scripts/rotate-rw-token.ts uses the shorter RW_* names locally. Reading
+  // only one set would have left auto-renewal permanently unable to run in
+  // the one environment where it matters — checked 2026-09-02, prod has the
+  // long names and not the short ones.
+  const username = (process.env.RENTALWORKS_USERNAME || process.env.RW_USERNAME)?.trim()
+  const password = (process.env.RENTALWORKS_PASSWORD || process.env.RW_PASSWORD)?.trim()
   if (!username || !password) {
-    return { ok: false, reason: 'RW_USERNAME / RW_PASSWORD are not set' }
+    return {
+      ok: false,
+      reason:
+        'No RentalWorks login credentials are set (RENTALWORKS_USERNAME/PASSWORD or RW_USERNAME/PASSWORD)',
+    }
   }
 
   const ctrl = new AbortController()
