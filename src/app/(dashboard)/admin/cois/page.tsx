@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { CoiReviewLauncher } from '@/components/coi/CoiReviewLauncher'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,8 @@ export default async function CoiListPage() {
       clientUploaderName: true,
       clientUploaderEmail: true,
       createdAt: true,
+      humanDecision: true,
+      policyExpiryDate: true,
       company: { select: { name: true } },
       job: { select: { name: true, jobCode: true } },
       inquiry: { select: { id: true } },
@@ -46,6 +49,7 @@ export default async function CoiListPage() {
               <th className="px-3 py-2 font-semibold">Attached to</th>
               <th className="px-3 py-2 font-semibold">Uploaded by</th>
               <th className="px-3 py-2 font-semibold">Source</th>
+              <th className="px-3 py-2 font-semibold">Status</th>
               <th className="px-3 py-2 font-semibold">Date</th>
               <th className="px-3 py-2 font-semibold"></th>
             </tr>
@@ -53,7 +57,7 @@ export default async function CoiListPage() {
           <tbody>
             {cois.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-lt-fg3">No COIs filed yet.</td>
+                <td colSpan={7} className="px-3 py-10 text-center text-lt-fg3">No COIs filed yet.</td>
               </tr>
             ) : (
               cois.map((c) => {
@@ -71,17 +75,48 @@ export default async function CoiListPage() {
                       {c.clientUploaderName || c.clientUploaderEmail || '—'}
                     </td>
                     <td className="px-3 py-2 text-lt-fg3 text-xs">{c.source === 'CLIENT_UPLOAD' ? 'Client link' : 'Internal'}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">
+                      {/* A company-scoped certificate only reaches that
+                          company's jobs once it is APPROVED — see
+                          lib/coi/companyCoi.ts — so the decision is the thing
+                          this list has to make visible and actionable. */}
+                      <span
+                        className={
+                          c.humanDecision === 'APPROVED'
+                            ? 'text-chip-good-fg bg-chip-good-bg px-2 py-0.5 rounded font-semibold'
+                            : c.humanDecision === 'PENDING'
+                              ? 'text-chip-warn-fg bg-chip-warn-bg px-2 py-0.5 rounded font-semibold'
+                              : 'text-chip-bad-fg bg-chip-bad-bg px-2 py-0.5 rounded font-semibold'
+                        }
+                      >
+                        {c.humanDecision}
+                      </span>
+                      {c.policyExpiryDate && (
+                        <span className="text-lt-fg3 ml-1.5">
+                          exp{' '}
+                          {c.policyExpiryDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            timeZone: 'UTC',
+                          })}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-lt-fg3 text-xs whitespace-nowrap">
                       {c.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <Link
-                        href={`/api/coi/download/${c.id}`}
-                        className="text-amber-600 hover:text-amber-500 text-xs font-semibold"
-                        target="_blank"
-                      >
-                        Download
-                      </Link>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-3">
+                        <CoiReviewLauncher coiId={c.id} />
+                        <Link
+                          href={`/api/coi/download/${c.id}`}
+                          className="text-amber-600 hover:text-amber-500 text-xs font-semibold"
+                          target="_blank"
+                        >
+                          Download
+                        </Link>
+                      </span>
                     </td>
                   </tr>
                 )
