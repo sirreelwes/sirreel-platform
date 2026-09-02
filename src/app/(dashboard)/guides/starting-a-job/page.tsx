@@ -319,8 +319,17 @@ export default function StartingAJobGuidePage() {
         </section>
 
         <footer className="mt-10 border-t border-lt-hairline pt-4 text-[13px] text-lt-fg3">
-          Portal links are per contact, expire after 7 days, and can be re-sent or revoked from the order&rsquo;s
-          Portal access panel. Internal — this page is not on sirreel.com.
+          <p>
+            When the gear comes back, the other half of this is{' '}
+            <Link href="/guides/finishing-a-job" className="font-semibold underline underline-offset-2">
+              Finishing a job
+            </Link>{' '}
+            — invoicing it and closing it out.
+          </p>
+          <p className="mt-2">
+            Portal links are per contact, expire after 7 days, and can be re-sent or revoked from the
+            order&rsquo;s Portal access panel. Internal — this page is not on sirreel.com.
+          </p>
         </footer>
       </div>
     </div>

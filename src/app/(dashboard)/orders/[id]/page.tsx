@@ -4198,7 +4198,16 @@ export default function OrderDetailPage() {
           <div>
             <h2 className="text-lg font-semibold text-lt-fg">Invoices</h2>
             <div className="text-xs text-lt-fg3 mt-0.5">
-              Native SirReel billing. Rental invoice anchors to the booked value snapshot.
+              Native SirReel billing. Rental invoice anchors to the booked value snapshot.{' '}
+              {/* The pre-invoice round is a WORKFLOW, not a button — the
+                  order of generate / pre-invoice / issue is the part that
+                  isn't discoverable from the controls alone. */}
+              <Link
+                href="/guides/finishing-a-job"
+                className="font-semibold underline underline-offset-2 hover:text-lt-fg"
+              >
+                How to finish a job
+              </Link>
             </div>
           </div>
           {(() => {

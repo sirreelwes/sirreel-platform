@@ -456,6 +456,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+          // Billing reads the OTHER end of this one: what sales did (or
+          // didn't) do before the balance landed on Collections.
+          { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
         ],
       },
       {
@@ -498,6 +501,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // the booking package, so it belongs in the sales list the
           // reps already live in.
           { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
+          { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
         ],
       },
       {
@@ -564,6 +568,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'outreach', label: 'Outreach', icon: 'Send', href: '/outreach' },
         // Everyone who can start a job should be able to find out how.
         { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
+        { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
       ],
     },
     {

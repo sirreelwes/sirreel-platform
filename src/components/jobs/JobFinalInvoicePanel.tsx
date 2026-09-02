@@ -93,7 +93,17 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
   return (
     <div id="final-invoice" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
       <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Final invoice</h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Final invoice</h2>
+          {/* Recording a number here EMAILS the client — worth knowing
+              before the first click, and the guide is where that is said. */}
+          <a
+            href="/guides/finishing-a-job"
+            className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 underline underline-offset-2 decoration-zinc-300"
+          >
+            How to finish a job
+          </a>
+        </div>
         <button
           onClick={() => setOpen((v) => !v)}
           className="rounded-lg bg-amber-600 hover:bg-amber-500 text-zinc-900 font-bold px-3 py-1.5 text-xs transition-colors"
