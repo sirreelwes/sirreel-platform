@@ -4382,6 +4382,7 @@ export default function OrderDetailPage() {
                         charging={chargingCard}
                         err={paymentErr}
                         onRecord={(body) => recordPayment(inv.id, body)}
+                        orderId={orderId}
                         onChargeSavedCard={(amt, waive) => chargeSavedCard(inv.id, amt, waive)}
                         onVoid={(paymentId) => voidPayment(paymentId, inv.id)}
                       />
@@ -5020,6 +5021,7 @@ function AddContactForm({
 // order at a time.
 function PaymentsPanel({
   invoiceId,
+  orderId,
   balanceDue,
   canRecord,
   payments,
@@ -5031,6 +5033,7 @@ function PaymentsPanel({
   onVoid,
 }: {
   invoiceId: string;
+  orderId: string;
   balanceDue: number;
   canRecord: boolean;
   payments: PaymentRow[] | null;
@@ -5238,6 +5241,16 @@ function PaymentsPanel({
         />
       )}
 
+      {/* Wes 2026-09-01: Collections has had "Send options" for years, but
+          it hangs off a FinalInvoice row in that queue — an HQ invoice has
+          none, so there was no way to hand a client bank details except
+          walking them through the portal. Offered whenever there is a
+          balance, card on file or not: a client may simply prefer to pay
+          by transfer, and the 3% card fee is a reason to. */}
+      {canRecord && balanceDue > 0 && (
+        <SendPaymentOptions orderId={orderId} />
+      )}
+
       {err && (
         <div className="text-[11px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded px-2 py-1.5">
           {err}
@@ -5253,6 +5266,55 @@ function PaymentsPanel({
       {/* invoiceId reserved for future per-form analytics — referenced here
           so the unused-var lint stays quiet during tighter perms work. */}
       <span className="hidden">{invoiceId}</span>
+    </div>
+  );
+}
+
+/**
+ * Email this order's client SirReel's payment details — payee, bank, ACH
+ * and wire routing, Zelle, plus the fraud line and the ACH form.
+ *
+ * Sends to the contact already on the order or job (ACCOUNTING first,
+ * then the primary); there is no address field, because a typed address
+ * is how bank details reach the wrong inbox. The server picks and
+ * reports who it went to.
+ */
+function SendPaymentOptions({ orderId }: { orderId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const send = async () => {
+    if (busy) return;
+    if (!window.confirm('Email SirReel\u2019s bank and payment details to this order\u2019s contact?')) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/send-payment-options`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) { setError(d?.error || 'Could not send the payment details.'); return; }
+      setSent(d.sentTo || 'the contact on file');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={send}
+        disabled={busy}
+        className="w-full rounded-lg border border-lt-hairline bg-lt-card px-3 py-2 text-[13px] font-semibold text-lt-fg2 transition-colors hover:border-lt-fg2 hover:text-lt-fg disabled:opacity-40"
+      >
+        {busy ? 'Sending\u2026' : sent ? 'Resend payment options' : 'Send payment options'}
+      </button>
+      {sent && (
+        <p className="text-[11px] text-chip-good-fg">Sent to {sent}.</p>
+      )}
+      {error && (
+        <p className="text-[11px] text-chip-bad-fg">{error}</p>
+      )}
+      {!sent && !error && (
+        <p className="text-[11px] text-lt-fg3">
+          Bank transfer, wire and Zelle details \u2014 no processing fee for the client.
+        </p>
+      )}
     </div>
   );
 }
