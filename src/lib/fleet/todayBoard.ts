@@ -8,8 +8,14 @@
  *     INCLUDED — since the 2026-08-18 import they ARE the live book,
  *     not a stale snapshot (the pre-import exclusion was removed
  *     2026-08-21 for the team rollout).
- *   - Assignment status ASSIGNED only (CHECKED_OUT is already gone;
- *     RETURNED/SWAPPED are stale).
+ *   - Assignment status depends on the edge. DEPARTURES are ASSIGNED
+ *     only (CHECKED_OUT is already gone; RETURNED/SWAPPED are stale).
+ *     RETURNS also include CHECKED_OUT and RETURNED — a unit checked in
+ *     this morning has to stay on today's board as DONE rather than
+ *     vanishing from it, or the crew loses the record of the work they
+ *     just did and the board's remaining count is the only proof it
+ *     ever appeared. SWAPPED stays excluded on both: that unit isn't on
+ *     this booking any more.
  *
  * `edge` picks which side of the assignment matches the date:
  * 'start' → departures, 'end' → returns. Times come from the booking's
@@ -52,12 +58,14 @@ export interface FleetMovement {
   pickupTime: string | null
   /** The assignment's CHECKOUT (pre-rental) inspection, if submitted. */
   inspection: { id: string; inspectionDate: string; inspectorName: string | null } | null
+  /** The assignment's RETURN inspection — the unit has been received. */
+  returnInspection: { id: string; inspectionDate: string; inspectorName: string | null } | null
 }
 
 export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Promise<FleetMovement[]> {
   const rows = await prisma.bookingAssignment.findMany({
     where: {
-      status: 'ASSIGNED',
+      status: edge === 'start' ? 'ASSIGNED' : { in: ['ASSIGNED', 'CHECKED_OUT', 'RETURNED'] },
       ...(edge === 'start' ? { startDate: dbDate } : { endDate: dbDate }),
       bookingItem: {
         booking: {
@@ -83,20 +91,33 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
           },
         },
       },
+      // Both edges of the vehicle's arc. The checkout drives the
+      // departure card; the return drives the arrival card, which
+      // could not exist before /fleet/return did.
       inspections: {
-        where: { type: 'CHECKOUT' },
+        where: { type: { in: ['CHECKOUT', 'RETURN'] } },
         select: {
           id: true,
+          type: true,
           inspectionDate: true,
           inspectedByUser: { select: { name: true } },
         },
-        take: 1,
       },
     },
     orderBy: { createdAt: 'asc' },
   })
+  const shape = (i: { id: string; inspectionDate: Date; inspectedByUser: { name: string | null } } | undefined) =>
+    i
+      ? {
+          id: i.id,
+          inspectionDate: i.inspectionDate.toISOString(),
+          inspectorName: i.inspectedByUser?.name ?? null,
+        }
+      : null
+
   return rows.map((r) => {
-    const insp = r.inspections[0] ?? null
+    const insp = r.inspections.find((i) => i.type === 'CHECKOUT')
+    const ret = r.inspections.find((i) => i.type === 'RETURN')
     return {
       assignmentId: r.id,
       jobId: r.bookingItem.booking.jobId,
@@ -107,13 +128,8 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
       company: companyLabel(r.bookingItem.booking.company?.name),
       deliveryTime: r.bookingItem.booking.deliveryTime,
       pickupTime: r.bookingItem.booking.pickupTime,
-      inspection: insp
-        ? {
-            id: insp.id,
-            inspectionDate: insp.inspectionDate.toISOString(),
-            inspectorName: insp.inspectedByUser?.name ?? null,
-          }
-        : null,
+      inspection: shape(insp),
+      returnInspection: shape(ret),
     }
   })
 }

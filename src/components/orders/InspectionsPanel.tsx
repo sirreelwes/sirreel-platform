@@ -1,18 +1,28 @@
 'use client';
 
 /**
- * Sprint 2A — staff-only "Inspections" section on the internal order
- * detail page. Lists pre-rental (CHECKOUT) inspections for the order's
- * linked booking: timestamp, inspector, photo thumbnails (via the
- * session-gated /api/fleet/photos proxy — never a raw blob URL),
- * notes, and pre-existing damage items. Renders nothing when the order
- * has no booking or no inspections yet.
+ * Staff-only "Inspections" section on the internal order detail page.
+ * Lists both ends of each vehicle's rental for the order's linked
+ * booking: timestamp, inspector, photo thumbnails (via the
+ * session-gated /api/fleet/photos proxy — never a raw blob URL), notes,
+ * and damage. Renders nothing when the order has no booking or no
+ * inspections yet.
+ *
+ * RETURN rows joined CHECKOUT here on 2026-09-02, when the return
+ * capture flow shipped. The distinction the panel has to carry is what
+ * the damage MEANS: pre-existing damage is on the truck's record and
+ * was waived before the client ever took it, while damage on a return
+ * is new, is why an order might get a charge added, and is sitting in
+ * triage until somebody decides. Rendering the two identically was the
+ * fastest way to get a client billed for a scratch that was already
+ * there.
  */
 
 import { useEffect, useState } from 'react';
 
 interface PanelInspection {
   id: string;
+  type: 'CHECKOUT' | 'RETURN';
   inspectionDate: string;
   overallCondition: string;
   mileageAtInspection: number | null;
@@ -21,7 +31,15 @@ interface PanelInspection {
   inspectedByUser: { name: string | null; email: string };
   bookingAssignment: { id: string; asset: { unitName: string } } | null;
   photos: { id: string; filename: string | null }[];
-  damageItems: { id: string; locationOnVehicle: string; damageType: string; severity: string; notes: string | null }[];
+  damageItems: {
+    id: string;
+    locationOnVehicle: string;
+    damageType: string;
+    severity: string;
+    notes: string | null;
+    isPreExisting: boolean;
+    disposition: string;
+  }[];
 }
 
 export function InspectionsPanel({ orderId }: { orderId: string }) {
@@ -38,12 +56,21 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
 
   return (
     <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 mt-6">
-      <h2 className="text-white font-semibold mb-4">🔍 Pre-Rental Inspections</h2>
+      <h2 className="text-white font-semibold mb-4">🔍 Inspections</h2>
       <div className="space-y-4">
         {inspections.map((insp) => (
           <div key={insp.id} className="bg-zinc-800 border border-zinc-700 rounded-lg p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
               <div className="text-white text-sm font-medium">
+                <span
+                  className={`mr-2 align-middle text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    insp.type === 'RETURN'
+                      ? 'bg-sky-900/40 text-sky-300 border-sky-800'
+                      : 'bg-zinc-700/60 text-zinc-300 border-zinc-600'
+                  }`}
+                >
+                  {insp.type === 'RETURN' ? 'Back' : 'Out'}
+                </span>
                 Unit {insp.bookingAssignment?.asset.unitName ?? '—'}
                 <span className="text-zinc-500 font-normal"> · {insp.overallCondition.toLowerCase()}</span>
                 {insp.mileageAtInspection != null && (
@@ -59,9 +86,16 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
             {insp.damageItems.length > 0 && (
               <ul className="mb-3 space-y-1">
                 {insp.damageItems.map((d) => (
-                  <li key={d.id} className="text-xs text-amber-500/90">
-                    ⚠ Pre-existing: {d.locationOnVehicle} — {d.damageType.replace('_', ' ').toLowerCase()} ({d.severity.toLowerCase()})
+                  <li
+                    key={d.id}
+                    className={`text-xs ${d.isPreExisting ? 'text-amber-500/90' : 'text-rose-400'}`}
+                  >
+                    ⚠ {d.isPreExisting ? 'Pre-existing' : 'New on return'}: {d.locationOnVehicle} —{' '}
+                    {d.damageType.replace('_', ' ').toLowerCase()} ({d.severity.toLowerCase()})
                     {d.notes ? ` — ${d.notes}` : ''}
+                    {!d.isPreExisting && d.disposition === 'PENDING' && (
+                      <span className="text-rose-300/70"> · awaiting a billing decision</span>
+                    )}
                   </li>
                 ))}
               </ul>

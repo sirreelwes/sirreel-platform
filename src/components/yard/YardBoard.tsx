@@ -24,8 +24,6 @@ const STATE_CHIP: Record<YardRow['state'], string> = {
   doing: 'bg-blue-950/60 border-blue-800 text-blue-300',
   done: 'bg-emerald-950/60 border-emerald-800 text-emerald-400',
   flag: 'bg-rose-950/60 border-rose-800 text-rose-300',
-  // Nothing to do and nothing done — see YardState in lib/yard/board.
-  info: 'bg-zinc-800 border-zinc-700 text-zinc-400',
 }
 
 function dayLabel(ymd: string, today: string, tomorrow: string): string {
@@ -45,7 +43,7 @@ function shiftYmd(ymd: string, days: number): string {
 
 function RowCard({ row }: { row: YardRow }) {
   // A row with no work left is quiet: dimmed card, plain-text button.
-  const done = row.state === 'done' || row.state === 'info'
+  const done = row.state === 'done'
   return (
     <a
       href={row.href}
@@ -111,18 +109,10 @@ function GroupCard({ group }: { group: YardGroup }) {
               ? 'bg-rose-950/60 border-rose-800 text-rose-300'
               : group.openCount > 0
                 ? 'bg-amber-950/60 border-amber-800 text-amber-300'
-                : group.done
-                  ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                : 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
           }`}
         >
-          {group.flagCount > 0
-            ? '⚠ Short'
-            : group.openCount > 0
-              ? `${group.openCount} to do`
-              : group.done
-                ? '✓ Done'
-                : 'Due back'}
+          {group.flagCount > 0 ? '⚠ Short' : group.openCount > 0 ? `${group.openCount} to do` : '✓ Done'}
         </span>
         <span className="flex-none text-zinc-600 text-sm">{open ? '▾' : '▸'}</span>
       </button>

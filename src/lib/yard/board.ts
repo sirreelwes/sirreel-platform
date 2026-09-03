@@ -37,12 +37,15 @@ export type YardKind = 'VEHICLE' | 'GEAR'
 /**
  * How far along a row is, in the shades a person on the floor cares
  * about. `flag` is a row that finished BADLY (a short count) and must
- * not read as done. `info` is a row HQ has no action for — a vehicle
- * due back, since there is no return-side inspection flow yet: it is
- * neither work to do nor work completed, and calling it either would
- * lie. It shows neutral and counts toward neither total.
+ * not read as done.
+ *
+ * There used to be a fifth state, `info`, for a vehicle due back — a
+ * row HQ had no action for, because no return-side inspection flow
+ * existed. /fleet/return is that flow, so a returning truck is now
+ * ordinary work: `todo` until someone checks it in, `done` after. The
+ * placeholder went with the gap it stood in for.
  */
-export type YardState = 'todo' | 'doing' | 'done' | 'flag' | 'info'
+export type YardState = 'todo' | 'doing' | 'done' | 'flag'
 
 export interface YardRow {
   /** BookingAssignment id (VEHICLE) or PickList id (GEAR). */
@@ -70,11 +73,7 @@ export interface YardGroup {
   jobName: string
   company: string
   rows: YardRow[]
-  /**
-   * Every row actually finished. An `info`-only group (a truck due back
-   * and nothing else) is NOT done — there was never anything to finish —
-   * so it gets neither the green tick nor a to-do count.
-   */
+  /** Every row actually finished — the group can collapse. */
   done: boolean
   /** Rows still asking for something. Drives the group's count chip. */
   openCount: number
@@ -262,22 +261,24 @@ export function assemble(rows: YardEntry[]): YardGroup[] {
     g.rows.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'VEHICLE' ? -1 : 1))
     g.openCount = g.rows.filter((r) => r.state === 'todo' || r.state === 'doing').length
     g.flagCount = g.rows.filter((r) => r.state === 'flag').length
-    g.done = g.openCount === 0 && g.rows.every((r) => r.state === 'done' || r.state === 'flag')
+    g.done = g.openCount === 0
   }
-  // Work first, then anything merely worth knowing about, then the
-  // finished. Within a band, the busiest group leads.
-  const band = (g: YardGroup) => (g.openCount > 0 ? 0 : g.done ? 2 : 1)
+  // Unfinished work floats up; within that, the busiest group first.
   return groups.sort((a, b) => {
-    if (band(a) !== band(b)) return band(a) - band(b)
+    if (a.done !== b.done) return a.done ? 1 : -1
     if (b.openCount !== a.openCount) return b.openCount - a.openCount
     return a.jobName.localeCompare(b.jobName)
   })
 }
 
+/** " · Julian" — who did it, when anyone did. */
+const firstName = (n: string | null | undefined) => (n ? ` · ${n.split(' ')[0]}` : '')
+
 /** One vehicle assignment as a board entry. Exported so the grouping
  *  rules can be tested without a database. */
 export function vehicleEntry(m: FleetMovement, edge: YardEdge): YardEntry {
   const inspected = !!m.inspection
+  const received = !!m.returnInspection
   return {
     key: groupKey(m.jobId, m.jobName, m.company),
     jobName: m.jobName || m.company,
@@ -288,19 +289,19 @@ export function vehicleEntry(m: FleetMovement, edge: YardEdge): YardEntry {
       title: `Unit ${m.unitName}`,
       detail: m.category,
       time: edge === 'out' ? m.deliveryTime : m.pickupTime,
-      href: `/fleet/inspection/${m.assignmentId}`,
-      // Returns have no HQ-side inspection flow yet, so the inbound card
-      // is informational and says so rather than pretending there's a
-      // walkaround to complete — or, worse, ticking itself green as if
-      // someone had received the truck.
-      action: edge === 'out' ? (inspected ? 'View' : 'Inspect') : 'View',
-      state: edge === 'out' ? (inspected ? 'done' : 'todo') : 'info',
+      // Each edge has its own screen: the pre-rental walkaround going
+      // out, the return check-in coming back.
+      href: edge === 'out' ? `/fleet/inspection/${m.assignmentId}` : `/fleet/return/${m.assignmentId}`,
+      action: edge === 'out' ? (inspected ? 'View' : 'Inspect') : received ? 'View' : 'Check in',
+      state: (edge === 'out' ? inspected : received) ? 'done' : 'todo',
       stateLabel:
         edge === 'out'
           ? inspected
-            ? `Inspected${m.inspection?.inspectorName ? ` · ${m.inspection.inspectorName.split(' ')[0]}` : ''}`
+            ? `Inspected${firstName(m.inspection?.inspectorName)}`
             : 'Needs inspection'
-          : 'Due back',
+          : received
+            ? `Checked in${firstName(m.returnInspection?.inspectorName)}`
+            : 'Due back',
       progress: null,
     },
   }

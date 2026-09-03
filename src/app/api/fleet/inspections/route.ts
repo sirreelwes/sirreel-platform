@@ -13,6 +13,14 @@
  * GET ?orderId= — inspections for the order's linked booking, for the
  *   internal order-detail "Inspections" panel. Any signed-in staff
  *   session (read-only surface on an internal page).
+ *
+ *   Returns CHECKOUT **and** RETURN rows (2026-09-02). It was checkout-
+ *   only because returns had no capture flow; now that they do, the
+ *   damage found on the way back — the damage somebody actually gets
+ *   billed for — would otherwise never appear on the order it belongs
+ *   to. Each row carries `type` so the panel can say which end of the
+ *   rental it is looking at, and damage is no longer filtered to
+ *   pre-existing: on a RETURN row that filter would hide every item.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -190,12 +198,13 @@ export async function GET(req: NextRequest) {
 
   const inspections = await prisma.inspection.findMany({
     where: {
-      type: 'CHECKOUT',
+      type: { in: ['CHECKOUT', 'RETURN'] },
       bookingAssignment: { bookingItem: { bookingId: order.bookingId } },
     },
     orderBy: { inspectionDate: 'desc' },
     select: {
       id: true,
+      type: true,
       inspectionDate: true,
       overallCondition: true,
       mileageAtInspection: true,
@@ -207,8 +216,15 @@ export async function GET(req: NextRequest) {
       },
       photos: { select: { id: true, filename: true }, orderBy: { createdAt: 'asc' } },
       damageItems: {
-        where: { isPreExisting: true },
-        select: { id: true, locationOnVehicle: true, damageType: true, severity: true, notes: true },
+        select: {
+          id: true,
+          locationOnVehicle: true,
+          damageType: true,
+          severity: true,
+          notes: true,
+          isPreExisting: true,
+          disposition: true,
+        },
       },
     },
   })

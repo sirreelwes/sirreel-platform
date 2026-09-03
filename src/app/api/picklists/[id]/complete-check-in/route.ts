@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
+import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       status: true,
       orderId: true,
       checkedInAt: true,
+      // For the job-level rollup below — whichever lane closes last
+      // stamps Job.returnedAt.
+      order: { select: { jobId: true } },
       items: {
         select: {
           id: true,
@@ -135,11 +139,19 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     })
   })
 
+  // Gear is one of two lanes that can be the last thing outstanding on
+  // a job. settleJobReturn holds the shared rule and stamps
+  // Job.returnedAt only when nothing is left in either lane — see
+  // lib/fleet/settleJobReturn. Before this, closing a check-in left the
+  // job reading "not returned" until somebody pressed the manual button.
+  const settled = await settleJobReturnSafe(picklist.order?.jobId, auth.userId)
+
   return NextResponse.json({
     ok: true,
     picklistId: picklist.id,
     checkedInAt,
     itemsCounted: picklist.items.length,
     shortfalls,
+    jobReturned: settled.stamped,
   })
 }
