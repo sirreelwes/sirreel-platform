@@ -7361,7 +7361,11 @@ model RwInvoiceInsuranceFlag {
 /// keeps the full named row so unmapped columns are never lost. Retire with RW.
 model RwQuote {
   id           String    @id @default(uuid())
-  rwQuoteId    String    @map("rw_quote_id")
+  /// UNIQUE since 2026-09-03: the resumable sync upserts by this id
+  /// instead of emptying the table, so a resumed cycle re-fetching a
+  /// page it already committed must land on the same row. Verified free
+  /// of duplicates across all 2,846 rows before the constraint went on.
+  rwQuoteId    String    @unique @map("rw_quote_id")
   quoteNumber  String?   @map("quote_number")
   orderNumber  String?   @map("order_number")
   status       String?
@@ -7383,14 +7387,50 @@ model RwQuote {
   @@map("sr_rw_quotes")
 }
 
+/// Resume point for a paged RentalWorks pull.
+///
+/// RW's list endpoints degrade with pagination depth — the quote pull was
+/// MEASURED at 331.9s for 15 pages on 2026-09-03 (4.8s on page 1, 31s on
+/// page 14) against a 300s function ceiling. An all-or-nothing pull that
+/// only commits at the end can therefore never finish, and because the
+/// process dies inside the await it cannot even log why. That is exactly
+/// how the quote mirror sat frozen from 2026-08-22.
+///
+/// So a paged sync commits EACH PAGE as it arrives, stamps every row it
+/// touches with `cycleStartedAt`, and records where to resume. A run that
+/// runs out of budget stops cleanly and the next one picks up at
+/// `nextPage`. Rows missing from a COMPLETED cycle are swept afterwards —
+/// which is the only point at which a deletion is safe.
+model RwSyncCursor {
+  /// Logical mirror name: "quote", "orderRef".
+  mirror         String    @id
+  /// Stamped onto every row this cycle touches; also the sweep boundary.
+  cycleStartedAt DateTime  @map("cycle_started_at")
+  /// 1-based page the next run should request.
+  nextPage       Int       @default(1)
+  /// Rows committed so far in this cycle (across resumptions).
+  rowsThisCycle  Int       @default(0) @map("rows_this_cycle")
+  /// Set when the cycle reached the last page. Null = still in progress.
+  completedAt    DateTime? @map("completed_at")
+  /// Why the last run stopped early, for the freshness alarm to quote.
+  lastError      String?   @map("last_error")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("sr_rw_sync_cursors")
+}
+
 /// Number → internal-id reference for RentalWorks ORDERS, plus enough
 /// header to label a link. RW's browse endpoints reject every
 /// server-side filter shape (same defect the invoice + quote syncs
 /// document), and GET /api/v1/order/{id} takes only the internal
 /// OrderId — so opening "RW order #304486" requires this mapping.
-/// Populated lazily: a cache miss triggers a full order/browse page
-/// scan that upserts every row (~4k), so one miss warms the whole
-/// table. See src/lib/rentalworks/orderRef.ts.
+///
+/// Refreshed by /api/cron/rw-order-refs (daily, resumable). It was
+/// "populated lazily" until 2026-09-03 — a cache miss fired a
+/// fire-and-forget full scan — which never worked: Vercel freezes the
+/// function once the response is sent, so a ~294s scan died instantly
+/// and the table only moved when someone ran it by hand. It was 12 days
+/// stale when that was found. See src/lib/rentalworks/orderRef.ts.
 model RwOrderRef {
   id           String    @id @default(uuid())
   rwOrderId    String    @unique @map("rw_order_id")

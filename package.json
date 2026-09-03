@@ -26,6 +26,7 @@
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
+    "test:paged-sync": "tsx tests/sync/paged-sync.test.ts",
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:kit-reconcile": "tsx tests/orders/kit-reconcile.test.ts",

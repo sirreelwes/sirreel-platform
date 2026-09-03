@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { lookupRwOrderByNumber, warmRwOrderRefsInBackground } from '@/lib/rentalworks/orderRef'
+import { lookupRwOrderByNumber } from '@/lib/rentalworks/orderRef'
 import { prisma } from '@/lib/prisma'
 import { readRwToken } from '@/lib/rentalworks/credential'
 
@@ -65,10 +65,21 @@ export async function GET(_req: NextRequest, { params }: { params: { number: str
         },
       })
     }
-    warmRwOrderRefsInBackground()
+    // This used to fire warmRwOrderRefsInBackground() and tell the user
+    // "the index is refreshing now". Neither half was true: Vercel freezes
+    // the function once this response is sent, so the ~294s scan died
+    // immediately, every time. Report what IS true — when the index last
+    // refreshed — instead of promising a refresh that never happened.
+    const freshest = await prisma.rwOrderRef.aggregate({ _max: { syncedAt: true } })
+    const lastIndexed = freshest._max.syncedAt
     return NextResponse.json(
       {
-        error: `#${number} isn't in HQ's RentalWorks index yet. If it was just created in RW, the index is refreshing now — try again in a few minutes.`,
+        error:
+          `#${number} isn't in HQ's RentalWorks index` +
+          (lastIndexed
+            ? `, which last refreshed ${lastIndexed.toISOString().slice(0, 16).replace('T', ' ')} UTC. It refreshes on a schedule; if this order was created after that, it will appear on the next run.`
+            : `. The index has never been built — check the RentalWorks card on Collections.`),
+        lastIndexedAt: lastIndexed,
       },
       { status: 404 },
     )

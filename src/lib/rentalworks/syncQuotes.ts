@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
+import { rwFetch } from '@/lib/rentalworks/rwClient'
+import { runPagedSync } from '@/lib/rentalworks/pagedSync'
 
 /**
  * Bulk-pull RentalWorks QUOTES into the HQ mirror (sr_rw_quotes).
@@ -18,8 +19,14 @@ import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
  * verified 2026-08-22), so it is unusable regardless of the request.
  * Field names below are verified against the live response.
  *
- * Same safety model as syncInvoices: the full pull completes IN MEMORY
- * first; only a fully-successful pull replaces the table.
+ * PAGING (rewritten 2026-09-03): resumable, via lib/rentalworks/pagedSync.
+ * The previous shape — pull everything into memory, then replace the table
+ * — could not finish. RW's quote endpoint degrades with depth (4.8s for
+ * page 1, 31s by page 14; 331.9s for the full 15 pages, measured), against
+ * a 300s function ceiling. The run was killed mid-await every night, so
+ * nothing committed and nothing was logged, and the mirror sat frozen from
+ * 2026-08-22 until someone went looking. Each page now commits as it lands
+ * and the next run resumes where this one stopped.
  */
 
 const PAGE_SIZE = 200
@@ -27,8 +34,15 @@ const MAX_PAGES = 40 // 8k quotes — backstop; ~2.8k exist as of 2026-08-22
 
 export interface RwQuoteSyncResult {
   ok: boolean
+  /** Rows committed by THIS run (a resumed cycle spans several). */
   pulled: number
   pages: number
+  /** True when this run reached the last page and closed the cycle. */
+  complete: boolean
+  /** True when this run continued an unfinished cycle. */
+  resumed: boolean
+  nextPage: number
+  swept: number
   error?: string
 }
 
@@ -74,80 +88,114 @@ function date(v: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
-export async function syncRwQuotes(): Promise<RwQuoteSyncResult> {
-  // No token read here any more: rwFetch resolves the stored credential and
-  // raises RwNoCredentialError / RwAuthError, which this function lets
-  // through rather than folding into {ok:false}.
+export interface RwQuoteRow {
+  rwQuoteId: string
+  [k: string]: unknown
+}
 
-  const rows: Array<Record<string, unknown>> = []
-  let page = 1
-
-  while (page <= MAX_PAGES) {
-    let res: Response
-    try {
-      res = await rwFetch(`/api/v1/quote?pageNo=${page}&pageSize=${PAGE_SIZE}`)
-    } catch (e) {
-      // An auth failure is NOT a network blip — rethrow rather than fold
-      // it into {ok:false} for a caller to log and move past.
-      if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') throw e
-      return { ok: false, pulled: 0, pages: page - 1, error: `network: ${(e as Error).message}` }
-    }
-    if (!res.ok) {
-      const actionable =
-        res.status === 401 || res.status === 403
-          ? `RentalWorks rejected the token (HTTP ${res.status}) — rotate it: docs/runbooks/rentalworks-token-rotation.md`
-          : `RW HTTP ${res.status} on GET /api/v1/quote`
-      return { ok: false, pulled: 0, pages: page - 1, error: actionable }
-    }
-
-    const body = (await res.json().catch(() => ({}))) as ItemsResponse
-    const items = body.Items ?? []
-
-    for (const q of items) {
-      const rwQuoteId = str(q.QuoteId)
-      if (!rwQuoteId) continue
-      const quoteNumber = str(q.QuoteNumber)
-      rows.push({
-        rwQuoteId,
-        quoteNumber,
-        // The number the invoices will eventually carry. Conversion keeps
-        // the quote's number, so pre-conversion the QuoteNumber IS the
-        // future order number.
-        orderNumber: str(q.ConvertedToOrderNumber) ?? quoteNumber,
-        status: str(q.Status),
-        quoteDate: date(q.QuoteDate),
-        rwCustomerId: str(q.CustomerId),
-        customerName: str(q.Customer),
-        dealName: str(q.Deal),
-        dealNumber: str(q.DealNumber),
-        description: str(q.Description),
-        agent: str(q.Agent),
-        startDate: date(q.EstimatedStartDate),
-        endDate: date(q.EstimatedStopDate),
-        total: num(q.Total),
-        // Curated extras — the full RW object is ~400 fields; keep only
-        // the ones with obvious future use.
-        raw: {
-          ConvertedToOrder: q.ConvertedToOrder ?? null,
-          ConvertedToOrderNumber: q.ConvertedToOrderNumber ?? null,
-          JobName: q.JobName ?? null,
-          DealType: q.DealType ?? null,
-          InvoicedAmount: q.InvoicedAmount ?? null,
-        },
-      })
-    }
-    if (items.length < PAGE_SIZE) break
-    page++
+/** One RW quote object → the mirror row we keep. */
+function toRow(q: RwQuoteItem): RwQuoteRow | null {
+  const rwQuoteId = str(q.QuoteId)
+  if (!rwQuoteId) return null
+  const quoteNumber = str(q.QuoteNumber)
+  return {
+    rwQuoteId,
+    quoteNumber,
+    // The number the invoices will eventually carry. Conversion keeps
+    // the quote's number, so pre-conversion the QuoteNumber IS the
+    // future order number.
+    orderNumber: str(q.ConvertedToOrderNumber) ?? quoteNumber,
+    status: str(q.Status),
+    quoteDate: date(q.QuoteDate),
+    rwCustomerId: str(q.CustomerId),
+    customerName: str(q.Customer),
+    dealName: str(q.Deal),
+    dealNumber: str(q.DealNumber),
+    description: str(q.Description),
+    agent: str(q.Agent),
+    startDate: date(q.EstimatedStartDate),
+    endDate: date(q.EstimatedStopDate),
+    total: num(q.Total),
+    // Curated extras — the full RW object is ~400 fields; keep only
+    // the ones with obvious future use.
+    raw: {
+      ConvertedToOrder: q.ConvertedToOrder ?? null,
+      ConvertedToOrderNumber: q.ConvertedToOrderNumber ?? null,
+      JobName: q.JobName ?? null,
+      DealType: q.DealType ?? null,
+      InvoicedAmount: q.InvoicedAmount ?? null,
+    },
   }
+}
 
-  const syncedAt = new Date()
-  const data = rows.map((r) => ({ ...r, syncedAt }))
-  const chunks: Array<typeof data> = []
-  for (let i = 0; i < data.length; i += 1000) chunks.push(data.slice(i, i + 1000))
-  await prisma.$transaction([
-    prisma.rwQuote.deleteMany({}),
-    ...chunks.map((c) => prisma.rwQuote.createMany({ data: c as never, skipDuplicates: true })),
-  ])
+/**
+ * Pull RW quotes into the mirror, resuming an unfinished cycle if there
+ * is one. Safe to call repeatedly: a run that hits its budget simply
+ * advances the cursor.
+ *
+ * `budgetMs` defaults below the 300s route ceiling with room for RW's
+ * slowest observed page (~47s) plus the sweep.
+ */
+export async function syncRwQuotes(opts?: { budgetMs?: number }): Promise<RwQuoteSyncResult> {
+  const r = await runPagedSync<RwQuoteRow>({
+    mirror: 'quote',
+    maxPages: MAX_PAGES,
+    budgetMs: opts?.budgetMs ?? 210_000,
 
-  return { ok: true, pulled: rows.length, pages: page }
+    async fetchPage(page) {
+      const res = await rwFetch(`/api/v1/quote?pageNo=${page}&pageSize=${PAGE_SIZE}`)
+      if (!res.ok) {
+        // 401/403 never reaches here — rwFetch raises RwAuthError first.
+        throw new Error(`RW HTTP ${res.status} on GET /api/v1/quote`)
+      }
+      const body = (await res.json().catch(() => ({}))) as ItemsResponse
+      const items = body.Items ?? []
+      const rows = items.map(toRow).filter((x): x is RwQuoteRow => x !== null)
+      return { rows, last: items.length < PAGE_SIZE }
+    },
+
+    async commitPage(rows, cycleStartedAt) {
+      if (!rows.length) return
+      // Idempotent by rwQuoteId: a resumed cycle re-fetches the page it
+      // stopped on, and RW can hand the same record back on two pages as
+      // rows shift underneath the paging.
+      //
+      // NOT a loop of upserts. Sequential per-row upserts against Neon
+      // were measured at ~8 MINUTES for 3,771 rows (2026-08-22, see
+      // orderRef.ts) — that alone would blow the budget this whole
+      // rewrite exists to fit inside. createMany lands the new rows in
+      // one statement; the updates refresh what already existed and run
+      // together.
+      await prisma.rwQuote.createMany({
+        data: rows.map((r) => ({ ...r, syncedAt: cycleStartedAt })) as never,
+        skipDuplicates: true,
+      })
+      await Promise.all(
+        rows.map(({ rwQuoteId, ...rest }) =>
+          prisma.rwQuote.updateMany({
+            where: { rwQuoteId },
+            data: { ...(rest as object), syncedAt: cycleStartedAt } as never,
+          }),
+        ),
+      )
+    },
+
+    async sweep(cycleStartedAt) {
+      const res = await prisma.rwQuote.deleteMany({ where: { syncedAt: { lt: cycleStartedAt } } })
+      return res.count
+    },
+
+    countExisting: () => prisma.rwQuote.count(),
+  })
+
+  return {
+    ok: r.ok,
+    pulled: r.rowsThisRun,
+    pages: r.pagesThisRun,
+    complete: r.complete,
+    resumed: r.resumed,
+    nextPage: r.nextPage,
+    swept: r.swept,
+    error: r.error,
+  }
 }

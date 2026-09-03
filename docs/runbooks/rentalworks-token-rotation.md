@@ -205,3 +205,49 @@ concluding an endpoint doesn't exist.
 - Cron alert: `src/app/api/cron/health-check/route.ts`
 - Dashboard: <https://hq.sirreel.com/admin/health>
 - Verify script: `scripts/verify-rw-token.ts` (gitignored — local only)
+
+---
+
+## After a rotation: check the mirrors actually caught up (added 2026-09-03)
+
+Rotating the token does **not** by itself bring the data back. On
+2026-09-02 the token was rotated and invoices resumed the next morning,
+while the quote and order mirrors stayed frozen on 2026-08-22 — nobody
+noticed for another day, and only then because someone chased an unrelated
+question.
+
+The token is one of three things that can stop RW data, and the other two
+have nothing to do with credentials:
+
+| Mirror | Job | Notes |
+|---|---|---|
+| Invoices | `/api/admin/rw-invoice-sync` daily 11:00 UTC | ~35s, all-or-nothing |
+| Quotes | `/api/cron/rw-quote-sync` 02:20/08:20/14:20/20:20 UTC | resumable; a full cycle is ~330s so it may span runs |
+| Order index | `/api/cron/rw-order-refs` daily 03:40 UTC | resumable |
+
+**Check freshness rather than trusting the rotation:**
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  https://hq.sirreel.com/api/cron/rw-mirror-freshness | jq '.stale, .health[] | {mirror, ageHours, stale}'
+```
+
+`stale: 0` means every mirror is current. Anything else names the mirror,
+its age, and — for the resumable ones — where its cycle stopped and why.
+That endpoint also runs itself daily at 16:00 UTC and emails the
+`rw-token` channel when something has gone quiet, so this check is a
+confirmation rather than the only line of defence.
+
+**Do not judge health by the token's `exp` claim.** RW stamps every token
+with a 300-second expiry and then honours it for weeks; it reads "lapsed"
+within five minutes of a successful rotation. Mirror age is the only
+honest signal — see the note in `src/lib/rentalworks/syncAlert.ts`.
+
+### If a mirror is stale but the token is fine
+
+Look at `health[].cursor` in the freshness response. `completedAt: null`
+with a `nextPage` above 1 means a cycle is legitimately mid-flight and
+will continue on its next run. A `lastError` mentioning `budget` is
+normal for quotes. A `lastError` mentioning `sweep SKIPPED` means the pull
+came back suspiciously small and deletion was refused on purpose — that
+one wants a human to look at RW before anything else is done.
