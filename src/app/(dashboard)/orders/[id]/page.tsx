@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -707,8 +708,13 @@ export default function OrderDetailPage() {
   // not on every re-render or refresh.
   const [autoSendHandled, setAutoSendHandled] = useState(false);
 
-  const fmt = (n: string | number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
+  // Money is redacted for viewers without seePricing — the yard crew
+  // reaches this page by clicking a reservation, and Wes 2026-09-03:
+  // "money value of jobs should not be visible in
+  // warehouse/albert/hugo/fleet view." Same name as the old local
+  // formatter, so every call site below redacts unchanged.
+  const fmt = useMoneyFormatter();
+  const canSeeMoney = useMoneyVisible();
 
   const fmtDate = (d: string | null) => {
     if (!d) return "--";
@@ -3380,20 +3386,28 @@ export default function OrderDetailPage() {
             order's vehicles, not another fee to look up by name — and
             because a rep who never thinks to search "LCDW" is exactly
             who it needs to reach. */}
-        <div className="px-6 pb-4">
-          <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
-        </div>
+        {/* Both of these are money in their entirety — a waiver price
+            and a discount off the total. There is nothing left of
+            either once the amounts are redacted, so the yard crew gets
+            no empty shell where a panel used to be. */}
+        {canSeeMoney && (
+          <div className="px-6 pb-4">
+            <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+          </div>
+        )}
 
-        <DiscountsPanel
-          orderId={orderId}
-          // Discounts are money-only — no hold/pick consequence. Use the
-          // wider money-editable gate so reps can still adjust totals
-          // post-BOOKED. Step 2's bookedTotal-tracks-live ensures the
-          // change flows through to the invoice.
-          isEditable={isMoneyEditableForOrder}
-          data={discountsData}
-          onChange={fetchOrder}
-        />
+        {canSeeMoney && (
+          <DiscountsPanel
+            orderId={orderId}
+            // Discounts are money-only — no hold/pick consequence. Use the
+            // wider money-editable gate so reps can still adjust totals
+            // post-BOOKED. Step 2's bookedTotal-tracks-live ensures the
+            // change flows through to the invoice.
+            isEditable={isMoneyEditableForOrder}
+            data={discountsData}
+            onChange={fetchOrder}
+          />
+        )}
 
         {order.lineItems.length > 0 && (
           <div className="px-6 py-4 border-t border-lt-hairline flex justify-end">
@@ -5449,12 +5463,17 @@ function CardOnFileCharge({
   charging: boolean;
   onCharge: (amount: number, waiveSurcharge: boolean) => void | Promise<void>;
 }) {
+  // Taking a payment is the most literal money surface on the page.
+  // Hooks run before the early return so the order of hooks is stable.
+  const moneyVisible = useMoneyVisible();
   const securityOnly = savedCard.paymentPreference === 'CHECK_WIRE';
   // They authorized the card but never picked a payment method. Not the same
   // as electing the card — say so before the fee is added on their behalf.
   const prefUndecided = savedCard.paymentPreference === 'UNDECIDED';
   const [amount, setAmount] = useState<number>(balanceDue);
   const [waive, setWaive] = useState(false);
+  // After every hook, so the hook order never changes with the viewer.
+  if (!moneyVisible) return null;
   const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
   const label = `${savedCard.cardType ? savedCard.cardType + ' ' : ''}····${savedCard.last4 ?? '????'}`;
   // Card is charged base + 3%; the invoice is credited the base. Staff can

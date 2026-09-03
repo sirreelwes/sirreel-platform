@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useMoneyFormatter, useMoneyVisible } from "@/hooks/useMoney";
 import { CopyIntakeLinkButton } from "@/components/intake/CopyIntakeLinkButton";
 import { TodayMovementStrip } from "@/components/jobs/TodayMovementStrip";
 import {
@@ -140,11 +141,12 @@ export default function OrdersPage() {
     return () => window.removeEventListener("click", close);
   }, [menuFor]);
 
-  const fmt = (n: string | number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n));
-
-  const fmtCents = (n: string | number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
+  // Redacting formatters — same names, so every call site below hides
+  // money for a viewer without seePricing (Wes 2026-09-03: the yard
+  // crew's view carries no job value).
+  const fmt = useMoneyFormatter({ maximumFractionDigits: 0 });
+  const fmtCents = useMoneyFormatter();
+  const canSeeMoney = useMoneyVisible();
 
   const fmtDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : null;
@@ -181,7 +183,7 @@ export default function OrdersPage() {
             <h1 className="text-2xl font-semibold text-lt-fg">Orders</h1>
             <p className="text-sm text-lt-fg2 mt-1">
               {total} order{total !== 1 ? "s" : ""}
-              {total > 0 && (
+              {canSeeMoney && total > 0 && (
                 <>
                   {" · "}
                   <span className="font-mono text-lt-fg">{fmt(valueTotal)}</span>
@@ -511,10 +513,8 @@ function MarkLostModal({
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const value = useMemo(
-    () => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(order.total)),
-    [order.total],
-  );
+  const fmtValue = useMoneyFormatter({ maximumFractionDigits: 0 });
+  const value = fmtValue(order.total);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -148,11 +149,6 @@ function fmtDateTime(d: string | null | undefined) {
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return '—';
   return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-function fmtMoney(n: number | null | undefined) {
-  if (n == null) return '—';
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 interface JobContact {
@@ -423,6 +419,13 @@ const ASSIGN_BADGE: Record<string, string> = {
 };
 
 export default function JobDetailPage() {
+  // Wes 2026-09-03: "money value of jobs should not be visible in
+  // warehouse/albert/hugo/fleet view." One predicate (seePricing) drives
+  // both the redacting formatter — same name the call sites already use
+  // — and the money-only blocks below, which are dropped outright rather
+  // than left as a row of em-dashes.
+  const fmtMoney = useMoneyFormatter({ minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const canSeeMoney = useMoneyVisible();
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
@@ -1164,7 +1167,12 @@ const driverTone = (d: any): string => {
     { key: 'agreement', label: 'Agreement', anchor: 'agreement' },
     // Anchors at the HQ invoice, not the RW block below it — the invoice is
     // what someone opening "Billing" is looking for.
-    { key: 'money', label: 'Billing & documents', anchor: 'invoices' },
+    // Billing & documents is money end to end — the invoice, the RW
+    // balance, the final-invoice handoff. Hidden entirely, chip and all,
+    // for viewers without seePricing (the yard crew).
+    ...(canSeeMoney
+      ? [{ key: 'money', label: 'Billing & documents', anchor: 'invoices' }]
+      : []),
     { key: 'contacts', label: 'Contacts', anchor: 'contacts' },
     { key: 'clientNotes', label: 'Client notes', anchor: null },
   ];
@@ -1431,7 +1439,7 @@ const driverTone = (d: any): string => {
             yet, and not at all when it would only say zero. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
           <Meta label="Agent" value={job.agent?.name || '—'} />
-          {dealValue != null && dealValue > 0 && (
+          {canSeeMoney && dealValue != null && dealValue > 0 && (
             <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
           )}
           {(job.orders.length > 0 || job.rwOrderCount > 0) && (
@@ -1456,7 +1464,7 @@ const driverTone = (d: any): string => {
             and Loaded ready stay; no other surface rolls those up. */}
         {liveOrders.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
-            {liveInvoices.length > 0 && (
+            {canSeeMoney && liveInvoices.length > 0 && (
               <RollupChip
                 label="Balance due"
                 value={totalBalanceDue > 0 ? fmtMoney(totalBalanceDue) : 'Paid in full'}
@@ -1693,6 +1701,7 @@ const driverTone = (d: any): string => {
               whether it has been billed and whether the client knows how to
               pay. That state lived only in the panel below and in the
               Collections queue (Wes 2026-09-02). */}
+          {canSeeMoney && (
           <FinalInvoiceTile
             jobId={job.id}
             onUpload={() => {
@@ -1707,6 +1716,7 @@ const driverTone = (d: any): string => {
               sentAt: i.sentAt ? String(i.sentAt) : null,
             }))}
           />
+          )}
         </div>
       </div>
 
@@ -2488,7 +2498,9 @@ const driverTone = (d: any): string => {
                         {order.stageBookingTerms.securityGuardRequired && (
                           <span className="text-amber-700">+ Security guard</span>
                         )}
-                        <span>Daily: <span className="font-mono text-zinc-900">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
+                        {canSeeMoney && (
+                          <span>Daily: <span className="font-mono text-zinc-900">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
+                        )}
                       </div>
                       {hasStageNotes && order.stageBookingTerms.salesNotes && (
                         <div className="mt-1 text-[13px] text-zinc-800 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
@@ -2570,7 +2582,9 @@ const driverTone = (d: any): string => {
                     <span className="text-[11px] text-zinc-700 ml-2">
                       {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
                     </span>
-                    <span className="ml-auto font-mono text-[13px] text-zinc-800">{fmtMoney(o.total)}</span>
+                    {canSeeMoney && (
+                      <span className="ml-auto font-mono text-[13px] text-zinc-800">{fmtMoney(o.total)}</span>
+                    )}
                     <Link
                       href={`/orders/${o.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -2593,8 +2607,8 @@ const driverTone = (d: any): string => {
                                   <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
                                   <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
                                   <th className="text-right pb-1.5 pr-2 font-semibold">Days</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Rate</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Total</th>
+                                  {canSeeMoney && <th className="text-right pb-1.5 pr-2 font-semibold">Rate</th>}
+                                  {canSeeMoney && <th className="text-right pb-1.5 pr-2 font-semibold">Total</th>}
                                   <th className="text-left pb-1.5 pl-2 font-semibold">Lane / Pick</th>
                                 </tr>
                               </thead>
@@ -2609,8 +2623,8 @@ const driverTone = (d: any): string => {
                                     </td>
                                     <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
                                     <td className="py-1.5 pr-2 text-right font-mono">{li.billableDays}</td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.rate)}</td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>
+                                    {canSeeMoney && <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.rate)}</td>}
+                                    {canSeeMoney && <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>}
                                     <td className="py-1.5 pl-2 text-[11px]">
                                       {li.fulfillmentLane && (
                                         <span className="text-zinc-700 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
@@ -2684,7 +2698,7 @@ const driverTone = (d: any): string => {
                       )}
 
                       {/* Invoices */}
-                      {o.invoices.length > 0 && (
+                      {canSeeMoney && o.invoices.length > 0 && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Invoices</div>
                           <ul className="text-[13px] text-zinc-700 space-y-0.5">
@@ -2724,7 +2738,7 @@ const driverTone = (d: any): string => {
           client actually holds, and until now every action on it (view PDF,
           send, void, generate) lived one level down inside the order
           (Wes 2026-09-01). Everything below is RentalWorks-era or manual. */}
-      {showSec('money') && (<>
+      {canSeeMoney && showSec('money') && (<>
       <div id="invoices" className="scroll-mt-4">
         <JobInvoicesPanel
           orders={job.orders.map((o) => ({
