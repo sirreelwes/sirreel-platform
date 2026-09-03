@@ -35,7 +35,7 @@ function check(got: unknown, want: unknown, why: string): void {
 }
 
 const vehicleNoCatalog: HoldableLineShape = {
-  department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
+  type: 'EQUIPMENT', department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
 }
 const vehicleUnitTracked: HoldableLineShape = {
   department: 'VEHICLES', assetCategoryId: null,
@@ -49,6 +49,25 @@ const supplies: HoldableLineShape = {
   department: 'PRODUCTION_SUPPLIES' as never, assetCategoryId: null,
   inventoryItem: { department: 'PRODUCTION_SUPPLIES' as never, trackingMode: 'QUANTITY', legacyAssetCategoryId: null },
 }
+// LCDW: a per-vehicle CHARGE. Carries department VEHICLES, which is why
+// a department-only test flagged it on four live quotes as a missing
+// truck — the exact false alarm that would teach someone to ignore the
+// one line in the email that means "nothing is reserved".
+const lcdwFee: HoldableLineShape = {
+  type: 'FEE', department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
+}
+const subRentalVehicle: HoldableLineShape = {
+  type: 'VEHICLE', department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
+}
+// "Production Truck" on S260903-002: a real truck typed EQUIPMENT on
+// department VEHICLES. Allowing only type=VEHICLE dropped it back out of
+// the report, which is why the rule excludes charges instead.
+const mistypedTruck: HoldableLineShape = {
+  type: 'EQUIPMENT', department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
+}
+const labourOnVehicles: HoldableLineShape = {
+  type: 'LABOR', department: 'VEHICLES', assetCategoryId: null, inventoryItem: null,
+}
 const legacyLine: HoldableLineShape = {
   department: 'VEHICLES', assetCategoryId: 'cat-legacy',
   assetCategory: { department: 'VEHICLES' }, inventoryItem: null,
@@ -60,6 +79,10 @@ check(isUnholdableVehicleLine(vehicleUnitTrackedNoCategory), true, 'unit-tracked
 check(isUnholdableVehicleLine(vehicleUnitTracked), false, 'a normal Cargo Van line holds fine')
 check(isUnholdableVehicleLine(legacyLine), false, 'a legacy line carrying its category directly holds fine')
 check(isUnholdableVehicleLine(supplies), false, 'quantity-tracked supplies are correctly skipped, NOT flagged')
+check(isUnholdableVehicleLine(lcdwFee), false, 'LCDW is a FEE on department VEHICLES — a charge, never a missing truck')
+check(isUnholdableVehicleLine(subRentalVehicle), true, 'a real VEHICLE line with no catalog row ("EcoFlux — Celebrity Motorhome") still flags')
+check(isUnholdableVehicleLine(mistypedTruck), true, '"Production Truck" typed EQUIPMENT on department VEHICLES is still a truck')
+check(isUnholdableVehicleLine(labourOnVehicles), false, 'labour billed against vehicles is not a unit to assign')
 
 // ── the arithmetic the hold logic performs ──
 // Mirrors holdOnQuoteSend: envelope spans every held line; quantity is

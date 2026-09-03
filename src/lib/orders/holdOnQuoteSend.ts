@@ -30,7 +30,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { LineItemDepartment } from '@prisma/client'
+import { LineItemDepartment, LineItemType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 
 export interface HoldOnQuoteResult {
@@ -48,8 +48,21 @@ export interface HoldOnQuoteResult {
 }
 
 
+/** Line types that are money or consumables, never a unit to assign:
+ *  a fee, a discount, labour, or an expendable. Everything else on a
+ *  VEHICLES/STAGES department is something physical that a person is
+ *  expecting us to hand over. */
+const NON_ASSIGNABLE_TYPES: ReadonlySet<LineItemType> = new Set([
+  LineItemType.FEE,
+  LineItemType.DISCOUNT,
+  LineItemType.LABOR,
+  LineItemType.EXPENDABLE,
+])
+
 /** The line shape both the hold logic and the action-item provider read. */
 export interface HoldableLineShape {
+  /** VEHICLE / EQUIPMENT / FEE / … — the precise discriminator. */
+  type?: LineItemType | null
   department: LineItemDepartment | null
   assetCategoryId: string | null
   assetCategory?: { department: LineItemDepartment | null } | null
@@ -74,6 +87,20 @@ export interface HoldableLineShape {
  * lines this module fails to hold — one definition, no drift.
  */
 export function isUnholdableVehicleLine(li: HoldableLineShape): boolean {
+  // Neither field decides this alone, and both directions were wrong on
+  // live quotes:
+  //   · department only — LCDW is a per-vehicle CHARGE carrying
+  //     department VEHICLES, and got reported on four quotes as a
+  //     missing truck. A false alarm on the one line in the email that
+  //     means "nothing is reserved anywhere" teaches people to ignore it.
+  //   · type === VEHICLE only — "Production Truck" on S260903-002 is
+  //     typed EQUIPMENT on department VEHICLES. A real truck, mistyped,
+  //     silently dropped back out of the report.
+  // So: exclude the types that are definitionally not a unit anyone
+  // could assign, and let everything else on a vehicle/stage department
+  // through. Excluding is the safe direction — a type added later is
+  // reported rather than quietly skipped.
+  if (li.type != null && NON_ASSIGNABLE_TYPES.has(li.type)) return false
   const dept = li.assetCategoryId ? li.assetCategory?.department : (li.inventoryItem?.department ?? li.department)
   if (dept !== LineItemDepartment.VEHICLES && dept !== LineItemDepartment.STAGES) return false
   if (li.assetCategoryId) return false

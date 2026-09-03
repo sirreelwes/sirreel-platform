@@ -42,6 +42,7 @@ export type NotificationChannelKey =
   | 'hq-escalation-fleet'
   | 'hq-escalation-warehouse'
   | 'eod-collections'
+  | 'eod-unassigned-units'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -138,6 +139,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The floor half: HQ-booked orders approaching pickup whose pick list is still DRAFT / PICKING / READY_TO_STAGE — or missing entirely, which is an order nobody has started rather than one that is fine. Hugo and the warehouse. There are no WAREHOUSE-role users yet, so the default is Hugo plus the hq@ group; point it at the floor once they have logins.',
     defaults: () => ['hugo@sirreel.com', hqNotifyInbox()],
+  },
+  {
+    key: 'eod-unassigned-units',
+    label: 'End-of-day: units not assigned',
+    description:
+      'Quotes sent with vehicles held but no specific unit picked, mailed at 5pm Pacific (Wes 2026-09-03). A quote reserves a CATEGORY — until someone picks the truck it sits on no unit row, and the same vehicle can go out twice. Silent on a day with nothing outstanding. Sales and dispatch both need it: sales sent the quote, dispatch picks the unit.',
+    defaults: () => ['wes@sirreel.com'],
   },
   {
     key: 'eod-collections',
