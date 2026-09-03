@@ -19,6 +19,8 @@
 
 import {
   buildBookingTerms,
+  buildInvoiceBookingTerms,
+  INVOICE_TERM_KEYS,
   classifyVehicleLine,
   periodTermsFor,
   cardFeeBody,
@@ -34,6 +36,10 @@ import {
   FUEL_PER_GALLON,
 } from '../../src/lib/contracts/fees'
 import { YARD_HOURS, YARD_HOURS_ONE_LINE } from '../../src/lib/site/yardHours'
+import {
+  quotePdfStaleReason,
+  QUOTE_PDF_TEMPLATE_EPOCH,
+} from '../../src/lib/orders/quotePdfFreshness'
 
 const failures: string[] = []
 const check = (c: boolean, why: string) => {
@@ -188,6 +194,51 @@ check(new Set(keys(truckTerms)).size === keys(truckTerms).length, 'keys are uniq
 check(truckTerms.every((t) => t.title.length > 0 && t.body.length > 0), 'every term has a title and a body')
 check(keys(truckTerms)[0] === 'lot-access', 'lot access leads — it is the first thing a driver needs')
 check(keys(truckTerms)[keys(truckTerms).length - 1] === 'card-fees', 'payment closes the block')
+
+// ─────────────────────────────────────────────────────────────────────
+console.log('\n9. The invoice subset explains charges, nothing more')
+const inv = buildInvoiceBookingTerms({ vehicles: [veh()] })
+check(keys(inv).join() === INVOICE_TERM_KEYS.join(),
+  'exactly the four charge-explaining terms, in quote order')
+for (const k of ['lot-access', 'truck-period', 'van-period', 'parking', 'lcdw', 'cancellation'] as BookingTermKey[]) {
+  check(!keys(inv).includes(k), `"${k}" is pre-booking — absent from the invoice`)
+}
+// The invoice must never state a rate the quote contradicts. Filtering the
+// same builder is what guarantees it, so assert the strings are identical.
+const q = buildBookingTerms({ vehicles: [veh()] })
+for (const t of inv) {
+  const onQuote = q.find((x) => x.key === t.key)!
+  check(t.body === onQuote.body, `"${t.key}" body is word-for-word the quote's`)
+}
+check(inv.every((t) => t.note === undefined),
+  'forward-looking notes are stripped ("let us know ahead of time" is moot after the fact)')
+check(q.find((t) => t.key === 'mileage')!.note !== undefined,
+  'and that note is still on the QUOTE, where it can be acted on')
+
+const invGear = buildInvoiceBookingTerms({ vehicles: [] })
+check(keys(invGear).join() === 'trash,card-fees',
+  'a gear-only invoice carries only trash + card fees')
+
+// ─────────────────────────────────────────────────────────────────────
+console.log('\n10. A pre-block quote PDF re-cuts itself')
+const t0 = new Date(QUOTE_PDF_TEMPLATE_EPOCH)
+const before = new Date(QUOTE_PDF_TEMPLATE_EPOCH - 86_400_000)
+const after = new Date(QUOTE_PDF_TEMPLATE_EPOCH + 86_400_000)
+
+check(quotePdfStaleReason({ quotePdfGeneratedAt: before, updatedAt: before }) === 'format',
+  'a PDF cut before the epoch is FORMAT-stale even though the order never moved')
+check(quotePdfStaleReason({ quotePdfGeneratedAt: after, updatedAt: after }) === null,
+  'a PDF cut after the epoch is current')
+check(quotePdfStaleReason({ quotePdfGeneratedAt: t0, updatedAt: t0 }) === null,
+  'the epoch instant itself counts as current, not stale')
+// Content staleness outranks format: wrong prices are the worse problem and
+// the more urgent message, and send-quote refuses only on 'content'.
+check(quotePdfStaleReason({ quotePdfGeneratedAt: before, updatedAt: after }) === 'content',
+  'an order that ALSO moved reports content, not format')
+check(quotePdfStaleReason({ quotePdfGeneratedAt: after, updatedAt: new Date(+after + 60_000) }) === 'content',
+  'a post-epoch PDF still goes content-stale when the order moves')
+check(quotePdfStaleReason({ quotePdfGeneratedAt: null, updatedAt: after }) === null,
+  'a MISSING PDF is absent, not stale — ensureFreshQuotePdf must not cut a first one')
 
 console.log(
   failures.length === 0

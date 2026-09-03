@@ -390,6 +390,53 @@ function lcdwTerm(vehicles: BookingVehicleLine[]): BookingTerm | null {
   }
 }
 
+/**
+ * The subset that belongs on an INVOICE.
+ *
+ * Wes, 2026-09-03, choosing this over the full block: most booking terms are
+ * PRE-booking information — lot hours, the rental cycle, cancellation, LCDW
+ * all help someone decide whether to book, and are spent by the time they are
+ * billed. Reprinting them on an invoice pads a billing document with terms
+ * that can no longer be acted on.
+ *
+ * These four are different: each one explains a CHARGE that can appear as a
+ * line on the final invoice, and each is a charge clients query. A $0.50/mile
+ * overage or a $25 disposal line with nothing next to it explaining the rate
+ * is how a billing question becomes a collections call, so the explanation
+ * travels with the bill.
+ *
+ * Order follows the quote's, so a client comparing the two documents reads
+ * the same terms in the same sequence.
+ */
+export const INVOICE_TERM_KEYS: readonly BookingTermKey[] = [
+  'refueling',
+  'mileage',
+  'trash',
+  'card-fees',
+]
+
+/**
+ * Booking terms for an invoice: the charge-explaining four, in quote order.
+ *
+ * Built by FILTERING buildBookingTerms rather than composing its own strings,
+ * so the invoice cannot state a rate the quote contradicts — the failure this
+ * whole module exists to prevent, and the reason a client who was quoted one
+ * mileage rate must never be billed against a different sentence.
+ *
+ * The vehicle gating comes along for free: a gear-only invoice has no
+ * refueling or mileage term to carry, and drops to trash + card fees.
+ *
+ * Forward-looking NOTES are stripped. The one that survives the filter is
+ * mileage's "let us know ahead of time if you're leaving the county" — an
+ * instruction that is meaningless on a document issued after the vehicle came
+ * back, and reads as boilerplate nobody proofread.
+ */
+export function buildInvoiceBookingTerms(input: BookingTermsInput): BookingTerm[] {
+  return buildBookingTerms(input)
+    .filter((t) => INVOICE_TERM_KEYS.includes(t.key))
+    .map(({ note: _forwardLooking, ...t }) => t)
+}
+
 /** "the PopVan" / "the PopVan and the ProScout" / "A, B and C". */
 function listNames(names: string[]): string {
   const unique = [...new Set(names)]

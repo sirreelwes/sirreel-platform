@@ -56,6 +56,7 @@ import {
   InvoiceDocument,
   type InvoiceLineSnapshotEntry,
 } from './InvoiceDocument'
+import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 
 export type GenerateRentalInvoiceResult =
   | {
@@ -384,6 +385,21 @@ export async function generateRentalInvoice(args: {
   // ── Render PDF ──────────────────────────────────────────────────
   let pdfBytes: Buffer
   try {
+    // Charge terms — the rates behind the metered lines above. Filtered
+    // from the SAME builder the quote PDF uses, so a client quoted 100
+    // mi/day cannot be billed against a different sentence.
+    //
+    // No `subRentals` in the query on purpose: the invoice subset excludes
+    // LCDW, the only term that cares whether a unit is a partner's.
+    const bookingTerms = buildInvoiceBookingTerms({
+      vehicles: order.lineItems
+        .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT')
+        .map<BookingVehicleLine>((li) => ({
+          description: li.description,
+          code: li.inventoryItem?.code ?? null,
+        })),
+    })
+
     const element = React.createElement(InvoiceDocument, {
       invoiceNumber,
       invoiceType: 'RENTAL',
@@ -412,6 +428,7 @@ export async function generateRentalInvoice(args: {
         phone: order.agent.phone ?? null,
       },
       notes,
+      bookingTerms,
     }) as React.ReactElement<DocumentProps>
     pdfBytes = await renderToBuffer(element)
   } catch (err) {
