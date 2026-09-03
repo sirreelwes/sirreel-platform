@@ -3,9 +3,14 @@
 /**
  * /admin/payment-info — Wes sets/updates the STRUCTURED payment & ACH
  * details the public request flow emails to verified clients, plus two
- * PRIVATE-Blob PDF attachments. ADMIN-only (the API enforces
- * requireAdmin). Details/attachments are never rendered on any public
- * surface; the PDFs have no public route — they're emailed only.
+ * PRIVATE-Blob PDF attachments. Details/attachments are never rendered
+ * on any public surface; the PDFs have no public route — they're
+ * emailed only.
+ *
+ * READ is ADMIN. WRITING is Wes alone (Wes 2026-09-03: "payment
+ * information should not be changeable by anyone except Wes") — the API
+ * enforces it and reports `canEdit` on GET so this page renders
+ * read-only for Dani rather than offering buttons that 403.
  *
  * There is EXACTLY ONE way to enter banking details: these structured
  * fields (the old free-text blob is gone). Routing numbers are
@@ -64,6 +69,10 @@ export default function AdminPaymentInfoPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorField, setErrorField] = useState<string | null>(null);
   const [busySlot, setBusySlot] = useState<SlotKey | null>(null);
+  // Comes from the API, never inferred here — the route is the gate, and
+  // a page that guessed would drift from it. Locked until GET says
+  // otherwise, so the controls never flash editable.
+  const [canEdit, setCanEdit] = useState(false);
 
   const load = () =>
     fetch('/api/admin/payment-info')
@@ -71,6 +80,7 @@ export default function AdminPaymentInfoPage() {
       .then((data) => {
         if (data.details) setD({ ...EMPTY, ...data.details });
         if (data.attachments) setSlots(data.attachments);
+        setCanEdit(!!data.canEdit);
         setLoaded(true);
       })
       .catch(() => setError('Could not load current settings.'));
@@ -150,7 +160,7 @@ export default function AdminPaymentInfoPage() {
       <input
         type="text"
         value={d[key]}
-        disabled={!loaded}
+        disabled={!loaded || !canEdit}
         onChange={(e) => set(key)(e.target.value)}
         placeholder={opts.placeholder}
         {...HARDEN}
@@ -171,6 +181,12 @@ export default function AdminPaymentInfoPage() {
           clients who request them via the public &ldquo;Payments made simple.&rdquo; page. Unknown
           requesters become pipeline inquiries instead. Changes are logged (field names only).
         </p>
+        {loaded && !canEdit && (
+          <p className="mt-3 text-sm text-lt-fg2 border border-lt-hairline bg-lt-inner rounded-lg px-3 py-2">
+            <b>Read-only.</b> These are the numbers every client wires money to, so only Wes
+            can change them. Ask him if something here is wrong.
+          </p>
+        )}
       </header>
 
       {/* Structured banking fields — the ONLY entry path */}
@@ -193,7 +209,7 @@ export default function AdminPaymentInfoPage() {
           </span>
           <textarea
             value={d.instructions}
-            disabled={!loaded}
+            disabled={!loaded || !canEdit}
             onChange={(e) => set('instructions')(e.target.value)}
             rows={3}
             placeholder="SWIFT/BIC, intermediary bank, beneficiary address — edge cases only."
@@ -211,7 +227,7 @@ export default function AdminPaymentInfoPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => void save()}
-            disabled={saving || !loaded}
+            disabled={saving || !loaded || !canEdit}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save details'}
@@ -243,6 +259,7 @@ export default function AdminPaymentInfoPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {canEdit && (
               <label className="text-[11px] font-semibold bg-lt-fg hover:bg-black text-white px-3 py-1.5 rounded-lg cursor-pointer">
                 {busySlot === slot ? 'Uploading…' : slots[slot].present ? 'Replace' : 'Upload PDF'}
                 <input
@@ -257,7 +274,8 @@ export default function AdminPaymentInfoPage() {
                   }}
                 />
               </label>
-              {slots[slot].present && (
+              )}
+              {canEdit && slots[slot].present && (
                 <button
                   onClick={() => void clearSlot(slot)}
                   disabled={busySlot === slot}

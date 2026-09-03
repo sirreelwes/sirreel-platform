@@ -18,13 +18,22 @@ import { signOut } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { writeViewAsCookie } from '@/lib/auth/viewAs';
 
+// MANAGER, FLEET_TECH and WAREHOUSE all read "Warehouse & Fleet" (Wes,
+// 2026-09-03: "get rid of all three and replace with one view"). They
+// share one nav, one landing page and one board; three different badges
+// under three people standing at the same bench only suggested three
+// different apps. The ROLES still exist and still differ in what they
+// can WRITE — this is the name of the view, not of the permission set.
+const YARD_LABEL = 'Warehouse & Fleet';
+
 export const ROLE_LABELS: Record<string, string> = {
   ADMIN:      'Admin',
-  MANAGER:    'Manager',
+  MANAGER:    YARD_LABEL,
   AGENT:      'Sales',
   BILLING:    'Billing',
-  FLEET_TECH: 'Fleet',
-  DISPATCHER: 'Deliveries & Pickups',
+  FLEET_TECH: YARD_LABEL,
+  WAREHOUSE:  YARD_LABEL,
+  DISPATCHER: YARD_LABEL,
   DRIVER:     'Driver',
   CLIENT:     'Client',
 };
@@ -101,11 +110,15 @@ export function UserMenu({
                 className="w-full px-2 py-1.5 text-[11px] border border-amber-300 rounded bg-white text-gray-900"
               >
                 <option value="" className="text-gray-900">Admin (default)</option>
-                <option value="MANAGER" className="text-gray-900">Manager</option>
+                {/* One entry, not three. Manager / Fleet Tech / Warehouse
+                    render the identical view, so previewing them
+                    separately showed the same screen three times. MANAGER
+                    is the role behind it: Hugo, Julian and Albert hold it,
+                    and it carries the most controls of the three, so the
+                    preview shows the fullest version of the shared view. */}
+                <option value="MANAGER" className="text-gray-900">Warehouse &amp; Fleet</option>
                 <option value="AGENT" className="text-gray-900">Sales Agent</option>
                 <option value="BILLING" className="text-gray-900">Billing</option>
-                <option value="FLEET_TECH" className="text-gray-900">Fleet Tech</option>
-                <option value="WAREHOUSE" className="text-gray-900">Warehouse</option>
                 <option value="DRIVER" className="text-gray-900">Driver</option>
                 <option value="CLIENT" className="text-gray-900">Client</option>
               </select>

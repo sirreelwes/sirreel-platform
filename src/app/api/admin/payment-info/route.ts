@@ -1,6 +1,11 @@
 /**
- * /api/admin/payment-info — Wes-managed payment/ACH details
- * (requireAdmin on every method).
+ * /api/admin/payment-info — Wes-managed payment/ACH details.
+ *
+ * READ (GET) is requireAdmin. WRITES (PUT / POST / DELETE) are narrower:
+ * requirePaymentInfoEditor, an email allowlist that is Wes alone (Wes
+ * 2026-09-03, after a call with Billing: "payment information should not
+ * be changeable by anyone except Wes"). requireAdmin was not enough —
+ * ADMIN is Wes AND Dani. See src/lib/payments/editor.ts.
  *
  * Storage (all server-side, never client-reachable outside this admin
  * surface; public delivery is EMAIL ONLY via /api/public/payment-info):
@@ -21,12 +26,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { del } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-admin'
+import { isPaymentInfoEditor } from '@/lib/payments/editor'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
 import { validatePaymentDetails } from '@/lib/payments/paymentDetails'
 
 export const dynamic = 'force-dynamic'
 
 const SINGLETON = 'singleton'
+
+/**
+ * Write gate: admin FIRST (so a signed-out or wrong-role caller gets the
+ * usual 401/403), then the editor allowlist on top. Returns the caller or
+ * a NextResponse to short-circuit with, exactly like requireAdmin.
+ */
+async function requirePaymentInfoEditor() {
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
+  if (!isPaymentInfoEditor(gate.user.email)) {
+    return NextResponse.json(
+      { error: 'Only Wes can change payment information.' },
+      { status: 403 },
+    )
+  }
+  return gate
+}
 const MAX_PDF_BYTES = 15 * 1024 * 1024
 
 const SLOTS = {
@@ -38,6 +61,7 @@ type SlotKey = keyof typeof SLOTS
 export async function GET() {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
+  const canEdit = isPaymentInfoEditor(gate.user.email)
 
   const s = await prisma.siteSetting.findUnique({
     where: { id: SINGLETON },
@@ -60,6 +84,8 @@ export async function GET() {
     },
   })
   return NextResponse.json({
+    // Whether THIS caller may save. Dani reads the page; only Wes writes.
+    canEdit,
     details: {
       payeeName: s?.paymentPayeeName ?? '',
       bankName: s?.paymentBankName ?? '',
@@ -82,7 +108,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requirePaymentInfoEditor()
   if (gate instanceof NextResponse) return gate
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -150,7 +176,7 @@ export async function PUT(req: NextRequest) {
 
 /** POST multipart { slot, file } → private Blob PDF, key persisted. */
 export async function POST(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requirePaymentInfoEditor()
   if (gate instanceof NextResponse) return gate
 
   const form = await req.formData().catch(() => null)
@@ -216,7 +242,7 @@ export async function POST(req: NextRequest) {
 
 /** DELETE ?slot=<slot> → clear that PDF slot. */
 export async function DELETE(req: NextRequest) {
-  const gate = await requireAdmin()
+  const gate = await requirePaymentInfoEditor()
   if (gate instanceof NextResponse) return gate
 
   const slot = new URL(req.url).searchParams.get('slot') as SlotKey | null

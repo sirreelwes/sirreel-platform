@@ -494,9 +494,17 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // The evidence desk behind the aging review — email trail + AI
           // reading per invoice. Collections-gated like /collections itself.
           { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
-          { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
+          // Reconcile RW dropped 2026-09-03 (Wes, after a call with
+          // Billing). It is an admin reconciliation tool, not part of
+          // the collecting loop, and it sat between the two screens Ana
+          // actually works. Still in the full nav for admin.
           { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
           { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
+          // Vendors joins Billing & Collections for admin, sales AND
+          // billing (Wes, 2026-09-03) — a vendor is who we owe, so the
+          // roster belongs with the money rather than buried in Admin.
+          // /api/vendors already admits BILLING (the subRentals perm).
+          { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
           { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
           // The how-to sits with the work it describes rather than in a
           // docs section of its own — there is one guide, and a nav
@@ -574,18 +582,26 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       },
       // Collections was tacked onto the end of the sales list; with the
       // group split it gets the same header it carries in the full nav
-      // rather than reading as a sales tab. Still allowlist-gated, so
-      // for most agents this section drops out entirely.
-      ...(canUseCollections(navRole, navEmail)
-        ? [{
-            label: 'Billing & Collections',
-            items: [
-              { id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' },
-              { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
-              { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
-            ],
-          }]
-        : []),
+      // rather than reading as a sales tab. The Collections entries stay
+      // allowlist-gated; Vendors does not — Wes 2026-09-03 put the vendor
+      // roster in front of admin, sales AND billing, and a rep sourcing a
+      // sub-rental needs it whether or not they ever chase an invoice. So
+      // the section renders for every agent, with Vendors as its floor.
+      {
+        label: 'Billing & Collections',
+        items: [
+          ...(canUseCollections(navRole, navEmail)
+            ? [
+                { id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' },
+                { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
+              ]
+            : []),
+          { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
+          ...(canUseCollections(navRole, navEmail)
+            ? [{ id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' }]
+            : []),
+        ],
+      },
     ];
   }
   // Fixed information architecture — identical for every user. This is a
@@ -666,6 +682,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // the rw_sync_failure alert.
         { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
         { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
+        // Moved out of Admin 2026-09-03 (Wes): a vendor is someone we owe,
+        // so the roster reads as money, not configuration — and sales and
+        // billing both needed it without an Admin section to find it in.
+        { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
         // Everyone who can take money should be able to find out how.
         { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
       ],
@@ -713,7 +733,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
         { id: 'fleet-pricing', label: 'Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
         { id: 'fees', label: 'Fees', icon: 'Receipt', href: '/admin/fees' },
-        { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
         { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
