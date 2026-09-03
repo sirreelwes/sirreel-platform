@@ -150,7 +150,15 @@ export async function GET(req: NextRequest) {
             negotiatedTermsActiveAsOf: true,
           },
         },
-        job: { select: { id: true, name: true, jobCode: true, productionType: true, status: true } },
+        job: {
+          select: {
+            id: true, name: true, jobCode: true, productionType: true, status: true,
+            // Release flag only — the codes themselves are never on this
+            // payload. The after-hours page fetches them from its own
+            // route, which re-checks the release and logs the read.
+            afterHoursReleasedAt: true,
+          },
+        },
         agent: {
           select: { id: true, name: true, email: true, phone: true, avatarUrl: true, displayTitle: true },
         },
@@ -498,6 +506,10 @@ export async function GET(req: NextRequest) {
     // phone and email. Withheld unless someone actually took the account.
     agent: order.repVisibleToClient ? order.agent : null,
     afterHoursLine: AFTER_HOURS_LINE,
+    /** True once an agent has released this job's after-hours instructions
+     *  — the portal shows the card, the card links to the page. A boolean,
+     *  not the codes: the codes have exactly one route and it audit-logs. */
+    afterHoursReleased: !!order.job?.afterHoursReleasedAt,
     leadership: leadership
       ? {
           id: leadership.id,

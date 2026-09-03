@@ -87,6 +87,9 @@ interface PortalData {
    *  automatic assignment is not a relationship. See the data route. */
   agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null } | null;
   afterHoursLine: string;
+  /** A rep has released this job's after-hours instructions. Gates the
+   *  card that links to /after-hours; the codes live only on that page. */
+  afterHoursReleased: boolean;
   leadership: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
   countdown: { msUntilPickup: number } | null;
   lineItems: {
@@ -623,6 +626,31 @@ export default function JobPortalPage() {
           <div className="text-[11px] text-gray-400 -mt-2">
             After-hours line: <a href={`tel:${data.afterHoursLine}`} className="text-gray-600 hover:text-gray-900">{data.afterHoursLine}</a>
           </div>
+
+          {/* After-hours access, once a rep has released it for this job.
+              Sits with the contact block rather than with paperwork: it is
+              not a document to action, it is how you get in at 5am. The
+              codes are NOT here — this is a link to the page that holds
+              them, so a screenshot of the portal isn't a copy of the gate
+              code. Absent entirely until released, because a row reading
+              "not available" would have a client calling to ask why. */}
+          {data.afterHoursReleased && (
+            <a
+              href={`/portal/job/${slug}/after-hours`}
+              className="block rounded-xl border p-4 hover:border-gray-400 transition-colors"
+              style={{ borderColor: '#E8D7A8', backgroundColor: '#FDF8EC' }}
+            >
+              <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: '#8a6a1f' }}>
+                After-hours pickup &amp; drop-off
+              </div>
+              <div className="text-sm font-semibold text-gray-900 mt-1">
+                Gate code, container code and directions →
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">
+                Send this link to whoever is making the run.
+              </div>
+            </a>
+          )}
         </section>
 
         {/* ── Schedule ────────────────────────────────────────────────────── */}

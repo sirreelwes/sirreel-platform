@@ -151,6 +151,13 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/api/driver-portal/', // driver portal read + licence upload (token-gated)
   '/drive/',           // no-login driver JOB page (/drive/[token])
   '/api/drive/',       // driver job page data + licence upload (token-gated)
+  // After-hours instructions forwarded by the CLIENT to their truck driver
+  // or PA (/after-hours/[token]). Same token-is-the-credential contract as
+  // /drive/ above, and a narrower payload — one page, no portal session, no
+  // order, no pricing. It MUST resolve here: the share email is client-
+  // facing mail and every client-facing link is built on this host.
+  '/after-hours/',
+  '/api/after-hours/', // the share's read (token-gated, self-checks)
   '/api/cardpointe/',  // portal pay-panel CardPointe config (client payment iframe)
   '/intake/',          // public agent-shared intake forms (/intake + /intake/[slug])
   '/api/intake/',      // intake submit
@@ -362,6 +369,11 @@ export function middleware(req: NextRequest): NextResponse {
       pathname.startsWith('/api/driver-portal/') ||
       pathname.startsWith('/drive/') ||
       pathname.startsWith('/api/drive/') ||
+      // Same problem as /drive/ above: an after-hours share link pasted or
+      // forwarded with the hq host would hit the staff app and demand a
+      // Google login from a truck driver at 5am.
+      pathname.startsWith('/after-hours/') ||
+      pathname.startsWith('/api/after-hours/') ||
       pathname.startsWith('/order/supplies')
     ) {
       const url = req.nextUrl.clone()

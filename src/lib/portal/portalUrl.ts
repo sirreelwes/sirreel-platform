@@ -55,6 +55,21 @@ export function portalJobUrl(slug: string, token?: string): string {
 }
 
 /**
+ * After-hours pickup / drop-off instructions for a job —
+ * `/portal/job/<slug>/after-hours`. Deep-linked from the release email so
+ * a coordinator forwarding it to a driver at 11pm lands on the codes
+ * rather than on the portal home with something to find.
+ *
+ * Carries `?token=` for the same reason the landing URL does: the page
+ * performs its own token-to-cookie handshake, so the link works for a
+ * recipient who has never opened the portal on this device.
+ */
+export function portalJobAfterHoursUrl(slug: string, token?: string): string {
+  const t = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${portalBaseUrl()}/portal/job/${slug}/after-hours${t}`
+}
+
+/**
  * Legacy single-token portal entry (`/portal/[token]`). Kept for
  * backward compat with old PortalAccess emails that addressed the
  * token directly in the path.

@@ -28,7 +28,10 @@ export async function GET() {
 
   const s = await prisma.siteSetting.findUnique({
     where: { id: SINGLETON },
-    select: { gateCode: true, gateCodeUpdatedAt: true, gateCodeUpdatedById: true },
+    select: {
+      gateCode: true, gateCodeUpdatedAt: true, gateCodeUpdatedById: true,
+      containerCode: true, containerCodeUpdatedAt: true,
+    },
   })
 
   let gateCodeUpdatedBy: string | null = null
@@ -105,6 +108,8 @@ export async function GET() {
     gateCode: s?.gateCode ?? '',
     gateCodeUpdatedAt: s?.gateCodeUpdatedAt ?? null,
     gateCodeUpdatedBy,
+    containerCode: s?.containerCode ?? '',
+    containerCodeUpdatedAt: s?.containerCodeUpdatedAt ?? null,
     jobs,
     audit,
     usage,
@@ -124,7 +129,7 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; gateCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string }
+    | { action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string }
     | null
   if (!body?.action) return NextResponse.json({ error: 'action required' }, { status: 400 })
 
@@ -153,6 +158,40 @@ export async function POST(req: NextRequest) {
         entityId: SINGLETON,
         oldValues: {},
         newValues: { changed: true, cleared: !gateCode, at: new Date().toISOString() },
+      },
+    })
+    return NextResponse.json({ ok: true })
+  }
+
+  // The storage-container keypad, recorded next to the gate for the same
+  // reason: it is programmed at the lot, and every surface that quotes it
+  // should read one row. It reaches clients only through a released
+  // after-hours page (see Job.afterHoursReleasedAt).
+  if (body.action === 'set-container-code') {
+    const containerCode =
+      typeof body.containerCode === 'string' ? body.containerCode.trim().slice(0, 60) : ''
+    await prisma.siteSetting.upsert({
+      where: { id: SINGLETON },
+      create: {
+        id: SINGLETON,
+        containerCode: containerCode || null,
+        containerCodeUpdatedAt: new Date(),
+        containerCodeUpdatedById: gate.user.id,
+      },
+      update: {
+        containerCode: containerCode || null,
+        containerCodeUpdatedAt: new Date(),
+        containerCodeUpdatedById: gate.user.id,
+      },
+    })
+    await prisma.auditLog.create({
+      data: {
+        userId: gate.user.id,
+        action: 'admin.container_code_updated',
+        entityType: 'SiteSetting',
+        entityId: SINGLETON,
+        oldValues: {},
+        newValues: { changed: true, cleared: !containerCode, at: new Date().toISOString() },
       },
     })
     return NextResponse.json({ ok: true })

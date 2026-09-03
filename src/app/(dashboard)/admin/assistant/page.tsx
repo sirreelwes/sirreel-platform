@@ -48,6 +48,8 @@ type Data = {
   gateCode: string
   gateCodeUpdatedAt: string | null
   gateCodeUpdatedBy: string | null
+  containerCode: string
+  containerCodeUpdatedAt: string | null
   jobs: Job[]
   audit: AuditRow[]
   usage: Usage
@@ -241,6 +243,8 @@ export default function AssistantAdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [gateInput, setGateInput] = useState('')
   const [savingGate, setSavingGate] = useState(false)
+  const [containerInput, setContainerInput] = useState('')
+  const [savingContainer, setSavingContainer] = useState(false)
   const [query, setQuery] = useState('')
   const [regenId, setRegenId] = useState<string | null>(null)
 
@@ -252,6 +256,7 @@ export default function AssistantAdminPage() {
       const d: Data = await res.json()
       setData(d)
       setGateInput(d.gateCode || '')
+      setContainerInput(d.containerCode || '')
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -284,6 +289,29 @@ export default function AssistantAdminPage() {
       alert('Save failed: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
       setSavingGate(false)
+    }
+  }
+
+  async function saveContainer() {
+    if (
+      !confirm(
+        'This only RECORDS the storage-container code — it does NOT reprogram the keypad. Save this value?',
+      )
+    )
+      return
+    setSavingContainer(true)
+    try {
+      const res = await fetch('/api/admin/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-container-code', containerCode: containerInput }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      alert('Save failed: ' + (e instanceof Error ? e.message : 'error'))
+    } finally {
+      setSavingContainer(false)
     }
   }
 
@@ -405,6 +433,39 @@ export default function AssistantAdminPage() {
             <div className="mt-2 text-xs text-zinc-500">
               Last recorded {fmt(data.gateCodeUpdatedAt)}
               {data.gateCodeUpdatedBy ? ` by ${data.gateCodeUpdatedBy}` : ''}.
+            </div>
+
+            {/* The container keypad. Same recording semantics, same section,
+                because they are one arrangement: the gate gets a driver onto
+                the lot and this opens the box their gear is in. Read by the
+                client-facing after-hours page (/portal/job/[slug]/after-hours)
+                once an agent releases it for a job. */}
+            <div className="mt-5 border-t border-zinc-800 pt-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                Storage container code
+              </h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                The keypad on the after-hours container inside Gate 1. Shown to clients on a
+                released after-hours page, and to nobody else.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <input
+                  value={containerInput}
+                  onChange={(e) => setContainerInput(e.target.value)}
+                  placeholder="e.g. 1580"
+                  className="w-48 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 font-mono text-lg tracking-widest text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                />
+                <button
+                  onClick={saveContainer}
+                  disabled={savingContainer || containerInput === (data.containerCode || '')}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {savingContainer ? 'Saving…' : 'Save container code'}
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-zinc-500">
+                Last recorded {fmt(data.containerCodeUpdatedAt)}.
+              </div>
             </div>
           </section>
 

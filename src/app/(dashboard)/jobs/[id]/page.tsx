@@ -44,6 +44,7 @@ import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } f
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
+import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
@@ -2342,14 +2343,19 @@ const driverTone = (d: any): string => {
           job.pickupAddress || job.pickupTime || job.pickupAccessNotes
         );
 
-        if (rows.length === 0 && !hasReportTo) return null;
-
+        // The card no longer self-hides on empty. It used to render only when
+        // an order carried logistics free-text, which meant the after-hours
+        // send — the one affordance here that EVERY job can use — was
+        // invisible on exactly the jobs most likely to need it: a plain
+        // will-call with no notes and no delivery. The panel is always
+        // present now; the free-text rows below still come and go.
         return (
           <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
             <div className="flex items-center justify-between mb-2.5">
               <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
-              <span className="text-[11px] text-zinc-700 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
+              <span className="text-[11px] text-zinc-700 uppercase tracking-wider">Client-facing access + agent notes</span>
             </div>
+            <JobAfterHoursPanel jobId={job.id} />
             {hasReportTo && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
                 <div className="flex items-baseline justify-between gap-3 mb-2">
