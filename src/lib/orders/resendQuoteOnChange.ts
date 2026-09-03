@@ -1,0 +1,225 @@
+/**
+ * Re-send the quote when the dock changed it.
+ *
+ * Wes, 2026-09-03: "yes, re-send the quote automatically when the
+ * check-out changes it but copy hq notifications."
+ *
+ * Context. The check-out report writes what actually went out onto the
+ * order's lines, and at SirReel the document on the truck is routinely
+ * still a QUOTE — the status catches up days after the gear is back. So
+ * a supervisor typing in a swap can silently leave the client holding a
+ * quote that no longer matches the order. The action item tells the
+ * AGENT; this tells the CLIENT, which is the half that was missing.
+ *
+ * ── What it deliberately will NOT do ──────────────────────────────
+ *
+ *  · It never sends a quote the client has not already seen. A DRAFT
+ *    with no quoteSentAt has no "re-" to send: mailing one would turn a
+ *    supervisor's count sheet into the first thing a client ever hears
+ *    from us about a job.
+ *  · It stops once the order is BOOKED. Past that the client's document
+ *    is an order and an agreement, not a quote, and re-sending a quote
+ *    against a signed job would be confusing at best.
+ *  · It never re-stamps quoteSentAt. This is a correction, not a new
+ *    quote, and the aging/cadence surfaces read that timestamp.
+ *  · It never blocks the report. Every failure path returns a reason and
+ *    the sheet still files — the yard's work must not depend on Resend.
+ *
+ * Relationship to POST /api/orders/[id]/send-quote: that route is the
+ * rep-driven send, with CC overrides, a typed message, portal grants for
+ * copied contacts and the status flip. This is the automatic one, and it
+ * is deliberately lean — same composer, same PDF freshness rule, same
+ * team CC, plus HQ notifications. If the composer or the freshness rule
+ * changes, both move together because both call the same helpers.
+ */
+
+import { get } from '@vercel/blob'
+import { prisma } from '@/lib/prisma'
+import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
+import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
+import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { withTeamCc } from '@/lib/email/teamVisibility'
+import { channelRecipients } from '@/lib/email/notificationChannels'
+import { mergeCc } from '@/lib/email/ccList'
+import { rankRecipients } from '@/lib/email/recipients'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
+
+/** Statuses where the client's live document is still a quote. */
+const QUOTE_STAGE_STATUSES = new Set(['DRAFT', 'QUOTE_SENT', 'APPROVED'])
+
+export type ResendOutcome =
+  | { sent: true; to: string; cc: string[] }
+  | { sent: false; reason: string }
+
+/**
+ * The note that goes above the standard quote body. It has to answer the
+ * question a client will actually have — "why am I getting this again?"
+ * — in the first sentence, and it names the changes rather than making
+ * them hunt through the PDF for the difference.
+ */
+function changeNote(changes: string[]): string {
+  const list = changes.slice(0, 8).join('\n• ')
+  const more = changes.length > 8 ? `\n• …and ${changes.length - 8} more` : ''
+  return (
+    'Your order changed at load-out, so here is the updated quote.\n\n' +
+    `• ${list}${more}\n\n` +
+    'The attached PDF and the portal both reflect what actually went out. ' +
+    'If anything here looks wrong, reply to this email and we will sort it out.'
+  )
+}
+
+export async function resendQuoteAfterCheckOut(opts: {
+  orderId: string
+  changes: string[]
+}): Promise<ResendOutcome> {
+  const { orderId, changes } = opts
+  if (changes.length === 0) return { sent: false, reason: 'nothing changed' }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      quoteSentAt: true,
+      quotePdfKey: true,
+      quotePdfUrl: true,
+      quotePdfGeneratedAt: true,
+      updatedAt: true,
+      portalSlug: true,
+      lineItems: { select: { updatedAt: true } },
+      discounts: { select: { updatedAt: true } },
+      agent: { select: { email: true } },
+      job: {
+        select: {
+          jobContacts: {
+            select: {
+              role: true,
+              isPrimary: true,
+              person: { select: { id: true, firstName: true, lastName: true, email: true } },
+            },
+          },
+        },
+      },
+      jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
+    },
+  })
+  if (!order) return { sent: false, reason: 'order not found' }
+  if (!QUOTE_STAGE_STATUSES.has(order.status)) {
+    return { sent: false, reason: `order is ${order.status.toLowerCase()} — the client's document is no longer a quote` }
+  }
+  if (!order.quoteSentAt) {
+    return { sent: false, reason: 'this quote has never been sent to the client' }
+  }
+
+  // The order's lines just moved, so the stored PDF is wrong by
+  // construction — always re-cut, never fall back to the stale one. That
+  // is the difference from the rep-driven route, which sends what is on
+  // file when a re-render fails: here the whole point is that the
+  // document changed, so a stale attachment would defeat the send.
+  const refreshed = await ensureFreshQuotePdf(orderId)
+  const pdfKey = refreshed.key ?? order.quotePdfKey
+  if (!pdfKey) {
+    return { sent: false, reason: 'no quote PDF could be produced' }
+  }
+
+  // Compose once without a portal URL to learn the canonical recipient,
+  // then again with the token bound to them — the same two-phase dance
+  // the send route does, and for the same reason.
+  const preliminary = await composeQuoteEmail({
+    orderId,
+    message: changeNote(changes),
+    customMessage: null,
+    overrideContactId: null,
+    portalUrl: null,
+    includeAttachmentMeta: false,
+  })
+  if (!preliminary.ok) return { sent: false, reason: preliminary.error }
+  const primary = preliminary.to
+
+  let portalUrl: string | null = null
+  if (order.portalSlug) {
+    try {
+      const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: primary.id })
+      portalUrl = portalJobUrl(order.portalSlug, link.token)
+    } catch (err) {
+      console.warn('[resend-quote] portal-link mint failed:', err)
+    }
+  }
+
+  const final = await composeQuoteEmail({
+    orderId,
+    message: changeNote(changes),
+    customMessage: null,
+    overrideContactId: null,
+    portalUrl,
+    includeAttachmentMeta: false,
+  })
+  if (!final.ok) return { sent: false, reason: final.error }
+
+  // Attachment is best-effort, exactly as on the rep-driven send: a blob
+  // that will not fetch must not stop the client hearing about a change.
+  let attachments: { filename: string; content: Buffer }[] | undefined
+  try {
+    const blob = await get(pdfKey, { access: 'private' })
+    if (blob && blob.statusCode === 200 && blob.stream) {
+      const buf = Buffer.from(await new Response(blob.stream).arrayBuffer())
+      attachments = [{ filename: `Quote-${order.orderNumber}.pdf`, content: buf }]
+    }
+  } catch (err) {
+    console.warn('[resend-quote] attachment fetch failed, sending without it:', err)
+  }
+
+  // CC: the job's other contacts, the sales desk, and — Wes's ask — HQ
+  // notifications, because a quote that changed itself at the dock is
+  // something the office should see go out, not something it discovers
+  // from a client. channelRecipients so the audience stays editable at
+  // /admin/notifications rather than hardcoded here.
+  const ranked = rankRecipients(order.job, order.jobContact)
+  const otherContacts = ranked.slice(1).map((r) => r.email)
+  const hq = await channelRecipients('hq-documents')
+  const clientCc = mergeCc(otherContacts, undefined, [primary.email]) ?? []
+  const cc = await withTeamCc(mergeCc(clientCc, hq, [primary.email]) ?? [], primary.email)
+
+  const emailResult = await sendAgreementEmail({
+    to: [primary.email],
+    // Replies go to the agent, never to notifications@ — same rule every
+    // other client-facing send follows.
+    replyTo: order.agent?.email ?? undefined,
+    cc,
+    subject: `Updated quote — ${final.subject.replace(/^Quote[:\s-]*/i, '')}`.trim(),
+    html: final.html,
+    text: final.text,
+    attachments,
+    label: `resend-quote-on-change:${order.orderNumber}`,
+  })
+  if (!emailResult.ok) return { sent: false, reason: emailResult.reason }
+
+  if (emailResult.id) {
+    await recordEmailDelivery({
+      resendMessageId: emailResult.id,
+      toAddress: primary.email,
+      ccAddresses: cc,
+      subject: final.subject,
+      label: `resend-quote-on-change:${order.orderNumber}`,
+      orderId: order.id,
+    })
+  }
+
+  // Audited as its own action: nobody clicked send, so "who sent this"
+  // has to be answerable from the log.
+  await prisma.auditLog.create({
+    data: {
+      userId: null,
+      action: 'order.quote_resent_after_check_out',
+      entityType: 'Order',
+      entityId: order.id,
+      oldValues: {},
+      newValues: { to: primary.email, cc, changes, at: new Date().toISOString() },
+    },
+  })
+
+  return { sent: true, to: primary.email, cc }
+}

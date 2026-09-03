@@ -4,7 +4,9 @@
  *   GET  ?edge=OUT|IN  → the draft: the order's lines with actuals
  *                        pre-filled, plus anything a prior report said
  *   POST               → submit; on the OUT edge this also writes the
- *                        differences onto the order and flags the agent
+ *                        differences onto the order, flags the agent, and
+ *                        re-sends the corrected quote to the client when
+ *                        the order is still in quote form
  *   PATCH              → the agent acknowledging what changed
  *
  * Gates. Filing is YARD work (requireYardAccess — the fleet-or-warehouse
@@ -25,8 +27,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireYardAccess } from '@/lib/yard/requireYardAccess'
 import { reportDraft, submitCheckReport, type SubmitLineInput } from '@/lib/orders/checkReports'
+import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
 
 export const dynamic = 'force-dynamic'
+// A submit that changes a quote re-renders the PDF and dispatches an
+// email. Same 30s ceiling the other send routes use.
+export const maxDuration = 30
 
 function parseEdge(raw: string | null): OrderCheckEdge | null {
   return raw === 'OUT' || raw === 'IN' ? raw : null
@@ -116,7 +122,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     lines,
   })
 
-  return NextResponse.json({ ok: true, ...result })
+  // Wes, 2026-09-03: "re-send the quote automatically when the check-out
+  // changes it but copy hq notifications." The order's lines have just
+  // moved under a client who is usually still holding a quote, so the
+  // corrected document goes out on its own rather than waiting for the
+  // agent to notice the flag.
+  //
+  // Deliberately AFTER the report is filed and deliberately non-fatal:
+  // the sheet is the yard's work and must not depend on Resend, a blob
+  // fetch or a PDF render. The outcome comes back so the screen can say
+  // what happened instead of leaving the supervisor guessing.
+  let resend: ResendOutcome | null = null
+  if (edge === 'OUT' && result.changedOrder) {
+    try {
+      resend = await resendQuoteAfterCheckOut({ orderId: id, changes: result.changes })
+    } catch (err) {
+      console.error('[check-report] quote re-send failed:', err)
+      resend = { sent: false, reason: err instanceof Error ? err.message : 'the re-send failed' }
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...result, resend })
 }
 
 /** The agent marking "I've seen what the yard changed." */

@@ -63,7 +63,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const [notes, setNotes] = useState(draft.notes)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ changedOrder: boolean; changes: string[] } | null>(null)
+  const [done, setDone] = useState<{
+    changedOrder: boolean
+    changes: string[]
+    /** Whether the corrected quote went back to the client, and why not. */
+    resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
+  } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.orderLineItemId === id ? { ...r, ...next } : r)))
@@ -110,7 +115,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         setError(data.reason || data.error || `Could not file the report (${res.status}).`)
         return
       }
-      setDone({ changedOrder: !!data.changedOrder, changes: data.changes ?? [] })
+      setDone({
+        changedOrder: !!data.changedOrder,
+        changes: data.changes ?? [],
+        resend: data.resend ?? null,
+      })
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not file the report.')
@@ -136,6 +145,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               <ul className="mt-3 text-[13px] text-amber-300 space-y-0.5">
                 {done.changes.map((c, i) => <li key={i}>{c}</li>)}
               </ul>
+              {/* Say plainly whether the client was told. A supervisor
+                  who does not know the email went out will send their
+                  own — or worse, assume one went and nothing did. */}
+              {done.resend && (
+                done.resend.sent ? (
+                  <p className="mt-3 text-[13px] text-emerald-400">
+                    The updated quote was emailed to {done.resend.to}, copying the office.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-[13px] text-zinc-400">
+                    The client was <b>not</b> emailed — {done.resend.reason}. The agent still has
+                    the flag.
+                  </p>
+                )
+              )}
             </>
           ) : (
             <p className="text-zinc-400 text-sm">
@@ -385,7 +409,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           <span>
             {diffs} line{diffs === 1 ? '' : 's'} differ from the order.
             {isOut
-              ? ` Filing this updates the order and flags ${draft.agentName || 'the agent'} to review it.`
+              ? ` Filing this updates the order and flags ${draft.agentName || 'the agent'} to review it.` +
+                (draft.preBooked
+                  ? ' The client is emailed the corrected quote automatically, copying the office.'
+                  : '')
               : ' A check-in is recorded and flagged, but never changes what was rented — the agent decides what a shortfall costs.'}
           </span>
         </p>
