@@ -7470,6 +7470,52 @@ model RwCollectionCharge {
 /// collected today may sit NEW for days. Staff mark it paid here to clear it
 /// from HQ AR without waiting on RW. Keyed on rw_invoice_id (NOT a relation)
 /// because the mirror is deleted/recreated each sync. Reversible.
+/// Per-invoice review state for the aging RW review desk
+/// (/collections/rw-review). Wes, 2026-09-02: "It will have notes on every
+/// Invoice, as well as the emails we have referenced and summary of what AI
+/// thinks about whether it has been paid."
+///
+/// Separate from RwInvoiceTriage on purpose. Triage answers "what do we DO
+/// about this" (Still owed / Dispute / Write off) and is a decision with
+/// consequences — write-offs leave the Outstanding tile and land in the tax
+/// ledger. This is the EVIDENCE that informs that decision, and it must be
+/// writable without ruling: a note on an invoice nobody has decided yet is the
+/// normal case, and forcing a decision to record one would corrupt the ledger.
+///
+/// `evidence` is a SNAPSHOT of the matched emails, not a live join. The search
+/// behind it is three ILIKE passes over 50k messages per invoice — far too slow
+/// to run on page load — and freezing it also means the AI verdict can always
+/// be read against exactly what the model saw, not what the mailbox looks like
+/// today.
+model RwInvoiceReview {
+  id          String  @id @default(uuid())
+  rwInvoiceId String  @unique @map("rw_invoice_id")
+
+  /// Ana's or an admin's own words. Survives every re-scan — the AI never
+  /// overwrites a human note.
+  note   String?   @db.Text
+  noteBy String?   @map("note_by")
+  noteAt DateTime? @map("note_at")
+
+  /// LIKELY_PAID | LIKELY_OPEN | DISPUTED | INSURANCE | NO_EVIDENCE.
+  /// A string, not an enum: the categories are still settling, and an enum
+  /// value that turns out wrong is a deploy-ordering problem (see the
+  /// enum-before-data rule in SHIPLOG).
+  aiVerdict     String? @map("ai_verdict")
+  aiConfidence  Float?  @map("ai_confidence")
+  aiSummary     String? @map("ai_summary") @db.Text
+  /// The emails the verdict was based on: tier, subject, sender, date, excerpt.
+  evidence      Json?
+  evidenceCount Int     @default(0) @map("evidence_count")
+
+  scannedAt DateTime? @map("scanned_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([aiVerdict])
+  @@map("sr_rw_invoice_reviews")
+}
+
 model RwInvoicePaidMark {
   id          String   @id @default(uuid())
   rwInvoiceId String   @unique @map("rw_invoice_id")

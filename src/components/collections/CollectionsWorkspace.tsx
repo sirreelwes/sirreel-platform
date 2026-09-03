@@ -683,9 +683,15 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             {/* Queue-status lines used to stack here too — they describe the
                 queue, not the receivable, and live on the queue card now. */}
             {(stats.agingUndecided ?? 0) > 0 ? (
-              <a href="/collections/aging-review" className="text-xs text-amber-700 hover:text-amber-800 font-semibold mt-1 inline-block">
-                Aging review · {stats.agingUndecided} undecided →
-              </a>
+              <span className="mt-1 flex flex-wrap items-center gap-x-3">
+                <a href="/collections/aging-review" className="text-xs text-amber-700 hover:text-amber-800 font-semibold">
+                  Aging review · {stats.agingUndecided} undecided →
+                </a>
+                {/* The evidence desk: email trail + what it appears to say. */}
+                <a href="/collections/rw-review" className="text-xs text-zinc-600 hover:text-zinc-900 font-semibold">
+                  Read the emails →
+                </a>
+              </span>
             ) : (
               <a href="/collections/aging-review" className="text-xs text-zinc-600 hover:text-zinc-700 mt-1 inline-block">
                 Aging review →

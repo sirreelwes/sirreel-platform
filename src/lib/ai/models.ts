@@ -37,5 +37,16 @@ export const SUMMARY_MODEL = 'claude-haiku-4-5-20251001'
 /** Cheap per-message structured extraction (Pipeline Quick Read cards). */
 export const MESSAGE_EXTRACTION_MODEL = 'claude-haiku-4-5-20251001'
 
+/**
+ * Judging whether an aging RentalWorks invoice has already been paid, from its
+ * email trail (/collections/rw-review). Opus rather than the review tier used
+ * elsewhere: this reads a scrappy, contradictory thread — a promise to pay, a
+ * disputed line item, an attached wire confirmation — and the failure mode is
+ * asymmetric. Calling a paid invoice open wastes a phone call; calling an open
+ * one paid stops the chase on real money. Runs over ~90 invoices on demand,
+ * not per request, so the tier costs little.
+ */
+export const COLLECTIONS_EVIDENCE_MODEL = 'claude-opus-5'
+
 /** Minimal-cost API health probe. */
 export const HEALTH_CHECK_MODEL = 'claude-haiku-4-5-20251001'

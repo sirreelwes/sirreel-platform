@@ -432,6 +432,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
             ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
             : []),
           { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
+          // The evidence desk behind the aging review — email trail + AI
+          // reading per invoice. Collections-gated like /collections itself.
+          { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
           { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
           { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
           { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
@@ -519,6 +522,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
             label: 'Billing & Collections',
             items: [
               { id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' },
+              { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
               { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
             ],
           }]
@@ -594,6 +598,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
           : []),
         { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
+        // The evidence desk behind the aging review — email trail + AI reading
+        // per invoice (Wes 2026-09-02: "for review by Ana and Admin").
+        { id: 'rw-review', label: 'Aging review (RW)', icon: 'Search', href: '/collections/rw-review' },
         { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
         // Moved out of Admin: the sync IS a collections concern — when it
         // stops, every balance on these pages is stale. Still linked from
