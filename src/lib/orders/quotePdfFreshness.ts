@@ -17,6 +17,22 @@
  * Staleness is "the order moved after the PDF was cut" — measured
  * against the order row AND its line items AND its discounts, because
  * editing a line does not necessarily touch Order.updatedAt.
+ *
+ * ── Two different kinds of stale ────────────────────────────────────
+ * CONTENT staleness is the one above: the order changed, so the stored
+ * PDF shows the wrong prices. That is a money error and sending it is
+ * worse than refusing.
+ *
+ * FORMAT staleness is new (2026-09-03). The DOCUMENT changed, not the
+ * order — the booking-details block shipped, and a PDF cut before it
+ * carries none of it. An order nobody edits afterward would otherwise
+ * send the old document forever, because content staleness cannot see a
+ * code deploy. So a PDF older than the template epoch is stale too.
+ *
+ * Callers that must react differently to the two — see send-quote, which
+ * refuses to send a content-stale PDF but WILL send a format-stale one
+ * rather than block a rep over a missing terms block — should use
+ * quotePdfStaleReason() instead of the boolean.
  */
 
 export type QuotePdfFreshnessInput = {
@@ -29,6 +45,21 @@ export type QuotePdfFreshnessInput = {
 
 const ms = (d: Date | string): number =>
   (typeof d === 'string' ? new Date(d) : d).getTime()
+
+/**
+ * When the quote PDF template last changed in a way clients must see.
+ *
+ * Bump this on any change to QuoteDocument or to what generateQuotePdf
+ * feeds it that a client would notice — and ONLY then. Every stored PDF
+ * older than this re-renders on the next preview or send, so a careless
+ * bump re-cuts every quote blob in the system.
+ *
+ * 2026-09-03 — the Booking Details block (lot hours, rental cycle,
+ * mileage, LCDW, cancellation, card fee) shipped.
+ */
+export const QUOTE_PDF_TEMPLATE_EPOCH = Date.UTC(2026, 8, 3)
+
+export type QuotePdfStaleReason = 'content' | 'format'
 
 /** Newest mutation timestamp across the order and everything it prices. */
 export function orderContentTouchedAt(input: QuotePdfFreshnessInput): number {
@@ -51,8 +82,22 @@ export function orderContentTouchedAt(input: QuotePdfFreshnessInput): number {
  * `quotePdfGeneratedAt` on a perfectly fresh render.
  */
 export function isQuotePdfStale(input: QuotePdfFreshnessInput): boolean {
-  if (!input.quotePdfGeneratedAt) return false
+  return quotePdfStaleReason(input) !== null
+}
+
+/**
+ * WHY the stored PDF is stale, or null when it is current.
+ *
+ * 'content' is checked first: when the order has also moved, the wrong
+ * prices are the more serious problem and the more urgent message.
+ */
+export function quotePdfStaleReason(
+  input: QuotePdfFreshnessInput,
+): QuotePdfStaleReason | null {
+  if (!input.quotePdfGeneratedAt) return null
   const generated = ms(input.quotePdfGeneratedAt)
-  if (!Number.isFinite(generated)) return false
-  return orderContentTouchedAt(input) > generated + 1000
+  if (!Number.isFinite(generated)) return null
+  if (orderContentTouchedAt(input) > generated + 1000) return 'content'
+  if (generated < QUOTE_PDF_TEMPLATE_EPOCH) return 'format'
+  return null
 }

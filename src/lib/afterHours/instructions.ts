@@ -31,15 +31,17 @@
 
 import { prisma } from '@/lib/prisma'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
+import { YARD_HOURS } from '@/lib/site/yardHours'
 
 const SINGLETON = 'singleton'
 
-/** Yard hours, as printed on the flyer this replaces. */
-export const AFTER_HOURS_SCHEDULE = {
-  weekdays: '6:00 AM – 6:00 PM, Monday through Friday',
-  saturday: '7:30 AM – 3:30 PM, Saturday',
-  sunday: 'Closed Sunday',
-} as const
+/**
+ * Yard hours. Defined in src/lib/site/yardHours.ts — which is prisma-free,
+ * so the quote PDF and the client portal can read the same hours without
+ * pulling this module's PrismaClient in with them. Kept exported under this
+ * name because every after-hours caller already uses it.
+ */
+export const AFTER_HOURS_SCHEDULE = YARD_HOURS
 
 /** The staffed line, and the hours a human actually answers it. */
 export const AFTER_HOURS_SUPPORT = {

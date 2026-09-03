@@ -1,5 +1,6 @@
 import React from 'react'
 import { PDF_BRAND } from '@/lib/pdf/brand'
+import type { BookingTerm } from '@/lib/sales/bookingTerms'
 import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
@@ -111,6 +112,16 @@ export interface InvoiceDocumentProps {
   job: InvoiceJobForRender | null
   agent: InvoiceAgentForRender
   notes: string | null
+  /**
+   * The charge-explaining booking terms — refueling, mileage, trash, card
+   * fees. Built by buildInvoiceBookingTerms(), which FILTERS the same
+   * builder the quote PDF uses, so a client cannot be quoted one mileage
+   * rate and billed against a different sentence.
+   *
+   * Absent/empty renders nothing, keeping every pre-2026-09-03 invoice
+   * byte-identical.
+   */
+  bookingTerms?: BookingTerm[]
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -388,6 +399,32 @@ const styles = StyleSheet.create({
   },
   notesBody: { fontSize: 9, lineHeight: 1.4 },
 
+  // Charge terms. Two columns like the quote's Booking Details, and the
+  // same type sizes, so the block a client already read on the quote is
+  // visually the same block here rather than a new document to parse.
+  //
+  // chargeTerms* prefix, NOT terms*: termsBox / termsRow / termsLabel /
+  // termsValue above are the PAYMENT-terms box in the header, and
+  // `termsLabel` collided outright.
+  chargeTermsBlock: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: C.rule,
+  },
+  chargeTermsLabel: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: C.accent,
+    marginBottom: 5,
+  },
+  chargeTermsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  chargeTermCell: { width: '50%', paddingRight: 10, marginBottom: 5 },
+  chargeTermTitle: { fontFamily: 'Helvetica-Bold', fontSize: 8, marginBottom: 1 },
+  chargeTermBody: { fontSize: 7.5, lineHeight: 1.35, color: C.muted },
+
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -453,6 +490,7 @@ export function InvoiceDocument({
   job,
   agent,
   notes,
+  bookingTerms,
   isPreInvoice = false,
 }: InvoiceDocumentProps): React.ReactElement {
   const docTitle = isPreInvoice
@@ -700,6 +738,27 @@ export function InvoiceDocument({
           <View style={styles.notesBlock}>
             <Text style={styles.notesLabel}>Notes</Text>
             <Text style={styles.notesBody}>{notes}</Text>
+          </View>
+        )}
+
+        {/* ── How these charges are calculated ─────────────────── */}
+        {/* The rates behind the metered lines above (mileage, refuel,
+            disposal) and the card fee. Named for what a client is actually
+            looking for when they scan an invoice for it: not "terms", but
+            where a number came from. */}
+        {bookingTerms && bookingTerms.length > 0 && (
+          <View style={styles.chargeTermsBlock}>
+            <Text style={styles.chargeTermsLabel} minPresenceAhead={40}>
+              How these charges are calculated
+            </Text>
+            <View style={styles.chargeTermsGrid}>
+              {bookingTerms.map((t) => (
+                <View key={t.key} style={styles.chargeTermCell} wrap={false}>
+                  <Text style={styles.chargeTermTitle}>{t.title}</Text>
+                  <Text style={styles.chargeTermBody}>{t.body}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 

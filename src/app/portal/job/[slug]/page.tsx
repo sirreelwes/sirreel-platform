@@ -87,6 +87,10 @@ interface PortalData {
    *  automatic assignment is not a relationship. See the data route. */
   agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null } | null;
   afterHoursLine: string;
+  /** Booking details — built server-side by buildBookingTerms from this
+   *  order's own vehicle lines, so the block here and the one on the quote
+   *  PDF are the same sentences. Empty on an order with no line items. */
+  bookingTerms: { key: string; title: string; body: string; note?: string }[];
   /** A rep has released this job's after-hours instructions. Gates the
    *  card that links to /after-hours; the codes live only on that page. */
   afterHoursReleased: boolean;
@@ -1422,6 +1426,35 @@ export default function JobPortalPage() {
             <span className="text-gray-900 font-bold">{fmtCurrency(data.order.total)}</span>
           </div>
         </section>
+
+        {/* ── Booking details ─────────────────────────────────────────────── */}
+        {/* Directly under Equipment: the client has just read WHAT they are
+            renting, and this is HOW it works. Same builder as the quote PDF,
+            so the page and the attachment cannot drift.
+
+            Guarded on length — `bookingTerms` is [] for an order with no
+            lines, and an empty "Booking details" heading is worse than none. */}
+        {data.bookingTerms.length > 0 && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
+            <h2 className="text-base font-bold text-gray-900">Booking details</h2>
+            <dl className="grid gap-4 sm:grid-cols-2">
+              {data.bookingTerms.map((t) => (
+                <div key={t.key}>
+                  <dt className="text-[11px] uppercase tracking-widest text-gray-400 font-semibold">
+                    {t.title}
+                  </dt>
+                  <dd className="text-[13px] text-gray-700 mt-1 leading-relaxed">{t.body}</dd>
+                  {/* Amber, matching the estimate wording above: a term's note
+                      is the qualification that must not be skimmed — above all
+                      the LCDW exclusions. */}
+                  {t.note && (
+                    <dd className="text-[11px] text-amber-700 mt-1 italic leading-relaxed">{t.note}</dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
 
         {/* ── Deliveries ──────────────────────────────────────────────────── */}
         {/* What's coming TO them, above "Your drivers" (what they collect FROM

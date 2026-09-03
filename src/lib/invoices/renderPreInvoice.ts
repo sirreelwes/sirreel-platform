@@ -29,6 +29,7 @@ import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import { InvoiceDocument, type InvoiceLineSnapshotEntry } from '@/lib/invoices/InvoiceDocument'
+import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 
 export async function renderPreInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({
@@ -54,6 +55,17 @@ export async function renderPreInvoice(invoiceId: string) {
           company: { select: { name: true, billingAddress: true, billingEmail: true } },
           job: { select: { jobCode: true, name: true } },
           agent: { select: { name: true, email: true, phone: true } },
+          // Charge-terms input. The pre-invoice prices off lineSnapshot, but
+          // the terms are gated on whether the order has VEHICLES at all,
+          // which the snapshot does not record.
+          lineItems: {
+            select: {
+              type: true,
+              department: true,
+              description: true,
+              inventoryItem: { select: { code: true } },
+            },
+          },
         },
       },
     },
@@ -78,6 +90,18 @@ export async function renderPreInvoice(invoiceId: string) {
 
   let pdfBytes: Buffer
   try {
+    // Same charge terms the issued invoice will carry — the pre-invoice is
+    // what a client is shown BEFORE it is issued, so it must not preview a
+    // document missing a block the real one has.
+    const bookingTerms = buildInvoiceBookingTerms({
+      vehicles: o.lineItems
+        .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT')
+        .map<BookingVehicleLine>((li) => ({
+          description: li.description,
+          code: li.inventoryItem?.code ?? null,
+        })),
+    })
+
     const element = React.createElement(InvoiceDocument, {
       isPreInvoice: true,
       invoiceNumber: invoice.invoiceNumber,
@@ -103,6 +127,7 @@ export async function renderPreInvoice(invoiceId: string) {
       job: o.job ? { jobCode: o.job.jobCode, name: o.job.name } : null,
       agent: { name: o.agent.name, email: o.agent.email, phone: o.agent.phone ?? null },
       notes: invoice.notes,
+      bookingTerms,
     }) as React.ReactElement<DocumentProps>
     pdfBytes = await renderToBuffer(element)
   } catch (err) {

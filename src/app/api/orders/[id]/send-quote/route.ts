@@ -26,7 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { get } from '@vercel/blob'
-import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
+import { quotePdfStaleReason } from '@/lib/orders/quotePdfFreshness'
 import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -183,10 +183,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // The blob key to attach. Replaced when the refresh below re-cuts the PDF:
   // regeneration DELETES the prior blob, so the key read above is dead.
   let quotePdfKey = order.quotePdfKey
-  if (isQuotePdfStale(order)) {
+  const staleReason = quotePdfStaleReason(order)
+  if (staleReason) {
     const refreshed = await ensureFreshQuotePdf(params.id)
     if (refreshed.key) quotePdfKey = refreshed.key
-    if (!refreshed.regenerated) {
+    // A FORMAT-stale PDF that failed to re-cut still prices the order
+    // correctly — it is only missing the booking-details block. Blocking the
+    // send over that would strand a rep behind a document defect the client
+    // would never have noticed, so fall through and send the old one. The
+    // refusal below stays for CONTENT staleness, where the prices are wrong.
+    if (!refreshed.regenerated && staleReason === 'format') {
+      console.warn(
+        `[send-quote] ${order.orderNumber}: pre-booking-details PDF failed to re-cut` +
+          `${refreshed.error ? ` (${refreshed.error})` : ''} — sending the stored one without the block`,
+      )
+    } else if (!refreshed.regenerated) {
       return bad(
         400,
         `This order changed after the quote PDF was generated${

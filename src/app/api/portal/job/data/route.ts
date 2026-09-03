@@ -21,6 +21,7 @@ import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 
 export const dynamic = 'force-dynamic'
 
@@ -188,6 +189,13 @@ export async function GET(req: NextRequest) {
             usageEstimated: true,
             parentLineItemId: true,
             autoKitPieceId: true,
+            // The next two feed the BOOKING-DETAILS block only, and are not
+            // serialized to the client. `department` picks out the vehicle
+            // lines; `subRentals` answers "is this a partner's unit" (never
+            // LCDW-eligible) with `select: { id: true }` so no vendor name,
+            // cost or PO can reach a client-facing render through it.
+            department: true,
+            subRentals: { select: { id: true } },
             inventoryItem: { select: { code: true, rwICode: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
@@ -505,6 +513,20 @@ export async function GET(req: NextRequest) {
     // presenting one as "Your SirReel rep" showed clients the wrong name,
     // phone and email. Withheld unless someone actually took the account.
     agent: order.repVisibleToClient ? order.agent : null,
+    // Booking details — the same block the quote PDF prints, from the same
+    // builder, so the page a client reads and the PDF they were sent cannot
+    // drift apart. Resolved server-side: the LCDW half needs to know which
+    // lines are partner-fulfilled, and that fact must not travel in the
+    // client-facing lineItems DTO above. Only finished sentences cross.
+    bookingTerms: buildBookingTerms({
+      vehicles: order.lineItems
+        .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT')
+        .map<BookingVehicleLine>((li) => ({
+          description: li.description,
+          code: li.inventoryItem?.code ?? null,
+          isPartnerVehicle: li.subRentals.length > 0,
+        })),
+    }),
     afterHoursLine: AFTER_HOURS_LINE,
     /** True once an agent has released this job's after-hours instructions
      *  — the portal shows the card, the card links to the page. A boolean,

@@ -24,6 +24,7 @@ import { prisma } from '@/lib/prisma'
 import { QuoteDocument, type Department, type QuoteLineItem } from '@/lib/sales/QuoteDocument'
 import { catalogClientCode } from '@/lib/catalog/display'
 import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
+import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 
 export type GenerateQuotePdfResult =
   | { ok: true; url: string; key: string; generatedAt: Date }
@@ -40,6 +41,12 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
       lineItems: {
         include: {
           inventoryItem: { select: { code: true, rwICode: true, trackingMode: true } },
+          // Booking-details input ONLY — see the bookingTerms block below.
+          // A line with any sub-rental is fulfilled by a partner's unit and
+          // can never carry LCDW. `select: { id: true }` deliberately: this
+          // must answer "is there one" and nothing else, so no vendor name,
+          // cost or PO can reach a client-facing render through it.
+          subRentals: { select: { id: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -89,6 +96,22 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
     notes: li.notes,
   }))
 
+  // Booking details (lot hours, rental cycle, mileage, LCDW, cancellation,
+  // card fee). Resolved HERE rather than inside QuoteDocument because the
+  // LCDW half has to know which lines are partner-fulfilled, and that fact
+  // must not travel in the client-facing line-item DTO above — see the
+  // CLIENT-FACING warning on it. What crosses into the render is the
+  // finished sentence, never the sub-rental.
+  const bookingTerms = buildBookingTerms({
+    vehicles: order.lineItems
+      .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT')
+      .map<BookingVehicleLine>((li) => ({
+        description: li.description,
+        code: li.inventoryItem?.code ?? null,
+        isPartnerVehicle: li.subRentals.length > 0,
+      })),
+  })
+
   const contactFullName = order.jobContact
     ? `${order.jobContact.firstName} ${order.jobContact.lastName}`.trim()
     : null
@@ -132,6 +155,7 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
       job: order.job
         ? { jobCode: order.job.jobCode, name: order.job.name }
         : null,
+      bookingTerms,
       generatedAt: new Date(),
     }) as React.ReactElement<DocumentProps>
     pdfBytes = await renderToBuffer(element)

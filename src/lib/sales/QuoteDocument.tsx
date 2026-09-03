@@ -5,6 +5,7 @@ import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/render
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 import { LINE_ITEM_DEPARTMENT_ORDER } from '@/lib/orders/lineItemDepartments'
 import { PDF_BRAND } from '@/lib/pdf/brand'
+import type { BookingTerm } from '@/lib/sales/bookingTerms'
 import { discountDisplayLabel } from '@/lib/orders/discountLabel'
 
 // Hyphenation is registered ONCE in lib/pdf/hyphenation (it's a global,
@@ -145,6 +146,16 @@ export interface QuoteDocumentProps {
   jobContact: QuoteContactForRender | null
   agent: QuoteAgentForRender
   job: QuoteJobForRender | null
+  /**
+   * Booking details — lot hours, rental cycle, mileage, LCDW, cancellation,
+   * card fee. Built by buildBookingTerms() from the order's own vehicle
+   * lines and passed in ALREADY RESOLVED: this renderer only lays them out,
+   * so nothing client-facing is decided here.
+   *
+   * Absent/empty renders nothing, which keeps every pre-2026-09-03 quote
+   * byte-identical.
+   */
+  bookingTerms?: BookingTerm[]
   generatedAt?: Date
 }
 
@@ -613,6 +624,30 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   notesBody: { fontSize: 9, lineHeight: 1.4 },
+  // Booking details. Two columns, because ten terms in one column runs
+  // most of a page and pushes the block onto a sheet of its own — where a
+  // client reads it as an appendix rather than as part of the quote.
+  termsBlock: {
+    marginTop: 12,
+    paddingTop: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: C.rule,
+  },
+  termsLabel: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: C.accent,
+    marginBottom: 5,
+  },
+  termsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  // 50% minus the gutter. Two per row; a term taller than its neighbour
+  // just makes that row taller.
+  termCell: { width: '50%', paddingRight: 10, marginBottom: 5 },
+  termTitle: { fontFamily: 'Helvetica-Bold', fontSize: 8, marginBottom: 1 },
+  termBody: { fontSize: 7.5, lineHeight: 1.35, color: C.muted },
+  termNote: { fontSize: 7.5, lineHeight: 1.35, fontStyle: 'italic', marginTop: 1, color: C.amber },
   // Footer
   footer: {
     position: 'absolute',
@@ -938,6 +973,29 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
           <View style={styles.notesBlock} wrap={false} minPresenceAhead={50}>
             <Text style={styles.notesLabel}>Notes</Text>
             <Text style={styles.notesBody}>{props.notes}</Text>
+          </View>
+        )}
+
+        {/* Booking details — how the rental actually works. Renders after
+            Notes so the rep's own note to this client still comes first.
+            `wrap` is left ON (unlike the Notes block): ten terms will not
+            always fit in whatever space is left, and forcing them to stay
+            whole would push the entire block to its own page. */}
+        {props.bookingTerms && props.bookingTerms.length > 0 && (
+          <View style={styles.termsBlock}>
+            {/* minPresenceAhead: never strand the heading at the foot of a
+                page. A "Booking Details" label with nothing under it reads as
+                the end of the quote, and the client stops there. */}
+            <Text style={styles.termsLabel} minPresenceAhead={54}>Booking Details</Text>
+            <View style={styles.termsGrid}>
+              {props.bookingTerms.map((t) => (
+                <View key={t.key} style={styles.termCell} wrap={false}>
+                  <Text style={styles.termTitle}>{t.title}</Text>
+                  <Text style={styles.termBody}>{t.body}</Text>
+                  {t.note && <Text style={styles.termNote}>{t.note}</Text>}
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
