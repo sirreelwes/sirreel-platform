@@ -925,16 +925,22 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   The hint under the label says what the locked shell adds
                   around the rep's words, per kind. */}
               {singleBox && (
-                <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                /* The one light panel in a dark modal (Wes 2026-09-02:
+                   "lighter, maybe even white … feel like the others"). The
+                   rest of HQ writes on white — the follow-up drawer, the
+                   estimate modal — and this box is where a rep actually
+                   composes, so it reads as a sheet of paper laid on the dark
+                   shell rather than a dark field to fight with. */
+                <div className="bg-white border border-zinc-300 rounded-lg px-3 py-2">
                   <div className="flex items-baseline justify-between">
-                    <label className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500">
                       Your message
                     </label>
                     {refreshing && (
-                      <span className="text-[10px] text-amber-300 animate-pulse">Updating preview…</span>
+                      <span className="text-[10px] text-amber-600 animate-pulse">Updating preview…</span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                  <p className="mt-0.5 text-[11px] text-gray-500">
                     {target.kind === 'quote'
                       ? 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the quote block with its portal button and the sign-off stay.'
                       : target.kind === 'card-auth'
@@ -955,12 +961,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                           the strip just names the person you're writing to
                           and the greeting is yours. */}
                       {preview?.to?.name && (
-                        <div className="flex items-baseline gap-2 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1.5">
-                          <span className="text-[10px] uppercase tracking-wide text-zinc-500 shrink-0">
+                        <div className="flex items-baseline gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
                             Writing to
                           </span>
-                          <span className="text-sm text-zinc-300">{preview.to.name}</span>
-                          <span className="text-[11px] text-zinc-500 ml-auto text-right">
+                          <span className="text-sm text-gray-800">{preview.to.name}</span>
+                          <span className="text-[11px] text-gray-500 ml-auto text-right">
                             no greeting is added — write your own
                           </span>
                         </div>
@@ -980,7 +986,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                                 ? 'Write the ask — start with a greeting. The security paragraph and the secure button follow it; never ask for the number itself. Or press Suggest.'
                                 : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
                         }
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
+                        className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-500 resize-y disabled:opacity-50"
                       />
                       {/* The two ways to fill a blank page. Suggest is the
                           headline (Wes 2026-09-02: "pressing a button should
@@ -991,7 +997,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         <button
                           onClick={() => { void runSuggest(); }}
                           disabled={suggestBusy || sendLocked || !preview}
-                          className="text-[12px] font-semibold bg-amber-600/90 hover:bg-amber-500 text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                          className="text-[12px] font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
                         >
                           {suggestBusy
                             ? 'Writing…'
@@ -1003,12 +1009,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                           <button
                             onClick={() => setCustomMessage(preview.defaultBody as string)}
                             disabled={sendLocked}
-                            className="text-[12px] font-semibold border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                            className="text-[12px] font-semibold border border-gray-300 text-gray-700 hover:border-gray-400 hover:text-gray-900 disabled:opacity-40 px-3 py-1.5 rounded-lg"
                           >
                             Use standard wording
                           </button>
                         )}
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-[10px] text-gray-500">
                           {customMessage.trim()
                             ? 'Builds on what you’ve written. Lands in the box — nothing sends.'
                             : 'Writes a first draft into the box, greeting included. Nothing sends.'}
@@ -1022,32 +1028,32 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         <button
                           onClick={runAiReview}
                           disabled={aiBusy || sendLocked || !customMessage.trim()}
-                          className="text-[12px] font-semibold border border-zinc-600 text-zinc-200 hover:border-amber-500 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                          className="text-[12px] font-semibold border border-gray-300 text-gray-700 hover:border-amber-500 hover:text-gray-900 disabled:opacity-40 px-3 py-1.5 rounded-lg"
                         >
                           {aiBusy ? 'Reviewing…' : 'Review with AI'}
                         </button>
-                        <span className="text-[10px] text-zinc-500">Flags risks + offers a polished version. Optional — nothing auto-applies.</span>
+                        <span className="text-[10px] text-gray-500">Flags risks + offers a polished version. Optional — nothing auto-applies.</span>
                       </div>
                       )}
-                      {aiError && <div className="text-[11px] text-rose-300 bg-rose-950/40 border border-rose-900 rounded px-2 py-1">{aiError}</div>}
+                      {aiError && <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">{aiError}</div>}
                       {aiFlags && (
                         aiFlags.length > 0 ? (
-                          <div className="text-[11px] text-amber-200 bg-amber-950/30 border border-amber-900 rounded px-2.5 py-1.5">
+                          <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
                             <div className="font-bold mb-0.5">AI flagged {aiFlags.length} thing{aiFlags.length === 1 ? '' : 's'}:</div>
                             <ul className="list-disc list-inside space-y-0.5">{aiFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
                           </div>
                         ) : (
-                          <div className="text-[11px] text-emerald-300 bg-emerald-950/30 border border-emerald-900 rounded px-2.5 py-1.5">AI found no issues — no availability contradictions.</div>
+                          <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">AI found no issues — no availability contradictions.</div>
                         )
                       )}
                       {aiPolished && aiPolished.trim() && aiPolished.trim() !== customMessage.trim() && (
-                        <div className="bg-zinc-900 border border-zinc-700 rounded px-2.5 py-2">
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Polished version</div>
-                          <div className="text-[12px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{aiPolished}</div>
+                        <div className="bg-gray-50 border border-gray-200 rounded px-2.5 py-2">
+                          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Polished version</div>
+                          <div className="text-[12px] text-gray-800 whitespace-pre-wrap leading-relaxed">{aiPolished}</div>
                           <button
                             onClick={() => { setCustomMessage(aiPolished); setAiPolished(null); }}
                             disabled={sendLocked}
-                            className="mt-1.5 text-[11px] font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-40"
+                            className="mt-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-600 disabled:opacity-40"
                           >
                             Use this version →
                           </button>
