@@ -148,6 +148,13 @@ export default function CollectingGuidePage() {
           <p className="mb-4 text-[14px] text-lt-fg3">
             Two lists, and they are not the same list. Start with the first one.
           </p>
+          <Note tone="plain" label="Why there are two, and why there won't be">
+            An invoice can currently be born in two places. Where this is heading is that{' '}
+            <strong>HQ is the source of truth</strong>: a final invoice created in RentalWorks gets
+            imported so a copy lives here, and one created in HQ simply lives here already. Either way it
+            ends up in HQ — RentalWorks is just one of the two places it can start, not a second system
+            you work in.
+          </Note>
           <ol className="list-none border-b border-lt-hairline p-0">
             <Step n={1} title="Ready to collect — your actual queue">
               <p>
