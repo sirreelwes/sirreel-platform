@@ -323,6 +323,8 @@ interface JobDetail {
     cardType: string | null;
     cardholderName: string | null;
     paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null;
+    /** The $0 stored-credential validation came back approved. */
+    validated: boolean;
   };
   // bookingId → the client's collision-waiver decision, so each reserved
   // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
@@ -1555,12 +1557,25 @@ const driverTone = (d: any): string => {
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">Card Authorization</div>
             {cardOnFile ? (
               <>
-                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-700">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <div
+                  className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
+                    job.cardAuth.validated ? 'text-emerald-700' : 'text-amber-700'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      job.cardAuth.validated ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`}
+                  />
                   On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
                 </div>
                 <div className="mt-1.5 text-[12px] text-zinc-700">
-                  {cardSecurityOnly ? 'Security only — client pays another way' : cardPrefUndecided ? 'Payment method not chosen yet' : job.cardAuth.cardholderName || 'Authorized'}
+                  {/* A card the gateway refused reads as "on file" everywhere
+                      and fails at charge time. Say it here, where someone can
+                      still ask for another card before the rental goes out. */}
+                  {!job.cardAuth.validated
+                    ? 'The $0 check was not approved — ask for another card'
+                    : cardSecurityOnly ? 'Security only — client pays another way' : cardPrefUndecided ? 'Payment method not chosen yet' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
               </>
             ) : !stripScored ? (

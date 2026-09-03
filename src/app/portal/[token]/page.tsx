@@ -201,6 +201,8 @@ export default function ClientPortal() {
   // that actually receives the emailed link was the one still collecting.
   const [cardLive, setCardLive] = useState<boolean | null>(null);
   const [cpToken, setCpToken] = useState('');
+  /** Trouble with the card FIELD, as reported by the tokenizer. */
+  const [ccCardError, setCcCardError] = useState('');
   // Expiry is collected HERE, not in the iframe: the card-on-file tokenizer
   // runs with useexpiry=false because it does not reliably hand the value back
   // on the postMessage (see /api/cardpointe/config).
@@ -330,12 +332,36 @@ export default function ClientPortal() {
   }, [activeTab]);
   useEffect(() => {
     const handler = (e: MessageEvent) => {
-      if (typeof e.data === 'string' && e.data.startsWith('{"message":')) {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.message?.token) setCpToken(msg.message.token);
-        } catch {}
-      }
+      if (typeof e.data !== 'string' || !e.data.startsWith('{')) return;
+      try {
+        // Two token shapes and a third payload this surface never read
+        // (Wes 2026-09-03, on clients giving up and asking for the old form):
+        //   {"message":"<token>"}                    message IS the token
+        //   {"message":{"token":"…"}}
+        //   {"message":{"validationError":"…"}}      bad or half-typed number
+        // This handler knew only the middle one, so on an account serving the
+        // string form no token ever landed — the same defect already fixed in
+        // collections, the pay panel and the v2 portal — and a mistyped card
+        // produced no message at all. Either way: a filled-in form and a
+        // permanently dead Authorize button.
+        const raw = JSON.parse(e.data) as
+          | { message?: string | { token?: string; validationError?: string } }
+          | null;
+        const inner = raw?.message;
+        const tok =
+          typeof inner === 'string' ? inner : typeof inner?.token === 'string' ? inner.token : '';
+        const invalid =
+          typeof inner === 'object' && typeof inner?.validationError === 'string'
+            ? inner.validationError
+            : '';
+        if (tok) {
+          setCpToken(tok);
+          setCcCardError('');
+        } else if (invalid) {
+          setCpToken('');
+          setCcCardError('That card number doesn\u2019t look right \u2014 check it and re-enter it.');
+        }
+      } catch {}
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -1489,11 +1515,16 @@ export default function ClientPortal() {
                 </div>
                 <div className="mt-4">
                   <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Number *</div>
-                  <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`} style={{height: '48px'}}>
+                  {/* No fixed 48px wrapper. That height was sized for an
+                      older number-only widget and clips whatever the
+                      tokenizer renders below it, with scrolling='no' hiding
+                      the overflow — the same clipping already fixed in
+                      collections, the pay panel and the v2 portal. */}
+                  <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`}>
                     {cpIframeUrl ? (
-                      <iframe src={cpIframeUrl} frameBorder="0" scrolling="no" width="100%" height="48" title="Card Entry" />
+                      <iframe src={cpIframeUrl} frameBorder="0" scrolling="no" width="100%" height="150" title="Card Entry" className="block bg-white" />
                     ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading secure card entry...</div>
+                      <div className="flex items-center justify-center py-6 text-xs text-gray-400">Loading secure card entry...</div>
                     )}
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1521,7 +1552,8 @@ export default function ClientPortal() {
                     </select>
                   </div>
                   {cpToken && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold"><span>✓</span><span>Card captured securely</span></div>}
-                  {!cpToken && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above — it is encrypted and never stored.</div>}
+                  {!cpToken && ccCardError && <div className="mt-1.5 text-[11px] text-red-600 font-semibold">{ccCardError}</div>}
+                  {!cpToken && !ccCardError && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above, then tap outside the box — it is encrypted there and never reaches SirReel.</div>}
                 </div>
                 <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs text-gray-600">This Credit Card Authorization form guarantees the payment of all fees due SirReel Studio Services according to the Rental Agreement. This credit card may be used for Charges and Deposits, Cancellation Fees, Damage to Premises and Equipment, Past Due Balances, Fines, Parking Fees and all fees incurred during a given project/production. I agree that the cardholder is a Personal Guarantor of the charges here described and summarized.</div>
                 <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><span className="font-bold">Credit Card Processing Fee.</span> {CC_SURCHARGE_TEXT}</div>

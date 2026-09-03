@@ -325,6 +325,11 @@ export async function GET(
             ccCardholderFirst: true,
             ccCardholderLast: true,
             ccPaymentPreference: true,
+            // The $0 stored-credential result. Without it the tile said
+            // "On file" for a card the gateway had refused — SR-JOB-0260's
+            // card came back C/503 "New Account Information" on 2026-09-01
+            // and read as authorized on every staff surface but the wallet.
+            ccAuthRespStat: true,
             lcdwAccepted: true,
             lcdwDecision: true,
             // Workers' Comp certificate — metadata + AI verdict only. The
@@ -348,8 +353,18 @@ export async function GET(
             [cardRow.ccCardholderFirst, cardRow.ccCardholderLast].filter(Boolean).join(' ').trim() ||
             null,
           paymentPreference: normalizePaymentPreference(cardRow.ccPaymentPreference),
+          /** False when the $0 validation did not come back approved. The
+           *  card may still charge; staff should know before counting on it. */
+          validated: cardRow.ccAuthRespStat === 'A',
         }
-      : { onFile: false, last4: null, cardType: null, cardholderName: null, paymentPreference: null }
+      : {
+          onFile: false,
+          last4: null,
+          cardType: null,
+          cardholderName: null,
+          paymentPreference: null,
+          validated: false,
+        }
     // Three states, not two. A vehicle whose client DECLINED the waiver and
     // one nobody has asked yet both used to send `false`, so the badge read
     // "LCDW not accepted" for both and the team could not tell a refusal

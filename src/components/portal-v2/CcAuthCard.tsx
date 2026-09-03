@@ -80,6 +80,9 @@ export function CcAuthCard({
   const [billingZip, setBillingZip] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  /** Trouble with the card FIELD itself, reported by the tokenizer. Separate
+   *  from `error`, which is about the submit. */
+  const [cardError, setCardError] = useState('')
   const [seeded, setSeeded] = useState(false)
 
   // Seed cardholder name + deposit estimate from the collect-once intake the
@@ -120,7 +123,11 @@ export function CcAuthCard({
   // capture pattern to the live portal.
   useEffect(() => {
     const handler = (e: MessageEvent) => {
-      if (typeof e.data === 'string' && e.data.startsWith('{"message":')) {
+      // Loose prefix on purpose. This used to require the literal
+      // `{"message":` opening, which throws away any payload whose keys come
+      // in a different order — and the tokenizer's INVALID-card payload is
+      // one of them. Collections has matched on `{` for months.
+      if (typeof e.data === 'string' && e.data.startsWith('{')) {
         try {
           // CardSecure posts the token in TWO shapes depending on version:
           //   {"message":"<token>"}        message IS the token
@@ -137,7 +144,27 @@ export function CcAuthCard({
               : typeof inner?.token === 'string'
                 ? inner.token
                 : ''
-          if (tok) setCpToken(tok)
+          // The tokenizer reports a bad or half-typed card number as
+          // `validationError` — and this handler used to drop it on the
+          // floor. The client saw a card number they had typed, no message
+          // of any kind, and an Authorize button that never lit up; several
+          // gave up and asked for the old form instead (Wes 2026-09-03).
+          const invalid =
+            typeof inner === 'object' && typeof inner?.validationError === 'string'
+              ? inner.validationError
+              : ''
+          if (tok) {
+            setCpToken(tok)
+            setCardError('')
+          } else if (invalid) {
+            setCpToken('')
+            setCardError(
+              // The gateway's own wording is terse ("Invalid card number").
+              // Say what to DO, since the field is inside an iframe the page
+              // cannot highlight.
+              'That card number doesn’t look right — check it and re-enter it.',
+            )
+          }
         } catch {}
       }
     }
@@ -355,8 +382,16 @@ export function CcAuthCard({
                 <span>✓</span>
                 <span>Card captured securely</span>
               </div>
+            ) : cardError ? (
+              <div className="mt-1.5 text-[11px] text-red-600 font-semibold">{cardError}</div>
             ) : (
-              iframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above — it is encrypted and never stored by SirReel.</div>
+              iframeUrl && (
+                <div className="mt-1 text-[10px] text-gray-400">
+                  Enter your card number above, then tap outside the box — it is encrypted there
+                  and never reaches SirReel. Expiry and ZIP go in the fields below; we don&rsquo;t
+                  ask for the CVV on a card kept on file.
+                </div>
+              )
             )}
           </div>
 
@@ -410,7 +445,11 @@ export function CcAuthCard({
                   }),
                 })
                 if (!r.ok) {
-                  setError('Failed to submit authorization — please try again.')
+                  // The server says WHY — a ZIP that doesn't parse, an expiry
+                  // it won't take. Replacing that with "please try again"
+                  // sent clients round the same loop until they gave up.
+                  const d = (await r.json().catch(() => ({}))) as { error?: string }
+                  setError(d.error || 'Failed to submit authorization — please try again.')
                   return
                 }
                 onAuthorized()
@@ -445,8 +484,8 @@ export function CcAuthCard({
               Say which one is missing rather than making the client guess. */}
           {!submitting && !cpToken && cardholderFirst && cardholderLast && acknowledged && sig && (
             <p className="mt-2 text-[11px] text-center text-gray-400">
-              Waiting on the card — enter the card number and CVV above, then
-              click outside the field to finish encrypting it.
+              Waiting on the card — enter the card number above, then tap
+              outside the field to finish encrypting it.
             </p>
           )}
           {/* Same reasoning for the ZIP: it is the one required field that can
