@@ -2579,6 +2579,7 @@ model PaperworkRequest {
   signerName String? @map("signer_name")
 
   booking                      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  cardAttempts                 PortalCardAttempt[]
   coi_ai_review                Json?
   coi_review_at                DateTime? @db.Timestamp(6)
   coi_admin_approved           Boolean?  @default(false)
@@ -8035,4 +8036,39 @@ model IntegrationCredential {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("integration_credentials")
+}
+
+/// A client failing to get their card through the portal's authorization
+/// step. One row per failed attempt.
+///
+/// Wes, 2026-09-03: "it's something that is usually needed same day or next
+/// day so it would need to notify immediately if multiple failed attempts."
+/// Before this, a client fighting the card form was invisible — the team
+/// only learned about it when the client gave up and asked for the Cognito
+/// form, by which point the rental was being held up.
+///
+/// Deliberately NOT a general event log: the row exists so someone can be
+/// told to pick up the phone. Nothing about the card is stored — `detail` is
+/// the tokenizer's or gateway's own message, which never contains a PAN.
+model PortalCardAttempt {
+  id                 String           @id @default(uuid())
+  paperworkRequestId String           @map("paperwork_request_id")
+  paperworkRequest   PaperworkRequest @relation(fields: [paperworkRequestId], references: [id], onDelete: Cascade)
+
+  /// CARD_INVALID   — the tokenizer refused the number (typo, unsupported).
+  /// SUBMIT_REJECTED — our own validation turned the submit away.
+  /// AUTH_DECLINED  — the $0 stored-credential check came back not-approved.
+  ///                  Not a typo: the client cannot fix this by retrying, so
+  ///                  it alerts on the FIRST occurrence.
+  kind   String
+  detail String? @db.Text
+
+  /// Set when this attempt triggered the internal alert, so a client who
+  /// keeps trying does not send the desk one email per keystroke.
+  notifiedAt DateTime? @map("notified_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([paperworkRequestId, createdAt])
+  @@map("sr_portal_card_attempts")
 }

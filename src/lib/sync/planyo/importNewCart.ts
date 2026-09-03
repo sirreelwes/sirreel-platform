@@ -321,7 +321,14 @@ export async function planCartImport(
     planyoCartId: cart,
     source: 'PLANYO_BACKFILL',
     bookingNumberHint: `SR-PB-${new Date().getUTCFullYear()}-NEW`,
-    jobName: jobNameRaw || `Planyo import — cart ${cart}`,
+    // EMPTY, not an invented name. This used to mint
+    // `Planyo import — cart <id>`, and Booking.jobName is the headline
+    // on the client paperwork portal — so on 2026-09-02 a client got a
+    // portal titled with our cart id. Empty string is HQ's existing
+    // "not named yet" convention (lib/scheduling/infoGaps), so the gap
+    // now shows up as a gap instead of masquerading as a real name, and
+    // client surfaces fall back through lib/jobs/displayName.
+    jobName: jobNameRaw,
     productionName: jobNameRaw || null,
     startLA,
     endLA,

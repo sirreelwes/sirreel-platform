@@ -1,6 +1,7 @@
 import { formatCalendarDate } from '@/lib/dates/calendarDate'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from '@/lib/contracts/fees'
 
 const TERMS = [
@@ -37,7 +38,13 @@ const TERMS = [
 
 function buildHtml(booking: any, format: string) {
   const company = booking.company?.name || ''
-  const jobName = booking.jobName || ''
+  // The production title printed on a signed rental agreement. Never a
+  // cart placeholder — see lib/jobs/displayName.
+  const jobName = resolveDisplayJobName({
+    jobName: booking.job?.name,
+    bookingJobName: booking.jobName,
+    companyName: booking.company?.name,
+  })
   // Calendar dates — UTC, never the server's zone. This is a signed rental
   // agreement; a day-early date here is a contract that states the wrong term.
   const LONG = { month: 'long', day: 'numeric', year: 'numeric' } as const
@@ -179,7 +186,7 @@ export async function GET(
 
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true } } }
+      include: { booking: { include: { company: true, job: { select: { name: true } } } } }
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 

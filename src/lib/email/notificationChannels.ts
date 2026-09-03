@@ -30,6 +30,7 @@ import { teamInboxEmail } from '@/lib/email/teamVisibility'
 
 export type NotificationChannelKey =
   | 'hq-documents'
+  | 'portal-card-trouble'
   | 'sales-team-cc'
   | 'signed-contract-sales'
   | 'signed-contract-billing'
@@ -58,6 +59,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The main internal feed: public form submissions (rental intake, contact, supply requests, space inquiries), signed rental agreements with the PDF attached, client COI drops, and portal paperwork events. Default is the hq@ distribution group.',
     defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'portal-card-trouble',
+    label: 'Client stuck on the card form',
+    description:
+      'Fires WHILE a client is failing to authorize their card in the portal — a card the tokenizer keeps refusing, or a $0 check the bank declined. Not a digest: a card is usually needed same or next day (Wes 2026-09-03), so this goes out within a minute of the trouble, at most once an hour per client. Point it at whoever can pick up the phone; defaults to the sales desk and Wes.',
+    defaults: () => ['rentals@sirreel.com', 'wes@sirreel.com'],
   },
   {
     key: 'sales-team-cc',

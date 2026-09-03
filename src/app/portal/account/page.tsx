@@ -21,6 +21,7 @@
  */
 
 import { cookies } from 'next/headers'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
@@ -177,6 +178,7 @@ export default async function PortalAccountPage() {
       endDate: true,
       status: true,
       company: { select: { name: true } },
+      job: { select: { name: true } },
     },
     orderBy: { startDate: 'desc' },
     take: 10,
@@ -335,7 +337,13 @@ export default async function PortalAccountPage() {
                         <span className="font-mono text-zinc-500">{b.bookingNumber}</span>
                         <StatusBadge status={b.status} />
                       </div>
-                      <div className="text-sm font-semibold text-zinc-900 mt-0.5 truncate">{b.jobName}</div>
+                      <div className="text-sm font-semibold text-zinc-900 mt-0.5 truncate">
+                        {resolveDisplayJobName({
+                          jobName: b.job?.name,
+                          bookingJobName: b.jobName,
+                          companyName: b.company?.name,
+                        })}
+                      </div>
                       <div className="text-xs text-zinc-500 mt-0.5">{b.company?.name ?? '—'}</div>
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">

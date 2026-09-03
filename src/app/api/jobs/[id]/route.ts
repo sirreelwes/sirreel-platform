@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isPlaceholderJobName } from '@/lib/jobs/displayName'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
@@ -343,6 +344,22 @@ export async function GET(
           },
         })
       : []
+    // How badly the client is struggling with the card step, if at all.
+    // Recorded by src/lib/portal/cardTrouble.ts; the desk gets an email in
+    // the moment, and this is the same fact on the job itself for whoever
+    // opens it afterwards.
+    const paperworkIds = paperwork.map((p) => p.id)
+    const [troubleCount, lastTrouble] = paperworkIds.length
+      ? await Promise.all([
+          prisma.portalCardAttempt.count({ where: { paperworkRequestId: { in: paperworkIds } } }),
+          prisma.portalCardAttempt.findFirst({
+            where: { paperworkRequestId: { in: paperworkIds } },
+            orderBy: { createdAt: 'desc' },
+            select: { kind: true, detail: true, createdAt: true },
+          }),
+        ])
+      : [0, null]
+
     const cardRow = paperwork.find((p) => !!p.ccCardNumberEncrypted)
     const cardAuth = cardRow
       ? {
@@ -356,6 +373,9 @@ export async function GET(
           /** False when the $0 validation did not come back approved. The
            *  card may still charge; staff should know before counting on it. */
           validated: cardRow.ccAuthRespStat === 'A',
+          troubleCount,
+          lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+          lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
         }
       : {
           onFile: false,
@@ -364,6 +384,9 @@ export async function GET(
           cardholderName: null,
           paymentPreference: null,
           validated: false,
+          troubleCount,
+          lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+          lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
         }
     // Three states, not two. A vehicle whose client DECLINED the waiver and
     // one nobody has asked yet both used to send `false`, so the badge read
@@ -577,6 +600,36 @@ export async function PATCH(
         }),
       },
     })
+
+    // Carry a rename onto the job's own bookings when theirs is not a
+    // real name. `Booking.jobName` — not `Job.name` — is the headline on
+    // the client paperwork portal, so before this a rename in HQ did not
+    // reach the client: the Supplying Demand portal still read "Planyo
+    // import — cart 5772289" after a human had renamed the job
+    // "Retirement" (Wes, 2026-09-03).
+    //
+    // Fill-only. A booking that carries its own real name keeps it — a
+    // job can own several bookings for different shoots, and a rename of
+    // the parent must not flatten them onto one title.
+    if (typeof name === 'string' && name.trim() && !isPlaceholderJobName(name)) {
+      try {
+        const bookings = await prisma.booking.findMany({
+          where: { jobId: params.id },
+          select: { id: true, jobName: true },
+        })
+        const toFill = bookings.filter((b) => isPlaceholderJobName(b.jobName)).map((b) => b.id)
+        if (toFill.length) {
+          await prisma.booking.updateMany({
+            where: { id: { in: toFill } },
+            data: { jobName: name.trim() },
+          })
+        }
+      } catch (err) {
+        // The rename itself already committed; a failure to propagate is
+        // a display gap, not a lost edit.
+        console.warn(`[jobs PATCH] booking jobName propagation failed:`, err)
+      }
+    }
 
     // Refresh the Company's most-common-profile cache when the FK was
     // in the body — whether it changed value or not. The helper is

@@ -124,7 +124,16 @@ export async function resolveJobForImportedBooking(
   }
 
   const createAndAttach = async (action: 'CREATED_NEW' | 'CREATED_NEW_SIBLING'): Promise<CartJobResolution> => {
-    const draftName = booking.jobName?.trim() || r.draft.name || `Planyo cart ${booking.planyoCartId ?? '?'}`
+    // Company name, never a cart id. `Job.name` is client-visible (it is
+    // the portal headline once lib/jobs/displayName picks it up), and a
+    // job called "Planyo cart 5772289" is the same defect Wes flagged on
+    // 2026-09-03 wearing a different string. The company is at least
+    // true, and a human renames it from the job page.
+    const draftName =
+      booking.jobName?.trim() ||
+      r.draft.name ||
+      booking.company?.name?.trim() ||
+      `Reservation ${booking.planyoCartId ?? ''}`.trim()
     const siblingCandidates =
       action === 'CREATED_NEW_SIBLING'
         ? r.candidates.slice(0, 5).map((c) => ({ jobCode: c.jobCode, name: c.name, score: c.score, reasons: c.reasons }))

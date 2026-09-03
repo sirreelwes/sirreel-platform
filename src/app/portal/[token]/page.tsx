@@ -203,6 +203,8 @@ export default function ClientPortal() {
   const [cpToken, setCpToken] = useState('');
   /** Trouble with the card FIELD, as reported by the tokenizer. */
   const [ccCardError, setCcCardError] = useState('');
+  /** Trouble with the SUBMIT, as reported by our own server. */
+  const [ccSubmitError, setCcSubmitError] = useState('');
   // Expiry is collected HERE, not in the iframe: the card-on-file tokenizer
   // runs with useexpiry=false because it does not reliably hand the value back
   // on the postMessage (see /api/cardpointe/config).
@@ -360,12 +362,19 @@ export default function ClientPortal() {
         } else if (invalid) {
           setCpToken('');
           setCcCardError('That card number doesn\u2019t look right \u2014 check it and re-enter it.');
+          // Same alert the v2 portal raises: a client stuck here is invisible
+          // to HQ otherwise, and the card is usually needed same or next day.
+          void fetch(`/api/portal/${token}/cc-trouble`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind: 'CARD_INVALID', detail: invalid }),
+          }).catch(() => {});
         }
       } catch {}
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+  }, [token]);
 
   const clearSig = (ref: React.RefObject<HTMLCanvasElement>, setDrawn: (v: boolean) => void) => {
     if (!ref.current) return;
@@ -379,6 +388,19 @@ export default function ClientPortal() {
     setSubmitting(true);
     try {
       const r = await fetch(`/api/portal/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      // A rejected submit used to return false and say NOTHING: the button
+      // simply failed to advance, with the reason (a ZIP or expiry the
+      // gateway won't take) discarded. On the card step that is a client
+      // stuck in a loop, so it is both shown and reported.
+      if (!r.ok && path === 'sign' && body?.step === 'cc') {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setCcSubmitError(d.error || 'We could not save that authorization — please try again.');
+        void fetch(`/api/portal/${token}/cc-trouble`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'SUBMIT_REJECTED', detail: d.error || `HTTP ${r.status}` }),
+        }).catch(() => {});
+      }
       return r.ok;
     } finally { setSubmitting(false); }
   };
@@ -1584,6 +1606,9 @@ export default function ClientPortal() {
                   number lives in a CardSecure iframe whose encryption can still
                   be pending. Name the missing one rather than making the client
                   hunt for it. */}
+              {ccSubmitError && (
+                <p className="mt-2 text-[11px] text-center text-red-600 font-semibold">{ccSubmitError}</p>
+              )}
               {!submitting && !cpToken && ccCardholderFirst && ccCardholderLast && ccAcknowledged && ccSigDrawn && (
                 <p className="mt-2 text-[11px] text-center text-gray-400">Waiting on the card — enter the card number above, then click outside the field to finish encrypting it.</p>
               )}

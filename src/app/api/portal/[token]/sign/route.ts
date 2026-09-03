@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
+import { recordCardTrouble } from '@/lib/portal/cardTrouble'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
 import { normalizePaymentPreference, paymentPreferenceLabel } from '@/lib/payments/paymentPreference'
@@ -233,6 +234,16 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
               `[cc-auth] $0 validation NOT approved for token ${params.token.slice(0, 8)}: ` +
                 `${zero.respcode} ${zero.resptext}`,
             )
+            // Tell the desk NOW. The client is told their authorization is
+            // submitted (it is — the row is written either way), but this
+            // card will fail at charge time and only a person can sort that
+            // out. SR-JOB-0260 carried a declined card for two days reading
+            // "On file" on every staff surface.
+            recordCardTrouble({
+              token: params.token,
+              kind: 'AUTH_DECLINED',
+              detail: [zero.respcode, zero.resptext].filter(Boolean).join(' ') || null,
+            })
           }
         } catch (err) {
           console.error('[cc-auth] $0 validation threw:', err)

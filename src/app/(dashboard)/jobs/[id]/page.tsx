@@ -325,6 +325,10 @@ interface JobDetail {
     paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null;
     /** The $0 stored-credential validation came back approved. */
     validated: boolean;
+    /** Failed portal attempts at this card step, and the latest one. */
+    troubleCount: number;
+    lastTroubleAt: string | null;
+    lastTroubleDetail: string | null;
   };
   // bookingId → the client's collision-waiver decision, so each reserved
   // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
@@ -1612,6 +1616,17 @@ const driverTone = (d: any): string => {
                     {ccBusy ? 'copying…' : 'copy link'}
                   </button>
                 </div>
+                {/* The client HAS tried. Sending them the link again is the
+                    wrong move — call them, or key in a signed authorization. */}
+                {job.cardAuth.troubleCount > 0 && (
+                  <div className="mt-1.5 text-[11px] text-rose-700 font-semibold">
+                    Client tried {job.cardAuth.troubleCount}×{' '}
+                    {job.cardAuth.lastTroubleAt
+                      ? `· last ${new Date(job.cardAuth.lastTroubleAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                      : ''}
+                    {job.cardAuth.lastTroubleDetail ? ` · ${job.cardAuth.lastTroubleDetail}` : ''}
+                  </div>
+                )}
                 {/* The client already signed a CCA on paper? It gets keyed
                     into the company's wallet rather than asking them to do
                     it again in the portal (Wes 2026-09-02). Collections-

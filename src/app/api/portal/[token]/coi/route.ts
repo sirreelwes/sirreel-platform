@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { prisma } from '@/lib/prisma'
 import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
 
@@ -32,14 +33,20 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           jobName: true,
           bookingNumber: true,
           company: { select: { name: true } },
+          job: { select: { name: true } },
         },
+      })
+      const displayJobName = resolveDisplayJobName({
+        jobName: booking?.job?.name,
+        bookingJobName: booking?.jobName,
+        companyName: booking?.company?.name,
       })
       notifyHqDocument({
         kind: 'coi',
         companyName: booking?.company?.name ?? null,
-        jobName: booking?.jobName ?? null,
+        jobName: displayJobName,
         rows: [
-          { label: 'Job', value: booking?.jobName || '—' },
+          { label: 'Job', value: displayJobName },
           { label: 'Company', value: booking?.company?.name || '—' },
           { label: 'Booking', value: booking?.bookingNumber || '—' },
           { label: 'File', value: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)` },
