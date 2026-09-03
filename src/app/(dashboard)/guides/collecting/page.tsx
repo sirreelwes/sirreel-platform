@@ -382,7 +382,7 @@ export default function CollectingGuidePage() {
             </Step>
             <Step n={3} title="Type the card into the secure box">
               <p>That box is CardConnect&rsquo;s, not ours — the number goes straight to them and comes back as a
-                token. <strong className="text-lt-fg">Card read ✓</strong> means they took it. You will only
+                token. <strong className="text-lt-fg">Card read</strong> means they took it. You will only
                 ever see the last four afterwards.</p>
               <p>There is no CVV field, and that is on purpose: a stored card replays its CVV on every later
                 charge, which our processor told us to stop doing.</p>
