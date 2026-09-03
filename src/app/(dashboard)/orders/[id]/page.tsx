@@ -234,7 +234,7 @@ type EmailDelivery = {
 type InvoiceRow = {
   id: string;
   invoiceNumber: string;
-  type: 'RENTAL' | 'LD';
+  type: 'RENTAL' | 'LD' | 'DEPOSIT';
   status: 'DRAFT' | 'SENT' | 'PAID' | 'PARTIAL' | 'VOID';
   subtotal: string;
   taxAmount: string;
@@ -1038,6 +1038,50 @@ export default function OrderDetailPage() {
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
+  // ── Deposit: money taken BEFORE the job wraps ──────────────────
+  // Deliberately NOT the invoice button with an early date. A RENTAL
+  // invoice advances the order to INVOICED, which drops it off Julian's
+  // dispatch board and locks the lines; a DEPOSIT does neither. See
+  // src/lib/invoices/deposits.ts.
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositNote, setDepositNote] = useState('');
+  const [depositBusy, setDepositBusy] = useState(false);
+  const [depositErr, setDepositErr] = useState<string | null>(null);
+
+  const takeDeposit = async () => {
+    const amount = Number(depositAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setDepositErr('Enter an amount greater than zero.');
+      return;
+    }
+    setDepositBusy(true);
+    setDepositErr(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, note: depositNote.trim() || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // The server carries the real reason (wrong status, over the order
+        // total). Surface it rather than a generic failure — "check the
+        // amount" is actionable, "something went wrong" is not.
+        setDepositErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      setDepositOpen(false);
+      setDepositAmount('');
+      setDepositNote('');
+      await fetchInvoices();
+    } catch (e) {
+      setDepositErr(e instanceof Error ? e.message : 'Could not raise the deposit.');
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
   const generateRentalInvoice = async () => {
     if (generatingInvoice) return;
     setGeneratingInvoice(true);
@@ -3739,6 +3783,156 @@ export default function OrderDetailPage() {
             </div>
             {fleetErr && (
               <div className="mt-3 text-[11px] text-chip-bad-fg">{fleetErr}</div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Deposits — money taken BEFORE the job wraps. Sits ABOVE the
+          invoice card because it is only ever relevant while the job is
+          still live; once the rental invoice exists it is history, and
+          the settled amount already shows on that invoice as "Less
+          deposit received". */}
+      {(() => {
+        const deposits = (invoices ?? []).filter(
+          (i) => i.type === 'DEPOSIT' && i.status !== 'VOID',
+        );
+        // Same pre-wrap window the API enforces. Kept in step with
+        // DEPOSITABLE in src/lib/invoices/deposits.ts — the server is the
+        // real gate, this only decides whether to offer the button.
+        const canTake = ['DRAFT', 'QUOTE_SENT', 'APPROVED', 'BOOKED', 'LOADED_READY', 'ON_JOB']
+          .includes(order.status);
+        if (deposits.length === 0 && !canTake) return null;
+
+        const collected = deposits.reduce((sum, d) => sum + Number(d.amountPaid), 0);
+        const raised = deposits.reduce((sum, d) => sum + Number(d.total), 0);
+        const orderTotal = Number(order.total);
+
+        return (
+          <div className="rounded-xl px-6 py-4 mb-4 border border-lt-hairline bg-lt-card">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-lt-fg">Deposits</span>
+                  {collected > 0 && (
+                    <span className="text-sm font-bold text-lt-fg">
+                      ${collected.toLocaleString('en-US', { minimumFractionDigits: 2 })} received
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-[11px] text-lt-fg3">
+                  {deposits.length === 0
+                    ? 'Take money before the job wraps. The order stays on the dispatch board and stays editable.'
+                    : raised > collected
+                      ? `$${(raised - collected).toLocaleString('en-US', { minimumFractionDigits: 2 })} raised and not yet paid. Credited against the final invoice when it clears.`
+                      : 'Credited against the final invoice automatically.'}
+                </div>
+              </div>
+              {canTake && !depositOpen && (
+                <button
+                  onClick={() => { setDepositOpen(true); setDepositErr(null); }}
+                  className="rounded-md bg-lt-fg text-white text-[11px] font-semibold px-3 py-1.5 shrink-0"
+                >
+                  Take a deposit
+                </button>
+              )}
+            </div>
+
+            {deposits.length > 0 && (
+              <div className="mt-3 divide-y divide-lt-hairline border-t border-lt-hairline">
+                {deposits.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-[11px] text-lt-fg2">{d.invoiceNumber}</span>
+                      <span className="ml-2 text-[11px] text-lt-fg3">
+                        {d.status === 'PAID' ? 'Paid'
+                          : d.status === 'PARTIAL' ? `Part paid — $${Number(d.balanceDue).toLocaleString('en-US', { minimumFractionDigits: 2 })} outstanding`
+                          : d.status === 'SENT' ? 'Sent — awaiting payment'
+                          : 'Draft — not sent yet'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[12px] font-semibold text-lt-fg tabular-nums">
+                        ${Number(d.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                      {d.pdfUrl && (
+                        <a
+                          href={`/api/invoices/${d.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-semibold underline underline-offset-2 text-lt-fg2"
+                        >
+                          PDF
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {depositOpen && (
+              <div className="mt-3 border-t border-lt-hairline pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[9rem_1fr_auto] gap-2 items-start">
+                  <input
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="Amount"
+                    inputMode="decimal"
+                    autoFocus
+                    className="rounded-md border border-lt-hairline bg-lt-inner px-2.5 py-1.5 text-[12px] text-lt-fg"
+                  />
+                  <input
+                    value={depositNote}
+                    onChange={(e) => setDepositNote(e.target.value)}
+                    placeholder="What was agreed — e.g. 50% up front per Jose"
+                    className="rounded-md border border-lt-hairline bg-lt-inner px-2.5 py-1.5 text-[12px] text-lt-fg"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void takeDeposit()}
+                      disabled={depositBusy}
+                      className="rounded-md bg-lt-fg text-white text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40"
+                    >
+                      {depositBusy ? 'Raising…' : 'Raise deposit'}
+                    </button>
+                    <button
+                      onClick={() => { setDepositOpen(false); setDepositErr(null); }}
+                      className="text-[11px] text-lt-fg3"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+                {/* Half is the common ask, so offer it rather than making
+                    them do the arithmetic — but it is a shortcut into the
+                    field, not a preset: the number stays editable. */}
+                {orderTotal > 0 && (
+                  <div className="mt-1.5 flex items-center gap-2 text-[11px] text-lt-fg3">
+                    <span>Order total ${orderTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <button
+                      onClick={() => setDepositAmount((Math.round(orderTotal * 50) / 100).toFixed(2))}
+                      className="underline underline-offset-2"
+                    >
+                      50%
+                    </button>
+                    <button
+                      onClick={() => setDepositAmount(orderTotal.toFixed(2))}
+                      className="underline underline-offset-2"
+                    >
+                      Full
+                    </button>
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-lt-fg3">
+                  Raises a draft deposit invoice. Send it like any other invoice to ask for the
+                  money. The order is <strong className="text-lt-fg">not</strong> invoiced — it stays
+                  on the dispatch board and the lines stay editable.
+                </p>
+                {depositErr && (
+                  <p className="mt-2 text-[11px] text-chip-bad-fg">{depositErr}</p>
+                )}
+              </div>
             )}
           </div>
         );

@@ -40,14 +40,26 @@
  * $2,145 credit = $2,145 owed. Nothing is double-counted and nothing moves.
  */
 
+import React from 'react'
+import { randomUUID } from 'crypto'
+import { put } from '@vercel/blob'
+import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/lib/prisma'
 import { nextInvoiceNumber } from '@/lib/orders'
-import type { InvoiceLineSnapshotEntry } from '@/lib/invoices/InvoiceDocument'
+import { InvoiceDocument, type InvoiceLineSnapshotEntry } from '@/lib/invoices/InvoiceDocument'
 
 /** Statuses where taking a deposit makes sense. */
 const DEPOSITABLE: ReadonlySet<string> = new Set([
   'DRAFT', 'QUOTE_SENT', 'APPROVED', 'BOOKED', 'LOADED_READY', 'ON_JOB',
 ])
+
+/** Printed on the deposit PDF. The client is being asked for money against
+ *  a job that has not happened yet, so the document says what it is and what
+ *  happens to it — otherwise it reads as a bill for a rental they have not
+ *  had. */
+const DEPOSIT_NOTE =
+  'This is a deposit toward your rental, not the final invoice. ' +
+  'It will be credited in full against your final invoice when the job wraps.'
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -114,6 +126,10 @@ export async function createDepositInvoice(args: {
     where: { id: args.orderId },
     select: {
       id: true, orderNumber: true, status: true, total: true, bookedTotal: true,
+      startDate: true, endDate: true,
+      company: { select: { name: true, billingAddress: true, billingEmail: true } },
+      job: { select: { jobCode: true, name: true } },
+      agent: { select: { name: true, email: true, phone: true } },
     },
   })
   if (!order) return { ok: false, status: 404, error: 'order not found' }
@@ -165,6 +181,66 @@ export async function createDepositInvoice(args: {
   const invoiceNumber = await nextInvoiceNumber('RENTAL')
   const issuedAt = new Date()
 
+  // ── Render the PDF ──────────────────────────────────────────────
+  // Not optional: sendInvoice refuses any invoice with no pdfBlobKey
+  // ("invoice has no PDF — regenerate first"), so a deposit without one
+  // could be raised and then never actually sent to the client, which is
+  // the only reason to raise it.
+  //
+  // No booking terms on this document. The four charge terms explain
+  // refuelling, mileage and disposal — charges a deposit does not contain,
+  // and this invoice is one line. They belong on the final invoice, which
+  // is where those charges land.
+  let pdfBytes: Buffer
+  try {
+    const element = React.createElement(InvoiceDocument, {
+      invoiceNumber,
+      invoiceType: 'DEPOSIT' as const,
+      orderNumber: order.orderNumber,
+      issuedAt,
+      dueDate: issuedAt,
+      servicePeriodStart: order.startDate,
+      servicePeriodEnd: order.endDate,
+      subtotal: amount,
+      taxRate: 0,
+      taxAmount: 0,
+      total: amount,
+      amountPaid: 0,
+      balanceDue: amount,
+      lines: snapshot,
+      company: {
+        name: order.company.name,
+        billingAddress: order.company.billingAddress,
+        billingEmail: order.company.billingEmail,
+      },
+      job: order.job ? { jobCode: order.job.jobCode, name: order.job.name } : null,
+      agent: {
+        name: order.agent.name,
+        email: order.agent.email,
+        phone: order.agent.phone ?? null,
+      },
+      notes: DEPOSIT_NOTE,
+    }) as React.ReactElement<DocumentProps>
+    pdfBytes = await renderToBuffer(element)
+  } catch (err) {
+    console.error('[createDepositInvoice] PDF render failed:', err)
+    return { ok: false, status: 500, error: 'failed to render the deposit PDF' }
+  }
+
+  const yyyy = issuedAt.getUTCFullYear()
+  const mm = String(issuedAt.getUTCMonth() + 1).padStart(2, '0')
+  const blobKey = `invoices/${yyyy}/${mm}/${randomUUID()}-${invoiceNumber}.pdf`
+  let blob
+  try {
+    blob = await put(blobKey, pdfBytes, {
+      access: 'private' as 'public', // @vercel/blob types expose only 'public'; the private bucket takes the same call
+      contentType: 'application/pdf',
+    })
+  } catch (err) {
+    console.error('[createDepositInvoice] blob upload failed:', err)
+    return { ok: false, status: 500, error: 'failed to upload the deposit PDF' }
+  }
+
   const inv = await prisma.$transaction(async (tx) => {
     const created = await tx.invoice.create({
       data: {
@@ -180,6 +256,10 @@ export async function createDepositInvoice(args: {
         // Due on receipt, matching every other SirReel invoice.
         dueDate: issuedAt,
         lineSnapshot: snapshot as unknown as object,
+        notes: DEPOSIT_NOTE,
+        pdfBlobKey: blobKey,
+        pdfUrl: blob.url,
+        pdfGeneratedAt: issuedAt,
       },
       select: { id: true, invoiceNumber: true },
     })

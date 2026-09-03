@@ -87,7 +87,7 @@ export interface InvoiceAgentForRender {
 
 export interface InvoiceDocumentProps {
   invoiceNumber: string
-  invoiceType: 'RENTAL' | 'LD'
+  invoiceType: 'RENTAL' | 'LD' | 'DEPOSIT'
   /** PRE-INVOICE round: this document is a DRAFT sent to the client for
    *  review, not a demand for payment (Wes 2026-09-01). Retitles the
    *  document and states plainly that it is not yet payable — a client
@@ -510,11 +510,16 @@ export function InvoiceDocument({
   bookingTerms,
   isPreInvoice = false,
 }: InvoiceDocumentProps): React.ReactElement {
+  // A deposit says so on its face. Titled plain "INVOICE" it reads as a bill
+  // for a rental the client has not had yet, which is the one thing this
+  // document must not be mistaken for.
   const docTitle = isPreInvoice
     ? 'PRE-INVOICE'
     : invoiceType === 'LD'
       ? 'LOSS & DAMAGE INVOICE'
-      : 'INVOICE'
+      : invoiceType === 'DEPOSIT'
+        ? 'DEPOSIT INVOICE'
+        : 'INVOICE'
 
   return (
     <Document>
