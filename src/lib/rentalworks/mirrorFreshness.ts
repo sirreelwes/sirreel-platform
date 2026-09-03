@@ -26,9 +26,14 @@
  *
  * Threshold per mirror is roughly two scheduled runs plus slack, so a
  * single missed or still-resuming run is not an alarm — two in a row is.
- * A resumable pull deliberately spans runs, so the age measured is the
- * newest row in the mirror, not the last completed cycle: rows are being
- * refreshed the whole time, and that is what a reader depends on.
+ *
+ * TWO ages, not one. The newest row is the obvious signal but on its own
+ * it lies about a resumable pull: a cycle that keeps restarting, or that
+ * only ever gets through its first pages before running out of budget,
+ * refreshes page 1 every single run and therefore always looks current —
+ * while the rows on the last pages quietly rot. So a mirror with a cursor
+ * is ALSO judged on when a cycle last CLOSED, which is the only moment
+ * every row in it has been seen. Either age over its limit is stale.
  */
 
 import { prisma } from '@/lib/prisma'
@@ -40,7 +45,13 @@ export interface MirrorHealth {
   syncedAt: Date | null
   ageHours: number | null
   thresholdHours: number
+  /** Hours since a cycle last closed. Null for mirrors without a cursor. */
+  cycleAgeHours: number | null
+  /** Limit on cycleAgeHours — a cycle may legitimately span several runs. */
+  cycleThresholdHours: number | null
   stale: boolean
+  /** Which of the two ages tripped, for the message. */
+  staleReason: 'rows' | 'cycle' | null
   rows: number
   /** Cursor note from the paged syncs — why the last run stopped. */
   cursor: {
@@ -51,13 +62,16 @@ export interface MirrorHealth {
   } | null
 }
 
-const THRESHOLDS: Record<RwMirror, { label: string; hours: number }> = {
-  // Daily at 11:00 UTC → two missed runs plus slack.
-  invoice: { label: 'Invoices', hours: 36 },
-  // Every 6h, and a cycle may legitimately span two or three runs.
-  quote: { label: 'Quotes', hours: 36 },
-  // Daily, resumable, and the least time-critical of the three.
-  orderRef: { label: 'Order index', hours: 48 },
+const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
+  // Daily at 11:00 UTC, all-or-nothing → two missed runs plus slack. No
+  // cursor, so no cycle age to check.
+  invoice: { label: 'Invoices', hours: 36, cycleHours: null },
+  // Every 6h; a full cycle measured ~330s so it takes two runs. Allowing
+  // 24h to close one is generous even if several runs are lost.
+  quote: { label: 'Quotes', hours: 36, cycleHours: 24 },
+  // Three times daily; a cycle measured ~470s across three runs. Same
+  // reasoning, with more slack — it is the least time-critical mirror.
+  orderRef: { label: 'Order index', hours: 48, cycleHours: 36 },
 }
 
 export async function checkRwMirrorFreshness(now = new Date()): Promise<MirrorHealth[]> {
@@ -78,17 +92,31 @@ export async function checkRwMirrorFreshness(now = new Date()): Promise<MirrorHe
   return rows.map(([mirror, agg, cursor]) => {
     const syncedAt = agg._max.syncedAt
     const ageHours = syncedAt ? (now.getTime() - syncedAt.getTime()) / 3_600_000 : null
-    const { label, hours } = THRESHOLDS[mirror]
+    const { label, hours, cycleHours } = THRESHOLDS[mirror]
+
+    // Cycle age only applies once a cursor exists — a mirror mid-way
+    // through its FIRST ever cycle has never closed one and must not be
+    // reported stale for it.
+    const cycleAgeHours =
+      cycleHours != null && cursor?.completedAt
+        ? (now.getTime() - cursor.completedAt.getTime()) / 3_600_000
+        : null
+
+    // A mirror that has NEVER populated is stale by definition — an empty
+    // table is the most misleading state of all, because every reader
+    // treats "no rows" as "nothing to show".
+    const rowsStale = ageHours == null || ageHours > hours
+    const cycleStale = cycleAgeHours != null && cycleHours != null && cycleAgeHours > cycleHours
     return {
       mirror,
       label,
       syncedAt,
       ageHours: ageHours == null ? null : Math.round(ageHours * 10) / 10,
       thresholdHours: hours,
-      // A mirror that has NEVER populated is stale by definition — an
-      // empty table is the most misleading state of all, because every
-      // reader treats "no rows" as "nothing to show".
-      stale: ageHours == null || ageHours > hours,
+      cycleAgeHours: cycleAgeHours == null ? null : Math.round(cycleAgeHours * 10) / 10,
+      cycleThresholdHours: cycleHours,
+      stale: rowsStale || cycleStale,
+      staleReason: rowsStale ? 'rows' : cycleStale ? 'cycle' : null,
       rows: agg._count,
       cursor: cursor
         ? {
@@ -111,7 +139,12 @@ export function describeMirror(h: MirrorHealth): string {
   const head = `${h.label}: ${age} (${h.rows.toLocaleString()} rows, limit ${h.thresholdHours}h)`
   if (!h.cursor) return head
   const cyc = h.cursor.completedAt
-    ? `cycle completed ${h.cursor.completedAt.toISOString().slice(0, 16).replace('T', ' ')}`
+    ? `cycle completed ${h.cursor.completedAt.toISOString().slice(0, 16).replace('T', ' ')}` +
+      (h.cycleAgeHours != null ? ` (${h.cycleAgeHours}h ago, limit ${h.cycleThresholdHours}h)` : '')
     : `cycle in progress, next page ${h.cursor.nextPage}, ${h.cursor.rowsThisCycle} rows so far`
-  return `${head}\n    ${cyc}${h.cursor.lastError ? `\n    last run: ${h.cursor.lastError}` : ''}`
+  const why =
+    h.staleReason === 'cycle'
+      ? '\n    STALE because no cycle has closed in time — early pages keep refreshing while the last pages rot'
+      : ''
+  return `${head}\n    ${cyc}${h.cursor.lastError ? `\n    last run: ${h.cursor.lastError}` : ''}${why}`
 }

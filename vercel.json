@@ -86,7 +86,7 @@
     },
     {
       "path": "/api/cron/rw-order-refs",
-      "schedule": "40 3 * * *"
+      "schedule": "40 3,9,17 * * *"
     },
     {
       "path": "/api/cron/rw-mirror-freshness",
