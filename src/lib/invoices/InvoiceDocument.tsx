@@ -8,7 +8,7 @@ import { ZellePayBlock } from './ZellePayBlock'
 /**
  * SirReel Invoice PDF. Shell mirrors the QuoteDocument / contracts
  * pattern (single muted ink palette, centered title, 3-section info
- * card, section-headed charges table). Invoice-specific fields layered
+ * card, one unlabelled charges table). Invoice-specific fields layered
  * in: payment terms, tax breakdown with rate, explicit Bill To /
  * Remit To columns, amount paid + balance due.
  *
@@ -201,29 +201,12 @@ const styles = StyleSheet.create({
   infoSub: { fontSize: 9, color: C.muted, marginTop: 1 },
 
   // ── Charges table ───────────────────────────────────────────
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 6,
-    marginBottom: 0,
-    paddingTop: 4,
-    paddingBottom: 4,
-    paddingHorizontal: 6,
-    backgroundColor: C.accentFill,
-    borderBottomWidth: 1,
-    borderBottomColor: C.accentDeep,
-  },
-  sectionTitle: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: C.accent,
-  },
-  sectionSub: { fontSize: 8, color: C.muted },
   tableHead: {
     flexDirection: 'row',
+    // Was carried by the removed "CHARGES" band. Safe on a fixed
+    // element: it only adds a little air under the top margin when the
+    // head repeats on page 2+.
+    marginTop: 6,
     paddingVertical: 3,
     paddingHorizontal: 6,
     backgroundColor: C.accentFillSoft,
@@ -565,13 +548,12 @@ export function InvoiceDocument({
           </View>
         </View>
 
-        {/* ── Charges section header ────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Charges</Text>
-          <Text style={styles.sectionSub}>{lines.length} line{lines.length === 1 ? '' : 's'}</Text>
-        </View>
-
         {/* ── Table head ───────────────────────────────────────── */}
+        {/* No "CHARGES" band above it. Wes 2026-09-02: no section
+            labels on client PDFs — the same ruling that took the
+            department bands off the quote and the department title off
+            the RW invoice header. The column head is the only label a
+            one-table document needs. */}
         <View style={styles.tableHead} fixed>
           <Text style={styles.colDesc}>Description</Text>
           <Text style={styles.colQty}>Qty</Text>

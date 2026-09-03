@@ -6,7 +6,7 @@ import '@/lib/pdf/hyphenation'
 
 /**
  * HQ-rendered duplicate of a RentalWorks invoice, styled to MATCH the
- * invoices RW itself prints (logo, blue header, No/Date/Due
+ * invoices RW itself prints (logo, header, No/Date/Due
  * block, Issued To / Remit To, order-meta band, blue section headers with
  * yellow totals, Grand Total / Amount Paid / Remaining Balance) — so a
  * client comparing paper sees the same document family.
@@ -101,16 +101,11 @@ const s = StyleSheet.create({
   mRow: { flexDirection: 'row', marginBottom: 1.5 },
   mKey: { fontFamily: 'Helvetica-Bold', width: 62 },
   mVal: { flex: 1 },
-  // sections
-  secHead: { marginTop: 14, borderWidth: 1, borderColor: BLUE, borderStyle: 'dashed', paddingVertical: 3, paddingHorizontal: 6 },
-  secHeadText: { color: BLUE, fontSize: 13, fontFamily: 'Helvetica-Bold' },
-  th: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: INK, paddingVertical: 3, marginTop: 4, fontFamily: 'Helvetica-Bold' },
+  // charges table
+  th: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: INK, paddingVertical: 3, marginTop: 16, fontFamily: 'Helvetica-Bold' },
   tr: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: '#cccccc' },
   cDesc: { flex: 1 },
   cNum: { width: 60, textAlign: 'right' },
-  secTotalRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 3 },
-  secTotalBox: { flexDirection: 'row', backgroundColor: YELLOW, borderTopWidth: 1, borderTopColor: HAIR, paddingVertical: 3, paddingHorizontal: 6 },
-  secTotalKey: { fontFamily: 'Helvetica-Bold', marginRight: 18 },
   // grand totals
   totalsWrap: { alignItems: 'flex-end', marginTop: 16 },
   gRow: { flexDirection: 'row', width: 240, justifyContent: 'space-between', paddingVertical: 3, paddingHorizontal: 6 },
@@ -118,6 +113,10 @@ const s = StyleSheet.create({
   bold: { fontFamily: 'Helvetica-Bold' },
   footer: { position: 'absolute', bottom: 28, left: 40, right: 40, fontSize: 7, color: MUTED, textAlign: 'center', borderTopWidth: 0.5, borderTopColor: '#cccccc', paddingTop: 6 },
 })
+
+/** RW's category names are SHOUTED ("MISCELLANEOUS"). In a description
+ *  cell that reads as a heading; sentence case reads as a line. */
+const titleCase = (v: string) => v.charAt(0) + v.slice(1).toLowerCase()
 
 const usd = (v: unknown) =>
   `$ ${Number(v ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -225,24 +224,27 @@ export function RwInvoiceDocument({ inv, renderedAt }: { inv: RwInvoiceDetail; r
           </View>
         </View>
 
-        {/* ── Category sections (summary rows — RW exposes no line items) ── */}
+        {/* ── Charges — ONE table, no section bands ──
+            Wes 2026-09-02: no section labels on client PDFs. RW's blue
+            RENTAL / SALES / LABOR bands (each with its own header row
+            and its own section total) are gone.
+
+            RW exposes no line items, only these category totals, so the
+            category is the ONLY thing separating one money row from the
+            next — dropping the name outright would print three identical
+            descriptions against three different amounts. It moves into
+            the row's own Description cell instead: a row that names
+            itself, not a band that heads a section. Nothing is lost and
+            the per-section totals are redundant once each category is a
+            single row. */}
+        <View style={s.th}>
+          <Text style={s.cDesc}>Description</Text>
+          <Text style={s.cNum}>Extended</Text>
+        </View>
         {sections.map((sec) => (
-          <View key={sec.key}>
-            <View style={s.secHead}><Text style={s.secHeadText}>{sec.label}</Text></View>
-            <View style={s.th}>
-              <Text style={s.cDesc}>Description</Text>
-              <Text style={s.cNum}>Extended</Text>
-            </View>
-            <View style={s.tr}>
-              <Text style={s.cDesc}>{description}</Text>
-              <Text style={s.cNum}>{Number(sec.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
-            </View>
-            <View style={s.secTotalRow}>
-              <View style={s.secTotalBox}>
-                <Text style={s.secTotalKey}>{sec.label} Total</Text>
-                <Text style={s.bold}>{usd(sec.amount)}</Text>
-              </View>
-            </View>
+          <View key={sec.key} style={s.tr}>
+            <Text style={s.cDesc}>{titleCase(sec.label)} — {description}</Text>
+            <Text style={s.cNum}>{Number(sec.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
           </View>
         ))}
 
