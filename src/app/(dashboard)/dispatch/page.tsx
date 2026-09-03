@@ -32,6 +32,20 @@ type PickListStatus =
   | 'CANCELLED'
 type Priority = 'URGENT' | 'HIGH' | 'STANDARD' | 'LOW'
 
+/** What the production itself typed in the portal — the gate a truck aims
+ *  for and when they want it. Null when they haven't answered. Mirrors
+ *  CardReportTo in /api/dispatch. */
+interface CardReportTo {
+  deliveryAddress: string | null
+  deliveryTime: string | null
+  deliveryAccessNotes: string | null
+  pickupAddress: string | null
+  pickupTime: string | null
+  pickupAccessNotes: string | null
+  contactName: string | null
+  contactPhone: string | null
+}
+
 interface FleetCard {
   kind: 'FLEET'
   cardId: string
@@ -52,6 +66,7 @@ interface FleetCard {
   // light marker on outbound for prep awareness.
   blindPickup: boolean
   blindReturn: boolean
+  reportTo: CardReportTo | null
 }
 
 interface WarehouseCard {
@@ -70,6 +85,7 @@ interface WarehouseCard {
   priority: Priority | null
   blindPickup: boolean
   blindReturn: boolean
+  reportTo: CardReportTo | null
 }
 
 type DispatchCard = FleetCard | WarehouseCard
@@ -119,6 +135,11 @@ function fmtDate(ymd: string): string {
   if (isNaN(d.getTime())) return ymd
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', timeZone: 'UTC' })
 }
+
+/** Which side of the day a card is being rendered on. Not a property of
+ *  the card — the same movement is outbound on its ship date and inbound
+ *  on its return date — so the lane is passed down by the caller. */
+type Lane = 'out' | 'in'
 
 const REFRESH_MS = 60_000
 
@@ -269,8 +290,8 @@ function OverdueBand({
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-chip-bad-fg/30">
-        <OverdueSection label="Late to ship" cards={overdue.lateToShip} />
-        <OverdueSection label="Late to return" cards={overdue.lateToReturn} />
+        <OverdueSection label="Late to ship" cards={overdue.lateToShip} lane="out" />
+        <OverdueSection label="Late to return" cards={overdue.lateToReturn} lane="in" />
       </div>
       {!!overdue.staleUnreturned && (
         <p className="px-4 py-2 text-[11px] text-lt-fg3 border-t border-chip-bad-fg/20">
@@ -282,7 +303,7 @@ function OverdueBand({
   )
 }
 
-function OverdueSection({ label, cards }: { label: string; cards: DispatchCard[] }) {
+function OverdueSection({ label, cards, lane }: { label: string; cards: DispatchCard[]; lane: Lane }) {
   return (
     <div className="p-3">
       <div className="text-[10px] uppercase tracking-wider font-bold text-chip-bad-fg mb-2">{label}</div>
@@ -290,7 +311,7 @@ function OverdueSection({ label, cards }: { label: string; cards: DispatchCard[]
         <div className="text-xs text-chip-bad-fg/70">None ✓</div>
       ) : (
         <div className="grid gap-1.5">
-          {cards.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} overdue /> : <WarehouseCardView key={c.cardId} c={c} overdue />))}
+          {cards.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} overdue lane={lane} /> : <WarehouseCardView key={c.cardId} c={c} overdue lane={lane} />))}
         </div>
       )}
     </div>
@@ -328,8 +349,8 @@ function DayColumn({ day }: { day: DispatchDay }) {
         empty={outTotal === 0}
         emptyCopy="Nothing going out."
       >
-        {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} />)}
-        {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} />)}
+        {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} lane="out" />)}
+        {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} lane="out" />)}
       </SubSection>
 
       <SubSection
@@ -337,7 +358,7 @@ function DayColumn({ day }: { day: DispatchDay }) {
         empty={inTotal === 0}
         emptyCopy="Nothing coming back."
       >
-        {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} /> : <WarehouseCardView key={c.cardId} c={c} />))}
+        {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} lane="in" /> : <WarehouseCardView key={c.cardId} c={c} lane="in" />))}
       </SubSection>
     </section>
   )
@@ -431,8 +452,8 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
               <div className="text-xs text-lt-fg3">None.</div>
             ) : (
               <div className="grid gap-1.5">
-                {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} />)}
-                {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} />)}
+                {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} lane="out" />)}
+                {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} lane="out" />)}
               </div>
             )}
           </div>
@@ -442,7 +463,7 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
               <div className="text-xs text-lt-fg3">None.</div>
             ) : (
               <div className="grid gap-1.5">
-                {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} /> : <WarehouseCardView key={c.cardId} c={c} />))}
+                {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} lane="in" /> : <WarehouseCardView key={c.cardId} c={c} lane="in" />))}
               </div>
             )}
           </div>
@@ -481,7 +502,37 @@ function isOutboundBlindPickup(c: { status: ListStatus; blindPickup: boolean }) 
   return (c.status === 'BOOKED' || c.status === 'LOADED_READY') && c.blindPickup
 }
 
-function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
+/** The client's own address and time, on the card the driver reads.
+ *  Lane decides WHICH half: an outbound card shows where to drop, an
+ *  inbound card where to collect from — they are not always the same
+ *  place, and they are never the same time. Renders nothing when the
+ *  production hasn't answered, rather than falling back to an address
+ *  nobody promised. */
+function ReportToLine({ r, lane }: { r: CardReportTo | null; lane: Lane }) {
+  if (!r) return null
+  const address = lane === 'in' ? r.pickupAddress : r.deliveryAddress
+  const time = lane === 'in' ? r.pickupTime : r.deliveryTime
+  const notes = lane === 'in' ? r.pickupAccessNotes : r.deliveryAccessNotes
+  if (!address && !time) return null
+  return (
+    <div className="mt-1.5 pt-1.5 border-t border-lt-hairline text-[11px] leading-snug">
+      <span className="uppercase tracking-wider font-bold text-lt-fg3">
+        {lane === 'in' ? 'Collect from' : 'Report to'}
+      </span>
+      {address && <div className="text-lt-fg2 whitespace-pre-wrap">{address}</div>}
+      {time && <div className="text-lt-fg2">{time}</div>}
+      {notes && <div className="text-lt-fg3">{notes}</div>}
+      {lane === 'out' && (r.contactName || r.contactPhone) && (
+        <div className="text-lt-fg3">
+          {r.contactName || '—'}
+          {r.contactPhone ? ` · ${r.contactPhone}` : ''}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FleetCardView({ c, overdue, lane = 'out' }: { c: FleetCard; overdue?: boolean; lane?: Lane }) {
   const blindReturn = isInboundBlindReturn(c)
   const blindPickup = isOutboundBlindPickup(c)
   return (
@@ -526,6 +577,7 @@ function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
         <div className="mt-1 text-[11px] text-lt-fg3">
           out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
         </div>
+        <ReportToLine r={c.reportTo} lane={lane} />
       </div>
       {blindReturn && (
         <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -537,7 +589,7 @@ function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
   )
 }
 
-function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean }) {
+function WarehouseCardView({ c, overdue, lane = 'out' }: { c: WarehouseCard; overdue?: boolean; lane?: Lane }) {
   const blindReturn = isInboundBlindReturn(c)
   const blindPickup = isOutboundBlindPickup(c)
   return (
@@ -587,6 +639,7 @@ function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean
         <div className="mt-1 text-[11px] text-lt-fg3">
           out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
         </div>
+        <ReportToLine r={c.reportTo} lane={lane} />
       </div>
       {blindReturn && (
         <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">

@@ -63,6 +63,65 @@ const MAX_DAYS = 30
 const RESERVATION_OVERDUE_DAYS = 7
 
 // ─── Card shapes ────────────────────────────────────────────────
+/** The client's own delivery/pickup answers, flattened onto a card.
+ *  The pickup ADDRESS inherits the delivery one when the production
+ *  ticked "same place"; the pickup TIME never inherits — a trailer
+ *  dropped at 6am is not collected at 6am. */
+export interface CardReportTo {
+  deliveryAddress: string | null
+  deliveryTime: string | null
+  deliveryAccessNotes: string | null
+  pickupAddress: string | null
+  pickupTime: string | null
+  pickupAccessNotes: string | null
+  contactName: string | null
+  contactPhone: string | null
+}
+
+/** Job columns needed to build a CardReportTo. NOT exported — a route
+ *  file may only export route handlers and Next's own config fields, and
+ *  a stray `export const` fails `next build` while passing tsc. */
+const REPORT_TO_SELECT = {
+  reportToAddress: true,
+  reportToAccessNotes: true,
+  reportToTime: true,
+  reportToContactName: true,
+  reportToContactPhone: true,
+  pickupSameAsDelivery: true,
+  pickupAddress: true,
+  pickupAccessNotes: true,
+  pickupTime: true,
+} as const
+
+type ReportToJob = {
+  reportToAddress: string | null
+  reportToAccessNotes: string | null
+  reportToTime: string | null
+  reportToContactName: string | null
+  reportToContactPhone: string | null
+  pickupSameAsDelivery: boolean
+  pickupAddress: string | null
+  pickupAccessNotes: string | null
+  pickupTime: string | null
+}
+
+function cardReportTo(job: ReportToJob | null | undefined): CardReportTo | null {
+  if (!job) return null
+  const same = job.pickupSameAsDelivery !== false
+  const out: CardReportTo = {
+    deliveryAddress: job.reportToAddress,
+    deliveryTime: job.reportToTime,
+    deliveryAccessNotes: job.reportToAccessNotes,
+    pickupAddress: same ? job.reportToAddress : job.pickupAddress,
+    pickupTime: job.pickupTime,
+    pickupAccessNotes: same ? job.reportToAccessNotes : job.pickupAccessNotes,
+    contactName: job.reportToContactName,
+    contactPhone: job.reportToContactPhone,
+  }
+  // Nothing answered = no card section at all.
+  return Object.values(out).some((v) => v) ? out : null
+}
+
 export interface FleetCard {
   kind: 'FLEET'
   // Stable id for React: line id, or `ba:<id>` for a reservation-derived card.
@@ -105,6 +164,12 @@ export interface FleetCard {
    *  it. */
   attachedOrderId?: string | null
   attachedOrderNumber?: string | null
+  /** What the CLIENT told us in the portal's "Deliveries" section:
+   *  where a truck reports, when, who meets it. Null when the
+   *  production hasn't answered — an honest blank, never a guess, and
+   *  never our billing address standing in for a gate. Outbound cards
+   *  render the delivery half, inbound the pickup half. */
+  reportTo: CardReportTo | null
 }
 
 export interface WarehouseCard {
@@ -128,6 +193,7 @@ export interface WarehouseCard {
   priority: BookingPriority | null
   blindPickup: boolean
   blindReturn: boolean
+  reportTo: CardReportTo | null
 }
 
 export type DispatchCard = FleetCard | WarehouseCard
@@ -239,7 +305,7 @@ export async function GET(req: NextRequest) {
           blindPickup: true,
           blindReturn: true,
           company: { select: { id: true, name: true } },
-          job: { select: { id: true, jobCode: true, name: true } },
+          job: { select: { id: true, jobCode: true, name: true, ...REPORT_TO_SELECT } },
           pickList: { select: { id: true, status: true } },
           booking: {
             select: {
@@ -334,6 +400,7 @@ export async function GET(req: NextRequest) {
       priority: r.priority,
       blindPickup: !!o.blindPickup,
       blindReturn: !!o.blindReturn,
+      reportTo: cardReportTo(r.line.order.job),
     }
   }
 
@@ -376,6 +443,7 @@ export async function GET(req: NextRequest) {
       priority: g.rows[0].priority,
       blindPickup: !!ho.blindPickup,
       blindReturn: !!ho.blindReturn,
+      reportTo: cardReportTo(head.order.job),
     }
   }
 
@@ -421,6 +489,7 @@ export async function GET(req: NextRequest) {
                 select: {
                   id: true,
                   jobCode: true,
+                  ...REPORT_TO_SELECT,
                   orders: {
                     select: { id: true, orderNumber: true },
                     orderBy: { createdAt: 'desc' },
@@ -469,6 +538,7 @@ export async function GET(req: NextRequest) {
       blindReturn: false,
       attachedOrderId: b.orders[0]?.id ?? b.job?.orders[0]?.id ?? null,
       attachedOrderNumber: b.orders[0]?.orderNumber ?? b.job?.orders[0]?.orderNumber ?? null,
+      reportTo: cardReportTo(b.job),
     }
   })
 
