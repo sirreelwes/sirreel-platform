@@ -88,6 +88,10 @@ export default function RwReviewPage() {
   const [savingNote, setSavingNote] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
   const [filter, setFilter] = useState<'all' | 'flagged' | 'unscanned' | 'nojob'>('all')
+  // Date first by default (Wes, 2026-09-02: "organize them all by date").
+  // Oldest invoice at the top — the aging worklist reading.
+  const [sort, setSort] = useState<'date' | 'attention' | 'amount'>('date')
+  const [marking, setMarking] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch('/api/collections/rw-review', { cache: 'no-store' })
@@ -115,6 +119,35 @@ export default function RwReviewPage() {
     }
   }
 
+  /**
+   * Clear an invoice from HQ's AR. Wes, 2026-09-02: "it doesn't affect RW" —
+   * correct, this writes an HQ-side override only, and it is reversible.
+   *
+   * Goes through the EXISTING mark-paid route rather than a second write path,
+   * so "paid" means one thing across the review desk, the aging review and the
+   * invoice list. The note carries the AI's reasoning and confidence, because
+   * six months from now the difference between "Ana confirmed the wire" and
+   * "a model inferred it from an email" is the whole story.
+   */
+  const markPaid = async (r: Row) => {
+    const label = `${r.customerName ?? 'this client'} · ${usd(r.remaining)}`
+    if (!window.confirm(`Clear ${label} from HQ collections?\n\nRentalWorks is not touched, and this can be undone.`)) return
+    setMarking(r.rwInvoiceId)
+    try {
+      const provenance = r.aiSummary
+        ? `Cleared from the review desk. AI read (${Math.round((r.aiConfidence ?? 0) * 100)}% confident): ${r.aiSummary}`
+        : 'Cleared from the review desk.'
+      await fetch('/api/rentalworks/invoices/mark-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId, note: provenance.slice(0, 500) }),
+      })
+      await load()
+    } finally {
+      setMarking(null)
+    }
+  }
+
   const saveNote = async (rwInvoiceId: string) => {
     setSavingNote(rwInvoiceId)
     try {
@@ -137,9 +170,16 @@ export default function RwReviewPage() {
             : true,
     )
     .sort((a, b) => {
-      const ai = INTERESTING.has(a.aiVerdict ?? '') ? 0 : 1
-      const bi = INTERESTING.has(b.aiVerdict ?? '') ? 0 : 1
-      return ai - bi || (b.ageDays ?? 0) - (a.ageDays ?? 0)
+      if (sort === 'amount') return b.remaining - a.remaining
+      if (sort === 'attention') {
+        const ai = INTERESTING.has(a.aiVerdict ?? '') ? 0 : 1
+        const bi = INTERESTING.has(b.aiVerdict ?? '') ? 0 : 1
+        if (ai !== bi) return ai - bi
+      }
+      // Oldest invoice first. Undated rows sort last rather than to 1970.
+      const at = a.invoiceDate ? +new Date(a.invoiceDate) : Number.POSITIVE_INFINITY
+      const bt = b.invoiceDate ? +new Date(b.invoiceDate) : Number.POSITIVE_INFINITY
+      return at - bt
     })
 
   return (
@@ -204,6 +244,24 @@ export default function RwReviewPage() {
                 {label}
               </button>
             ))}
+            <span className="ml-auto flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-400">Sort</span>
+              {([
+                ['date', 'Oldest first'],
+                ['attention', 'Needs a look'],
+                ['amount', 'Largest'],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setSort(k)}
+                  className={`px-2 py-1 rounded-lg text-[11.5px] font-semibold ${
+                    sort === k ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
           </div>
         </header>
 
@@ -242,7 +300,10 @@ export default function RwReviewPage() {
                         {r.note && <span title="Has a note">📝</span>}
                       </div>
                       <div className="mt-0.5 text-[12px] text-zinc-500">
-                        Inv {r.invoiceNumber ?? '—'} · order {r.orderNumber ?? '—'}
+                        <span className="font-semibold text-zinc-700 tabular-nums">
+                          {r.invoiceDate ? new Date(r.invoiceDate).toISOString().slice(0, 10) : 'no date'}
+                        </span>
+                        {' · '}Inv {r.invoiceNumber ?? '—'} · order {r.orderNumber ?? '—'}
                         {r.ageDays !== null && <> · {r.ageDays} days old</>}
                         {r.agent && <> · {r.agent}</>}
                         {r.evidenceCount > 0 && <> · {r.evidenceCount} emails</>}
@@ -331,6 +392,14 @@ export default function RwReviewPage() {
                               Re-read emails
                             </button>
                           )}
+                          <button
+                            onClick={() => void markPaid(r)}
+                            disabled={marking === r.rwInvoiceId}
+                            title="Clears it from HQ collections only. RentalWorks is untouched, and it can be undone."
+                            className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-[12px] font-semibold text-emerald-700"
+                          >
+                            {marking === r.rwInvoiceId ? 'Clearing…' : 'Mark paid in HQ'}
+                          </button>
                           <a
                             href="/collections/aging-review"
                             className="ml-auto text-[12px] font-semibold text-zinc-600 hover:text-zinc-900"
