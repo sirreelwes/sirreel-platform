@@ -6,7 +6,7 @@ import '@/lib/pdf/hyphenation'
 
 /**
  * HQ-rendered duplicate of a RentalWorks invoice, styled to MATCH the
- * invoices RW itself prints (logo, blue department header, No/Date/Due
+ * invoices RW itself prints (logo, blue header, No/Date/Due
  * block, Issued To / Remit To, order-meta band, blue section headers with
  * yellow totals, Grand Total / Amount Paid / Remaining Balance) — so a
  * client comparing paper sees the same document family.
@@ -22,6 +22,9 @@ export interface RwInvoiceDetail {
   InvoiceDate?: string
   InvoiceDueDate?: string
   Customer?: string
+  /** RW's internal department ("Pro Supplies / Comm"). Deliberately NOT
+   *  rendered — Wes 2026-09-02: no department title on any client PDF.
+   *  Kept on the type only because the live RW payload carries it. */
   Department?: string
   BillToName?: string
   BillToAttention1?: string
@@ -80,8 +83,7 @@ const s = StyleSheet.create({
   brandText: { fontSize: 18, fontFamily: 'Helvetica-Bold' },
   addr: { fontSize: 8, marginTop: 4 },
   addrBold: { fontSize: 8, fontFamily: 'Helvetica-Bold' },
-  deptCol: { alignItems: 'center', marginTop: 2 },
-  dept: { fontSize: 11, fontFamily: 'Helvetica-Bold' },
+  titleCol: { alignItems: 'center', marginTop: 2 },
   invWord: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: BLUE, marginTop: 2 },
   numCol: { width: 170 },
   numRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 2 },
@@ -155,7 +157,7 @@ export function RwInvoiceDocument({ inv, renderedAt }: { inv: RwInvoiceDetail; r
   return (
     <Document>
       <Page size="LETTER" style={s.page}>
-        {/* ── Header: logo | department + Invoice | No/Date/Due ── */}
+        {/* ── Header: logo | Invoice | No/Date/Due ── */}
         <View style={s.headRow}>
           <View style={{ width: 200 }}>
             {LOGO_BUFFER ? <Image src={LOGO_BUFFER} style={s.logo} /> : <Text style={s.brandText}>SirReel</Text>}
@@ -164,8 +166,7 @@ export function RwInvoiceDocument({ inv, renderedAt }: { inv: RwInvoiceDetail; r
             <Text style={s.addr}>Sun Valley, CA 91352</Text>
             <Text style={s.addr}>Phone:  (888) 477-7335</Text>
           </View>
-          <View style={s.deptCol}>
-            {inv.Department ? <Text style={s.dept}>{inv.Department}</Text> : null}
+          <View style={s.titleCol}>
             <Text style={s.invWord}>Invoice</Text>
           </View>
           <View style={s.numCol}>
