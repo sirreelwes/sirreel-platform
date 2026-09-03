@@ -60,8 +60,9 @@ interface AttachmentMeta {
 
 interface CompositionOk {
   ok: true;
-  /** The standard wording, prefilled into "Write my own email" so the rep
-   *  edits real copy instead of starting from an empty box. */
+  /** The standard wording. NO LONGER prefilled (Wes 2026-09-02: the box
+   *  opens blank); it sits behind the "Use standard wording" button as one
+   *  of the two ways to put words on the page — the other is Suggest. */
   defaultBody?: string | null;
   to: RankedContact;
   alternatives: RankedContact[];
@@ -143,7 +144,19 @@ export type EmailReviewTarget =
   // Server derives recipient + booking from the job; the PaperworkRequest
   // token is minted at SEND time, so the preview's portal CTA is an
   // annotation rather than a live button.
-  | { kind: 'card-auth'; jobId: string; message?: string | null };
+  | { kind: 'card-auth'; jobId: string; message?: string | null }
+  // "Ask client for job name" from Review Quote. There is no Order and often
+  // no saved Person yet, so the recipient travels in the target rather than
+  // being derived server-side. Wes 2026-09-02: this used to send on the first
+  // click with no preview — the only client email in HQ that skipped the gate.
+  | {
+      kind: 'ask-job-name'
+      inquiryId: string
+      toEmail: string
+      toName?: string | null
+      askForCompany?: boolean
+      message?: string | null
+    };
 
 interface Props {
   target: EmailReviewTarget | null;
@@ -210,6 +223,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         send: `/api/jobs/${target.jobId}/card-auth/send`,
         titleKind: 'Card authorization request',
       };
+    case 'ask-job-name':
+      return {
+        preview: `/api/inquiries/${target.inquiryId}/ask-job-name/preview`,
+        send: `/api/inquiries/${target.inquiryId}/ask-job-name`,
+        titleKind: 'Job-name request',
+      };
   }
 }
 
@@ -252,6 +271,15 @@ function buildPreviewBody(
   // the rep cannot write away the copy that tells a client this is not
   // phishing (see cardAuthRequest.ts).
   if (target.kind === 'quote' || target.kind === 'card-auth') {
+    base.customMessage = customMessage.trim() || null;
+  }
+  // Ask-job-name: the recipient isn't saved anywhere yet (the quote it is
+  // asked from is still unsaved), so it rides in the body with the rep's
+  // words. The signed link is minted at SEND time, never by the preview.
+  if (target.kind === 'ask-job-name') {
+    base.toEmail = target.toEmail;
+    if (target.toName) base.toName = target.toName;
+    if (target.askForCompany) base.askForCompany = true;
     base.customMessage = customMessage.trim() || null;
   }
   // Welcome invite: the server derives recipient/company/agent from the
@@ -323,13 +351,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   const [dupWarning, setDupWarning] = useState<{ by: string | null; at: string | null } | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  // The composer box. There is no "Write my own email" toggle any more
-  // (Wes 2026-08-31: "we don't need the extra step … every email preview
-  // should open with suggested text but be editable"): every kind that
-  // has a defaultBody opens with the standard wording prefilled, and the
-  // box's text — edited or not — is what sends. Quick Respond still opens
-  // with only the generic opener; the server picks the default.
-  const seededRef = useRef(false);
+  // The composer box opens BLANK (Wes 2026-09-02: "the default should be a
+  // blank page"). It used to open with the standard wording already in it,
+  // which is how canned copy went out under a rep's name without anyone
+  // choosing it. Two buttons put words there now — "Suggest with AI" and
+  // "Use standard wording" — and whatever is in the box IS the email; the
+  // template no longer adds a greeting above it either.
   // CC typed by the rep (Wes 2026-08-25). Applies to every kind this modal
   // sends; the routes re-parse it server-side.
   // Seeded from whoever the client CC'd on the inbound email so the whole
@@ -345,6 +372,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(customMessage, 350);
   const [aiBusy, setAiBusy] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
   const [aiFlags, setAiFlags] = useState<string[] | null>(null);
   const [aiPolished, setAiPolished] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -398,27 +426,13 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     setShowPicker(false);
     setCustomMessage('');
     setCcInput('');
-    seededRef.current = false;
+    setSuggestBusy(false);
     setAiFlags(null);
     setAiPolished(null);
     setAiError(null);
     sendInFlightRef.current = false;
     setSendState('idle');
   }, [target, quickRespond]);
-
-  // Seed the composer once per target with the standard wording, so
-  // "editable" means editing real copy rather than retyping it. Applies to
-  // every kind whose preview supplies a defaultBody (quote, card-auth,
-  // quick-reply, welcome). Quick Respond seeds the GENERIC opener only —
-  // never anything about availability, units or dates (Wes 2026-08-25);
-  // the server decides which default that is. Never overwrites text the
-  // rep has already typed.
-  useEffect(() => {
-    if (!target) return;
-    if (seededRef.current || customMessage.trim() || !preview?.defaultBody) return;
-    seededRef.current = true;
-    setCustomMessage(preview.defaultBody);
-  }, [target, quickRespond, preview?.defaultBody, customMessage]);
 
   // Initial fetch when target changes.
   useEffect(() => {
@@ -523,6 +537,45 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     }
   };
 
+  /**
+   * "Suggest with AI" — the button that fills the blank page.
+   *
+   * The composer no longer seeds itself, and the template no longer pastes
+   * "Hi <First>," above the rep's words, so the suggestion carries its own
+   * greeting. It lands in the box, editable; nothing sends. Whatever the rep
+   * has already typed rides along so a half-written thought gets finished
+   * rather than thrown away.
+   */
+  const runSuggest = async () => {
+    if (!preview || suggestBusy) return;
+    setSuggestBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/email/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: quickRespond && target.kind === 'welcome' ? 'quick-respond' : target.kind,
+          recipientName: preview.to.name || null,
+          jobName: preview.order?.jobName || null,
+          stage: preview.stage || null,
+          validUntil: preview.order?.validUntil || null,
+          draft: customMessage.trim() || null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false || typeof json?.body !== 'string') {
+        setAiError(json?.error || `Suggestion failed (${res.status})`);
+        return;
+      }
+      setCustomMessage(json.body);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Suggestion failed');
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
   // AI pass over the rep's custom message — server reuses the parse Anthropic
   // pattern and recomputes the REAL availability so it can catch a
   // contradiction. Returns flags + a polished rewrite; nothing auto-applies.
@@ -599,7 +652,14 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     target.kind === 'card-auth' ||
     target.kind === 'quick-reply' ||
     target.kind === 'followup-order' ||
-    target.kind === 'followup-job';
+    target.kind === 'followup-job' ||
+    target.kind === 'ask-job-name';
+  // Nothing is written for the rep any more, so an empty box would mean an
+  // empty email. The templated fallback still lives server-side for
+  // non-composer callers, but firing it from here would quietly hand back
+  // the canned default this change removed — so Send stays dark until there
+  // are words, and "Suggest with AI" is one click away.
+  const bodyMissing = singleBox && !customMessage.trim();
 
   return (
     <div
@@ -876,31 +936,32 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   </div>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
                     {target.kind === 'quote'
-                      ? 'The standard wording, yours to edit. Your words are the whole email — the quote block with its portal button and the sign-off stay.'
+                      ? 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the quote block with its portal button and the sign-off stay.'
                       : target.kind === 'card-auth'
-                        ? 'The standard ask, yours to edit. The secure button and sign-off stay — so does the paragraph saying we never take card numbers by email; it is what keeps this from reading like phishing.'
+                        ? 'Blank page — write it, or press Suggest. Your words are the whole ask, greeting included; the secure button and sign-off stay, and so does the paragraph saying we never take card numbers by email — it is what keeps this from reading like phishing.'
                         : target.kind === 'quick-reply'
-                          ? 'The standard wording, yours to edit. Your words are the whole email — the “add gear or vehicles” button and the sign-off stay.'
-                          : 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'}
+                          ? 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the “add gear or vehicles” button and the sign-off stay.'
+                          : target.kind === 'ask-job-name'
+                            ? 'The standard ask, yours to edit. The link the client taps to answer, and the sign-off, stay — without the link there is nothing for them to fill in.'
+                            : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
                   </p>
                   <div className="mt-2 space-y-2">
-                      {/* Show the greeting that will sit above these words.
-                          Reps couldn't see it, so they wrote their own and
-                          the client got "Hi Kacie," then "Hi again, Kacie!".
-                          The template now stands its greeting down when the
-                          draft opens with one, but the real fix is showing
-                          the rep what precedes them at the moment they
-                          write. */}
+                      {/* Who this is going to — reference, not a promise.
+                          This strip used to read "Starts with Hi Kacie, —
+                          added automatically", because the template pasted a
+                          greeting above the box and reps couldn't see it.
+                          Wes 2026-09-02 took the automatic greeting away with
+                          the automatic body: nothing is written for you, so
+                          the strip just names the person you're writing to
+                          and the greeting is yours. */}
                       {preview?.to?.name && (
                         <div className="flex items-baseline gap-2 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1.5">
                           <span className="text-[10px] uppercase tracking-wide text-zinc-500 shrink-0">
-                            Starts with
+                            Writing to
                           </span>
-                          <span className="text-sm text-zinc-300">
-                            Hi {preview.to.name.split(' ')[0]},
-                          </span>
+                          <span className="text-sm text-zinc-300">{preview.to.name}</span>
                           <span className="text-[11px] text-zinc-500 ml-auto text-right">
-                            added automatically — write your own and this one drops
+                            no greeting is added — write your own
                           </span>
                         </div>
                       )}
@@ -912,17 +973,50 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         maxLength={5000}
                         placeholder={
                           quickRespond
-                            ? 'A generic opener is prefilled — replace or extend it. Nothing specific about availability, units or dates goes out unless you write it.'
+                            ? 'Write the reply — start with a greeting. Nothing about availability, units or dates goes out unless you write it. Or press Suggest.'
                             : target.kind === 'quote'
-                              ? 'The standard quote wording, yours to edit. The quote total, dates and portal button are added underneath — no need to retype them.'
+                              ? 'Write the quote email — start with a greeting. The total, dates and portal button are added underneath, so there’s no need to retype them. Or press Suggest.'
                               : target.kind === 'card-auth'
-                                ? 'The standard ask, yours to edit. The security paragraph and the secure button follow it — don’t retype those, and never ask for the number itself.'
-                                : 'The standard wording, yours to edit. The greeting and sign-off are added around it.'
+                                ? 'Write the ask — start with a greeting. The security paragraph and the secure button follow it; never ask for the number itself. Or press Suggest.'
+                                : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
                         }
                         className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                       />
-                      {/* AI pass is Quick Reply's — it checks the draft against
-                          real fleet availability, which no other kind has. */}
+                      {/* The two ways to fill a blank page. Suggest is the
+                          headline (Wes 2026-09-02: "pressing a button should
+                          populate an AI suggested" draft); the standard
+                          wording survives as an explicit choice rather than
+                          the default, which also covers an AI outage. */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => { void runSuggest(); }}
+                          disabled={suggestBusy || sendLocked || !preview}
+                          className="text-[12px] font-semibold bg-amber-600/90 hover:bg-amber-500 text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                        >
+                          {suggestBusy
+                            ? 'Writing…'
+                            : customMessage.trim()
+                              ? '✨ Finish with AI'
+                              : '✨ Suggest with AI'}
+                        </button>
+                        {preview?.defaultBody && !customMessage.trim() && (
+                          <button
+                            onClick={() => setCustomMessage(preview.defaultBody as string)}
+                            disabled={sendLocked}
+                            className="text-[12px] font-semibold border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                          >
+                            Use standard wording
+                          </button>
+                        )}
+                        <span className="text-[10px] text-zinc-500">
+                          {customMessage.trim()
+                            ? 'Builds on what you’ve written. Lands in the box — nothing sends.'
+                            : 'Writes a first draft into the box, greeting included. Nothing sends.'}
+                        </span>
+                      </div>
+                      {/* Review is Quick Reply's alone — it checks the draft
+                          against real fleet availability, which no other kind
+                          has. */}
                       {target.kind === 'quick-reply' && (
                       <div className="flex items-center gap-2">
                         <button
@@ -1101,8 +1195,14 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
           </button>
           <button
             onClick={() => { void handleSend(); }}
-            disabled={!preview || sendLocked || loading || ccBlocked}
-            title={ccBlocked ? 'Fix the CC addresses first' : undefined}
+            disabled={!preview || sendLocked || loading || ccBlocked || bodyMissing}
+            title={
+              ccBlocked
+                ? 'Fix the CC addresses first'
+                : bodyMissing
+                  ? 'Write the message first — or press Suggest with AI'
+                  : undefined
+            }
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
             {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : dupWarning ? 'Send anyway' : 'Send'}

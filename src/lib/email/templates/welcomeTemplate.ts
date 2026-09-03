@@ -29,7 +29,6 @@
  */
 
 import { defaultEmailBody, PRE_JOB_OPENING_LINE } from '@/lib/email/standardOpening'
-import { startsWithGreeting } from '@/lib/email/greeting'
 
 function escapeHtml(s: string): string {
   return s
@@ -274,16 +273,20 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
   // The tier line no longer needs a paragraph of its own — it IS the opener.
   const showAvailabilityMessage = false
 
-  // A rep writing in "Write my own email" can't see the templated
-  // greeting above their box, so they open with one of their own and the
-  // client gets "Hi Kacie," followed by "Hi again, Kacie!". Keep THEIR
-  // line — it's the one a human chose, and it may carry a beat ours
-  // doesn't — and stand ours down. See lib/email/greeting.ts for why this
-  // is the safe direction and how narrowly it matches.
-  const repWroteGreeting = startsWithGreeting(
-    withAvailability ? customBody : repBody,
-    first,
-  )
+  // Any rep-written body stands our greeting down — the rep's box IS the
+  // whole email now, greeting included.
+  //
+  // Wes 2026-09-02 reversed the composer default: it opens BLANK, and the
+  // "Starts with Hi <First>," strip above it is gone (it now just names the
+  // recipient). Nothing promises the rep a greeting any more, so pasting one
+  // above their words would either duplicate the one they wrote or contradict
+  // the empty page they were handed. This used to be a narrow
+  // startsWithGreeting() sniff that only caught "Hi Kacie," — with the
+  // guarantee removed, presence of a body is the whole test.
+  //
+  // Blank box → the templated fallback below, greeting and all, so a
+  // non-composer caller still sends a complete email.
+  const repWroteGreeting = !!(withAvailability ? customBody : repBody)
 
   const closer = withAvailability
     ? '' // the tier message carries its own next step

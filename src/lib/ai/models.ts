@@ -25,6 +25,9 @@ export const REPLY_CLASSIFIER_MODEL = 'claude-sonnet-4-5'
 /** Interactive fleet assistant chat. */
 export const ASSISTANT_MODEL = 'claude-sonnet-4-5-20250929'
 
+/** Client-email drafting behind the composers' "Suggest with AI" button. */
+export const EMAIL_SUGGEST_MODEL = 'claude-sonnet-4-5-20250929'
+
 /** Long-form document drafting (demand letters). */
 export const DRAFTING_MODEL = 'claude-sonnet-4-5-20250929'
 

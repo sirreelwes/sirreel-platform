@@ -23,7 +23,6 @@
 
 import type { CadenceStage } from '@/lib/sales/quoteCadence'
 import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
-import { startsWithGreeting } from '@/lib/email/greeting'
 
 // See quoteSend.ts for the rationale on routing the email asset URLs
 // through the portal host.
@@ -165,7 +164,11 @@ export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpS
   // wraps them. Blank box → the stage copy, so a caller that doesn't compose
   // through the modal still sends something complete.
   const ownBody = (input.customMessage || '').trim()
-  const repWroteGreeting = ownBody ? startsWithGreeting(ownBody, input.firstName) : false
+  // A rep-written nudge carries its own greeting (Wes 2026-09-02: the box
+  // opens blank and nothing is pasted above it any more), so ANY body stands
+  // ours down — not just one that happens to open with "Hi <First>,". Blank
+  // box → the stage copy below, greeting included.
+  const repWroteGreeting = !!ownBody
   const greetingHtml = repWroteGreeting
     ? ''
     : `<p style="margin:0 0 16px;">Hi ${firstName},</p>`
@@ -192,8 +195,10 @@ export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpS
   const subject = `${input.jobName || 'Your quote'} — ${stageCopy.subjectSuffix}`
 
   const text = [
-    repWroteGreeting ? null : `Hi ${input.firstName || 'there'},`,
-    ``,
+    // The blank line belongs TO the greeting — with the greeting gone (a
+    // rep-written body carries its own) a bare '' left the plain-text part
+    // opening on an empty line.
+    ...(repWroteGreeting ? [] : [`Hi ${input.firstName || 'there'},`, ``]),
     ownBody || stageCopy.bodyLead.replace(/<[^>]+>/g, ''),
     ``,
     ownBody ? null : stageCopy.bodyClose,

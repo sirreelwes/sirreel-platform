@@ -127,8 +127,8 @@ interface FollowUpThreadResponse {
 interface FollowUpPreviewResponse {
   ok: true;
   to: { email: string; name: string };
-  /** One-line starter the composer box opens with. The rep edits it (or
-   *  writes something else entirely) and that text IS the email body. */
+  /** The stage's standard wording. No longer prefilled (Wes 2026-09-02: the
+   *  box opens blank); it sits behind the "Use standard wording" button. */
   defaultBody?: string | null;
   subject: string;
   html: string;
@@ -278,15 +278,17 @@ export function ThreadDrawer(props: Props) {
   // recipient will actually see. The text-fallback toggle is there for
   // the multipart-degradation case the spec covers.
   const [previewView, setPreviewView] = useState<'html' | 'text'>('html');
-  // The follow-up body, written from scratch off the composer's one-line
-  // starter (Wes 2026-09-01). Whatever sits here is the email — the drawer
-  // re-previews on it (debounced) and sends it as `message`.
+  // The follow-up body. Opens BLANK (Wes 2026-09-02: "the default should be
+  // a blank page") — it used to open with the stage's starter line already
+  // typed. Whatever sits here is the email, greeting included: the template
+  // no longer pastes "Hi <First>," above it. "Suggest with AI" is what puts
+  // words on the page. The drawer re-previews on it (debounced) and sends it
+  // as `message`.
   const [message, setMessage] = useState('');
   const debouncedMessage = useDebouncedValue(message, 350);
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
-  // One seed per opened order — after that the box is the rep's, and a
-  // re-preview must never overwrite what they typed.
-  const seededRef = useRef<string | null>(null);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
   const [sending, setSending] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [sendError, setSendError] = useState('');
@@ -345,7 +347,7 @@ export function ThreadDrawer(props: Props) {
         setError('');
         setPreviewError('');
         setMessage('');
-        seededRef.current = null;
+        setSuggestError('');
         return;
       }
       setLoading(true);
@@ -355,7 +357,7 @@ export function ThreadDrawer(props: Props) {
       setPreviewError('');
       setSendError('');
       setMessage('');
-      seededRef.current = null;
+      setSuggestError('');
       const threadReq = fetch(`/api/sales/follow-ups/thread?orderId=${encodeURIComponent(orderId)}`)
         .then((r) => r.json())
         .then((d: FollowUpThreadResponse | { error: string }) => {
@@ -378,25 +380,16 @@ export function ThreadDrawer(props: Props) {
     }
   }, [mode, emailId, orderId]);
 
-  // Seed the composer with the stage's starter line the first time a
-  // preview lands for this order. Guarded by orderId so reusing the drawer
-  // for another quote re-seeds, and by the ref so the debounced re-preview
-  // below never clobbers what the rep has typed.
+  // Live re-preview on the typed body. Keeps the previous preview on screen
+  // while refreshing so the iframe doesn't flicker mid-sentence.
+  //
+  // The blank-box case belongs to the initial fetch above, so this skips it —
+  // it used to be gated by the seed ref, which is gone now that the composer
+  // opens empty (Wes 2026-09-02). Without the skip, opening the drawer fired
+  // two identical previews.
   useEffect(() => {
     if (mode !== 'followup' || !orderId) return;
-    if (seededRef.current === orderId) return;
-    const seed = preview?.defaultBody;
-    if (!seed) return;
-    seededRef.current = orderId;
-    setMessage(seed);
-  }, [mode, orderId, preview?.defaultBody]);
-
-  // Live re-preview on the typed body. Skips the very first render (the
-  // initial fetch above already ran) and keeps the previous preview on
-  // screen while refreshing so the iframe doesn't flicker mid-sentence.
-  useEffect(() => {
-    if (mode !== 'followup' || !orderId) return;
-    if (seededRef.current !== orderId) return;
+    if (!debouncedMessage.trim()) return;
     let cancelled = false;
     setPreviewRefreshing(true);
     fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/send/preview`, {
@@ -542,6 +535,41 @@ export function ThreadDrawer(props: Props) {
   }, [data, router]);
 
   // followup-mode actions
+  /**
+   * "Suggest with AI" — the button that fills the blank page.
+   *
+   * The box no longer opens with the stage's starter line, and the template
+   * no longer pastes a greeting above it, so the suggestion carries its own.
+   * It lands in the box, editable; nothing sends.
+   */
+  const runSuggest = useCallback(async () => {
+    if (!orderId || suggestBusy) return;
+    setSuggestBusy(true);
+    setSuggestError('');
+    try {
+      const res = await fetch('/api/email/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'followup-order',
+          recipientName: preview?.to?.name || null,
+          stage: preview?.stage || null,
+          draft: message.trim() || null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false || typeof json?.body !== 'string') {
+        setSuggestError(json?.error || `Suggestion failed (${res.status})`);
+        return;
+      }
+      setMessage(json.body);
+    } catch {
+      setSuggestError('Suggestion failed.');
+    } finally {
+      setSuggestBusy(false);
+    }
+  }, [orderId, preview?.to?.name, preview?.stage, message, suggestBusy]);
+
   const handleSend = useCallback(async () => {
     if (mode !== 'followup' || !orderId) return;
     setSending(true);
@@ -854,11 +882,15 @@ export function ThreadDrawer(props: Props) {
                           <span className="text-[10px] text-blue-600 animate-pulse">Updating preview…</span>
                         )}
                       </div>
+                      {/* Who this is going to — reference, not a promise.
+                          This line used to read "Starts with Hi Kacie, —
+                          added automatically"; Wes 2026-09-02 took the
+                          automatic greeting away along with the automatic
+                          body, so it just names the recipient now. */}
                       {preview?.to?.name && (
                         <div className="mt-1 text-[10px] text-gray-500">
-                          Starts with{' '}
-                          <span className="text-gray-700">Hi {preview.to.name.split(' ')[0]},</span> — added
-                          automatically; write your own greeting and this one drops.
+                          Writing to <span className="text-gray-700">{preview.to.name}</span> — no greeting is
+                          added; write your own.
                         </div>
                       )}
                       <textarea
@@ -868,9 +900,39 @@ export function ThreadDrawer(props: Props) {
                         disabled={sending || skipping}
                         rows={4}
                         maxLength={5000}
-                        placeholder="Write the check-in. Blank sends the standard stage wording."
+                        placeholder="Write the check-in — start with a greeting. Or press Suggest."
                         className="mt-1.5 w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-[12px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 resize-y disabled:opacity-50"
                       />
+                      {/* The two ways to fill a blank page. */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { void runSuggest(); }}
+                          disabled={suggestBusy || sending || skipping}
+                          className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-2.5 py-1 text-[11px] font-bold text-white"
+                        >
+                          {suggestBusy ? 'Writing…' : message.trim() ? '✨ Finish with AI' : '✨ Suggest with AI'}
+                        </button>
+                        {preview?.defaultBody && !message.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setMessage(preview.defaultBody as string)}
+                            disabled={sending || skipping}
+                            className="rounded-lg border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-2.5 py-1 text-[11px] font-semibold text-gray-700"
+                          >
+                            Use standard wording
+                          </button>
+                        )}
+                      </div>
+                      {suggestError && (
+                        <div className="mt-1 text-[10px] text-red-600">{suggestError}</div>
+                      )}
+                      {!message.trim() && (
+                        <div className="mt-1 text-[10px] text-gray-500">
+                          The preview below shows the standard stage wording as a sample — write the check-in (or
+                          press Suggest) and it becomes the email.
+                        </div>
+                      )}
                     </div>
                   )}
                   {previewError ? (
@@ -1005,7 +1067,8 @@ export function ThreadDrawer(props: Props) {
             <div className="flex gap-2">
               <button
                 onClick={handleSend}
-                disabled={!preview || sending || skipping}
+                disabled={!preview || sending || skipping || !message.trim()}
+                title={!message.trim() ? 'Write the check-in first — or press Suggest with AI' : undefined}
                 className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 disabled:opacity-50 text-white text-[12px] font-bold"
               >
                 {sending ? 'Sending…' : 'Send follow-up'}

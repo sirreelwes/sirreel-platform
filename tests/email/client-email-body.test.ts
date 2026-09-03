@@ -13,6 +13,12 @@
  *     with our templated opener above it and our templated closer below it
  *     reads like two people wrote it — same rule Quick Reply already follows.
  *
+ * As of 2026-09-02 "the whole email" includes the GREETING: the composer
+ * opens blank, the "Starts with Hi <First>," strip above it is gone, and a
+ * rep-written body suppresses the templated greeting outright. A blank box
+ * still renders the standard wording, greeting and all, for any caller that
+ * doesn't compose through the modal — both directions are asserted below.
+ *
  * And the reason the default lives in standardOpening.ts: the compose box is
  * seeded from the same function the template renders, so what a rep is handed
  * to edit is character-for-character what the client receives. That equality
@@ -74,7 +80,14 @@ has('paragraph breaks survive', own.html, 'Hey Colin &mdash; great catching up.'
 lacks('no templated opener above it', own.html, "we&#39;d love to work with you")
 lacks('no templated closer below it', own.html, 'Take a look when you have a minute')
 lacks('plain text drops the closer too', own.text, 'Take a look when you have a minute')
-has('the greeting survives', own.html, 'Hi Colin,')
+// The rep's words are the WHOLE email now, greeting included (Wes
+// 2026-09-02: the composer opens blank and no longer advertises a greeting
+// above the box, so pasting one there would either double the rep's or
+// contradict the empty page they were handed).
+lacks('no greeting is pasted above the rep', own.html, 'Hi Colin,')
+lacks('nor in the plain text', own.text, 'Hi Colin,')
+has('the templated fallback still greets', templated.html, 'Hi Colin,')
+has('the templated fallback greets in text too', templated.text, 'Hi Colin,')
 has('the quote block survives', own.html, 'The Watch Party')
 has('the total survives', own.html, '$4,620')
 has('the portal button survives', own.html, 'View quote &amp; portal')
@@ -144,7 +157,10 @@ for (const [label, doc] of [['templated', cardTemplated], ['rep-written', cardOw
 eq('card: payment options precede the CTA',
   cardTemplated.html.indexOf('ACH, Zelle and wire transfer') < cardTemplated.html.indexOf('Authorize your card'),
   true)
-has('card: the greeting survives', cardOwn.html, 'Hi Colin,')
+lacks('card: no greeting above the rep-written ask', cardOwn.html, 'Hi Colin,')
+lacks('card: nor in the plain text', cardOwn.text, 'Hi Colin,')
+has('card: the templated fallback still greets', cardTemplated.html, 'Hi Colin,')
+has('card: the templated fallback greets in text too', cardTemplated.text, 'Hi Colin,')
 has('card: the sign-off survives', cardOwn.html, 'The SirReel Team')
 lacks('card: rep prose is escaped', card('<img src=x onerror=1>').html, '<img src=x')
 

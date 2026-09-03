@@ -116,12 +116,18 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
     repBody ||
     defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw, agentFirstName: agentRef })
   const askHtml = noteHtml(askText)
+  // A rep-written ask carries its own greeting. Wes 2026-09-02 reversed the
+  // composer default — it opens BLANK and no longer shows a "Starts with Hi
+  // <First>," strip — so a templated greeting above the rep's words would
+  // either double theirs or contradict the blank page they were handed.
+  // Blank box → the standard ask above, greeting and all.
+  const greetingText = repBody ? null : `Hi ${firstNameRaw},`
+  const greetingHtml = repBody ? '' : `<p style="margin:0 0 16px;">Hi ${firstName},</p>`
 
   const subject = `Card authorization for ${jobNameRaw}`
 
   const text = [
-    `Hi ${firstNameRaw},`,
-    ``,
+    ...(greetingText ? [greetingText, ``] : []),
     ...(note ? [note, ``] : []),
     askText,
     ``,
@@ -225,7 +231,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Body ──────────────────────────────────────────────── -->
           <tr>
             <td style="padding:24px 36px 8px;font-size:15px;line-height:1.6;color:#333333;">
-              <p style="margin:0 0 16px;">Hi ${firstName},</p>
+              ${greetingHtml}
               ${note ? noteHtml(note) : ''}
               ${askHtml}
               <p style="margin:0 0 16px;">
