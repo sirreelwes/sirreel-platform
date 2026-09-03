@@ -25,7 +25,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, AlertTriangle, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine } from '@/lib/orders/checkReports'
 
 type Row = DraftLine & { open: boolean }
@@ -60,6 +60,17 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     })),
   )
   const [preppedBy, setPreppedBy] = useState(draft.preppedBy)
+  // ── Photo of the paper ────────────────────────────────────────────
+  // Wes, 2026-09-03: photograph the marked-up sheet and let HQ read it.
+  // What comes back is a SUGGESTION — it fills the form and nothing
+  // else. The supervisor still reviews and files, because a misread
+  // digit here would rewrite a client's order and email them about it.
+  const [reading, setReading] = useState(false)
+  const [photo, setPhoto] = useState<{ key: string; url: string } | null>(null)
+  const [readNote, setReadNote] = useState<string | null>(null)
+  const [readWarn, setReadWarn] = useState<string | null>(null)
+  /** Line ids the photo filled in, so the form can show which they are. */
+  const [fromPhoto, setFromPhoto] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState(draft.notes)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,6 +91,94 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     [rows, extras],
   )
 
+  async function readPhoto(file: File) {
+    setReading(true)
+    setError(null)
+    setReadNote(null)
+    setReadWarn(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('edge', draft.edge)
+      const res = await fetch(`/api/orders/${draft.orderId}/check-report/photo`, {
+        method: 'POST',
+        body: fd,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || `Could not read the photo (${res.status}).`)
+        return
+      }
+      if (data.photoKey) setPhoto({ key: data.photoKey, url: data.photoUrl })
+
+      if (!data.read) {
+        setReadWarn(data.error || 'The photo was saved but could not be read — type the sheet in.')
+        return
+      }
+      if (data.read.unreadable) {
+        setReadWarn(`${data.read.unreadable} The photo is attached; type the sheet in or retake it.`)
+        return
+      }
+      // A supervisor with a stack of paper will photograph the wrong
+      // sheet eventually. Say so loudly and change nothing.
+      if (data.mismatch) {
+        setReadWarn(
+          `That photo looks like order ${data.mismatch}, not ${draft.orderNumber}. Nothing was filled in.`,
+        )
+        return
+      }
+
+      const conf: Record<string, number> = {}
+      setRows((prev) =>
+        prev.map((r) => {
+          const hit = (data.read.lines as Array<{ orderLineItemId: string; actualQty: number; note: string | null; confidence: number }>)
+            .find((l) => l.orderLineItemId === r.orderLineItemId)
+          if (!hit) return r
+          conf[r.orderLineItemId] = hit.confidence
+          // A "SWAP: x" note from the reader lands in the substitution
+          // field, where it belongs — same place a person would type it.
+          const swap = hit.note?.startsWith('SWAP: ') ? hit.note.slice(6) : null
+          return {
+            ...r,
+            actualQty: hit.actualQty,
+            substituteFor: swap ?? r.substituteFor,
+            note: swap ? r.note : (hit.note ?? r.note),
+            // Open anything that differs or that the reader was unsure
+            // about, so the supervisor's eye lands on exactly those.
+            open: hit.actualQty !== r.expectedQty || !!swap || hit.confidence < 0.75,
+          }
+        }),
+      )
+      setFromPhoto(conf)
+      if (data.read.extras?.length) {
+        setExtras((prev) => [
+          ...prev,
+          ...(data.read.extras as Array<{ description: string; actualQty: number; note: string | null }>).map(
+            (e, i) => ({
+              key: `photo-${Date.now()}-${i}`,
+              description: e.description,
+              actualQty: e.actualQty,
+              note: e.note ?? '',
+            }),
+          ),
+        ])
+      }
+      if (data.read.preppedBy && !preppedBy) setPreppedBy(data.read.preppedBy)
+      if (data.read.notes) setNotes((n) => (n ? `${n}\n${data.read.notes}` : data.read.notes))
+
+      const filled = Object.keys(conf).length
+      setReadNote(
+        filled === 0
+          ? 'Nothing was written on the sheet that changed a line — check the counts and file.'
+          : `Filled in ${filled} line${filled === 1 ? '' : 's'} from the photo. Check them before filing — lines the reader was unsure about are opened below.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read the photo.')
+    } finally {
+      setReading(false)
+    }
+  }
+
   async function submit() {
     setSaving(true)
     setError(null)
@@ -91,6 +190,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           edge: draft.edge,
           preppedBy,
           notes,
+          sheetPhotoKey: photo?.key ?? null,
+          sheetPhotoUrl: photo?.url ?? null,
           lines: [
             ...rows.map((r) => ({
               orderLineItemId: r.orderLineItemId,
@@ -221,6 +322,70 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         )}
       </header>
 
+      {/* ── Photograph the paper ────────────────────────────────────
+          The sheet comes off the floor covered in pen. Typing 40 lines
+          out of it is the whole cost of this screen, so the phone in
+          their hand does the first pass and the supervisor confirms. */}
+      <div className="mb-4 border border-zinc-800 rounded-xl p-3 bg-zinc-900/40">
+        <div className="flex flex-wrap items-center gap-3">
+          <label
+            className={`inline-flex items-center gap-2 text-[13px] font-semibold rounded-lg px-3 py-2 ${
+              reading
+                ? 'bg-zinc-800 text-zinc-500 cursor-wait'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer'
+            }`}
+          >
+            <Camera size={15} aria-hidden />
+            {reading ? 'Reading the sheet…' : photo ? 'Retake the photo' : 'Photograph the sheet'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              // capture= puts a phone straight into the camera; on a
+              // desktop it is ignored and this is an ordinary file picker.
+              capture="environment"
+              className="hidden"
+              disabled={reading}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void readPhoto(f)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          <span className="text-[12px] text-zinc-500 flex-1 min-w-[16rem]">
+            Fills the counts below from the handwriting. Nothing is filed until you check it and
+            hit File — the photo is kept with the report either way.
+          </span>
+          {/* A plain anchor, not next/link: this is an API route that
+              streams a PDF, and the client router has no business
+              prefetching or intercepting it. */}
+          <a
+            href={`/api/orders/${draft.orderId}/pick-list-pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[12px] font-semibold text-zinc-400 hover:text-amber-500 inline-flex items-center gap-1.5"
+          >
+            <Printer size={14} aria-hidden />
+            Print a fresh sheet
+          </a>
+        </div>
+        {photo && !readWarn && (
+          <p className="mt-2 text-[12px] text-emerald-400">Photo attached to this report.</p>
+        )}
+        {readNote && <p className="mt-2 text-[12px] text-sky-300">{readNote}</p>}
+        {readWarn && (
+          <p className="mt-2 text-[12px] text-amber-300 flex items-start gap-1.5">
+            <AlertTriangle size={13} aria-hidden className="flex-none mt-0.5" />
+            <span>{readWarn}</span>
+          </p>
+        )}
+        {draft.filed?.sheetPhotoUrl && !photo && (
+          <p className="mt-2 text-[12px] text-zinc-500">
+            A photo of the sheet is already on the filed report.
+          </p>
+        )}
+      </div>
+
       {/* Who prepped it — the name on the paper. */}
       <div className="mb-4">
         <label className="block">
@@ -279,6 +444,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     }`}
                   />
                 </label>
+                {/* Where a number came from matters more than what it
+                    is: a low-confidence read is exactly the line a
+                    supervisor should look at twice. */}
+                {fromPhoto[r.orderLineItemId] !== undefined && (
+                  <span
+                    title={`Read from the photo (${Math.round(fromPhoto[r.orderLineItemId] * 100)}% confident)`}
+                    className={`text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-none border ${
+                      fromPhoto[r.orderLineItemId] < 0.75
+                        ? 'text-amber-300 border-amber-900 bg-amber-950/50'
+                        : 'text-sky-300 border-sky-900 bg-sky-950/50'
+                    }`}
+                  >
+                    {fromPhoto[r.orderLineItemId] < 0.75 ? 'Check' : 'Photo'}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => patch(r.orderLineItemId, { open: !r.open })}

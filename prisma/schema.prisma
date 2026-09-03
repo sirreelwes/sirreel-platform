@@ -3567,6 +3567,18 @@ model OrderCheckReport {
   agentAckedAt   DateTime? @map("agent_acked_at")
   agentAckedById String?   @map("agent_acked_by_id")
 
+  /// A photo of the marked-up paper sheet (Wes, 2026-09-03: "it would
+  /// be really cool if they could just take a photo of the pick list
+  /// and have it be so that it is easy for HQ to ingest"). Private
+  /// blob — the URL 403s on a direct fetch and is served back through a
+  /// session-gated proxy, same as every other private image here.
+  ///
+  /// Stored because the paper IS the source document: once the counts
+  /// are typed in and the order is rewritten, this is the only thing
+  /// that still shows what the floor actually wrote.
+  sheetPhotoKey String? @map("sheet_photo_key")
+  sheetPhotoUrl String? @map("sheet_photo_url")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

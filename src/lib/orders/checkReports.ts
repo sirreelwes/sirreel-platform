@@ -177,7 +177,13 @@ export interface ReportDraft {
   endDate: string | null
   agentName: string | null
   edge: OrderCheckEdge
-  filed: { submittedAt: string; preppedBy: string | null; notes: string | null; changedOrder: boolean } | null
+  filed: {
+    submittedAt: string
+    preppedBy: string | null
+    notes: string | null
+    changedOrder: boolean
+    sheetPhotoUrl: string | null
+  } | null
   preppedBy: string
   notes: string
   lines: DraftLine[]
@@ -215,6 +221,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         where: { edge },
         select: {
           submittedAt: true, preppedBy: true, notes: true, changedOrder: true,
+          sheetPhotoUrl: true,
           lines: {
             select: {
               orderLineItemId: true, description: true, expectedQty: true,
@@ -252,6 +259,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           preppedBy: prior.preppedBy,
           notes: prior.notes,
           changedOrder: prior.changedOrder,
+          sheetPhotoUrl: prior.sheetPhotoUrl,
         }
       : null,
     preppedBy: prior?.preppedBy ?? '',
@@ -326,6 +334,11 @@ export async function submitCheckReport(opts: {
   preppedBy: string | null
   notes: string | null
   lines: SubmitLineInput[]
+  /** Private-blob key + url of the photographed paper sheet, if one was
+   *  taken. The paper is the source document; once the counts are typed
+   *  in this is the only thing that still shows what was written. */
+  sheetPhotoKey?: string | null
+  sheetPhotoUrl?: string | null
 }): Promise<SubmitResult> {
   const { orderId, edge, submittedById, preppedBy, notes, lines } = opts
 
@@ -358,6 +371,8 @@ export async function submitCheckReport(opts: {
       where: { orderId_edge: { orderId, edge } },
       create: {
         orderId, edge, submittedById, preppedBy, notes,
+        sheetPhotoKey: opts.sheetPhotoKey ?? null,
+        sheetPhotoUrl: opts.sheetPhotoUrl ?? null,
         changedOrder: applyToOrder,
         // A re-submission that changes something is unacknowledged
         // again — the agent has to see the NEW state, not remember
@@ -367,6 +382,11 @@ export async function submitCheckReport(opts: {
       },
       update: {
         submittedById, preppedBy, notes,
+        // A re-file without a new photo KEEPS the one on record — the
+        // paper did not stop existing because someone corrected a digit.
+        ...(opts.sheetPhotoKey
+          ? { sheetPhotoKey: opts.sheetPhotoKey, sheetPhotoUrl: opts.sheetPhotoUrl ?? null }
+          : {}),
         submittedAt: new Date(),
         changedOrder: applyToOrder,
         agentAckedAt: null,

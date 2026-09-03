@@ -60,6 +60,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     preppedBy?: string
     notes?: string
     lines?: unknown
+    /** From the photo endpoint — the stored image of the paper sheet. */
+    sheetPhotoKey?: string
+    sheetPhotoUrl?: string
   } | null
   const edge = parseEdge(body?.edge ?? null)
   if (!edge) return NextResponse.json({ error: 'edge must be OUT or IN' }, { status: 400 })
@@ -120,6 +123,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     preppedBy: typeof body.preppedBy === 'string' && body.preppedBy.trim() ? body.preppedBy.trim() : null,
     notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null,
     lines,
+    sheetPhotoKey: typeof body.sheetPhotoKey === 'string' ? body.sheetPhotoKey : null,
+    sheetPhotoUrl: typeof body.sheetPhotoUrl === 'string' ? body.sheetPhotoUrl : null,
   })
 
   // Wes, 2026-09-03: "re-send the quote automatically when the check-out

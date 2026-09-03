@@ -1,20 +1,28 @@
 'use client'
 
 /**
- * /warehouse/pick — warehouse picking queue.
+ * /warehouse/pick — where the paper comes from.
  *
- * Lists open PickLists (DRAFT / PICKING / READY_TO_STAGE / STAGED) so
- * the floor picker can pick the next one to work. Sorted by the
- * order's pickup date ascending — what physically ships next is on
- * top. Toggle "Show completed" to reveal LOADED + CANCELLED lists.
+ * Wes, 2026-09-03: "because we are going to keep the manual system,
+ * here is where they can see and PRINT the picklist for the warehouse."
+ * So the primary action on every row is now PRINT, not open. The
+ * scan-driven session behind each row still exists — the floor has
+ * chosen not to run it, and it costs nothing to leave standing — but it
+ * is no longer what this page is for.
  *
- * Each row shows order #, company, pickup window, item count,
- * per-status counts, current list status, and who (if anyone) is
- * actively assigned. Click any row to open the detail view.
+ * The loop the page now serves, end to end:
+ *   1. Print here.
+ *   2. The floor pulls the order and marks the sheet up by hand.
+ *   3. A supervisor photographs it on /reports/orders, which reads the
+ *      handwriting and pre-fills the check-out report.
+ *
+ * Lists open PickLists (DRAFT / PICKING / READY_TO_STAGE / STAGED),
+ * soonest pickup first. Toggle "Show completed" for LOADED + CANCELLED.
  */
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Printer, Camera } from 'lucide-react'
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 interface QueueItem {
@@ -98,8 +106,14 @@ function WarehousePickQueuePageInner() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-semibold text-white">All pick lists</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">
-            Every open list, soonest pickup first. Today’s work is on the <Link href="/yard" className="text-amber-500 hover:text-amber-400">yard board</Link>.
+          <p className="text-sm text-zinc-400 mt-0.5 max-w-[70ch]">
+            Print the sheet for the floor, soonest pickup first. When it comes back marked up,
+            photograph it on{' '}
+            <Link href="/reports/orders" className="text-amber-500 hover:text-amber-400">
+              Check In/Out Reports
+            </Link>{' '}
+            and HQ reads the handwriting. Today’s work is on the{' '}
+            <Link href="/yard" className="text-amber-500 hover:text-amber-400">yard board</Link>.
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-zinc-300 select-none cursor-pointer">
@@ -133,9 +147,8 @@ function WarehousePickQueuePageInner() {
             const done = p.counts.PICKED + p.counts.STAGED + p.counts.LOADED
             const pct = p.itemCount > 0 ? Math.round((done / p.itemCount) * 100) : 0
             return (
-              <Link
+              <div
                 key={p.id}
-                href={`/warehouse/pick/${p.id}`}
                 className="block bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-600 transition-colors"
               >
                 <div className="flex items-start gap-4 flex-wrap">
@@ -161,13 +174,44 @@ function WarehousePickQueuePageInner() {
                     </div>
                   </div>
                   <div className="flex-none min-w-[110px] text-right">
-                    <div className="text-xs text-zinc-500 mb-1">{pct}% done</div>
+                    {/* The progress bar tracks the SCANNED session,
+                        which the floor is not running — so it is a
+                        quiet aside now, not the row's headline. */}
+                    <div className="text-xs text-zinc-500 mb-1">{pct}% scanned</div>
                     <div className="w-[110px] h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                       <div className="h-full bg-amber-500" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 </div>
-              </Link>
+
+                {/* Actions. Print first and loudest: it is what this page
+                    is for. The scan session is still one click away for
+                    anyone who wants it. */}
+                <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap items-center gap-2">
+                  <a
+                    href={`/api/orders/${p.order.id}/pick-list-pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white"
+                  >
+                    <Printer size={14} aria-hidden />
+                    Print pick list
+                  </a>
+                  <Link
+                    href={`/reports/orders/${p.order.id}?edge=OUT`}
+                    className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-3 py-2 border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  >
+                    <Camera size={14} aria-hidden />
+                    Enter the marked-up sheet
+                  </Link>
+                  <Link
+                    href={`/warehouse/pick/${p.id}`}
+                    className="ml-auto text-[12px] font-semibold text-zinc-500 hover:text-amber-500"
+                  >
+                    Scan session →
+                  </Link>
+                </div>
+              </div>
             )
           })}
         </div>
