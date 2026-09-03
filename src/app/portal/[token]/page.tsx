@@ -3,9 +3,11 @@ import { formatCalendarDate } from '@/lib/dates/calendarDate';
 import { LCDW_ELIGIBILITY_NOTE } from '@/components/portal-v2/terms'
 import { LcdwElection, useLcdwCoverage, lcdwApplies } from '@/components/portal-v2/LcdwElection'
 import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
+import type { ReactNode } from 'react'
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
+import { PaymentOptionsPanel } from '@/components/portal/PaymentOptionsPanel';
 import type { PaymentPreference } from '@/lib/payments/paymentPreference';
 import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, LCDW_WAIVED_DAMAGE_LIMIT, usd, usd2 } from '@/lib/contracts/fees';
@@ -17,6 +19,7 @@ import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, LCDW_WAIVED_DAMA
 // that prohibit surcharging, so the flat claim overstated what we can deliver.
 // One const, both surfaces — the duplication was the defect.
 import { CC_SURCHARGE_TEXT, CC_ACK_TEXT } from '@/components/portal-v2/terms';
+import { Check, CheckCircle2, Clapperboard, ClipboardList, Clock, CreditCard, FileText, Lock, Paperclip, PenLine, Send, ShieldCheck, XCircle } from 'lucide-react'
 
 /**
  * Visual restyle pass (May 2026) — see commit history for the version
@@ -60,12 +63,12 @@ const TERMS = [
 ];
 
 type TabId = 'overview' | 'agreement' | 'lcdw' | 'coi' | 'cc' | 'studio';
-const ALL_TABS: { id: TabId; label: string; icon: string; contractTypes: string[] }[] = [
-  { id: 'overview', label: 'Overview', icon: '📋', contractTypes: ['vehicles', 'stage', 'both'] },
-  { id: 'agreement', label: 'Agreement', icon: '✍️', contractTypes: ['vehicles', 'both'] },
-  { id: 'studio', label: 'Studio Contract', icon: '🎬', contractTypes: ['stage', 'both'] },
-  { id: 'coi', label: 'COI', icon: '📄', contractTypes: ['vehicles', 'stage', 'both'] },
-  { id: 'cc', label: 'CC Auth', icon: '💳', contractTypes: ['vehicles', 'stage', 'both'] },
+const ALL_TABS: { id: TabId; label: string; icon: ReactNode; contractTypes: string[] }[] = [
+  { id: 'overview', label: 'Overview', icon: <ClipboardList size={14} aria-hidden />, contractTypes: ['vehicles', 'stage', 'both'] },
+  { id: 'agreement', label: 'Agreement', icon: <PenLine size={14} aria-hidden />, contractTypes: ['vehicles', 'both'] },
+  { id: 'studio', label: 'Studio Contract', icon: <Clapperboard size={14} aria-hidden />, contractTypes: ['stage', 'both'] },
+  { id: 'coi', label: 'COI', icon: <FileText size={14} aria-hidden />, contractTypes: ['vehicles', 'stage', 'both'] },
+  { id: 'cc', label: 'CC Auth', icon: <CreditCard size={14} aria-hidden />, contractTypes: ['vehicles', 'stage', 'both'] },
 ];
 // Calendar dates (rental windows), so UTC — a client must never be shown
 // their pickup a day early. Instants elsewhere on this page stay local.
@@ -114,6 +117,10 @@ export default function ClientPortal() {
   const [lcdwDeclined, setLcdwDeclined] = useState(false);
   // Does this booking have anything the waiver could cover? A stage-only or
   // supplies-only job does not, and must not be asked.
+  // Adding a card IS authorizing one, so "Add another card" re-opens the
+  // capture form rather than cloning it. Wes 2026-09-03: a client with a card
+  // on file wanted to pay with a different one WITHOUT losing the first.
+  const [addingCard, setAddingCard] = useState(false);
   const lcdwCoverage = useLcdwCoverage(token);
   const lcdwNeeded = lcdwApplies(lcdwCoverage);
   const lcdwChoice: 'accept' | 'decline' | null = lcdwAccepted ? 'accept' : lcdwDeclined ? 'decline' : null;
@@ -433,17 +440,17 @@ export default function ClientPortal() {
   if (error || !booking) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
-        <div className="text-4xl mb-3">🔒</div>
+        <div className="text-4xl mb-3"><Lock size={36} aria-hidden /></div>
         <div className="text-gray-800 font-semibold">Link Not Found</div>
         <div className="text-gray-500 text-sm mt-1">{error || 'This link is invalid or expired.'}</div>
-        <div className="mt-3 text-sm">📞 <a href="tel:8185152389" className="font-semibold text-gray-700">(818) 515-2389</a></div>
+        <div className="mt-3 text-sm"><a href="tel:8185152389" className="font-semibold text-gray-700">(818) 515-2389</a></div>
       </div>
     </div>
   );
 
   const renderLockedCard = (title: string) => (
     <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center">
-      <div className="text-4xl mb-3">🔒</div>
+      <div className="text-4xl mb-3"><Lock size={36} aria-hidden /></div>
       <div className="font-bold text-base text-gray-800">{title} — Locked</div>
       <div className="text-sm mt-1 text-gray-500">
         {lockReason === 'cancelled'
@@ -455,7 +462,7 @@ export default function ClientPortal() {
 
   const renderDoneCard = (title: string, sub: string) => (
     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-      <div className="text-4xl mb-3">✅</div>
+      <div className="text-4xl mb-3"><CheckCircle2 size={36} aria-hidden /></div>
       <div className="text-emerald-800 font-bold text-base">{title}</div>
       <div className="text-emerald-600 text-sm mt-1">{sub}</div>
     </div>
@@ -609,7 +616,7 @@ export default function ClientPortal() {
                         className="text-[12px] font-semibold inline-flex items-center gap-1"
                         style={{ color: statusColor }}
                       >
-                        {isDone && <span aria-hidden>✓</span>}
+                        {isDone && <span aria-hidden><Check size={16} aria-hidden /></span>}
                         {statusLabel}
                       </span>
                       <span className="text-gray-300 text-lg leading-none">›</span>
@@ -665,7 +672,7 @@ export default function ClientPortal() {
               {agreementState && (agreementState.status === 'SIGNED_BASELINE' || agreementState.status === 'SIGNED_NEGOTIATED') && (
                 <div className="bg-white rounded-2xl border border-emerald-200 p-5 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="text-2xl">✅</div>
+                    <div className="text-2xl"><CheckCircle2 size={24} aria-hidden /></div>
                     <div className="flex-1">
                       <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Signed</div>
                       <h2 className="font-bold text-gray-900 mt-1">Agreement signed</h2>
@@ -715,13 +722,13 @@ export default function ClientPortal() {
                           }}
                           className="flex-1 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
                         >
-                          ✍️ Sign and accept
+                          Sign and accept
                         </button>
                         <a
                           href={`/api/portal/${token}/agreement/download`}
                           className="flex-1 text-center py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
                         >
-                          📝 Download for review
+                          Download for review
                         </a>
                       </div>
                     </>
@@ -746,7 +753,7 @@ export default function ClientPortal() {
                           href={`/api/portal/${token}/agreement/download`}
                           className="flex-1 text-center py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
                         >
-                          📝 Download again
+                          Download again
                         </a>
                         <button
                           onClick={() => {
@@ -759,7 +766,7 @@ export default function ClientPortal() {
                           }}
                           className="flex-1 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
                         >
-                          ✍️ Sign the original
+                          Sign the original
                         </button>
                       </div>
                     </>
@@ -781,13 +788,13 @@ export default function ClientPortal() {
                   >
                     {pathARedlineFile ? (
                       <div>
-                        <div className="text-xl mb-1">📄</div>
+                        <div className="text-xl mb-1"><FileText size={20} aria-hidden /></div>
                         <div className="text-xs font-semibold text-indigo-700">{pathARedlineFile.name}</div>
                         <div className="text-[10px] text-gray-400 mt-0.5">{(pathARedlineFile.size / 1024).toFixed(0)} KB</div>
                       </div>
                     ) : (
                       <div>
-                        <div className="text-xl mb-1">📤</div>
+                        <div className="text-xl mb-1"><Send size={20} aria-hidden /></div>
                         <div className="text-xs text-gray-500">Drop redline here or click to browse</div>
                         <div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div>
                       </div>
@@ -833,7 +840,7 @@ export default function ClientPortal() {
               {agreementState && (agreementState.status === 'REDLINE_UPLOADED' || agreementState.status === 'UNDER_REVIEW') && (
                 <div className="bg-white rounded-2xl border border-amber-200 p-5 space-y-2">
                   <div className="flex items-start gap-3">
-                    <div className="text-2xl">📋</div>
+                    <div className="text-2xl"><ClipboardList size={24} aria-hidden /></div>
                     <div>
                       <div className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Under review</div>
                       <h2 className="font-bold text-gray-900 mt-1">Your redline is in review</h2>
@@ -863,7 +870,7 @@ export default function ClientPortal() {
                       rel="noreferrer"
                       className="block text-center py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
                     >
-                      📄 Preview negotiated PDF
+                      Preview negotiated PDF
                     </a>
                   )}
                   <button
@@ -877,7 +884,7 @@ export default function ClientPortal() {
                     }}
                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
                   >
-                    ✍️ Sign negotiated version
+                    Sign negotiated version
                   </button>
                 </div>
               )}
@@ -1081,7 +1088,7 @@ export default function ClientPortal() {
               {pathBStep === 'done' && (
                 <div className="bg-white rounded-2xl border border-emerald-200 p-5 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="text-2xl">🎉</div>
+                    
                     <div className="flex-1">
                       <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Signed</div>
                       <h2 className="font-bold text-gray-900 mt-1">Agreement signed</h2>
@@ -1102,8 +1109,8 @@ export default function ClientPortal() {
                 <h2 className="font-bold text-gray-900 mb-2">Rental Agreement</h2>
                 <p className="text-xs text-gray-500 mb-3">Download and review the agreement below. Upload your signed copy when ready — let us know if it contains any proposed changes.</p>
                 <div className="flex gap-2 mb-4">
-                  <a href={`/api/portal/${token}/contract/download?format=pdf`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800">📄 Download PDF</a>
-                  <a href={`/api/portal/${token}/contract/download?format=docx`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50">📝 Download Word</a>
+                  <a href={`/api/portal/${token}/contract/download?format=pdf`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800">Download PDF</a>
+                  <a href={`/api/portal/${token}/contract/download?format=docx`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50">Download Word</a>
                 </div>
                 <div className="border-t border-gray-100 pt-4">
                   <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Upload Signed Contract</div>
@@ -1111,7 +1118,7 @@ export default function ClientPortal() {
                     <div className="space-y-2">
                       <div onDragOver={e => { e.preventDefault(); }} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setRedlineFile(f); }} onClick={() => document.getElementById('redline-file')?.click()}
                         className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${redlineFile ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}>
-                        {redlineFile ? <div><div className="text-xl mb-1">📄</div><div className="text-xs font-semibold text-blue-700">{redlineFile.name}</div></div> : <div><div className="text-xl mb-1">📤</div><div className="text-xs text-gray-500">Drop contract here or click to browse</div><div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div></div>}
+                        {redlineFile ? <div><div className="text-xl mb-1"><FileText size={20} aria-hidden /></div><div className="text-xs font-semibold text-blue-700">{redlineFile.name}</div></div> : <div><div className="text-xl mb-1"><Send size={20} aria-hidden /></div><div className="text-xs text-gray-500">Drop contract here or click to browse</div><div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div></div>}
                         <input id="redline-file" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => setRedlineFile(e.target.files?.[0] || null)} />
                       </div>
                       {redlineFile && (
@@ -1129,7 +1136,7 @@ export default function ClientPortal() {
                                 else alert('Error: ' + (data.error || 'Unknown'));
                               } finally { setRedlineSubmitting(false); }
                             }} disabled={redlineSubmitting} className="flex-1 py-2 bg-amber-500 text-white rounded-xl text-xs font-semibold hover:bg-amber-600 disabled:opacity-40">
-                              {redlineSubmitting ? '📋 Reviewing...' : '✏️ Yes, has changes'}
+                              {redlineSubmitting ? 'Reviewing...' : 'Yes, has changes'}
                             </button>
                             <button onClick={async () => {
                               if (!redlineFile) return;
@@ -1140,7 +1147,7 @@ export default function ClientPortal() {
                                 setRedlineReview({ recommendation: 'approve', noChanges: true });
                               } finally { setRedlineSubmitting(false); }
                             }} disabled={redlineSubmitting} className="flex-1 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800 disabled:opacity-40">
-                              {redlineSubmitting ? '...' : '✓ No changes'}
+                              {redlineSubmitting ? '...' : 'No changes'}
                             </button>
                           </div>
                         </div>
@@ -1149,7 +1156,7 @@ export default function ClientPortal() {
                   ) : (
                     <div className={`rounded-xl p-3 border ${redlineReview.noChanges ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'approve' ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'reject' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{redlineReview.noChanges ? '✅' : redlineReview.recommendation === 'approve' ? '✅' : redlineReview.recommendation === 'reject' ? '❌' : '📋'}</span>
+                        <span className="text-lg">{redlineReview.noChanges ? <CheckCircle2 size={14} aria-hidden /> : redlineReview.recommendation === 'approve' ? <CheckCircle2 size={14} aria-hidden /> : redlineReview.recommendation === 'reject' ? <XCircle size={14} aria-hidden /> : <ClipboardList size={14} aria-hidden />}</span>
                         <div>
                           <div className="text-xs font-bold text-gray-800">{redlineReview.noChanges && redlineReview.recommendation === 'approve' ? 'Contract Confirmed — No Issues' : redlineReview.noChanges ? 'Contract Received — Under Review' : redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
                           <div className="text-[10px] text-gray-500 mt-0.5">{redlineReview.noChanges && redlineReview.recommendation === 'approve' ? 'Your contract matches our standard agreement and is on file.' : 'Your contract has been received and is being reviewed by the SirReel team.'}</div>
@@ -1223,7 +1230,7 @@ export default function ClientPortal() {
                 <h2 className="font-bold text-gray-900">Certificate of Insurance</h2>
                 {coiReview && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${coiReview.overallPass ? 'bg-emerald-100 text-emerald-700' : coiReview.requiresAdminApproval ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
-                    {coiReview.overallPass ? '✓ Approved' : coiReview.requiresAdminApproval ? '⚠ Pending Review' : '✗ Issues'}
+                    {coiReview.overallPass ? 'Approved' : coiReview.requiresAdminApproval ? 'Pending Review' : 'Issues'}
                   </span>
                 )}
               </div>
@@ -1233,7 +1240,7 @@ export default function ClientPortal() {
                 <div className="space-y-3">
                   <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCoiFile(f); }} onClick={() => document.getElementById('coi-file')?.click()}
                     className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${coiFile ? 'border-emerald-300 bg-emerald-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'}`}>
-                    {coiFile ? <div><div className="text-2xl mb-1">📄</div><div className="text-sm font-semibold text-emerald-700">{coiFile.name}</div></div> : <div><div className="text-2xl mb-1">📎</div><div className="text-sm text-gray-600">Drop COI here or click to browse</div><div className="text-xs text-gray-400">PDF, JPG, or PNG</div></div>}
+                    {coiFile ? <div><div className="text-2xl mb-1"><FileText size={24} aria-hidden /></div><div className="text-sm font-semibold text-emerald-700">{coiFile.name}</div></div> : <div><div className="text-2xl mb-1"><Paperclip size={24} aria-hidden /></div><div className="text-sm text-gray-600">Drop COI here or click to browse</div><div className="text-xs text-gray-400">PDF, JPG, or PNG</div></div>}
                     <input id="coi-file" type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCoiFile(e.target.files?.[0] || null)} />
                   </div>
                   <button onClick={async () => {
@@ -1252,14 +1259,14 @@ export default function ClientPortal() {
                     } catch (err: any) { alert('Upload failed: ' + err.message); }
                     finally { setCoiReviewing(false); }
                   }} disabled={!coiFile || coiReviewing} className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">
-                    {coiReviewing ? '🔍 Reviewing COI...' : 'Upload & Review →'}
+                    {coiReviewing ? 'Reviewing COI...' : 'Upload & Review →'}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {coiReview.overallPass ? (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-                      <span className="text-2xl">✅</span>
+                      <span className="text-2xl"><CheckCircle2 size={24} aria-hidden /></span>
                       <div>
                         <div className="text-sm font-bold text-emerald-800">COI Approved</div>
                         <div className="text-xs text-emerald-600 mt-0.5">All requirements met. Your certificate of insurance is on file with SirReel.</div>
@@ -1267,7 +1274,7 @@ export default function ClientPortal() {
                     </div>
                   ) : (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                      <span className="text-2xl">🕐</span>
+                      <span className="text-2xl"><Clock size={24} aria-hidden /></span>
                       <div>
                         <div className="text-sm font-bold text-amber-800">COI Under Review</div>
                         <div className="text-xs text-amber-700 mt-1 leading-relaxed">Thanks for uploading your COI. Our team will review it and let you know if it meets the requirements. You will hear from us shortly.</div>
@@ -1286,16 +1293,16 @@ export default function ClientPortal() {
             <div className="bg-white rounded-2xl border border-gray-200 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <h2 className="font-bold text-gray-900">Workers Compensation</h2>
-                {wcReview && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${wcReview.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{wcReview.pass ? '✓ Approved' : '✗ Issues'}</span>}
+                {wcReview && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${wcReview.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{wcReview.pass ? 'Approved' : 'Issues'}</span>}
               </div>
               <p className="text-sm text-gray-500 mb-3">If Workers Comp is on your main COI it will be reviewed automatically. If provided separately by your payroll company (ADP, Entertainment Partners, Cast & Crew, etc.), upload it here.</p>
               {coiReview?.workersComp?.pass ? (
-                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl"><span className="text-emerald-500">✓</span><span className="text-sm text-emerald-700">Workers Comp found on main COI — no separate upload needed.</span></div>
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl"><span className="text-emerald-500"><Check size={16} aria-hidden /></span><span className="text-sm text-emerald-700">Workers Comp found on main COI — no separate upload needed.</span></div>
               ) : !wcReview ? (
                 <div className="space-y-3">
                   <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setWcFile(f); }} onClick={() => document.getElementById('wc-file')?.click()}
                     className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer ${wcFile ? 'border-blue-300 bg-blue-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'}`}>
-                    {wcFile ? <div><div className="text-2xl mb-1">📄</div><div className="text-sm font-semibold text-blue-700">{wcFile.name}</div></div> : <div><div className="text-2xl mb-1">🛡️</div><div className="text-sm text-gray-600">Drop WC certificate here or click to browse</div><div className="text-xs text-gray-400 mt-0.5">PDF, JPG, or PNG</div></div>}
+                    {wcFile ? <div><div className="text-2xl mb-1"><FileText size={24} aria-hidden /></div><div className="text-sm font-semibold text-blue-700">{wcFile.name}</div></div> : <div><div className="text-2xl mb-1"><ShieldCheck size={24} aria-hidden /></div><div className="text-sm text-gray-600">Drop WC certificate here or click to browse</div><div className="text-xs text-gray-400 mt-0.5">PDF, JPG, or PNG</div></div>}
                     <input id="wc-file" type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setWcFile(e.target.files?.[0] || null)} />
                   </div>
                   <button onClick={async () => {
@@ -1310,14 +1317,14 @@ export default function ClientPortal() {
                     } catch (err: any) { alert('Upload failed: ' + err.message); }
                     finally { setWcReviewing(false); }
                   }} disabled={!wcFile || wcReviewing} className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">
-                    {wcReviewing ? '🔍 Reviewing...' : 'Upload & Review →'}
+                    {wcReviewing ? 'Reviewing...' : 'Upload & Review →'}
                   </button>
                   <p className="text-center text-xs text-gray-400">Don't have it? Your SirReel rep can upload it if you send it to them directly.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className={`rounded-xl p-3 flex items-center gap-3 ${wcReview.pass ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                    <span className="text-xl">{wcReview.pass ? '✅' : '❌'}</span>
+                    <span className="text-xl">{wcReview.pass ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}</span>
                     <div><div className={`text-sm font-bold ${wcReview.pass ? 'text-emerald-800' : 'text-red-700'}`}>{wcReview.pass ? 'Workers Comp Approved' : 'Needs Correction'}</div><div className="text-xs text-gray-500">{wcReview.provider && `Provider: ${wcReview.provider}`}{wcReview.expiryDate && ` · Expires ${wcReview.expiryDate}`}</div></div>
                   </div>
                   {!wcReview.pass && <button onClick={() => { setWcReview(null); setWcFile(null); }} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Upload New Document</button>}
@@ -1364,7 +1371,7 @@ export default function ClientPortal() {
                           <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Sets</div>
                           <div className="space-y-1">
                             {sets.map((s: string) => (
-                              <div key={s} className="flex items-center gap-2 text-sm"><span>🎬</span><span>{SET_LABELS[s] || s}{prelitSets.includes(s) ? ' (Pre-lit)' : ''}</span></div>
+                              <div key={s} className="flex items-center gap-2 text-sm"><span><Clapperboard size={16} aria-hidden /></span><span>{SET_LABELS[s] || s}{prelitSets.includes(s) ? ' (Pre-lit)' : ''}</span></div>
                             ))}
                           </div>
                         </div>
@@ -1429,7 +1436,9 @@ export default function ClientPortal() {
         {/* CC AUTH */}
         {activeTab === 'cc' && (
           locked ? renderLockedCard('Credit Card Authorization') :
-          done.cc ? renderDoneCard('Credit Card Authorized', 'Authorization on file with SirReel') :
+          done.cc && !addingCard ? (
+            <PaymentOptionsPanel token={token} onAddAnother={() => setAddingCard(true)} />
+          ) :
           cardLive === false ? (
             // Not live. Rather than a dead step, point the client at the form
             // that genuinely holds their details today. Says nothing about
@@ -1573,7 +1582,7 @@ export default function ClientPortal() {
                       ))}
                     </select>
                   </div>
-                  {cpToken && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold"><span>✓</span><span>Card captured securely</span></div>}
+                  {cpToken && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold"><span><Check size={16} aria-hidden /></span><span>Card captured securely</span></div>}
                   {!cpToken && ccCardError && <div className="mt-1.5 text-[11px] text-red-600 font-semibold">{ccCardError}</div>}
                   {!cpToken && !ccCardError && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above, then tap outside the box — it is encrypted there and never reaches SirReel.</div>}
                 </div>
@@ -1597,9 +1606,14 @@ export default function ClientPortal() {
                   ccExpiry: `${ccExpMonth}${ccExpYear}`,
                   ccSignatureData: sigData(ccSigRef),
                 })) {
-                  setDone(d => ({ ...d, cc: true })); setActiveTab('overview');
+                  setDone(d => ({ ...d, cc: true }));
+                  // Adding a second card lands back on the wallet, not the
+                  // overview — the client came here to choose which card we
+                  // charge, and the choice lives one screen away.
+                  if (addingCard) { setAddingCard(false); }
+                  else { setActiveTab('overview'); }
                 }
-              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || ccExpMonth.length !== 2 || ccExpYear.length !== 2 || !/^\d{5}(-\d{4})?$/.test(ccZip) || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
+              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || ccExpMonth.length !== 2 || ccExpYear.length !== 2 || !/^\d{5}(-\d{4})?$/.test(ccZip) || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete'}</button>
               {/* A disabled button with every visible field filled reads as a
                   broken page. The two likeliest culprits are off-screen from
                   the button: the ZIP lives up in Billing Address, and the card
@@ -1634,7 +1648,7 @@ export default function ClientPortal() {
             </a>
             <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0A${typeof window !== 'undefined' ? window.location.origin : ''}/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              📧 Email me this link for later
+              Email me this link for later
             </a>
           </div>
         )}
