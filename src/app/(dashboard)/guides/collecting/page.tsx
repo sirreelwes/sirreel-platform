@@ -295,7 +295,7 @@ export default function CollectingGuidePage() {
             </Step>
             <Step n={3} title="Check the card block">
               <p>A panel headed <strong>💳 Card on file</strong> shows the card type, last four and cardholder.
-                No panel means no card — use section 5.</p>
+                No panel means no card — use section 5, or section 6 if they already signed an authorization.</p>
               <Note tone="warn" label="Read the preference line">
                 If it says the card is <strong>security only</strong>, the client elected to pay by check or bank
                 transfer. Charge it only as a fallback on an unpaid balance, and tell them first.
@@ -358,7 +358,66 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Bank transfer, wire or Zelle</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Key in a card they signed for</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            When the client authorized in writing — a paper form or a signed Cognito CCA — instead of
+            going through their portal. You type the number, and it still never reaches HQ.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Have the signed authorization in front of you">
+              <p>Every field below is copied off it. If it isn&rsquo;t signed, stop — use section 5 and let the
+                client enter the card themselves.</p>
+              <Note tone="stop" label="Never upload the authorization form">
+                That form has the full card number on it, and usually the CVV. Do not drag it into HQ, attach it
+                to the company, or email it to yourself. HQ deliberately stores no card numbers anywhere, and one
+                copy in our files undoes that. Leave it where it already lives and point at it in step 4.
+              </Note>
+            </Step>
+            <Step n={2} title="Open the company wallet">
+              <p>Left nav → <Link href="/crm" className="font-semibold underline underline-offset-2">CRM</Link> →
+                the company → the <strong className="text-lt-fg">Cards on file</strong> panel →
+                <strong className="text-lt-fg"> Key in an authorized card</strong>. From a job you already have open,
+                the Card Authorization tile links straight across.</p>
+              <p>The card goes on the <em>company</em>, not one job, so it is there for their next booking too.</p>
+            </Step>
+            <Step n={3} title="Type the card into the secure box">
+              <p>That box is CardConnect&rsquo;s, not ours — the number goes straight to them and comes back as a
+                token. <strong className="text-lt-fg">Card read ✓</strong> means they took it. You will only
+                ever see the last four afterwards.</p>
+              <p>There is no CVV field, and that is on purpose: a stored card replays its CVV on every later
+                charge, which our processor told us to stop doing.</p>
+            </Step>
+            <Step n={4} title="Fill the rest exactly as written on the form">
+              <p>Expiry, cardholder name and billing ZIP as the client wrote them — a ZIP that doesn&rsquo;t match
+                their bank is the most common decline. Naming the card is optional and helps when a company keeps
+                several.</p>
+              <p>The last field is required: <strong className="text-lt-fg">where the signed authorization
+                lives</strong>, e.g. &ldquo;Cognito CCA #4182, signed 9/2&rdquo;. Since we don&rsquo;t keep the form,
+                this is the only thread back to the client&rsquo;s consent if they dispute a charge in six months.
+                Write it so someone who wasn&rsquo;t there could find it.</p>
+            </Step>
+            <Step n={5} title="Put on file">
+              <p>HQ runs a $0 authorization before storing anything.</p>
+              <Note tone="warn" label="A decline stores nothing, and that is correct">
+                If the $0 check doesn&rsquo;t approve, the card is not saved. Nothing is broken — re-read the
+                digits, expiry and ZIP off the form, or ask the client for another card. Storing a card that
+                already failed just moves the failure to the day you try to collect.
+              </Note>
+            </Step>
+            <Step n={6} title="Then charge it">
+              <p>Go back to section 4. Nothing needs re-keying.</p>
+            </Step>
+          </ol>
+          <Note tone="plain" label="Why this screen refuses on a preview link">
+            Keying a card is production-only. On a preview or staging URL the form tells you so and declines,
+            because a card stored against the sandbox could never actually be charged. Use
+            <strong className="text-lt-fg"> hq.sirreel.com</strong>. Wes, Dani, Ana and Jose can use this screen;
+            it is the same access as charging a card.
+          </Note>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · Bank transfer, wire or Zelle</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             No processing fee. Usually the better path on large invoices, and often what a production&rsquo;s
             accounts-payable team prefers.
@@ -385,7 +444,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · Close the day</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">8 · Close the day</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             The end-of-day summary that goes to Dani and Wes. HQ works out the figures; you check them
             and add the sentence they actually read.
@@ -430,7 +489,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">8 · What your login opens</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">9 · What your login opens</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             Your menu is deliberately short. It is not a cut-down version of someone else&rsquo;s — every
             entry is there because a billing question needs it, and the point is that you can settle most
@@ -472,7 +531,7 @@ export default function CollectingGuidePage() {
           <Note tone="warn" label="One entry that does not work yet">
             <strong>Payment Info</strong> is in your menu but the page is admin-only, so it will refuse
             you. You do not need it: the bank details clients need are already on their own portal, with
-            a button to send them to accounts payable — section 6. Changing those details is Wes&rsquo;s
+            a button to send them to accounts payable — section 7. Changing those details is Wes&rsquo;s
             job by design.
           </Note>
         </section>
@@ -493,7 +552,7 @@ export default function CollectingGuidePage() {
               </thead>
               <tbody className="text-lt-fg2">
                 {[
-                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 5.'],
+                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 5, or 6 if they signed on paper.'],
                   ['Card declined', 'The bank refused it — limit, expiry, or a fraud hold.', 'Ask the client to call their bank, or take another card.'],
                   ['Payment gateway unreachable', 'Our side could not reach CardPointe.', 'Wait and retry. If it persists, flag it — no card is at fault.'],
                   ['Invoice is not payable', 'Already paid, void, or still a draft.', 'Check the status; a draft has to be sent first.'],
