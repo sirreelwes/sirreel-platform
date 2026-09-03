@@ -32,8 +32,9 @@ try {
 // Field coverage matches the RentalWorks samples: top band with logo +
 // "QUOTE" title, customer/agent/
 // billing/usage info-box row, three-column issued-to / outgoing /
-// incoming row, line items grouped by department with subtotals,
-// grand total, footer with page numbers.
+// incoming row, ONE itemised line-item table (department-ordered but
+// never department-labelled — Wes 2026-09-02), grand total, footer with
+// page numbers.
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -149,21 +150,15 @@ export interface QuoteDocumentProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Department labels & ordering
+// Department ordering
 // ─────────────────────────────────────────────────────────────────────
+// No DEPT_LABELS here on purpose. Departments order the rows; nothing
+// on this document names one (Wes 2026-09-02 — no department title on
+// any client PDF). Client-facing department names live in
+// src/lib/quotes/departmentQuote.ts, where the whole document IS one
+// department by design.
 
-const DEPT_LABELS: Record<Department, string> = {
-  VEHICLES: 'Vehicles',
-  COMMUNICATIONS: 'Communications',
-  STAGES: 'Studios',
-  PRO_SUPPLIES: 'Pro Supplies',
-  EXPENDABLES: 'Expendables',
-  GE: 'Grip & Electric',
-  ART: 'Art Department',
-  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
-}
-
-// Section ordering — shared with the internal order-detail table so the
+// Row ordering — shared with the internal order-detail table so the
 // PDF the client commented on and the page the rep edits flow in the
 // same order. Single source: src/lib/orders/lineItemDepartments.ts.
 const DEPT_ORDER: readonly Department[] = LINE_ITEM_DEPARTMENT_ORDER
@@ -301,10 +296,6 @@ function computeLineTotal(item: QuoteLineItem): number {
 // collects type=FEE lines regardless of their storage department.
 type SectionKey = Department | 'FEES'
 
-function sectionLabel(key: SectionKey): string {
-  return key === 'FEES' ? 'Fees' : DEPT_LABELS[key]
-}
-
 function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: SectionKey; items: QuoteLineItem[]; subtotal: number }> {
   const lineItems = items.filter((l) => !l.isDiscount)
   const buckets = new Map<Department, QuoteLineItem[]>()
@@ -441,29 +432,9 @@ const styles = StyleSheet.create({
   infoLabel: { width: '42%', fontSize: 9, color: C.muted },
   infoValue: { width: '58%', fontSize: 9 },
   // Line items table
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 8,
-    marginBottom: 0,
-    paddingTop: 3.5,
-    paddingBottom: 3.5,
-    paddingHorizontal: 6,
-    backgroundColor: C.accentFill,
-    borderBottomWidth: 1,
-    borderBottomColor: C.accentDeep,
-  },
-  sectionTitle: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: C.accent,
-  },
-  sectionSub: { fontSize: 8, color: C.muted },
   tableHead: {
     flexDirection: 'row',
+    marginTop: 8,
     paddingVertical: 3,
     paddingHorizontal: 6,
     backgroundColor: C.accentFillSoft,
@@ -499,38 +470,6 @@ const styles = StyleSheet.create({
   // Upright, not italic — the qualifier is an aside, the window is a fact.
   lineWindow: { fontSize: 8, color: C.muted, marginTop: 1 },
   dateNote: { fontSize: 8, color: C.faint, marginTop: 1 },
-  subtotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'stretch',
-    marginTop: 1,
-    borderTopWidth: 0.5,
-    borderTopColor: C.accentEdge,
-  },
-  subtotalLabel: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    color: C.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    // Fixed width so every tinted label block lines up with the ones
-    // above and below it. Auto-width left the section subtotal and the
-    // discount row ragged against each other.
-    width: 150,
-    textAlign: 'right',
-    backgroundColor: C.accentFill,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  subtotalValue: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    width: '16%',
-    textAlign: 'right',
-    backgroundColor: C.moneyFill,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
   // Discount row
   discountRow: {
     flexDirection: 'row',
@@ -633,6 +572,10 @@ const styles = StyleSheet.create({
 export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
   const generatedAt = props.generatedAt ?? new Date()
   const grouped = groupByDepartment(props.lineItems)
+  // Departments order the rows; they no longer label them. Flattened here
+  // so the zebra striping runs continuously instead of restarting at each
+  // (now invisible) department boundary.
+  const orderedItems = grouped.flatMap((g) => g.items)
   const discountItems = props.lineItems.filter((l) => l.isDiscount)
   // No order-wide date row. It was an order-level rollup presented as the
   // usage period, and when the header dates were blank it filled from the
@@ -733,117 +676,96 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
           </View>
         </View>
 
-        {/* Line items per department */}
-        {grouped.map(({ dept, items, subtotal }) => (
-          // The section must be allowed to SPLIT across pages. It used to
-          // carry wrap={false}, which tells react-pdf "never break this" —
-          // fine for a 3-line department, catastrophic for an 18-line one:
-          // once the block is taller than a page, react-pdf gives up on
-          // laying it out (the "Node of type VIEW can't wrap between pages"
-          // warning) and renders the rows ON TOP OF EACH OTHER. Clients
-          // were receiving quotes with the description, the date note and
-          // the next row all overprinted.
-          //
-          // wrap={false} belongs on the ROW — a single line item should
-          // never be split down the middle — which is exactly what
-          // InvoiceDocument and PickListDocument already do.
-          <View key={dept}>
-            {/* minPresenceAhead keeps the band from being orphaned at the
-                foot of a page with its rows stranded overleaf. */}
-            <View style={styles.sectionHeader} wrap={false} minPresenceAhead={60}>
-              <Text style={styles.sectionTitle}>{sectionLabel(dept)}</Text>
-              <Text style={styles.sectionSub}>{items.length} {items.length === 1 ? 'item' : 'items'}</Text>
+        {/* Line items — ONE continuous table.
+            Wes 2026-09-02: no department title on any client PDF. The
+            rows used to be split into labelled bands ("Vehicles",
+            "Production Supplies") each with its own header, item count
+            and subtotal; that band IS a department title, so it's gone.
+            groupByDepartment survives purely as an ORDERING pass —
+            departments still keep their DEPT_ORDER sequence and
+            accessories still sit under their parent — but the client
+            reads a single itemised list. Per-department subtotals went
+            with the labels (an unnamed "Subtotal $800" mid-table is
+            worse than none); DEPARTMENT-scope discounts now render in
+            the totals block, under the discount's own label.
+
+            The table must be allowed to SPLIT across pages. It used to
+            carry wrap={false}, which tells react-pdf "never break this" —
+            fine for a 3-line department, catastrophic for an 18-line one:
+            once the block is taller than a page, react-pdf gives up on
+            laying it out (the "Node of type VIEW can't wrap between pages"
+            warning) and renders the rows ON TOP OF EACH OTHER. Clients
+            were receiving quotes with the description, the date note and
+            the next row all overprinted.
+
+            wrap={false} belongs on the ROW — a single line item should
+            never be split down the middle — which is exactly what
+            InvoiceDocument and PickListDocument already do. */}
+        <View style={styles.tableHead} wrap={false} minPresenceAhead={40}>
+          <Text style={styles.colCode}>Item</Text>
+          <Text style={styles.colDesc}>Description</Text>
+          <Text style={styles.colQty}>Qty</Text>
+          <Text style={styles.colDays}>Days</Text>
+          <Text style={styles.colRate}>Rate</Text>
+          <Text style={styles.colTotal}>Total</Text>
+        </View>
+        {orderedItems.map((item, idx) => {
+          return (
+            <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
+              {/* Wrap the inventory code in a View (mirrors colDesc)
+                  so the column acts as a hard layout container.
+                  Without this, a Text whose content is wider than
+                  its width style renders glyphs past the right
+                  edge and over the next cell — the symptom this
+                  patch is fixing. */}
+              <View style={styles.colCode}>
+                {/* Capped to a single line. HQ-native codes are slugs
+                    ("VEH--STRAPS--RATCHET") that wrapped to three lines
+                    and set the height of the whole row — three lines of
+                    internal SKU next to a two-word description. */}
+                <Text style={styles.codeText}>{clientItemCode(item.inventoryCode)}</Text>
+              </View>
+              <View style={item.isChild ? styles.colDescChild : styles.colDesc}>
+                <Text>{item.isChild ? `\u2514  ${item.description}` : item.description}</Text>
+                {item.qualifier && <Text style={styles.qualifier}>{item.qualifier}</Text>}
+                {item.notes && item.notes.trim().length > 0 && (
+                  <Text style={styles.qualifier}>{item.notes}</Text>
+                )}
+                {/* The line's own window — ONE terse line (see
+                    fmtLineWindow). Pulled 8/29 when it was a date range
+                    plus a "Billable days: N (rental period …)" sentence
+                    under every item; restored 9/1 without the sentence,
+                    because the header no longer carries any date at all
+                    and a line is where a wrong one is worth seeing. */}
+                {(() => {
+                  const w = fmtLineWindow(item.pickupDate, item.returnDate, quoteYear)
+                  return w ? <Text style={styles.lineWindow}>{w}</Text> : null
+                })()}
+              </View>
+              <Text style={styles.colQty}>{item.quantity}</Text>
+              <Text style={styles.colDays}>
+                {item.billableDays ?? 'TBD'}
+                {item.billableDays != null &&
+                  item.computedDays != null &&
+                  item.billableDays !== item.computedDays && (
+                    <Text style={styles.daysSpan}> / {item.computedDays}</Text>
+                  )}
+              </Text>
+              <Text style={styles.colRate}>
+                {item.isIncludedAccessory && item.rate === 0
+                  ? 'Included'
+                  : `${fmtMoney(item.rate)}${rateUnit(item.rateType)}`}
+              </Text>
+              <Text style={styles.colTotal}>
+                {item.isIncludedAccessory && item.rate === 0
+                  ? '—'
+                  : item.billableDays == null
+                    ? `${fmtMoney(item.rate)}/day`
+                    : fmtMoney(computeLineTotal(item))}
+              </Text>
             </View>
-            <View style={styles.tableHead} wrap={false} minPresenceAhead={40}>
-              <Text style={styles.colCode}>Item</Text>
-              <Text style={styles.colDesc}>Description</Text>
-              <Text style={styles.colQty}>Qty</Text>
-              <Text style={styles.colDays}>Days</Text>
-              <Text style={styles.colRate}>Rate</Text>
-              <Text style={styles.colTotal}>Total</Text>
-            </View>
-            {items.map((item, idx) => {
-              return (
-                <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
-                  {/* Wrap the inventory code in a View (mirrors colDesc)
-                      so the column acts as a hard layout container.
-                      Without this, a Text whose content is wider than
-                      its width style renders glyphs past the right
-                      edge and over the next cell — the symptom this
-                      patch is fixing. */}
-                  <View style={styles.colCode}>
-                    {/* Capped to a single line. HQ-native codes are slugs
-                        ("VEH--STRAPS--RATCHET") that wrapped to three lines
-                        and set the height of the whole row — three lines of
-                        internal SKU next to a two-word description. */}
-                    <Text style={styles.codeText}>{clientItemCode(item.inventoryCode)}</Text>
-                  </View>
-                  <View style={item.isChild ? styles.colDescChild : styles.colDesc}>
-                    <Text>{item.isChild ? `\u2514  ${item.description}` : item.description}</Text>
-                    {item.qualifier && <Text style={styles.qualifier}>{item.qualifier}</Text>}
-                    {item.notes && item.notes.trim().length > 0 && (
-                      <Text style={styles.qualifier}>{item.notes}</Text>
-                    )}
-                    {/* The line's own window — ONE terse line (see
-                        fmtLineWindow). Pulled 8/29 when it was a date range
-                        plus a "Billable days: N (rental period …)" sentence
-                        under every item; restored 9/1 without the sentence,
-                        because the header no longer carries any date at all
-                        and a line is where a wrong one is worth seeing. */}
-                    {(() => {
-                      const w = fmtLineWindow(item.pickupDate, item.returnDate, quoteYear)
-                      return w ? <Text style={styles.lineWindow}>{w}</Text> : null
-                    })()}
-                  </View>
-                  <Text style={styles.colQty}>{item.quantity}</Text>
-                  <Text style={styles.colDays}>
-                    {item.billableDays ?? 'TBD'}
-                    {item.billableDays != null &&
-                      item.computedDays != null &&
-                      item.billableDays !== item.computedDays && (
-                        <Text style={styles.daysSpan}> / {item.computedDays}</Text>
-                      )}
-                  </Text>
-                  <Text style={styles.colRate}>
-                    {item.isIncludedAccessory && item.rate === 0
-                      ? 'Included'
-                      : `${fmtMoney(item.rate)}${rateUnit(item.rateType)}`}
-                  </Text>
-                  <Text style={styles.colTotal}>
-                    {item.isIncludedAccessory && item.rate === 0
-                      ? '—'
-                      : item.billableDays == null
-                        ? `${fmtMoney(item.rate)}/day`
-                        : fmtMoney(computeLineTotal(item))}
-                  </Text>
-                </View>
-              )
-            })}
-            <View style={styles.subtotalRow}>
-              <Text style={styles.subtotalLabel}>{sectionLabel(dept)} Subtotal</Text>
-              <Text style={styles.subtotalValue}>{fmtMoney(subtotal)}</Text>
-            </View>
-            {/* Department discount line — renders directly under the
-                section subtotal when a DEPARTMENT-scope OrderDiscount
-                applies. Clamped to the section subtotal so the visible
-                amount can never exceed what's being discounted. */}
-            {(() => {
-              const d = (props.discounts ?? []).find((x) => x.scope === 'DEPARTMENT' && x.departmentKey === dept)
-              if (!d) return null
-              const raw = d.type === 'PERCENT' ? subtotal * (d.value / 100) : d.value
-              const amt = Math.round(Math.max(0, Math.min(raw, subtotal)) * 100) / 100
-              if (amt <= 0) return null
-              return (
-                <View style={styles.subtotalRow}>
-                  <Text style={styles.subtotalLabel}>
-                    {discountDisplayLabel({ label: d.label, type: d.type, value: d.value })}
-                  </Text>
-                  <Text style={styles.subtotalValue}>-{fmtMoney(amt)}</Text>
-                </View>
-              )
-            })()}
-          </View>
-        ))}
+          )
+        })}
 
         {/* Discount line items */}
         {discountItems.map((item, idx) => (
@@ -898,9 +820,37 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                 <Text style={styles.totalsLabel}>{isRateCardQuote ? 'Subtotal (dated lines)' : 'Subtotal'}</Text>
                 <Text style={styles.totalsValue}>{fmtMoney(breakdown.rawSubtotal)}</Text>
               </View>
-              {/* Order-scope discount line — sits between Subtotal and
-                  Tax. Dept discounts already rendered under their
-                  section subtotals above. */}
+              {/* DEPARTMENT-scope discounts — these used to render under
+                  their section subtotal, which no longer exists (the
+                  section band was a department title). They still reduce
+                  the grand total, so they MUST stay visible or Subtotal −
+                  Order discount + Tax stops reconciling to Grand Total.
+                  Shown under the discount's own staff-authored label; the
+                  department is not named. Amount comes straight off the
+                  shared breakdown, already clamped to that department's
+                  line subtotal. */}
+              {breakdown.byDepartment
+                .filter((d) => d.discount > 0)
+                .map((d) => {
+                  const row = (props.discounts ?? []).find(
+                    (x) => x.scope === 'DEPARTMENT' && x.departmentKey === d.department
+                  )
+                  return (
+                    <View key={`deptdisc-${d.department}`} style={styles.totalsRow}>
+                      <Text style={styles.totalsLabel}>
+                        {discountDisplayLabel({
+                          label: d.discountLabel,
+                          type: row?.type ?? 'FIXED',
+                          value: row ? row.value : 0,
+                          fallback: 'Discount',
+                        })}
+                      </Text>
+                      <Text style={styles.totalsValue}>-{fmtMoney(d.discount)}</Text>
+                    </View>
+                  )
+                })}
+              {/* Order-scope discount line — sits between the department
+                  discounts and Tax. */}
               {breakdown.orderDiscount > 0 && (
                 <View style={styles.totalsRow}>
                   <Text style={styles.totalsLabel}>
