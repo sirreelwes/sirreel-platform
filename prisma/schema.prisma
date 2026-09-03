@@ -1429,6 +1429,21 @@ model InspectionPhoto {
   contentType  String?  @map("content_type")
   uploadedBy   String?  @map("uploaded_by")
   createdAt    DateTime @default(now()) @map("created_at")
+  /// Which slot of the guided walk-around this photo fills — FRONT,
+  /// DRIVER_SIDE, REAR, PASSENGER_SIDE, INTERIOR, ODOMETER, FUEL_GAUGE,
+  /// or DAMAGE for a close-up. The same slots are shot at check-out and
+  /// check-in so the two can be laid side by side, which is the whole
+  /// point of the position existing (2026-09-02, emulating DamageID).
+  ///
+  /// A plain String, deliberately NOT an enum: an old Prisma client 500s
+  /// on an enum value it has never seen, so adding a slot later would
+  /// mean a deploy dance for what is really just a label. Canonical
+  /// values live in src/lib/fleet/photoPositions.ts.
+  ///
+  /// NULL on every photo taken before the guided capture shipped, and on
+  /// any free-form extra. Render those as "Other" rather than dropping
+  /// them — they are real evidence.
+  position     String?
 
   inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 
@@ -5179,6 +5194,39 @@ model Job {
   /// tells dispatch whether the address they are looking at is fresh.
   reportToUpdatedAt DateTime? @map("report_to_updated_at")
 
+  // ── After-hours pickup / drop-off release ───────────────────────────
+  // What Jose emails as a PDF attachment today ("Afer Hours EQ P:R.pdf",
+  // found in his sent mail 2026-09-02): the lot address, business hours,
+  // the gate code, the storage-container code, and what to do on arrival.
+  // That PDF lands in a client's Gmail as a permanent, forwardable file
+  // with both codes printed on it, and it stays there long after the job
+  // wraps.
+  //
+  // This replaces the attachment with a RELEASE. An agent releases the
+  // after-hours info for this job; the client is emailed a LINK — never
+  // the codes — into their existing token-gated portal session, and the
+  // codes render only on that page. Revoking clears the release and the
+  // page stops answering, which is the one thing an emailed PDF can never
+  // do. Every release, re-send, revoke and client view is audit-logged.
+  //
+  // NOTE FOR WES: the gate code's standing policy (SiteSetting.gateCode,
+  // 2026-08-22) says never on a client-facing surface, reasoning that the
+  // client has the assistant and a named driver has /drive/[token]. This
+  // is narrower than the PDF it replaces, but it IS a widening of that
+  // rule and was made deliberately — say so, or turn it off by leaving
+  // SiteSetting.gateCode out of the payload (see src/lib/afterHours).
+  afterHoursReleasedAt   DateTime? @map("after_hours_released_at")
+  afterHoursReleasedById String?   @map("after_hours_released_by_id")
+  /// Last time the link email actually went out, and to whom. Separate
+  /// from the release itself: an agent releases once and may re-send the
+  /// link three times as a production changes coordinators.
+  afterHoursSentAt       DateTime? @map("after_hours_sent_at")
+  afterHoursSentTo       String?   @map("after_hours_sent_to")
+  /// Optional per-job line from the agent — "your cart is the one tagged
+  /// GOGGLES", "park in the north row". Rendered above the standing
+  /// instructions. Free text: the exceptions are never the same twice.
+  afterHoursNote         String?   @map("after_hours_note") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -5200,6 +5248,9 @@ model Job {
   /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
   subRentals            SubRental[]
   lcdwElection          LcdwElection?
+  /// Narrow after-hours links the client (or an agent) forwarded to a
+  /// driver / PA. See AfterHoursShare — they die with this job's release.
+  afterHoursShares      AfterHoursShare[]
 
   @@index([companyId])
   @@index([status])
@@ -6407,6 +6458,57 @@ model PortalAccess {
   @@map("sr_portal_accesses")
 }
 
+/// A forwarded after-hours link. The client's coordinator hands the run to a
+/// truck driver or a PA at 9pm, and that person needs the gate code and
+/// nothing else.
+///
+/// WHY NOT JUST FORWARD THE PORTAL LINK: a PortalAccess magic link opens the
+/// whole project portal — the quote and its totals, the invoice, the
+/// paperwork, the contacts. Forwarding one to a driver hands a subcontractor
+/// the client's pricing. So the share is its own credential with its own
+/// route (/after-hours/[token]), and that route serves exactly one thing.
+///
+/// Three ways it dies, and all three matter:
+///   1. `expiresAt` — a fixed TTL, because a run is a night, not a quarter.
+///   2. `revokedAt` — someone took it back.
+///   3. the JOB's release is revoked — every share on that job goes dark
+///      with it, which is the property the emailed PDF never had.
+///
+/// Minted by the client from their own portal session, or by staff from the
+/// job page. `sharedByPortalAccessId` / `sharedByUserId` record which, so a
+/// leaked code has a name attached to the link it walked out on.
+model AfterHoursShare {
+  id    String @id @default(uuid())
+  jobId String @map("job_id")
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// 32 random bytes, base64url. The credential — there is no second factor.
+  token String @unique
+
+  /// Who it was sent to. Kept so the client can see their own share list and
+  /// so a re-share to the same driver replaces rather than accumulates.
+  email     String
+  /// "Marco", "the PA" — whatever the sender typed. Greeting only.
+  name      String? @map("recipient_name")
+  /// Free text from the sender, shown above the standing instructions —
+  /// separate from Job.afterHoursNote, which is the AGENT's line.
+  message   String? @db.Text
+
+  sharedByPortalAccessId String? @map("shared_by_portal_access_id")
+  sharedByUserId         String? @map("shared_by_user_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  viewedAt  DateTime? @map("viewed_at")
+  viewCount Int       @default(0) @map("view_count")
+
+  @@index([jobId])
+  @@index([token])
+  @@map("sr_after_hours_shares")
+}
+
 /// One row per hourly health-check run. `services` holds the full per-service
 /// JSON payload returned by /api/admin/health so the /admin/health page can
 /// render a 24h history without re-probing. `alertedAt` is set when the cron
@@ -6817,6 +6919,7 @@ enum PlanyoSyncOutcome {
 enum PlanyoSyncOp {
   CREATE
   UPDATE_DATES
+  UPDATE_UNIT
   UPDATE_QTY
   UPDATE_STATUS
   RELEASE
@@ -6942,6 +7045,20 @@ model SiteSetting {
   gateCode            String?   @map("gate_code")
   gateCodeUpdatedAt   DateTime? @map("gate_code_updated_at")
   gateCodeUpdatedById String?   @map("gate_code_updated_by_id")
+
+  /// AFTER-HOURS STORAGE CONTAINER keypad code — the second half of the
+  /// after-hours arrangement the gate code opens. The gate gets a driver
+  /// onto the lot; this opens the container their gear is in (or goes back
+  /// into). Same recording semantics as gateCode: this field only RECORDS
+  /// what is physically programmed, and saving here changes no hardware.
+  ///
+  /// RELEASE POLICY: released only on the per-job after-hours page
+  /// (/portal/job/[slug]/after-hours), and only after an agent has
+  /// explicitly released it for that job. See Job.afterHoursReleasedAt for
+  /// why that is tighter than where this code was actually living.
+  containerCode            String?   @map("container_code")
+  containerCodeUpdatedAt   DateTime? @map("container_code_updated_at")
+  containerCodeUpdatedById String?   @map("container_code_updated_by_id")
 
   /// Master switch for the public "Who we are" team section on /contact.
   /// Off until the roster + photos are set in /admin/who-we-are.
@@ -7508,11 +7625,29 @@ model RwInvoiceReview {
   evidence      Json?
   evidenceCount Int     @default(0) @map("evidence_count")
 
+  /// Reviewed and set aside — off THIS desk, still in AR.
+  ///
+  /// Deliberately weaker than the two neighbouring actions, because the desk
+  /// needs somewhere to put "I have looked at this and there is nothing to do
+  /// today" that does not lie about the money. Marking paid removes it from
+  /// Outstanding (it asserts the money arrived); writing it off puts it in the
+  /// bad-debt ledger at tax time and is Wes-only. Dismissing does neither — the
+  /// balance stays owed and stays on the aging review; it just stops occupying
+  /// the reading room.
+  ///
+  /// Without this the only ways to clear a row were to claim payment or to
+  /// write it off, and a desk whose only exits overstate what happened is a
+  /// desk that will be used to overstate what happened.
+  dismissedAt     DateTime? @map("dismissed_at")
+  dismissedBy     String?   @map("dismissed_by")
+  dismissedReason String?   @map("dismissed_reason")
+
   scannedAt DateTime? @map("scanned_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@index([aiVerdict])
+  @@index([dismissedAt])
   @@map("sr_rw_invoice_reviews")
 }
 

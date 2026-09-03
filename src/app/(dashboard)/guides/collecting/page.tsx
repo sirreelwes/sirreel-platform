@@ -98,6 +98,14 @@ export default function CollectingGuidePage() {
             the balance, the chase list and the end-of-day report are all wrong.
           </p>
           <p className="mt-2 text-[14px] leading-relaxed text-lt-fg2">
+            When an invoice looks wrong rather than just unpaid, the{' '}
+            <Link href="/collections/rw-review" className="font-semibold underline underline-offset-2">
+              aging review
+            </Link>{' '}
+            has the emails behind it and three ways out: <strong>Paid</strong>,{' '}
+            <strong>Set aside</strong>, or a write-off that only Wes can make.
+          </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-lt-fg2">
             The one rule: <strong className="text-lt-fg">never put a 3% card fee on an invoice.</strong>{' '}
             CardPointe adds that itself at the moment of charge. Typing it onto the invoice as well bills
             the client twice for the same fee.
@@ -206,7 +214,73 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">3 · Charge the card on file</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">3 · Read the ones that look wrong</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            <Link href="/collections/rw-review" className="font-semibold underline underline-offset-2">
+              Aging review (RW)
+            </Link>{' '}
+            — every open invoice with the emails behind it, oldest first, and a read of what those
+            emails appear to say.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Why this page exists">
+              <p>
+                Most open invoices have no job in HQ behind them — no order, no contacts, no history.
+                The email trail is the only context there is, so the page puts it in front of you
+                instead of making you go looking.
+              </p>
+            </Step>
+            <Step n={2} title="Start with “Needs a look”">
+              <p>
+                That filter hides the ordinary debt and leaves the ones that are something else: an
+                invoice that looks already paid, a client disputing a line, a balance riding on an
+                insurance claim. Those are the ones where chasing harder is the wrong move.
+              </p>
+            </Step>
+            <Step n={3} title="Read the summary, then read the emails under it">
+              <p>
+                The summary is an AI reading of the thread, with its confidence. It is a place to
+                start, not a fact — the emails it read are printed directly underneath so you can
+                disagree in about ten seconds. If it is wrong, it is wrong in public.
+              </p>
+              <Note tone="warn" label="“Looks paid” means go and check">
+                It means somebody said in an email that money was sent. It does not mean the money is
+                in our account. Match it against the bank before you clear it.
+              </Note>
+            </Step>
+            <Step n={4} title="Then pick one of three exits">
+              <p>
+                <strong>Paid</strong> — the money arrived. Clears it from collections and from
+                Outstanding. RentalWorks is not touched and it can be undone.
+              </p>
+              <p>
+                <strong>Set aside</strong> — you have read it and there is nothing to do today. It
+                stays owed, stays in Outstanding, and stays on the aging review; it just leaves this
+                desk. Use this one freely.
+              </p>
+              <p>
+                <strong>Write off</strong> — we are never getting it. That one lives on the{' '}
+                <Link href="/collections/aging-review" className="font-semibold underline underline-offset-2">
+                  aging review
+                </Link>{' '}
+                and is Wes only, because it lands in the bad-debt ledger at tax time.
+              </p>
+              <Note tone="plain" label="Never claim paid to clear a row">
+                If you just want it off the list, that is what Set aside is for. Marking paid moves
+                the AR figure the company reports.
+              </Note>
+            </Step>
+            <Step n={5} title="Leave a note whenever you learn something">
+              <p>
+                Who you spoke to, what they said, what happens next. Notes survive every re-read of
+                the emails, and they are what stop the next person starting from nothing.
+              </p>
+            </Step>
+          </ol>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">4 · Charge the card on file</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             For any invoice marked Sent or Partial where the client authorized a card through their portal.
           </p>
@@ -221,7 +295,7 @@ export default function CollectingGuidePage() {
             </Step>
             <Step n={3} title="Check the card block">
               <p>A panel headed <strong>💳 Card on file</strong> shows the card type, last four and cardholder.
-                No panel means no card — use section 4.</p>
+                No panel means no card — use section 5.</p>
               <Note tone="warn" label="Read the preference line">
                 If it says the card is <strong>security only</strong>, the client elected to pay by check or bank
                 transfer. Charge it only as a fallback on an unpaid balance, and tell them first.
@@ -260,7 +334,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">4 · Ask for a card</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">5 · Ask for a card</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             When no card is on file. The client enters it themselves — we never handle the number.
           </p>
@@ -278,13 +352,13 @@ export default function CollectingGuidePage() {
                 reaches SirReel, and you only ever see the last four.</p>
             </Step>
             <Step n={4} title="Then charge it">
-              <p>Once the card shows on the job, go back to section 3. Nothing needs re-keying.</p>
+              <p>Once the card shows on the job, go back to section 4. Nothing needs re-keying.</p>
             </Step>
           </ol>
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">5 · Bank transfer, wire or Zelle</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Bank transfer, wire or Zelle</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             No processing fee. Usually the better path on large invoices, and often what a production&rsquo;s
             accounts-payable team prefers.
@@ -311,7 +385,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Close the day</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · Close the day</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             The end-of-day summary that goes to Dani and Wes. HQ works out the figures; you check them
             and add the sentence they actually read.
@@ -356,7 +430,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · What your login opens</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">8 · What your login opens</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             Your menu is deliberately short. It is not a cut-down version of someone else&rsquo;s — every
             entry is there because a billing question needs it, and the point is that you can settle most
@@ -398,7 +472,7 @@ export default function CollectingGuidePage() {
           <Note tone="warn" label="One entry that does not work yet">
             <strong>Payment Info</strong> is in your menu but the page is admin-only, so it will refuse
             you. You do not need it: the bank details clients need are already on their own portal, with
-            a button to send them to accounts payable — section 5. Changing those details is Wes&rsquo;s
+            a button to send them to accounts payable — section 6. Changing those details is Wes&rsquo;s
             job by design.
           </Note>
         </section>
@@ -419,7 +493,7 @@ export default function CollectingGuidePage() {
               </thead>
               <tbody className="text-lt-fg2">
                 {[
-                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 4.'],
+                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 5.'],
                   ['Card declined', 'The bank refused it — limit, expiry, or a fraud hold.', 'Ask the client to call their bank, or take another card.'],
                   ['Payment gateway unreachable', 'Our side could not reach CardPointe.', 'Wait and retry. If it persists, flag it — no card is at fault.'],
                   ['Invoice is not payable', 'Already paid, void, or still a draft.', 'Check the status; a draft has to be sent first.'],

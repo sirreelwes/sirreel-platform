@@ -75,6 +75,9 @@ export async function GET() {
       evidence: (r?.evidence as unknown[] | null) ?? [],
       evidenceCount: r?.evidenceCount ?? 0,
       scannedAt: r?.scannedAt ?? null,
+      dismissedAt: r?.dismissedAt ?? null,
+      dismissedBy: r?.dismissedBy ?? null,
+      dismissedReason: r?.dismissedReason ?? null,
     }
   })
 
@@ -84,8 +87,11 @@ export async function GET() {
     totals: {
       count: rows.length,
       remaining: rows.reduce((s, r) => s + r.remaining, 0),
-      unscanned: rows.filter((r) => !r.scannedAt).length,
+      unscanned: rows.filter((r) => !r.scannedAt && !r.dismissedAt).length,
       noJob: rows.filter((r) => !r.job).length,
+      // Dismissed rows still count toward `remaining` — they are still owed.
+      // Only the desk stops showing them.
+      dismissed: rows.filter((r) => r.dismissedAt).length,
     },
   })
 }

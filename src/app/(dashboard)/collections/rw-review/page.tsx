@@ -58,6 +58,9 @@ interface Row {
   evidence: EvidenceHit[]
   evidenceCount: number
   scannedAt: string | null
+  dismissedAt: string | null
+  dismissedBy: string | null
+  dismissedReason: string | null
 }
 
 const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -87,11 +90,12 @@ export default function RwReviewPage() {
   const [scanning, setScanning] = useState(false)
   const [savingNote, setSavingNote] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
-  const [filter, setFilter] = useState<'all' | 'flagged' | 'unscanned' | 'nojob'>('all')
+  const [filter, setFilter] = useState<'all' | 'flagged' | 'unscanned' | 'nojob' | 'dismissed'>('all')
   // Date first by default (Wes, 2026-09-02: "organize them all by date").
   // Oldest invoice at the top — the aging worklist reading.
   const [sort, setSort] = useState<'date' | 'attention' | 'amount'>('date')
   const [marking, setMarking] = useState<string | null>(null)
+  const [dismissing, setDismissing] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch('/api/collections/rw-review', { cache: 'no-store' })
@@ -148,6 +152,31 @@ export default function RwReviewPage() {
     }
   }
 
+  /**
+   * Set aside without claiming anything. The balance stays owed and stays in
+   * Outstanding — see the route for why this is deliberately the weak action.
+   */
+  const dismiss = async (r: Row, undo = false) => {
+    setDismissing(r.rwInvoiceId)
+    try {
+      await fetch(
+        undo
+          ? `/api/collections/rw-review/dismiss?rwInvoiceId=${encodeURIComponent(r.rwInvoiceId)}`
+          : '/api/collections/rw-review/dismiss',
+        undo
+          ? { method: 'DELETE' }
+          : {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId }),
+            },
+      )
+      await load()
+    } finally {
+      setDismissing(null)
+    }
+  }
+
   const saveNote = async (rwInvoiceId: string) => {
     setSavingNote(rwInvoiceId)
     try {
@@ -163,12 +192,16 @@ export default function RwReviewPage() {
   }
 
   const visible = (rows ?? [])
-    .filter((r) =>
-      filter === 'flagged' ? INTERESTING.has(r.aiVerdict ?? '')
-        : filter === 'unscanned' ? !r.scannedAt
-          : filter === 'nojob' ? !r.job
-            : true,
-    )
+    .filter((r) => {
+      // Dismissed rows are hidden everywhere except their own filter — the
+      // point of dismissing is that the desk stops showing them.
+      if (filter === 'dismissed') return !!r.dismissedAt
+      if (r.dismissedAt) return false
+      if (filter === 'flagged') return INTERESTING.has(r.aiVerdict ?? '')
+      if (filter === 'unscanned') return !r.scannedAt
+      if (filter === 'nojob') return !r.job
+      return true
+    })
     .sort((a, b) => {
       if (sort === 'amount') return b.remaining - a.remaining
       if (sort === 'attention') {
@@ -233,6 +266,7 @@ export default function RwReviewPage() {
               ['flagged', 'Needs a look'],
               ['nojob', 'No HQ job'],
               ['unscanned', 'Not yet read'],
+              ['dismissed', 'Set aside'],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -276,11 +310,16 @@ export default function RwReviewPage() {
               const isOpen = openId === r.rwInvoiceId
               return (
                 <div key={r.rwInvoiceId} className="rounded-xl border border-zinc-200 bg-white">
-                  <button
-                    onClick={() => setOpenId(isOpen ? null : r.rwInvoiceId)}
-                    className="w-full text-left p-3.5 flex items-start gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
+                  <div className="p-3.5 flex items-start gap-3">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setOpenId(isOpen ? null : r.rwInvoiceId)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(isOpen ? null : r.rwInvoiceId) }
+                      }}
+                      className="min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 rounded"
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[14px] font-semibold text-zinc-900">{r.customerName ?? 'Unknown client'}</span>
                         {r.dealName && <span className="text-[13px] text-zinc-500">· {r.dealName}</span>}
@@ -298,6 +337,14 @@ export default function RwReviewPage() {
                           </span>
                         )}
                         {r.note && <span title="Has a note">📝</span>}
+                        {r.dismissedAt && (
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-zinc-300 bg-zinc-100 text-zinc-500"
+                            title={`Set aside by ${r.dismissedBy ?? 'someone'} — still owed, still in Outstanding.`}
+                          >
+                            set aside
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 text-[12px] text-zinc-500">
                         <span className="font-semibold text-zinc-700 tabular-nums">
@@ -312,11 +359,50 @@ export default function RwReviewPage() {
                         <p className="mt-1.5 text-[12.5px] leading-snug text-zinc-600 line-clamp-2">{r.aiSummary}</p>
                       )}
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="shrink-0 text-right">
                       <div className="text-[15px] font-bold text-amber-700 tabular-nums">{usd(r.remaining)}</div>
-                      <div className="text-[11px] text-zinc-400">{isOpen ? 'close' : 'open'}</div>
+                      {/* Both exits on the row itself — Wes, 2026-09-02: "just
+                          mark them paid or dismiss them". Making someone expand
+                          a row to clear it is what turns a 76-row list into an
+                          afternoon. */}
+                      <div className="mt-1.5 flex items-center justify-end gap-1">
+                        {r.dismissedAt ? (
+                          <button
+                            onClick={() => void dismiss(r, true)}
+                            disabled={dismissing === r.rwInvoiceId}
+                            className="px-2 py-1 rounded-md text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 disabled:opacity-40"
+                          >
+                            {dismissing === r.rwInvoiceId ? '…' : 'Put back'}
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => void markPaid(r)}
+                              disabled={marking === r.rwInvoiceId}
+                              title="Money arrived. Clears it from HQ collections and from Outstanding. RentalWorks untouched, and reversible."
+                              className="px-2 py-1 rounded-md border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-[11px] font-semibold text-emerald-700"
+                            >
+                              {marking === r.rwInvoiceId ? '…' : 'Paid'}
+                            </button>
+                            <button
+                              onClick={() => void dismiss(r)}
+                              disabled={dismissing === r.rwInvoiceId}
+                              title="Nothing to do today. Stays owed and stays in Outstanding — it just leaves this desk."
+                              className="px-2 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50 disabled:opacity-40 text-[11px] font-semibold text-zinc-600"
+                            >
+                              {dismissing === r.rwInvoiceId ? '…' : 'Set aside'}
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => setOpenId(isOpen ? null : r.rwInvoiceId)}
+                          className="px-1.5 py-1 rounded-md text-[11px] text-zinc-400 hover:text-zinc-700"
+                        >
+                          {isOpen ? 'close' : 'open'}
+                        </button>
+                      </div>
                     </div>
-                  </button>
+                  </div>
 
                   {isOpen && (
                     <div className="border-t border-zinc-100 p-3.5 space-y-3">
