@@ -14,13 +14,19 @@
  * move here and `instructions.ts` re-exports them. One definition, and a
  * change to the lot's hours still lands everywhere at once.
  *
- * ── Saturday, and why it says 7:30 ─────────────────────────────────────
- * The flyer this replaced said 7:30 AM, and every after-hours surface has
- * been telling clients 7:30 AM since. Jose's 2026-09-03 quote said 7:00 AM.
- * One of the two is wrong and it is not safe to guess: opening half an hour
- * later than a client was told is a driver sitting at a locked gate. Kept at
- * the flyer's 7:30 pending Wes's ruling — change it HERE and the quote PDF,
- * the portal, and the after-hours packet all follow.
+ * ── Saturday is 7:30, and it has been asked twice ─────────────────────
+ * Jose's 2026-09-03 quote said the lot opens 7:00 AM on Saturday. Every
+ * after-hours surface says 7:30 AM, inherited from the flyer these values
+ * replaced. Raised with Wes on 2026-09-03; his ruling is 7:30 — the quote
+ * was the wrong one. Left recorded because the discrepancy is not obvious
+ * from either number on its own, and the next person to notice a 7:00 in
+ * an old quote should not have to re-open it.
+ *
+ * Not to be confused with AFTER_HOURS_SUPPORT.staffedHours, which is when a
+ * human answers the phone (7:30 AM) and is a different fact about a
+ * different thing. That the two currently agree is a coincidence — the gate
+ * opening and the phone being answered are not required to match, so do not
+ * "consolidate" them.
  */
 
 /** Yard hours, as printed on the flyer this replaced. */
