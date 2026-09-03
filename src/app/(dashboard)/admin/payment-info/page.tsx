@@ -7,7 +7,7 @@
  * on any public surface; the PDFs have no public route — they're
  * emailed only.
  *
- * READ is ADMIN. WRITING is Wes alone (Wes 2026-09-03: "payment
+ * READ is ADMIN + BILLING (Ana sends these to clients). WRITING is Wes alone (Wes 2026-09-03: "payment
  * information should not be changeable by anyone except Wes") — the API
  * enforces it and reports `canEdit` on GET so this page renders
  * read-only for Dani rather than offering buttons that 403.

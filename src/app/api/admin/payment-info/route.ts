@@ -1,7 +1,7 @@
 /**
  * /api/admin/payment-info — Wes-managed payment/ACH details.
  *
- * READ (GET) is requireAdmin. WRITES (PUT / POST / DELETE) are narrower:
+ * READ (GET) is ADMIN + BILLING. WRITES (PUT / POST / DELETE) are narrower:
  * requirePaymentInfoEditor, an email allowlist that is Wes alone (Wes
  * 2026-09-03, after a call with Billing: "payment information should not
  * be changeable by anyone except Wes"). requireAdmin was not enough —
@@ -25,7 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { del } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/auth-admin'
+import { getCurrentUser, requireAdmin } from '@/lib/auth-admin'
 import { isPaymentInfoEditor } from '@/lib/payments/editor'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
 import { validatePaymentDetails } from '@/lib/payments/paymentDetails'
@@ -33,6 +33,25 @@ import { validatePaymentDetails } from '@/lib/payments/paymentDetails'
 export const dynamic = 'force-dynamic'
 
 const SINGLETON = 'singleton'
+
+/**
+ * Read gate. ADMIN plus BILLING (Ana) — Wes 2026-09-03: "yes, let Ana read
+ * the payment details." She is the person who answers "where do we send
+ * it", and until now the Payment Info tab in her own nav 403'd. Reading is
+ * deliberately wider than writing; see requirePaymentInfoEditor below.
+ *
+ * Role check rather than an allowlist on purpose: this one tracks the JOB
+ * (whoever holds Collections needs the numbers), where the write gate
+ * tracks a PERSON.
+ */
+async function requirePaymentInfoReader() {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  if (user.role !== 'ADMIN' && user.role !== 'BILLING') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+  return { user }
+}
 
 /**
  * Write gate: admin FIRST (so a signed-out or wrong-role caller gets the
@@ -59,7 +78,7 @@ const SLOTS = {
 type SlotKey = keyof typeof SLOTS
 
 export async function GET() {
-  const gate = await requireAdmin()
+  const gate = await requirePaymentInfoReader()
   if (gate instanceof NextResponse) return gate
   const canEdit = isPaymentInfoEditor(gate.user.email)
 
