@@ -21,15 +21,15 @@
  * A blast to everyone teaches everyone to ignore it. Each blocker goes
  * to the desk that can actually clear it:
  *
- *   coi / sign / card / driver — all four are things the CLIENT has to
- *       give us (a certificate, a signature, a card, the name of whoever
- *       is driving). Chasing a client is sales work.  → sales + admin
- *   gear — which physical unit is assigned to the booking. Fleet's
- *       call.                                          → Hugo + Julian
+ * coi / sign / card / driver — all four are things the CLIENT has to
+ * give us (a certificate, a signature, a card, the name of whoever
+ * is driving). Chasing a client is sales work.  → sales + admin
+ * gear — which physical unit is assigned to the booking. Fleet's
+ * call. → Hugo + Julian
  *
- *   staging — the ORDER's pick list. Wes, 2026-09-01, folding this in:
- *       "if it's strictly related to orders that are going out, it would
- *       be hugo and warehouse."      → Hugo + warehouse
+ * staging — the ORDER's pick list. Wes, 2026-09-01, folding this in:
+ * "if it's strictly related to orders that are going out, it would
+ * be hugo and warehouse." → Hugo + warehouse
  *
  * Staging is deliberately NOT a BlockerKey. The five job checks answer
  * "may this go out"; the pick list answers "has anyone pulled it", which
@@ -136,11 +136,11 @@ export function withinEscalationWindow(daysToPickup: number | null): boolean {
  * bands. A COI three weeks out is a to-do; the same COI missing tomorrow
  * is someone driving off the lot uninsured, or not driving at all.
  *
- *   overdue  — pickup has passed and it still is not ready
- *   today    — leaves today
- *   urgent   — 1–2 days
- *   soon     — 3–6 days
- *   null     — 7+ days out, or no date: no escalation yet
+ * overdue  — pickup has passed and it still is not ready
+ * today — leaves today
+ * urgent — 1–2 days
+ * soon — 3–6 days
+ * null — 7+ days out, or no date: no escalation yet
  */
 export type EscalationTier = 'overdue' | 'today' | 'urgent' | 'soon'
 
@@ -159,10 +159,10 @@ export const TIER_RANK: Record<EscalationTier, number> = {
 
 /** Subject prefix — the tier has to survive a phone lock screen. */
 export const TIER_PREFIX: Record<EscalationTier, string> = {
-  overdue: '🔴 PAST PICKUP',
-  today: '🔴 TODAY',
-  urgent: '🟠 URGENT',
-  soon: '🟡',
+  overdue: 'PAST PICKUP',
+  today: 'TODAY',
+  urgent: 'URGENT',
+  soon: 'SOON',
 }
 
 /**

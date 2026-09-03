@@ -16,15 +16,15 @@ ProScout/VTR: 2/3 available, 1 booked
 Studios: 8/10 available, 2 booked
 Other: 19 available`;
 
-const MAINT_LIST = `🔧 Cube #24(A): Bad motor — long-term @ High Tech
-🔧 Cube #8: Transmission @ High Tech
-🔧 Cube #15: Oil/Reverse sticky
-🔧 Sprinter #2: Engine inspect
-🔧 SC #38: Check engine light
-🔧 Nissan #1: Motor mounts @ Dealership
-🔧 Pop #3: Transmission — long-term
-🔧 Pop #1: Interior lights
-🔧 Cube #9: Battery issue`;
+const MAINT_LIST = `Cube #24(A): Bad motor — long-term @ High Tech
+Cube #8: Transmission @ High Tech
+Cube #15: Oil/Reverse sticky
+Sprinter #2: Engine inspect
+SC #38: Check engine light
+Nissan #1: Motor mounts @ Dealership
+Pop #3: Transmission — long-term
+Pop #1: Interior lights
+Cube #9: Battery issue`;
 
 const BOOKINGS_LIST = `Cinepower & Light — 6× Cube — Active — Jose
 Justin K Productions — 4× Cube — Confirmed — Oliver

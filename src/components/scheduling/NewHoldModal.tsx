@@ -25,7 +25,7 @@
  * the booking — the unit has to come off the board NOW — so Company and
  * Job are OPTIONAL here. Submitting without them creates an INCOMPLETE
  * hold that carries its own to-do list (src/lib/scheduling/infoGaps.ts);
- * the gantt flags it with a ⚠ triangle until an agent finishes it. The
+ * the gantt flags it with a warning triangle until an agent finishes it. The
  * same amber panel carries "an Order will be attached", a third to-do the
  * agent can declare up front.
  *
@@ -43,6 +43,7 @@ import { ContactPicker, type ContactPickerValue } from '@/components/shared/Cont
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
+import { AlertTriangle, Check } from 'lucide-react'
 
 interface AvailabilitySummary {
   serviceableCount: number
@@ -445,7 +446,7 @@ export function NewHoldModal({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center space-y-3">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-600 text-xl">✓</div>
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-600 text-xl"><Check size={20} aria-hidden /></div>
           <h2 className="text-lg font-semibold text-zinc-900">Hold created</h2>
           <p className="text-sm text-zinc-600">{heldNotice.message}</p>
           <button
@@ -670,7 +671,7 @@ export function NewHoldModal({
             </p>
           </div>
 
-          {/* Call-in to-do list. Mirrors what the gantt's ⚠ triangle will
+          {/* Call-in to-do list. Mirrors what the gantt's warning triangle will
               show on this reservation: what is still missing, plus the
               agent's own declaration that an Order is coming. */}
           <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
@@ -691,13 +692,13 @@ export function NewHoldModal({
 
             {pendingGaps.length > 0 ? (
               <div className="flex items-start gap-2 border-t border-amber-200 pt-2">
-                <span aria-hidden className="text-amber-600 text-base leading-none mt-0.5">⚠</span>
+                <span aria-hidden className="text-amber-600 text-base leading-none mt-0.5"><AlertTriangle size={16} aria-hidden /></span>
                 <div className="text-[11px] text-amber-800">
                   <span className="font-semibold">
                     Incomplete — {pendingGaps.map((g) => g.label).join(', ')}
                   </span>
                   <span className="block">
-                    You can still create the hold now; the reservation carries a ⚠ on the board until
+                    You can still create the hold now; the reservation carries a warning on the board until
                     someone fills this in.
                   </span>
                 </div>

@@ -9,6 +9,7 @@ import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWid
 import DaniDashboard from '@/components/dashboard/DaniDashboard';
 import { ThankYousToSendWidget } from '@/components/orders/ThankYousToSendWidget';
 import { WeeklyCandidWidget } from '@/components/orders/WeeklyCandidWidget';
+import { Building2, Camera, Clapperboard, Radio, Sparkles, Truck } from 'lucide-react';
 
 const ADMIN_DASHBOARD_USERS = ['Wes', 'Dani Novoa'];
 const SALES_USERS = ['Jose Pacheco', 'Oliver Carlson'];
@@ -89,15 +90,15 @@ function AdminDashboard({ userName }: { userName: string }) {
   ).length;
 
   const FLEET = [
-    { cat: 'Cube Truck', short: 'Cube', total: 41, out: planyoUnits.length ? countOut('cube') : 19, maint: 4, rate: 175, color: '#3b82f6', icon: '🚛' },
-    { cat: 'Cargo Van w/ LG', short: 'Cargo', total: 30, out: planyoUnits.length ? countOut('cargo') : 14, maint: 4, rate: 200, color: '#8b5cf6', icon: '🚐' },
-    { cat: 'Cargo Van w/o LG', short: 'Cargo (no LG)', total: 8, out: planyoUnits.length ? countOut('cargo') : 3, maint: 0, rate: 150, color: '#a78bfa', icon: '🚐' },
-    { cat: 'Passenger Van', short: 'Pass Van', total: 10, out: planyoUnits.length ? countOut('pass') : 4, maint: 1, rate: 175, color: '#06b6d4', icon: '🚌' },
-    { cat: 'PopVan', short: 'PopVan', total: 9, out: planyoUnits.length ? countOut('pop') : 3, maint: 2, rate: 400, color: '#f59e0b', icon: '🎬' },
-    { cat: 'Camera Cube', short: 'Cam Cube', total: 7, out: planyoUnits.length ? countOut('cam') : 2, maint: 0, rate: 200, color: '#ec4899', icon: '📷' },
-    { cat: 'DLUX', short: 'DLUX', total: 8, out: planyoUnits.length ? countOut('dlux') : 4, maint: 0, rate: 450, color: '#10b981', icon: '✨' },
-    { cat: 'ProScout/VTR', short: 'Scout', total: 3, out: planyoUnits.length ? countOut('scout') : 1, maint: 0, rate: 450, color: '#f97316', icon: '📡' },
-    { cat: 'Studios', short: 'Studios', total: 10, out: planyoUnits.length ? countOut('studio') : 4, maint: 0, rate: 3000, color: '#6366f1', icon: '🏢' },
+    { cat: 'Cube Truck', short: 'Cube', total: 41, out: planyoUnits.length ? countOut('cube') : 19, maint: 4, rate: 175, color: '#3b82f6', icon: <Truck size={14} aria-hidden /> },
+    { cat: 'Cargo Van w/ LG', short: 'Cargo', total: 30, out: planyoUnits.length ? countOut('cargo') : 14, maint: 4, rate: 200, color: '#8b5cf6', icon: <Truck size={14} aria-hidden /> },
+    { cat: 'Cargo Van w/o LG', short: 'Cargo (no LG)', total: 8, out: planyoUnits.length ? countOut('cargo') : 3, maint: 0, rate: 150, color: '#a78bfa', icon: <Truck size={14} aria-hidden /> },
+    { cat: 'Passenger Van', short: 'Pass Van', total: 10, out: planyoUnits.length ? countOut('pass') : 4, maint: 1, rate: 175, color: '#06b6d4', icon: <Truck size={14} aria-hidden /> },
+    { cat: 'PopVan', short: 'PopVan', total: 9, out: planyoUnits.length ? countOut('pop') : 3, maint: 2, rate: 400, color: '#f59e0b', icon: <Clapperboard size={14} aria-hidden /> },
+    { cat: 'Camera Cube', short: 'Cam Cube', total: 7, out: planyoUnits.length ? countOut('cam') : 2, maint: 0, rate: 200, color: '#ec4899', icon: <Camera size={14} aria-hidden /> },
+    { cat: 'DLUX', short: 'DLUX', total: 8, out: planyoUnits.length ? countOut('dlux') : 4, maint: 0, rate: 450, color: '#10b981', icon: <Sparkles size={14} aria-hidden /> },
+    { cat: 'ProScout/VTR', short: 'Scout', total: 3, out: planyoUnits.length ? countOut('scout') : 1, maint: 0, rate: 450, color: '#f97316', icon: <Radio size={14} aria-hidden /> },
+    { cat: 'Studios', short: 'Studios', total: 10, out: planyoUnits.length ? countOut('studio') : 4, maint: 0, rate: 3000, color: '#6366f1', icon: <Building2 size={14} aria-hidden /> },
   ];
   const totalUnits = FLEET.reduce((s, f) => s + f.total, 0);
   const totalOut = FLEET.reduce((s, f) => s + f.out, 0);
@@ -226,16 +227,16 @@ function AdminDashboard({ userName }: { userName: string }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{greeting}, {userName.split(' ')[0]} 👋</h1>
+          <h1 className="text-xl font-bold text-gray-900">{greeting}, {userName.split(' ')[0]}</h1>
           <p className="text-[12px] text-gray-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · SirReel HQ</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px]">
-            <span className="text-amber-600 font-bold">⚡ {agentAlerts.length > 0 ? `${agentAlerts.reduce((s,a) => s + a.count, 0)} unanswered emails` : 'All caught up'}</span>
+            <span className="text-amber-600 font-bold">{agentAlerts.length > 0 ? `${agentAlerts.reduce((s,a) => s + a.count, 0)} unanswered emails` : 'All caught up'}</span>
           </div>
           {rwConnected && (
             <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">
-              🔴 Live · RentalWorks
+              <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> Live · RentalWorks
             </div>
           )}
         </div>
@@ -351,7 +352,7 @@ function AdminDashboard({ userName }: { userName: string }) {
 
         {/* Needs Attention — live alerts + team response */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚡ Needs Attention</div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Needs Attention</div>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
 
             {/* System alerts */}
@@ -365,7 +366,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                     <div className={`font-bold flex items-center gap-1 ${
                       alert.severity === 'critical' ? 'text-red-700' :
                       alert.severity === 'high' ? 'text-amber-700' : 'text-gray-700'}`}>
-                      {alert.severity === 'critical' ? '🔴' : alert.severity === 'high' ? '🟡' : '⚪'}
+                      {alert.severity === 'critical' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> : alert.severity === 'high' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> : <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-zinc-300" />}
                       {alert.link ? (
                         <a href={alert.link} className="hover:underline">{alert.title}</a>
                       ) : alert.title}
@@ -410,7 +411,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                       a.severity === 'critical' ? 'bg-red-50 text-red-700' :
                       a.severity === 'high' ? 'bg-amber-50 text-amber-700' :
                       'bg-gray-50 text-gray-600'}`}>
-                    <span className="font-bold">{a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟡' : '⚪'} {a.agent}</span>
+                    <span className="font-bold">{a.severity === 'critical' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> : a.severity === 'high' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> : <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-zinc-300" />} {a.agent}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-bold">{a.count} unanswered</span>
                       <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
@@ -458,7 +459,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             })}
 
             {alerts.length === 0 && agentAlerts.length === 0 && (
-              <div className="text-[11px] text-gray-400 py-4 text-center">✅ All caught up</div>
+              <div className="text-[11px] text-gray-400 py-4 text-center">All caught up</div>
             )}
           </div>
         </div>

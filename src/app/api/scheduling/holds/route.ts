@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
           booking: result.booking,
           bookingItem: result.bookingItem,
           // What the agent still owes on this reservation (empty when
-          // the hold was created complete). Drives the ⚠ triangle.
+          // the hold was created complete). Drives the triangle.
           infoGaps: bookingInfoGaps({
             companyId: result.booking.companyId,
             jobId: result.booking.jobId,

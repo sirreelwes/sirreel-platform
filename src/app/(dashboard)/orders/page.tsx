@@ -196,7 +196,7 @@ export default function OrdersPage() {
               onClick={() => router.push("/orders/new")}
               className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"
             >
-              ✨ New Order
+              New Order
             </button>
           </div>
         </div>

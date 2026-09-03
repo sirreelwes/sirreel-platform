@@ -151,7 +151,7 @@ export function CounterProposalEmail({
           onClick={copyToClipboard}
           className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold rounded-lg"
         >
-          {copied ? 'Copied ✓' : 'Copy email'}
+          {copied ? 'Copied' : 'Copy email'}
         </button>
       </div>
     </div>

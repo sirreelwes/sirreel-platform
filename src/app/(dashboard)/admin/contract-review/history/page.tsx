@@ -100,7 +100,7 @@ export default function ContractReviewHistoryPage() {
       {orphanCount > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
           <div className="text-[12px] text-amber-800">
-            ⚠️ <span className="font-semibold">{orphanCount}</span> {orphanCount === 1 ? 'review is' : 'reviews are'} not linked to a Job.
+            <span className="font-semibold">{orphanCount}</span> {orphanCount === 1 ? 'review is' : 'reviews are'} not linked to a Job.
           </div>
           {!orphansOnly && (
             <button

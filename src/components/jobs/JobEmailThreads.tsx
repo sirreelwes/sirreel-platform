@@ -158,7 +158,7 @@ export function JobEmailThreads({ jobId, tone = 'dark' }: { jobId: string; tone?
                           {m.bodyText || m.snippet || '(no preview)'}
                         </p>
                         {m.attachmentCount > 0 && (
-                          <div className={`mt-1 text-[10px] ${T.meta}`}>📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</div>
+                          <div className={`mt-1 text-[10px] ${T.meta}`}>{m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</div>
                         )}
                       </div>
                     )

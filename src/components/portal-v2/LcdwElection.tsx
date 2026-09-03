@@ -104,7 +104,7 @@ export function LcdwElection({
         {coverage!.covered.length > 0 ? (
           <ul className="space-y-0.5 text-gray-700">
             {coverage!.covered.map((c) => (
-              <li key={c}>✓ {c} — covered</li>
+              <li key={c}>{c} — covered</li>
             ))}
           </ul>
         ) : (

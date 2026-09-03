@@ -17,6 +17,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { notifyJobsChanged } from '@/components/jobs/JobsListProvider'
+import { X } from 'lucide-react'
 
 interface CompanyHit {
   id: string
@@ -99,7 +100,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
       </button>
       {confirmation && (
         <span className="ml-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
-          ✓ {confirmation}
+          {confirmation}
         </span>
       )}
 
@@ -111,7 +112,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
                 <h3 className="text-lg font-bold text-gray-900">New Job</h3>
                 <p className="text-[11px] text-gray-400 mt-0.5">Enter what you know — we&rsquo;ll check for an existing Job first.</p>
               </div>
-              <button onClick={reset} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={reset} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
             </div>
             <div className="space-y-3">
               <div>
@@ -129,7 +130,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
                 />
                 {companyId && (
-                  <div className="text-[10px] text-emerald-600 mt-0.5">✓ existing company — will be linked, not duplicated</div>
+                  <div className="text-[10px] text-emerald-600 mt-0.5">existing company — will be linked, not duplicated</div>
                 )}
                 {companyOpen && typed.length > 0 && (
                   <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Mail } from 'lucide-react'
 
 export default function ClientLoginPage() {
   const [email, setEmail] = useState('')
@@ -41,7 +42,7 @@ export default function ClientLoginPage() {
           <div className="px-6 py-8">
             {step === 'sent' ? (
               <div className="text-center">
-                <div className="text-4xl mb-4">📧</div>
+                <div className="text-4xl mb-4"><Mail size={36} aria-hidden /></div>
                 <h2 className="text-lg font-bold text-gray-900 mb-2">Check your email</h2>
                 <p className="text-sm text-gray-500">We sent a link to <strong>{email}</strong>. Click it to view your job history.</p>
                 <p className="text-xs text-gray-400 mt-3">Link expires in 24 hours.</p>

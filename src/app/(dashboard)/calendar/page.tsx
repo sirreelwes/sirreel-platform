@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { STATUS_CHIPS } from '@/lib/scheduling/statusTokens';
 import StatusLegend from '@/components/scheduling/StatusLegend';
+import { Wrench, X } from 'lucide-react'
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -121,7 +122,7 @@ export default function CalendarPage() {
         </div>
         <StatusLegend>
           <div className="flex items-center gap-1">
-            <span>🔧</span>
+            <span><Wrench size={16} aria-hidden /></span>
             <span className="text-gray-500">Maintenance pill</span>
           </div>
         </StatusLegend>
@@ -159,7 +160,7 @@ export default function CalendarPage() {
                   <span className={`text-[12px] font-semibold ${isToday ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : 'text-gray-700 px-0.5'}`}>
                     {d}
                   </span>
-                  {dayMaint.length > 0 && <span className="text-[9px] text-red-400">🔧{dayMaint.length}</span>}
+                  {dayMaint.length > 0 && <span className="text-[9px] text-red-400 inline-flex items-center gap-0.5"><Wrench size={9} aria-hidden />{dayMaint.length}</span>}
                 </div>
 
                 {/* Job pills */}
@@ -180,7 +181,7 @@ export default function CalendarPage() {
                   {/* Maintenance pills */}
                   {dayMaint.slice(0, 2).map(m => (
                     <div key={m.id} className="px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-red-50 text-red-600 border border-red-200 truncate">
-                      🔧 {m.unit}
+                      {m.unit}
                     </div>
                   ))}
                 </div>
@@ -217,7 +218,7 @@ export default function CalendarPage() {
                     Open Job →
                   </button>
                 )}
-                <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600"><X size={16} aria-hidden /></button>
               </div>
             </div>
 

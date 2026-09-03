@@ -87,7 +87,7 @@ export function StageAreasPicker({
             : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
         } ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'}`}
       >
-        {on ? '✓ ' : ''}
+        {on ? '' : ''}
         {a.name}
       </button>
     )

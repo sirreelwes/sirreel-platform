@@ -92,7 +92,7 @@ export interface LineItemDescriptionComboboxProps {
    *  records the binding + may pre-fill rate / department. */
   onPickCatalog: (hit: CatalogHit) => void
   /** Current catalog binding for this row (if any). When non-null,
-   *  the input shows a small "✓ {name}" pill. Editing the text away
+   *  the input shows a small "{name}" pill. Editing the text away
    *  from the bound name (parent decides what counts) should call
    *  onClearCatalog. */
   catalogBinding: CatalogBinding | null
@@ -372,7 +372,7 @@ function LineItemDescriptionComboboxInner(
       <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
         {catalogBinding && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 pointer-events-auto" title={`Bound to catalog: ${catalogBinding.id}`}>
-            ✓ {catalogBinding.type === 'ASSET_CATEGORY' ? 'category' : 'item'}
+            {catalogBinding.type === 'ASSET_CATEGORY' ? 'category' : 'item'}
           </span>
         )}
         {showCustomChip && (

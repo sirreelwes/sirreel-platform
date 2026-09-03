@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { NeedsAttentionAlerts } from '@/components/dashboard/NeedsAttentionAlerts';
+import { X } from 'lucide-react';
 
 function fDate(ds: string): string {
   if (!ds) return '';
@@ -92,7 +93,7 @@ export default function CollectionsDashboard() {
   function logPayment() {
     const p = { id: 'p' + Date.now(), client: pClient, amount: Number(pAmount), method: pMethod, ref: pRef, time: 'Just now', order: pOrder };
     setCollections(prev => [p, ...prev]);
-    setToast(`✓ Payment logged — ${pClient} · $${Number(pAmount).toLocaleString()}`);
+    setToast(`Payment logged — ${pClient} · $${Number(pAmount).toLocaleString()}`);
     setTimeout(() => setToast(''), 4000);
     setNewPayment(false);
     setPClient(''); setPAmount(''); setPRef(''); setPOrder('');
@@ -102,7 +103,7 @@ export default function CollectionsDashboard() {
     <div>
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{greeting}, Ana 👋</h1>
+          <h1 className="text-xl font-bold text-gray-900">{greeting}, Ana</h1>
           <p className="text-[12px] text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · Collections & Billing</p>
         </div>
         <button onClick={() => setNewPayment(true)}
@@ -147,7 +148,7 @@ export default function CollectionsDashboard() {
           {/* Payments received today */}
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💳 Payments Received</div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payments Received</div>
               <button onClick={() => setNewPayment(true)} className="text-[10px] text-blue-600 font-semibold hover:underline">+ Log</button>
             </div>
             <div className="divide-y divide-gray-50">
@@ -178,7 +179,7 @@ export default function CollectionsDashboard() {
           {/* Claims */}
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">🛡️ Insurance Claims</div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Claims</div>
               <a href="/claims" className="text-[10px] text-blue-600 font-semibold hover:underline">View all →</a>
             </div>
             <div className="divide-y divide-gray-50">
@@ -214,7 +215,7 @@ export default function CollectionsDashboard() {
           {overdue.length > 0 && (
             <div className="bg-white rounded-xl border border-red-200">
               <div className="px-4 py-3 border-b border-red-100 flex justify-between items-center">
-                <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider">⚠️ Overdue Invoices</div>
+                <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Overdue Invoices</div>
                 <span className="text-[11px] font-bold text-red-600">${totalOverdue.toLocaleString()}</span>
               </div>
               <div className="divide-y divide-red-50">
@@ -269,7 +270,7 @@ export default function CollectionsDashboard() {
                 </div>
               ))}
               {outstanding.length === 0 && !loading && (
-                <div className="p-4 text-[12px] text-gray-400 text-center">All invoices collected 🎉</div>
+                <div className="p-4 text-[12px] text-gray-400 text-center">All invoices collected</div>
               )}
             </div>
             {outstanding.length > 20 && (
@@ -290,7 +291,7 @@ export default function CollectionsDashboard() {
                 <h2 className="text-[16px] font-bold text-gray-900">Log Payment</h2>
                 <p className="text-[11px] text-gray-400">Record a CardPointe or manual payment</p>
               </div>
-              <button onClick={() => setNewPayment(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setNewPayment(false)} className="text-gray-400 hover:text-gray-600 text-xl"><X size={20} aria-hidden /></button>
             </div>
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -328,7 +329,7 @@ export default function CollectionsDashboard() {
               <button onClick={() => setNewPayment(false)} className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold">Cancel</button>
               <button onClick={logPayment} disabled={!pClient || !pAmount}
                 className={`flex-1 py-2.5 rounded-lg text-[13px] font-bold ${pClient && pAmount ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                Log Payment ✓
+                Log Payment
               </button>
             </div>
           </div>

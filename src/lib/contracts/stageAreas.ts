@@ -3,7 +3,7 @@
  * checkboxes and everywhere selected areas render (v2 studio card,
  * signed-copy PDF, ready-to-sign flows).
  *
- * ⚠️ PROVISIONAL LABELS (July 2026): Wes's verbatim list didn't survive
+ * PROVISIONAL LABELS (July 2026): Wes's verbatim list didn't survive
  * the goal handoff (placeholder text). These four match the real
  * bookable Lankershim Studios assets in the native scheduler
  * (scripts/scheduling-add-missing-assets.ts). To finalize: edit ONLY
@@ -12,10 +12,10 @@
  *
  * Rules encoded here:
  *  - `key` is what's persisted in stageDetails.sets — never rename a
- *    key that has shipped; retire it instead (remove from this list;
- *    stageAreaLabel falls back to rendering the stored label/key).
+ * key that has shipped; retire it instead (remove from this list;
+ * stageAreaLabel falls back to rendering the stored label/key).
  *  - STRYKER_TRIGGER_KEY: the Hospital Set is the ONLY area that pulls
- *    the Stryker Master Media Use Agreement.
+ * the Stryker Master Media Use Agreement.
  */
 
 export interface StageArea {

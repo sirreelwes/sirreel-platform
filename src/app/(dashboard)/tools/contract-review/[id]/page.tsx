@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ReviewResultPanel, type DecisionState, type ClauseDecisionValue } from '@/components/reviews/ReviewResultPanel';
 import { CounterPdfPreview } from '@/components/reviews/CounterPdfPreview';
 import { CounterProposalEmail } from '@/components/reviews/CounterProposalEmail';
+import { AlertTriangle, Circle, FileText } from 'lucide-react'
 
 const RISK_BADGE: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -405,7 +406,7 @@ export default function ContractReviewDetailPage() {
               }`}
             >
               Counter Proposal
-              {counterExists && <span className="ml-1.5 text-emerald-400">●</span>}
+              {counterExists && <span className="ml-1.5 text-emerald-400"><Circle size={16} aria-hidden /></span>}
             </button>
           </div>
         </div>
@@ -463,7 +464,7 @@ export default function ContractReviewDetailPage() {
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-3">
-                <div className="text-2xl">📄</div>
+                <div className="text-2xl"><FileText size={24} aria-hidden /></div>
                 <div className="text-sm font-semibold text-gray-700">No counter-proposal generated yet</div>
                 <div className="text-[12px] text-gray-500 max-w-md mx-auto leading-relaxed">
                   {!allDecided
@@ -494,7 +495,7 @@ export default function ContractReviewDetailPage() {
         if (flaggedCount === 0) return null;
         return (
           <div className="rounded-2xl border border-red-300 bg-red-50 p-4 flex items-start gap-3">
-            <div className="text-xl">⚠️</div>
+            <div className="text-xl"><AlertTriangle size={20} aria-hidden /></div>
             <div className="text-[12px] text-red-700 leading-relaxed">
               <div className="font-bold uppercase text-[10px] mb-1">Operator review required</div>
               {flaggedCount === 1

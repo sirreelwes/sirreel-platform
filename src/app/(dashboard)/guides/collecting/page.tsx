@@ -294,7 +294,7 @@ export default function CollectingGuidePage() {
                 <strong>Partial</strong> invoices can take a payment — Paid, Void and Draft cannot.</p>
             </Step>
             <Step n={3} title="Check the card block">
-              <p>A panel headed <strong>💳 Card on file</strong> shows the card type, last four and cardholder.
+              <p>A panel headed <strong>Card on file</strong> shows the card type, last four and cardholder.
                 No panel means no card — use section 5, or section 6 if they already signed an authorization.</p>
               <Note tone="warn" label="Read the preference line">
                 If it says the card is <strong>security only</strong>, the client elected to pay by check or bank

@@ -56,7 +56,7 @@ function buildEmailHtml(
     const pass = item.pass ?? true
     if (pass) return ''
     const color = isCritical ? '#dc2626' : '#d97706'
-    const badge = isCritical ? '🔴 CRITICAL' : '🟡 ALERT'
+    const badge = isCritical ? 'CRITICAL' : 'ALERT'
     return `
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">
@@ -85,7 +85,7 @@ function buildEmailHtml(
     </div>
 
     <div style="background:${statusColor};padding:16px 24px;">
-      <div style="color:white;font-weight:bold;font-size:15px;">${review.overallPass ? '✅' : '⚠️'} ${statusText}</div>
+      <div style="color:white;font-weight:bold;font-size:15px;">${statusText}</div>
     </div>
 
     <div style="padding:24px;">
@@ -282,10 +282,10 @@ export async function POST(
         : 'https://hq.sirreel.com/paperwork'
       const html = buildEmailHtml(companyName, jobName, review, reviewUrl)
       const subject = review.overallPass
-        ? `🟢 COI Clear — ${companyName} · ${jobName}`
+        ? `COI Clear — ${companyName} · ${jobName}`
         : review.criticalPass
-          ? `🟡 COI Alert — ${companyName} · ${jobName}`
-          : `🔴 COI Critical Issues — ${companyName} · ${jobName}`
+          ? `COI Alert — ${companyName} · ${jobName}`
+          : `COI Critical Issues — ${companyName} · ${jobName}`
 
       // The audience is a DB-backed channel, not a hardcoded list — this
       // one still named four individuals while a 'coi-team' channel

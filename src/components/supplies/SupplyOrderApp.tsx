@@ -932,7 +932,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                       }`}
                     >
                       <div className="text-[13.5px] font-bold text-white" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                        {on ? '✓ ' : '+ '}{o.jobName}
+                        {on ? '' : '+ '}{o.jobName}
                       </div>
                       <div className="text-[11.5px] text-[#a8a294] mt-0.5">
                         {o.startDate ?? '—'}{o.endDate && o.endDate !== o.startDate ? ` – ${o.endDate}` : ''} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'}
@@ -2327,7 +2327,7 @@ function PanelHead({ title, sub, onClose }: { title: string; sub: string; onClos
         className="border-none bg-[#efeada] w-[38px] h-[38px] rounded-[10px] cursor-pointer text-xl text-[#0c0c0d] inline-flex items-center justify-center hover:bg-[#e6e0cf]"
         aria-label="Close"
       >
-        ✕
+       
       </button>
     </div>
   )

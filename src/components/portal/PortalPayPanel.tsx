@@ -40,6 +40,7 @@
 import { useEffect, useState } from 'react'
 import { SigCanvas } from './SigCanvas'
 import { surchargeBreakdown } from '@/lib/payments/surcharge'
+import { Check } from 'lucide-react'
 
 interface PortalInvoice {
   id: string
@@ -639,7 +640,7 @@ function CardPayForm({
         </div>
         {cardToken && (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
-            <span>✓</span>
+            <span><Check size={16} aria-hidden /></span>
             <span>
               Card captured securely{last4 ? <> · ····{last4}</> : null}
             </span>
@@ -956,7 +957,7 @@ function AchPayForm({
         </div>
         {bankToken && (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
-            <span>✓</span>
+            <span><Check size={16} aria-hidden /></span>
             <span>
               Account captured securely{last4 ? <> · ····{last4}</> : null}
             </span>

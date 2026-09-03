@@ -21,17 +21,19 @@
  * and the target is locked. Frees the rep to skip step 2.
  */
 
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Building2, Clapperboard, DoorOpen, Mail, MessageSquare, Phone } from 'lucide-react'
 
 type OutreachType = 'VISIT' | 'CALL' | 'EMAIL' | 'TEXT' | 'EVENT' | 'DROP_IN'
 
-const TYPE_OPTIONS: { value: OutreachType; label: string; icon: string }[] = [
-  { value: 'VISIT', label: 'Visit', icon: '🏢' },
-  { value: 'CALL', label: 'Call', icon: '📞' },
-  { value: 'EMAIL', label: 'Email', icon: '✉️' },
-  { value: 'TEXT', label: 'Text', icon: '💬' },
-  { value: 'EVENT', label: 'Event', icon: '🎬' },
-  { value: 'DROP_IN', label: 'Drop-in', icon: '🚪' },
+const TYPE_OPTIONS: { value: OutreachType; label: string; icon: ReactNode }[] = [
+  { value: 'VISIT', label: 'Visit', icon: <Building2 size={14} aria-hidden /> },
+  { value: 'CALL', label: 'Call', icon: <Phone size={14} aria-hidden /> },
+  { value: 'EMAIL', label: 'Email', icon: <Mail size={14} aria-hidden /> },
+  { value: 'TEXT', label: 'Text', icon: <MessageSquare size={14} aria-hidden /> },
+  { value: 'EVENT', label: 'Event', icon: <Clapperboard size={14} aria-hidden /> },
+  { value: 'DROP_IN', label: 'Drop-in', icon: <DoorOpen size={14} aria-hidden /> },
 ]
 
 interface PersonHit {
@@ -235,7 +237,7 @@ export function OutreachQuickLogModal({
             disabled={saving}
             className="text-sm text-lt-fg2 hover:text-lt-fg px-2 py-1"
           >
-            Close ✕
+            Close
           </button>
         </div>
 

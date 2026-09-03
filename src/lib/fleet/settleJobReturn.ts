@@ -4,7 +4,7 @@
  *
  * `Job.returnedAt` is the not-returned kill switch: the /jobs rail reads
  * it to decide whether a job is overdue, and until now the only thing
- * that ever wrote it was the manual "✓ returned" button, whose route
+ * that ever wrote it was the manual "returned" button, whose route
  * says in as many words that it is "the manual v1 stand-in for the
  * future warehouse check-in flow, which will write the same field".
  * This is that flow. Both the vehicle return inspection and the gear
@@ -14,10 +14,10 @@
  * The rule is deliberately CONSERVATIVE — it stamps only when the job
  * has nothing outstanding in the yard at all:
  *
- *   - no BookingAssignment still ASSIGNED or CHECKED_OUT (a truck that
- *     is out, or was never received)
- *   - every PickList either CHECKED_IN or CANCELLED (nothing waiting to
- *     be picked, staged, loaded, or counted back)
+ * - no BookingAssignment still ASSIGNED or CHECKED_OUT (a truck that
+ * is out, or was never received)
+ * - every PickList either CHECKED_IN or CANCELLED (nothing waiting to
+ * be picked, staged, loaded, or counted back)
  *
  * So a job with a second order still to go out does NOT get stamped
  * when its first truck comes home. The failure mode is under-stamping —

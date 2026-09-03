@@ -16,6 +16,7 @@
  */
 
 import { useState } from 'react'
+import { Mail } from 'lucide-react'
 
 export interface ClientDetailReply {
   id: string
@@ -72,7 +73,7 @@ export function ClientDetailSuggestion({ reply, onUse, onResolved, compact }: Pr
   return (
     <div className={`rounded-lg border border-sky-300 bg-sky-50 ${compact ? 'px-2.5 py-2' : 'px-3 py-2.5'}`}>
       <div className="flex items-center gap-1.5">
-        <span aria-hidden className="text-sky-600 text-[13px] leading-none">✉</span>
+        <span aria-hidden className="text-sky-600 text-[13px] leading-none"><Mail size={16} aria-hidden /></span>
         <span className="text-[10px] font-bold uppercase tracking-wide text-sky-900">
           The client answered
         </span>

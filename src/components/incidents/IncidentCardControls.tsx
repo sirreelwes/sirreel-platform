@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 
 export type DerivedSeverity = 'LITIGATION' | 'ROUTINE'
 export type RecoveryPosture =
@@ -59,7 +60,7 @@ export function SeverityControl({
         className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${baseChip}`}
         title={tooltip}
       >
-        {isLit ? '⚠ Litigation' : 'Routine'}
+        {isLit ? 'Litigation' : 'Routine'}
       </span>
       {!isOverride && (
         <span
@@ -289,7 +290,7 @@ export function RecoveryStepper({
         return (
           <span key={label} className="flex items-center gap-1">
             <span className={`text-[11px] px-2 py-0.5 rounded-full border ${cls}`}>
-              {isDone && <span className="mr-1" aria-hidden>✓</span>}
+              {isDone && <span className="mr-1" aria-hidden><Check size={16} aria-hidden /></span>}
               {label}
             </span>
             {i < steps.length - 1 && (

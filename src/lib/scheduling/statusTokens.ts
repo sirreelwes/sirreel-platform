@@ -13,17 +13,17 @@
  *
  * Design contract (Wes, 2026-08-21 — matched to the Planyo look the
  * team knows, with our own semantics):
- *   · green  = booked/confirmed        (same instinct as Planyo)
- *   · blue   = hold/reserved, pending  (same instinct as Planyo)
- *   · dark red = booked with an Order attached (Planyo "ORDER ATTACHED")
- *   · GREY UNIQUELY MEANS MAINTENANCE / unit out of service. Nothing
- *     else may render grey-filled — cancelled is a struck outline.
- *   · inquiry = dashed outline ("not real yet") — kills the old
- *     pale-green vs dark-green misread.
- *   · backups stay the faded dashed-blue sub-lane (our model replaces
- *     Planyo's "X - 2ND HOLD" placeholder hack).
- *   · yellow is reserved for the ART DEPT job tag (Planyo's yellow),
- *     which is a TAG, not a status.
+ * · green  = booked/confirmed (same instinct as Planyo)
+ * · blue = hold/reserved, pending  (same instinct as Planyo)
+ * · dark red = booked with an Order attached (Planyo "ORDER ATTACHED")
+ * · GREY UNIQUELY MEANS MAINTENANCE / unit out of service. Nothing
+ * else may render grey-filled — cancelled is a struck outline.
+ * · inquiry = dashed outline ("not real yet") — kills the old
+ * pale-green vs dark-green misread.
+ * · backups stay the faded dashed-blue sub-lane (our model replaces
+ * Planyo's "X - 2ND HOLD" placeholder hack).
+ * · yellow is reserved for the ART DEPT job tag (Planyo's yellow),
+ * which is a TAG, not a status.
  */
 
 export type BarColor = { bg: string; border: string; text: string }
@@ -49,7 +49,7 @@ export const STATUS_COLORS: Record<string, BarColor> = {
 
 /**
  * A BOOKED bar whose reservation has an Order attached — Planyo's
- * "ORDER ATTACHED" dark red, the team's strongest color habit. The 📄
+ * "ORDER ATTACHED" dark red, the team's strongest color habit. The
  * marker stays alongside; color makes it readable across the room.
  */
 export const ORDER_ATTACHED_COLOR: BarColor = { bg: 'bg-[#b04a5a]', border: 'border-[#93394a]', text: 'text-white' }

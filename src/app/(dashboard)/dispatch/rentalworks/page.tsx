@@ -8,6 +8,7 @@ function fmt(d: string) {
 }
 
 import { STATUS_CHIPS } from '@/lib/scheduling/statusTokens'
+import { CheckCircle2 } from 'lucide-react'
 
 // Planyo feed tokens mapped onto the shared chip palette so this page
 // agrees with the gantt/calendar (previously: confirmed was BLUE here
@@ -102,7 +103,7 @@ export default function DispatchPage() {
         <div className="flex gap-2 items-center">
           {successMsg && (
             <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">
-              ✅ {successMsg}
+              {successMsg}
             </div>
           )}
           <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-700 font-semibold">
@@ -126,7 +127,7 @@ export default function DispatchPage() {
               <div className="text-center py-8 text-gray-400 text-sm">Loading...</div>
             ) : displayUnlinked.length === 0 ? (
               <div className="text-center py-12 text-gray-400 text-sm">
-                <div className="text-3xl mb-2">✅</div>
+                <div className="text-3xl mb-2"><CheckCircle2 size={30} aria-hidden /></div>
                 All reservations are linked!
               </div>
             ) : (

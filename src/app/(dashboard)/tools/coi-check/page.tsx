@@ -2,9 +2,10 @@
 import { useState, useCallback } from 'react';
 import { COI_CHECK_LABELS } from '@/lib/coi/checks';
 import { ALERT_CHECK_KEYS, CRITICAL_CHECK_KEYS } from '@/lib/coi/reviewCoi';
+import { AlertTriangle, Check, CheckCircle2, FileText, Paperclip, X, XCircle } from 'lucide-react'
 
 // Mirrors the shared checklist (src/lib/coi/checks.ts) — critical first,
-// then the judgment calls. `hard` drives the ✗-vs-⚠ treatment below.
+// then the judgment calls. `hard` drives the X-vs-warning treatment below.
 const CHECKS = [
   ...CRITICAL_CHECK_KEYS.map((key) => ({ key: key as string, label: COI_CHECK_LABELS[key], hard: true })),
   ...ALERT_CHECK_KEYS.map((key) => ({ key: key as string, label: COI_CHECK_LABELS[key], hard: false })),
@@ -72,13 +73,13 @@ export default function CoiCheckPage() {
           >
             {file ? (
               <div>
-                <div className="text-3xl mb-2">📄</div>
+                <div className="text-3xl mb-2"><FileText size={30} aria-hidden /></div>
                 <div className="text-sm font-semibold text-emerald-700">{file.name}</div>
                 <div className="text-xs text-gray-400 mt-1">{(file.size / 1024).toFixed(0)} KB · Click to change</div>
               </div>
             ) : (
               <div>
-                <div className="text-3xl mb-3">📎</div>
+                <div className="text-3xl mb-3"><Paperclip size={30} aria-hidden /></div>
                 <div className="text-sm font-semibold text-gray-700">Drop COI here or click to browse</div>
                 <div className="text-xs text-gray-400 mt-1">PDF, JPG, or PNG</div>
               </div>
@@ -95,7 +96,7 @@ export default function CoiCheckPage() {
 
           <button onClick={runReview} disabled={!file || reviewing}
             className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-gray-800 disabled:opacity-40 transition-colors">
-            {reviewing ? '🔍 Reviewing COI...' : 'Review COI →'}
+            {reviewing ? 'Reviewing COI...' : 'Review COI →'}
           </button>
         </div>
       ) : (
@@ -106,7 +107,7 @@ export default function CoiCheckPage() {
             review.requiresAdminApproval ? 'bg-amber-50 border border-amber-200' :
             'bg-red-50 border border-red-200'
           }`}>
-            <div className="text-3xl">{review.overallPass ? '✅' : review.requiresAdminApproval ? '⚠️' : '❌'}</div>
+            <div className="text-3xl">{review.overallPass ? <CheckCircle2 size={14} aria-hidden /> : review.requiresAdminApproval ? <AlertTriangle size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}</div>
             <div className="flex-1">
               <div className={`text-base font-bold ${review.overallPass ? 'text-emerald-800' : review.requiresAdminApproval ? 'text-amber-800' : 'text-red-700'}`}>
                 {review.overallPass ? 'COI Approved' : review.requiresAdminApproval ? 'Pending Admin Approval' : 'COI Rejected — Hard Fails'}
@@ -150,7 +151,7 @@ export default function CoiCheckPage() {
                 return (
                   <div key={check.key} className={`flex items-center gap-3 px-4 py-2.5 ${!pass && !check.hard ? 'bg-amber-50/50' : ''}`}>
                     <span className={`text-sm font-bold flex-shrink-0 ${pass ? 'text-emerald-600' : check.hard ? 'text-red-600' : 'text-amber-500'}`}>
-                      {pass ? '✓' : check.hard ? '✗' : '⚠'}
+                      {pass ? <Check size={14} aria-hidden /> : check.hard ? <X size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
                     </span>
                     <span className="text-[12px] font-medium text-gray-700 flex-1">{check.label}</span>
                     {!check.hard && <span className="text-[9px] text-gray-400 font-semibold">Optional</span>}

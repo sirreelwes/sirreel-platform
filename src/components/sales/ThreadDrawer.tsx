@@ -683,7 +683,7 @@ export function ThreadDrawer(props: Props) {
             aria-label="Close thread preview"
             className="text-gray-400 hover:text-gray-700 text-xl p-1 flex-shrink-0"
           >
-            ✕
+           
           </button>
         </div>
 
@@ -837,7 +837,7 @@ export function ThreadDrawer(props: Props) {
                     {(onlySnippet || m.attachmentCount > 0) && (
                       <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-400">
                         {onlySnippet && <span>snippet only — body not yet synced</span>}
-                        {m.attachmentCount > 0 && <span>📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</span>}
+                        {m.attachmentCount > 0 && <span>{m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</span>}
                       </div>
                     )}
                   </div>
@@ -911,7 +911,7 @@ export function ThreadDrawer(props: Props) {
                           disabled={suggestBusy || sending || skipping}
                           className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-2.5 py-1 text-[11px] font-bold text-white"
                         >
-                          {suggestBusy ? 'Writing…' : message.trim() ? '✨ Finish with AI' : '✨ Suggest with AI'}
+                          {suggestBusy ? 'Writing…' : message.trim() ? 'Finish with AI' : 'Suggest with AI'}
                         </button>
                         {preview?.defaultBody && !message.trim() && (
                           <button
@@ -1045,7 +1045,7 @@ export function ThreadDrawer(props: Props) {
             {followUpData && followUpData.replies.count > 0 && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5">
                 <div className="text-[11px] font-bold text-amber-900">
-                  ⚠ This contact has sent {followUpData.replies.count} message{followUpData.replies.count === 1 ? '' : 's'} since the quote went out — check Gmail before following up.
+                  This contact has sent {followUpData.replies.count} message{followUpData.replies.count === 1 ? '' : 's'} since the quote went out — check Gmail before following up.
                 </div>
                 {followUpData.replies.latest && (
                   <div className="mt-1.5 text-[10px] text-amber-800">

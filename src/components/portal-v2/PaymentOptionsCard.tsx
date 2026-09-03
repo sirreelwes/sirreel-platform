@@ -2,6 +2,7 @@
 
 import { CardShell } from './CardShell'
 import { PortalBankDetails } from '@/components/portal/PortalBankDetails'
+import { Landmark } from 'lucide-react';
 
 /**
  * "Other ways to pay" — ACH, wire and Zelle, inside the guided portal.
@@ -32,7 +33,7 @@ export function PaymentOptionsCard({
 }) {
   return (
     <CardShell
-      icon="🏦"
+      icon={<Landmark size={16} aria-hidden />}
       title="Other ways to pay"
       subtitle="ACH, wire or Zelle — no processing fee"
       status="info"

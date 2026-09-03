@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { AlertTriangle, Check, CheckCircle2, ClipboardList, X } from 'lucide-react'
 
 function timeAgo(d: string) {
   if (!d) return '—';
@@ -59,7 +60,7 @@ export default function ReviewsWidget() {
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <span className="text-base">📋</span>
+          <span className="text-base"><ClipboardList size={16} aria-hidden /></span>
           <span className="text-sm font-bold text-gray-900">Pending Reviews</span>
           {pending.length > 0 && (
             <span className="w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{pending.length}</span>
@@ -72,7 +73,7 @@ export default function ReviewsWidget() {
         <div className="p-5 text-center text-sm text-gray-400">Loading...</div>
       ) : pending.length === 0 ? (
         <div className="p-5 text-center">
-          <div className="text-2xl mb-2">✅</div>
+          <div className="text-2xl mb-2"><CheckCircle2 size={24} aria-hidden /></div>
           <div className="text-sm text-gray-500">No pending reviews</div>
         </div>
       ) : (
@@ -90,13 +91,13 @@ export default function ReviewsWidget() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {review.coi?.type === 'needs_admin_approval' && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">⚠ COI Approval</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">COI Approval</span>
                   )}
                   {review.coi?.type === 'hard_fail' && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">✗ COI Failed</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">COI Failed</span>
                   )}
                   {review.redline && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">📝 Redline</span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Redline</span>
                   )}
                   <span className="text-[9px] text-gray-400">{timeAgo(review.redline?.uploadedAt || review.coi?.reviewedAt)}</span>
                 </div>
@@ -106,7 +107,7 @@ export default function ReviewsWidget() {
               {review.coi && (
                 <div className={`rounded-xl p-3 mb-2 ${review.coi.type === 'needs_admin_approval' ? 'bg-amber-50 border border-amber-100' : 'bg-red-50 border border-red-100'}`}>
                   <div className={`text-[11px] font-bold mb-1 ${review.coi.type === 'needs_admin_approval' ? 'text-amber-800' : 'text-red-700'}`}>
-                    {review.coi.type === 'needs_admin_approval' ? '⚠ All required coverages pass — manageable items need your sign-off' : '✗ COI hard fails — client must correct and resubmit'}
+                    {review.coi.type === 'needs_admin_approval' ? 'All required coverages pass — manageable items need your sign-off' : 'COI hard fails — client must correct and resubmit'}
                   </div>
                   {review.coi.review?.insuredName?.found && (
                     <div className="text-[10px] text-gray-500">Insured: <span className="font-semibold">{review.coi.review.insuredName.found}</span></div>
@@ -133,7 +134,7 @@ export default function ReviewsWidget() {
                 <div className={`rounded-xl p-3 mb-2 ${review.redline.review.recommendation === 'approve' ? 'bg-emerald-50 border border-emerald-100' : review.redline.review.recommendation === 'reject' ? 'bg-red-50 border border-red-100' : 'bg-amber-50 border border-amber-100'}`}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-[11px] font-bold text-gray-800">
-                      AI: {review.redline.review.recommendation === 'approve' ? '✅ Approve' : review.redline.review.recommendation === 'reject' ? '❌ Reject' : '📋 Counter'}
+                      AI: {review.redline.review.recommendation === 'approve' ? 'Approve' : review.redline.review.recommendation === 'reject' ? 'Reject' : 'Counter'}
                     </div>
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${review.redline.review.riskLevel === 'high' ? 'bg-red-100 text-red-700' : review.redline.review.riskLevel === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {review.redline.review.riskLevel?.toUpperCase()} RISK
@@ -141,9 +142,9 @@ export default function ReviewsWidget() {
                   </div>
                   <p className="text-[10px] text-gray-600 leading-relaxed">{review.redline.review.summary}</p>
                   <div className="flex gap-2 mt-1 text-[10px]">
-                    <span className="text-emerald-600">✓ {review.redline.review.autoApprovedCount}</span>
-                    <span className="text-amber-600">⚠ {review.redline.review.needsReviewCount}</span>
-                    <span className="text-red-600">✗ {review.redline.review.notAcceptableCount}</span>
+                    <span className="text-emerald-600">{review.redline.review.autoApprovedCount}</span>
+                    <span className="text-amber-600">{review.redline.review.needsReviewCount}</span>
+                    <span className="text-red-600">{review.redline.review.notAcceptableCount}</span>
                   </div>
                 </div>
               )}
@@ -174,7 +175,7 @@ export default function ReviewsWidget() {
                           change.type === 'not_acceptable' ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
                         }`}>
                           <div className="font-semibold mb-0.5">
-                            {change.type === 'auto_approved' ? '✓' : change.type === 'not_acceptable' ? '✗' : '⚠'}
+                            {change.type === 'auto_approved' ? <Check size={14} aria-hidden /> : change.type === 'not_acceptable' ? <X size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
                             {' '}§{change.clause}
                           </div>
                           <div className="opacity-70">{change.proposed}</div>
@@ -209,7 +210,7 @@ export default function ReviewsWidget() {
                       disabled={acting === review.token + '_coi'}
                       className="w-full py-2.5 bg-amber-500 text-white text-[12px] font-bold rounded-xl hover:bg-amber-600 disabled:opacity-40 transition-colors"
                     >
-                      {acting === review.token + '_coi' ? 'Approving...' : '✓ Approve COI with Exceptions'}
+                      {acting === review.token + '_coi' ? 'Approving...' : 'Approve COI with Exceptions'}
                     </button>
                   )}
 
@@ -218,7 +219,7 @@ export default function ReviewsWidget() {
                     <div className="flex gap-2">
                       <button onClick={() => actRedline(review.token, 'approve', notes[review.id] || '')}
                         disabled={!!acting} className="flex-1 py-2 bg-emerald-600 text-white text-[11px] font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-40">
-                        {acting === review.token + '_redline' ? '...' : '✓ Approve'}
+                        {acting === review.token + '_redline' ? '...' : 'Approve'}
                       </button>
                       <button onClick={() => actRedline(review.token, 'counter', notes[review.id] || '')}
                         disabled={!!acting} className="flex-1 py-2 bg-amber-500 text-white text-[11px] font-bold rounded-xl hover:bg-amber-600 disabled:opacity-40">
@@ -226,7 +227,7 @@ export default function ReviewsWidget() {
                       </button>
                       <button onClick={() => actRedline(review.token, 'reject', notes[review.id] || '')}
                         disabled={!!acting} className="flex-1 py-2 bg-red-600 text-white text-[11px] font-bold rounded-xl hover:bg-red-700 disabled:opacity-40">
-                        ✗ Reject
+                        Reject
                       </button>
                     </div>
                   )}

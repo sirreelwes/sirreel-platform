@@ -10,6 +10,7 @@ import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
 import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
+import { FileText, Lock, Send } from 'lucide-react';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -472,7 +473,7 @@ export default function JobPortalPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center space-y-4">
-          <div className="text-5xl">🔒</div>
+          <div className="text-5xl"><Lock size={44} aria-hidden /></div>
           <h1 className="text-xl font-semibold text-gray-900">{sentTitle}</h1>
 
           {resendState === 'sent' ? (
@@ -1177,13 +1178,13 @@ export default function JobPortalPage() {
                     >
                       {coiFile ? (
                         <>
-                          <div className="text-xl">📄</div>
+                          <div className="text-xl"><FileText size={20} aria-hidden /></div>
                           <div className="text-xs font-semibold text-amber-700">{coiFile.name}</div>
                           <div className="text-[10px] text-gray-400 mt-0.5">{(coiFile.size / 1024).toFixed(0)} KB</div>
                         </>
                       ) : (
                         <>
-                          <div className="text-xl">📤</div>
+                          <div className="text-xl"><Send size={20} aria-hidden /></div>
                           <div className="text-xs text-gray-500">Click to upload your COI</div>
                           <div className="text-[10px] text-gray-400 mt-0.5">PDF, PNG, or JPG · max 10 MB</div>
                         </>

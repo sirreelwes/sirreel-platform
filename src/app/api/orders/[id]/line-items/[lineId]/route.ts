@@ -296,7 +296,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         if (!feas.capacityClear && confirmConflict) {
           const orderLabel = parentOrder.orderNumber;
           const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
-          holdsAuditNote = `⚠ CAPACITY OVERRIDE on ${orderLabel} (qty change Δ+${proposedDelta}): conflicts with ${conflictList}`;
+          holdsAuditNote = `CAPACITY OVERRIDE on ${orderLabel} (qty change Δ+${proposedDelta}): conflicts with ${conflictList}`;
         }
       }
     }

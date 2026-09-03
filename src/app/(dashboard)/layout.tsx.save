@@ -112,7 +112,7 @@ export default function DashboardLayout({
                     : 'border-l-transparent text-sirreel-text-muted hover:bg-sirreel-surface/50'
                 }`}
               >
-                <span className="text-sm">⚡</span>
+                <span className="text-sm" />
                 <span>Ask AI</span>
               </button>
             </>
@@ -200,7 +200,7 @@ export default function DashboardLayout({
                     : 'bg-sirreel-surface border border-sirreel-border text-sirreel-text-muted hover:border-sirreel-border-hover'
                 }`}
               >
-                ⚡ AI
+                AI
               </button>
             )}
             {perms.canCreateBooking && (
@@ -217,7 +217,7 @@ export default function DashboardLayout({
         {/* Role banner (non-admin roles) */}
         {!perms.seeClientNames && (
           <div className="px-4 py-1.5 bg-red-950/30 border-b border-red-900/30 flex items-center gap-2 text-[11px]">
-            <span className="text-red-400">🔒</span>
+            <span className="text-red-400" />
             <span className="text-red-400/70">
               Client names and pricing hidden in this role
             </span>

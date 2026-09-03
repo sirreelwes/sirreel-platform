@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import { Inbox } from 'lucide-react'
 
 type EmailAlert = {
   id: string; fromAddress: string; subject: string
@@ -28,15 +29,15 @@ export default function InboxBell() {
     <div className="relative">
       <button onClick={() => { setOpen(prev => !prev); loadAlerts() }}
         className="relative px-2 py-1.5 rounded-md bg-white border border-gray-200 text-gray-500 hover:border-gray-300">
-        <span className="text-sm">📬</span>
+        <span className="text-sm"><Inbox size={14} aria-hidden /></span>
         {n > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">{n > 9 ? "9+" : n}</span>}
       </button>
       {open && (
         <div className="absolute right-0 top-9 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
           <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
-            <div className="text-[11px] font-bold text-gray-700">📬 Inbox Alerts</div>
+            <div className="text-[11px] font-bold text-gray-700">Inbox Alerts</div>
             {loading && <span className="text-[10px] text-gray-400">Refreshing...</span>}
-            {n === 0 && !loading && <span className="text-[10px] text-green-600">All clear ✓</span>}
+            {n === 0 && !loading && <span className="text-[10px] text-green-600">All clear</span>}
           </div>
           {data?.summary && data.summary.length > 0 && (
             <div className="px-3 py-1.5 border-b border-gray-100 flex flex-wrap gap-1">

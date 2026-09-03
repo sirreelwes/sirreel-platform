@@ -214,7 +214,7 @@ export function PushDatesModal({
             disabled={applying}
             className="text-sm text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
           >
-            Close ✕
+            Close
           </button>
         </div>
 
@@ -287,7 +287,7 @@ export function PushDatesModal({
                 </div>
                 {preview.postBooking && (
                   <div className="text-xs text-chip-warn-fg mt-2">
-                    ⚠ Order is past booking — the invoice will reflect this change as an adjustment.
+                    Order is past booking — the invoice will reflect this change as an adjustment.
                   </div>
                 )}
               </section>

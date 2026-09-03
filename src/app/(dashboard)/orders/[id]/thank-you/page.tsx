@@ -292,7 +292,7 @@ export default function ThankYouComposePage() {
       </Link>
 
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900 mb-4">
-        ⚠ PLACEHOLDER COPY — needs Wes review before first real send. Template structural shell is final; subject line and body prose are starter drafts. Search for <code>[[PLACEHOLDER]]</code> in <code>src/lib/email/templates/thankYouTemplate.ts</code>.
+        PLACEHOLDER COPY — needs Wes review before first real send. Template structural shell is final; subject line and body prose are starter drafts. Search for <code>[[PLACEHOLDER]]</code> in <code>src/lib/email/templates/thankYouTemplate.ts</code>.
       </div>
 
       {item && (

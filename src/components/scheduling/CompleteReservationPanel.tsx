@@ -6,7 +6,7 @@
  * Origin (Wes, 2026-08-24): a client phones in a reservation before the
  * production company or the job/show name exist. NewHoldModal lets the
  * hold be created anyway (the unit has to come off the board NOW), and
- * the gantt bar carries a ⚠ triangle until an agent fills the blanks in
+ * the gantt bar carries a warning triangle until an agent fills the blanks in
  * — which happens here, in the reservation pop-up.
  *
  * Three to-dos, all defined by src/lib/scheduling/infoGaps.ts:
@@ -29,6 +29,7 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { ClientDetailSuggestion, type ClientDetailReply } from '@/components/intake/ClientDetailSuggestion'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { bookingInfoGaps, type BookingInfoGap } from '@/lib/scheduling/infoGaps'
+import { AlertTriangle, Check } from 'lucide-react'
 
 export interface ReservationInfoState {
   companyId: string | null
@@ -183,7 +184,7 @@ export function CompleteReservationPanel({
     return (
       <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between gap-3">
         <span className="text-[11px] text-gray-500">
-          <span className="text-green-600 font-bold">✓</span> Reservation details complete
+          <span className="text-green-600 font-bold"><Check size={16} aria-hidden /></span> Reservation details complete
         </span>
         {canEdit && (
           <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
@@ -204,7 +205,7 @@ export function CompleteReservationPanel({
   return (
     <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
       <div className="flex items-center gap-2 mb-2">
-        <span aria-hidden className="text-amber-600 text-base leading-none">⚠</span>
+        <span aria-hidden className="text-amber-600 text-base leading-none"><AlertTriangle size={16} aria-hidden /></span>
         <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
           Finish this reservation — {gaps.map((g) => g.label).join(', ')}
         </div>

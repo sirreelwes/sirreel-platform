@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Star } from 'lucide-react';
 
 /**
  * HQ · Vehicle Catalog — edit the public-site fields of each VehicleCategory
@@ -348,7 +349,7 @@ export default function AdminVehicleCatalogPage() {
                               />
                               <div className="px-1.5 py-1.5 flex flex-col gap-1">
                                 {p.isPrimary ? (
-                                  <span className="text-[11px] font-semibold text-emerald-700">★ Primary</span>
+                                  <span className="text-[11px] font-semibold text-emerald-700 inline-flex items-center gap-1"><Star size={11} aria-hidden />Primary</span>
                                 ) : (
                                   <button
                                     onClick={() => patchPhoto(v.id, p.id, { isPrimary: true })}
@@ -381,7 +382,7 @@ export default function AdminVehicleCatalogPage() {
                                     className="text-[12px] px-1 border border-sirreel-border rounded text-red-600 ml-auto disabled:opacity-30"
                                     title="Delete photo"
                                   >
-                                    ✕
+                                   
                                   </button>
                                 </div>
                               </div>

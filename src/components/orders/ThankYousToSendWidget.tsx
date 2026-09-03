@@ -148,7 +148,7 @@ export function ThankYousToSendWidget({ scope = 'mine' }: { scope?: 'mine' | 'al
               <div className="flex items-center gap-2 shrink-0">
                 {it.hasPhoto ? (
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    📷 {it.jobPhotos.length || (it.photoDocument ? 1 : 0)} photo
+                    {it.jobPhotos.length || (it.photoDocument ? 1 : 0)} photo
                   </span>
                 ) : (
                   <span className="text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">

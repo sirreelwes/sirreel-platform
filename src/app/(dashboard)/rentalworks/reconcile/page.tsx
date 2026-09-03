@@ -320,7 +320,7 @@ function ReconcilePageInner() {
                 disabled={bulkBusy}
                 className="ml-auto text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
               >
-                {bulkBusy ? 'Working…' : `✓ Confirm all ${visibleSuggestions.length}`}
+                {bulkBusy ? 'Working…' : `Confirm all ${visibleSuggestions.length}`}
               </button>
             </div>
             <div className="space-y-1.5">
@@ -350,7 +350,7 @@ function ReconcilePageInner() {
                   </span>
                   <span className="flex items-center gap-1 flex-wrap">
                     {s.reasons.map((r) => (
-                      <span key={r} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">✓ {r}</span>
+                      <span key={r} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">{r}</span>
                     ))}
                   </span>
                   <span className="ml-auto flex items-center gap-1.5">
@@ -366,7 +366,7 @@ function ReconcilePageInner() {
                       disabled={confirming === s.jobId || bulkBusy}
                       className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
                     >
-                      {confirming === s.jobId ? 'Linking…' : '✓ Confirm'}
+                      {confirming === s.jobId ? 'Linking…' : 'Confirm'}
                     </button>
                   </span>
                 </div>
@@ -438,7 +438,7 @@ function ReconcilePageInner() {
               {jobs?.length === 0 && (
                 <div className="p-5 text-[12px] text-lt-fg3">
                   {bucket === 'ready'
-                    ? '🎉 Nothing left to match. New RentalWorks orders will show up here after the nightly sync.'
+                    ? 'Nothing left to match. New RentalWorks orders will show up here after the nightly sync.'
                     : bucket === 'needsClient'
                       ? 'Every client is linked to a RentalWorks customer.'
                       : bucket === 'noMatch'
@@ -458,7 +458,7 @@ function ReconcilePageInner() {
                     <span className="font-mono text-[11px] text-lt-fg2">{j.jobCode}</span>
                     {j.linkedOrders.length > 0 && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        ✓ {j.linkedOrders.length}
+                        {j.linkedOrders.length}
                       </span>
                     )}
                     {suggestedJobIds.has(j.id) && (
@@ -662,7 +662,7 @@ function ReconcilePanel({
                   className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 bg-white text-emerald-800 hover:border-rose-300 hover:text-rose-700"
                   title="Click to unlink"
                 >
-                  #{l.rwOrderNumber} ✕
+                  #{l.rwOrderNumber}
                 </button>
               ))}
             </div>
@@ -748,7 +748,7 @@ function ReconcilePanel({
                       {c.reasons?.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                           {c.reasons.map((rsn) => (
-                            <span key={rsn} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">✓ {rsn}</span>
+                            <span key={rsn} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">{rsn}</span>
                           ))}
                           {c.distanceDays != null && <span className="text-[10px] text-lt-fg3">{c.distanceDays}d from job start</span>}
                         </div>

@@ -20,6 +20,7 @@ import {
 } from '@/lib/contracts/strykerAgreement'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Paperwork } from './types'
+import { Clapperboard, Hourglass } from 'lucide-react'
 
 /**
  * Studio / Standing Sets contract card.
@@ -115,7 +116,7 @@ export function StudioContractCard({
 
   return (
     <CardShell
-      icon="🎬"
+      icon={<Clapperboard size={16} aria-hidden />}
       title="Studio Contract"
       subtitle="Standing sets license agreement"
       status={status}
@@ -144,7 +145,7 @@ export function StudioContractCard({
         </div>
       ) : !termsReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-          <span className="text-xl">⏳</span>
+          <span className="text-xl"><Hourglass size={20} aria-hidden /></span>
           <div>
             <div className="text-sm font-bold text-amber-800">Your agent is preparing your contract terms</div>
             <div className="text-xs text-amber-700 mt-0.5 leading-relaxed">
@@ -181,7 +182,7 @@ export function StudioContractCard({
               <div className="space-y-1">
                 {sets.map((s) => (
                   <div key={s} className="flex items-center gap-2 text-sm">
-                    <span>🎬</span>
+                    <span><Clapperboard size={16} aria-hidden /></span>
                     <span>
                       {stageAreaContractLabel(s, sd)}
                       {prelitSets.includes(s) ? ' (Pre-lit)' : ''}
@@ -244,7 +245,7 @@ export function StudioContractCard({
                 <div className="flex flex-wrap gap-1.5">
                   {amenities.map((label) => (
                     <span key={label} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-50 border border-gray-100 text-xs text-gray-700">
-                      ✓ {label}
+                      {label}
                     </span>
                   ))}
                 </div>
@@ -413,7 +414,7 @@ export function StudioContractCard({
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ backgroundColor: PORTAL.ink }}
           >
-            {submitting ? 'Saving…' : 'Sign Studio Contract ✓'}
+            {submitting ? 'Saving…' : 'Sign Studio Contract'}
           </button>
         </div>
       )}

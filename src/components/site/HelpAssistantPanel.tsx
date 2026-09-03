@@ -7,6 +7,7 @@
  */
 
 import { useAssistantChat } from './useAssistantChat'
+import { MessageSquare } from 'lucide-react'
 
 export function HelpAssistantPanel() {
   const { messages, draft, setDraft, busy, send, scrollRef } = useAssistantChat()
@@ -15,7 +16,7 @@ export function HelpAssistantPanel() {
     <div className="flex h-[560px] max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-[#2e2e30] bg-[#141414] shadow-2xl">
       <div className="flex items-center justify-between border-b border-[#2e2e30] bg-[#0c0c0d] px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="text-[18px] leading-none" aria-hidden>💬</span>
+          <span className="text-[18px] leading-none" aria-hidden><MessageSquare size={16} aria-hidden /></span>
           <div>
             <div className="text-[14px] font-extrabold text-white" style={{ fontFamily: 'Archivo, sans-serif' }}>
               SirReel Assistant
@@ -68,7 +69,7 @@ export function HelpAssistantPanel() {
             aria-label="Send"
             className="rounded-xl bg-[#c39a3f] px-4 py-2.5 text-[13.5px] font-extrabold text-[#0c0c0d] hover:bg-[#d4a547] disabled:opacity-40"
           >
-            ➤
+           
           </button>
         </div>
         <div className="mt-1.5 text-[10px] text-[#5c574d]">

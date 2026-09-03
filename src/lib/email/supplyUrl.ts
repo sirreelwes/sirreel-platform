@@ -16,8 +16,8 @@
  * /order/supplies path still resolves directly, so older emailed links keep
  * working.)
  *
- * ⚠️  DNS: orders.sirreel.com must resolve before real clients receive these
- *     emails. Confirm it's live (the domain is attached to the sirreel-fleet
- *     Vercel project) before the first real send.
+ * DNS: orders.sirreel.com must resolve before real clients receive these
+ * emails. Confirm it's live (the domain is attached to the sirreel-fleet
+ * Vercel project) before the first real send.
  */
 export const SUPPLY_ORDER_URL = process.env.SUPPLY_ORDER_BASE_URL || 'https://orders.sirreel.com'

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { UserRole } from '@prisma/client';
 import { getPermissions } from '@/lib/permissions';
+import { Zap } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -73,7 +74,7 @@ export default function AIChat({
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-base">⚡</span>
+          <span className="text-base"><Zap size={16} aria-hidden /></span>
           <div>
             <div className="text-[13px] font-bold text-gray-900">SirReel AI</div>
             <div className="text-[9px] text-gray-400">
@@ -85,14 +86,14 @@ export default function AIChat({
           onClick={onClose}
           className="text-gray-500 hover:text-gray-900 transition-colors text-sm p-1"
         >
-          ✕
+         
         </button>
       </div>
 
       {/* Role restriction notice */}
       {!perms.seeClientNames && (
         <div className="px-3 py-1.5 bg-red-950/30 text-[9px] text-red-400/70 border-b border-red-900/20">
-          🔒 AI won't reveal client info in this role
+          AI won't reveal client info in this role
         </div>
       )}
 

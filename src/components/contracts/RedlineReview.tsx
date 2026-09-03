@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertTriangle, Check, CheckCircle2, ClipboardList, X, XCircle } from 'lucide-react'
 
 const RISK_COLORS = {
   auto_approved: 'bg-emerald-50 border-emerald-200 text-emerald-800',
@@ -9,9 +10,9 @@ const RISK_COLORS = {
 };
 
 const RISK_ICONS = {
-  auto_approved: '✓',
-  needs_review: '⚠',
-  not_acceptable: '✗',
+  auto_approved: <Check size={14} aria-hidden />,
+  needs_review: <AlertTriangle size={14} aria-hidden />,
+  not_acceptable: <X size={14} aria-hidden />,
 };
 
 const RISK_LABELS = {
@@ -56,7 +57,7 @@ export default function RedlineReview({ review, token, onStatusChange }: {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">
-              {review.recommendation === 'approve' ? '✅' : review.recommendation === 'reject' ? '❌' : '📋'}
+              {review.recommendation === 'approve' ? <CheckCircle2 size={14} aria-hidden /> : review.recommendation === 'reject' ? <XCircle size={14} aria-hidden /> : <ClipboardList size={14} aria-hidden />}
             </span>
             <div>
               <div className={`text-sm font-bold ${
@@ -78,9 +79,9 @@ export default function RedlineReview({ review, token, onStatusChange }: {
         </div>
         <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">{review.summary}</p>
         <div className="flex gap-3 mt-3 text-[11px]">
-          <span className="text-emerald-700 font-semibold">✓ {review.autoApprovedCount} auto-approved</span>
-          <span className="text-amber-700 font-semibold">⚠ {review.needsReviewCount} needs review</span>
-          <span className="text-red-700 font-semibold">✗ {review.notAcceptableCount} not acceptable</span>
+          <span className="text-emerald-700 font-semibold">{review.autoApprovedCount} auto-approved</span>
+          <span className="text-amber-700 font-semibold">{review.needsReviewCount} needs review</span>
+          <span className="text-red-700 font-semibold">{review.notAcceptableCount} not acceptable</span>
         </div>
       </div>
 
@@ -190,7 +191,7 @@ export default function RedlineReview({ review, token, onStatusChange }: {
 
       {sent && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center text-sm text-emerald-700 font-semibold">
-          ✓ Response sent to client
+          Response sent to client
         </div>
       )}
     </div>

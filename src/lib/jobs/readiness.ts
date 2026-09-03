@@ -104,9 +104,9 @@ export function readinessApplies(state: RowState): boolean {
   return OUTBOUND.has(state)
 }
 
-/** "COI +2" / "Card" / "✓ Ready" — the row chip's text. */
+/** "COI +2" / "Card" / "Ready" — the row chip's text. */
 export function readinessChipText(r: JobReadiness): string {
-  if (r.ready) return '✓ Ready'
+  if (r.ready) return 'Ready'
   const rest = r.blockers.length - 1
   return rest > 0 ? `${r.blockers[0].label} +${rest}` : r.blockers[0].label
 }

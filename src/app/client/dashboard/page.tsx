@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { Check, Circle, ClipboardList, Lock, X } from 'lucide-react'
 
 function fmt(d: string) {
   if (!d) return '—'
@@ -13,7 +14,7 @@ function PaperworkBadge({ done, label }: { done: boolean; label: string }) {
     <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold ${
       done ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'
     }`}>
-      <span>{done ? '✓' : '○'}</span>
+      <span>{done ? <Check size={14} aria-hidden /> : <Circle size={14} aria-hidden />}</span>
       <span>{label}</span>
     </div>
   )
@@ -55,7 +56,7 @@ function ClientDashboardInner() {
   if (error) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm w-full text-center">
-        <div className="text-4xl mb-3">🔒</div>
+        <div className="text-4xl mb-3"><Lock size={36} aria-hidden /></div>
         <h2 className="text-lg font-bold text-gray-900 mb-2">Link expired</h2>
         <p className="text-sm text-gray-500 mb-4">{error}</p>
         <button onClick={() => router.push('/client-login')}
@@ -110,7 +111,7 @@ function ClientDashboardInner() {
 
         {jobs.length === 0 && (
           <div className="text-center py-12 text-gray-400">
-            <div className="text-4xl mb-3">📋</div>
+            <div className="text-4xl mb-3"><ClipboardList size={36} aria-hidden /></div>
             <div className="text-sm">No jobs found for this email.</div>
           </div>
         )}
@@ -128,7 +129,7 @@ function ClientDashboardInner() {
                 <h3 className="text-lg font-bold text-gray-900">{selected.job_name || 'Job'}</h3>
                 <div className="text-sm text-gray-500">{fmt(selected.start_date)} – {fmt(selected.end_date)}</div>
               </div>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl"><X size={20} aria-hidden /></button>
             </div>
 
             <div className="p-5 space-y-4">
@@ -168,7 +169,7 @@ function ClientDashboardInner() {
               {(!selected.coi_received) && (
                 <a href={`/portal/${selected.portal_token}`}
                   className="block w-full py-3 border-2 border-amber-300 bg-amber-50 text-amber-700 rounded-xl text-sm font-bold text-center hover:bg-amber-100 transition-colors">
-                  ⚠️ COI Required — Upload Now
+                  COI Required — Upload Now
                 </a>
               )}
             </div>

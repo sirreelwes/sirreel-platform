@@ -5,6 +5,7 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker';
 import { JobPicker } from '@/components/orders/JobPicker';
 import { NewJobModal } from '@/components/orders/NewJobModal';
 import { RecentReviewsWidget } from '@/components/reviews/RecentReviewsWidget';
+import { PenLine } from 'lucide-react';
 
 export default function ContractReviewPage() {
   const router = useRouter();
@@ -83,13 +84,13 @@ export default function ContractReviewPage() {
         >
           {file ? (
             <div>
-              <div className="text-3xl mb-2">📝</div>
+              <div className="text-3xl mb-2"><PenLine size={30} aria-hidden /></div>
               <div className="text-sm font-semibold text-blue-700">{file.name}</div>
               <div className="text-xs text-gray-400 mt-1">{(file.size / 1024).toFixed(0)} KB · Click to change</div>
             </div>
           ) : (
             <div>
-              <div className="text-3xl mb-3">📝</div>
+              <div className="text-3xl mb-3"><PenLine size={30} aria-hidden /></div>
               <div className="text-sm font-semibold text-gray-700">Drop redlined contract here or click to browse</div>
               <div className="text-xs text-gray-400 mt-1">PDF or Word (.docx)</div>
             </div>
@@ -128,7 +129,7 @@ export default function ContractReviewPage() {
 
         <button onClick={handleSubmit} disabled={!file || reviewing}
           className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-gray-800 disabled:opacity-40 transition-colors">
-          {reviewing ? '📋 Reviewing changes...' : 'Review Contract →'}
+          {reviewing ? 'Reviewing changes...' : 'Review Contract →'}
         </button>
       </div>
 

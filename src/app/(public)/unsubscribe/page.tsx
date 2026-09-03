@@ -27,6 +27,7 @@
 import { verifyUnsubscribeToken } from '@/lib/outreach/unsubscribeToken'
 import { suppressEmail } from '@/lib/outreach/suppression'
 import { prisma } from '@/lib/prisma'
+import { AlertTriangle, Check } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,7 +105,7 @@ export default async function UnsubscribePage({
 
   return (
     <Shell>
-      <div style={{ fontSize: '32px', marginBottom: '12px' }}>{ok ? '✓' : '⚠'}</div>
+      <div style={{ fontSize: '32px', marginBottom: '12px' }}>{ok ? <Check size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}</div>
       <h1 style={{ fontSize: '20px', fontWeight: 600, margin: '0 0 12px' }}>
         {ok ? 'You\u2019re unsubscribed' : 'We couldn\u2019t finish that'}
       </h1>

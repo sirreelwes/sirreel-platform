@@ -3064,7 +3064,7 @@ function DepartmentGroup({
               Apply
             </button>
             {appliedFlash && (
-              <span className="text-[10px] font-semibold text-chip-good-fg ml-1">Applied ✓</span>
+              <span className="text-[10px] font-semibold text-chip-good-fg ml-1">Applied</span>
             )}
           </div>
         )}
@@ -3471,8 +3471,8 @@ function RowActionsMenu({
 // ─────────────────────────────────────────────────────────────────────────
 
 const MATCH_BADGE: Record<ContactMatchStatus, { label: string; cls: string }> = {
-  existing:        { label: '✓ Existing',      cls: 'bg-chip-good-bg text-chip-good-fg border-chip-good-fg/30' },
-  new:             { label: '✚ New',           cls: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30' },
+  existing:        { label: 'Existing',      cls: 'bg-chip-good-bg text-chip-good-fg border-chip-good-fg/30' },
+  new:             { label: 'New',           cls: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30' },
   possible_match:  { label: '? Possible match', cls: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30' },
 };
 
@@ -3534,7 +3534,7 @@ function PersonSearchField({ onPick }: { onPick: (p: PersonHit) => void }) {
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => q.trim().length >= 1 && setOpen(true)}
-        placeholder="🔍 Link an existing CRM contact…"
+        placeholder="Link an existing CRM contact…"
         className="w-full px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg placeholder:text-lt-fg3"
       />
       {open && q.trim().length > 0 && (

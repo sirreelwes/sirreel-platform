@@ -76,10 +76,10 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
     <div>
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{greeting}, {agentName.split(' ')[0]} 👋</h1>
+          <h1 className="text-xl font-bold text-gray-900">{greeting}, {agentName.split(' ')[0]}</h1>
           <p className="text-[12px] text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · SirReel HQ</p>
         </div>
-        <span className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">🔴 Live · RentalWorks</span>
+        <span className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> Live · RentalWorks</span>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -99,7 +99,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
           <div className="text-[10px] text-gray-400 mt-0.5">{returning.length} returning</div>
         </a>
         <a href="/inbox" className="p-4 bg-white rounded-xl border border-red-100 hover:shadow-sm block">
-          <div className="text-[9px] font-bold text-red-400 uppercase mb-1">⚡ Needs Reply</div>
+          <div className="text-[9px] font-bold text-red-400 uppercase mb-1">Needs Reply</div>
           <div className="text-3xl font-extrabold text-red-500">{criticalCount}</div>
           <div className="text-[10px] text-gray-400 mt-0.5">{inboxEmails.length} total inquiries</div>
         </a>
@@ -109,7 +109,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
         {/* Inquiry Queue */}
         <div className="col-span-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">📬 Inquiry Queue</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inquiry Queue</div>
             <a href="/inbox" className="text-[10px] text-blue-600 font-semibold hover:underline">View all →</a>
           </div>
           <div className="divide-y divide-gray-50 flex-1">
@@ -126,7 +126,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
                 <div className="text-[10px] text-gray-400 truncate">{e.snippet}</div>
                 <div className="flex items-center gap-2 mt-1.5">
                   <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${e.priority === 0 ? 'bg-red-50 text-red-600' : e.priority === 1 ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'}`}>
-                    {e.priority === 0 ? '🔴 Reply now' : e.priority === 1 ? '🟡 High' : '⚪ Normal'}
+                    {e.priority === 0 ? 'Reply now' : e.priority === 1 ? 'High' : 'Normal'}
                   </span>
                   <span className="text-[9px] text-gray-400">{e.category?.replace('_', ' ')}</span>
                 </div>
@@ -146,7 +146,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
             </div>
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <div className="text-[10px] font-bold text-amber-600 uppercase mb-2">📤 Going Out ({goingOut.length})</div>
+                <div className="text-[10px] font-bold text-amber-600 uppercase mb-2">Going Out ({goingOut.length})</div>
                 {goingOut.length === 0 && !loading && <div className="text-[11px] text-gray-400 py-2">None scheduled today</div>}
                 <div className="space-y-1.5">
                   {goingOut.map(o => (
@@ -159,7 +159,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-bold text-emerald-600 uppercase mb-2">📥 Returning ({returning.length})</div>
+                <div className="text-[10px] font-bold text-emerald-600 uppercase mb-2">Returning ({returning.length})</div>
                 {returning.length === 0 && !loading && <div className="text-[11px] text-gray-400 py-2">None returning today</div>}
                 <div className="space-y-1.5">
                   {returning.map(o => (

@@ -23,7 +23,7 @@
  *     tagline above the footer
  *   - sign-off: `<agent name>` + `& Team SirReel` (no displayTitle)
  *
- * ⚠️  PLACEHOLDER COPY — NEEDS WES REVIEW BEFORE FIRST REAL SEND  ⚠️
+ * PLACEHOLDER COPY — NEEDS WES REVIEW BEFORE FIRST REAL SEND
  *     Look for `[[PLACEHOLDER]]` markers throughout for every spot
  *     that carries placeholder language.
  */

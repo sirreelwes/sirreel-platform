@@ -1,7 +1,7 @@
 /**
  * Post-job thank-you email template.
  *
- * ⚠️  PLACEHOLDER COPY — NEEDS WES REVIEW BEFORE FIRST REAL SEND  ⚠️
+ * PLACEHOLDER COPY — NEEDS WES REVIEW BEFORE FIRST REAL SEND
  *
  * The structural shell (logo, typography, photo slot, sign-off block,
  * footer) is final. The actual prose — subject line, opening, the

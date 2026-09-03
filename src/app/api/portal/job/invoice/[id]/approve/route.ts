@@ -135,8 +135,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ...(await channelRecipients('hq-documents')),
     ]),
     subject: approved
-      ? `✅ Pre-invoice approved — ${invoice.order.company.name} · ${jobLabel}`
-      : `✋ Pre-invoice changes requested — ${invoice.order.company.name} · ${jobLabel}`,
+      ? `Pre-invoice approved — ${invoice.order.company.name} · ${jobLabel}`
+      : `Pre-invoice changes requested — ${invoice.order.company.name} · ${jobLabel}`,
     html: renderEmailShell({
       heading: approved ? 'Client approved the pre-invoice' : 'Client asked for changes',
       eyebrow: invoice.invoiceNumber,

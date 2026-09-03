@@ -122,7 +122,7 @@ export async function sendCadenceEmail(
     actualCc = undefined
     const bannerNote = `Test redirect — original recipients were ${origTo}${origCc ? ` (cc ${origCc})` : ''}. This send was rewritten by CADENCE_TEST_OVERRIDE_EMAIL.`
     actualHtml = `<div style="margin:0 0 16px;padding:12px 16px;border-radius:6px;background-color:#fff4e5;border:1px solid #f5c08a;color:#7a3e00;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;">
-  <strong>⚠ Test redirect.</strong> Original recipients: ${origTo}${origCc ? ` (cc ${origCc})` : ''}. CADENCE_TEST_OVERRIDE_EMAIL routed this here.
+  <strong>Test redirect.</strong> Original recipients: ${origTo}${origCc ? ` (cc ${origCc})` : ''}. CADENCE_TEST_OVERRIDE_EMAIL routed this here.
 </div>` + actualHtml
     actualText = `[${bannerNote}]\n\n${actualText}`
     console.log(`[cadence-email] OVERRIDE — ${input.label || input.eventType || ''} routed to ${override} instead of ${origTo}`)

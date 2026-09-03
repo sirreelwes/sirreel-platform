@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { KeyRound } from 'lucide-react'
 
 type Side = 'front' | 'back'
 
@@ -67,7 +68,7 @@ export default function DriverPortalPage({ params }: { params: { token: string }
     return (
       <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <div className="text-3xl mb-3">🔑</div>
+          <div className="text-3xl mb-3"><KeyRound size={30} aria-hidden /></div>
           <p className="text-[15px] text-zinc-300">{loadError}</p>
         </div>
       </main>
@@ -93,7 +94,7 @@ export default function DriverPortalPage({ params }: { params: { token: string }
 
         {done && (
           <div className="mb-5 rounded-xl border border-emerald-800 bg-emerald-950/50 px-4 py-3 text-[14px] text-emerald-200">
-            ✓ Got both sides — you&rsquo;re all set. You can close this page.
+            Got both sides — you&rsquo;re all set. You can close this page.
           </div>
         )}
 

@@ -19,6 +19,7 @@ import {
   type V2Intake,
   type V2Paperwork,
 } from '@/components/portal-v2/types'
+import { Lock, Phone } from 'lucide-react'
 
 /**
  * Portal v2 — guided, collect-once client paperwork experience.
@@ -210,11 +211,11 @@ export default function ClientPortalV2() {
     return (
       <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="text-4xl mb-3">🔒</div>
+          <div className="text-4xl mb-3"><Lock size={36} aria-hidden /></div>
           <div className="text-gray-800 font-semibold">Link Not Found</div>
           <div className="text-gray-500 text-sm mt-1">{error || 'This link is invalid or expired.'}</div>
           <div className="mt-3 text-sm">
-            📞{' '}
+            <Phone size={14} aria-hidden className="inline-block align-[-2px]" />{' '}
             <a href="tel:8185152389" className="font-semibold text-gray-700">
               (818) 515-2389
             </a>
@@ -286,7 +287,7 @@ export default function ClientPortalV2() {
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Paperwork</span>
             <span className={`text-[11px] font-bold ${allDone ? 'text-emerald-600' : 'text-gray-700'}`}>
-              {allDone ? '🎉 All complete' : `${doneCount} of ${total} complete`}
+              {allDone ? 'All complete' : `${doneCount} of ${total} complete`}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -304,7 +305,7 @@ export default function ClientPortalV2() {
       <div className="max-w-xl mx-auto px-4 py-5 space-y-3">
         {allDone && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-            <div className="text-4xl mb-2">🎉</div>
+            
             <div className="text-emerald-800 font-bold text-base">All paperwork submitted!</div>
             <div className="text-emerald-600 text-sm mt-1">
               Everything is on file with SirReel. We&rsquo;ll reach out if anything
@@ -398,7 +399,7 @@ export default function ClientPortalV2() {
             }/portal/v2/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
             className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
-            📧 Email me this link for later
+            Email me this link for later
           </a>
         </div>
       </div>

@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { AlertTriangle } from 'lucide-react'
 
 type ListStatus = 'BOOKED' | 'LOADED_READY' | 'ON_JOB'
 type PickListStatus =
@@ -308,7 +309,7 @@ function OverdueSection({ label, cards, lane }: { label: string; cards: Dispatch
     <div className="p-3">
       <div className="text-[10px] uppercase tracking-wider font-bold text-chip-bad-fg mb-2">{label}</div>
       {cards.length === 0 ? (
-        <div className="text-xs text-chip-bad-fg/70">None ✓</div>
+        <div className="text-xs text-chip-bad-fg/70">None</div>
       ) : (
         <div className="grid gap-1.5">
           {cards.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} overdue lane={lane} /> : <WarehouseCardView key={c.cardId} c={c} overdue lane={lane} />))}
@@ -581,7 +582,7 @@ function FleetCardView({ c, overdue, lane = 'out' }: { c: FleetCard; overdue?: b
       </div>
       {blindReturn && (
         <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-          <span aria-hidden="true">⚠</span>
+          <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
           Blind return — needs check-in
         </div>
       )}
@@ -643,7 +644,7 @@ function WarehouseCardView({ c, overdue, lane = 'out' }: { c: WarehouseCard; ove
       </div>
       {blindReturn && (
         <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-          <span aria-hidden="true">⚠</span>
+          <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
           Blind return — needs check-in
         </div>
       )}

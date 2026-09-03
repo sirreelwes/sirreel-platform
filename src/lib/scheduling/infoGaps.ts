@@ -1,6 +1,6 @@
 /**
  * Incomplete call-in reservations — the shared definition of "what's
- * still missing", used by every surface that shows the ⚠ triangle.
+ * still missing", used by every surface that shows the triangle.
  *
  * Origin (Wes, 2026-08-24): a client phones in a reservation before the
  * production company or the job/show name exist. Blocking the hold on

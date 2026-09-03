@@ -30,6 +30,7 @@ import {
   type InsuredMatchResult,
 } from '@/lib/coi/insuredMatch';
 import type { CoiChecklistRow } from '@/lib/coi/checks';
+import { Check, X } from 'lucide-react';
 
 interface StaleAgreement {
   orderId: string;
@@ -73,9 +74,9 @@ interface CoiReviewData {
   fixDraft: { issues: string[]; message: string };
 }
 
-const CHECK_MARK: Record<CoiChecklistRow['status'], string> = {
-  PASS: '✓',
-  FAIL: '✗',
+const CHECK_MARK: Record<CoiChecklistRow['status'], React.ReactNode> = {
+  PASS: <Check size={13} aria-hidden />,
+  FAIL: <X size={13} aria-hidden />,
   UNKNOWN: '–',
 };
 

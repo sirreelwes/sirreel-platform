@@ -18,7 +18,8 @@
  */
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Inbox, X } from 'lucide-react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import { NewJobLauncher } from './NewJobLauncher'
@@ -68,6 +69,7 @@ export function JobsToolbar() {
 
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const searchRef = useRef<HTMLInputElement>(null)
   const selectedId = pathname?.startsWith('/jobs/') ? pathname.slice('/jobs/'.length).split('/')[0] : null
   const incomingPanel = searchParams?.get('panel') === 'incoming'
   const selected = !!selectedId || incomingPanel
@@ -139,7 +141,7 @@ export function JobsToolbar() {
                 : 'border-zinc-200 bg-white hover:bg-zinc-100'
           }`}
         >
-          <span className="text-[12px]">📥</span>
+          <Inbox size={13} aria-hidden className="text-zinc-500" />
           <span className="text-[12px] font-semibold text-zinc-800">Incoming</span>
           {incomingOverdue > 0 && (
             <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">
@@ -161,12 +163,44 @@ export function JobsToolbar() {
           )}
         </Link>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search job, code, company, contact…"
-          className="order-last md:order-none w-full md:w-auto flex-1 md:min-w-[180px] max-w-full md:max-w-md px-2.5 py-2 md:py-1.5 min-h-[44px] md:min-h-0 bg-white border border-zinc-300 rounded-lg text-[16px] md:text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500"
-        />
+        {/* Wes 2026-09-03: clearing the search meant holding backspace
+            through the whole query. The X only appears once there is
+            something to clear, and Escape does the same thing for
+            anyone already typing. Padding-right reserves the button's
+            lane so a long query never runs underneath it. */}
+        <div className="order-last md:order-none relative w-full md:w-auto flex-1 md:min-w-[180px] max-w-full md:max-w-md">
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && search) {
+                e.preventDefault()
+                setSearch('')
+              }
+            }}
+            placeholder="Search job, code, company, contact…"
+            className={`w-full px-2.5 py-2 md:py-1.5 min-h-[44px] md:min-h-0 bg-white border border-zinc-300 rounded-lg text-[16px] md:text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500 ${
+              search ? 'pr-9' : ''
+            }`}
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              title="Clear search"
+              onClick={() => {
+                setSearch('')
+                // Focus goes back to the field, not nowhere — the point
+                // of clearing is usually to type something else.
+                searchRef.current?.focus()
+              }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+            >
+              <X size={14} aria-hidden />
+            </button>
+          )}
+        </div>
 
         <select
           value={status}

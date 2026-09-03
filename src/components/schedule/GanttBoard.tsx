@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
-import { Wrench } from 'lucide-react';
+import { AlertTriangle, Check, Pencil, Timer, Wrench, X } from 'lucide-react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
@@ -96,7 +96,7 @@ function assignLanes(bookings: any[]): { bookings: any[]; laneCount: number } {
 }
 
 // ── Order badge — red square + pen glyph on a bar whose reservation has an
-// Order attached (Wes 2026-08-22: the 📄 marker was too easy to miss).
+// Order attached (Wes 2026-08-22: the document marker was too easy to miss).
 // Clicking it deep-links to the order instead of opening the reservation
 // modal; pointer-down is stopped so the badge can't start a bar drag. When
 // the booking somehow lacks a linked order id, it falls back to a plain
@@ -119,7 +119,7 @@ function OrderBadge({ order, rwOrderNumber, jobId }: {
         title={`Order ${order.orderNumber} attached — click to open`}
         onClick={(ev) => ev.stopPropagation()}
         onPointerDown={(ev) => ev.stopPropagation()}
-      >✎</a>
+      ><Pencil size={16} aria-hidden /></a>
     )
   }
   if (rwOrderNumber && jobId) {
@@ -130,10 +130,10 @@ function OrderBadge({ order, rwOrderNumber, jobId }: {
         title={`RW order ${rwOrderNumber} attached — click to open the job's RW billing`}
         onClick={(ev) => ev.stopPropagation()}
         onPointerDown={(ev) => ev.stopPropagation()}
-      >✎</a>
+      ><Pencil size={16} aria-hidden /></a>
     )
   }
-  return <span className={ORDER_BADGE_CLASS} title="Order attached">✎</span>
+  return <span className={ORDER_BADGE_CLASS} title="Order attached"><Pencil size={16} aria-hidden /></span>
 }
 
 // ── Incomplete-info triangle — a call-in reservation created before the
@@ -149,7 +149,7 @@ function IncompleteBadge({ gaps }: { gaps?: Array<{ key: string; label: string }
       title={`Incomplete — missing ${gaps.map((g) => g.label).join(', ')}`}
       aria-label={`Incomplete reservation — missing ${gaps.map((g) => g.label).join(', ')}`}
       onPointerDown={(ev) => ev.stopPropagation()}
-    >⚠</span>
+    ><AlertTriangle size={16} aria-hidden /></span>
   )
 }
 
@@ -1414,11 +1414,11 @@ export function GanttBoard() {
           <span className="text-gray-500">Unit on a job today</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] leading-none text-white">✎</span>
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] leading-none text-white"><Pencil size={11} aria-hidden /></span>
           <span className="text-gray-500">Order attached · click opens order</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-amber-400 text-[10px] leading-none text-amber-950">⚠</span>
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-amber-400 text-[10px] leading-none text-amber-950"><AlertTriangle size={11} aria-hidden /></span>
           <span className="text-gray-500">Missing info · open to finish</span>
         </div>
         <div className="flex items-center gap-1">
@@ -1692,7 +1692,7 @@ export function GanttBoard() {
                                 title={`Needs a unit — ${t.categoryName}${detail ? ` · ${detail}` : ''}${canBindUnit ? ' · click to pick a unit' : ''}`}
                               >
                                 <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
-                                  ⚠ {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
+                                  {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
                                 </span>
                               </div>
                             )
@@ -1854,7 +1854,7 @@ export function GanttBoard() {
                   </>
                 )}
               </div>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
             </div>
 
             {/* Call-in completion — company / job name / expected order.
@@ -1945,7 +1945,7 @@ export function GanttBoard() {
                   className="w-full text-left px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition-colors"
                 >
                   <span className="text-[12px] font-semibold text-amber-800">
-                    🎬 {stageTermsPending ? 'Opening stage terms…' : 'Stage terms — set rate & areas, start the contract →'}
+                    {stageTermsPending ? 'Opening stage terms…' : 'Stage terms — set rate & areas, start the contract →'}
                   </span>
                 </button>
                 {stageTermsErr && <div className="mt-1 text-[11px] text-red-600">{stageTermsErr}</div>}
@@ -1992,7 +1992,7 @@ export function GanttBoard() {
                         href={`/jobs/${selected.jobId}#rw-billing`}
                         className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-semibold mb-1"
                       >
-                        <span>✎ RW order #{n} attached</span>
+                        <span>RW order #{n} attached</span>
                         <span className="opacity-80">billing on the job →</span>
                       </Link>
                     ))}
@@ -2026,7 +2026,7 @@ export function GanttBoard() {
                         href={`/orders/${o.id}`}
                         className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 mb-1"
                       >
-                        <span className="text-[12px] font-semibold text-blue-700">📄 {o.orderNumber}</span>
+                        <span className="text-[12px] font-semibold text-blue-700">{o.orderNumber}</span>
                         <span className="text-[10px] text-gray-500 truncate">
                           {String(o.status || '').replace(/_/g, ' ').toLowerCase()} · loaded on {selected.unitName}
                           {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 &&
@@ -2250,7 +2250,7 @@ export function GanttBoard() {
                           href={`/orders/${o.id}`}
                           className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 mb-1"
                         >
-                          <span className="text-[12px] font-semibold text-blue-700">📄 {o.orderNumber}</span>
+                          <span className="text-[12px] font-semibold text-blue-700">{o.orderNumber}</span>
                           <span className="text-[10px] text-gray-500 truncate">
                             {String(o.status || '').replace(/_/g, ' ').toLowerCase()}
                             {loadedOn.length > 0 && ` · loaded on ${loadedOn.join(', ')}`} →
@@ -2392,7 +2392,7 @@ export function GanttBoard() {
             style={{ left: 0, top: 0, width: drag.width, height: drag.height, willChange: 'transform' }}
           >
             <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
-              {drag.label}{overTarget ? ` ${drag.targetValid ? '→' : '✕'} ${drag.targetUnit}` : ''}
+              {drag.label}{overTarget ? ` ${drag.targetValid ? '→' : ''} ${drag.targetUnit}` : ''}
             </span>
           </div>
         )
@@ -2525,7 +2525,7 @@ function PaperChip({ label, value, tone, href }: { label: string; value: string;
     : tone === 'warn' ? 'bg-amber-50 border-amber-300 text-amber-800'
     : tone === 'bad' ? 'bg-red-50 border-red-300 text-red-700'
     : 'bg-white border-dashed border-gray-300 text-gray-400'
-  const icon = tone === 'good' ? '✓' : tone === 'warn' ? '⏱' : tone === 'bad' ? '⚠' : '−'
+  const icon = tone === 'good' ? <Check size={12} aria-hidden /> : tone === 'warn' ? <Timer size={12} aria-hidden /> : tone === 'bad' ? <AlertTriangle size={12} aria-hidden /> : '−'
   const body = (
     <>
       <span aria-hidden="true">{icon}</span>
@@ -2714,7 +2714,7 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
     return (
       <>
         <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
-        📋 No pre-rental walkaround yet for {unitName || 'this unit'} — that comes before the keys.
+        No pre-rental walkaround yet for {unitName || 'this unit'} — that comes before the keys.
         {assignmentId && (
           <a
             href={`/fleet/inspection/${assignmentId}`}
@@ -2807,7 +2807,7 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
       </div>
       {d?.flagged && (
         <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-red-100 border border-red-300 text-[11px] text-red-800 font-semibold">
-          ⚠ Flagged driver{d.flagReason ? ` — ${d.flagReason}` : ''}
+          Flagged driver{d.flagReason ? ` — ${d.flagReason}` : ''}
         </div>
       )}
     </div>

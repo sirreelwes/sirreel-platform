@@ -55,6 +55,7 @@ import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
+import { Check, User } from 'lucide-react'
 
 /**
  * Job status, honestly split.
@@ -1331,7 +1332,7 @@ const driverTone = (d: any): string => {
                         disabled={returnSaving}
                         className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2 disabled:opacity-50"
                       >
-                        {job.returnedAt ? 'Unmark returned' : '✓ Mark returned'}
+                        {job.returnedAt ? 'Unmark returned' : 'Mark returned'}
                       </button>
                       <button onClick={openEdit} className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2">
                         Edit job details
@@ -1392,7 +1393,7 @@ const driverTone = (d: any): string => {
             </div>
             {job.returnedAt && (
               <div className="text-[12px] text-emerald-700 font-semibold text-right">
-                ✓ Returned {fmtDateTime(job.returnedAt)}
+                Returned {fmtDateTime(job.returnedAt)}
                 {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
               </div>
             )}
@@ -1506,7 +1507,7 @@ const driverTone = (d: any): string => {
           {stripScored ? (
             <span className="text-[12px] text-zinc-600">
               {readiness.done} of {readiness.total} complete
-              {readiness.ready && <span className="text-emerald-700 font-semibold"> · ✓ Ready to go out</span>}
+              {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
             </span>
           ) : (
             <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
@@ -1806,7 +1807,7 @@ const driverTone = (d: any): string => {
                               : 'Approved'
                           }
                         >
-                          <span aria-hidden>✓</span> Complete
+                          <span aria-hidden><Check size={16} aria-hidden /></span> Complete
                         </span>
                       ) : (
                         <button
@@ -2284,7 +2285,7 @@ const driverTone = (d: any): string => {
                     <span className="text-zinc-600">No driver named</span>
                   ) : (
                     <span className={driverTone(a.drivers[0])}>
-                      🧑‍✈️ {driverName(a.drivers[0])}
+                      <User size={12} aria-hidden className="inline-block align-[-1px] mr-1" />{driverName(a.drivers[0])}
                       {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
                       {' · '}{driverStateLabel(a.drivers[0])}
                     </span>

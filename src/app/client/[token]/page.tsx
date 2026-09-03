@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd } from '@/lib/contracts/fees';
+import { Ban, BarChart3, Bookmark, Building2, Camera, Car, Check, Clapperboard, ClipboardList, CreditCard, FileText, Fuel, Globe, IdCard, Lock, Mail, MapPin, PenLine, Phone, Radio, Receipt, ShieldCheck, Sparkles, Truck, X , type LucideIcon } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type PortalStep = 'agreement' | 'lcdw' | 'coi' | 'cc';
@@ -107,7 +108,7 @@ function PaperworkModal({ step, token, onClose, onComplete }: { step: PortalStep
             {step === 'coi' && 'Certificate of Insurance'}
             {step === 'cc' && 'Credit Card Authorization'}
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors text-sm">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors text-sm"><X size={14} aria-hidden /></button>
         </div>
         <div className="p-5">
           <div className="text-sm text-gray-500 mb-4">
@@ -177,11 +178,11 @@ export default function ClientDashboard() {
     <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center p-4">
       <div className="text-center max-w-sm">
         <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <span className="text-gray-500 text-xl">🔒</span>
+          <span className="text-gray-500 text-xl"><Lock size={20} aria-hidden /></span>
         </div>
         <div className="text-gray-800 font-semibold text-lg mb-2">Link Not Found</div>
         <div className="text-gray-500 text-sm">This link is invalid or has expired. Please contact your SirReel representative.</div>
-        <div className="mt-4 text-sm text-gray-600">📞 <a href="tel:8185152389" className="font-semibold hover:underline">(818) 515-2389</a></div>
+        <div className="mt-4 text-sm text-gray-600"><a href="tel:8185152389" className="font-semibold hover:underline">(818) 515-2389</a></div>
       </div>
     </div>
   );
@@ -192,10 +193,10 @@ export default function ClientDashboard() {
   const cc = paperwork?.creditCardAuth;
   const paperworkComplete = ra && coi && cc;
   const paperworkSteps = [
-    { key: 'agreement' as PortalStep, label: 'Rental Agreement', done: ra, icon: '📋', required: true },
-    { key: 'lcdw' as PortalStep, label: 'LCDW Waiver', done: lcdw, icon: '🛡️', required: true },
-    { key: 'coi' as PortalStep, label: 'Certificate of Insurance', done: coi, icon: '📄', required: true },
-    { key: 'cc' as PortalStep, label: 'Credit Card Auth', done: cc, icon: '💳', required: true },
+    { key: 'agreement' as PortalStep, label: 'Rental Agreement', done: ra, icon: <ClipboardList size={14} aria-hidden />, required: true },
+    { key: 'lcdw' as PortalStep, label: 'LCDW Waiver', done: lcdw, icon: <ShieldCheck size={14} aria-hidden />, required: true },
+    { key: 'coi' as PortalStep, label: 'Certificate of Insurance', done: coi, icon: <FileText size={14} aria-hidden />, required: true },
+    { key: 'cc' as PortalStep, label: 'Credit Card Auth', done: cc, icon: <CreditCard size={14} aria-hidden />, required: true },
   ];
   const completedCount = paperworkSteps.filter(s => s.done).length;
 
@@ -203,16 +204,18 @@ export default function ClientDashboard() {
   const company = booking.company;
   const items = booking.items || [];
 
-  const VEHICLE_ICONS: Record<string, string> = {
-    'Cube': '🚛', 'Cargo': '🚐', 'Van': '🚐', 'Pass': '🚌',
-    'PopVan': '🎬', 'Camera': '📷', 'DLUX': '✨', 'Scout': '📡',
-    'Studios': '🏢', 'Studio': '🏢', 'Stake': '🚚', 'Trailer': '🚛',
+  // Category -> icon for the client-facing line list. Matched on a
+  // substring of the category name, longest-standing behaviour kept.
+  const VEHICLE_ICONS: Record<string, LucideIcon> = {
+    'Cube': Truck, 'Cargo': Truck, 'Van': Truck, 'Pass': Truck,
+    'PopVan': Clapperboard, 'Camera': Camera, 'DLUX': Sparkles, 'Scout': Radio,
+    'Studios': Building2, 'Studio': Building2, 'Stake': Truck, 'Trailer': Truck,
   };
   const getIcon = (name: string) => {
-    for (const [key, icon] of Object.entries(VEHICLE_ICONS)) {
-      if (name.toLowerCase().includes(key.toLowerCase())) return icon;
+    for (const [key, Icon] of Object.entries(VEHICLE_ICONS)) {
+      if (name.toLowerCase().includes(key.toLowerCase())) return <Icon size={18} />;
     }
-    return '🚗';
+    return <Car size={18} />;
   };
 
   const rentalDays = booking.startDate && booking.endDate
@@ -256,7 +259,7 @@ export default function ClientDashboard() {
             )}
             {paperworkComplete && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <span className="text-emerald-600 text-xs">✓</span>
+                <span className="text-emerald-600 text-xs"><Check size={12} aria-hidden /></span>
                 <span className="text-[11px] text-emerald-700 font-semibold">All paperwork complete</span>
               </div>
             )}
@@ -305,7 +308,7 @@ export default function ClientDashboard() {
 
             {booking.deliveryAddress && (
               <div className="mt-3 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-2">
-                <span className="text-gray-400 text-sm">📍</span>
+                <span className="text-gray-400 text-sm"><MapPin size={14} aria-hidden /></span>
                 <div>
                   <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Delivery · </span>
                   <span className="text-sm text-gray-200">{booking.deliveryAddress}</span>
@@ -386,7 +389,7 @@ export default function ClientDashboard() {
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                   step.done ? 'bg-emerald-100' : 'bg-white border border-gray-200'
                 }`}>
-                  {step.done ? '✓' : step.icon}
+                  {step.done ? <Check size={14} aria-hidden /> : step.icon}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[11px] font-semibold truncate ${step.done ? 'text-emerald-700' : 'text-gray-700'}`}>
@@ -401,7 +404,7 @@ export default function ClientDashboard() {
           </div>
           {!paperworkComplete && (
             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-              ⚠️ Please complete all paperwork before your rental start date of <strong>{fmtShort(booking.startDate)}</strong>.
+              Please complete all paperwork before your rental start date of <strong>{fmtShort(booking.startDate)}</strong>.
             </div>
           )}
         </div>
@@ -411,10 +414,10 @@ export default function ClientDashboard() {
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Documents</div>
           <div className="space-y-2">
             {[
-              { label: 'Order Confirmation', icon: '📋', status: 'available', desc: 'Booking details & equipment list' },
-              { label: 'Quote / Estimate', icon: '📊', status: booking.rentalworksOrderId ? 'available' : 'pending', desc: booking.rentalworksOrderId ? `Order #${booking.rentalworksOrderId}` : 'Pending from SirReel' },
-              { label: 'Invoice', icon: '🧾', status: booking.invoiceStatus === 'sent' || booking.invoiceStatus === 'paid' ? 'available' : 'pending', desc: booking.invoiceStatus === 'paid' ? 'Paid ✓' : booking.invoiceStatus === 'sent' ? 'Awaiting payment' : 'Not yet issued' },
-              { label: 'Signed Agreement', icon: '✍️', status: ra ? 'available' : 'pending', desc: ra ? 'Signed & on file' : 'Complete paperwork above' },
+              { label: 'Order Confirmation', icon: <ClipboardList size={14} aria-hidden />, status: 'available', desc: 'Booking details & equipment list' },
+              { label: 'Quote / Estimate', icon: <BarChart3 size={14} aria-hidden />, status: booking.rentalworksOrderId ? 'available' : 'pending', desc: booking.rentalworksOrderId ? `Order #${booking.rentalworksOrderId}` : 'Pending from SirReel' },
+              { label: 'Invoice', icon: <Receipt size={14} aria-hidden />, status: booking.invoiceStatus === 'sent' || booking.invoiceStatus === 'paid' ? 'available' : 'pending', desc: booking.invoiceStatus === 'paid' ? 'Paid' : booking.invoiceStatus === 'sent' ? 'Awaiting payment' : 'Not yet issued' },
+              { label: 'Signed Agreement', icon: <PenLine size={14} aria-hidden />, status: ra ? 'available' : 'pending', desc: ra ? 'Signed & on file' : 'Complete paperwork above' },
             ].map((doc, i) => (
               <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
                 doc.status === 'available' ? 'border-gray-200 hover:border-gray-300 cursor-pointer' : 'border-gray-100 opacity-60'
@@ -452,10 +455,10 @@ export default function ClientDashboard() {
                 </div>
                 <div className="flex gap-2">
                   {agent.email && (
-                    <a href={`mailto:${agent.email}`} className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-sm hover:bg-gray-100 transition-colors">✉️</a>
+                    <a href={`mailto:${agent.email}`} className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-sm hover:bg-gray-100 transition-colors"><Mail size={14} aria-hidden /></a>
                   )}
                   {agent.phone && (
-                    <a href={`tel:${agent.phone}`} className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-sm hover:bg-gray-100 transition-colors">📞</a>
+                    <a href={`tel:${agent.phone}`} className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-sm hover:bg-gray-100 transition-colors"><Phone size={14} aria-hidden /></a>
                   )}
                 </div>
               </div>
@@ -464,21 +467,21 @@ export default function ClientDashboard() {
             {/* Office */}
             <div className="grid grid-cols-2 gap-2">
               <a href="tel:8185152389" className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                <span className="text-base">📞</span>
+                <span className="text-base"><Phone size={16} aria-hidden /></span>
                 <div>
                   <div className="text-[11px] font-semibold text-gray-700">Office</div>
                   <div className="text-[10px] text-gray-500">(818) 515-2389</div>
                 </div>
               </a>
               <a href="mailto:info@sirreel.com" className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                <span className="text-base">✉️</span>
+                <span className="text-base"><Mail size={16} aria-hidden /></span>
                 <div>
                   <div className="text-[11px] font-semibold text-gray-700">Email</div>
                   <div className="text-[10px] text-gray-500">info@sirreel.com</div>
                 </div>
               </a>
               <a href="https://www.sirreel.com" target="_blank" className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                <span className="text-base">🌐</span>
+                <span className="text-base"><Globe size={16} aria-hidden /></span>
                 <div>
                   <div className="text-[11px] font-semibold text-gray-700">Website</div>
                   <div className="text-[10px] text-gray-500">www.sirreel.com</div>
@@ -500,24 +503,24 @@ export default function ClientDashboard() {
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Driver & Compliance Requirements</div>
           <div className="space-y-2 text-sm text-gray-600 leading-relaxed">
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
-              <span className="text-base mt-0.5">🪪</span>
+              <span className="text-base mt-0.5"><IdCard size={16} aria-hidden /></span>
               <div><span className="font-semibold text-gray-800">Driver Licensing: </span>All drivers must be duly licensed, trained, and qualified to drive vehicles of this type. A valid driver's license is required for all vehicle operators.</div>
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
-              <span className="text-base mt-0.5">🚫</span>
+              <span className="text-base mt-0.5"><Ban size={16} aria-hidden /></span>
               <div><span className="font-semibold text-gray-800">Non-Smoking: </span>All vehicles are non-smoking. A {usd(SMOKING_FEE_PER_DAY)}/day fee applies for violations, plus cost of repairs.</div>
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
-              <span className="text-base mt-0.5">⛽</span>
+              <span className="text-base mt-0.5"><Fuel size={16} aria-hidden /></span>
               <div><span className="font-semibold text-gray-800">Fuel Policy: </span>Vehicles must be returned at the same fuel level they were dispatched. A {usd(FUEL_PER_GALLON)}/gallon fee applies for shortfalls.</div>
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
-              <span className="text-base mt-0.5">🔖</span>
+              <span className="text-base mt-0.5"><Bookmark size={16} aria-hidden /></span>
               <div><span className="font-semibold text-gray-800">Vehicle Identification: </span>Do not remove, obscure, or deface any SirReel identification markings on vehicles or equipment.</div>
             </div>
             {paperwork?.dotNumber && (
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                <span className="text-base mt-0.5">📋</span>
+                <span className="text-base mt-0.5"><ClipboardList size={16} aria-hidden /></span>
                 <div><span className="font-semibold text-blue-800">DOT / CA Number on file: </span><span className="font-mono text-blue-700">{paperwork.dotNumber}</span></div>
               </div>
             )}

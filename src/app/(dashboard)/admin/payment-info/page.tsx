@@ -216,7 +216,7 @@ export default function AdminPaymentInfoPage() {
           >
             {saving ? 'Saving…' : 'Save details'}
           </button>
-          {savedAt && <span className="text-xs text-emerald-700">Saved ✓ {savedAt}</span>}
+          {savedAt && <span className="text-xs text-emerald-700">Saved {savedAt}</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function AdminPaymentInfoPage() {
               <div className="text-[13px] font-medium text-lt-fg">{SLOT_LABELS[slot]}</div>
               <div className="text-[11px] text-lt-fg3 truncate">
                 {slots[slot].present ? (
-                  <span className="text-emerald-700">✓ {slots[slot].filename || 'file on file'}</span>
+                  <span className="text-emerald-700">{slots[slot].filename || 'file on file'}</span>
                 ) : (
                   <span className="italic">No file — this slot is skipped in the email.</span>
                 )}

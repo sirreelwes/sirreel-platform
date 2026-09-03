@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react'
+import { Inbox } from 'lucide-react'
 
 export function PaymentInfoRequestForm() {
   const [email, setEmail] = useState('')
@@ -43,7 +44,7 @@ export function PaymentInfoRequestForm() {
   if (done) {
     return (
       <div className="bg-[#141414] border border-[#2e2e30] rounded-2xl p-8">
-        <div className="text-3xl mb-3">📬</div>
+        <div className="text-3xl mb-3"><Inbox size={30} aria-hidden /></div>
         <div className="text-lg font-bold" style={{ fontFamily: 'Archivo, sans-serif' }}>Request received</div>
         <p className="text-[#a8a294] text-[14px] leading-relaxed mt-2 max-w-[52ch]">{done}</p>
       </div>

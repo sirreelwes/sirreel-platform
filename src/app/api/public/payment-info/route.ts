@@ -78,7 +78,7 @@ async function notifyBilling(subject: string, lines: string[]): Promise<void> {
 
 /**
  * Additive Action-Queue visibility — surface the request as a
- * dashboard Alert (the "⚡ Needs Attention" engine) so it doesn't live
+ * dashboard Alert (the "Needs Attention" engine) so it doesn't live
  * only in the pipeline Inquiry + billing@ inbox. High severity: a
  * client trying to pay. No expires_at — the unmatched one MUST NOT rot;
  * it stays until an operator dismisses it. Never contains banking

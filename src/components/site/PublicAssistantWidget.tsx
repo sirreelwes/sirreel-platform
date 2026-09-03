@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAssistantChat } from './useAssistantChat'
+import { MessageSquare } from 'lucide-react'
 
 export function PublicAssistantWidget() {
   const pathname = usePathname()
@@ -31,7 +32,7 @@ export function PublicAssistantWidget() {
           className="fixed bottom-5 right-5 z-[70] flex items-center gap-2 bg-[#c39a3f] hover:bg-[#d4a547] text-[#0c0c0d] font-extrabold text-[13px] uppercase tracking-wide rounded-full pl-4 pr-5 py-3 shadow-2xl transition-colors"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
-          <span className="text-[17px] leading-none">💬</span>
+          <span className="text-[17px] leading-none"><MessageSquare size={16} aria-hidden /></span>
           Need help?
         </button>
       )}
@@ -51,7 +52,7 @@ export function PublicAssistantWidget() {
               aria-label="Close chat"
               className="text-[#8b857a] hover:text-white text-lg leading-none px-1"
             >
-              ✕
+             
             </button>
           </div>
 
@@ -95,7 +96,7 @@ export function PublicAssistantWidget() {
                 aria-label="Send"
                 className="bg-[#c39a3f] hover:bg-[#d4a547] disabled:opacity-40 text-[#0c0c0d] font-extrabold rounded-xl px-3.5 py-2.5 text-[13.5px]"
               >
-                ➤
+               
               </button>
             </div>
             <div className="text-[10px] text-[#5c574d] mt-1.5">

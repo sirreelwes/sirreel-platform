@@ -2,13 +2,14 @@
 import { useState } from 'react';
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
 import { clauseMatches, type MarkupManifest } from '@/lib/contracts/markupShared';
+import { AlertTriangle, Check, ClipboardList, Search, X, XCircle } from 'lucide-react'
 
 const BASELINE_BY_REF = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c]));
 
 const TYPE_CONFIG = {
-  auto_approved: { color: 'bg-emerald-50 border-emerald-200 text-emerald-800', icon: '✓', badge: 'bg-emerald-100 text-emerald-700', label: 'Auto-approved' },
-  needs_review: { color: 'bg-amber-50 border-amber-200 text-amber-800', icon: '⚠', badge: 'bg-amber-100 text-amber-700', label: 'Needs review' },
-  not_acceptable: { color: 'bg-red-50 border-red-200 text-red-700', icon: '✗', badge: 'bg-red-100 text-red-700', label: 'Not acceptable' },
+  auto_approved: { color: 'bg-emerald-50 border-emerald-200 text-emerald-800', icon: <Check size={14} aria-hidden />, badge: 'bg-emerald-100 text-emerald-700', label: 'Auto-approved' },
+  needs_review: { color: 'bg-amber-50 border-amber-200 text-amber-800', icon: <AlertTriangle size={14} aria-hidden />, badge: 'bg-amber-100 text-amber-700', label: 'Needs review' },
+  not_acceptable: { color: 'bg-red-50 border-red-200 text-red-700', icon: <X size={14} aria-hidden />, badge: 'bg-red-100 text-red-700', label: 'Not acceptable' },
 };
 
 export type ClauseDecisionValue = 'PENDING' | 'ACCEPT' | 'COUNTER' | 'REJECT';
@@ -21,7 +22,7 @@ export interface DecisionState {
 
 const DECISION_BTN: Record<Exclude<ClauseDecisionValue, 'PENDING'>, { label: string; idle: string; active: string }> = {
   ACCEPT: {
-    label: '✓ Accept',
+    label: 'Accept',
     idle: 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50',
     active: 'bg-emerald-600 text-white border border-emerald-600',
   },
@@ -31,7 +32,7 @@ const DECISION_BTN: Record<Exclude<ClauseDecisionValue, 'PENDING'>, { label: str
     active: 'bg-amber-500 text-white border border-amber-500',
   },
   REJECT: {
-    label: '✗ Reject',
+    label: 'Reject',
     idle: 'bg-white border border-red-300 text-red-700 hover:bg-red-50',
     active: 'bg-red-600 text-white border border-red-600',
   },
@@ -114,7 +115,7 @@ export function ReviewResultPanel({
           server-side, never by the model. */}
       {review._meta?.redlineSourceUnknown && (
         <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3">
-          <div className="text-2xl">🔍</div>
+          <div className="text-2xl"><Search size={24} aria-hidden /></div>
           <div>
             <div className="text-sm font-bold text-amber-900">Redline source unknown — zero PDF annotations</div>
             <p className="text-[12px] text-amber-800 mt-0.5 leading-relaxed">
@@ -131,16 +132,16 @@ export function ReviewResultPanel({
         'bg-amber-50 border-amber-200'
       }`}>
         <div className="flex items-start gap-4">
-          <div className="text-3xl">{review.recommendation === 'reject' ? '❌' : '📋'}</div>
+          <div className="text-3xl">{review.recommendation === 'reject' ? <XCircle size={14} aria-hidden /> : <ClipboardList size={14} aria-hidden />}</div>
           <div className="flex-1">
             <div className={`text-base font-bold ${review.recommendation === 'reject' ? 'text-red-700' : 'text-amber-800'}`}>
               AI Recommendation: {review.recommendation === 'reject' ? 'Reject' : 'Counter-propose'}
             </div>
             <p className="text-sm mt-1 text-gray-600">{review.summary}</p>
             <div className="flex gap-3 mt-2 text-[11px]">
-              <span className="text-emerald-600 font-semibold">✓ {review.autoApprovedCount} auto-approved</span>
-              <span className="text-amber-600 font-semibold">⚠ {review.needsReviewCount} needs review</span>
-              <span className="text-red-600 font-semibold">✗ {review.notAcceptableCount} not acceptable</span>
+              <span className="text-emerald-600 font-semibold">{review.autoApprovedCount} auto-approved</span>
+              <span className="text-amber-600 font-semibold">{review.needsReviewCount} needs review</span>
+              <span className="text-red-600 font-semibold">{review.notAcceptableCount} not acceptable</span>
             </div>
           </div>
           <div className={`text-[10px] font-bold px-2.5 py-1 rounded-lg flex-shrink-0 ${
@@ -172,7 +173,7 @@ export function ReviewResultPanel({
                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${cfg.badge}`}>{cfg.label}</span>
                       {needsOperatorReview && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-red-600 text-white">
-                          ⚠️ Needs operator review
+                          Needs operator review
                         </span>
                       )}
                       {isSecondRound && (
@@ -193,7 +194,7 @@ export function ReviewResultPanel({
                 <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2 text-[11px]">
                   {needsOperatorReview && change.operatorReviewReason && (
                     <div className="bg-red-50 border border-red-300 rounded-lg p-2.5">
-                      <div className="font-bold text-red-700 uppercase text-[9px] mb-1">⚠️ Operator review reason</div>
+                      <div className="font-bold text-red-700 uppercase text-[9px] mb-1">Operator review reason</div>
                       <div className="text-red-700 leading-relaxed">{change.operatorReviewReason}</div>
                     </div>
                   )}
@@ -480,7 +481,7 @@ function DiscussPanel({
         className="w-full flex items-center justify-between px-2.5 py-2 text-left"
       >
         <span className="font-bold text-gray-500 uppercase text-[9px]">
-          💬 Discuss with Claude{messages.length > 0 ? ` (${messages.length})` : ''}
+          Discuss with Claude{messages.length > 0 ? ` (${messages.length})` : ''}
         </span>
         <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
@@ -514,7 +515,7 @@ function DiscussPanel({
                               className="text-[10px] font-bold px-2 py-1 rounded bg-amber-500 text-white hover:bg-amber-600"
                             >
                               {appliedFor === `${m.id}:${si}`
-                                ? '✓ Applied — review & save your decision'
+                                ? 'Applied — review & save your decision'
                                 : 'Apply as Counter text'}
                             </button>
                           )}
@@ -585,7 +586,7 @@ function SourceAgreementPanel({ sa }: { sa: any }) {
           Source cross-check (text · annotations · image)
         </div>
         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${agree ? 'bg-emerald-100 text-emerald-700' : 'bg-red-600 text-white'}`}>
-          {agree ? '✓ All three agree' : '⚠ Sources disagree'}
+          {agree ? 'All three agree' : 'Sources disagree'}
         </span>
       </div>
       <div className="space-y-0.5">

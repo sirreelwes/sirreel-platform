@@ -83,7 +83,7 @@ export default function CollectionsReportWidget() {
     <div className="p-4 bg-white rounded-xl border border-gray-200">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💵 Collections</div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Collections</div>
         <div className="flex gap-1">
           {(['day','week','month','year'] as Period[]).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
@@ -122,9 +122,9 @@ export default function CollectionsReportWidget() {
 
           {/* Breakdown */}
           <div className="bg-gray-50 rounded-lg px-3 py-1 mb-3">
-            <MoneyRow label="💳 CardPointe (CC)" curr={p.curr.cardpointe} prev={p.prev.cardpointe} pct={p.pctCardpointe} />
-            <MoneyRow label="📋 Total Collected (RW)" curr={p.curr.rentalworks} prev={p.prev.rentalworks} pct={p.pctRentalworks} />
-            <MoneyRow label="📝 Quotes Created" curr={p.curr.quotesCreated} prev={p.prev.quotesCreated} pct={0} />
+            <MoneyRow label="CardPointe (CC)" curr={p.curr.cardpointe} prev={p.prev.cardpointe} pct={p.pctCardpointe} />
+            <MoneyRow label="Total Collected (RW)" curr={p.curr.rentalworks} prev={p.prev.rentalworks} pct={p.pctRentalworks} />
+            <MoneyRow label="Quotes Created" curr={p.curr.quotesCreated} prev={p.prev.quotesCreated} pct={0} />
           </div>
 
           {/* Sparkline — last 30 days */}

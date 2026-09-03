@@ -297,7 +297,7 @@ export async function GET(req: NextRequest) {
         .join(' · ')
       return p(
         `<strong>${esc(r.jobName)}</strong> — ${esc(r.companyName)} <span style="color:#888;">(${esc(r.jobCode)})</span>${whenChip(r.pickupDate)}<br/>` +
-          `All paperwork &amp; approvals ✓ &nbsp; ${orderLinks} &nbsp;·&nbsp; <a href="${HQ_APP_URL}/jobs/${r.jobId}">Open job</a>`,
+          `All paperwork &amp; approvals complete &nbsp; ${orderLinks} &nbsp;·&nbsp; <a href="${HQ_APP_URL}/jobs/${r.jobId}">Open job</a>`,
       )
     })
     .join('')

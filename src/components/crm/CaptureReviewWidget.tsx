@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { mapTitleToRole, PERSON_ROLE_VALUES, type PersonRoleValue } from '@/lib/crm/roleMapping'
 import Link from 'next/link'
+import { X } from 'lucide-react'
 
 type Verdict = 'AUTO_CAPTURED' | 'NEEDS_REVIEW' | 'SKIPPED'
 type Resolution =
@@ -359,7 +360,7 @@ export function CaptureReviewWidget({ onChanged, forceCollapsed }: { onChanged?:
           {notice && (
             <div className="px-4 py-2 text-xs text-chip-good-fg bg-chip-good-bg/30 flex items-center justify-between gap-2">
               <span>{notice}</span>
-              <button type="button" onClick={() => setNotice(null)} className="text-lt-fg3 hover:text-lt-fg">✕</button>
+              <button type="button" onClick={() => setNotice(null)} className="text-lt-fg3 hover:text-lt-fg"><X size={16} aria-hidden /></button>
             </div>
           )}
 
@@ -584,7 +585,7 @@ function CaptureRowView({
                 {row.parsedTitle && <span> · </span>}
                 <span>{row.parsedCompanyString}</span>
                 {row.company && (
-                  <span className="text-chip-good-fg"> ✓ linked</span>
+                  <span className="text-chip-good-fg"> linked</span>
                 )}
                 {!row.company && row.parsedCompanyString && (
                   <span className="text-lt-fg3"> · no CRM match</span>
@@ -700,7 +701,7 @@ function ThreadDrawer({
             onClick={onClose}
             className="text-sm text-lt-fg2 hover:text-lt-fg"
           >
-            Close ✕
+            Close
           </button>
         </div>
 
@@ -735,7 +736,7 @@ function ThreadDrawer({
                   )}
                   <div className="text-sm font-medium text-lt-fg mb-2">{m.subject || '(no subject)'}</div>
                   {m.attachmentCount > 0 && (
-                    <div className="text-xs text-lt-fg2 mb-2">📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</div>
+                    <div className="text-xs text-lt-fg2 mb-2">{m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</div>
                   )}
                   <div className="text-sm text-lt-fg2 whitespace-pre-wrap break-words">
                     {m.bodyText || m.snippet || '(empty body)'}
@@ -758,7 +759,7 @@ function ThreadDrawer({
                 <DRow label="Email" value={capture.parsedEmail} />
                 <DRow label="Phone" value={capture.parsedPhone} />
                 <DRow label="Title" value={capture.parsedTitle} />
-                <DRow label="Company" value={capture.parsedCompanyString} note={capture.company ? '✓ linked' : 'no CRM match'} />
+                <DRow label="Company" value={capture.parsedCompanyString} note={capture.company ? 'linked' : 'no CRM match'} />
                 <DRow label="Project" value={capture.parsedProject} />
               </dl>
 

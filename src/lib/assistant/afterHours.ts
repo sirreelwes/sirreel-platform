@@ -447,7 +447,7 @@ export async function alertOnCallTeam(input: {
   const what = (input.emergency || '').trim().slice(0, 400) || '(no details)'
 
   if (oncall.length === 0) {
-    await notifyTeam('⚠ After-hours emergency — NO on-call contacts set', [
+    await notifyTeam('After-hours emergency — NO on-call contacts set', [
       `A caller reported an emergency but NO on-call agents are configured in /admin/assistant.`,
       `Caller: ${caller} · callback: ${cb}`,
       `Emergency: ${what}`,
@@ -466,7 +466,7 @@ export async function alertOnCallTeam(input: {
   }
 
   // Always email the team as a record + fallback (esp. before SMS is live).
-  await notifyTeam('⚠ After-hours EMERGENCY — on-call alerted', [
+  await notifyTeam('After-hours EMERGENCY — on-call alerted', [
     `Caller: ${caller} · callback: ${cb}`,
     `Emergency: ${what}`,
     ...summaryLines(input.transcriptSummary),
@@ -561,7 +561,7 @@ export async function alertStrandedDriver(input: {
   ]
 
   if (oncall.length === 0) {
-    await notifyTeam('⚠ Driver stuck at the lot — NO on-call contacts set', [
+    await notifyTeam('Driver stuck at the lot — NO on-call contacts set', [
       ...lines,
       'No on-call agents are configured in /admin/assistant, so nobody was texted.',
     ])

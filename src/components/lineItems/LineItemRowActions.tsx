@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { Lock } from 'lucide-react';
 
 export interface LineItemRowActionsExtra {
   /** Menu label. */
@@ -84,9 +85,7 @@ export function LineItemRowActions({
         className="inline-block text-lt-fg3 cursor-not-allowed select-none"
         title={editability.lockedReason ?? 'This document is locked — line items cannot be edited.'}
         aria-label="Locked"
-      >
-        🔒
-      </span>
+      ><Lock size={16} aria-hidden /></span>
     );
   }
 

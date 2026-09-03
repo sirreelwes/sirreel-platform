@@ -1,7 +1,9 @@
 'use client';
 
+import type { ReactNode } from 'react'
 import { useState, useMemo } from 'react';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
+import { AlertTriangle, ClipboardList, Search, Wrench, X } from 'lucide-react'
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -58,11 +60,11 @@ const STATUS_CFG: Record<MaintStatus, { label: string; color: string; bg: string
   complete: { label: 'Complete', color: 'text-emerald-600', bg: 'bg-emerald-50' },
 };
 
-const TYPE_CFG: Record<MaintType, { label: string; icon: string }> = {
-  repair: { label: 'Repair', icon: '🔧' },
-  damage: { label: 'Damage', icon: '⚠️' },
-  preventive: { label: 'Preventive', icon: '📋' },
-  inspection: { label: 'Inspection', icon: '🔍' },
+const TYPE_CFG: Record<MaintType, { label: string; icon: ReactNode }> = {
+  repair: { label: 'Repair', icon: <Wrench size={14} aria-hidden /> },
+  damage: { label: 'Damage', icon: <AlertTriangle size={14} aria-hidden /> },
+  preventive: { label: 'Preventive', icon: <ClipboardList size={14} aria-hidden /> },
+  inspection: { label: 'Inspection', icon: <Search size={14} aria-hidden /> },
 };
 
 // ═══ Real Data ═══
@@ -196,7 +198,7 @@ function MaintenancePageInner() {
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setShowDamage(true); setNType('damage'); }} className="px-3 py-1.5 rounded-md bg-red-50 text-red-600 text-xs font-bold border border-red-200 hover:bg-red-100">⚠️ Report Damage</button>
+          <button onClick={() => { setShowDamage(true); setNType('damage'); }} className="px-3 py-1.5 rounded-md bg-red-50 text-red-600 text-xs font-bold border border-red-200 hover:bg-red-100">Report Damage</button>
           <button onClick={() => { setShowNew(true); setNType('repair'); }} className="px-3 py-1.5 rounded-md bg-black text-white text-xs font-bold hover:bg-gray-800">+ New Issue</button>
         </div>
       </div>
@@ -205,7 +207,7 @@ function MaintenancePageInner() {
       {unnotified.length > 0 && (
         <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[12px]">
-            <span className="text-red-500 animate-pulse">🔴</span>
+            <span className="text-red-500 animate-pulse"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /></span>
             <span className="font-bold text-red-700">{unnotified.length} damage report{unnotified.length > 1 ? 's' : ''} pending agent notification:</span>
             {unnotified.map((r, i) => <span key={r.id} className="text-red-600">{i > 0 && ' · '}{r.vehicleName} → {r.damageAgent}</span>)}
           </div>
@@ -215,10 +217,10 @@ function MaintenancePageInner() {
       {/* Tabs */}
       <div className="flex gap-1 mb-2">
         {[
-          { key: 'active' as const, label: '🔧 Active', count: active.length },
-          { key: 'damage' as const, label: '⚠️ Damage', count: damage.length },
-          { key: 'scheduled' as const, label: '📋 Scheduled', count: records.filter(r => r.status === 'scheduled' || r.type === 'preventive').length },
-          { key: 'history' as const, label: '✓ History', count: records.filter(r => r.status === 'complete').length },
+          { key: 'active' as const, label: 'Active', count: active.length },
+          { key: 'damage' as const, label: 'Damage', count: damage.length },
+          { key: 'scheduled' as const, label: 'Scheduled', count: records.filter(r => r.status === 'scheduled' || r.type === 'preventive').length },
+          { key: 'history' as const, label: 'History', count: records.filter(r => r.status === 'complete').length },
         ].map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); setSelected(null); setStatusFilter('all'); }}
             className={`px-3 py-1.5 rounded text-[11px] font-semibold border ${tab === t.key ? 'bg-gray-100 text-gray-900 border-gray-300' : 'border-gray-200 text-gray-500'}`}>
@@ -249,7 +251,7 @@ function MaintenancePageInner() {
                       <span className="text-[13px] font-bold text-gray-900">{r.vehicleName}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${pr.bg} ${pr.color}`}>{pr.label}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${st.bg} ${st.color}`}>{st.label}</span>
-                      {r.type === 'damage' && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600">⚠️ DMG</span>}
+                      {r.type === 'damage' && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600">DMG</span>}
                       {r.type === 'damage' && !r.damageNotified && r.damageClient && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-500 text-white animate-pulse">NOTIFY</span>}
                     </div>
                     <div className="text-[12px] font-medium text-gray-700 mt-0.5">{r.issue}</div>
@@ -277,7 +279,7 @@ function MaintenancePageInner() {
                 <h2 className="text-lg font-bold text-gray-900">{selected.vehicleName}</h2>
                 <div className="text-[12px] text-gray-500">{selected.category} · {TYPE_CFG[selected.type].icon} {TYPE_CFG[selected.type].label}</div>
               </div>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={16} aria-hidden /></button>
             </div>
 
             {/* Priority + Status */}
@@ -288,22 +290,22 @@ function MaintenancePageInner() {
               {selected.status === 'scheduled' && <button onClick={() => updateStatus(selected.id, 'in_shop')} className="px-2.5 py-1 rounded text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">→ In Shop</button>}
               {selected.status === 'diagnosed' && <button onClick={() => updateStatus(selected.id, 'in_shop')} className="px-2.5 py-1 rounded text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">→ In Shop</button>}
               {selected.status === 'in_shop' && <button onClick={() => updateStatus(selected.id, 'waiting_parts')} className="px-2.5 py-1 rounded text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">→ Waiting Parts</button>}
-              {['in_shop', 'waiting_parts', 'diagnosed', 'scheduled'].includes(selected.status) && <button onClick={() => updateStatus(selected.id, 'complete')} className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">✓ Complete</button>}
+              {['in_shop', 'waiting_parts', 'diagnosed', 'scheduled'].includes(selected.status) && <button onClick={() => updateStatus(selected.id, 'complete')} className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">Complete</button>}
             </div>
 
             {/* Damage alert */}
             {selected.type === 'damage' && selected.damageClient && (
               <div className={`p-3 rounded-lg mb-3 ${selected.damageNotified ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                <div className="text-[12px] font-bold text-gray-900 mb-1">⚠️ Damage Report</div>
+                <div className="text-[12px] font-bold text-gray-900 mb-1">Damage Report</div>
                 <div className="text-[11px] text-gray-600 space-y-1">
                   <div><span className="text-gray-400">Client:</span> {selected.damageClient}</div>
                   <div><span className="text-gray-400">Agent:</span> {selected.damageAgent}</div>
                   <div><span className="text-gray-400">Photos:</span> {selected.damagePhotos} uploaded</div>
-                  <div><span className="text-gray-400">Status:</span> {selected.damageNotified ? <span className="text-emerald-600 font-semibold">✓ Agent notified</span> : <span className="text-red-600 font-semibold">Pending notification</span>}</div>
+                  <div><span className="text-gray-400">Status:</span> {selected.damageNotified ? <span className="text-emerald-600 font-semibold">Agent notified</span> : <span className="text-red-600 font-semibold">Pending notification</span>}</div>
                 </div>
                 {!selected.damageNotified && (
                   <button onClick={() => notifyAgent(selected.id)} className="mt-2 w-full py-2 rounded-lg bg-red-600 text-white text-[12px] font-bold hover:bg-red-700">
-                    📧 Notify {selected.damageAgent} with Damage Report + Photos
+                    Notify {selected.damageAgent} with Damage Report + Photos
                   </button>
                 )}
               </div>
@@ -364,8 +366,8 @@ function MaintenancePageInner() {
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center" onClick={() => { setShowNew(false); setShowDamage(false); }}>
           <div className="bg-white border border-gray-200 rounded-2xl w-[520px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-900">{showDamage ? '⚠️ Report Damage' : '🔧 New Maintenance Issue'}</h3>
-              <button onClick={() => { setShowNew(false); setShowDamage(false); }} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <h3 className="text-lg font-bold text-gray-900">{showDamage ? 'Report Damage' : 'New Maintenance Issue'}</h3>
+              <button onClick={() => { setShowNew(false); setShowDamage(false); }} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
             </div>
 
             {/* Vehicle */}
@@ -388,19 +390,19 @@ function MaintenancePageInner() {
                 <div>
                   <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Type</div>
                   <select value={nType} onChange={e => setNType(e.target.value as MaintType)} className="input text-[12px]">
-                    <option value="repair">🔧 Repair</option>
-                    <option value="preventive">📋 Preventive</option>
-                    <option value="inspection">🔍 Inspection</option>
+                    <option value="repair">Repair</option>
+                    <option value="preventive">Preventive</option>
+                    <option value="inspection">Inspection</option>
                   </select>
                 </div>
               )}
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Priority</div>
                 <select value={nPriority} onChange={e => setNPriority(e.target.value as Priority)} className="input text-[12px]">
-                  <option value="critical">🔴 Critical — vehicle down</option>
-                  <option value="high">🟠 High — needs attention</option>
-                  <option value="medium">🟡 Medium — can wait</option>
-                  <option value="low">⚪ Low — cosmetic/minor</option>
+                  <option value="critical"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> Critical — vehicle down</option>
+                  <option value="high"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-orange-500" /> High — needs attention</option>
+                  <option value="medium"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> Medium — can wait</option>
+                  <option value="low"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-zinc-300" /> Low — cosmetic/minor</option>
                 </select>
               </div>
             </div>
@@ -466,7 +468,7 @@ function MaintenancePageInner() {
                 className={`flex-1 py-2.5 rounded-lg text-[12px] font-bold ${nVehicle && nIssue
                   ? showDamage ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-black text-white hover:bg-gray-800'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                {showDamage ? '⚠️ Report Damage' : '🔧 Log Issue'}
+                {showDamage ? 'Report Damage' : 'Log Issue'}
               </button>
             </div>
           </div>

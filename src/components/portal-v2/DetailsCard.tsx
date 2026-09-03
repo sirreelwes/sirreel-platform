@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatPhone } from '@/lib/format/phone'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import type { V2Intake } from './types'
+import { Check, User } from 'lucide-react'
 
 /**
  * DetailsCard — the "collect-once" intake at the top of the v2 portal.
@@ -78,7 +79,7 @@ export function DetailsCard({
     <div className={`bg-white rounded-2xl border transition-all ${open ? 'border-gray-300 shadow-sm' : 'border-gray-200'}`}>
       <button type="button" onClick={onToggle} className="w-full flex items-center gap-3 p-4 text-left">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${complete ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-          {complete ? '✓' : '👤'}
+          {complete ? <Check size={14} aria-hidden /> : <User size={14} aria-hidden />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold text-gray-900">Your details</div>

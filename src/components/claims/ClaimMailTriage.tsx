@@ -385,7 +385,7 @@ function IncidentGroupCard({
             className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg"
             title="Derived from inbound mail: law-firm sender or litigation phrase in parse."
           >
-            ⚠ Litigation
+            Litigation
           </span>
         )}
         <span className="text-xs text-lt-fg2">

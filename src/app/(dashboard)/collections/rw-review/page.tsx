@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { PenLine } from 'lucide-react'
 
 /**
  * /collections/rw-review — the aging RentalWorks invoice review desk.
@@ -336,7 +337,7 @@ export default function RwReviewPage() {
                             no job
                           </span>
                         )}
-                        {r.note && <span title="Has a note">📝</span>}
+                        {r.note && <span title="Has a note"><PenLine size={16} aria-hidden /></span>}
                         {r.dismissedAt && (
                           <span
                             className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-zinc-300 bg-zinc-100 text-zinc-500"

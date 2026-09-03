@@ -26,6 +26,7 @@ import {
   stageTermsReady,
   type ComplexArea,
 } from '@/lib/contracts/stageAreas'
+import { Check } from 'lucide-react'
 
 interface NeedsRow {
   bookingId: string
@@ -75,9 +76,9 @@ const addDaysIso = (iso: string, n: number): string => {
 }
 
 function StatusChip({ row }: { row: Row }) {
-  if (row.signed) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700">✓ Signed</span>
+  if (row.signed) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700">Signed</span>
   if (row.termsReady) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-700">Ready to sign</span>
-  return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700">⚠ Terms needed</span>
+  return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700">Terms needed</span>
 }
 
 export default function StageTermsPage() {
@@ -147,7 +148,7 @@ export default function StageTermsPage() {
       })
       const d = await r.json()
       if (!r.ok) {
-        setMessage(`⚠️ Could not start paperwork for ${n.jobName}: ${d.error || 'unknown error'}`)
+        setMessage(`Could not start paperwork for ${n.jobName}: ${d.error || 'unknown error'}`)
         return
       }
       let msg = d.outcome === 'upgraded'
@@ -155,13 +156,13 @@ export default function StageTermsPage() {
         : d.outcome === 'existing'
           ? `${n.jobName} already had stage paperwork — opened it.`
           : `Stage paperwork started for ${n.jobName} — set the terms below.`
-      if (d.warning) msg += ` ⚠️ ${d.warning}`
+      if (d.warning) msg += ` ${d.warning}`
       setMessage(msg)
       const fresh = await load()
       const row = fresh.find((x) => x.token === d.token)
       if (row) await openEditor(row)
     } catch (err: any) {
-      setMessage(`⚠️ Could not start paperwork for ${n.jobName}: ${err?.message || 'network error'}`)
+      setMessage(`Could not start paperwork for ${n.jobName}: ${err?.message || 'network error'}`)
     } finally {
       setEnsuring(null)
     }
@@ -265,10 +266,10 @@ export default function StageTermsPage() {
         ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' The Stryker Master Media Use Agreement will be required and separately signed (Hospital Set).' : ''}`
         : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate (and a technician choice if the LED Wall is on).'
       if (d.readyEmail?.sent) {
-        msg += ` ✉️ Ready-to-sign email sent to ${d.readyEmail.to}.`
+        msg += ` Ready-to-sign email sent to ${d.readyEmail.to}.`
         setEmailSentAt(d.readyEmail.sentAt || null)
       } else if (d.readyEmail && !d.readyEmail.sent) {
-        msg += ` ⚠️ Client email NOT sent: ${d.readyEmail.reason}.`
+        msg += ` Client email NOT sent: ${d.readyEmail.reason}.`
       }
       if (d.readyToSignEmailSentAt) setEmailSentAt(d.readyToSignEmailSentAt)
       setSavedSignable(!!d.termsReady)
@@ -298,7 +299,7 @@ export default function StageTermsPage() {
       {needs.length > 0 && (
         <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 overflow-hidden">
           <div className="px-4 py-3 border-b border-amber-200 flex items-center justify-between">
-            <div className="text-sm font-semibold text-amber-800">⚠ Needs stage paperwork ({needs.length})</div>
+            <div className="text-sm font-semibold text-amber-800">Needs stage paperwork ({needs.length})</div>
             <div className="text-[11px] text-amber-700">Held stage jobs with no contract started — click one to begin</div>
           </div>
           <div className="divide-y divide-amber-100 max-h-[300px] overflow-y-auto">
@@ -389,7 +390,7 @@ export default function StageTermsPage() {
               {selected.signed ? (
                 <div className="space-y-3">
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <div className="text-sm font-bold text-emerald-800">✓ Studio contract signed — terms are locked</div>
+                    <div className="text-sm font-bold text-emerald-800">Studio contract signed — terms are locked</div>
                     {signoff && (
                       <div className="mt-2 space-y-1 text-xs text-emerald-900">
                         <div>
@@ -416,12 +417,12 @@ export default function StageTermsPage() {
                     rel="noreferrer"
                     className="block text-center py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold"
                   >
-                    📄 View signed PDF
+                    View signed PDF
                   </a>
                   {signoff?.signedPdfUrl && (
                     <div className="text-[11px] text-gray-400 text-center">
                       Durable copy stored to Blob at signing{' '}
-                      <span title={signoff.signedPdfUrl}>✓</span>
+                      <span title={signoff.signedPdfUrl}><Check size={16} aria-hidden /></span>
                     </div>
                   )}
                 </div>
@@ -485,7 +486,7 @@ export default function StageTermsPage() {
                                     </div>
                                   )}
                                   <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                                    📌 PO marker{ledWallPoFlaggedAt ? ` (flagged ${new Date(ledWallPoFlaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ' (set on save)'}: $1,000 LED Wall purchase order owed to Angelo Belarmino / XR Stages. Flag only — nothing is billed or payable from here.
+                                    PO marker{ledWallPoFlaggedAt ? ` (flagged ${new Date(ledWallPoFlaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ' (set on save)'}: $1,000 LED Wall purchase order owed to Angelo Belarmino / XR Stages. Flag only — nothing is billed or payable from here.
                                   </div>
                                 </>
                               )}
@@ -529,7 +530,7 @@ export default function StageTermsPage() {
                               className="text-[11px] text-gray-400 hover:text-red-600 flex-shrink-0"
                               title="Remove custom area"
                             >
-                              ✕
+                             
                             </button>
                           )}
                         </div>
@@ -656,9 +657,9 @@ export default function StageTermsPage() {
                             const d = await r.json()
                             if (d.sent) {
                               setEmailSentAt(d.sentAt || null)
-                              setMessage(`✉️ Signing link ${emailSentAt ? 're-sent' : 'sent'} to ${d.to}.`)
+                              setMessage(`Signing link ${emailSentAt ? 're-sent' : 'sent'} to ${d.to}.`)
                             } else {
-                              setMessage(`⚠️ Not sent: ${d.reason}`)
+                              setMessage(`Not sent: ${d.reason}`)
                             }
                           } finally {
                             setResending(false)

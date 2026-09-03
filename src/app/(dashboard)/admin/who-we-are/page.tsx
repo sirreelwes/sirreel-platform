@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 
 type Member = { id: string; name: string; title: string; published: boolean; sortOrder: number; hasPhoto: boolean }
 
@@ -235,7 +236,7 @@ export default function WhoWeAreAdminPage() {
                     title="Toggle published">
                     {m.published ? 'Published' : 'Hidden'}
                   </button>
-                  <button onClick={() => remove(m)} className="h-7 w-7 rounded border border-zinc-700 text-red-400 hover:border-red-500" title="Remove">✕</button>
+                  <button onClick={() => remove(m)} className="h-7 w-7 rounded border border-zinc-700 text-red-400 hover:border-red-500" title="Remove"><X size={16} aria-hidden /></button>
                 </div>
               </div>
             ))}

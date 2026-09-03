@@ -8,11 +8,11 @@
  * Each vehicle line links to its pre-rental inspection checkout page.
  *
  * Scope guards (shared with /fleet/today via lib/fleet/todayBoard):
- *   - Booking.source PLANYO_BACKFILL is INCLUDED — since the
- *     2026-08-18 import those rows ARE the live book; the pre-import
- *     exclusion was removed 2026-08-21 for the team rollout.
- *   - Assignment.status ASSIGNED only (CHECKED_OUT is already gone;
- *     RETURNED/SWAPPED are stale).
+ * - Booking.source PLANYO_BACKFILL is INCLUDED — since the
+ * 2026-08-18 import those rows ARE the live book; the pre-import
+ * exclusion was removed 2026-08-21 for the team rollout.
+ * - Assignment.status ASSIGNED only (CHECKED_OUT is already gone;
+ * RETURNED/SWAPPED are stale).
  *
  * Idempotency: one AuditLog marker row per Pacific day
  * (action=cron.fleet_readiness_digest, entityId=YYYY-MM-DD). Re-runs
@@ -110,8 +110,8 @@ async function handle(req: NextRequest) {
   }
 
   const subject = `Fleet readiness — ${dayOf.length} departing today, ${dayBefore.length} tomorrow (${today})`
-  const slackText = `🚚 *Fleet readiness digest — ${today}*\n\n${slackSection(`Departing TODAY (${today})`, dayOf)}\n\n${slackSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}\n\n_Complete the pre-rental inspection before each unit leaves the yard._`
-  const emailHtml = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#222"><h2 style="margin:0 0 4px">🚚 Fleet readiness digest — ${today}</h2><p style="margin:0 0 12px;color:#555">Complete the pre-rental inspection before each unit leaves the yard.</p>${emailSection(`Departing TODAY (${today})`, dayOf)}${emailSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}</div>`
+  const slackText = `*Fleet readiness digest — ${today}*\n\n${slackSection(`Departing TODAY (${today})`, dayOf)}\n\n${slackSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}\n\n_Complete the pre-rental inspection before each unit leaves the yard._`
+  const emailHtml = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#222"><h2 style="margin:0 0 4px">Fleet readiness digest — ${today}</h2><p style="margin:0 0 12px;color:#555">Complete the pre-rental inspection before each unit leaves the yard.</p>${emailSection(`Departing TODAY (${today})`, dayOf)}${emailSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}</div>`
   const emailText = `Fleet readiness digest — ${today}\n\n${textSection(`Departing TODAY (${today})`, dayOf)}\n\n${textSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}`
 
   if (dryRun) {

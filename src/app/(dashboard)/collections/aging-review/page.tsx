@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 
 interface Row {
   rwInvoiceId: string
@@ -237,7 +238,7 @@ export default function AgingReviewPage() {
                     Claims →
                   </a>
                 ) : null}
-                <span role="button" onClick={() => setMatterResult(null)} className="text-violet-500 hover:text-violet-800 cursor-pointer">✕</span>
+                <span role="button" onClick={() => setMatterResult(null)} className="text-violet-500 hover:text-violet-800 cursor-pointer"><X size={16} aria-hidden /></span>
               </span>
             </div>
           )}

@@ -1,7 +1,7 @@
 /**
  * Credit-card surcharge — ESTIMATE ONLY.
  *
- * ⚠ This module no longer decides what a client is charged. Under the
+ * This module no longer decides what a client is charged. Under the
  * CardPointe Merchant Surcharge Program the GATEWAY applies the fee and
  * waives it when the cardholder is ineligible — debit, prepaid, or a state
  * that prohibits surcharging (Connecticut, Massachusetts). The authoritative

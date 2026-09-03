@@ -196,7 +196,7 @@ export function buildPaymentInfoEmail(input: {
         <tr>
           <td style="width:5px;background:#c2410c;border-radius:8px 0 0 8px;">&nbsp;</td>
           <td style="background:#fff7ed;border:1px solid #fdba74;border-left:none;border-radius:0 8px 8px 0;padding:14px 16px;">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#c2410c;margin:0 0 4px;">⚠ Fraud warning</div>
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#c2410c;margin:0 0 4px;">Fraud warning</div>
             <div style="font-size:13px;line-height:1.6;color:#7c2d12;">${escapeHtml(FRAUD_WARNING)}</div>
             ${
               input.verifyLink

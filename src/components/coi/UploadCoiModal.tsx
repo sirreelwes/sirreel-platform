@@ -152,7 +152,7 @@ export function UploadCoiModal({
                 </button>
               )}
               {approved && (
-                <span className="mr-auto text-[12px] font-semibold text-emerald-700">Approved ✓</span>
+                <span className="mr-auto text-[12px] font-semibold text-emerald-700">Approved</span>
               )}
               <button
                 onClick={onUploaded}

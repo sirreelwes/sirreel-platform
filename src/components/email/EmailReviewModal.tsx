@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_CC, splitCcInput } from '@/lib/email/ccList';
 import { isHighRiskEmailDomain } from '@/lib/email/emailDomain';
+import { AlertTriangle } from 'lucide-react';
 
 /**
  * Small debounce hook — used to delay re-fetching the live preview
@@ -1002,8 +1003,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                           {suggestBusy
                             ? 'Writing…'
                             : customMessage.trim()
-                              ? '✨ Finish with AI'
-                              : '✨ Suggest with AI'}
+                              ? 'Finish with AI'
+                              : 'Suggest with AI'}
                         </button>
                         {preview?.defaultBody && !customMessage.trim() && (
                           <button
@@ -1110,7 +1111,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                             <span className={c.tight ? 'font-bold' : 'text-zinc-500'}>
                               {c.utilization === null ? 'no active units' : `${Math.round(c.utilization * 100)}%`}
                             </span>
-                            {c.tight && <span aria-hidden>⚠</span>}
+                            {c.tight && <span aria-hidden><AlertTriangle size={16} aria-hidden /></span>}
                           </span>
                         ))}
                       </div>
@@ -1211,7 +1212,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
             }
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
-            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : dupWarning ? 'Send anyway' : 'Send'}
+            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent' : dupWarning ? 'Send anyway' : 'Send'}
           </button>
         </div>
       </div>

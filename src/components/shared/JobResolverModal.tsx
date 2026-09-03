@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { Check, X } from 'lucide-react'
 
 export interface ResolverContext {
   companyId?: string | null
@@ -264,7 +265,7 @@ export function JobResolverModal({
         {highlighted && selectedId !== c.jobId && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex-shrink-0">best match</span>
         )}
-        {selectedId === c.jobId && <span className="text-emerald-600 text-sm flex-shrink-0">✓</span>}
+        {selectedId === c.jobId && <span className="text-emerald-600 text-sm flex-shrink-0"><Check size={14} aria-hidden /></span>}
       </div>
       <div className="text-[11px] text-gray-500 mt-0.5">
         {c.companyName || '(no company)'} · {c.status.toLowerCase()}
@@ -291,7 +292,7 @@ export function JobResolverModal({
               Everything lives inside a Job — pick where this work belongs.
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
         </div>
 
         {loading ? (
@@ -300,7 +301,7 @@ export function JobResolverModal({
           <>
             {result?.companyAmbiguity && (
               <div className="mb-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                ⚠ {result.companyAmbiguity}
+                {result.companyAmbiguity}
               </div>
             )}
 
@@ -366,7 +367,7 @@ export function JobResolverModal({
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                   {dCompanyId && !companyUnknown && (
-                    <div className="text-[10px] text-emerald-600 mt-0.5">✓ existing company — will be linked, not duplicated</div>
+                    <div className="text-[10px] text-emerald-600 mt-0.5">existing company — will be linked, not duplicated</div>
                   )}
                   <label className="mt-1.5 flex items-start gap-1.5 text-[11px] text-gray-600 cursor-pointer select-none">
                     <input
@@ -412,7 +413,7 @@ export function JobResolverModal({
                   </div>
                 </div>
                 {result?.resolvedPerson && dContactEmail === result.resolvedPerson.email && (
-                  <div className="text-[10px] text-emerald-600 -mt-2">✓ {result.resolvedPerson.name} is already in the CRM — will be linked, not duplicated</div>
+                  <div className="text-[10px] text-emerald-600 -mt-2">{result.resolvedPerson.name} is already in the CRM — will be linked, not duplicated</div>
                 )}
                 {error && <div className="text-[11px] text-red-600">{error}</div>}
                 <button

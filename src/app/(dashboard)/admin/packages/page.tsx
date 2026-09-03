@@ -415,7 +415,7 @@ export default function AdminPackagesPage() {
                             className="text-[10px] text-chip-bad-fg hover:opacity-70 px-1.5"
                             title="Remove item"
                           >
-                            ✕
+                           
                           </button>
                         </div>
                       ))}

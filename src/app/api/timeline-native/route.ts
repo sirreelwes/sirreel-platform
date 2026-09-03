@@ -378,7 +378,7 @@ export async function GET(req: NextRequest) {
       companyId: b.companyId,
       jobName: b.jobName,
       // Call-in reservations can be created before the company / job /
-      // order are known — the board shows a ⚠ triangle until they are.
+      // order are known — the board shows a triangle until they are.
       expectsOrder: b.expectsOrder,
       infoGaps: bookingInfoGaps({
         companyId: b.companyId,

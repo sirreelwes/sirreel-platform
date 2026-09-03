@@ -260,7 +260,7 @@ async function sendSyncAlert(
   if (futureCands.length) {
     lines.push('')
     lines.push(
-      `★ *Future-dated release candidates (live capacity wrongly held) — ${futureCands.length}*`,
+      `*Future-dated release candidates (live capacity wrongly held) — ${futureCands.length}*`,
     )
     for (const c of futureCands) lines.push(fmtCand(c))
   }
@@ -291,7 +291,7 @@ async function sendSyncAlert(
   // confirm the pick — same review posture as the company matcher.
   if (newCarts.jobAmbiguous.length) {
     lines.push('')
-    lines.push(`★ *Imported carts needing Job confirmation — ${newCarts.jobAmbiguous.length}*`)
+    lines.push(`*Imported carts needing Job confirmation — ${newCarts.jobAmbiguous.length}*`)
     for (const j of newCarts.jobAmbiguous) {
       if (j.mode === 'attached') {
         lines.push(`  • cart=${j.cart} · ${j.bookingNumber} → attached [${j.jobCode ?? '?'}] "${j.jobName ?? '?'}" (score ${j.score ?? '?'}) — confirm the pick`)
@@ -309,7 +309,7 @@ async function sendSyncAlert(
 
   if (newFlagged.length) {
     lines.push('')
-    lines.push(`★ *New carts requiring human review — ${newFlagged.length}*`)
+    lines.push(`*New carts requiring human review — ${newFlagged.length}*`)
     for (const f of newFlagged) {
       const candidatesStr = f.candidates && f.candidates.length
         ? '  candidates: ' + f.candidates.map((c) => `"${c.name}"`).join(' | ')

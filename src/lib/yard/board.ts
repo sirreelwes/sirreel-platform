@@ -80,7 +80,7 @@ export interface YardGroup {
   /**
    * Rows that finished badly — a short count. Rolled up to the group
    * because the group collapses when nothing is outstanding, and a
-   * collapsed "✓ Done" over a two-item shortfall is exactly the lie
+   * collapsed "Done" over a two-item shortfall is exactly the lie
    * this board exists to stop telling.
    */
   flagCount: number

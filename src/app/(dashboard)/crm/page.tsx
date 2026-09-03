@@ -805,7 +805,7 @@ export default function CRMPage() {
                     {selectForQuote ? (
                       <div className="flex items-center justify-center gap-2">
                         <span className={`text-[10px] ${co.coiOnFile ? 'text-chip-good-fg' : 'text-lt-fg3'}`}>
-                          {co.coiOnFile ? 'COI ✓' : 'no COI'}
+                          {co.coiOnFile ? 'COI' : 'no COI'}
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); selectCompanyForQuote(co.id); }}

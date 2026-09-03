@@ -38,6 +38,7 @@ import {
   groupLineItemsByDepartment,
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
+import { AlertTriangle } from 'lucide-react'
 
 type LineItem = {
   id: string;
@@ -1276,7 +1277,7 @@ export default function OrderDetailPage() {
         ? `Paperwork portal sent to ${email}.`
         : `Portal created but email failed: ${data.emailResult?.reason || 'unknown'}.`;
       const signBit = data.agreementError
-        ? ` ⚠ ${data.agreementError}`
+        ? ` ${data.agreementError}`
         : data.agreement?.signable
           ? ' Agreement is ready to sign.'
           : '';
@@ -2681,7 +2682,7 @@ export default function OrderDetailPage() {
                 <span className="flex flex-wrap gap-1 mt-0.5">
                   {units.map((u, i) => (
                     <span key={i} title={u.category} className="text-xs px-2 py-0.5 rounded bg-lt-inner border border-lt-hairline text-lt-fg">
-                      🚚 {u.unitName}
+                      {u.unitName}
                     </span>
                   ))}
                 </span>
@@ -2702,7 +2703,7 @@ export default function OrderDetailPage() {
         li.inventoryItem?.internalFlags?.includes("REQUIRES_AV_TECH"),
       ) && (
         <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
-          <span className="text-amber-700 text-xl leading-none">⚠</span>
+          <span className="text-amber-700 text-xl leading-none"><AlertTriangle size={20} aria-hidden /></span>
           <div className="text-sm text-lt-fg">
             <div className="font-semibold text-amber-600">A/V Tech required</div>
             <div className="text-xs text-lt-fg2 mt-0.5">
@@ -2809,7 +2810,7 @@ export default function OrderDetailPage() {
         const which = needDelivery && needPickup ? "delivery and pickup" : needDelivery ? "delivery" : "pickup";
         return (
           <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <span className="text-amber-700 text-xl leading-none">⚠</span>
+            <span className="text-amber-700 text-xl leading-none"><AlertTriangle size={20} aria-hidden /></span>
             <div className="text-sm text-lt-fg flex-1">
               <div className="font-semibold text-amber-600">Create the {which} task</div>
               <div className="text-xs text-lt-fg2 mt-0.5">
@@ -3324,7 +3325,7 @@ export default function OrderDetailPage() {
                                 onClick={() => setBulkDaysDept(null)}
                                 className="text-lt-fg3 hover:text-lt-fg2 text-[10px]"
                               >
-                                ✕
+                               
                               </button>
                             </span>
                           ) : dayEditable ? (
@@ -3669,7 +3670,7 @@ export default function OrderDetailPage() {
                 </a>
               </div>
               {bothDone ? (
-                <span className="text-[11px] font-semibold text-chip-good-fg">Both lanes ready ✓</span>
+                <span className="text-[11px] font-semibold text-chip-good-fg">Both lanes ready</span>
               ) : (
                 <span className="text-[11px] text-lt-fg3">
                   {!warehouseDone && !fleetDone
@@ -3868,7 +3869,7 @@ export default function OrderDetailPage() {
               — it just no longer asks the rep to do anything. */}
           {order.quotePdfUrl && order.quotePdfStale && (
             <div className="mt-1.5 inline-flex items-center gap-1.5 rounded bg-amber-500/10 border border-amber-500/40 px-2 py-1">
-              <span className="text-amber-600 text-xs leading-none">⚠</span>
+              <span className="text-amber-600 text-xs leading-none"><AlertTriangle size={12} aria-hidden /></span>
               <span className="text-[11px] text-amber-700 font-medium">
                 {regeneratingPdf
                   ? 'The order changed — rebuilding this PDF now…'
@@ -4864,7 +4865,7 @@ function PackageScopeModal({
             disabled={state.submitting}
             className="text-sm text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
           >
-            Close ✕
+            Close
           </button>
         </div>
 
@@ -4981,13 +4982,13 @@ function RecipientLine({
     }
     return (
       <div className="text-[11px] text-lt-fg">
-        ⚠ No recipient — add a contact to send
+        No recipient — add a contact to send
       </div>
     );
   }
   const others = recipients.others;
   const tooltip = others.length
-    ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}${isHighRiskEmailDomain(o.email) ? '  ⚠ iCloud — may be filtered' : ''}`).join('\n')
+    ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}${isHighRiskEmailDomain(o.email) ? 'iCloud — may be filtered' : ''}`).join('\n')
     : undefined;
   const primaryRisky = isHighRiskEmailDomain(recipients.primary.email);
   return (
@@ -5481,7 +5482,7 @@ function CardOnFileCharge({
     <div className="border border-lt-hairline rounded-lg p-3 bg-lt-inner space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3">
-          💳 Card on file
+          Card on file
         </span>
         <span className="text-[11px] text-lt-fg2 font-mono">{label}</span>
         {savedCard.cardholderName && (
@@ -5490,12 +5491,12 @@ function CardOnFileCharge({
       </div>
       {securityOnly && (
         <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-1.5 text-[11px] text-chip-warn-fg">
-          🛈 Client elected to pay by check / bank transfer — card is on file as <span className="font-semibold">security only</span>. Charge it only as a fallback (e.g. unpaid balance).
+          Client elected to pay by check / bank transfer — card is on file as <span className="font-semibold">security only</span>. Charge it only as a fallback (e.g. unpaid balance).
         </div>
       )}
       {prefUndecided && (
         <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-1.5 text-[11px] text-chip-warn-fg">
-          🛈 Client hasn&rsquo;t chosen a payment method yet — the card is on file as a guarantee. Confirm with them before charging it with the processing fee.
+          Client hasn&rsquo;t chosen a payment method yet — the card is on file as a guarantee. Confirm with them before charging it with the processing fee.
         </div>
       )}
       <div className="flex items-end gap-2">

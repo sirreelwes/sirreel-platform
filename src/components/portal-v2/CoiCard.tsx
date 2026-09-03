@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
 import type { V2Paperwork } from './types'
+import { Check, CheckCircle2, Clock, FileText, XCircle } from 'lucide-react'
 
 /**
  * COI + Workers Comp card — wraps the existing upload/AI-review plumbing:
@@ -53,7 +54,7 @@ export function CoiCard({
 
   return (
     <CardShell
-      icon="📄"
+      icon={<FileText size={16} aria-hidden />}
       title="Insurance (COI)"
       subtitle="Certificate of insurance + workers comp"
       status={status}
@@ -81,7 +82,7 @@ export function CoiCard({
                         : 'bg-red-100 text-red-600'
                   }`}
                 >
-                  {coiReview.overallPass ? '✓ Approved' : coiReview.requiresAdminApproval ? '⚠ Pending Review' : '✗ Issues'}
+                  {coiReview.overallPass ? 'Approved' : coiReview.requiresAdminApproval ? 'Pending Review' : 'Issues'}
                 </span>
               )}
             </div>
@@ -104,10 +105,10 @@ export function CoiCard({
                   }`}
                 >
                   {coiFile ? (
-                    <div className="text-sm font-semibold text-emerald-700">📄 {coiFile.name}</div>
+                    <div className="text-sm font-semibold text-emerald-700">{coiFile.name}</div>
                   ) : (
                     <div>
-                      <div className="text-sm text-gray-600">📎 Drop COI here or tap to browse</div>
+                      <div className="text-sm text-gray-600">Drop COI here or tap to browse</div>
                       <div className="text-xs text-gray-400 mt-0.5">PDF, JPG, or PNG</div>
                     </div>
                   )}
@@ -149,14 +150,14 @@ export function CoiCard({
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                   style={{ backgroundColor: PORTAL.ink }}
                 >
-                  {coiReviewing ? '🔍 Reviewing COI…' : 'Upload & Review →'}
+                  {coiReviewing ? 'Reviewing COI…' : 'Upload & Review →'}
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
                 {coiReview.overallPass ? (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-3">
-                    <span className="text-xl">✅</span>
+                    <span className="text-xl"><CheckCircle2 size={20} aria-hidden /></span>
                     <div>
                       <div className="text-sm font-bold text-emerald-800">COI Approved</div>
                       <div className="text-xs text-emerald-600 mt-0.5">All requirements met. Your certificate is on file with SirReel.</div>
@@ -164,7 +165,7 @@ export function CoiCard({
                   </div>
                 ) : (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
-                    <span className="text-xl">🕐</span>
+                    <span className="text-xl"><Clock size={20} aria-hidden /></span>
                     <div>
                       <div className="text-sm font-bold text-amber-800">COI Under Review</div>
                       <div className="text-xs text-amber-700 mt-0.5">
@@ -193,13 +194,13 @@ export function CoiCard({
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Workers Compensation</div>
               {wcReview && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${wcReview.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
-                  {wcReview.pass ? '✓ Approved' : '✗ Issues'}
+                  {wcReview.pass ? 'Approved' : 'Issues'}
                 </span>
               )}
             </div>
             {wcSatisfied && !wcReview ? (
               <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <span className="text-emerald-500">✓</span>
+                <span className="text-emerald-500"><Check size={16} aria-hidden /></span>
                 <span className="text-sm text-emerald-700">Workers Comp on file — no separate upload needed.</span>
               </div>
             ) : !wcReview ? (
@@ -221,10 +222,10 @@ export function CoiCard({
                   }`}
                 >
                   {wcFile ? (
-                    <div className="text-sm font-semibold text-blue-700">📄 {wcFile.name}</div>
+                    <div className="text-sm font-semibold text-blue-700">{wcFile.name}</div>
                   ) : (
                     <div>
-                      <div className="text-sm text-gray-600">🛡️ Drop WC certificate here or tap to browse</div>
+                      <div className="text-sm text-gray-600">Drop WC certificate here or tap to browse</div>
                       <div className="text-xs text-gray-400 mt-0.5">PDF, JPG, or PNG</div>
                     </div>
                   )}
@@ -261,14 +262,14 @@ export function CoiCard({
                   className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                   style={{ backgroundColor: PORTAL.ink }}
                 >
-                  {wcReviewing ? '🔍 Reviewing…' : 'Upload & Review →'}
+                  {wcReviewing ? 'Reviewing…' : 'Upload & Review →'}
                 </button>
                 <p className="text-center text-xs text-gray-400">Don&rsquo;t have it? Your SirReel rep can upload it if you send it to them directly.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <div className={`rounded-xl p-3 flex items-center gap-3 ${wcReview.pass ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                  <span className="text-xl">{wcReview.pass ? '✅' : '❌'}</span>
+                  <span className="text-xl">{wcReview.pass ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}</span>
                   <div>
                     <div className={`text-sm font-bold ${wcReview.pass ? 'text-emerald-800' : 'text-red-700'}`}>
                       {wcReview.pass ? 'Workers Comp Approved' : 'Needs Correction'}

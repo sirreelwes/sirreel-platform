@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
+import { KeyRound } from 'lucide-react'
 
 type Side = 'front' | 'back'
 
@@ -123,7 +124,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
     return (
       <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <div className="text-3xl mb-3">🔑</div>
+          <div className="text-3xl mb-3"><KeyRound size={30} aria-hidden /></div>
           <p className="text-[15px] text-zinc-300">{loadError}</p>
         </div>
       </main>
@@ -182,7 +183,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
         )}
         {licenceDone && (
           <div className="mb-4 rounded-xl border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-[14px] text-emerald-200">
-            ✓ License received — nothing else needed from you before pickup.
+            License received — nothing else needed from you before pickup.
           </div>
         )}
 
@@ -215,7 +216,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
               className={`w-full rounded-xl px-4 py-3 text-[15px] font-semibold disabled:opacity-40 ${
                 meSaved ? 'bg-zinc-800 text-zinc-200' : 'bg-amber-600 text-white hover:bg-amber-500'
               }`}>
-              {savingMe ? 'Saving…' : meSaved ? '✓ Saved' : 'Save my details'}
+              {savingMe ? 'Saving…' : meSaved ? 'Saved' : 'Save my details'}
             </button>
           </div>
         </Section>
@@ -236,7 +237,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
               who follows the mailing address alone ends up at the wrong
               side of the lot. */}
           <div className="mb-2.5 rounded-xl border border-amber-700/60 bg-amber-950/25 px-3.5 py-2.5">
-            <div className="text-[15px] font-semibold text-amber-200">🚧 {YARD.gateInstruction}</div>
+            <div className="text-[15px] font-semibold text-amber-200">{YARD.gateInstruction}</div>
             <div className="mt-0.5 text-[13px] text-zinc-300">{YARD.address}</div>
           </div>
 

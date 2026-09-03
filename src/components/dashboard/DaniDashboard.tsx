@@ -39,11 +39,11 @@ function StatCard({ label, value, sub, color }: StatCardProps) {
 function IncompleteJobsWidget({ jobs, loading }: { jobs: any[]; loading: boolean }) {
   return (
     <div className="p-4 bg-white rounded-xl border border-gray-200">
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚠️ Paperwork Incomplete</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Paperwork Incomplete</div>
       {loading ? (
         <div className="text-[11px] text-gray-400 py-8 text-center">Loading...</div>
       ) : jobs.length === 0 ? (
-        <div className="text-[11px] text-gray-400 py-8 text-center">✅ All paperwork up to date</div>
+        <div className="text-[11px] text-gray-400 py-8 text-center">All paperwork up to date</div>
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
           {jobs.map((j: any, i: number) => (
@@ -69,11 +69,11 @@ function IncompleteJobsWidget({ jobs, loading }: { jobs: any[]; loading: boolean
 function CoiQueueWidget({ items, loading }: { items: any[]; loading: boolean }) {
   return (
     <div className="p-4 bg-white rounded-xl border border-gray-200">
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">📄 COI Review Queue</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">COI Review Queue</div>
       {loading ? (
         <div className="text-[11px] text-gray-400 py-8 text-center">Loading...</div>
       ) : items.length === 0 ? (
-        <div className="text-[11px] text-gray-400 py-8 text-center">✅ No COIs pending review</div>
+        <div className="text-[11px] text-gray-400 py-8 text-center">No COIs pending review</div>
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
           {items.map((item: any, i: number) => {
@@ -90,8 +90,8 @@ function CoiQueueWidget({ items, loading }: { items: any[]; loading: boolean }) 
                   <div className="text-[10px] text-gray-500 truncate">{item.jobName || 'Unnamed job'}</div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0 items-center">
-                  {critFails && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700">🔴 Critical</span>}
-                  {!critFails && alertFails && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700">🟡 Alert</span>}
+                  {critFails && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> Critical</span>}
+                  {!critFails && alertFails && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> Alert</span>}
                   <span className="text-[10px] text-gray-400 ml-1">Review →</span>
                 </div>
               </a>
@@ -106,11 +106,11 @@ function CoiQueueWidget({ items, loading }: { items: any[]; loading: boolean }) 
 function RedlineWidget({ items, loading }: { items: any[]; loading: boolean }) {
   return (
     <div className="p-4 bg-white rounded-xl border border-gray-200">
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">📝 Agreement Redlines</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Agreement Redlines</div>
       {loading ? (
         <div className="text-[11px] text-gray-400 py-8 text-center">Loading...</div>
       ) : items.length === 0 ? (
-        <div className="text-[11px] text-gray-400 py-8 text-center">✅ No redlines pending</div>
+        <div className="text-[11px] text-gray-400 py-8 text-center">No redlines pending</div>
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
           {items.map((item: any, i: number) => {
@@ -140,7 +140,7 @@ function RedlineWidget({ items, loading }: { items: any[]; loading: boolean }) {
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${riskBadge}`}>{review.riskLevel.toUpperCase()}</span>
                   )}
                   {(review?.notAcceptableCount ?? 0) > 0 && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700">{review.notAcceptableCount} ✗</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700">{review.notAcceptableCount}</span>
                   )}
                   <span className="text-[10px] text-gray-400 ml-1">Review →</span>
                 </div>
@@ -156,7 +156,7 @@ function RedlineWidget({ items, loading }: { items: any[]; loading: boolean }) {
 function RecentActivityWidget({ items, loading }: { items: any[]; loading: boolean }) {
   return (
     <div className="p-4 bg-white rounded-xl border border-gray-200">
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">🕐 Recent Portal Activity</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Recent Portal Activity</div>
       {loading ? (
         <div className="text-[11px] text-gray-400 py-8 text-center">Loading...</div>
       ) : items.length === 0 ? (
@@ -207,7 +207,7 @@ function CollectionsWidget({ rwOrders, loading }: { rwOrders: any[]; loading: bo
   return (
     <div className="p-4 bg-white rounded-xl border border-gray-200">
       <div className="flex justify-between items-center mb-3">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💵 Collections</div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Collections</div>
         <span className="text-[10px] text-gray-400">RentalWorks · Live</span>
       </div>
       {loading ? (
@@ -232,7 +232,7 @@ function CollectionsWidget({ rwOrders, loading }: { rwOrders: any[]; loading: bo
             </div>
           </div>
           <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 text-[10px] text-gray-400 text-center">
-            💳 CardPointe daily batch deposits — check terminal for same-day card payments
+            CardPointe daily batch deposits — check terminal for same-day card payments
           </div>
         </>
       )}
@@ -275,7 +275,7 @@ export default function DaniDashboard({ userName }: { userName: string }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{greeting}, {userName.split(' ')[0]} 👋</h1>
+          <h1 className="text-xl font-bold text-gray-900">{greeting}, {userName.split(' ')[0]}</h1>
           <p className="text-[12px] text-gray-500">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · SirReel HQ
           </p>
@@ -283,12 +283,12 @@ export default function DaniDashboard({ userName }: { userName: string }) {
         <div className="flex gap-2">
           {coiQueue.length > 0 && (
             <div className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-700 font-bold">
-              🔴 {coiQueue.length} COI{coiQueue.length !== 1 ? 's' : ''} need review
+              <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> {coiQueue.length} COI{coiQueue.length !== 1 ? 's' : ''} need review
             </div>
           )}
           {redlines.length > 0 && (
             <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-700 font-bold">
-              📝 {redlines.length} redline{redlines.length !== 1 ? 's' : ''} pending
+              {redlines.length} redline{redlines.length !== 1 ? 's' : ''} pending
             </div>
           )}
         </div>

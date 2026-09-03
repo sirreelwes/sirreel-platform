@@ -1,5 +1,7 @@
 'use client';
 
+import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
+
 type ReviewItem = { pass: boolean; found?: string; required?: string; note?: string };
 type SubItem = { pass: boolean; found?: string; required?: string };
 
@@ -9,7 +11,7 @@ function Row({ label, item, children }: { label: string; item: ReviewItem; child
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className={`text-sm flex-shrink-0 ${item.pass ? 'text-emerald-600' : 'text-red-500'}`}>
-            {item.pass ? '✓' : '✗'}
+            {item.pass ? <Check size={14} aria-hidden /> : <X size={14} aria-hidden />}
           </span>
           <span className={`text-[12px] font-semibold ${item.pass ? 'text-emerald-800' : 'text-red-700'}`}>{label}</span>
         </div>
@@ -29,7 +31,7 @@ function SubRow({ label, item }: { label: string; item: SubItem }) {
   return (
     <div className="flex items-center justify-between text-[11px]">
       <div className="flex items-center gap-1.5">
-        <span className={item.pass ? 'text-emerald-500' : 'text-red-500'}>{item.pass ? '✓' : '✗'}</span>
+        <span className={item.pass ? 'text-emerald-500' : 'text-red-500'}>{item.pass ? <Check size={14} aria-hidden /> : <X size={14} aria-hidden />}</span>
         <span className={item.pass ? 'text-emerald-700' : 'text-red-600'}>{label}</span>
       </div>
       <div className="text-gray-500 text-right">
@@ -69,7 +71,7 @@ export default function CoiReviewResults({ review, compact = false }: { review: 
         <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl ${
           review.overallPass ? 'bg-emerald-100' : 'bg-red-100'
         }`}>
-          {review.overallPass ? '✅' : '❌'}
+          {review.overallPass ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}
         </div>
         <div className="flex-1">
           <div className={`text-sm font-bold ${review.overallPass ? 'text-emerald-800' : 'text-red-700'}`}>

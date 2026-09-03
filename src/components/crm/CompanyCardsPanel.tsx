@@ -480,7 +480,7 @@ function KeyedCardForm({
       ) : (
         <p className="text-[11px] text-lt-fg3">Loading secure card entry…</p>
       )}
-      {token && <p className="text-[11px] text-chip-good-fg mt-1">Card read ✓</p>}
+      {token && <p className="text-[11px] text-chip-good-fg mt-1">Card read</p>}
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <select value={expMonth} onChange={(e) => setExpMonth(e.target.value)} className={field} aria-label="Expiry month">

@@ -1,19 +1,21 @@
 'use client';
 import EmailActionPanel from "@/components/inbox/EmailActionPanel";
+import type { ReactNode } from 'react'
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import { AlertTriangle, ClipboardList, CreditCard, FileText, Hourglass, Inbox, Mail, Paperclip, RotateCw, ShieldCheck, User, Wrench } from 'lucide-react'
 
-const CAT: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
-  BOOKING_INQUIRY: { label: 'New Booking',  icon: '📋', color: 'text-cadence-booked-fg',   bg: 'bg-cadence-booked-bg',   border: 'border-cadence-booked-fg/30' },
-  COI:             { label: 'COI',          icon: '🛡️', color: 'text-cadence-returned-fg', bg: 'bg-cadence-returned-bg', border: 'border-cadence-returned-fg/30' },
-  CONTRACT:        { label: 'Contract',     icon: '📄', color: 'text-cadence-picking-today-fg', bg: 'bg-cadence-picking-today-bg', border: 'border-cadence-picking-today-fg/30' },
-  PO:              { label: 'PO',           icon: '📎', color: 'text-cadence-invoiced-fg',   bg: 'bg-cadence-invoiced-bg',   border: 'border-cadence-invoiced-fg/30' },
-  BILLING:         { label: 'Billing',      icon: '💳', color: 'text-chip-warn-fg',  bg: 'bg-chip-warn-bg',  border: 'border-chip-warn-fg/30' },
-  FLEET_ISSUE:     { label: 'Fleet Issue',  icon: '🔧', color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
-  FOLLOW_UP:       { label: 'Follow-up',   icon: '🔄', color: 'text-cadence-returning-today-fg', bg: 'bg-cadence-returning-today-bg', border: 'border-cadence-returning-today-fg/30' },
-  COMPLAINT:       { label: 'Complaint',    icon: '⚠️', color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
-  SUPPORT:         { label: 'Support',      icon: '🙋', color: 'text-cadence-on-rental-fg',   bg: 'bg-cadence-on-rental-bg',   border: 'border-cadence-on-rental-fg/30' },
-  GENERAL:         { label: 'General',      icon: '📧', color: 'text-chip-neutral-fg',   bg: 'bg-chip-neutral-bg',   border: 'border-chip-neutral-fg/30' },
+const CAT: Record<string, { label: string; icon: ReactNode; color: string; bg: string; border: string }> = {
+  BOOKING_INQUIRY: { label: 'New Booking',  icon: <ClipboardList size={14} aria-hidden />, color: 'text-cadence-booked-fg',   bg: 'bg-cadence-booked-bg',   border: 'border-cadence-booked-fg/30' },
+  COI:             { label: 'COI',          icon: <ShieldCheck size={14} aria-hidden />, color: 'text-cadence-returned-fg', bg: 'bg-cadence-returned-bg', border: 'border-cadence-returned-fg/30' },
+  CONTRACT:        { label: 'Contract',     icon: <FileText size={14} aria-hidden />, color: 'text-cadence-picking-today-fg', bg: 'bg-cadence-picking-today-bg', border: 'border-cadence-picking-today-fg/30' },
+  PO:              { label: 'PO',           icon: <Paperclip size={14} aria-hidden />, color: 'text-cadence-invoiced-fg',   bg: 'bg-cadence-invoiced-bg',   border: 'border-cadence-invoiced-fg/30' },
+  BILLING:         { label: 'Billing',      icon: <CreditCard size={14} aria-hidden />, color: 'text-chip-warn-fg',  bg: 'bg-chip-warn-bg',  border: 'border-chip-warn-fg/30' },
+  FLEET_ISSUE:     { label: 'Fleet Issue',  icon: <Wrench size={14} aria-hidden />, color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
+  FOLLOW_UP:       { label: 'Follow-up',   icon: <RotateCw size={14} aria-hidden />, color: 'text-cadence-returning-today-fg', bg: 'bg-cadence-returning-today-bg', border: 'border-cadence-returning-today-fg/30' },
+  COMPLAINT:       { label: 'Complaint',    icon: <AlertTriangle size={14} aria-hidden />, color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
+  SUPPORT:         { label: 'Support',      icon: <User size={14} aria-hidden />, color: 'text-cadence-on-rental-fg',   bg: 'bg-cadence-on-rental-bg',   border: 'border-cadence-on-rental-fg/30' },
+  GENERAL:         { label: 'General',      icon: <Mail size={14} aria-hidden />, color: 'text-chip-neutral-fg',   bg: 'bg-chip-neutral-bg',   border: 'border-chip-neutral-fg/30' },
 };
 
 const URGENCY = [
@@ -125,7 +127,7 @@ export default function InboxPage() {
           </div>
           <button onClick={syncNow} disabled={syncing}
             className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-lt-fg text-white hover:bg-black disabled:opacity-40">
-            {syncing ? '⏳' : '↻'} Sync
+            {syncing ? <Hourglass size={14} aria-hidden /> : '↻'} Sync
           </button>
         </div>
 
@@ -232,7 +234,7 @@ export default function InboxPage() {
       <div className="flex-1 bg-lt-card rounded-xl border border-lt-hairline flex flex-col overflow-hidden">
         {!selected ? (
           <div className="flex-1 flex flex-col items-center justify-center text-lt-fg3">
-            <div className="text-4xl mb-3">📬</div>
+            <div className="text-4xl mb-3"><Inbox size={36} aria-hidden /></div>
             <div className="text-sm font-semibold">Select an email to view</div>
             <div className="text-[11px] mt-1">{filtered.length} thread{filtered.length !== 1 ? 's' : ''} shown</div>
           </div>

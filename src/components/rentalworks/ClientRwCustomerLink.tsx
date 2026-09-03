@@ -98,7 +98,7 @@ export function ClientRwCustomerLink({
             <span className="text-[10px] text-lt-fg3">{Math.round(c.score * 100)}% name match</span>
             {c.takenByOtherCompany && (
               <span className="text-[10px] font-semibold text-rose-600" title="Already linked to another HQ client">
-                ⚠ linked to {c.takenByOtherCompany}
+                linked to {c.takenByOtherCompany}
               </span>
             )}
             <button

@@ -147,7 +147,7 @@ export function PaymentDetailsSendPanel({
   if (done) {
     return (
       <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-3 py-2.5 text-[12px] text-emerald-300">
-        ✓ {done}
+        {done}
       </div>
     )
   }
@@ -158,7 +158,7 @@ export function PaymentDetailsSendPanel({
   return (
     <div className="rounded-xl border border-amber-600/40 bg-amber-950/20 p-3 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-[13px] font-semibold text-amber-200">💳 Payment details request</div>
+        <div className="text-[13px] font-semibold text-amber-200">Payment details request</div>
         <div className="text-[11px] text-zinc-400">
           Requester: <span className="font-mono text-zinc-200">{elig.submittedEmail || 'unknown'}</span>
         </div>
@@ -167,11 +167,11 @@ export function PaymentDetailsSendPanel({
       {/* PROMINENT identity flag — the operator is the gate. */}
       {elig.qualifies ? (
         <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-[12px] text-emerald-300">
-          ✓ On file{elig.personName ? ` — ${elig.personName}` : ''}, currently on a qualifying job.
+          On file{elig.personName ? ` — ${elig.personName}` : ''}, currently on a qualifying job.
         </div>
       ) : (
         <div className="rounded-lg border-2 border-rose-500/60 bg-rose-950/40 px-3 py-2.5">
-          <div className="text-[12px] font-bold text-rose-300">⚠ No qualifying job on file</div>
+          <div className="text-[12px] font-bold text-rose-300">No qualifying job on file</div>
           <div className="text-[11px] text-rose-200/90 mt-0.5">
             This address is not attached to an active job. <b>Verify the requester&rsquo;s identity</b> before
             sending — payment details go straight to this inbox.

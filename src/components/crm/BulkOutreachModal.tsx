@@ -14,17 +14,19 @@
  * quick-add and preset-lock paths would make both flows harder to read.
  */
 
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { Building2, Clapperboard, DoorOpen, Mail, MessageSquare, Phone } from 'lucide-react'
 
 type OutreachType = 'VISIT' | 'CALL' | 'EMAIL' | 'TEXT' | 'EVENT' | 'DROP_IN'
 
-const TYPE_OPTIONS: { value: OutreachType; label: string; icon: string }[] = [
-  { value: 'EVENT', label: 'Event', icon: '🎬' },
-  { value: 'VISIT', label: 'Visit', icon: '🏢' },
-  { value: 'CALL', label: 'Call', icon: '📞' },
-  { value: 'EMAIL', label: 'Email', icon: '✉️' },
-  { value: 'TEXT', label: 'Text', icon: '💬' },
-  { value: 'DROP_IN', label: 'Drop-in', icon: '🚪' },
+const TYPE_OPTIONS: { value: OutreachType; label: string; icon: ReactNode }[] = [
+  { value: 'EVENT', label: 'Event', icon: <Clapperboard size={14} aria-hidden /> },
+  { value: 'VISIT', label: 'Visit', icon: <Building2 size={14} aria-hidden /> },
+  { value: 'CALL', label: 'Call', icon: <Phone size={14} aria-hidden /> },
+  { value: 'EMAIL', label: 'Email', icon: <Mail size={14} aria-hidden /> },
+  { value: 'TEXT', label: 'Text', icon: <MessageSquare size={14} aria-hidden /> },
+  { value: 'DROP_IN', label: 'Drop-in', icon: <DoorOpen size={14} aria-hidden /> },
 ]
 
 const PRESETS: { label: string; days: number }[] = [

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { SWatermark } from '@/components/site/SWatermark'
 import { SETUP_GUIDES, getSetupGuide } from '@/lib/site/setupGuides'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { Check } from 'lucide-react'
 
 /**
  * Public /help/[slug] — client-facing gear setup guides.
@@ -176,7 +177,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
               <ul className="mt-2.5 space-y-1.5">
                 {guide.placement.good.map((g) => (
                   <li key={g} className="text-[14px] leading-relaxed text-[#3d392f] pl-5 relative">
-                    <span className="absolute left-0 text-[#2f7d4f] font-bold">✓</span>
+                    <span className="absolute left-0 text-[#2f7d4f] font-bold"><Check size={16} aria-hidden /></span>
                     {g}
                   </li>
                 ))}

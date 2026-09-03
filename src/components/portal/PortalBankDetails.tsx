@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from 'react'
 import { ZelleDetails } from '@/components/payments/ZelleDetails'
+import { Check } from 'lucide-react'
 
 interface Details {
   payeeName: string
@@ -59,7 +60,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
           className="text-[10px] text-gray-400 hover:text-gray-900 shrink-0"
           aria-label={`Copy ${label}`}
         >
-          {copied ? '✓' : 'copy'}
+          {copied ? <Check size={14} aria-hidden /> : 'copy'}
         </button>
       </span>
     </div>

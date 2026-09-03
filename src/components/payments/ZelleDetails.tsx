@@ -19,6 +19,7 @@
  */
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 /** Same asset the invoice PDF uses, on the host that serves it publicly. */
 const ZELLE_QR_URL = 'https://hq.sirreel.com/payment/zelle-qr.png'
@@ -71,7 +72,7 @@ export function ZelleDetails({
               className="ml-2 text-[10px] text-gray-400 hover:text-gray-900"
               aria-label="Copy Zelle tag"
             >
-              {copied ? '✓' : 'copy'}
+              {copied ? <Check size={14} aria-hidden /> : 'copy'}
             </button>
           </div>
           <div className={`${small ? 'text-xs' : 'text-sm'} text-gray-900 mt-0.5`}>

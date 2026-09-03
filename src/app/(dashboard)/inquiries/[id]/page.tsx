@@ -385,7 +385,7 @@ export default function InquiryDetailPage() {
         {/* Payment-specific resolved banner (NOT "converted to quote"). */}
         {isPaymentInfo && paymentSentAt && (
           <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
-            ✓ Payment details sent{paymentSentTo ? ` to ${paymentSentTo}` : ''} on {fmtDateTime(paymentSentAt)}.
+            Payment details sent{paymentSentTo ? ` to ${paymentSentTo}` : ''} on {fmtDateTime(paymentSentAt)}.
           </div>
         )}
 

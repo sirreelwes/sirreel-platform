@@ -55,7 +55,7 @@ export function CopyIntakeLinkButton({ className = '' }: { className?: string })
         (className ? ` ${className}` : '')
       }
     >
-      {copied ? '✓ Copied' : '↗ Copy intake link'}
+      {copied ? 'Copied' : '↗ Copy intake link'}
     </button>
   )
 }

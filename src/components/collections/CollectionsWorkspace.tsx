@@ -840,7 +840,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                   {fv.note && <div className="text-xs text-zinc-600 mt-0.5">{fv.note}</div>}
                   {fv.alreadyCharged > 0 && (
                     <div className="text-xs text-amber-500/90 mt-1">
-                      ⚠ {money(fv.alreadyCharged)} already collected against this invoice
+                      {money(fv.alreadyCharged)} already collected against this invoice
                     </div>
                   )}
                   {/* Money may already be in: the RW mirror shows a zero
@@ -848,7 +848,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       rather than chasing a client who already paid. */}
                   {fv.rwRemaining === 0 && (
                     <div className="text-xs text-emerald-700 mt-1 font-semibold">
-                      ✓ RentalWorks shows this invoice PAID — confirm and mark collected
+                      RentalWorks shows this invoice PAID — confirm and mark collected
                     </div>
                   )}
                   {/* The row's story: age → emailed → replied. Unsent is the
@@ -858,7 +858,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       {fv.ageDays === 0 ? 'today' : `${fv.ageDays}d in queue`}
                     </span>
                     {fv.emailedAt ? (
-                      <span className="text-xs text-emerald-500/90">✓ emailed {fv.emailedTo}</span>
+                      <span className="text-xs text-emerald-500/90">emailed {fv.emailedTo}</span>
                     ) : (
                       <span className="text-xs text-orange-700 font-semibold">NOT emailed</span>
                     )}
@@ -920,7 +920,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           onClick={() => setCollectPicker(null)}
                           className="text-[11px] px-1.5 py-0.5 text-zinc-600 hover:text-zinc-700"
                         >
-                          ✕
+                         
                         </button>
                       </span>
                     ) : (
@@ -1042,14 +1042,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     embarrassment this prevents. */}
                 {i.paidMarkedAt && (
                   <div className="text-xs text-emerald-700 mt-1">
-                    ✓ Already marked paid in HQ on{' '}
+                    Already marked paid in HQ on{' '}
                     {new Date(i.paidMarkedAt).toLocaleDateString()}
                     {i.paidMarkNote ? ` · ${i.paidMarkNote}` : ''} — RentalWorks has not caught up
                   </div>
                 )}
                 {i.alreadyCharged.count > 0 && (
                   <div className="text-xs text-amber-500/90 mt-1">
-                    ⚠ {i.alreadyCharged.count} charge{i.alreadyCharged.count === 1 ? '' : 's'} already
+                    {i.alreadyCharged.count} charge{i.alreadyCharged.count === 1 ? '' : 's'} already
                     taken here totalling {money(i.alreadyCharged.total)}
                   </div>
                 )}
@@ -1154,7 +1154,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     {cv.invoiceNumber ? ` · ${cv.invoiceNumber}` : ''}
                   </div>
                   <div className="text-xs text-zinc-600 mt-0.5">
-                    ✓ {cv.collectedVia ? cv.collectedVia.toLowerCase() : 'collected'}
+                    {cv.collectedVia ? cv.collectedVia.toLowerCase() : 'collected'}
                     {cv.collectedAt &&
                       ` · ${new Date(cv.collectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                     {cv.collectedBy && ` · by ${cv.collectedBy}`}
@@ -1192,7 +1192,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     is what the operator reads while charging. */}
                 {invoice.alreadyCharged.total > 0 && (
                   <div className="text-xs text-amber-700 mt-1">
-                    ⚠ {money(invoice.alreadyCharged.total)} already charged against this invoice here.
+                    {money(invoice.alreadyCharged.total)} already charged against this invoice here.
                   </div>
                 )}
               </div>
@@ -1220,7 +1220,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 />
                 {validAmount && invoice.remainingTotal > 0 && base > invoice.remainingTotal && (
                   <p className="mt-1.5 text-xs text-red-700">
-                    ⚠ {money(base)} is more than the {money(invoice.remainingTotal)} balance on this
+                    {money(base)} is more than the {money(invoice.remainingTotal)} balance on this
                     invoice.
                   </p>
                 )}
@@ -1331,13 +1331,13 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           </div>
                           {selectedAuth.paymentPreference === 'UNDECIDED' && (
                             <div className="text-amber-700">
-                              ⚠ Client hasn&rsquo;t chosen a payment method yet — this card is on
+                              Client hasn&rsquo;t chosen a payment method yet — this card is on
                               file as a guarantee, not an election to pay by card.
                             </div>
                           )}
                           {selectedAuth.paymentPreference === 'CHECK_WIRE' && (
                             <div className="text-amber-700">
-                              ⚠ Client elected to pay by check/wire — this card was authorized as
+                              Client elected to pay by check/wire — this card was authorized as
                               security only.
                             </div>
                           )}

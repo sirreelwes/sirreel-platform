@@ -9,7 +9,7 @@
  * render as a skeleton with empty tables and silent failures — it read as
  * "HQ is broken" rather than "this isn't yours".
  *
- * ⚠️  THIS IS COSMETIC. It is NOT the security boundary and must never be
+ * NOTE: THIS IS COSMETIC. It is NOT the security boundary and must never be
  * treated as one: it runs in the browser, and anyone can bypass it with
  * devtools. The boundary is the per-route API gate (see the 2026-08-24
  * hardening of rentalworks/invoices, reconcile/*, and fleet). Only apply

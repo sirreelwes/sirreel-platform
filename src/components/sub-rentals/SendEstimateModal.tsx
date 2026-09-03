@@ -260,7 +260,7 @@ export default function SendEstimateModal({
                     disabled={suggestBusy || sending}
                     className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-2.5 py-1 text-xs font-bold text-white"
                   >
-                    {suggestBusy ? 'Writing…' : message.trim() ? '✨ Finish with AI' : '✨ Suggest with AI'}
+                    {suggestBusy ? 'Writing…' : message.trim() ? 'Finish with AI' : 'Suggest with AI'}
                   </button>
                   {composed?.defaultBody && !message.trim() && (
                     <button

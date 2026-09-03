@@ -8,6 +8,7 @@ import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Intake } from './types'
+import { Check, CreditCard } from 'lucide-react'
 
 /**
  * Credit-card authorization card. Wraps the EXISTING CardPointe/CardSecure
@@ -186,12 +187,12 @@ export function CcAuthCard({
 
   return (
     <CardShell
-      icon="💳"
+      icon={<CreditCard size={16} aria-hidden />}
       title="Card Authorization"
       subtitle="Card kept on file for deposits & charges"
       status={status}
       statusLabel={done ? 'Authorized' : undefined}
-      chips={<ContextChip>🔒 CardPointe secure</ContextChip>}
+      chips={<ContextChip>CardPointe secure</ContextChip>}
       open={open}
       onToggle={onToggle}
       actionLabel="Authorize"
@@ -388,7 +389,7 @@ export function CcAuthCard({
             </div>
             {cpToken ? (
               <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
-                <span>✓</span>
+                <span><Check size={16} aria-hidden /></span>
                 <span>Card captured securely</span>
               </div>
             ) : cardError ? (
@@ -493,7 +494,7 @@ export function CcAuthCard({
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ backgroundColor: PORTAL.ink }}
           >
-            {submitting ? 'Submitting…' : 'Authorize & Complete ✓'}
+            {submitting ? 'Submitting…' : 'Authorize & Complete'}
           </button>
           {/* A disabled button with every visible field filled reads as a broken
               page — the card number lives in a CardSecure iframe, so its

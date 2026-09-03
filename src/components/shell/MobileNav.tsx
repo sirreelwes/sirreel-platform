@@ -120,7 +120,7 @@ export function MobileNav({
                 aria-label="Close navigation"
                 className="w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white text-lg"
               >
-                ✕
+               
               </button>
             </div>
 

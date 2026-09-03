@@ -55,7 +55,7 @@ export interface PickListLine {
    *  fleet-ready for FLEET lines). Remaining = ordered − out. */
   out: number
   /** True when the digital picking floor already marked this line
-   *  picked — prints a ✓ in the Picked box instead of leaving it
+   *  picked — prints a in the Picked box instead of leaving it
    *  blank for handwriting. */
   picked: boolean
   /** An included accessory (InventoryKitPiece) — gear that rides along

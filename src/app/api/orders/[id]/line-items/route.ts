@@ -324,7 +324,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           // BookingItem.notes by syncHoldOnLineAdd below.
           const orderLabel = parentOrderForBooking?.orderNumber ?? orderId;
           const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
-          holdsOverrideNote = `⚠ CAPACITY OVERRIDE on ${orderLabel} (qty +${quantity}): conflicts with ${conflictList}`;
+          holdsOverrideNote = `CAPACITY OVERRIDE on ${orderLabel} (qty +${quantity}): conflicts with ${conflictList}`;
         }
       }
     }

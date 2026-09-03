@@ -338,7 +338,7 @@ function JobsSidebarItem({
               title="The gear is back — confirm the return and clear Not returned"
               className="text-[10px] md:text-[8.5px] font-bold uppercase tracking-wider px-2.5 md:px-1.5 min-h-[44px] md:min-h-0 md:py-0.5 rounded whitespace-nowrap bg-white border border-red-300 text-red-700 hover:bg-red-600 hover:border-red-600 hover:text-white disabled:opacity-50"
             >
-              {marking ? '…' : '✓ returned'}
+              {marking ? '…' : 'returned'}
             </button>
           )}
         </span>

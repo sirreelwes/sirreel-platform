@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { OutreachQuickLogModal } from './OutreachQuickLogModal'
+import { Building2, Clapperboard, DoorOpen, Mail, MessageSquare, Phone } from 'lucide-react';
 
 type Kind = 'activity' | 'outreach'
 
@@ -27,8 +28,10 @@ interface Row {
   activityType: string | null
 }
 
-const TYPE_ICONS: Record<string, string> = {
-  VISIT: '🏢', CALL: '📞', EMAIL: '✉️', TEXT: '💬', EVENT: '🎬', DROP_IN: '🚪',
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  VISIT: <Building2 size={14} aria-hidden />, CALL: <Phone size={14} aria-hidden />,
+  EMAIL: <Mail size={14} aria-hidden />, TEXT: <MessageSquare size={14} aria-hidden />,
+  EVENT: <Clapperboard size={14} aria-hidden />, DROP_IN: <DoorOpen size={14} aria-hidden />,
 }
 
 function fmtDue(iso: string): string {
@@ -130,7 +133,7 @@ export function FollowUpsDueModal({
             onClick={onClose}
             className="text-sm text-lt-fg2 hover:text-lt-fg px-2 py-1"
           >
-            Close ✕
+            Close
           </button>
         </div>
 
@@ -161,7 +164,7 @@ export function FollowUpsDueModal({
                 <div key={`${r.kind}:${r.id}`} className="px-5 py-3">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     {r.kind === 'outreach' && r.type && (
-                      <span className="text-base">{TYPE_ICONS[r.type] ?? ''}</span>
+                      <span className="text-base">{TYPE_ICONS[r.type] ?? null}</span>
                     )}
                     <span className={`text-xs px-2 py-0.5 rounded ${
                       new Date(r.due) < new Date()

@@ -168,14 +168,14 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ``,
     ...(quick
       ? [
-          `  ✓ The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
+          `  • The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
           ``,
           `${[input.ctaLabel || 'Start your order', input.secondaryCtaLabel].filter(Boolean).join(' / ')}: ${portalLink}`,
         ]
       : [
           `Everything you'll need lives in one place:`,
-          `  ✓ Your SirReel portal — paperwork, schedule, equipment, all in one place`,
-          `  ✓ The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
+          `  • Your SirReel portal — paperwork, schedule, equipment, all in one place`,
+          `  • The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
           ``,
           `${input.ctaLabel || 'Click here for your SirReel portal'}: ${portalLink}`,
           ``,

@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Clapperboard } from 'lucide-react';
 
 export interface DayClaimLine {
   id: string;
@@ -94,7 +95,7 @@ export function DayClaimsPanel({
   return (
     <div className="bg-amber-500/5 border border-amber-500/40 rounded-xl p-4 mb-6">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-lg">🎬</span>
+        <span className="text-lg"><Clapperboard size={18} aria-hidden /></span>
         <h2 className="text-sm font-semibold text-lt-fg">Shoot-days claims</h2>
         {pendingCount > 0 && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white uppercase tracking-wider">
@@ -207,7 +208,7 @@ export function DayClaimsPanel({
                           onClick={() => void post({ lineId: l.id, billableDays: l.claimedDays }, `approve:${l.id}`)}
                           className="text-[10px] font-bold px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40"
                         >
-                          {busy === `approve:${l.id}` ? '…' : `✓ Approve ${l.claimedDays}d`}
+                          {busy === `approve:${l.id}` ? '…' : `Approve ${l.claimedDays}d`}
                         </button>
                       )}
                     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Shared "⚡ Needs Attention" alert list — the dashboard Action Queue,
+ * Shared "Needs Attention" alert list — the dashboard Action Queue,
  * backed by the global Alert engine (GET /api/alerts, dismiss via
  * POST /api/alerts/dismiss with the signed-in user's email so
  * per-user dismissal is recorded correctly).
@@ -66,7 +66,7 @@ export function NeedsAttentionAlerts({ className = '' }: { className?: string })
 
   return (
     <div className={`p-4 bg-white rounded-xl border border-gray-200 ${className}`}>
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚡ Needs Attention</div>
+      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Needs Attention</div>
       <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
         {alerts.map((alert) => (
           <div
@@ -90,7 +90,7 @@ export function NeedsAttentionAlerts({ className = '' }: { className?: string })
                       : 'text-gray-700'
                   }`}
                 >
-                  <span>{alert.severity === 'critical' ? '🔴' : alert.severity === 'high' ? '🟡' : '⚪'}</span>
+                  <span>{alert.severity === 'critical' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> : alert.severity === 'high' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> : <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-zinc-300" />}</span>
                   {alert.link ? (
                     <a href={alert.link} className="hover:underline">
                       {alert.title}

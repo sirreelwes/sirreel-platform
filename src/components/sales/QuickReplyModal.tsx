@@ -738,7 +738,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
                     />
                     {matchedCompanyId ? (
-                      <div className="mt-1 text-[10px] text-emerald-700">✓ Matched a client we already have</div>
+                      <div className="mt-1 text-[10px] text-emerald-700">Matched a client we already have</div>
                     ) : (clientName ?? '').trim().length >= 2 ? (
                       <div className="mt-1 text-[10px] text-gray-400">New client — not in the CRM yet</div>
                     ) : null}
@@ -780,7 +780,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                     />
                     {job ? (
                       <div className="mt-1 text-[10px] text-emerald-700">
-                        ✓ Existing job {job.jobCode} — holds land here
+                        Existing job {job.jobCode} — holds land here
                       </div>
                     ) : (jobName ?? '').trim().length >= 2 ? (
                       <div className="mt-1 text-[10px] text-gray-400">New project — a job gets created</div>
@@ -867,7 +867,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                       />
                       {parsedPersonId ? (
                         <span className="block text-[10px] text-emerald-700 mt-0.5">
-                          ✓ {recipientName ? `${recipientName} — ` : ''}linked to their contact record
+                          {recipientName ? `${recipientName} — ` : ''}linked to their contact record
                         </span>
                       ) : contactQuery.trim() && !contactQuery.includes('@') ? (
                         <span className="block text-[10px] text-amber-700 mt-0.5">

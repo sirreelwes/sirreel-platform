@@ -170,7 +170,7 @@ export function InquirySourceDrawer({
             aria-label="Close original inquiry"
             className="text-gray-400 hover:text-gray-700 text-xl p-1 flex-shrink-0"
           >
-            ✕
+           
           </button>
         </div>
 
@@ -209,7 +209,7 @@ export function InquirySourceDrawer({
                 </div>
                 {m.attachmentCount > 0 && (
                   <div className="text-[10px] text-gray-500 mt-1">
-                    📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}
+                    {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}
                   </div>
                 )}
                 <div className="mt-2">

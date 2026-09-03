@@ -80,7 +80,7 @@ function auditLabel(a: AuditRow): string {
   }
   if (a.action === 'public.emergency_escalation') {
     const v = a.newValues || {}
-    return `⚠ Emergency escalation — released ${String(v.released ?? '?')} number(s)`
+    return `Emergency escalation — released ${String(v.released ?? '?')} number(s)`
   }
   return a.action
 }

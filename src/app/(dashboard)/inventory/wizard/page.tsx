@@ -35,6 +35,7 @@ import {
   MAX_LONG_EDGE,
   MAX_IMAGE_BYTES,
 } from '@/lib/inventory/resizeImage'
+import { Check } from 'lucide-react'
 
 type ViewMode = 'either' | 'value' | 'photo' | 'all'
 
@@ -304,7 +305,7 @@ export default function InventoryWizardPage() {
         <div className="bg-red-900/30 border border-red-800/40 text-red-200 rounded-lg p-3 text-sm">{loadError}</div>
       ) : queue.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
-          <div className="text-3xl mb-2">✓</div>
+          <div className="text-3xl mb-2"><Check size={30} aria-hidden /></div>
           <p className="text-white font-medium">Nothing left in this view.</p>
           <p className="text-sm text-zinc-400 mt-1">
             Every item under “{VIEW_LABELS[mode]}”{catFilter && ` in ${catFilter}`} is handled.

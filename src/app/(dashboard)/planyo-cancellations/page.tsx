@@ -144,7 +144,7 @@ export default function PlanyoCancellationsPage() {
                     </td>
                     <td className="px-4 py-3 align-top text-right">
                       {done[key] ? (
-                        <span className="text-[12px] font-semibold text-emerald-700">✓ {done[key]}</span>
+                        <span className="text-[12px] font-semibold text-emerald-700">{done[key]}</span>
                       ) : c.bookingItemId ? (
                         <button
                           onClick={() => release(c)}

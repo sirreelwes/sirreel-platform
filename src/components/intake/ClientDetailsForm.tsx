@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 interface Props {
   token: string
@@ -63,7 +64,7 @@ export function ClientDetailsForm({ token, ask }: Props) {
   if (done) {
     return (
       <div className="rounded-xl border border-[#cfe3cf] bg-[#f2f8f2] px-4 py-5 text-center">
-        <div className="text-[22px]" aria-hidden>✓</div>
+        <div className="text-[22px]" aria-hidden><Check size={16} aria-hidden /></div>
         <div className="mt-1 text-[15px] font-semibold text-[#0c0c0d]">Thank you — got it</div>
         <p className="mt-1 text-[13px] text-[#5b554b]">
           Your rep has what they need and will follow up shortly. You can close this page.

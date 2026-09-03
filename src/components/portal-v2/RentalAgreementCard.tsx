@@ -7,6 +7,7 @@ import { RENTAL_TERMS } from './terms'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
 import { LcdwElection, useLcdwCoverage, lcdwApplies } from './LcdwElection'
 import type { V2AgreementState, V2Booking, V2Intake } from './types'
+import { ClipboardList, PenLine } from 'lucide-react'
 
 /**
  * Rental Agreement card — wraps the two existing signing paths untouched:
@@ -237,7 +238,7 @@ export function RentalAgreementCard({
 
   return (
     <CardShell
-      icon="✍️"
+      icon={<PenLine size={16} aria-hidden />}
       title="Rental Agreement"
       subtitle="Equipment & vehicle rental agreement"
       status={status}
@@ -265,7 +266,7 @@ export function RentalAgreementCard({
         </div>
       ) : underReview ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-          <span className="text-xl">📋</span>
+          <span className="text-xl"><ClipboardList size={20} aria-hidden /></span>
           <div>
             <div className="text-sm font-bold text-amber-800">Your redline is in review</div>
             <div className="text-xs text-amber-700 mt-0.5">
@@ -289,7 +290,7 @@ export function RentalAgreementCard({
               className="flex-1 py-3 text-white rounded-xl text-xs font-semibold"
               style={{ backgroundColor: PORTAL.ink }}
             >
-              ✍️ Review & sign now
+              Review & sign now
             </button>
             <a
               href={
@@ -299,7 +300,7 @@ export function RentalAgreementCard({
               }
               className="flex-1 text-center py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
             >
-              📝 Download for review
+              Download for review
             </a>
           </div>
           {agreementState?.status === 'DOWNLOAD_SENT' && (
@@ -318,9 +319,9 @@ export function RentalAgreementCard({
                 }`}
               >
                 {redlineFile ? (
-                  <div className="text-xs font-semibold text-indigo-700">📄 {redlineFile.name}</div>
+                  <div className="text-xs font-semibold text-indigo-700">{redlineFile.name}</div>
                 ) : (
-                  <div className="text-xs text-gray-500">📤 Drop your edited .docx or .pdf here, or tap to browse</div>
+                  <div className="text-xs text-gray-500">Drop your edited .docx or .pdf here, or tap to browse</div>
                 )}
                 <input
                   id="v2-redline-file"
@@ -510,7 +511,7 @@ export function RentalAgreementCard({
               disabled={!sig || submitting}
               className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold"
             >
-              {submitting ? 'Submitting…' : 'Submit & Sign ✓'}
+              {submitting ? 'Submitting…' : 'Submit & Sign'}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
+import { BarChart3, Check, DollarSign, Mail, Phone, Timer, Truck, Wrench } from 'lucide-react';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -87,7 +88,7 @@ function ReportingPageInner() {
     { time: 'Yesterday', text: 'Jason Mayfield booked Cold Front MV — $6,040', type: 'booked' },
   ];
 
-  const activityIcons: Record<string, string> = { hold: '⏱', active: '🟢', inquiry: '📞', email: '📧', urgent: '🔴', maint: '🔧', booked: '✓' };
+  const activityIcons: Record<string, import('react').ReactNode> = { hold: <Timer size={14} aria-hidden />, active: <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-emerald-500" />, inquiry: <Phone size={14} aria-hidden />, email: <Mail size={14} aria-hidden />, urgent: <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" />, maint: <Wrench size={14} aria-hidden />, booked: <Check size={14} aria-hidden /> };
 
   // Monthly revenue chart (last 6 months)
   const monthlyRev = [
@@ -118,10 +119,10 @@ function ReportingPageInner() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'Revenue', value: '$' + revenue.total.toLocaleString(), sub: `${revChange > 0 ? '+' : ''}${revChange}% vs prev`, color: revChange > 0 ? 'text-emerald-600' : 'text-red-600', bg: 'bg-emerald-50', icon: '💰' },
-          { label: 'Pipeline', value: '$' + pipelineTotal.toLocaleString(), sub: `${pipeline.reduce((s, p) => s + p.count, 0)} jobs in progress`, color: 'text-blue-600', bg: 'bg-blue-50', icon: '📊' },
-          { label: 'Utilization', value: utilizationPct + '%', sub: `${totalBooked} of ${totalUnits} units booked`, color: utilizationPct > 50 ? 'text-emerald-600' : 'text-amber-600', bg: 'bg-amber-50', icon: '🚛' },
-          { label: 'Maint Cost', value: '$' + maintCosts.total.toLocaleString(), sub: `${maintCosts.inShop} vehicles in shop`, color: 'text-red-600', bg: 'bg-red-50', icon: '🔧' },
+          { label: 'Revenue', value: '$' + revenue.total.toLocaleString(), sub: `${revChange > 0 ? '+' : ''}${revChange}% vs prev`, color: revChange > 0 ? 'text-emerald-600' : 'text-red-600', bg: 'bg-emerald-50', icon: <DollarSign size={14} aria-hidden /> },
+          { label: 'Pipeline', value: '$' + pipelineTotal.toLocaleString(), sub: `${pipeline.reduce((s, p) => s + p.count, 0)} jobs in progress`, color: 'text-blue-600', bg: 'bg-blue-50', icon: <BarChart3 size={14} aria-hidden /> },
+          { label: 'Utilization', value: utilizationPct + '%', sub: `${totalBooked} of ${totalUnits} units booked`, color: utilizationPct > 50 ? 'text-emerald-600' : 'text-amber-600', bg: 'bg-amber-50', icon: <Truck size={14} aria-hidden /> },
+          { label: 'Maint Cost', value: '$' + maintCosts.total.toLocaleString(), sub: `${maintCosts.inShop} vehicles in shop`, color: 'text-red-600', bg: 'bg-red-50', icon: <Wrench size={14} aria-hidden /> },
         ].map(kpi => (
           <div key={kpi.label} className="p-4 bg-white rounded-xl border border-gray-200">
             <div className="flex items-center justify-between mb-2">
@@ -269,7 +270,7 @@ function ReportingPageInner() {
 
         {/* Alerts & actions needed */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚡ Needs Attention</div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Needs Attention</div>
           <div className="space-y-2">
             {[
               { text: '2 urgent email inquiries unanswered', severity: 'critical', action: 'Open Inbox' },
@@ -286,7 +287,7 @@ function ReportingPageInner() {
               }`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className={`text-[10px] ${alert.severity === 'critical' ? 'text-red-500' : alert.severity === 'high' ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {alert.severity === 'critical' ? '🔴' : alert.severity === 'high' ? '🟡' : '⚪'}
+                    {alert.severity === 'critical' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-red-500" /> : alert.severity === 'high' ? <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-amber-400" /> : <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-zinc-300" />}
                   </span>
                   <span className="text-[11px] text-gray-700 truncate">{alert.text}</span>
                 </div>

@@ -63,7 +63,7 @@ export function CopyCoiLinkButton({
         ? 'text-rose-500 border-rose-400'
         : ''
   const label =
-    state === 'copied' ? 'Link copied ✓' : state === 'error' ? "Couldn't generate — retry" : 'Copy COI link'
+    state === 'copied' ? 'Link copied' : state === 'error' ? "Couldn't generate — retry" : 'Copy COI link'
 
   return (
     <button

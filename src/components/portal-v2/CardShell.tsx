@@ -2,6 +2,7 @@
 
 import { PORTAL } from '@/lib/brand/portalTokens'
 import type { V2CardStatus } from './types'
+import { Check, CheckCircle2, Lock } from 'lucide-react'
 
 /**
  * CardShell — the stacked document card of the v2 guided portal.
@@ -41,7 +42,7 @@ export function CardShell({
   actionLabel = 'Start',
   children,
 }: {
-  icon: string
+  icon: React.ReactNode
   title: string
   subtitle?: string
   status: V2CardStatus
@@ -62,7 +63,7 @@ export function CardShell({
             status === 'done' ? 'bg-emerald-50' : 'bg-gray-50'
           }`}
         >
-          {status === 'done' ? '✓' : icon}
+          {status === 'done' ? <Check size={14} aria-hidden /> : icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -95,7 +96,7 @@ export function CardShell({
 export function DoneNote({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-      <div className="text-2xl mb-1">✅</div>
+      <div className="text-2xl mb-1"><CheckCircle2 size={24} aria-hidden /></div>
       <div className="text-emerald-800 font-bold text-sm">{title}</div>
       {sub && <div className="text-emerald-600 text-xs mt-0.5">{sub}</div>}
     </div>
@@ -105,7 +106,7 @@ export function DoneNote({ title, sub }: { title: string; sub?: string }) {
 export function LockedNote({ title }: { title: string }) {
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-      <div className="text-2xl mb-1">🔒</div>
+      <div className="text-2xl mb-1"><Lock size={24} aria-hidden /></div>
       <div className="font-bold text-sm text-gray-800">{title} — Locked</div>
       <div className="text-xs mt-0.5 text-gray-500">This booking is no longer active. Documents are read-only.</div>
     </div>

@@ -251,7 +251,7 @@ export function NewTaskModal({ onClose, onCreated }: NewTaskModalProps) {
               </label>
             </div>
             {personId && (
-              <p className="text-[11px] text-emerald-700">✓ Linked to this job&rsquo;s contact record.</p>
+              <p className="text-[11px] text-emerald-700">Linked to this job&rsquo;s contact record.</p>
             )}
 
             <label className="block">

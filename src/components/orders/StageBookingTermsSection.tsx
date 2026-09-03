@@ -440,7 +440,7 @@ export function StageBookingTermsSection({
                             : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-600"
                         }`}
                       >
-                        {on ? "✓ " : ""}{a.label}
+                        {on ? "" : ""}{a.label}
                       </button>
                     );
                   })}
@@ -471,7 +471,7 @@ export function StageBookingTermsSection({
                           : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600"
                       }`}
                     >
-                      {on ? "✓ " : ""}{label}
+                      {on ? "" : ""}{label}
                     </button>
                   );
                 })}

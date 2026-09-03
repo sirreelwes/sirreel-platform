@@ -111,7 +111,7 @@ export default function FinishingAJobGuidePage() {
             </Step>
             <Step n={2} title="Mark the job returned">
               <p>
-                On the job page: <strong>More ▾ → ✓ Mark returned</strong>. This is what stops the job
+                On the job page: <strong>More → Mark returned</strong>. This is what stops the job
                 showing up as still out. It is separate from billing on purpose — the gear can be back
                 weeks before the number is agreed.
               </p>
