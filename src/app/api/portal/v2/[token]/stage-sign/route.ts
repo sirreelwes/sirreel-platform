@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true, agent: true, person: true } } },
+      include: { booking: { include: { company: true, agent: true, person: true, job: { select: { name: true } } } } },
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -93,7 +94,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       ? {
           producerName: request.booking?.company?.name || 'Producer',
           producerAddress: request.booking?.company?.billingAddress || '',
-          projectTitle: request.booking?.jobName || '',
+          projectTitle: resolveDisplayJobName({
+            jobName: request.booking?.job?.name,
+            bookingJobName: request.booking?.jobName,
+            companyName: request.booking?.company?.name,
+          }),
           agreementDate: fmtLong(now),
           returnDate: request.booking?.endDate ? fmtLongUTC(new Date(request.booking.endDate)) : '',
         }
@@ -189,7 +194,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       //    assigned agent. NOT sent to the client (their copy lives in
       //    the portal's Download button).
       try {
-        const jobName = request.booking?.jobName || '—'
+        const jobName = resolveDisplayJobName({
+          jobName: request.booking?.job?.name,
+          bookingJobName: request.booking?.jobName,
+          companyName: request.booking?.company?.name,
+        })
         const companyName = request.booking?.company?.name || '—'
         const agentEmail = request.booking?.agent?.email || null
         const setLabels: string[] = Object.values(signoff.termsSnapshot.setLabels || {})
@@ -253,7 +262,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         if (!clientTo) {
           console.warn('[portal/v2/stage-sign] no client email on file — signed-confirmation skipped')
         } else {
-          const jobName = request.booking?.jobName || ''
+          const jobName = resolveDisplayJobName({
+            jobName: request.booking?.job?.name,
+            bookingJobName: request.booking?.jobName,
+            companyName: request.booking?.company?.name,
+          })
           const email = buildStageSignedConfirmationEmail({
             clientFirstName: request.booking?.person?.firstName || '',
             jobName,

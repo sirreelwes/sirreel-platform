@@ -22,6 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { sendPaymentShareEmail } from '@/lib/payments/paymentShare'
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           // company is known. The job name is the honest fallback — better in
           // an A/P inbox than "your production", which identifies nothing.
           company: { select: { name: true } },
-          job: { select: { orders: { orderBy: { createdAt: 'desc' }, take: 1, select: { orderNumber: true } } } },
+          job: { select: { name: true, orders: { orderBy: { createdAt: 'desc' }, take: 1, select: { orderNumber: true } } } },
         },
       },
     },
@@ -78,7 +79,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     // The host the client is actually on — the portal has its own, and a link
     // to the marketing host would 404 for the A/P department receiving it.
     origin: new URL(req.url).origin,
-    company: booking.company?.name || booking.jobName || 'your production',
+    company:
+      booking.company?.name ||
+      resolveDisplayJobName({ jobName: booking.job?.name, bookingJobName: booking.jobName }) ||
+      'your production',
     orderRef: orderNumber ? ` for order ${orderNumber}` : '',
     createdVia: 'PAPERWORK_PORTAL',
     personId: booking.personId,

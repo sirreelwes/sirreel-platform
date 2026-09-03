@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { prisma } from '@/lib/prisma'
 import { renderStageSignedCopyPdf } from '@/lib/contracts/renderStageSignedCopy'
 
@@ -19,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true } } },
+      include: { booking: { include: { company: true, job: { select: { name: true } } } } },
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -39,7 +40,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="sirreel-studio-contract-${(request.booking?.jobName || 'signed').replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 60)}.pdf"`,
+        'Content-Disposition': `inline; filename="sirreel-studio-contract-${resolveDisplayJobName({ jobName: request.booking?.job?.name, bookingJobName: request.booking?.jobName, companyName: request.booking?.company?.name }).replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 60)}.pdf"`,
       },
     })
   } catch (err: any) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
 // One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
@@ -137,7 +138,7 @@ export async function POST(
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true, agent: true, job: { select: { id: true } } } } }
+      include: { booking: { include: { company: true, agent: true, job: { select: { id: true, name: true } } } } }
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -148,7 +149,11 @@ export async function POST(
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
     const companyName = request.booking?.company?.name || ''
-    const jobName = request.booking?.jobName || ''
+    const jobName = resolveDisplayJobName({
+      jobName: request.booking?.job?.name,
+      bookingJobName: request.booking?.jobName,
+      companyName: request.booking?.company?.name,
+    })
 
     const review: Record<string, any> = await runCoiAiReview(buffer, file.type)
 

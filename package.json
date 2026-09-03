@@ -24,6 +24,7 @@
     "test:client-email-body": "tsx tests/email/client-email-body.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
+    "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
