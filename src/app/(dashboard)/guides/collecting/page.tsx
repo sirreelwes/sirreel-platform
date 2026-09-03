@@ -348,6 +348,54 @@ export default function CollectingGuidePage() {
           </ol>
         </section>
 
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">7 · What your login opens</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            Your menu is deliberately short. It is not a cut-down version of someone else&rsquo;s — every
+            entry is there because a billing question needs it, and the point is that you can settle most
+            disputes without asking anyone.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[34rem] border-collapse text-[14px]">
+              <thead>
+                <tr className="border-b border-lt-fg2/30 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-lt-fg3">
+                  <th className="py-2 pr-4">When you need to know</th>
+                  <th className="py-2">Where to look</th>
+                </tr>
+              </thead>
+              <tbody className="text-lt-fg2">
+                {[
+                  ['What is still owed, across everything', 'Receivables (RW) — every mirrored invoice, searchable, with the client and job stitched on.'],
+                  ['What this line item actually is, and what it rents for', 'Inventory. This is the one that settles a disputed charge without a phone call.'],
+                  ['Whether they really had it those days', 'Reservations. What went out and when it came back is how a disputed rental window gets decided.'],
+                  ['What moved today', 'Deliveries & Pickups — read-only for you, and that is fine; you are reading it, not running it.'],
+                  ['Whether we hold their COI or signed contract', 'Paperwork.'],
+                  ['Who to actually call', 'Clients, or the job page from any invoice row — contacts, email history and the job&rsquo;s whole story.'],
+                  ['Why an invoice looks wrong before it reached you', 'How to finish a job — the sales end of the same job. You read the other end of it.'],
+                  ['Whether an order is linked to its job', 'Reconcile RW.'],
+                ].map(([a, b]) => (
+                  <tr key={a} className="border-b border-lt-hairline align-top">
+                    <td className="py-2.5 pr-4 font-medium text-lt-fg">{a}</td>
+                    <td className="py-2.5">{b}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Note tone="plain" label="What you will not see, and why it does not matter">
+            Fleet, Warehouse and the COO reporting section are not in your menu because those pages would
+            refuse you anyway — the tabs would be noise pointing at dead ends. You can see pricing but not
+            company revenue, and you cannot confirm or cancel a booking or assign a vehicle. None of that
+            sits between you and collecting; if you ever find that it does, say so and it changes.
+          </Note>
+          <Note tone="warn" label="One entry that does not work yet">
+            <strong>Payment Info</strong> is in your menu but the page is admin-only, so it will refuse
+            you. You do not need it: the bank details clients need are already on their own portal, with
+            a button to send them to accounts payable — section 5. Changing those details is Wes&rsquo;s
+            job by design.
+          </Note>
+        </section>
+
         <section>
           <h2 className="mb-1 text-xl font-semibold text-lt-fg">When it doesn&rsquo;t work</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
