@@ -32,16 +32,42 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 
 /**
- * Orders a check report can be filed against. An order that was never
- * booked has nothing to load onto a truck, and a cancelled one should
- * not be quietly edited by a count sheet.
+ * Orders a check report can be filed against.
+ *
+ * Wes, 2026-09-03: "we need to have orders in their quote form show up
+ * there because they don't get flipped to invoice until later, usually
+ * after vehicle and order are returned."
+ *
+ * The first cut of this list was BOOKED-and-later, on the reasoning that
+ * an unbooked order has nothing to load. That is wrong about how SirReel
+ * actually runs: the paperwork on the truck is routinely still a QUOTE,
+ * and the status catches up days after the gear is back. Gating on
+ * status meant the sheet a supervisor was physically holding had no row
+ * to type it into — the exact gap this surface exists to close.
+ *
+ * So the rule is about whether the order is ALIVE, not how far along it
+ * is. Excluded:
+ *   - CANCELLED / CLOSED — finished or called off; a count sheet must
+ *     not quietly edit either.
+ *   - quoteStatus LOST — a dead quote is not going anywhere. Handled by
+ *     the where-clause below, since it lives on the other status axis.
+ *
+ * DRAFT is IN deliberately. A half-written order with real dates is
+ * exactly the state a rush job is in at 6am.
  */
 export const REPORTABLE_ORDER_STATUSES = [
+  'DRAFT', 'QUOTE_SENT', 'APPROVED',
   'BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK',
+  // Kept so a late correction still has somewhere to land. CLOSED is
+  // not — by then the money is settled.
+  'INVOICED',
 ] as const
 
 /** How far the list reaches. Backward so a sheet that never got typed
  *  in stays on screen; forward so tomorrow can be prepped today. */
+/** Statuses that mean "the paperwork is still a quote". */
+const PRE_BOOKED_STATUSES: ReadonlySet<string> = new Set(['DRAFT', 'QUOTE_SENT', 'APPROVED'])
+
 export const REPORT_DAYS_BACK = 3
 export const REPORT_DAYS_FORWARD = 4
 
@@ -51,6 +77,11 @@ export interface ReportListRow {
   jobId: string
   jobName: string
   company: string
+  /** Raw lifecycle status — the list says so when it is still a quote. */
+  status: string
+  /** True while the order has not been booked. Not a blocker; the crew
+   *  should just know what document they are writing against. */
+  preBooked: boolean
   /** The Pacific day this edge falls on. */
   ymd: string
   lineCount: number
@@ -77,12 +108,17 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
   const orders = await prisma.order.findMany({
     where: {
       status: { in: [...REPORTABLE_ORDER_STATUSES] },
+      // A lost quote is not on a truck. This lives on the sales axis
+      // (OrderQuoteStatus), not the lifecycle one, so it needs its own
+      // clause rather than a status omission.
+      quoteStatus: { not: 'LOST' },
       archivedAt: null,
       ...(edge === 'OUT' ? { startDate: { in: dbDates } } : { endDate: { in: dbDates } }),
     },
     select: {
       id: true,
       orderNumber: true,
+      status: true,
       startDate: true,
       endDate: true,
       jobId: true,
@@ -105,6 +141,8 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       jobId: o.jobId,
       jobName: o.job?.name || 'Unnamed job',
       company: o.company?.name || 'Unknown company',
+      status: o.status,
+      preBooked: PRE_BOOKED_STATUSES.has(o.status),
       // @db.Date is stored at UTC midnight — format in UTC or it prints
       // the previous day west of Greenwich.
       ymd: d ? d.toISOString().slice(0, 10) : '',
@@ -133,6 +171,8 @@ export interface ReportDraft {
   jobId: string
   jobName: string
   company: string
+  status: string
+  preBooked: boolean
   startDate: string | null
   endDate: string | null
   agentName: string | null
@@ -157,6 +197,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     select: {
       id: true,
       orderNumber: true,
+      status: true,
       startDate: true,
       endDate: true,
       jobId: true,
@@ -199,6 +240,8 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     jobId: order.jobId,
     jobName: order.job?.name || 'Unnamed job',
     company: order.company?.name || 'Unknown company',
+    status: order.status,
+    preBooked: PRE_BOOKED_STATUSES.has(order.status),
     startDate: ymd(order.startDate),
     endDate: ymd(order.endDate),
     agentName: order.agent?.name ?? null,

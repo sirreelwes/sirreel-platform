@@ -59,7 +59,8 @@ export default async function OrderReportsPage() {
         <p className="text-zinc-500 text-sm mt-0.5 max-w-[70ch]">
           Type in the pull sheet after it comes off the floor. Everything is pre-filled with what
           the order says, so you only touch the lines that came out different — and on a check-out
-          those differences update the order and tell the agent.
+          those differences update the order and tell the agent. Orders still in quote form are
+          here too; they usually don&rsquo;t get flipped until after everything is back.
         </p>
       </header>
 
@@ -121,6 +122,16 @@ function Lane({
                     <div className="text-zinc-400 text-[12px] truncate">
                       {r.company}
                       <span className="text-zinc-600"> · {r.lineCount} line{r.lineCount === 1 ? '' : 's'}</span>
+                      {/* Wes, 2026-09-03: the paperwork on the truck is
+                          routinely still a quote — the status catches up
+                          days after the gear is back. Say so rather than
+                          hiding the row, so the supervisor knows which
+                          document they are writing against. */}
+                      {r.preBooked && (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300 border border-sky-900 bg-sky-950/50 rounded px-1.5 py-0.5">
+                          Quote
+                        </span>
+                      )}
                     </div>
                   </div>
 

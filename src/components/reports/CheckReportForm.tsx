@@ -178,6 +178,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           <span> · {fmtDay(draft.startDate)} – {fmtDay(draft.endDate)}</span>
           {draft.agentName && <span> · agent {draft.agentName}</span>}
         </p>
+        {/* The document is often still a quote when the truck leaves —
+            the status catches up after everything is back. Naming it
+            keeps the supervisor from wondering whether they have the
+            right screen. */}
+        {draft.preBooked && (
+          <p className="text-[12px] text-sky-300 mt-2 border border-sky-900 bg-sky-950/40 rounded-lg px-3 py-2">
+            This is still a <b>quote</b> ({draft.status.replace(/_/g, ' ').toLowerCase()}). File the
+            sheet anyway — it goes onto the same lines, and the agent sees whatever changed.
+          </p>
+        )}
         {draft.filed && (
           <p className="text-[12px] text-zinc-500 mt-2 border border-zinc-800 rounded-lg px-3 py-2">
             Already filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}
