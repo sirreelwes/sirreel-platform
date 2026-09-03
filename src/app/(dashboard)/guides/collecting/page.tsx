@@ -1,25 +1,43 @@
 /**
- * /guides/collecting — how to take a payment in HQ.
+ * /guides/collecting — running the collections desk, day to day.
  *
  * Wes, 2026-09-01: "can i transfer this billing instruction to
- * sirreel.com somewhere or in HQ itself?"
+ * sirreel.com somewhere or in HQ itself?" — HQ, not sirreel.com. This
+ * names internal controls, says which invoice states can be charged, and
+ * repeats the bank-detail fraud warning we give clients; a page about how
+ * SirReel collects money does not belong on the marketing site.
  *
- * HQ, not sirreel.com. This names internal controls, says which invoice
- * states can be charged, and repeats the bank-detail fraud warning we
- * give clients — a page about how SirReel collects money does not belong
- * on the public marketing site.
+ * Wes, 2026-09-02: make it "a simple, plain english way to explain like we
+ * made for 'how to start..' for sales".
+ *
+ * That prompted the reshape. The page used to answer ONE question — how do
+ * I take a payment — which is the middle of Ana's day and none of the
+ * edges. /guides/starting-a-job works because it walks a whole job start
+ * to finish, so this now walks a whole DAY: what the desk is telling you,
+ * who to chase, the three ways money arrives, and the report that closes
+ * it out. The three payment sections are the original ones, kept.
  *
  * Written for Ana and correct for anyone in Sales or Admin: the controls
- * it describes render for every role that can see pricing.
+ * it describes render for every role that can see pricing. Write-off is
+ * the exception and the page says so — Wes only, enforced server-side.
  *
- * Deliberately a plain page rather than a CMS entry. There is no
- * internal-docs model in HQ and inventing one for a single procedure
- * would be a bigger commitment than the content justifies; if a second
- * and third guide appear, that is the moment to generalise.
+ * Deliberately a plain page rather than a CMS entry — same call as the
+ * other two guides. Three plain pages is still cheaper than a docs model.
+ *
+ * Facts this page asserts, and where they live — keep them in lockstep:
+ *   - Outstanding / Ready to collect / Collected this month / Avg days to
+ *     collect tiles → CollectionsWorkspace.
+ *   - Aging review is >60 days, oldest first, rulings Still owed /
+ *     Dispute / Write off → collections/aging-review.
+ *   - "Mark collected" records a bank payment; card charges self-record →
+ *     CollectionsWorkspace.
+ *   - The EOD figures, and which are pre-filled vs checked →
+ *     src/lib/collections/eodReport.ts.
+ *   - A red RentalWorks meter stops invoice imports → RwConnectionCard.
  */
 import Link from 'next/link'
 
-export const metadata = { title: 'Collecting a payment · SirReel HQ' }
+export const metadata = { title: 'Collecting, day to day · SirReel HQ' }
 
 /** Steps are a real sequence — the order IS the procedure. */
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
@@ -55,15 +73,128 @@ export default function CollectingGuidePage() {
       <div className="mx-auto max-w-3xl">
         <header className="mb-8 border-b-2 border-lt-fg pb-5">
           <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-lt-fg3">Billing</span>
-          <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-lt-fg">Collecting a payment</h1>
+          <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-lt-fg">Collecting, day to day</h1>
           <p className="mt-2 max-w-2xl text-[15px] text-lt-fg2">
-            Three ways money comes in, and where each lives in HQ. Start with one question:
-            has the client already given us a card?
+            One page for the whole desk: what to look at when you sit down, who to chase, the three
+            ways money arrives, and the report that closes the day.
           </p>
         </header>
 
+        {/* The whole day in one box, mirroring /guides/starting-a-job. Someone
+            who reads nothing else should still know the shape. */}
+        <div className="mb-9 rounded-xl border border-lt-hairline bg-lt-inner p-4">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-lt-fg3">The short version</div>
+          <p className="text-[14px] leading-relaxed text-lt-fg2">
+            <strong className="text-lt-fg">Open the desk → work the list → take the money → send the report.</strong>{' '}
+            Everything starts at{' '}
+            <Link href="/collections" className="font-semibold underline underline-offset-2">Collections</Link>:
+            first the invoices an agent has finalised for you, then every other unpaid RentalWorks
+            invoice, oldest first. Money arrives three ways — a card we already hold, a card we ask
+            for, or a bank transfer.
+          </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-lt-fg2">
+            The one habit that matters: <strong className="text-lt-fg">record money the day it lands.</strong>{' '}
+            Card charges record themselves. A wire or a check does not, and until someone marks it,
+            the balance, the chase list and the end-of-day report are all wrong.
+          </p>
+        </div>
+
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">1 · Charge the card on file</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">1 · Start with the desk</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            What <Link href="/collections" className="font-semibold underline underline-offset-2">Collections</Link>{' '}
+            is telling you before you touch anything.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Check the connection strip at the very top">
+              <p>
+                One line: <strong>Connected · RentalWorks</strong>, when it was last checked and when it
+                renews. Green is nothing to do.
+              </p>
+              <Note tone="stop" label="If it is red, stop">
+                Invoice imports have stopped and nothing falls back to another source — the list below it
+                is frozen at whatever it last knew, and it will not tell you that. Fix the connection
+                before you work the list, or you will chase yesterday.
+              </Note>
+            </Step>
+            <Step n={2} title="Read the tiles">
+              <p>
+                <strong>Outstanding (RW)</strong> is everything still owed, with a bar showing how old it
+                is. <strong>This week</strong> and <strong>Collected this month</strong> are what has come
+                in, and <strong>Avg days to collect</strong> is how fast it is coming.
+              </p>
+              <p>
+                Outstanding excludes voided invoices, anything already marked paid, and anything written
+                off — so it is what is genuinely chaseable, not a raw balance total.
+              </p>
+            </Step>
+            <Step n={3} title="Note anything sitting on insurance">
+              <p>
+                Where a claim is in play the tile splits out <strong>awaiting insurance</strong> from{' '}
+                <strong>on clients</strong>. Money waiting on a carrier is not a client who is ignoring
+                you, and chasing them for it damages the relationship for nothing.
+              </p>
+            </Step>
+          </ol>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">2 · Chase what is owed</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            Two lists, and they are not the same list. Start with the first one.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Ready to collect — your actual queue">
+              <p>
+                These are final invoices an agent has finalised on the job page. It is the work that is
+                ready for you, so it comes first.
+              </p>
+            </Step>
+            <Step n={2} title="All RentalWorks invoices — the fallback">
+              <p>
+                Underneath sits every unpaid RW invoice, oldest debt first, because that is the one most
+                in need of a call. This is where anything finalised outside HQ shows up. Each row carries
+                the client, the invoice, the balance and how late it is; open the job from the row when
+                you need contacts or history before you call.
+              </p>
+            </Step>
+            <Step n={3} title="Mark collected when money arrives outside HQ">
+              <p>
+                A wire, ACH, Zelle or check that lands in the bank does not post itself. Use{' '}
+                <strong>Mark collected</strong> on the row the day it arrives. Card charges taken in HQ
+                record themselves — you never mark those.
+              </p>
+              <Note tone="warn" label="This is the habit everything else depends on">
+                An unrecorded payment keeps the client on the chase list, overstates Outstanding, and
+                leaves the end-of-day report short. It is thirty seconds now against a wrong number and
+                an awkward phone call later.
+              </Note>
+            </Step>
+            <Step n={4} title="Once a week, clear the aging review">
+              <p>
+                <Link href="/collections/aging-review" className="font-semibold underline underline-offset-2">
+                  Aging review
+                </Link>{' '}
+                is every open invoice past 60 days, oldest first, waiting for a ruling:{' '}
+                <strong>Still owed</strong>, <strong>Dispute</strong>, or <strong>Write off</strong>. The
+                Collections page shows a count of undecided rows so you can see the backlog without
+                opening it.
+              </p>
+              <p>
+                Rulings are data, not notes. They drive what stays in Outstanding and they build the
+                write-off ledger at the bottom of that page — which is the bad-debt list at tax time,
+                with dates and amounts. Deciding again replaces the earlier ruling, so rule and move on.
+              </p>
+              <Note tone="plain" label="Write off is Wes only">
+                The button is hidden for everyone else and refused on the server too. Everything else on
+                that page is yours.
+              </Note>
+            </Step>
+          </ol>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">3 · Charge the card on file</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             For any invoice marked Sent or Partial where the client authorized a card through their portal.
           </p>
@@ -78,7 +209,7 @@ export default function CollectingGuidePage() {
             </Step>
             <Step n={3} title="Check the card block">
               <p>A panel headed <strong>💳 Card on file</strong> shows the card type, last four and cardholder.
-                No panel means no card — use step 2 below.</p>
+                No panel means no card — use section 4.</p>
               <Note tone="warn" label="Read the preference line">
                 If it says the card is <strong>security only</strong>, the client elected to pay by check or bank
                 transfer. Charge it only as a fallback on an unpaid balance, and tell them first.
@@ -107,7 +238,7 @@ export default function CollectingGuidePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">2 · Ask for a card</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">4 · Ask for a card</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             When no card is on file. The client enters it themselves — we never handle the number.
           </p>
@@ -125,13 +256,13 @@ export default function CollectingGuidePage() {
                 reaches SirReel, and you only ever see the last four.</p>
             </Step>
             <Step n={4} title="Then charge it">
-              <p>Once the card shows on the job, go back to section 1. Nothing needs re-keying.</p>
+              <p>Once the card shows on the job, go back to section 3. Nothing needs re-keying.</p>
             </Step>
           </ol>
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">3 · Bank transfer, wire or Zelle</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">5 · Bank transfer, wire or Zelle</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
             No processing fee. Usually the better path on large invoices, and often what a production&rsquo;s
             accounts-payable team prefers.
@@ -147,14 +278,59 @@ export default function CollectingGuidePage() {
                 nobody retypes an account number.</p>
             </Step>
             <Step n={3} title="Record it when it arrives">
-              <p>A bank transfer does not post itself. When the money lands, record the payment against the invoice
-                so the balance and the collections list stay true.</p>
+              <p>A bank transfer does not post itself. When the money lands, hit <strong>Mark collected</strong> on
+                the invoice so the balance, the chase list and tonight&rsquo;s report all stay true.</p>
             </Step>
           </ol>
           <Note tone="plain" label="Tell clients this once">
             SirReel never emails asking to send payment to a different account. If a client receives one it is
             fraud — they should call the number in their portal before sending anything.
           </Note>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">6 · Close the day</h2>
+          <p className="mb-4 text-[14px] text-lt-fg3">
+            The end-of-day summary that goes to Dani and Wes. HQ works out the figures; you check them
+            and add the sentence they actually read.
+          </p>
+          <ol className="list-none border-b border-lt-hairline p-0">
+            <Step n={1} title="Press Send EOD Report">
+              <p>
+                Top of{' '}
+                <Link href="/collections" className="font-semibold underline underline-offset-2">Collections</Link>.
+                It opens with today&rsquo;s numbers already filled in and tells you who it is going to.
+              </p>
+            </Step>
+            <Step n={2} title="Check the figures — especially the ones tagged “check”">
+              <p>
+                <strong>Collected today</strong> is the whole take.{' '}
+                <strong>of which card</strong> is the CardPointe slice of that same money, not a second
+                pile — HQ works out the ACH/wire/cheque remainder for you.
+              </p>
+              <p>
+                Any field tagged <strong>check</strong> is one HQ cannot see all of. Money you marked paid
+                straight in RentalWorks never passed through HQ, and orders written directly in RW are not
+                counted. Every box is editable; type over anything that is wrong.
+              </p>
+              <Note tone="plain" label="Why some numbers look low">
+                The more you record in HQ as it happens, the closer these arrive. The figures are only as
+                complete as the day&rsquo;s marking-off.
+              </Note>
+            </Step>
+            <Step n={3} title="Write the note">
+              <p>
+                This is the part no query can produce — returns that slipped to Monday, an ACH still in
+                flight, why today looks light. Dani and Wes read this before the numbers.
+              </p>
+            </Step>
+            <Step n={4} title="Send">
+              <p>
+                It goes out as your email, so a reply comes back to you. Sending twice is fine — a
+                corrected report is a normal evening, and you will be asked to confirm.
+              </p>
+            </Step>
+          </ol>
         </section>
 
         <section>
@@ -173,11 +349,14 @@ export default function CollectingGuidePage() {
               </thead>
               <tbody className="text-lt-fg2">
                 {[
-                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 2.'],
+                  ['No card panel on the invoice', 'No authorized card for this job.', 'Use section 4.'],
                   ['Card declined', 'The bank refused it — limit, expiry, or a fraud hold.', 'Ask the client to call their bank, or take another card.'],
                   ['Payment gateway unreachable', 'Our side could not reach CardPointe.', 'Wait and retry. If it persists, flag it — no card is at fault.'],
                   ['Invoice is not payable', 'Already paid, void, or still a draft.', 'Check the status; a draft has to be sent first.'],
                   ['Amount exceeds balance due', 'You typed more than is owed.', 'Lower it. Overpayment is refused deliberately.'],
+                  ['RentalWorks strip is red', 'Invoice imports have stopped; the list is stale.', 'Fix the connection before working the list — nothing falls back.'],
+                  ['EOD says the card figure is larger than the total', 'Card is part of the total, so one box is wrong.', 'Almost always a digit in the wrong field. Send unlocks once it is fixed.'],
+                  ['EOD saved but did not send', 'Your figures and note are stored; the email failed.', 'Press send again — nothing needs re-keying.'],
                 ].map(([a, b, c]) => (
                   <tr key={a} className="border-b border-lt-hairline align-top">
                     <td className="py-2.5 pr-4 font-medium text-lt-fg">{a}</td>
@@ -193,6 +372,12 @@ export default function CollectingGuidePage() {
         <footer className="mt-10 border-t border-lt-hairline pt-4 text-[13px] text-lt-fg3">
           Card numbers are tokenized by CardPointe in the client&rsquo;s browser; SirReel never stores or sees a
           full card number. Internal — this page is not on sirreel.com.
+          <span className="mt-2 block">
+            Related:{' '}
+            <Link href="/guides/starting-a-job" className="font-semibold underline underline-offset-2">Starting a job</Link>{' '}
+            ·{' '}
+            <Link href="/guides/finishing-a-job" className="font-semibold underline underline-offset-2">Finishing a job</Link>
+          </span>
         </footer>
       </div>
     </div>
