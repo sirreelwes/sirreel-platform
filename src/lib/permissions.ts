@@ -210,8 +210,15 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // board, and nothing else. Every write still needs canAssignAssets /
   // canChangeAssetStatus / canCreateMaintenance, all still false here,
   // so a picker can see the units and change none of them.
+  //
+  // maintenance:true as of 2026-09-03 for the same reason, one step
+  // further out: MANAGER / FLEET_TECH / WAREHOUSE now share ONE nav
+  // (Wes: "one view for Manager, Warehouse and Fleet, no difference in
+  // any"), and that nav carries Maintenance. Also a VIEW flag —
+  // canCreateMaintenance stays false, so a picker reads the shop board
+  // and writes nothing on it.
   WAREHOUSE: {
-    calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: false,
+    calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
     warehouse: true, billing: false, subRentals: false,
@@ -355,15 +362,29 @@ export function isBillingRole(role: UserRole): boolean {
 
 // The yard crew — whoever lives on the merged /yard board. The layout
 // auto-redirects /dashboard → /yard for these (mirrors the sales-role
-// pattern above) and their nav opens on it.
+// pattern above), they all get the SAME trimmed nav (see
+// getNavSections), and their nav opens on it.
 //
 // WAREHOUSE joined FLEET_TECH here on 2026-09-02: since the lanes
 // merged there is one board and one crew, so there is no longer a
 // reason for the picker and the fleet tech to land in different places.
+//
+// MANAGER joined them on 2026-09-03 (Wes: "Hugo is seeing way too many
+// views. Let's change to one view for Manager, Warehouse and Fleet. No
+// difference in any and just have the functions that are on fleet and
+// warehouse views"). Hugo, Julian and Albert ARE the MANAGER role, and
+// they run the yard — they were falling through to the full ~40-tab IA
+// built for admin. One crew, one board, one nav.
 export function isFleetYardRole(role: UserRole): boolean {
-  // DISPATCHER is being retired (fold into FLEET_TECH); no live DISPATCHER
-  // users exist, so this covers the yard roles.
-  return role === UserRole.FLEET_TECH || role === UserRole.WAREHOUSE;
+  // DISPATCHER is retired (folded into FLEET_TECH); no live DISPATCHER
+  // users exist, but it is listed so a stray holder gets the yard nav
+  // rather than the admin IA.
+  return (
+    role === UserRole.MANAGER ||
+    role === UserRole.FLEET_TECH ||
+    role === UserRole.WAREHOUSE ||
+    role === UserRole.DISPATCHER
+  );
 }
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
@@ -373,16 +394,12 @@ export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   // halves of the same morning.
   if (isFleetYardRole(role)) return '/yard';
   if (isBillingRole(role)) return '/collections';
-  // Wes, 2026-08-31: "julian, hugo, albert should all land on orders."
-  // Those three ARE the MANAGER role — nobody else holds it — so the
-  // role is the right hook rather than an email list that would rot the
-  // first time someone joins or leaves.
-  //
-  // They run the work rather than sell it: Julian on dispatch/fleet,
-  // Hugo as GM, so the ORDER (what actually goes out, when, on which
-  // truck) is their unit of work. Sales think in Jobs, which is why
-  // admin and agents keep landing there.
-  if (role === UserRole.MANAGER) return '/orders';
+  // MANAGER (Julian, Hugo, Albert) used to land on /orders per Wes
+  // 2026-08-31. Superseded 2026-09-03: they now share the yard crew's
+  // single view, and /orders is not one of its surfaces — landing on a
+  // page that isn't in your own sidebar is how you get a user who
+  // thinks the app lost their work. isFleetYardRole above sends them to
+  // /yard, the board that IS their morning.
   // Everyone else — sales and admin — starts on /jobs. Wes, same day:
   // "it should always go to Jobs if anything." /jobs has been the one
   // stop shop since the 2026-08-27 merge (incoming, active and wrapped);
@@ -396,28 +413,42 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // Legacy callers pass a bare role and get no email — those users simply
   // don't see email-gated entries, which is the safe default.
   const navEmail: string | undefined = typeof input === 'string' ? undefined : input.email;
-  // WAREHOUSE is the one fully-gated nav (2026-08-21, Phase 2 of the
-  // reservations rollout): pick-floor users get a trimmed IA of only
-  // the surfaces whose APIs actually admit them — everything else in
-  // the fixed IA below would 403 and read as "the app is broken" to a
-  // brand-new audience. Deliberately scoped to this NEW role so the
-  // fixed-IA ruling for existing roles (below) stands untouched.
-  if (navRole === 'WAREHOUSE') {
+  // ONE view for the whole yard crew — MANAGER, FLEET_TECH, WAREHOUSE
+  // (Wes, 2026-09-03: "Hugo is seeing way too many views. Let's change
+  // to one view for Manager, Warehouse and Fleet. No difference in any
+  // and just have the functions that are on fleet and warehouse
+  // views").
+  //
+  // History: this branch shipped 2026-08-21 for WAREHOUSE alone, as the
+  // one fully-gated nav — a brand-new pick-floor audience couldn't be
+  // shown the fixed IA, most of which 403s for them and reads as "the
+  // app is broken". MANAGER and FLEET_TECH kept falling through to that
+  // fixed IA: ~40 tabs, the COO section and the whole Admin group
+  // included, for people whose job is the truck and the carts. Same
+  // problem, so now the same answer.
+  //
+  // The item list is exactly the union of what the two old views
+  // carried: the full "Warehouse & Fleet" group from the fixed IA plus
+  // Reservations. Deliberately NOT here: Jobs / Orders / Clients /
+  // Billing / COO / Admin. Every write on these surfaces is still gated
+  // on the per-role permission it always was (canAssignAssets,
+  // canChangeAssetStatus, canCreateMaintenance, canCreateBooking), so
+  // the three roles see the same nav and still do different things
+  // through it — a picker reads what a manager can change.
+  if (isFleetYardRole(navRole)) {
     return [
       {
-        // Deliberately the SAME section name and the same first entry
-        // the full nav uses (2026-09-02) — a picker and a manager
-        // standing at the same bench should be looking at nav that
-        // matches, or "tap Today" stops being an instruction anyone can
-        // give across the two. Vehicles is a read-only roster for this
-        // role; every asset write is still gated on canAssignAssets /
-        // canChangeAssetStatus, both false for WAREHOUSE.
+        // "Today" is first and is the board itself: /yard shows both
+        // lanes grouped by show. Everything below it is a lookup, not a
+        // daily surface.
         label: 'Warehouse & Fleet',
         items: [
           { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
           { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
           { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ClipboardList', href: '/warehouse/pick' },
           { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
+          { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
+          { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },
         ],
       },
       {
