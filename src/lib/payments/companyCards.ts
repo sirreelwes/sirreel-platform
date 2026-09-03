@@ -39,6 +39,12 @@ export interface CardOnFileSummary {
   /** MM/YY already past. Not a hard block — the gateway decides — but staff
    *  should see it before reaching for the card. */
   expired: boolean
+  /** PORTAL_JOB | PAPERWORK | STAFF — how the card got here. Legacy
+   *  paperwork rows read 'PAPERWORK'. */
+  source: string | null
+  /** STAFF cards: where the client's signed authorization lives. Null on
+   *  cards the client typed themselves — the portal signature IS the record. */
+  authorizationRef: string | null
 }
 
 const normalizePreference = normalizePaymentPreference
@@ -71,6 +77,7 @@ export async function listCompanyCards(companyId: string): Promise<CardOnFileSum
         id: true, label: true, last4: true, cardType: true, expiry: true,
         cardholderName: true, isDefault: true, paymentPreference: true,
         authValidatedAt: true, authRespStat: true, createdAt: true,
+        source: true, authorizationRef: true,
       },
     }),
     prisma.paperworkRequest.findMany({
@@ -116,6 +123,8 @@ export async function listCompanyCards(companyId: string): Promise<CardOnFileSum
     authorizedAt: c.authValidatedAt ?? c.createdAt,
     validated: c.authRespStat === 'A',
     expired: isExpiryPast(c.expiry, now),
+    source: c.source,
+    authorizationRef: c.authorizationRef,
   }))
 
   const legacyCards: CardOnFileSummary[] = legacy
@@ -134,6 +143,8 @@ export async function listCompanyCards(companyId: string): Promise<CardOnFileSum
       authorizedAt: p.ccAuthSignedAt,
       validated: p.ccAuthRespStat === 'A',
       expired: isExpiryPast(p.ccCardExpiry, now),
+      source: 'PAPERWORK',
+      authorizationRef: null,
     }))
 
   return [...walletCards, ...legacyCards]
@@ -375,4 +386,107 @@ export async function mirrorPaperworkCardToWallet(
     select: { id: true },
   })
   return created.id
+}
+
+/**
+ * Put a card on file that STAFF keyed in from an authorization the client
+ * signed elsewhere — a Cognito CCA, a PDF a production emailed over.
+ *
+ * Wes, 2026-09-02, on Jose's request to drop a Cognito CCA into HQ: the
+ * dropping is the part that can't happen (that document carries the PAN, and
+ * a copy of it in our storage is cardholder data at rest). Keying the number
+ * is fine, and is what collections already does for a card read out on the
+ * phone — the PAN goes from the staffer's keyboard into CardConnect's own
+ * iframe and comes back as a token. Nothing about the number reaches this
+ * server on the way past.
+ *
+ * The difference from the collections path is that this token is KEPT, which
+ * changes two things:
+ *
+ *   1. It must be minted CVV-free (`/api/cardpointe/config?mode=card-on-file`).
+ *      CVV rides along with the token on every later auth, and replaying it on
+ *      a merchant-initiated charge is what Fiserv flagged on 2026-08-14.
+ *   2. `authorizationRef` is required. A card the client never typed needs a
+ *      pointer to the paper that says they agreed — otherwise the wallet
+ *      cannot answer "who authorized this?" months later in a dispute.
+ *
+ * Idempotent on (companyId, cardToken), same as the paperwork mirror: keying
+ * the same card twice updates it rather than stacking duplicates staff would
+ * then have to tell apart.
+ */
+export async function addKeyedCompanyCard(input: {
+  companyId: string
+  cardToken: string
+  expiry: string
+  billingPostal: string
+  cardholderName: string
+  authorizationRef: string
+  label?: string | null
+  paymentPreference?: string | null
+  sourceJobId?: string | null
+  addedById: string
+  auth: {
+    retref: string | null
+    respcode: string | null
+    respstat: string | null
+    resptext: string | null
+    validatedAt: Date | null
+  }
+  last4: string | null
+  cardType: string | null
+}): Promise<{ cardId: string; created: boolean }> {
+  const fields = {
+    last4: input.last4,
+    cardType: input.cardType,
+    expiry: input.expiry,
+    billingPostal: input.billingPostal,
+    cardholderName: input.cardholderName,
+    paymentPreference: normalizePaymentPreference(input.paymentPreference ?? null),
+    authRetref: input.auth.retref,
+    authRespCode: input.auth.respcode,
+    authRespStat: input.auth.respstat,
+    authRespText: input.auth.resptext,
+    authValidatedAt: input.auth.validatedAt,
+    authorizationRef: input.authorizationRef,
+    source: 'STAFF',
+    sourceJobId: input.sourceJobId ?? null,
+    addedById: input.addedById,
+  }
+
+  const existing = await prisma.companyCard.findUnique({
+    where: { companyId_cardToken: { companyId: input.companyId, cardToken: input.cardToken } },
+    select: { id: true },
+  })
+  if (existing) {
+    await prisma.companyCard.update({
+      where: { id: existing.id },
+      data: {
+        ...fields,
+        // Re-keying a card that was taken off file is putting it back.
+        removedAt: null,
+        removedById: null,
+        // A staffer who typed a label this time gets it; one who left the box
+        // empty does not wipe the name someone chose earlier.
+        ...(input.label ? { label: input.label } : {}),
+      },
+    })
+    return { cardId: existing.id, created: false }
+  }
+
+  const liveCount = await prisma.companyCard.count({
+    where: { companyId: input.companyId, removedAt: null },
+  })
+  const created = await prisma.companyCard.create({
+    data: {
+      companyId: input.companyId,
+      cardToken: input.cardToken,
+      label: input.label || null,
+      // Same rule as the portal mirror: the first card on file is the
+      // default, because there is nothing to choose between.
+      isDefault: liveCount === 0,
+      ...fields,
+    },
+    select: { id: true },
+  })
+  return { cardId: created.id, created: true }
 }

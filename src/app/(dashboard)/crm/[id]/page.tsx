@@ -390,7 +390,7 @@ export default function CompanyDetailPage() {
 
       {/* Cards on file. Next to AR because they answer consecutive
           questions: what's owed, and what we can charge it to. */}
-      <div className="mb-6">
+      <div id="cards" className="mb-6 scroll-mt-4">
         <CompanyCardsPanel companyId={companyId} />
       </div>
 

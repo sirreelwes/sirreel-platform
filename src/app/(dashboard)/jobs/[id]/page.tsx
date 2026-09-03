@@ -1597,6 +1597,20 @@ const driverTone = (d: any): string => {
                     {ccBusy ? 'copying…' : 'copy link'}
                   </button>
                 </div>
+                {/* The client already signed a CCA on paper? It gets keyed
+                    into the company's wallet rather than asking them to do
+                    it again in the portal (Wes 2026-09-02). Collections-
+                    gated over there, so most people see nothing. */}
+                {job.company?.id && (
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    <a
+                      href={`/crm/${job.company.id}#cards`}
+                      className="underline underline-offset-2 hover:text-zinc-900"
+                    >
+                      Already have a signed authorization? Key it in
+                    </a>
+                  </div>
+                )}
               </>
             )}
           </div>

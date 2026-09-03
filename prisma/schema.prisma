@@ -6242,6 +6242,14 @@ model CompanyCard {
   /// `sourcePaperworkRequestId` are provenance only — a card on file belongs
   /// to the COMPANY and is chargeable on any of its jobs.
   source                   String  @default("STAFF")
+
+  /// STAFF cards only: where the client's signed authorization lives, in the
+  /// staffer's own words — "Cognito CCA #4182, signed 9/2". A card the client
+  /// did not type themselves needs a pointer to the paper that justifies it,
+  /// and HQ deliberately does not keep the document (it carries the PAN).
+  /// Free text on purpose: the authorization lives in Cognito, in email, or
+  /// in a drawer, and naming which is the whole value.
+  authorizationRef String? @map("authorization_ref")
   sourceJobId              String? @map("source_job_id")
   sourcePaperworkRequestId String? @map("source_paperwork_request_id")
 

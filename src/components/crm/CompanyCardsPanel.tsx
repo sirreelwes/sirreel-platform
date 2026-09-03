@@ -9,14 +9,19 @@
  * one, so a second card was invisible at best and a silent substitution at
  * worst.
  *
- * ── There is no "add card" button here, on purpose ─────────────────
+ * ── The two ways a card gets here ──────────────────────────────────
  *
- * Cards are captured client-side in the portal, where the number is
- * tokenized in the browser and the client signs the authorization. A staff
- * form that accepted a card number would pull these screens and their logs
- * into PCI scope and would produce an authorization nobody signed. Staff
- * ORGANISE the wallet — name a card, pick the default, take one off file —
- * and clients fill it.
+ * Normally the client does it: the portal tokenizes the number in the
+ * browser and they sign the authorization themselves.
+ *
+ * "Key in an authorized card" is the second way (Wes 2026-09-02, from Jose:
+ * clients still send signed Cognito CCAs, and re-asking them to type it into
+ * the portal is a call nobody wants to make). A staffer types the number into
+ * the SAME CardConnect iframe — this page never receives a PAN, exactly as
+ * before; what is new is who does the typing. Two conditions come with it:
+ * the authorization has to be named (`authorizationRef`), because the client's
+ * consent lives on paper HQ deliberately does not store, and the CCA itself
+ * must NOT be uploaded anywhere — that document carries the number.
  *
  * `Default` is what the charge paths reach for. With several cards and no
  * default, HQ deliberately asks rather than guessing: charging the wrong
@@ -38,6 +43,8 @@ interface CardOnFile {
   authorizedAt: string | null;
   validated: boolean;
   expired: boolean;
+  source: string | null;
+  authorizationRef: string | null;
 }
 
 function expiryLabel(e: string | null): string {
@@ -52,6 +59,7 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState('');
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -109,10 +117,31 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
         )}
       </div>
       <p className="text-xs text-lt-fg3 mb-3">
-        Captured in the client portal. Charges use the default card.
+        Captured in the client portal, or keyed from a signed authorization. Charges use the
+        default card.
       </p>
 
       {error && <p className="text-xs text-chip-bad-fg mb-2">{error}</p>}
+
+      <div className="mb-3">
+        {adding ? (
+          <KeyedCardForm
+            companyId={companyId}
+            onCancel={() => setAdding(false)}
+            onAdded={(next) => {
+              setAdding(false);
+              setCards(next);
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="text-[11px] font-semibold text-lt-fg hover:text-black underline underline-offset-2"
+          >
+            + Key in a card the client authorized
+          </button>
+        )}
+      </div>
 
       {cards.length === 0 ? (
         <p className="text-sm text-lt-fg3">
@@ -181,6 +210,13 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
                         ? ` · authorized ${new Date(c.authorizedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                         : ''}
                     </div>
+                    {/* A card the client never typed has to say whose
+                        signature stands behind it, and who keyed it. */}
+                    {c.source === 'STAFF' && (
+                      <div className="text-[11px] text-lt-fg3 mt-0.5">
+                        Keyed by staff · authorization: {c.authorizationRef || 'not recorded'}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 text-[11px]">
@@ -293,6 +329,211 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Key in a card the client authorized."
+ *
+ * The number goes from the staffer's keyboard into CardConnect's iframe and
+ * comes back as a token — this component never holds a PAN and neither does
+ * our server. `mode=card-on-file` mints it WITHOUT a CVV, because a stored
+ * token replays its CVV on every later charge and Fiserv flagged exactly that
+ * on 2026-08-14.
+ *
+ * The signed authorization stays where it is. It is named here, not uploaded:
+ * a Cognito CCA carries the full card number, so a copy in HQ's storage would
+ * be cardholder data at rest in a system that today holds none.
+ */
+function KeyedCardForm({
+  companyId,
+  onCancel,
+  onAdded,
+}: {
+  companyId: string;
+  onCancel: () => void;
+  onAdded: (cards: CardOnFile[]) => void;
+}) {
+  const [iframeUrl, setIframeUrl] = useState('');
+  const [live, setLive] = useState<boolean | null>(null);
+  const [token, setToken] = useState('');
+  const [expMonth, setExpMonth] = useState('');
+  const [expYear, setExpYear] = useState('');
+  const [zip, setZip] = useState('');
+  const [name, setName] = useState('');
+  const [label, setLabel] = useState('');
+  const [ref, setRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/cardpointe/config?mode=card-on-file')
+      .then((r) => r.json())
+      .then((d) => {
+        setLive(d.live === true);
+        if (d.iframeUrl) setIframeUrl(d.iframeUrl);
+        else setErr(d.error || 'Card entry unavailable');
+      })
+      .catch(() => setErr('Card entry unavailable'));
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (typeof e.data !== 'string' || !e.data.startsWith('{')) return;
+      try {
+        // CardSecure posts the token in two shapes depending on version —
+        // {"message":"<token>"} and {"message":{"token":…}}. Accept both, as
+        // collections does; handling only one is a silently dead form.
+        const raw = JSON.parse(e.data) as
+          | { message?: string | { token?: string; validationError?: string } }
+          | null;
+        const inner = raw?.message;
+        const t =
+          typeof inner === 'string' ? inner : typeof inner?.token === 'string' ? inner.token : '';
+        const invalid =
+          typeof inner === 'object' && typeof inner?.validationError === 'string'
+            ? inner.validationError
+            : '';
+        if (t) {
+          setToken(t);
+          setErr(null);
+        } else if (invalid) {
+          setToken('');
+          setErr(invalid);
+        }
+      } catch {
+        /* not ours */
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const expiry = expMonth && expYear ? `${expMonth}${expYear}` : '';
+  const ready = !!token && expiry.length === 4 && /^\d{5}(-\d{4})?$/.test(zip) && name.trim().length > 1 && ref.trim().length > 3;
+
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/crm/companies/${companyId}/cards/keyed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardToken: token,
+          expiry,
+          billingPostal: zip.trim(),
+          cardholderName: name.trim(),
+          authorizationRef: ref.trim(),
+          label: label.trim() || null,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) {
+        setErr(j?.error || 'Could not store the card.');
+        return;
+      }
+      onAdded(j.cards || []);
+    } catch {
+      setErr('Could not store the card.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field = 'w-full rounded-md border border-lt-hairline px-2 py-1.5 text-xs';
+
+  return (
+    <div className="rounded-lg border border-lt-hairline bg-lt-inner p-3">
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <h3 className="text-xs font-semibold text-lt-fg">Key in an authorized card</h3>
+        <button onClick={onCancel} className="text-[11px] text-lt-fg3 hover:text-black">
+          Cancel
+        </button>
+      </div>
+      <p className="text-[11px] text-lt-fg3 mb-2">
+        For a card the client already authorized in writing. Type the number into the secure box —
+        it goes straight to CardConnect and HQ never sees it. Do not upload the authorization form
+        anywhere: it has the card number on it.
+      </p>
+
+      {live === false && (
+        <p className="text-[11px] text-chip-warn-fg mb-2">
+          This environment is on the CardPointe sandbox — a card stored here could not be charged,
+          so the form will refuse. Use hq.sirreel.com.
+        </p>
+      )}
+      {err && <p className="text-[11px] text-chip-bad-fg mb-2">{err}</p>}
+
+      {iframeUrl ? (
+        <iframe
+          src={iframeUrl}
+          title="Card entry"
+          frameBorder="0"
+          scrolling="no"
+          width="100%"
+          height="60"
+          className="block bg-white rounded"
+        />
+      ) : (
+        <p className="text-[11px] text-lt-fg3">Loading secure card entry…</p>
+      )}
+      {token && <p className="text-[11px] text-chip-good-fg mt-1">Card read ✓</p>}
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <select value={expMonth} onChange={(e) => setExpMonth(e.target.value)} className={field} aria-label="Expiry month">
+          <option value="">Exp. month</option>
+          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <select value={expYear} onChange={(e) => setExpYear(e.target.value)} className={field} aria-label="Expiry year">
+          <option value="">Exp. year</option>
+          {Array.from({ length: 15 }, (_, i) => 26 + i).map((y) => (
+            <option key={y} value={String(y)}>20{y}</option>
+          ))}
+        </select>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Cardholder name"
+          className={field}
+        />
+        <input
+          value={zip}
+          onChange={(e) => setZip(e.target.value)}
+          placeholder="Billing ZIP"
+          inputMode="numeric"
+          className={field}
+        />
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Name this card (optional)"
+          className={`${field} col-span-2`}
+        />
+        <input
+          value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          placeholder='Where the signed authorization lives — "Cognito CCA #4182, signed 9/2"'
+          className={`${field} col-span-2`}
+        />
+      </div>
+
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          onClick={() => void submit()}
+          disabled={!ready || busy}
+          className="rounded-md bg-lt-fg text-white text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40"
+        >
+          {busy ? 'Validating…' : 'Put on file'}
+        </button>
+        <span className="text-[11px] text-lt-fg3">
+          Runs a $0 authorization first — a card that declines is not stored.
+        </span>
+      </div>
     </div>
   );
 }
