@@ -329,9 +329,14 @@ export default function WarehousePickDetailPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <Link href="/warehouse/pick" className="text-xs text-zinc-500 hover:text-zinc-300">
-        ← Back to queue
-      </Link>
+      <div className="flex items-center gap-4">
+        <Link href="/yard" className="text-xs text-zinc-500 hover:text-zinc-300">
+          ← Back to today
+        </Link>
+        <Link href="/warehouse/pick" className="text-xs text-zinc-500 hover:text-zinc-300">
+          All pick lists
+        </Link>
+      </div>
 
       {/* Header */}
       <div className="mt-3 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
@@ -351,7 +356,7 @@ export default function WarehousePickDetailPage() {
                 <span className="text-[11px] text-zinc-400">· assigned to {picklist.assignedTo.name}</span>
               )}
             </div>
-            <h1 className="text-xl font-semibold text-zinc-900 mt-1">
+            <h1 className="text-xl font-semibold text-white mt-1">
               {picklist.order.company.name}
               {picklist.order.job && <span className="text-zinc-500 font-normal"> · {picklist.order.job.name}</span>}
             </h1>

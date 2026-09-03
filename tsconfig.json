@@ -37,7 +37,8 @@
     ".next-kitbuild/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next-verify/types/**/*.ts",
-    ".next-payroll/types/**/*.ts"
+    ".next-payroll/types/**/*.ts",
+    ".next-yard/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

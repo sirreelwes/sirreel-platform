@@ -34,6 +34,13 @@ export const ymdToDbDate = (ymd: string) => new Date(`${ymd}T00:00:00.000Z`)
 
 export interface FleetMovement {
   assignmentId: string
+  /**
+   * The Job this booking belongs to, when it has one. Added 2026-09-02
+   * for the merged yard board, which groups trucks and pick lists under
+   * one show — without it the two lanes can never recognise each other.
+   * Nullable: bookings predating the Planyo import carry no jobId.
+   */
+  jobId: string | null
   unitName: string
   category: string
   bookingNumber: string
@@ -67,6 +74,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
           booking: {
             select: {
               bookingNumber: true,
+              jobId: true,
               jobName: true,
               deliveryTime: true,
               pickupTime: true,
@@ -91,6 +99,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
     const insp = r.inspections[0] ?? null
     return {
       assignmentId: r.id,
+      jobId: r.bookingItem.booking.jobId,
       unitName: r.asset.unitName,
       category: r.bookingItem.category.name,
       bookingNumber: r.bookingItem.booking.bookingNumber,

@@ -160,12 +160,18 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canSendEmail: true, canEditCompany: false, canManageUsers: false,
   },
 
-  // Julian, Chris — fleet associates. Calendar/gantt with production co + job visible, NOT client contacts
+  // Julian, Chris — fleet associates. Calendar/gantt with production co + job visible, NOT client contacts.
+  //
+  // warehouse:true as of 2026-09-02 (Wes: "combine fleet and warehouse
+  // into one view. no need to separate"). There is one yard crew, not
+  // two: the same people who inspect the truck pull the carts that go on
+  // it. Without this flag the merged /yard board would 403 half its own
+  // cards for the people it was built for.
   FLEET_TECH: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: false, billing: false, subRentals: false,
+    warehouse: true, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -197,9 +203,16 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // Data scope per Wes 2026-08-21: company, job name, and drivers —
   // no client contacts, no pricing. Zero reservation mutations.
   // First intended holder: Chris (account deferred — on leave).
+  //
+  // fleet:true as of 2026-09-02 — the other half of the FLEET_TECH
+  // widening above, so the merged /yard board reads the same for either
+  // role. This is a VIEW flag: it opens the fleet roster and the yard
+  // board, and nothing else. Every write still needs canAssignAssets /
+  // canChangeAssetStatus / canCreateMaintenance, all still false here,
+  // so a picker can see the units and change none of them.
   WAREHOUSE: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: false,
-    fleet: false, crm: false, claims: false,
+    fleet: true, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
     warehouse: true, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -340,19 +353,25 @@ export function isBillingRole(role: UserRole): boolean {
   return role === UserRole.BILLING;
 }
 
-// Roles whose home is the mobile-first /fleet/today board. The layout
-// auto-redirects /dashboard → /fleet/today for these (mirrors the
-// sales-role pattern above) and their nav gets a "Today" entry.
+// The yard crew — whoever lives on the merged /yard board. The layout
+// auto-redirects /dashboard → /yard for these (mirrors the sales-role
+// pattern above) and their nav opens on it.
+//
+// WAREHOUSE joined FLEET_TECH here on 2026-09-02: since the lanes
+// merged there is one board and one crew, so there is no longer a
+// reason for the picker and the fleet tech to land in different places.
 export function isFleetYardRole(role: UserRole): boolean {
   // DISPATCHER is being retired (fold into FLEET_TECH); no live DISPATCHER
   // users exist, so this covers the yard roles.
-  return role === UserRole.FLEET_TECH;
+  return role === UserRole.FLEET_TECH || role === UserRole.WAREHOUSE;
 }
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
-  if (isFleetYardRole(role)) return '/fleet/today';
-  if (role === 'WAREHOUSE') return '/warehouse/pick';
+  // One board for the whole yard crew (2026-09-02). WAREHOUSE used to
+  // land on /warehouse/pick and FLEET_TECH on /fleet/today — the two
+  // halves of the same morning.
+  if (isFleetYardRole(role)) return '/yard';
   if (isBillingRole(role)) return '/collections';
   // Wes, 2026-08-31: "julian, hugo, albert should all land on orders."
   // Those three ARE the MANAGER role — nobody else holds it — so the
@@ -386,16 +405,25 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (navRole === 'WAREHOUSE') {
     return [
       {
-        label: 'Warehouse',
+        // Deliberately the SAME section name and the same first entry
+        // the full nav uses (2026-09-02) — a picker and a manager
+        // standing at the same bench should be looking at nav that
+        // matches, or "tap Today" stops being an instruction anyone can
+        // give across the two. Vehicles is a read-only roster for this
+        // role; every asset write is still gated on canAssignAssets /
+        // canChangeAssetStatus, both false for WAREHOUSE.
+        label: 'Warehouse & Fleet',
         items: [
-          { id: 'warehouse-pick', label: 'Pick', icon: 'ClipboardList', href: '/warehouse/pick' },
+          { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
+          { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
+          { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ClipboardList', href: '/warehouse/pick' },
+          { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
         ],
       },
       {
         label: 'Schedule',
         items: [
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
-          { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         ],
       },
     ];
@@ -612,23 +640,25 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       ],
     },
     {
-      label: 'Fleet',
+      // ONE section for the yard (Wes, 2026-09-02: "combine fleet and
+      // warehouse into one view. no need to separate"). It used to be
+      // two adjacent groups — a five-item "Fleet" and a one-item
+      // "Warehouse" — which read as two departments to a crew that is
+      // one crew, and buried the fact that a show's truck and a show's
+      // carts are the same morning's work.
+      //
+      // "Today" is first and is the board itself: /yard shows both
+      // lanes grouped by show. Everything below it is a lookup, not a
+      // daily surface. Deliveries & Pickups stays CROSS-LISTED with Ops
+      // above — same route, highlighted in both.
+      label: 'Warehouse & Fleet',
       items: [
-        // Yard roles' mobile home — top of their Fleet group.
-        ...(isFleetYardRole(navRole)
-          ? [{ id: 'fleet-today', label: 'Today', icon: 'Sun', href: '/fleet/today' }]
-          : []),
-        // Cross-listed — SAME route as Ops above.
+        { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
         { id: 'dispatch-fleet', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
-        { id: 'fleet', label: 'Fleet', icon: 'Car', href: '/fleet' },
+        { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ClipboardList', href: '/warehouse/pick' },
+        { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
         { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
         { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },
-      ],
-    },
-    {
-      label: 'Warehouse',
-      items: [
-        { id: 'warehouse-pick', label: 'Pick', icon: 'ClipboardList', href: '/warehouse/pick' },
       ],
     },
     {

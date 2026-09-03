@@ -11,7 +11,7 @@ import type { MetadataRoute } from 'next';
  * still hits the network.
  *
  * start_url is `/` — the role router. Sales land on /jobs, yard roles on
- * /fleet/today, billing on /collections, everyone else on /dashboard, so
+ * /yard, billing on /collections, everyone else on /dashboard, so
  * one installed icon is correct for every role on the roster.
  *
  * Icons are the existing brand assets already shipped in public/.

@@ -113,11 +113,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace('/jobs');
   }
 
-  // Yard roles (FLEET_TECH / DISPATCHER) live on the mobile Fleet Today
-  // board — same pattern: login lands on /dashboard, bounce them to
-  // /fleet/today on any viewport. Respects the admin view-as toggle.
+  // Yard roles (FLEET_TECH / WAREHOUSE) live on the merged /yard board
+  // — same pattern: login lands on /dashboard, bounce them to /yard on
+  // any viewport. Respects the admin view-as toggle.
   if (typeof window !== 'undefined' && isFleetYardRole(role) && pathname === '/dashboard') {
-    router.replace('/fleet/today');
+    router.replace('/yard');
   }
 
   // Billing (Ana) works from the collections workspace; Dashboard isn't
