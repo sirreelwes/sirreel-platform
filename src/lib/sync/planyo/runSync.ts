@@ -28,12 +28,14 @@ import {
 import {
   applyCreate,
   applyUpdateDates,
+  applyUpdateUnit,
   applyRelease,
 } from './reconcileHolds'
 
 export interface EventCounts {
   create: number
   updateDates: number
+  updateUnit: number
   release: number
   releaseCandidate: number
   unmapped: number
@@ -47,7 +49,7 @@ export interface RunSyncOpts {
   dryRun: boolean
   /** Required when dryRun=false. Counts must match the freshly-computed
    *  events exactly; otherwise the run aborts before any write. */
-  authorizedSignature?: Pick<EventCounts, 'create' | 'updateDates' | 'release' | 'unmapped' | 'conflict'>
+  authorizedSignature?: Pick<EventCounts, 'create' | 'updateDates' | 'updateUnit' | 'release' | 'unmapped' | 'conflict'>
   /** Default: today-30d → today+90d (UTC days). */
   windowStart?: Date
   windowEnd?: Date
@@ -77,7 +79,7 @@ export interface RunSyncResult {
   counts: EventCounts
   events: SyncEvent[]
   authorizedSignature?: RunSyncOpts['authorizedSignature']
-  computedSignature?: Pick<EventCounts, 'create' | 'updateDates' | 'release' | 'unmapped' | 'conflict'>
+  computedSignature?: Pick<EventCounts, 'create' | 'updateDates' | 'updateUnit' | 'release' | 'unmapped' | 'conflict'>
 }
 
 /**
@@ -184,6 +186,7 @@ async function computeEvents(
   const counts: EventCounts = {
     create: 0,
     updateDates: 0,
+    updateUnit: 0,
     release: 0,
     releaseCandidate: 0,
     unmapped: 0,
@@ -200,6 +203,7 @@ async function computeEvents(
     switch (ev.op) {
       case 'CREATE': counts.create++; break
       case 'UPDATE_DATES': counts.updateDates++; break
+      case 'UPDATE_UNIT': counts.updateUnit++; break
       case 'RELEASE': counts.release++; break
       case 'FLAG_UNMAPPED': counts.unmapped++; break
       case 'LOG_CONFLICT': counts.conflict++; break
@@ -349,6 +353,7 @@ async function computeEvents(
     switch (ev.op) {
       case 'NO_CHANGE': counts.noChange--; break
       case 'UPDATE_DATES': counts.updateDates--; break
+      case 'UPDATE_UNIT': counts.updateUnit--; break
       case 'UPDATE_QTY': /* not in use yet */ break
       case 'UPDATE_STATUS': /* not in use yet */ break
       case 'LOG_CONFLICT': counts.conflict--; break
@@ -377,10 +382,11 @@ async function computeEvents(
   }
 }
 
-function sig(c: EventCounts): Pick<EventCounts, 'create' | 'updateDates' | 'release' | 'unmapped' | 'conflict'> {
+function sig(c: EventCounts): Pick<EventCounts, 'create' | 'updateDates' | 'updateUnit' | 'release' | 'unmapped' | 'conflict'> {
   return {
     create: c.create,
     updateDates: c.updateDates,
+    updateUnit: c.updateUnit,
     release: c.release,
     unmapped: c.unmapped,
     conflict: c.conflict,
@@ -388,12 +394,13 @@ function sig(c: EventCounts): Pick<EventCounts, 'create' | 'updateDates' | 'rele
 }
 
 function sigMatches(
-  a: Pick<EventCounts, 'create' | 'updateDates' | 'release' | 'unmapped' | 'conflict'>,
-  b: Pick<EventCounts, 'create' | 'updateDates' | 'release' | 'unmapped' | 'conflict'>,
+  a: Pick<EventCounts, 'create' | 'updateDates' | 'updateUnit' | 'release' | 'unmapped' | 'conflict'>,
+  b: Pick<EventCounts, 'create' | 'updateDates' | 'updateUnit' | 'release' | 'unmapped' | 'conflict'>,
 ): boolean {
   return (
     a.create === b.create &&
     a.updateDates === b.updateDates &&
+    a.updateUnit === b.updateUnit &&
     a.release === b.release &&
     a.unmapped === b.unmapped &&
     a.conflict === b.conflict
@@ -532,6 +539,17 @@ export async function runSync(opts: RunSyncOpts): Promise<RunSyncResult> {
         if (opts.revertCorrectionIds?.has(ev.planyoReservationId)) {
           appliedDetail = '[REVERT_CORRECTION] ' + appliedDetail
         }
+      } else if (ev.op === 'UPDATE_UNIT') {
+        const hq = computed.hqByRid.get(ev.planyoReservationId)!
+        const planyoLine = pull.results.find(
+          (p) => String(p.reservation_id) === ev.planyoReservationId,
+        )!
+        const resId = parseInt(String(planyoLine.resource_id ?? 0), 10)
+        const cat = computed.crosswalk.get(resId)!
+        const r = await applyUpdateUnit(prisma, planyoLine, hq.id, cat)
+        bookingId = r.bookingId
+        bookingItemId = r.bookingItemId
+        appliedDetail = r.detail
       } else if (ev.op === 'RELEASE') {
         const hq = computed.hqByRid.get(ev.planyoReservationId)!
         const planyoLine = pull.results.find(
@@ -608,6 +626,7 @@ function abortShell(
     counts: {
       create: 0,
       updateDates: 0,
+      updateUnit: 0,
       release: 0,
       releaseCandidate: 0,
       unmapped: 0,

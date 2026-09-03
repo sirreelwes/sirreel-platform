@@ -563,12 +563,35 @@ export async function applyCartImport(
         console.log(`[planyo-import] cart ${plan.cart}: item ${b.categoryName} already at capacity (${slot.quantity}) — skipping bind of "${b.rawUnit}"`)
         continue
       }
+      // Double-book guard (2026-09-02). This bind used to write
+      // Planyo's unit_assignment with no conflict check at all, while
+      // HQ's own assign endpoint refuses an occupied unit — so the
+      // importer was the one path that could put two jobs on one truck.
+      // A collision here means Planyo and HQ disagree about where the
+      // unit is; import the line UNBOUND and log it rather than write a
+      // physically impossible assignment. The item stays REQUESTED, so
+      // the stale-holds worklist surfaces it for a human.
+      const bindStart = laDateToDbDate(b.startLA)
+      const bindEnd = laDateToDbDate(b.endLA)
+      const occupied = await tx.bookingAssignment.findFirst({
+        where: {
+          assetId: assets[0].id,
+          status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
+          startDate: { lte: bindEnd },
+          endDate: { gte: bindStart },
+        },
+        select: { bookingItem: { select: { booking: { select: { bookingNumber: true } } } } },
+      })
+      if (occupied) {
+        console.log(`[planyo-import] cart ${plan.cart}: unit "${b.rawUnit}" → "${b.normalizedUnit}" already held ${b.startLA}→${b.endLA} by ${occupied.bookingItem.booking.bookingNumber} — left unassigned`)
+        continue
+      }
       await tx.bookingAssignment.create({
         data: {
           bookingItemId: slot.id,
           assetId: assets[0].id,
-          startDate: laDateToDbDate(b.startLA),
-          endDate: laDateToDbDate(b.endLA),
+          startDate: bindStart,
+          endDate: bindEnd,
           status: 'ASSIGNED',
         },
       })

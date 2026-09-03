@@ -12,10 +12,12 @@ import {
 } from './dateConvention'
 import type { CrosswalkEntry } from './resourceCrosswalk'
 import type { PlanyoLine } from './planyoClient'
+import { resolvePlanyoUnitName } from '@/lib/scheduling/planyoNameNormalizer'
 
 export type SyncOp =
   | 'CREATE'
   | 'UPDATE_DATES'
+  | 'UPDATE_UNIT'
   | 'UPDATE_QTY'
   | 'UPDATE_STATUS'
   | 'RELEASE'
@@ -186,6 +188,40 @@ export function diffLine(
       detail: 'Planyo status=2 cancelled — release BookingItem hold',
       before: snapshot(hq),
       after: { status: 'CANCELLED' },
+    }
+  }
+
+  // ── Unit drift (added 2026-09-02). Dispatch reassigns trucks in
+  // Planyo constantly; before this the importer wrote the binding once
+  // at cart-import time and NOTHING ever revisited it. HQ kept the old
+  // unit and never picked up the new one, so a single asset silently
+  // accumulated jobs it wasn't on — 19 of 81 live bookings (22 holds)
+  // when this was found, rendering as phantom stacked lanes on /gantt.
+  // Compared on the NORMALIZED name so Planyo's "23 (A)" and HQ's
+  // "Cube 23" don't read as a drift every single tick.
+  const planyoUnitRaw = (planyo.unit_assignment ?? '').trim()
+  if (planyoUnitRaw) {
+    const planyoUnit = resolvePlanyoUnitName(planyoUnitRaw, cat.name).lookupName
+    const hqUnit = resolvePlanyoUnitName(hq.unitName ?? '', cat.name).lookupName
+    if (hqUnit.toLowerCase() !== planyoUnit.toLowerCase()) {
+      return {
+        op: 'UPDATE_UNIT',
+        planyoReservationId: rid,
+        planyoCartId: cart,
+        detail: `HQ "${hq.unitName}" (${hqUnit})  vs  Planyo "${planyoUnitRaw}" (${planyoUnit})`,
+        before: snapshot(hq),
+        // The apply side moves the BookingAssignment AND syncs its
+        // window, so carry the dates too — a line that drifted on both
+        // axes is repaired in one pass instead of two ticks.
+        after: {
+          unitNameRaw: planyoUnitRaw,
+          unitName: planyoUnit,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          startLA: planyoStart,
+          endLA: planyoEnd,
+        },
+      }
     }
   }
 
