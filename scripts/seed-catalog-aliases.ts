@@ -38,6 +38,18 @@ interface AliasSeed {
 
 const SEEDS: AliasSeed[] = [
   {
+    id: '9e990153-429f-4687-9e3a-493f1def398d',
+    name: 'SuperCube Truck',
+    aliases: ['production truck', 'prod truck'],
+    why:
+      "Wes's ruling 2026-09-03: production truck = the SuperCube. Typed free-hand " +
+      'on the High Horses quote (S260903-002), it matched no catalog row, so it ' +
+      'resolved to no AssetCategory and the quote-send hold reserved NOTHING for ' +
+      'it — a real truck on a live quote that no board showed as spoken for. ' +
+      "Distinct from the neighbours: 'production cart' is the Rubbermaid and " +
+      "'camera truck' is the Camera Cube.",
+  },
+  {
     id: '75298e0e-9e2e-4c23-9196-bf13371085c0',
     name: 'Wardrobe Rack, Rolling',
     aliases: ['garment rack', 'clothing rack'],
