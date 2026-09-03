@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, KeyRound, CheckCircle2 } from 'lucide-react';
 import { evaluateLicenseGate, type LicenseGateResult } from '@/lib/drivers/licenseGate'
 
 interface DriverRow {
@@ -155,7 +156,11 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
   if (done) {
     return (
       <div className={`rounded-xl border p-5 text-center ${done.overridden ? 'border-amber-600 bg-amber-950/40' : 'border-emerald-700 bg-emerald-950/40'}`}>
-        <div className="text-3xl mb-2">{done.overridden ? '⚠️' : '🔑'}</div>
+        <div className="mb-2 flex justify-center">
+          {done.overridden
+            ? <AlertTriangle size={30} aria-hidden className="text-amber-500" />
+            : <KeyRound size={30} aria-hidden className="text-emerald-500" />}
+        </div>
         <p className="text-white font-semibold">Handed over to {done.name}</p>
         <p className="mt-1 text-sm text-zinc-300">
           {done.overridden
@@ -282,7 +287,11 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
           gate.ok ? 'border-emerald-700 bg-emerald-950/30' : 'border-amber-700 bg-amber-950/25'
         }`}>
           <div className="flex items-start gap-2.5">
-            <span className="text-lg leading-none">{gate.ok ? '✅' : '⚠️'}</span>
+            <span className="leading-none">
+              {gate.ok
+                ? <CheckCircle2 size={18} aria-hidden className="text-emerald-500" />
+                : <AlertTriangle size={18} aria-hidden className="text-amber-500" />}
+            </span>
             <div className="min-w-0">
               <div className="text-[15px] font-semibold text-white">
                 {gate.ok ? 'Cleared to hand over' : 'Blocked'}

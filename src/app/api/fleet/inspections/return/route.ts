@@ -33,6 +33,7 @@ import { list } from '@vercel/blob'
 import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
+import { normalizePosition } from '@/lib/fleet/photoPositions'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 
 export const dynamic = 'force-dynamic'
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     fuelLevel?: string | null
     notes?: string | null
     damages?: { location?: string; damageType?: string; severity?: string; notes?: string | null }[]
-    stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null }[]
+    stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null; position?: string | null }[]
   } | null
 
   if (!body?.bookingAssignmentId) {
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
     select: {
       id: true,
       assetId: true,
+      status: true,
       bookingItem: { select: { booking: { select: { jobId: true } } } },
     },
   })
@@ -95,11 +97,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'booking assignment not found' }, { status: 404 })
   }
 
+  // A RETURN inspection may ALREADY exist without the unit having been
+  // checked in. captureReturnDamage (the order page's L&D capture) mints
+  // one when ops logs damage against an assignment, and its own rule is
+  // "one Inspection row per (assignment, RETURN)" — so refusing outright
+  // would mean that logging damage on the order page silently locked the
+  // yard out of receiving the truck.
+  //
+  // The marker for "actually checked in" is the assignment status, which
+  // only this route sets alongside a RETURN inspection. So:
+  //   existing inspection + RETURNED  → genuinely already done, 409
+  //   existing inspection + not yet   → adopt it, don't mint a second
   const existing = await prisma.inspection.findFirst({
     where: { bookingAssignmentId: assignment.id, type: 'RETURN' },
     select: { id: true },
   })
-  if (existing) {
+  if (existing && assignment.status === 'RETURNED') {
     return NextResponse.json(
       { error: 'this unit has already been checked in', inspectionId: existing.id },
       { status: 409 },
@@ -118,21 +131,39 @@ export async function POST(req: NextRequest) {
   const newDamageFound = damages.length > 0
 
   const result = await prisma.$transaction(async (tx) => {
-    const inspection = await tx.inspection.create({
-      data: {
-        assetId: assignment.assetId,
-        bookingAssignmentId: assignment.id,
-        type: 'RETURN',
-        inspectedBy: auth.userId,
-        inspectionDate: new Date(),
-        overallCondition: body.overallCondition as VehicleCondition,
-        mileageAtInspection: mileage,
-        fuelLevel: body.fuelLevel || null,
-        newDamageFound,
-        notes: body.notes?.trim() || null,
-      },
-      select: { id: true },
-    })
+    // Adopting rather than creating keeps damage that ops logged earlier
+    // attached to the same inspection the check-in closes, so the order
+    // page shows one return event and not two halves of one.
+    const inspection = existing
+      ? await tx.inspection.update({
+          where: { id: existing.id },
+          data: {
+            inspectedBy: auth.userId,
+            inspectionDate: new Date(),
+            overallCondition: body.overallCondition as VehicleCondition,
+            mileageAtInspection: mileage,
+            fuelLevel: body.fuelLevel || null,
+            // Damage captured before the truck was received still counts.
+            newDamageFound: newDamageFound || undefined,
+            notes: body.notes?.trim() || undefined,
+          },
+          select: { id: true },
+        })
+      : await tx.inspection.create({
+          data: {
+            assetId: assignment.assetId,
+            bookingAssignmentId: assignment.id,
+            type: 'RETURN',
+            inspectedBy: auth.userId,
+            inspectionDate: new Date(),
+            overallCondition: body.overallCondition as VehicleCondition,
+            mileageAtInspection: mileage,
+            fuelLevel: body.fuelLevel || null,
+            newDamageFound,
+            notes: body.notes?.trim() || null,
+          },
+          select: { id: true },
+        })
 
     if (damages.length) {
       await tx.damageItem.createMany({
@@ -179,7 +210,7 @@ export async function POST(req: NextRequest) {
   // photo row at an arbitrary URL. Same contract as the checkout route.
   const stagedPrefix = `fleet-inspections/staged/${assignment.id}/`
   const requested = (body.stagedPhotos ?? [])
-    .filter((p): p is { key: string; filename?: string | null; contentType?: string | null } =>
+    .filter((p): p is { key: string; filename?: string | null; contentType?: string | null; position?: string | null } =>
       typeof p?.key === 'string' && p.key.startsWith(stagedPrefix))
     .slice(0, 50)
   let photosAttached = 0
@@ -199,6 +230,9 @@ export async function POST(req: NextRequest) {
         fileUrl: blob.url,
         filename: p.filename?.slice(0, 80) || p.key.split('/').pop() || 'photo',
         contentType: p.contentType && ALLOWED_PHOTO_TYPES.has(p.contentType) ? p.contentType : null,
+        // Re-validated rather than trusted: this arrives from the client
+        // a second time, and the column is what a side-by-side reads.
+        position: normalizePosition(p.position),
         uploadedBy: auth.userId,
       })
     }

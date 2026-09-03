@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import { getPermissions } from '@/lib/permissions';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
+import { Truck, AlertTriangle, Check } from 'lucide-react';
 
 type Asset = {
   id: string;
@@ -54,8 +55,8 @@ function CatThumb({ assetId, hasImage, name }: { assetId: string; hasImage: bool
   const [ok, setOk] = useState(true);
   if (!hasImage || !ok) {
     return (
-      <div className="w-12 h-9 rounded bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 text-gray-300 text-[14px]" title={name}>
-        🚚
+      <div className="w-12 h-9 rounded bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 text-gray-300" title={name}>
+        <Truck size={16} aria-hidden />
       </div>
     );
   }
@@ -368,7 +369,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               <div className="col-span-2">
                 <label className={labelCls}>VIN</label>
                 <input className={`${fieldCls} font-mono ${vinWarn ? 'border-amber-400' : ''}`} value={vin} onChange={(e) => setVin(e.target.value)} placeholder="1FTBW2CM5NKA12345" />
-                {vinWarn && <p className="text-[10px] text-amber-600 mt-1">⚠ VINs are usually 17 characters with no I, O, or Q. Saved anyway — double-check if this is a real VIN.</p>}
+                {vinWarn && <p className="text-[10px] text-amber-600 mt-1 flex items-start gap-1"><AlertTriangle size={11} aria-hidden className="mt-px flex-none" />VINs are usually 17 characters with no I, O, or Q. Saved anyway — double-check if this is a real VIN.</p>}
               </div>
               <div className="col-span-2">
                 <label className={labelCls}>Lockbox access code <span className="font-normal normal-case text-gray-400">— released to verified drivers by the after-hours assistant</span></label>
@@ -379,7 +380,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               <button onClick={saveFields} disabled={savingFields} className="px-3 py-1.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[12px] font-semibold rounded-lg">
                 {savingFields ? 'Saving…' : 'Save details'}
               </button>
-              {savedMsg && <span className="text-[11px] text-emerald-600 font-medium">Saved ✓</span>}
+              {savedMsg && <span className="text-[11px] text-emerald-600 font-medium inline-flex items-center gap-1">Saved<Check size={11} aria-hidden /></span>}
             </div>
           </section>
 

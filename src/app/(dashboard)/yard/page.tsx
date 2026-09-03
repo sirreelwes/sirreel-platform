@@ -14,6 +14,7 @@
  */
 
 import Link from 'next/link'
+import { Lock, ArrowRight } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { yardBoardFor, pacificYmd } from '@/lib/yard/board'
 import { YardBoard } from '@/components/yard/YardBoard'
@@ -26,7 +27,7 @@ export default async function YardPage() {
   if (!user) {
     return (
       <div className="max-w-sm mx-auto text-center py-16 px-6">
-        <div className="text-4xl mb-3">🔒</div>
+        <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
         <h1 className="text-white text-lg font-semibold mb-2">Yard access required</h1>
         <p className="text-zinc-400 text-sm">
           The yard board is for fleet and warehouse staff. Ask Wes or Hugo if you need it.
@@ -53,14 +54,17 @@ export default async function YardPage() {
       <YardBoard initial={board} today={today} />
 
       <footer className="mt-8 pt-4 border-t border-zinc-800 flex flex-wrap gap-x-5 gap-y-2 text-xs">
-        <Link href="/warehouse/pick" className="text-zinc-500 hover:text-amber-500">
-          All pick lists →
+        <Link href="/warehouse/pick" className="text-zinc-500 hover:text-amber-500 inline-flex items-center gap-1">
+          All pick lists
+          <ArrowRight size={12} aria-hidden />
         </Link>
-        <Link href="/dispatch" className="text-zinc-500 hover:text-amber-500">
-          Deliveries &amp; pickups →
+        <Link href="/dispatch" className="text-zinc-500 hover:text-amber-500 inline-flex items-center gap-1">
+          Deliveries &amp; pickups
+          <ArrowRight size={12} aria-hidden />
         </Link>
-        <Link href="/fleet" className="text-zinc-500 hover:text-amber-500">
-          Fleet roster →
+        <Link href="/fleet" className="text-zinc-500 hover:text-amber-500 inline-flex items-center gap-1">
+          Fleet roster
+          <ArrowRight size={12} aria-hidden />
         </Link>
       </footer>
     </div>

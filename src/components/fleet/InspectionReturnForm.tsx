@@ -21,7 +21,10 @@
  *     rather than arithmetic someone does later from two records.
  */
 
-import { useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { GuidedPhotoCapture, type StagedPhoto, type ComparePhoto } from './GuidedPhotoCapture';
+import { missingPositions } from '@/lib/fleet/photoPositions';
 
 const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'] as const;
 const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const;
@@ -38,6 +41,8 @@ export interface CheckoutSnapshot {
   fuelLevel: string | null;
   mileage: number | null;
   notes: string | null;
+  /** Check-out walk-around, shown slot-by-slot beside the new shots. */
+  photos: ComparePhoto[];
   preExisting: {
     id: string;
     locationOnVehicle: string;
@@ -52,17 +57,6 @@ interface DamageDraft {
   damageType: string;
   severity: string;
   notes: string;
-}
-
-interface PhotoDraft {
-  localId: string;
-  file: File;
-  preview: string;
-  status: 'uploading' | 'done' | 'error';
-  key?: string;
-  filename?: string;
-  contentType?: string | null;
-  error?: string;
 }
 
 const inputCls =
@@ -111,8 +105,6 @@ function TapSelector({
   );
 }
 
-let nextLocalId = 0;
-
 export function InspectionReturnForm({
   bookingAssignmentId,
   checkout,
@@ -124,7 +116,7 @@ export function InspectionReturnForm({
   const [mileage, setMileage] = useState('');
   const [fuel, setFuel] = useState<string>(checkout?.fuelLevel ?? 'full');
   const [notes, setNotes] = useState('');
-  const [photos, setPhotos] = useState<PhotoDraft[]>([]);
+  const [photos, setPhotos] = useState<StagedPhoto[]>([]);
   const [damages, setDamages] = useState<DamageDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,54 +126,7 @@ export function InspectionReturnForm({
     damageCount: number;
     jobReturned: boolean;
   } | null>(null);
-  const cameraInput = useRef<HTMLInputElement>(null);
-  const libraryInput = useRef<HTMLInputElement>(null);
-
-  const patchPhoto = (localId: string, patch: Partial<PhotoDraft>) =>
-    setPhotos((p) => p.map((ph) => (ph.localId === localId ? { ...ph, ...patch } : ph)));
-
-  async function uploadPhoto(draft: PhotoDraft) {
-    patchPhoto(draft.localId, { status: 'uploading', error: undefined });
-    try {
-      const fd = new FormData();
-      fd.append('file', draft.file);
-      fd.append('bookingAssignmentId', bookingAssignmentId);
-      const res = await fetch('/api/fleet/inspections/photos/stage', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `upload failed (${res.status})`);
-      patchPhoto(draft.localId, {
-        status: 'done',
-        key: data.key,
-        filename: data.filename,
-        contentType: data.contentType ?? null,
-      });
-    } catch (err) {
-      patchPhoto(draft.localId, {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'upload failed',
-      });
-    }
-  }
-
-  function addFiles(list: FileList | null) {
-    if (!list?.length) return;
-    const drafts: PhotoDraft[] = Array.from(list).map((file) => ({
-      localId: `p${nextLocalId++}`,
-      file,
-      preview: URL.createObjectURL(file),
-      status: 'uploading',
-    }));
-    setPhotos((p) => [...p, ...drafts]);
-    drafts.forEach((d) => void uploadPhoto(d));
-  }
-
-  function removePhoto(localId: string) {
-    setPhotos((p) => {
-      const target = p.find((ph) => ph.localId === localId);
-      if (target) URL.revokeObjectURL(target.preview);
-      return p.filter((ph) => ph.localId !== localId);
-    });
-  }
+  const onPhotosChange = useCallback((next: StagedPhoto[]) => setPhotos(next), []);
 
   const addDamage = () =>
     setDamages((d) => [...d, { location: '', damageType: 'SCRATCH', severity: 'MINOR', notes: '' }]);
@@ -191,6 +136,10 @@ export function InspectionReturnForm({
 
   const uploadingCount = photos.filter((p) => p.status === 'uploading').length;
   const failedCount = photos.filter((p) => p.status === 'error').length;
+  // A PROMPT, never a lock — see the note in GuidedPhotoCapture. A tech
+  // in front of a truck at 6am has to be able to record what they can
+  // see; an unshot angle is recorded as unshot rather than blocking.
+  const missing = missingPositions(photos.map((p) => p.position));
 
   // Live comparisons against the checkout. Both are stated as facts on
   // the screen rather than left as arithmetic for whoever reads the two
@@ -227,7 +176,12 @@ export function InspectionReturnForm({
             })),
           stagedPhotos: photos
             .filter((p) => p.status === 'done' && p.key)
-            .map((p) => ({ key: p.key, filename: p.filename ?? null, contentType: p.contentType ?? null })),
+            .map((p) => ({
+              key: p.key,
+              filename: p.filename ?? null,
+              contentType: p.contentType ?? null,
+              position: p.position,
+            })),
         }),
       });
       const data = await res.json();
@@ -248,7 +202,7 @@ export function InspectionReturnForm({
   if (done) {
     return (
       <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-        <div className="text-3xl mb-2">✅</div>
+        <CheckCircle2 size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
         <p className="text-white font-semibold">Unit checked in</p>
         <p className="text-zinc-400 text-sm mt-1">
           {done.photosAttached} photo{done.photosAttached === 1 ? '' : 's'} attached
@@ -267,9 +221,10 @@ export function InspectionReturnForm({
         </p>
         <a
           href="/yard"
-          className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
         >
-          Back to today →
+          Back to today
+          <ArrowRight size={14} aria-hidden />
         </a>
       </div>
     );
@@ -332,95 +287,13 @@ export function InspectionReturnForm({
         </section>
       )}
 
-      <div>
-        <label className={labelCls}>Photos (all four sides, interior, anything new)</label>
-        <input
-          ref={cameraInput}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={libraryInput}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => cameraInput.current?.click()}
-            className="min-h-[52px] bg-amber-600 active:bg-amber-500 text-white font-semibold rounded-lg text-base"
-          >
-            📷 Take photo
-          </button>
-          <button
-            type="button"
-            onClick={() => libraryInput.current?.click()}
-            className="min-h-[52px] bg-zinc-800 border border-zinc-700 active:bg-zinc-700 text-zinc-200 font-semibold rounded-lg text-base"
-          >
-            🖼️ Camera roll
-          </button>
-        </div>
-
-        {photos.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-            {photos.map((p) => (
-              <div
-                key={p.localId}
-                className="relative aspect-square rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.preview} alt={p.filename || 'return photo'} className="w-full h-full object-cover" />
-                {p.status === 'uploading' && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <span className="text-white text-xs animate-pulse">Uploading…</span>
-                  </div>
-                )}
-                {p.status === 'error' && (
-                  <button
-                    type="button"
-                    onClick={() => void uploadPhoto(p)}
-                    className="absolute inset-0 bg-red-950/80 flex flex-col items-center justify-center gap-1"
-                  >
-                    <span className="text-red-300 text-lg">↻</span>
-                    <span className="text-red-300 text-xs font-medium">Failed — tap to retry</span>
-                  </button>
-                )}
-                {p.status === 'done' && (
-                  <span className="absolute top-1 left-1 bg-emerald-600 text-white text-[10px] font-bold rounded px-1">
-                    ✓
-                  </span>
-                )}
-                <button
-                  type="button"
-                  aria-label="Remove photo"
-                  onClick={() => removePhoto(p.localId)}
-                  className="absolute top-1 right-1 w-7 h-7 bg-black/70 text-zinc-300 rounded-full text-sm leading-none"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {failedCount > 0 && (
-          <p className="text-red-400 text-xs mt-2">
-            {failedCount} photo{failedCount === 1 ? '' : 's'} failed to upload — tap to retry, or remove. The rest
-            are safe.
-          </p>
-        )}
-      </div>
+      {/* The guided walk-around — same slots the check-out shot, with
+          each check-out photo above the button that replaces it. */}
+      <GuidedPhotoCapture
+        bookingAssignmentId={bookingAssignmentId}
+        compareTo={checkout?.photos}
+        onChange={onPhotosChange}
+      />
 
       <div>
         <label className={labelCls}>Condition back</label>
@@ -529,6 +402,12 @@ export function InspectionReturnForm({
         />
       </div>
 
+      {missing.length > 0 && (
+        <p className="text-amber-400/90 text-xs bg-amber-950/30 border border-amber-900/60 rounded-lg px-3 py-2">
+          Walk-around incomplete — no {missing.map((m) => m.label.toLowerCase()).join(', ')} shot.
+          {' '}You can still submit; the gap is recorded as a gap.
+        </p>
+      )}
       {error && <p className="text-red-400 text-sm bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">{error}</p>}
 
       <button

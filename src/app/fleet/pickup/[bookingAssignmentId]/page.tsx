@@ -15,6 +15,7 @@
  * needs a path forward, not a locked door.
  */
 
+import { Lock, ClipboardList, Flag } from 'lucide-react'
 import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess'
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
@@ -39,7 +40,7 @@ export default async function FleetPickupPage({ params }: Params) {
     return (
       <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <div className="text-4xl mb-3">🔒</div>
+          <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
           <h1 className="text-white text-lg font-semibold mb-2">Fleet access required</h1>
           <p className="text-zinc-400 text-sm">
             Vehicle handover is limited to warehouse and fleet (admin, manager, fleet tech, warehouse).
@@ -112,7 +113,7 @@ export default async function FleetPickupPage({ params }: Params) {
       <Shell>
         {header}
         <div className="bg-zinc-800 border border-amber-700/60 rounded-xl p-5">
-          <div className="text-2xl mb-2">📋</div>
+          <ClipboardList size={26} aria-hidden className="mx-auto mb-2 text-zinc-400" />
           <p className="text-white font-semibold">Inspection first</p>
           <p className="text-zinc-400 text-sm mt-1">
             This unit hasn&rsquo;t had its pre-rental walkaround yet. Do that before handing
@@ -134,7 +135,7 @@ export default async function FleetPickupPage({ params }: Params) {
       <Shell>
         {header}
         <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">🏁</div>
+          <Flag size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
           <p className="text-white font-semibold">Already returned</p>
           <p className="text-zinc-400 text-sm mt-1">
             This checkout closed on {checkout.returnTime.toISOString().slice(0, 16).replace('T', ' ')}.

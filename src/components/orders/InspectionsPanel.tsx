@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { AlertTriangle, FileText } from 'lucide-react';
 
 interface PanelInspection {
   id: string;
@@ -56,7 +57,7 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
 
   return (
     <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 mt-6">
-      <h2 className="text-white font-semibold mb-4">🔍 Inspections</h2>
+      <h2 className="text-white font-semibold mb-4">Inspections</h2>
       <div className="space-y-4">
         {inspections.map((insp) => (
           <div key={insp.id} className="bg-zinc-800 border border-zinc-700 rounded-lg p-4">
@@ -83,6 +84,19 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
               </div>
             </div>
             {insp.notes && <p className="text-zinc-400 text-sm mb-2">{insp.notes}</p>}
+            {/* Out-vs-back document for this vehicle. Hung off the RETURN
+                row because that is the point at which both ends exist. */}
+            {insp.type === 'RETURN' && insp.bookingAssignment && (
+              <a
+                href={`/api/fleet/inspections/report/${insp.bookingAssignment.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-amber-500 mb-2"
+              >
+                <FileText size={12} aria-hidden />
+                Condition report (out vs back)
+              </a>
+            )}
             {insp.damageItems.length > 0 && (
               <ul className="mb-3 space-y-1">
                 {insp.damageItems.map((d) => (
@@ -90,7 +104,8 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
                     key={d.id}
                     className={`text-xs ${d.isPreExisting ? 'text-amber-500/90' : 'text-rose-400'}`}
                   >
-                    ⚠ {d.isPreExisting ? 'Pre-existing' : 'New on return'}: {d.locationOnVehicle} —{' '}
+                    <AlertTriangle size={11} aria-hidden className="inline-block align-[-1px] mr-1" />
+                    {d.isPreExisting ? 'Pre-existing' : 'New on return'}: {d.locationOnVehicle} —{' '}
                     {d.damageType.replace('_', ' ').toLowerCase()} ({d.severity.toLowerCase()})
                     {d.notes ? ` — ${d.notes}` : ''}
                     {!d.isPreExisting && d.disposition === 'PENDING' && (

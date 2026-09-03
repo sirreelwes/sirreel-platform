@@ -20,6 +20,7 @@
  */
 
 import Link from 'next/link'
+import { Lock, CheckCircle2, ArrowLeft, ArrowRight, FileText } from 'lucide-react'
 import { getFleetInspectionUser } from '@/lib/fleet/requireFleetInspectionAccess'
 import { prisma } from '@/lib/prisma'
 import { InspectionReturnForm, type CheckoutSnapshot } from '@/components/fleet/InspectionReturnForm'
@@ -44,7 +45,7 @@ export default async function FleetReturnPage({ params }: Params) {
     return (
       <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <div className="text-4xl mb-3">🔒</div>
+          <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
           <h1 className="text-white text-lg font-semibold mb-2">Fleet access required</h1>
           <p className="text-zinc-400 text-sm">
             Return check-ins are limited to yard ops (admin, manager, fleet tech, warehouse). Sign in at{' '}
@@ -89,6 +90,13 @@ export default async function FleetReturnPage({ params }: Params) {
           mileageAtInspection: true,
           notes: true,
           inspectedByUser: { select: { name: true } },
+          // The check-out walk-around, laid beside the new shots
+          // slot-by-slot. Ordered so the guided slots come before
+          // anything free-form or pre-guided-capture (position null).
+          photos: {
+            select: { id: true, position: true },
+            orderBy: { createdAt: 'asc' },
+          },
           damageItems: {
             where: { isPreExisting: true },
             select: {
@@ -118,8 +126,9 @@ export default async function FleetReturnPage({ params }: Params) {
 
   const header = (
     <header className="mb-5">
-      <Link href="/yard" className="text-zinc-500 text-xs hover:text-zinc-300">
-        ← Back to today
+      <Link href="/yard" className="text-zinc-500 text-xs hover:text-zinc-300 inline-flex items-center gap-1">
+        <ArrowLeft size={12} aria-hidden />
+        Back to today
       </Link>
       <div className="text-amber-500 text-xs font-semibold uppercase tracking-wide mb-1 mt-3">
         Return check-in
@@ -145,7 +154,7 @@ export default async function FleetReturnPage({ params }: Params) {
       <Shell>
         {header}
         <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">✅</div>
+          <CheckCircle2 size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
           <p className="text-white font-semibold">Already checked in</p>
           <p className="text-zinc-400 text-sm mt-1">
             {returnRow.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by{' '}
@@ -158,12 +167,27 @@ export default async function FleetReturnPage({ params }: Params) {
               ? ` · ${returnRow.mileageAtInspection.toLocaleString()} mi`
               : ''}
           </p>
-          <Link
-            href="/yard"
-            className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
-          >
-            Back to today →
-          </Link>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <Link
+              href="/yard"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+            >
+              Back to today
+              <ArrowRight size={14} aria-hidden />
+            </Link>
+            {/* The out-vs-back document. Viewing is open to yard staff;
+                sending it to the renter is still gated off — see
+                inspectionReportSendingEnabled. */}
+            <a
+              href={`/api/fleet/inspections/report/${assignment.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-zinc-400 text-xs hover:text-amber-500"
+            >
+              <FileText size={12} aria-hidden />
+              Condition report (out vs back)
+            </a>
+          </div>
         </div>
       </Shell>
     )
@@ -177,6 +201,7 @@ export default async function FleetReturnPage({ params }: Params) {
         fuelLevel: checkoutRow.fuelLevel,
         mileage: checkoutRow.mileageAtInspection,
         notes: checkoutRow.notes,
+        photos: checkoutRow.photos,
         preExisting: checkoutRow.damageItems,
       }
     : null

@@ -36,6 +36,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, AlertTriangle } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -585,7 +586,7 @@ export default function WarehousePickDetailPage() {
                   </div>
                   {isPicked && !counted && !checkingIn && !checkedIn && i.pickedBy && (
                     <div className="mt-1.5 text-[11px] text-emerald-400 flex items-center gap-1.5">
-                      <span aria-hidden>✓</span>
+                      <Check size={13} aria-hidden />
                       <span>picked by {i.pickedBy.name}{i.scannedCode ? ` · scanned ${i.scannedCode}` : ''}</span>
                     </div>
                   )}
@@ -631,7 +632,7 @@ export default function WarehousePickDetailPage() {
                     className="flex-none min-h-[56px] px-5 sm:px-6 flex items-center justify-center text-emerald-400"
                     aria-label="picked"
                   >
-                    <span className="text-2xl leading-none" aria-hidden>✓</span>
+                    <Check size={22} aria-hidden />
                   </div>
                 )}
 
@@ -679,7 +680,7 @@ export default function WarehousePickDetailPage() {
                     }`}
                     aria-label={isShort ? 'short' : 'returned'}
                   >
-                    <span className="text-2xl leading-none" aria-hidden>{isShort ? '!' : '✓'}</span>
+                    {isShort ? <AlertTriangle size={22} aria-hidden /> : <Check size={22} aria-hidden />}
                   </div>
                 )}
               </div>

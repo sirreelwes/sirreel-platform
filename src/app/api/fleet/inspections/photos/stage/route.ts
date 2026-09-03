@@ -18,6 +18,7 @@ import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
+import { normalizePosition } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'only JPEG/PNG/WebP/HEIC images are accepted' }, { status: 415 })
   }
 
+  // Which walk-around slot this fills. Validated here so an unknown
+  // value becomes null rather than being written through — see
+  // lib/fleet/photoPositions.
+  const position = normalizePosition(form.get('position'))
+
   const safeName = (file.name || 'photo').replace(/[^\w.\-]/g, '_').slice(0, 80)
   const key = `fleet-inspections/staged/${assignment.id}/${randomUUID()}-${safeName}`
   await put(key, file, {
@@ -61,5 +67,5 @@ export async function POST(req: NextRequest) {
     contentType,
   })
 
-  return NextResponse.json({ ok: true, key, filename: safeName, contentType }, { status: 201 })
+  return NextResponse.json({ ok: true, key, filename: safeName, contentType, position }, { status: 201 })
 }

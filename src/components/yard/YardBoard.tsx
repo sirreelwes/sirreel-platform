@@ -15,6 +15,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Truck, Package, AlertTriangle, Check, RotateCw,
+  ChevronLeft, ChevronRight, ChevronDown, ArrowLeft,
+} from 'lucide-react'
 import type { YardBoard as Board, YardGroup, YardRow } from '@/lib/yard/board'
 
 const PULL_THRESHOLD = 70
@@ -53,8 +57,8 @@ function RowCard({ row }: { row: YardRow }) {
           : 'bg-zinc-800 border-zinc-700 active:border-amber-600 hover:border-zinc-600'
       }`}
     >
-      <span className="text-xl leading-none flex-none" aria-hidden>
-        {row.kind === 'VEHICLE' ? '🚚' : '📦'}
+      <span className="flex-none text-zinc-400" aria-hidden>
+        {row.kind === 'VEHICLE' ? <Truck size={20} /> : <Package size={20} />}
       </span>
       <span className="min-w-0 flex-1">
         {/* Title and detail stack rather than sharing a line: on a 375px
@@ -112,9 +116,19 @@ function GroupCard({ group }: { group: YardGroup }) {
                 : 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
           }`}
         >
-          {group.flagCount > 0 ? '⚠ Short' : group.openCount > 0 ? `${group.openCount} to do` : '✓ Done'}
+          {group.flagCount > 0 ? (
+            <span className="inline-flex items-center gap-1"><AlertTriangle size={11} aria-hidden />Short</span>
+          ) : group.openCount > 0 ? (
+            `${group.openCount} to do`
+          ) : (
+            <span className="inline-flex items-center gap-1"><Check size={11} aria-hidden />Done</span>
+          )}
         </span>
-        <span className="flex-none text-zinc-600 text-sm">{open ? '▾' : '▸'}</span>
+        <ChevronDown
+          size={16}
+          aria-hidden
+          className={`flex-none text-zinc-600 transition-transform ${open ? '' : '-rotate-90'}`}
+        />
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2">
@@ -220,9 +234,9 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
           type="button"
           onClick={() => setDate(shiftYmd(date, -1))}
           aria-label="Previous day"
-          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700"
+          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 flex items-center justify-center"
         >
-          ‹
+          <ChevronLeft size={18} aria-hidden />
         </button>
         <div className="flex-1 text-center">
           <div className="text-white font-semibold">{dayLabel(date, today, tomorrow)}</div>
@@ -232,18 +246,18 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
           type="button"
           onClick={() => setDate(shiftYmd(date, 1))}
           aria-label="Next day"
-          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700"
+          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 flex items-center justify-center"
         >
-          ›
+          <ChevronRight size={18} aria-hidden />
         </button>
         <button
           type="button"
           onClick={() => void load(date)}
           disabled={refreshing}
-          className="min-h-[44px] px-3 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 disabled:opacity-50"
+          className="min-h-[44px] px-3 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 disabled:opacity-50 flex items-center justify-center"
           aria-label="Refresh"
         >
-          ↻
+          <RotateCw size={16} aria-hidden className={refreshing ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -251,9 +265,10 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
         <button
           type="button"
           onClick={() => setDate(today)}
-          className="mb-3 w-full min-h-[44px] rounded-lg border border-zinc-700 bg-zinc-800/60 text-zinc-300 text-sm active:bg-zinc-700"
+          className="mb-3 w-full min-h-[44px] rounded-lg border border-zinc-700 bg-zinc-800/60 text-zinc-300 text-sm active:bg-zinc-700 inline-flex items-center justify-center gap-1.5"
         >
-          ← Back to today
+          <ArrowLeft size={14} aria-hidden />
+          Back to today
         </button>
       )}
 

@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react';
 import { UserPlus } from 'lucide-react'
 
 interface DriverRow {
@@ -185,7 +186,7 @@ export default function GuestDriversPage() {
                       {d.phone && <> · {d.phone}</>}
                     </div>
                     {d.flagged && (
-                      <div className="mt-1 text-[11px] font-semibold text-rose-700">⚠ {d.flagReason || 'Flagged'}</div>
+                      <div className="mt-1 text-[11px] font-semibold text-rose-700 flex items-center gap-1"><AlertTriangle size={11} aria-hidden />{d.flagReason || 'Flagged'}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 align-top">

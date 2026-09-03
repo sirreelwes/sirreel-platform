@@ -29,6 +29,7 @@ import { list } from '@vercel/blob'
 import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
+import { normalizePosition } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     // Blob keys returned by /api/fleet/inspections/photos/stage — the
     // photos already uploaded as they were taken; finalize only links
     // them, it never receives bytes.
-    stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null }[]
+    stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null; position?: string | null }[]
   } | null
   if (!body?.bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId required' }, { status: 400 })
@@ -149,7 +150,7 @@ export async function POST(req: NextRequest) {
   const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
   const stagedPrefix = `fleet-inspections/staged/${assignment.id}/`
   const requested = (body.stagedPhotos ?? [])
-    .filter((p): p is { key: string; filename?: string | null; contentType?: string | null } =>
+    .filter((p): p is { key: string; filename?: string | null; contentType?: string | null; position?: string | null } =>
       typeof p?.key === 'string' && p.key.startsWith(stagedPrefix))
     .slice(0, 50)
   let photosAttached = 0
@@ -166,6 +167,9 @@ export async function POST(req: NextRequest) {
         fileUrl: blob.url,
         filename: p.filename?.slice(0, 80) || p.key.split('/').pop() || 'photo',
         contentType: p.contentType && ALLOWED_PHOTO_TYPES.has(p.contentType) ? p.contentType : null,
+        // Re-validated rather than trusted: this arrives from the client
+        // a second time, and the column is what a side-by-side reads.
+        position: normalizePosition(p.position),
         uploadedBy: auth.userId,
       })
     }

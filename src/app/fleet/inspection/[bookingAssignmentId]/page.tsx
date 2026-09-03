@@ -11,6 +11,7 @@
  * on the hq host.
  */
 
+import { Lock, CheckCircle2 } from 'lucide-react'
 import { getFleetInspectionUser } from '@/lib/fleet/requireFleetInspectionAccess'
 import { prisma } from '@/lib/prisma'
 import { InspectionCheckoutForm } from '@/components/fleet/InspectionCheckoutForm'
@@ -27,7 +28,7 @@ export default async function FleetInspectionPage({ params }: Params) {
     return (
       <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <div className="text-4xl mb-3">🔒</div>
+          <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
           <h1 className="text-white text-lg font-semibold mb-2">Fleet access required</h1>
           <p className="text-zinc-400 text-sm">
             Pre-rental inspections are limited to fleet ops (admin, manager, dispatcher, fleet tech).
@@ -104,7 +105,7 @@ export default async function FleetInspectionPage({ params }: Params) {
 
         {existing ? (
           <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-            <div className="text-3xl mb-2">✅</div>
+            <CheckCircle2 size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
             <p className="text-white font-semibold">Inspection already completed</p>
             <p className="text-zinc-400 text-sm mt-1">
               {existing.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by {existing.inspectedByUser.name || 'fleet'}
