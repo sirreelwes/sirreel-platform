@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { needsJobDisambiguation } from '@/lib/jobs/jobDisambiguation';
 // selectedClientId is usually a Company id but is sometimes an ANSWER
 // ('__new__' / '__unknown__'). Anything wanting a real id asks through
@@ -1711,38 +1712,29 @@ function NewQuotePageInner() {
   // (src/lib/intake/detailsToken) rather than inventing a second
   // mechanism. The client's answer comes back as a ClientDetailReply for
   // a human to accept; it never renames anything on its own.
-  const [askingJobName, setAskingJobName] = useState(false);
+  //
+  // The click OPENS THE REVIEW GATE; it does not send (Wes 2026-09-02:
+  // "something sent without my ability to review it"). It used to POST
+  // straight to the send route from an inline text link — the only
+  // client-facing email in HQ that went out unreviewed.
+  const [askJobNameTarget, setAskJobNameTarget] = useState<EmailReviewTarget | null>(null);
   const [askJobNameNote, setAskJobNameNote] = useState<string | null>(null);
-  const askClientForJobName = async () => {
-    if (!inquiryId || askingJobName) return;
-    const toEmail = contacts.find((c) => c.include && c.email)?.email || parsed?.contactEmail || null;
+  const askClientForJobName = () => {
+    if (!inquiryId) return;
+    const lead = contacts.find((c) => c.include && c.email);
+    const toEmail = lead?.email || parsed?.contactEmail || null;
     if (!toEmail) {
       setAskJobNameNote('No client email on this quote yet — add a contact below first.');
       return;
     }
-    setAskingJobName(true);
     setAskJobNameNote(null);
-    try {
-      const res = await fetch(`/api/inquiries/${inquiryId}/ask-job-name`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toEmail,
-          toName: contacts.find((c) => c.include && c.email)?.name || null,
-          askForCompany: companyPick.mode === 'creating_new',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAskJobNameNote(data.error || `Could not send (HTTP ${res.status}).`);
-        return;
-      }
-      setAskJobNameNote(`Asked ${data.sentTo} — their answer lands on this inquiry.`);
-    } catch (e) {
-      setAskJobNameNote(e instanceof Error ? e.message : 'Could not send.');
-    } finally {
-      setAskingJobName(false);
-    }
+    setAskJobNameTarget({
+      kind: 'ask-job-name',
+      inquiryId,
+      toEmail,
+      toName: lead?.name || null,
+      askForCompany: companyPick.mode === 'creating_new',
+    });
   };
   // The lead the Job should be created against — the first included
   // contact with an email. One definition, used by the headless resolve
@@ -2515,11 +2507,10 @@ function NewQuotePageInner() {
                   <button
                     type="button"
                     onClick={askClientForJobName}
-                    disabled={askingJobName}
-                    title="Email the client a one-tap link asking what to call this production"
-                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 disabled:text-lt-fg3 underline underline-offset-2"
+                    title="Review and send the client a one-tap link asking what to call this production"
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2"
                   >
-                    {askingJobName ? 'Sending…' : 'Ask client for job name'}
+                    Ask client for job name…
                   </button>
                 )}
               </div>
@@ -2597,6 +2588,17 @@ function NewQuotePageInner() {
                 onClose={() => setJobResolverOpen(false)}
               />
             )}
+
+            {/* The job-name ask, behind the same review gate every other
+                client email uses: the rep reads it, edits it, and sends. */}
+            <EmailReviewModal
+              target={askJobNameTarget}
+              onClose={() => setAskJobNameTarget(null)}
+              onSent={(info) => {
+                setAskJobNameTarget(null);
+                setAskJobNameNote(`Asked ${info.recipient} — their answer lands on this inquiry.`);
+              }}
+            />
 
             {/* Recommendations: list of this client's open Jobs, only
                 shown while nothing has been picked/typed yet. Clicking

@@ -22,15 +22,23 @@
  * Nothing here creates or renames a Job. The reply arrives as a
  * ClientDetailReply for a human to accept — the client's words are the
  * suggestion, not the write.
+ *
+ * ── This is the SEND half of a review gate (Wes 2026-09-02) ────────
+ *
+ * It used to be the whole thing: one click on Review Quote and the email
+ * was gone, unreviewed. The copy now comes from composeAskJobNameEmail so
+ * /preview renders the same words, and the rep sends from
+ * EmailReviewModal like every other client-facing email in HQ.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { CLIENT_SIGNOFF } from '@/lib/email/signoff'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { parseCcList } from '@/lib/email/ccList'
 import { signDetailsToken, detailsLinkUrl } from '@/lib/intake/detailsToken'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
+import { composeAskJobNameEmail, loadAskJobNameContext } from '@/lib/sales/askJobNameEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,45 +52,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const inquiry = await prisma.inquiry.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      title: true,
-      person: { select: { firstName: true, email: true } },
-      company: { select: { name: true } },
-    },
-  })
-  if (!inquiry) return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  // Rep-typed CC from the review modal. Re-parsed server-side: the
+  // client-side check is a convenience, not a control.
+  const cc = parseCcList(body.ccAdd)
 
-  const body = (await req.json().catch(() => null)) as {
-    toEmail?: unknown
-    toName?: unknown
-    askForCompany?: unknown
-  } | null
-
-  // The caller may pass the recipient explicitly — on Review Quote the
-  // contact often is not saved yet, so there is no Person row to read.
-  const toEmail =
-    (typeof body?.toEmail === 'string' && body.toEmail.trim()) || inquiry.person?.email || ''
-  if (!toEmail) {
-    return NextResponse.json(
-      { error: 'No client email on this inquiry — add a contact first.' },
-      { status: 400 },
-    )
+  let ctx
+  try {
+    ctx = await loadAskJobNameContext(id, user, body)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Could not compose the ask.'
+    return NextResponse.json({ error: msg }, { status: msg === 'Inquiry not found' ? 404 : 400 })
   }
-  const toName =
-    (typeof body?.toName === 'string' && body.toName.trim()) || inquiry.person?.firstName || 'there'
-  // Ask for the company too when we do not have one yet — same trip.
-  const askForCompany = body?.askForCompany === true || !inquiry.company
 
   let url: string
   try {
     url = detailsLinkUrl(
       signDetailsToken({
-        inquiryId: inquiry.id,
-        sentTo: toEmail,
-        ask: { company: askForCompany, project: true },
+        inquiryId: ctx.inquiryId,
+        sentTo: ctx.toEmail,
+        ask: { company: ctx.askForCompany, project: true },
       }),
     )
   } catch (err) {
@@ -90,31 +79,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Could not create the link.' }, { status: 500 })
   }
 
-  const agent = user.name || 'the SirReel team'
-  const wanted = askForCompany ? 'the production name and your company' : 'the production name'
-  const subject = `Quick one — what should we call this job?`
-  const text =
-    `Hi ${toName},\n\n` +
-    `We're putting your quote together. So it lands in the right place, could you tell us ` +
-    `${wanted}?\n\n${url}\n\n` +
-    `Takes a few seconds — or just reply to this email and we'll add it.\n\n` +
-    `Thanks,\n${agent}\n${CLIENT_SIGNOFF}`
-  const html =
-    `<div style="font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1c1917">` +
-    `<p>Hi ${toName},</p>` +
-    `<p>We're putting your quote together. So it lands in the right place, could you tell us ${wanted}?</p>` +
-    `<p><a href="${url}" style="color:#b45309;font-weight:700">Add ${askForCompany ? 'them' : 'it'} here</a> — takes a few seconds, or just reply to this email and we'll add it.</p>` +
-    `<p>Thanks,<br>${agent}<br>${CLIENT_SIGNOFF}</p></div>`
+  const customMessage =
+    typeof body.customMessage === 'string' && body.customMessage.trim() ? body.customMessage : null
+  const { subject, html, text } = composeAskJobNameEmail({ ctx, url, customMessage })
 
   const result = await sendAgreementEmail({
-    to: [toEmail],
+    to: [ctx.toEmail],
+    cc: cc.length ? cc : undefined,
     subject,
     html,
     text,
     // Replies go to the rep who asked, not a shared inbox — they are the
     // one waiting on the answer.
     replyTo: user.email,
-    label: `ask-job-name:${inquiry.id}`,
+    label: `ask-job-name:${ctx.inquiryId}`,
   })
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? 'send failed' }, { status: 502 })
@@ -122,11 +100,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (result.id) {
     await recordEmailDelivery({
       resendMessageId: result.id,
-      toAddress: toEmail,
+      toAddress: ctx.toEmail,
+      ccAddresses: cc,
       subject,
-      label: `ask-job-name:${inquiry.id}`,
+      label: `ask-job-name:${ctx.inquiryId}`,
     })
   }
 
-  return NextResponse.json({ ok: true, sentTo: toEmail, askedForCompany: askForCompany })
+  return NextResponse.json({ ok: true, sentTo: ctx.toEmail, askedForCompany: ctx.askForCompany })
 }

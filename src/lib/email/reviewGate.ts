@@ -31,6 +31,11 @@ const REVIEW_REQUIRED: Record<EmailReviewKind, boolean> = {
   'quick-reply': true,
   welcome: true, // Welcome / Job Begin invite — always agent-reviewed
   'card-auth': true, // Card-authorization request from the job page
+  // "Ask client for job name" on Review Quote. It shipped OUTSIDE this
+  // registry — never a modal kind, so nothing here could have caught that
+  // one click mailed the client (Wes 2026-09-02). Being in the union is
+  // what makes the gate enforceable.
+  'ask-job-name': true,
 }
 
 export function shouldReview(kind: EmailReviewKind): boolean {
