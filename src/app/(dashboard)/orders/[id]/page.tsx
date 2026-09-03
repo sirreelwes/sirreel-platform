@@ -134,6 +134,19 @@ type Order = {
     id: string;
     jobCode: string;
     name: string;
+    /** Client-supplied logistics from the portal's "Deliveries" section.
+     *  The production owns these — they are the client's own statement of
+     *  where a truck reports and when, not our guess. Read-only here. */
+    reportToAddress?: string | null;
+    reportToAccessNotes?: string | null;
+    reportToTime?: string | null;
+    reportToContactName?: string | null;
+    reportToContactPhone?: string | null;
+    pickupSameAsDelivery?: boolean;
+    pickupAddress?: string | null;
+    pickupAccessNotes?: string | null;
+    pickupTime?: string | null;
+    reportToUpdatedAt?: string | null;
     jobContacts: JobContactRow[];
     bookings?: Array<{
       id: string;
@@ -836,16 +849,32 @@ export default function OrderDetailPage() {
     // Prefill the scheduled day from the order's date chain (delivery ≈ start,
     // pickup ≈ end) and items from the order's line descriptions — all editable.
     const dateSrc = type === "DELIVERY" ? order.startDate : order.endDate;
+    // Prefill the site from what the CLIENT typed in the portal. The pickup
+    // address inherits the delivery one only when the production said it
+    // does (pickupSameAsDelivery); the pickup TIME never inherits — a
+    // trailer dropped at 6am is not collected at 6am, and copying it would
+    // state a confident wrong fact instead of leaving an honest blank.
+    const j = order.job;
+    const pickupSame = j?.pickupSameAsDelivery !== false;
+    const siteAddress =
+      type === "DELIVERY"
+        ? j?.reportToAddress ?? ""
+        : (pickupSame ? j?.reportToAddress : j?.pickupAddress) ?? "";
+    const siteTime = (type === "DELIVERY" ? j?.reportToTime : j?.pickupTime) ?? "";
+    const siteNotes =
+      type === "DELIVERY"
+        ? j?.reportToAccessNotes ?? ""
+        : (pickupSame ? j?.reportToAccessNotes : j?.pickupAccessNotes) ?? "";
     setTaskErr(null);
     setTaskForm({
       type,
       scheduledDate: dateSrc ? dateSrc.slice(0, 10) : "",
-      scheduledTime: "",
-      siteAddress: "",
-      contactName: "",
-      contactPhone: "",
+      scheduledTime: siteTime,
+      siteAddress,
+      contactName: j?.reportToContactName ?? "",
+      contactPhone: j?.reportToContactPhone ?? "",
       deliveryItems: order.lineItems.map((li) => li.description).filter(Boolean).join(", "),
-      notes: "",
+      notes: siteNotes,
     });
   }, [order]);
 
@@ -2683,6 +2712,88 @@ export default function OrderDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Client-supplied delivery details ──────────────────────────────
+          Where the production told US to report, typed by the production
+          itself in the portal's "Deliveries" section. These columns had a
+          writer and no reader: a client filled in the address, the times and
+          an on-site contact, emailed her rep to say so, and there was nowhere
+          in HQ the rep could look. Read-only on purpose — the client owns
+          these; staff correct them by editing the dispatch task, not by
+          overwriting the client's own statement. */}
+      {(() => {
+        const j = order.job;
+        if (!j) return null;
+        const pickupSame = j.pickupSameAsDelivery !== false;
+        const effPickupAddress = pickupSame ? j.reportToAddress : j.pickupAddress;
+        const effPickupNotes = pickupSame ? j.reportToAccessNotes : j.pickupAccessNotes;
+        const hasAny =
+          j.reportToAddress || j.reportToTime || j.reportToContactName ||
+          j.reportToContactPhone || j.reportToAccessNotes ||
+          j.pickupAddress || j.pickupTime || j.pickupAccessNotes;
+        if (!hasAny) return null;
+        const saved = j.reportToUpdatedAt
+          ? new Date(j.reportToUpdatedAt).toLocaleString("en-US", {
+              weekday: "short", month: "short", day: "numeric",
+              hour: "numeric", minute: "2-digit",
+            })
+          : null;
+        return (
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 mb-6">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <div className="text-sm font-semibold text-lt-fg">
+                Delivery details from the client
+              </div>
+              {saved && (
+                <div className="text-[11px] text-lt-fg3">Client saved {saved}</div>
+              )}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-lt-fg3 font-semibold mb-1">
+                  Delivery — report to
+                </div>
+                <div className="text-lt-fg whitespace-pre-wrap">
+                  {j.reportToAddress || <span className="text-lt-fg3">—</span>}
+                </div>
+                {j.reportToTime && (
+                  <div className="text-lt-fg2 text-xs mt-1">Time: {j.reportToTime}</div>
+                )}
+                {j.reportToAccessNotes && (
+                  <div className="text-lt-fg2 text-xs mt-1 whitespace-pre-wrap">
+                    {j.reportToAccessNotes}
+                  </div>
+                )}
+                {(j.reportToContactName || j.reportToContactPhone) && (
+                  <div className="text-lt-fg2 text-xs mt-1">
+                    On site: {j.reportToContactName || "—"}
+                    {j.reportToContactPhone ? ` · ${j.reportToContactPhone}` : ""}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-lt-fg3 font-semibold mb-1">
+                  Pickup — collect from
+                </div>
+                <div className="text-lt-fg whitespace-pre-wrap">
+                  {effPickupAddress || <span className="text-lt-fg3">—</span>}
+                  {pickupSame && effPickupAddress && (
+                    <span className="text-lt-fg3 text-xs"> (same as delivery)</span>
+                  )}
+                </div>
+                {j.pickupTime && (
+                  <div className="text-lt-fg2 text-xs mt-1">Time: {j.pickupTime}</div>
+                )}
+                {effPickupNotes && (
+                  <div className="text-lt-fg2 text-xs mt-1 whitespace-pre-wrap">
+                    {effPickupNotes}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delivery/pickup pending-task nudge — order marked for delivery and/or
           pickup but no matching DispatchTask exists yet. Purely derived (no

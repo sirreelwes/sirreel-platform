@@ -59,6 +59,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
           id: true,
           jobCode: true,
           name: true,
+          // Client-supplied report-to / pickup logistics (written from
+          // /portal/job/[slug] "Deliveries", never by staff). Until this
+          // select existed the production could fill in the address and
+          // times and NOBODY in HQ could see them — 2026-09-02, a client
+          // emailed her rep asking why he couldn't find what she'd typed.
+          reportToAddress: true,
+          reportToAccessNotes: true,
+          reportToTime: true,
+          reportToContactName: true,
+          reportToContactPhone: true,
+          pickupSameAsDelivery: true,
+          pickupAddress: true,
+          pickupAccessNotes: true,
+          pickupTime: true,
+          reportToUpdatedAt: true,
           jobContacts: {
             select: {
               role: true,

@@ -299,6 +299,19 @@ interface JobDetail {
   returnedAt: string | null;
   returnedBy: { id: string; name: string } | null;
   archivedAt: string | null;
+  /** Client-supplied logistics, written from the portal's "Deliveries"
+   *  section by the production itself. Read-only here — this is their
+   *  statement of where a truck reports and when, not our guess. */
+  reportToAddress: string | null;
+  reportToAccessNotes: string | null;
+  reportToTime: string | null;
+  reportToContactName: string | null;
+  reportToContactPhone: string | null;
+  pickupSameAsDelivery: boolean;
+  pickupAddress: string | null;
+  pickupAccessNotes: string | null;
+  pickupTime: string | null;
+  reportToUpdatedAt: string | null;
   /** Derived operational position — same rollup the /jobs board renders. */
   cadence: CadenceRollup;
   // Job-level card-on-file status (derived from the job's bookings'
@@ -2314,7 +2327,22 @@ const driverTone = (d: any): string => {
           })
           .filter((r): r is NonNullable<typeof r> => r !== null);
 
-        if (rows.length === 0) return null;
+        // The client's own report-to, typed in the portal. It had a writer
+        // and no reader until 2026-09-02 — a production filled in the
+        // address, the times and an on-site contact, emailed her rep to say
+        // she had, and there was nowhere in HQ he could look. It renders
+        // FIRST because it is the one fact on this card the client asserted
+        // rather than an agent transcribing a phone call.
+        const pickupSame = job.pickupSameAsDelivery !== false;
+        const effPickupAddress = pickupSame ? job.reportToAddress : job.pickupAddress;
+        const effPickupNotes = pickupSame ? job.reportToAccessNotes : job.pickupAccessNotes;
+        const hasReportTo = !!(
+          job.reportToAddress || job.reportToTime || job.reportToContactName ||
+          job.reportToContactPhone || job.reportToAccessNotes ||
+          job.pickupAddress || job.pickupTime || job.pickupAccessNotes
+        );
+
+        if (rows.length === 0 && !hasReportTo) return null;
 
         return (
           <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
@@ -2322,6 +2350,55 @@ const driverTone = (d: any): string => {
               <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
               <span className="text-[11px] text-zinc-700 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
             </div>
+            {hasReportTo && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <div className="text-[12px] font-semibold text-amber-800">
+                    Where to report — entered by the client
+                  </div>
+                  {job.reportToUpdatedAt && (
+                    <div className="text-[11px] text-zinc-600">
+                      Saved {fmtDateTime(job.reportToUpdatedAt)}
+                    </div>
+                  )}
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">Delivery</div>
+                    <div className="text-[13px] text-zinc-900 whitespace-pre-wrap leading-relaxed">
+                      {job.reportToAddress || <span className="text-zinc-500">—</span>}
+                    </div>
+                    {job.reportToTime && (
+                      <div className="text-[12px] text-zinc-700 mt-0.5">Time: {job.reportToTime}</div>
+                    )}
+                    {job.reportToAccessNotes && (
+                      <div className="text-[12px] text-zinc-700 mt-0.5 whitespace-pre-wrap">{job.reportToAccessNotes}</div>
+                    )}
+                    {(job.reportToContactName || job.reportToContactPhone) && (
+                      <div className="text-[12px] text-zinc-700 mt-0.5">
+                        On site: {job.reportToContactName || '—'}
+                        {job.reportToContactPhone ? ` · ${job.reportToContactPhone}` : ''}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">Pickup</div>
+                    <div className="text-[13px] text-zinc-900 whitespace-pre-wrap leading-relaxed">
+                      {effPickupAddress || <span className="text-zinc-500">—</span>}
+                      {pickupSame && effPickupAddress && (
+                        <span className="text-zinc-500 text-[12px]"> (same as delivery)</span>
+                      )}
+                    </div>
+                    {job.pickupTime && (
+                      <div className="text-[12px] text-zinc-700 mt-0.5">Time: {job.pickupTime}</div>
+                    )}
+                    {effPickupNotes && (
+                      <div className="text-[12px] text-zinc-700 mt-0.5 whitespace-pre-wrap">{effPickupNotes}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-4">
               {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
                 <div key={order.id} className="border-l-2 border-amber-200 pl-3">
