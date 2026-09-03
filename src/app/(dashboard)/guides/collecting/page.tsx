@@ -97,6 +97,11 @@ export default function CollectingGuidePage() {
             Card charges record themselves. A wire or a check does not, and until someone marks it,
             the balance, the chase list and the end-of-day report are all wrong.
           </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-lt-fg2">
+            The one rule: <strong className="text-lt-fg">never put a 3% card fee on an invoice.</strong>{' '}
+            CardPointe adds that itself at the moment of charge. Typing it onto the invoice as well bills
+            the client twice for the same fee.
+          </p>
         </div>
 
         <section className="mb-10">
@@ -218,9 +223,19 @@ export default function CollectingGuidePage() {
             <Step n={4} title="Set the amount">
               <p>It defaults to the full balance. Type a smaller number for a deposit or part payment; you cannot
                 exceed the balance.</p>
-              <p>A <strong>3% processing fee</strong> is added on top and shown before you commit. The invoice is
-                credited the base amount; the fee is extra. Tick <strong>waive</strong> only if the fee was
-                negotiated away.</p>
+              <p>
+                The <strong>3% card fee is added by CardPointe</strong>, not by us and not by you. HQ shows an
+                estimate of it before you commit; the real figure comes back from the gateway, which waives the
+                fee by itself on debit and prepaid cards and for cardholders in states that prohibit it. The
+                invoice is credited the amount you typed — the fee rides on top and is recorded separately.
+              </p>
+              <p>Tick <strong>waive</strong> only when the fee was negotiated away.</p>
+              <Note tone="stop" label="Never add a card fee to an invoice">
+                Wes, 2026-09-02: &ldquo;nobody adds a 3% credit card fee onto any invoice. The credit card company
+                is supposed to automatically do that.&rdquo; A fee line typed onto an invoice — here or in
+                RentalWorks — is charged <em>on top of</em> the one CardPointe already adds, so the client pays
+                6%. There is no card-fee line item in HQ for exactly this reason.
+              </Note>
             </Step>
             <Step n={5} title="Charge, and read the confirmation">
               <p>The dialog repeats the split and ends “This runs a real charge through CardPointe.” Check the last
