@@ -272,45 +272,6 @@ function fmtMoney(n: number) {
   }).format(n);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Draft state — survive the round-trip to /crm and back.
-// ─────────────────────────────────────────────────────────────────────────
-//
-// When the AI fails to extract a customer, the user clicks "Pick one in
-// CRM," which navigates away from this page. Without persistence, the
-// component remounts on return and Review Quote re-renders as the
-// pre-parse input page — all parsed line items, contacts, edits gone.
-//
-// Tactical fix: serialize the post-parse state to sessionStorage before
-// navigating, restore on mount when clientCompanyId is in the URL,
-// clear once the quote is saved. Keyed by inquiryId (or a sentinel)
-// so concurrent quote captures in different tabs don't collide.
-//
-// A future refactor (persist as DRAFT Order in the DB at parse time
-// and load by id) gives stable URLs and shareable drafts. Not in scope
-// for this fix.
-
-interface DraftState {
-  savedAt: number;
-  parsed: ParsedTop | null;
-  items: ResolvedItem[];
-  editing: ParsedTop;
-  selectedClientId: string;
-  contacts: ResolvedContact[];
-  emailText: string;
-  job: JobPickerValue;
-  candidateJobs: AttachableJob[];
-  /** Legacy single order-wide dollar discount. Kept so a draft saved before
-   *  the per-department discounts shipped still restores; migrated into
-   *  `discounts` on load. */
-  discountAmount: string;
-  discountLabel: string;
-  discounts?: DraftDiscount[];
-  newJobProductionType: ProductionType;
-  newJobProductionTypeProfileId: string | null;
-  newJobNotes: string;
-}
-
 /**
  * A discount the rep sets up BEFORE the order exists.
  *
@@ -329,45 +290,6 @@ interface DraftDiscount {
   /** PERCENT: 0-100. FIXED: a positive dollar amount (sign is applied here). */
   value: number;
   label: string;
-}
-
-const DRAFT_TTL_MS = 30 * 60_000; // entries older than 30 min are stale
-
-function draftKey(inquiryId: string | null): string {
-  return `newQuoteDraft:${inquiryId || '__none'}`;
-}
-
-function saveDraftState(inquiryId: string | null, state: Omit<DraftState, 'savedAt'>): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const payload: DraftState = { ...state, savedAt: Date.now() };
-    sessionStorage.setItem(draftKey(inquiryId), JSON.stringify(payload));
-  } catch (err) {
-    console.warn('[orders/new] failed to save draft state:', err);
-  }
-}
-
-function readDraftState(inquiryId: string | null): DraftState | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = sessionStorage.getItem(draftKey(inquiryId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as DraftState;
-    if (Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
-      sessionStorage.removeItem(draftKey(inquiryId));
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function clearDraftState(inquiryId: string | null): void {
-  if (typeof window === 'undefined') return;
-  try {
-    sessionStorage.removeItem(draftKey(inquiryId));
-  } catch {}
 }
 
 const RATE_TYPE_LABEL: Record<RateType, string> = {
@@ -389,9 +311,9 @@ function newLocalId(): string {
   return `li-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Tag every incoming row with a localId. Parse-API output, sessionStorage
-// drafts, and supply-order cart conversions all flow through here so
-// parsed rows behave identically to manually-added ones.
+// Tag every incoming row with a localId. Parse-API output and
+// supply-order cart conversions both flow through here so parsed rows
+// behave identically to manually-added ones.
 type IncomingItem = Omit<ResolvedItem, 'localId'> & { localId?: string };
 function withLocalIds(items: IncomingItem[]): ResolvedItem[] {
   return items.map((it) => ({ ...it, localId: it.localId ?? newLocalId() }));
@@ -757,48 +679,6 @@ function NewQuotePageInner() {
       return { ...prev, name: seed };
     });
   }, [parsed, inquiry]);
-
-  // Restore Review-Quote draft state when returning from /crm. The
-  // session-saved snapshot is only read when ?clientCompanyId is in
-  // the URL (the marker of a CRM-return), so fresh new-quote visits
-  // never pick up a stale draft. Runs once per mount; the
-  // clientCompanyId effect below overrides selectedClientId after.
-  useEffect(() => {
-    if (!clientCompanyIdFromUrl) return;
-    const draft = readDraftState(inquiryId);
-    if (!draft) return;
-    setParsed(draft.parsed);
-    setItems(withLocalIds(draft.items));
-    setEditing(draft.editing);
-    setContacts(draft.contacts);
-    setEmailText(draft.emailText);
-    setJob(draft.job ?? EMPTY_JOB_PICKER_VALUE);
-    setCandidateJobs(draft.candidateJobs);
-    // Legacy drafts carried one order-wide dollar amount; lift it into the
-    // list rather than dropping the rep's number on the floor.
-    const legacy = parseFloat(draft.discountAmount ?? '');
-    setDiscounts(
-      draft.discounts?.length
-        ? draft.discounts
-        : Number.isFinite(legacy) && legacy !== 0
-          ? [{
-              localId: 'legacy',
-              scope: 'ORDER' as const,
-              departmentKey: null,
-              type: 'FIXED' as const,
-              value: Math.abs(legacy),
-              label: draft.discountLabel || 'Discount',
-            }]
-          : [],
-    );
-    setNewJobProductionType(draft.newJobProductionType ?? 'OTHER');
-    setNewJobProductionTypeProfileId(draft.newJobProductionTypeProfileId ?? null);
-    setNewJobNotes(draft.newJobNotes ?? '');
-    // selectedClientId is intentionally NOT restored here — the next
-    // effect sets it to clientCompanyIdFromUrl, which is exactly what
-    // the user just picked. Restoring the old empty value first would
-    // race the company-fetch.
-  }, [clientCompanyIdFromUrl, inquiryId]);
 
   // Round-trip from /crm: when ?clientCompanyId is in the URL, fetch
   // the company by id, inject into the candidates dropdown, and
@@ -2111,11 +1991,6 @@ function NewQuotePageInner() {
         link.click();
         document.body.removeChild(link);
       }
-
-      // The capture is now persisted as an Order, so the CRM-return
-      // draft snapshot is no longer needed. Clearing prevents stale
-      // restoration on a future /orders/new-quote visit.
-      clearDraftState(inquiryId);
 
       router.push(action === 'send' ? `/orders/${order.id}?send=1` : `/orders/${order.id}`);
     } finally {
