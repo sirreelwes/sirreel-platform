@@ -2578,18 +2578,18 @@ model PaperworkRequest {
   // Signer info
   signerName String? @map("signer_name")
 
-  booking                      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking                      Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   cardAttempts                 PortalCardAttempt[]
   coi_ai_review                Json?
-  coi_review_at                DateTime? @db.Timestamp(6)
-  coi_admin_approved           Boolean?  @default(false)
+  coi_review_at                DateTime?           @db.Timestamp(6)
+  coi_admin_approved           Boolean?            @default(false)
   coi_admin_approved_by        String?
   coi_admin_approval_note      String?
-  coi_admin_approved_at        DateTime? @db.Timestamp(6)
+  coi_admin_approved_at        DateTime?           @db.Timestamp(6)
   contract_redline_status      String?
   contract_redline_review      String?
-  contract_redline_uploaded_at DateTime? @db.Timestamp(6)
-  updated_at                   DateTime  @default(now()) @db.Timestamp(6)
+  contract_redline_uploaded_at DateTime?           @db.Timestamp(6)
+  updated_at                   DateTime            @default(now()) @db.Timestamp(6)
 
   @@map("paperwork_requests")
 }
@@ -4105,6 +4105,19 @@ model Invoice {
 enum InvoiceType {
   RENTAL
   LD
+  // Money taken BEFORE the job wraps — a negotiated deposit or a paid-in-
+  // full-upfront rental. Deliberately its own type rather than an early
+  // RENTAL invoice, because `type === 'RENTAL'` is the guard on both
+  // lifecycle advances: sendInvoice's RETURNED -> INVOICED and
+  // recordPayment's maybeAdvanceOrderToClosed. A DEPOSIT therefore takes
+  // real money without moving Order.status, which is the whole point —
+  // an INVOICED order drops off the dispatch board (Julian stops seeing
+  // the pickup) and isOrderEditable() locks the lines.
+  //
+  // Settled against the final rental invoice as a DEPOSIT_CREDIT snapshot
+  // line, NOT by moving Payment rows: each payment stays attached to the
+  // document it was actually made against. See src/lib/invoices/deposits.ts.
+  DEPOSIT
 }
 
 // Phase 5 commit 3 — native payment recording. PaymentLog (free-text,
@@ -6242,7 +6255,7 @@ model CompanyCard {
   /// Where it came from: PORTAL_JOB | PAPERWORK | STAFF. `sourceJobId` and
   /// `sourcePaperworkRequestId` are provenance only — a card on file belongs
   /// to the COMPANY and is chargeable on any of its jobs.
-  source                   String  @default("STAFF")
+  source String @default("STAFF")
 
   /// STAFF cards only: where the client's signed authorization lives, in the
   /// staffer's own words — "Cognito CCA #4182, signed 9/2". A card the client
@@ -6250,7 +6263,7 @@ model CompanyCard {
   /// and HQ deliberately does not keep the document (it carries the PAN).
   /// Free text on purpose: the authorization lives in Cognito, in email, or
   /// in a drawer, and naming which is the whole value.
-  authorizationRef String? @map("authorization_ref")
+  authorizationRef         String? @map("authorization_ref")
   sourceJobId              String? @map("source_job_id")
   sourcePaperworkRequestId String? @map("source_paperwork_request_id")
 
@@ -6496,12 +6509,12 @@ model AfterHoursShare {
 
   /// Who it was sent to. Kept so the client can see their own share list and
   /// so a re-share to the same driver replaces rather than accumulates.
-  email     String
+  email   String
   /// "Marco", "the PA" — whatever the sender typed. Greeting only.
-  name      String? @map("recipient_name")
+  name    String? @map("recipient_name")
   /// Free text from the sender, shown above the standing instructions —
   /// separate from Job.afterHoursNote, which is the AGENT's line.
-  message   String? @db.Text
+  message String? @db.Text
 
   sharedByPortalAccessId String? @map("shared_by_portal_access_id")
   sharedByUserId         String? @map("shared_by_user_id")
@@ -7614,8 +7627,8 @@ model RwCollectionCharge {
 /// be read against exactly what the model saw, not what the mailbox looks like
 /// today.
 model RwInvoiceReview {
-  id          String  @id @default(uuid())
-  rwInvoiceId String  @unique @map("rw_invoice_id")
+  id          String @id @default(uuid())
+  rwInvoiceId String @unique @map("rw_invoice_id")
 
   /// Ana's or an admin's own words. Survives every re-scan — the AI never
   /// overwrites a human note.

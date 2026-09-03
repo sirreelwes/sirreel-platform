@@ -37,7 +37,16 @@ try {
 // Types
 // ─────────────────────────────────────────────────────────────────
 
-export type InvoiceLineKind = 'RENTAL_LINE' | 'ADJUSTMENT' | 'DAMAGE'
+// DEPOSIT      — the single line on a deposit invoice (money taken before
+//                the job wraps; see src/lib/invoices/deposits.ts).
+// DEPOSIT_CREDIT — the negative settlement line on the FINAL invoice for
+//                deposits already collected. Negative on purpose: it is
+//                subtracted in the same column the charges are added in,
+//                so the arithmetic on the page is one column a client can
+//                follow, not a separate credits block they have to trust.
+// Stored inside the lineSnapshot JSON, so neither is a DB enum and adding
+// them needs no migration.
+export type InvoiceLineKind = 'RENTAL_LINE' | 'ADJUSTMENT' | 'DAMAGE' | 'DEPOSIT' | 'DEPOSIT_CREDIT'
 
 export interface InvoiceLineSnapshotEntry {
   description: string
@@ -108,6 +117,13 @@ export interface InvoiceDocumentProps {
    *  [] preserves the original 3-row totals layout (Subtotal/Tax/Total)
    *  for invoices generated before discounts shipped. */
   discountLines?: { label: string; amount: number }[]
+  /** Deposits already collected on this order, as a positive number.
+   *  Rendered AFTER Tax and before Total: a deposit is money against the
+   *  gross, so showing it above the tax row would imply tax was computed on
+   *  the reduced figure. `total` passed in is already NET of this — the row
+   *  shows the client the arithmetic that produced it. 0/absent renders
+   *  nothing, so every invoice without a deposit is unchanged. */
+  depositCredit?: number
   company: InvoiceCompanyForRender
   job: InvoiceJobForRender | null
   agent: InvoiceAgentForRender
@@ -486,6 +502,7 @@ export function InvoiceDocument({
   balanceDue,
   lines,
   discountLines,
+  depositCredit,
   company,
   job,
   agent,
@@ -669,6 +686,12 @@ export function InvoiceDocument({
             </Text>
             <Text style={styles.totalsValue}>{fmtUsd(taxAmount)}</Text>
           </View>
+          {depositCredit != null && depositCredit > 0 && (
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>Less deposit received</Text>
+              <Text style={styles.totalsValue}>-{fmtUsd(depositCredit)}</Text>
+            </View>
+          )}
           <View style={styles.grandRow}>
             <Text style={styles.grandLabel}>Total</Text>
             <Text style={styles.grandValue}>{fmtUsd(total)}</Text>

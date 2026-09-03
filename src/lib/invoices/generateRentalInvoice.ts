@@ -57,6 +57,7 @@ import {
   type InvoiceLineSnapshotEntry,
 } from './InvoiceDocument'
 import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
+import { depositsCollected } from '@/lib/invoices/deposits'
 
 export type GenerateRentalInvoiceResult =
   | {
@@ -313,7 +314,24 @@ export async function generateRentalInvoice(args: {
   // Document the deviation from "Invoice.total == bookedTotal" when
   // damage was added so future readers see what changed.
   const invoiceSubtotal = bookedSubtotal + billNowTotal
-  const invoiceTotal = bookedTotal + billNowTotal
+  // ── Deposits already collected ──────────────────────────────────
+  // Money taken before the job wrapped, on DEPOSIT invoices against this
+  // same order. The final invoice bills the REMAINDER, or the client is
+  // asked twice for the same money.
+  //
+  // It comes off `total`, not `subtotal`: a deposit is paid against the
+  // gross, and netting it out of the subtotal would recompute tax on a
+  // reduced base and quietly under-collect sales tax. Subtotal and tax stay
+  // anchored to the booked snapshot exactly as before; only the bottom line
+  // moves, and InvoiceDocument prints a "Less deposit received" row so the
+  // client can follow the arithmetic.
+  //
+  // Netting `Invoice.total` (rather than leaving it gross and only reducing
+  // balanceDue) is what keeps AR honest: the deposit invoice already carries
+  // its own dollars, so a gross final invoice would count the same money
+  // twice in every company spend rollup.
+  const depositCredit = await depositsCollected(orderId)
+  const invoiceTotal = round2ct(bookedTotal + billNowTotal - depositCredit)
 
   // ── Discount lines for the InvoiceDocument totals block ────────
   // Built from CURRENT OrderDiscount rows. Each gets a labeled row
@@ -416,6 +434,7 @@ export async function generateRentalInvoice(args: {
       balanceDue: invoiceTotal,
       lines: snapshot,
       discountLines,
+      depositCredit,
       company: {
         name: order.company.name,
         billingAddress: order.company.billingAddress,
@@ -569,4 +588,10 @@ export async function deleteInvoiceBlob(blobKey: string): Promise<void> {
   } catch (err) {
     console.warn('[generateRentalInvoice] blob delete failed (non-fatal):', err)
   }
+}
+
+/** Cents rounding at module scope, so the totals math can use it before the
+ *  discount block's local `round2` comes into scope. */
+function round2ct(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
 }
