@@ -453,6 +453,11 @@ export async function GET(req: NextRequest) {
       startDate: true,
       endDate: true,
       status: true,
+      // WHICH order this specific unit goes out on (Hugo, 2026-09-03).
+      // Distinct from the booking-level `hasOrder` below: that says the
+      // reservation has an order somewhere, this says THIS truck is the
+      // one the order was written against.
+      order: { select: { id: true, orderNumber: true } },
       asset: { select: { id: true, unitName: true, categoryId: true, tier: true, category: { select: { id: true, name: true } } } },
       bookingItem: {
         select: {
@@ -558,6 +563,10 @@ export async function GET(req: NextRequest) {
       // excluded, so the same unit on another booking still shows.
       orders: bookingExtras.get(a.bookingItem.booking.id)?.orders ?? [],
       hasOrder: hasOrderByBookingId.get(a.bookingItem.booking.id) ?? false,
+      // The unit-level attachment. Null on every bar sales hasn't named
+      // a unit for — including every historical row, which is why the
+      // booking-level badge stays as well.
+      attachedOrder: a.order ? { id: a.order.id, orderNumber: a.order.orderNumber } : null,
       siblingUnits: (bookingExtras.get(a.bookingItem.booking.id)?.units ?? []).filter(
         (u) => !(u.unitName === a.asset.unitName && u.bookingNumber === a.bookingItem.booking.bookingNumber),
       ),

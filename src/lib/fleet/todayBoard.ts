@@ -56,6 +56,12 @@ export interface FleetMovement {
   deliveryTime: string | null
   /** booking.pickupTime — relevant on the 'end' edge */
   pickupTime: string | null
+  /**
+   * The order sales said THIS unit is going out on (Hugo, 2026-09-03).
+   * Null on every historical row and wherever sales hasn't named a unit
+   * — the yard board treats it as extra information, never a blocker.
+   */
+  attachedOrder: { id: string; orderNumber: string } | null
   /** The assignment's CHECKOUT (pre-rental) inspection, if submitted. */
   inspection: { id: string; inspectionDate: string; inspectorName: string | null } | null
   /** The assignment's RETURN inspection — the unit has been received. */
@@ -75,6 +81,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
     },
     select: {
       id: true,
+      order: { select: { id: true, orderNumber: true } },
       asset: { select: { unitName: true } },
       bookingItem: {
         select: {
@@ -128,6 +135,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
       company: companyLabel(r.bookingItem.booking.company?.name),
       deliveryTime: r.bookingItem.booking.deliveryTime,
       pickupTime: r.bookingItem.booking.pickupTime,
+      attachedOrder: r.order ? { id: r.order.id, orderNumber: r.order.orderNumber } : null,
       inspection: shape(insp),
       returnInspection: shape(ret),
     }

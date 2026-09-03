@@ -327,6 +327,36 @@ export function can(input: UserRole | PermissionsUser, permission: keyof Permiss
   return getPermissions(input)[permission];
 }
 
+/**
+ * Who may CREATE an order (or a quote, which is an order before it is
+ * booked). Sales and admin only.
+ *
+ * Hugo, 2026-09-03: "create order should not be possible from
+ * Fleet/Warehouse view/login. That is only for sales. Modifications to
+ * that order can be done but only within Checkout report." The yard
+ * crew has plenty of reasons to open an order and exactly none to
+ * invent one — an order is a commercial commitment with a price on it,
+ * and the yard cannot see the price.
+ *
+ * Derived rather than a new Permissions column so it cannot fall out of
+ * step with the two flags that already say "this person does commerce":
+ * `bookings` (the order/quote surfaces) AND `seePricing` (an order they
+ * cannot price is an order they cannot write). That lands on ADMIN,
+ * AGENT and BILLING, and excludes MANAGER / FLEET_TECH / WAREHOUSE /
+ * DRIVER.
+ *
+ * This is a UI + page gate. It is NOT the write boundary: the order
+ * create routes keep their own server-side checks.
+ */
+export function canCreateOrders(input: UserRole | PermissionsUser): boolean {
+  const perms = getPermissions(input);
+  // CLIENT holds both flags for the portal's own booking flow, and has
+  // no business on a staff order form.
+  const role = typeof input === 'string' ? input : input.role;
+  if (role === UserRole.CLIENT) return false;
+  return perms.bookings && perms.seePricing;
+}
+
 // After-hours Assistant config surface (standing gate code, per-job auth
 // codes, release audit log). Full access for ADMIN, AGENT (sales — they
 // hand the code to production), and MANAGER (Hugo). Kept as a standalone
@@ -388,24 +418,22 @@ export function isFleetYardRole(role: UserRole): boolean {
 }
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
-  const role = typeof input === 'string' ? input : input.role;
-  // One board for the whole yard crew (2026-09-02). WAREHOUSE used to
-  // land on /warehouse/pick and FLEET_TECH on /fleet/today — the two
-  // halves of the same morning.
-  if (isFleetYardRole(role)) return '/yard';
-  if (isBillingRole(role)) return '/collections';
-  // MANAGER (Julian, Hugo, Albert) used to land on /orders per Wes
-  // 2026-08-31. Superseded 2026-09-03: they now share the yard crew's
-  // single view, and /orders is not one of its surfaces — landing on a
-  // page that isn't in your own sidebar is how you get a user who
-  // thinks the app lost their work. isFleetYardRole above sends them to
-  // /yard, the board that IS their morning.
-  // Everyone else — sales and admin — starts on /jobs. Wes, same day:
-  // "it should always go to Jobs if anything." /jobs has been the one
-  // stop shop since the 2026-08-27 merge (incoming, active and wrapped);
-  // Dashboard is still in the nav for anyone who wants it, it is just no
-  // longer what the app opens on.
-  return '/jobs';
+  // ONE default view for the whole company (Wes, 2026-09-03, after the
+  // Hugo meeting: "move the Reservations tab to the top of the list and
+  // have that be the default view for everyone").
+  //
+  // This replaces a per-role fan-out that had been rewritten twice in a
+  // week — yard to /yard, billing to /collections, MANAGER to /orders,
+  // everyone else to /jobs — each time because the previous answer was
+  // wrong for somebody. The board is the one screen every department
+  // reads the same way: sales see what is sold, the yard sees what is
+  // going out, billing sees what actually shipped. Every one of those
+  // old destinations is still one click away, first in its own section.
+  //
+  // The parameter is kept so callers don't churn, and so a future
+  // per-role exception has somewhere to live.
+  void input;
+  return '/gantt';
 }
 
 export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
@@ -438,23 +466,33 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (isFleetYardRole(navRole)) {
     return [
       {
-        // "Today" is first and is the board itself: /yard shows both
-        // lanes grouped by show. Everything below it is a lookup, not a
-        // daily surface.
+        // Reservations is FIRST and is where everyone now lands (Wes,
+        // 2026-09-03, after the Hugo meeting: "move the Reservations tab
+        // to the top of the list and have that be the default view for
+        // everyone"). It used to sit in a section of its own at the
+        // bottom, under every lookup.
+        //
+        // Then the day's work: /yard is the board, and the two REPORTS
+        // are the desks that digitize the paper. Everything below is a
+        // lookup, not a daily surface.
         label: 'Warehouse & Fleet',
         items: [
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
-          { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
-          { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ClipboardList', href: '/warehouse/pick' },
+          // Hugo, 2026-09-03: the floor picks on PAPER, then walks the
+          // paperwork to a supervisor who enters it here. Gear.
+          { id: 'order-reports', label: 'Check In/Out Reports', icon: 'ClipboardList', href: '/reports/orders' },
+          // The same idea for the truck itself — the DamageID walk-around
+          // at both ends, off a list instead of a deep link.
+          { id: 'vehicle-reports', label: 'Vehicle Check In/Out', icon: 'Car', href: '/reports/vehicles' },
+          { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ListChecks', href: '/warehouse/pick' },
           { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
           { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
           { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },
-        ],
-      },
-      {
-        label: 'Schedule',
-        items: [
-          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+          // Deliveries & Pickups pulled 2026-09-03 (Hugo): "remove
+          // delivery/pickup from view for now — this needs to be worked
+          // on before they see it." The ROUTE is untouched and still in
+          // the admin nav; only the yard crew's entry is gone.
         ],
       },
     ];
@@ -515,11 +553,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Sales',
         items: [
-          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
-          // Reservations back 2026-08-24 (Wes). BILLING already has
-          // gantt:true — seeing what actually went out, and when it came
+          // Reservations first — it is the app's default view for
+          // everyone as of 2026-09-03. Billing has had gantt:true since
+          // 2026-08-24: seeing what actually went out, and when it came
           // back, is how a disputed rental window gets settled.
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
           // exists to quote from — it is gated on seePricing, and its main
@@ -558,8 +597,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Sales',
         items: [
-          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+          // Reservations first — the app's default view for everyone
+          // as of 2026-09-03.
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
           // exists to quote from — it is gated on seePricing, and its main
@@ -634,8 +675,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // renders the same registry; /action-items redirects there.
         // Inquiries merged into /jobs (2026-08-27) — the landing panel
         // IS the inbound queue; /inquiries redirects there.
-        { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+        // Reservations first — the app's default view for everyone as
+        // of 2026-09-03 (Wes, after the Hugo meeting).
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+        { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
         // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
         // exists to quote from — it is gated on seePricing, and its main

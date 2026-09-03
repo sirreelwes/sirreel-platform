@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavSections, isSalesRole, isFleetYardRole, isBillingRole } from '@/lib/permissions';
+import { getPermissions, getNavSections, defaultLandingPath } from '@/lib/permissions';
 import { readViewAsCookie, writeViewAsCookie, previewSalesOnly } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
@@ -105,25 +105,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .filter((h) => pathname === h || pathname.startsWith(h + '/'))
       .sort((a, b) => b.length - a.length)[0] ?? null;
 
-  // Sales agents work primarily from /sales/pipeline — Dashboard isn't
-  // in their nav, and `/` redirects to /dashboard by default. Bounce
-  // them to the pipeline on any visit to /dashboard. Respects the
-  // admin view-as toggle so previewing as AGENT routes correctly.
-  if (typeof window !== 'undefined' && isSalesRole(role) && pathname === '/dashboard') {
-    router.replace('/jobs');
-  }
-
-  // Yard roles (FLEET_TECH / WAREHOUSE) live on the merged /yard board
-  // — same pattern: login lands on /dashboard, bounce them to /yard on
-  // any viewport. Respects the admin view-as toggle.
-  if (typeof window !== 'undefined' && isFleetYardRole(role) && pathname === '/dashboard') {
-    router.replace('/yard');
-  }
-
-  // Billing (Ana) works from the collections workspace; Dashboard isn't
-  // in her nav either, so bounce the same way. Respects view-as.
-  if (typeof window !== 'undefined' && isBillingRole(role) && pathname === '/dashboard') {
-    router.replace('/collections');
+  // Dashboard is in the ADMIN nav and nobody else's. Anyone who lands
+  // on it without a tab for it — sales, billing, the yard crew — gets
+  // bounced to their default view, which since 2026-09-03 is
+  // Reservations for everyone. Three near-identical role checks used to
+  // live here, one per department, each naming its destination twice
+  // (here and in defaultLandingPath) and drifting the moment either
+  // moved. One rule now, keyed on the nav itself: no Dashboard tab, no
+  // Dashboard page. Respects the admin view-as toggle, so previewing a
+  // role reproduces its bounce.
+  const hasDashboardTab = sections.some((s2) => s2.items.some((i) => i.id === 'dashboard'));
+  if (typeof window !== 'undefined' && !hasDashboardTab && pathname === '/dashboard') {
+    router.replace(defaultLandingPath(permsUser));
   }
 
   // "+ New Job" is the app's ONE create entry point and as of

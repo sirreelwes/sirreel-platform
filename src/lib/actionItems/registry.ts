@@ -14,6 +14,9 @@
  *   - hold-unassigned (DERIVED) — a sent quote whose soft holds are not
  *     yet on specific units. Sending a quote reserves a CATEGORY; until
  *     someone picks the truck it appears on no unit row at all.
+ *   - check-report-changes (DERIVED) — a yard check-out report that had
+ *     to change the order (a swap, a short, something extra on the
+ *     truck) and the agent has not acknowledged it. Clears on ack.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -59,8 +62,12 @@ import { quoteAgingProvider } from '@/lib/actionItems/providers/quoteAging'
 import { inquiryUntouchedProvider } from '@/lib/actionItems/providers/inquiryUntouched'
 import { rwTokenProvider } from '@/lib/actionItems/providers/rwToken'
 import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassigned'
+import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkReportChanges'
 
 const PROVIDERS: ActionItemProvider[] = [
+  // The yard changed a booked order at the dock and the agent hasn't
+  // seen it yet — the money moved without them.
+  checkReportChangesProvider,
   holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,

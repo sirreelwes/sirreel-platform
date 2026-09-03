@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
+import { OrderCreateGuard } from '@/components/shared/OrderCreateGuard';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
@@ -322,9 +323,14 @@ function withLocalIds(items: IncomingItem[]): ResolvedItem[] {
 
 export default function NewQuotePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-lt-fg2">Loading…</div>}>
-      <NewQuotePageInner />
-    </Suspense>
+    // Sales writes the orders (Hugo, 2026-09-03). The guard is cosmetic —
+    // POST /api/orders enforces the same rule — but without it the yard
+    // crew could fill the whole builder in and only be refused on save.
+    <OrderCreateGuard>
+      <Suspense fallback={<div className="p-6 text-sm text-lt-fg2">Loading…</div>}>
+        <NewQuotePageInner />
+      </Suspense>
+    </OrderCreateGuard>
   );
 }
 

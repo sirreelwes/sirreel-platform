@@ -33,6 +33,7 @@ const truck = (over: Partial<FleetMovement> = {}): FleetMovement => ({
   company: 'Peacoat Productions LLC',
   deliveryTime: '7:00a',
   pickupTime: '6:00p',
+  attachedOrder: null,
   inspection: null,
   returnInspection: null,
   ...over,

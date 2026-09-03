@@ -34,6 +34,7 @@
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:scan": "tsx tests/warehouse/scan-normalize.test.ts",
     "test:yard": "tsx tests/yard/board-grouping.test.ts",
+    "test:check-report": "tsx tests/orders/check-report-classify.test.ts",
     "test:annual-coverage": "tsx tests/agreements/annual-coverage.test.ts",
     "test:card-expiry": "tsx tests/payments/company-card-expiry.test.ts",
     "test:role-mapping": "tsx tests/crm/role-mapping.test.ts",

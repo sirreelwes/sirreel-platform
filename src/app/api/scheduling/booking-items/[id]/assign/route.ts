@@ -28,6 +28,9 @@ interface AssignBody {
   assetId?: string
   bufferDays?: number
   bufferOverride?: boolean
+  /** Which order this unit goes out on. Optional: with one candidate
+   *  order on the job we stamp it without asking. */
+  orderId?: string
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -61,7 +64,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       quantity: true,
       status: true,
       holdRank: true,
-      booking: { select: { id: true, startDate: true, endDate: true } },
+      // jobId comes along for the order-attachment lookup below.
+      booking: { select: { id: true, jobId: true, startDate: true, endDate: true } },
       assignments: { select: { id: true, assetId: true } },
     },
   })
@@ -196,6 +200,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // asset and the engine continues to ignore rank-2+ for
   // availableToHold (verified by the capacity-1 test suite).
 
+  // ── Which order does this unit belong to? ─────────────────────────
+  // The picker already knows: the booking's own order, or the order(s)
+  // whose quoted lines raised this hold. The client may name one
+  // explicitly (a booking can carry lines from more than one order); we
+  // verify the choice against the job so a stray id can't attach a unit
+  // to somebody else's order.
+  const candidateOrders = await prisma.order.findMany({
+    where: {
+      jobId: bookingItem.booking.jobId ?? undefined,
+      status: { notIn: ['CANCELLED'] },
+      archivedAt: null,
+    },
+    select: { id: true },
+  })
+  const candidateIds = new Set(candidateOrders.map((o) => o.id))
+  const requestedOrderId = typeof body.orderId === 'string' ? body.orderId : null
+  if (requestedOrderId && !candidateIds.has(requestedOrderId)) {
+    return NextResponse.json(
+      { ok: false, error: 'order-not-on-job', reason: 'that order does not belong to this booking\u2019s job' },
+      { status: 400 },
+    )
+  }
+  const attachOrderId =
+    requestedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
+
   // Persist atomically and (if appropriate) flip status to ASSIGNED.
   const result = await prisma.$transaction(async (tx) => {
     const created = await tx.bookingAssignment.create({
@@ -205,6 +234,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         startDate: windowStart,
         endDate: windowEnd,
         status: 'ASSIGNED',
+        // WHICH order this unit is going out on (Hugo, 2026-09-03).
+        // Sales already answers "which unit" here; this records the
+        // other half so the yard can see, on the truck, that it is
+        // spoken for by a specific order. Explicit choice wins; with
+        // exactly one candidate order we stamp it rather than asking a
+        // question with one answer.
+        orderId: attachOrderId,
       },
       select: {
         id: true,

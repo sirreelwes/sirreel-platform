@@ -1181,6 +1181,26 @@ model BookingAssignment {
   endDate       DateTime         @map("end_date") @db.Date
   status        AssignmentStatus @default(ASSIGNED)
 
+  // WHICH ORDER THIS UNIT IS GOING OUT ON.
+  //
+  // Hugo, 2026-09-03: "if sales has already associated an order and a
+  // vehicle — sales needs to say which vehicle gets the order and then
+  // that vehicle should have an 'Order Attached' indicator."
+  //
+  // An order already related to a BOOKING, and a booking can carry
+  // several vehicles across several items. So "this order is attached"
+  // could be said of the reservation but not of any particular truck,
+  // and the yard could not tell which of three vans on one booking was
+  // the one the order was written against. This is that missing link,
+  // and it is the ASSIGNMENT (unit + window) rather than the Asset,
+  // because the same van serves a different order next week.
+  //
+  // Nullable: every historical row, and every hold placed before the
+  // order exists. SetNull rather than Cascade — deleting an order must
+  // not take the unit off the reservation.
+  orderId String? @map("order_id")
+  order   Order?  @relation("AssignmentOrder", fields: [orderId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -1191,6 +1211,7 @@ model BookingAssignment {
 
   driverAssignments DriverAssignment[]
 
+  @@index([orderId])
   @@map("booking_assignments")
 }
 
@@ -3456,11 +3477,135 @@ model Order {
   // @unique on the FK so a RETURNED → not-RETURNED → RETURNED bounce
   // doesn't mint duplicates; the upsert is idempotent.
   thankYouSuggestion ThankYouSuggestion?
+  // The check-out / check-in reports the yard files against this order
+  // (Hugo, 2026-09-03 — the floor picks on paper, a supervisor types the
+  // paperwork in). Cascade-deletes with the order.
+  checkReports       OrderCheckReport[]
+  // The specific units sales said are going out on this order — the
+  // other end of BookingAssignment.orderId. Drives the "Order attached"
+  // indicator on the unit.
+  unitAssignments    BookingAssignment[] @relation("AssignmentOrder")
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
   @@index([cadenceState])
   @@map("sr_orders")
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ORDER CHECK IN/OUT REPORTS
+//
+// Hugo, 2026-09-03: "the warehouse prefers to have pick lists handled
+// manually on paper. Once the warehouse associate finishes prepping and
+// loading they take the paperwork to Albert, Carlos, Hugo or Pedro for
+// them to do the Check In/Out Reports. This needs to be a tab on the
+// left and essentially that digitizes the report."
+//
+// So this is a TRANSCRIPTION of a physical document, not a second
+// picking workflow. PickList/PickListItem stay exactly as they are —
+// they model a scan-driven pick session the floor has decided not to
+// run, and they only exist for WAREHOUSE-lane lines on booked orders. A
+// paper pull sheet lists everything on the order, gets marked up in a
+// loading bay, and is signed. That is a different document, and it gets
+// its own table rather than being forced through the pick list's shape.
+//
+// The report is also the ONLY place the yard may change an order (Hugo,
+// same meeting): "there are last minute exchanges and modifications that
+// will need to be done to the order based on the check out report. This
+// should be done and modify the order and flag back to the sales agent."
+// A submitted report with any changed line writes those changes onto the
+// OrderLineItems and raises the flag below.
+// ─────────────────────────────────────────────────────────────────────
+
+enum OrderCheckEdge {
+  /// What actually left the building.
+  OUT
+  /// What actually came back.
+  IN
+}
+
+enum OrderCheckLineChange {
+  /// Went out (or came back) exactly as written.
+  NONE
+  /// Fewer than the order says.
+  SHORT
+  /// More than the order says.
+  EXTRA
+  /// A different piece went in its place — the classic last-minute
+  /// exchange. `substituteFor` holds what it replaced.
+  SUBSTITUTE
+  /// On the truck but not on the order at all.
+  ADDED
+  /// On the order but deliberately not sent.
+  REMOVED
+}
+
+model OrderCheckReport {
+  id      String         @id @default(uuid())
+  orderId String         @map("order_id")
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  edge    OrderCheckEdge
+
+  /// Who typed it in — a supervisor (Albert, Carlos, Hugo, Pedro).
+  /// SOFT FK: a plain id with no relation, so adding this table did not
+  /// have to touch the User model. Resolve it with a lookup when you
+  /// need the name; nothing cascades off a deleted user here.
+  submittedById String   @map("submitted_by_id")
+  submittedAt   DateTime @default(now()) @map("submitted_at")
+  /// The name on the paper — the associate who actually prepped and
+  /// loaded it. Free text on purpose: the floor crew are not all HQ
+  /// users, and a picker list would be one more thing to maintain.
+  preppedBy     String?  @map("prepped_by")
+  notes         String?  @db.Text
+
+  /// True when submitting this report changed the order. Drives the
+  /// sales-agent flag: this is the "tell the agent" bit, and it is
+  /// stored rather than derived so that acknowledging it is possible.
+  changedOrder   Boolean   @default(false) @map("changed_order")
+  /// Stamped when the agent has seen what changed. Null + changedOrder
+  /// is what the action item looks for.
+  agentAckedAt   DateTime? @map("agent_acked_at")
+  agentAckedById String?   @map("agent_acked_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lines OrderCheckReportLine[]
+
+  /// One current report per edge per order. A re-count supersedes the
+  /// earlier one in place rather than stacking a second document that
+  /// disagrees with the first.
+  @@unique([orderId, edge])
+  @@index([changedOrder, agentAckedAt])
+  @@map("sr_order_check_reports")
+}
+
+model OrderCheckReportLine {
+  id       String           @id @default(uuid())
+  reportId String           @map("report_id")
+  report   OrderCheckReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  /// The order line this row speaks about. SOFT FK and nullable: an
+  /// ADDED row describes something that was never on the order, and a
+  /// line deleted later must not take the historical report with it.
+  orderLineItemId String? @map("order_line_item_id")
+
+  /// Snapshot of what the paper said, so the report still reads
+  /// correctly after the order moves on.
+  description String
+  expectedQty Int    @map("expected_qty")
+  actualQty   Int    @map("actual_qty")
+
+  change        OrderCheckLineChange @default(NONE)
+  /// For SUBSTITUTE: the description of the item this one replaced.
+  substituteFor String?              @map("substitute_for")
+  note          String?              @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([reportId])
+  @@index([orderLineItemId])
+  @@map("sr_order_check_report_lines")
 }
 
 // OrderDocument — typed file attachments on an order. Mirrors the

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireOrderCreateAccess } from '@/lib/orders/requireOrderCreateAccess';
 import { prisma } from "@/lib/prisma";
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { getServerSession } from "next-auth";
@@ -114,6 +115,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Sales + admin only (Hugo, 2026-09-03). This route had no role
+    // check at all; the yard crew simply had no nav entry pointing at
+    // it, which is not the same as being unable to reach it.
+    const gate = await requireOrderCreateAccess();
+    if (gate instanceof NextResponse) return gate;
+
     const body = await req.json();
     const { companyId, jobId, bookingId, description, startDate, endDate, taxRate } = body;
     let { agentId } = body;

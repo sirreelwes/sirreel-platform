@@ -32,6 +32,14 @@ interface CurrentAssignment {
   startDate: string
   endDate: string
   asset: { id: string; unitName: string; tier: string }
+  /** Which order THIS unit is going out on (Hugo, 2026-09-03). */
+  order?: { id: string; orderNumber: string } | null
+}
+
+interface CandidateOrder {
+  id: string
+  orderNumber: string
+  status: string
 }
 
 interface PickerData {
@@ -55,6 +63,8 @@ interface PickerData {
     orderNumber: string
     orderStatus: string
   }[]
+  /** Live orders on this booking's job — what a unit may be attached to. */
+  candidateOrders?: CandidateOrder[]
   currentAssignments: CurrentAssignment[]
   candidates: Candidate[]
   summary: {
@@ -123,6 +133,15 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   const [submitting, setSubmitting] = useState<string | null>(null) // assetId mid-submit
   const [error, setError] = useState<string | null>(null)
   const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string } | null>(null)
+  /**
+   * Which order the NEXT unit assigned here goes out on. Empty means
+   * "let the server decide", which is correct whenever the job has a
+   * single live order — the common case, and one nobody should have to
+   * answer. It only becomes a real question on a job carrying more than
+   * one order, which is exactly when the yard could not otherwise tell
+   * which truck belonged to which.
+   */
+  const [attachOrderId, setAttachOrderId] = useState<string>('')
   // DOT paperwork (Phase 2): generate the per-vehicle DOT info packet for the
   // order's assigned units + publish it to the client portal.
   type Incomplete = { unitName: string; missing: string[] }
@@ -202,6 +221,27 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     }
   }
 
+  /** Re-point (or clear) the order on a unit already assigned. */
+  async function setAssignmentOrder(assignmentId: string, orderId: string | null) {
+    setError(null)
+    try {
+      const res = await fetch(`/api/scheduling/assignments/${assignmentId}/order`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) {
+        setError(json.reason || json.error || `Request failed (${res.status})`)
+        return
+      }
+      await refresh()
+      onChanged?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   async function assign(asset: Candidate, bufferOverride: boolean) {
     setSubmitting(asset.assetId)
     setError(null)
@@ -209,7 +249,14 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
       const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId: asset.assetId, bufferDays, bufferOverride }),
+        body: JSON.stringify({
+          assetId: asset.assetId,
+          bufferDays,
+          bufferOverride,
+          // Which order this unit goes out on. null lets the server
+          // decide when the job has exactly one candidate.
+          orderId: attachOrderId || null,
+        }),
       })
       const json = await res.json()
       if (res.ok && json.ok) {
@@ -331,17 +378,66 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 </div>
               </div>
 
+              {/* Which order the units here belong to. Only a question
+                  when the job carries more than one live order — with
+                  one, the server attaches it and nobody is asked. */}
+              {(data.candidateOrders?.length ?? 0) > 1 && (
+                <section className="rounded border border-violet-200 bg-violet-50 px-3 py-2">
+                  <label className="block">
+                    <span className="text-xs uppercase tracking-wide text-violet-700 font-semibold">
+                      This unit goes out on
+                    </span>
+                    <select
+                      value={attachOrderId}
+                      onChange={(e) => setAttachOrderId(e.target.value)}
+                      className="mt-1 w-full border border-violet-300 rounded px-2 py-1.5 text-sm bg-white text-zinc-900"
+                    >
+                      <option value="">Don&rsquo;t attach to an order yet</option>
+                      {data.candidateOrders!.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.orderNumber} · {o.status}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[11px] text-violet-700/80 mt-1 block">
+                      This job has {data.candidateOrders!.length} orders. Naming one puts an
+                      &ldquo;Order attached&rdquo; marker on the truck so the yard knows which is which.
+                    </span>
+                  </label>
+                </section>
+              )}
+
               {data.currentAssignments.length > 0 && (
                 <section>
                   <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Assigned</div>
                   <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
                     {data.currentAssignments.map((a) => (
-                      <li key={a.id} className="px-3 py-2 text-sm flex items-center justify-between">
-                        <div>
+                      <li key={a.id} className="px-3 py-2 text-sm flex items-center justify-between gap-3">
+                        <div className="min-w-0">
                           <span className="font-mono text-zinc-900">{a.asset.unitName}</span>
                           <span className="ml-2 text-xs text-zinc-500">{a.asset.tier}</span>
+                          {a.order ? (
+                            <span className="ml-2 text-[11px] font-semibold text-violet-700 bg-violet-100 border border-violet-200 rounded px-1.5 py-0.5">
+                              Order {a.order.orderNumber} attached
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-[11px] text-zinc-400">no order attached</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
+                          {(data.candidateOrders?.length ?? 0) > 0 && (
+                            <select
+                              value={a.order?.id ?? ''}
+                              onChange={(e) => void setAssignmentOrder(a.id, e.target.value || null)}
+                              aria-label={`Order attached to ${a.asset.unitName}`}
+                              className="text-xs border border-zinc-300 rounded px-1.5 py-1 bg-white text-zinc-700"
+                            >
+                              <option value="">— no order —</option>
+                              {data.candidateOrders!.map((o) => (
+                                <option key={o.id} value={o.id}>{o.orderNumber}</option>
+                              ))}
+                            </select>
+                          )}
                           <span className="text-xs text-zinc-500">{ASSIGN_STATUS_LABEL[a.status] ?? a.status}</span>
                           {a.status === 'ASSIGNED' && (
                             <button

@@ -83,6 +83,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           startDate: true,
           endDate: true,
           asset: { select: { id: true, unitName: true, tier: true } },
+          // Which order THIS unit is going out on (Hugo, 2026-09-03).
+          order: { select: { id: true, orderNumber: true } },
         },
       })
     : []
@@ -153,6 +155,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       orderStatus: l.order.status,
     })),
     category: { id: bookingItem.categoryId, ...bookingItem.category },
+    // Orders sales may attach a unit to — every live order on this
+    // booking's job. Offered as a choice only when there is more than
+    // one; with a single candidate the assign route stamps it silently
+    // rather than asking a question with one answer.
+    candidateOrders: await prisma.order.findMany({
+      where: {
+        jobId: bookingItem.booking.jobId ?? undefined,
+        status: { notIn: ['CANCELLED'] },
+        archivedAt: null,
+      },
+      select: { id: true, orderNumber: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    }),
     currentAssignments,
     candidates,
     summary: {

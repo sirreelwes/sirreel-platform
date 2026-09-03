@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
-import { AlertTriangle, Check, Pencil, Timer, Wrench, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2, Pencil, Timer, Wrench, X } from 'lucide-react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
@@ -13,7 +13,7 @@ import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
 import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
-import { getPermissions } from '@/lib/permissions';
+import { canCreateOrders, getPermissions } from '@/lib/permissions';
 import { readViewAsCookie } from '@/lib/auth/viewAs';
 import {
   barColor,
@@ -103,8 +103,23 @@ function assignLanes(bookings: any[]): { bookings: any[]; laneCount: number } {
 // non-click marker rather than a dead link.
 const ORDER_BADGE_CLASS =
   'mr-1 inline-flex h-4 w-4 flex-none items-center justify-center rounded-sm bg-red-600 border border-white/80 text-[10px] leading-none text-white'
-function OrderBadge({ order, rwOrderNumber, jobId }: {
+// The unit-level variant — violet, matching the "order" chip the
+// Out/Back strip already uses for an attached order, so the two surfaces
+// agree about what that colour means.
+const UNIT_ORDER_BADGE_CLASS =
+  'mr-1 inline-flex h-4 w-4 flex-none items-center justify-center rounded-sm bg-violet-600 border border-white/80 text-[10px] leading-none text-white'
+function OrderBadge({ order, rwOrderNumber, jobId, unitLevel = false }: {
   order?: { id: string; orderNumber: string } | null
+  /**
+   * True when the badge is saying "THIS truck is the one the order was
+   * written against" rather than "this reservation has an order
+   * somewhere on it" (Hugo, 2026-09-03: "sales needs to say which
+   * vehicle gets the order and then that vehicle should have an 'Order
+   * Attached' indicator"). It reads differently because it means
+   * something different — a booking with three vans and one order used
+   * to put the same badge on all three.
+   */
+  unitLevel?: boolean
   /** First linked RentalWorks order number (JobRwOrder) — the fallback
    *  destination when the job has no HQ order yet (RW quote linked
    *  pre-invoice). Lands on the job's RW billing panel. */
@@ -115,11 +130,15 @@ function OrderBadge({ order, rwOrderNumber, jobId }: {
     return (
       <a
         href={`/orders/${order.id}`}
-        className={`${ORDER_BADGE_CLASS} hover:bg-red-500 cursor-pointer`}
-        title={`Order ${order.orderNumber} attached — click to open`}
+        className={`${unitLevel ? UNIT_ORDER_BADGE_CLASS : ORDER_BADGE_CLASS} hover:opacity-80 cursor-pointer`}
+        title={
+          unitLevel
+            ? `Order ${order.orderNumber} is attached to THIS unit — click to open`
+            : `Order ${order.orderNumber} attached — click to open`
+        }
         onClick={(ev) => ev.stopPropagation()}
         onPointerDown={(ev) => ev.stopPropagation()}
-      ><Pencil size={16} aria-hidden /></a>
+      >{unitLevel ? <Link2 size={15} aria-hidden /> : <Pencil size={16} aria-hidden />}</a>
     )
   }
   if (rwOrderNumber && jobId) {
@@ -329,7 +348,12 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
               }}
             >
               <IncompleteBadge gaps={b.infoGaps} />
-              {b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
+              {/* Unit-level attachment wins: it is the more specific
+                  claim. The booking-level badge stays for every bar
+                  sales has not named a unit for — including all history. */}
+              {b.attachedOrder
+                ? <OrderBadge order={b.attachedOrder} unitLevel />
+                : b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                 {(b.tags || []).includes('ART_DEPT') && (
                   <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
@@ -390,6 +414,10 @@ export function GanttBoard() {
   const viewAs = typeof window !== 'undefined' && realRole === 'ADMIN' ? readViewAsCookie() : null
   const sessionRole = (viewAs as UserRole | null) ?? realRole
   const canBindUnit = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
+  // Creating an order is sales' job, not the yard's (Hugo 2026-09-03).
+  // Hides the two "+ create order" paths out of the reservation modal;
+  // the order create routes enforce it server-side too.
+  const canMakeOrders = sessionRole ? canCreateOrders(sessionRole) : false
   // FLEET capability (canAssignAssets) — N/A mark/clear, condition tier, asset
   // notes (AssetSummaryPanel edit). Split off canBindUnit in the re-split.
   const canFleetOps = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
@@ -694,12 +722,25 @@ export function GanttBoard() {
     })
   }, [refreshTimeline])
 
+  // How far a single arrow tap moves the window. Three days: enough to
+  // feel like progress on a 2W board, small enough to land on a specific
+  // day without overshooting it.
+  const NUDGE_DAYS = 3
+
   // ── Window paging. ‹ / › step by the current visible width
   //    (totalDays) so a 2W window pages two weeks at a time, a 4W
   //    window pages four. Today resets to the default anchor. ──
-  function panBackward() { setAnchorDate(addDays(anchorDate, -totalDays)) }
-  function panForward()  { setAnchorDate(addDays(anchorDate,  totalDays)) }
-  function goToday()     { setAnchorDate(defaultAnchor) }
+  function panWindow(dir: -1 | 1) { setAnchorDate(addDays(anchorDate, dir * totalDays)) }
+  function goToday()              { setAnchorDate(defaultAnchor) }
+
+  /**
+   * Fine movement: shift the window by a few days rather than a whole
+   * screen. Moving the ANCHOR rather than calling scrollBy on purpose —
+   * scrollLeft is owned by the buffer/edge-advance machinery below, and
+   * a competing smooth scroll fights it at the seams. Stepping the
+   * anchor reuses the exact path the pager already takes.
+   */
+  function nudgeDays(delta: number) { setAnchorDate(addDays(anchorDate, delta)) }
 
   // ── Scroll plumbing for trackpad / drag pan ─────────────────────
   // The rendered grid is 3× the visible span (see RENDER_BUFFER_WINDOWS
@@ -1364,23 +1405,42 @@ export function GanttBoard() {
         <div className="flex items-center gap-2">
           {/* Window pager — steps by the current visible width. Today
               resets to the default anchor (today − 3d). */}
+          {/* Hugo, 2026-09-03: "we need arrows to navigate left and right
+              — they aren't working on touchpads, but with mouse." The
+              grid scrolls horizontally with a wheel and by dragging, and
+              neither is reachable on a trackpad without a two-finger
+              gesture the crew doesn't use. These existed as 7px ‹ ›
+              glyphs nobody found; they are now real buttons — a day
+              nudge for fine movement, a window jump for distance. */}
           <div className="flex items-center gap-1">
             <button
-              onClick={panBackward}
-              className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200"
-              aria-label="Previous window"
+              onClick={() => panWindow(-1)}
+              className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center"
+              aria-label={`Back ${totalDays} days`}
               title={`Back ${totalDays} days`}
-            >‹</button>
+            ><ChevronsLeft size={16} aria-hidden /></button>
+            <button
+              onClick={() => nudgeDays(-NUDGE_DAYS)}
+              className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center"
+              aria-label={`Back ${NUDGE_DAYS} days`}
+              title={`Back ${NUDGE_DAYS} days`}
+            ><ChevronLeft size={18} aria-hidden /></button>
             <button
               onClick={goToday}
-              className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200"
+              className="px-2.5 h-8 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200"
             >Today</button>
             <button
-              onClick={panForward}
-              className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200"
-              aria-label="Next window"
+              onClick={() => nudgeDays(NUDGE_DAYS)}
+              className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center"
+              aria-label={`Forward ${NUDGE_DAYS} days`}
+              title={`Forward ${NUDGE_DAYS} days`}
+            ><ChevronRight size={18} aria-hidden /></button>
+            <button
+              onClick={() => panWindow(1)}
+              className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center"
+              aria-label={`Forward ${totalDays} days`}
               title={`Forward ${totalDays} days`}
-            >›</button>
+            ><ChevronsRight size={16} aria-hidden /></button>
           </div>
           <span className="text-[11px] font-semibold text-gray-500 px-1">{rangeLabel}</span>
           <div className="flex bg-gray-100 rounded-lg p-0.5">
@@ -1996,14 +2056,16 @@ export function GanttBoard() {
                         <span className="opacity-80">billing on the job →</span>
                       </Link>
                     ))}
-                    <Link
-                      href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
-                      className="block text-center text-[11px] text-gray-400 hover:text-gray-600 hover:underline pt-1"
-                    >
-                      + create an HQ order instead
-                    </Link>
+                    {canMakeOrders && (
+                      <Link
+                        href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
+                        className="block text-center text-[11px] text-gray-400 hover:text-gray-600 hover:underline pt-1"
+                      >
+                        + create an HQ order instead
+                      </Link>
+                    )}
                   </div>
-                ) : selected.jobId ? (
+                ) : selected.jobId && canMakeOrders ? (
                   <div className="pt-2">
                     <Link
                       href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
