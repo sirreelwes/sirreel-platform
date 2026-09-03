@@ -97,8 +97,9 @@ export function composeAskJobNameEmail(input: {
   const subject = 'Quick one — what should we call this job?'
 
   const text = [
-    greeting,
-    greeting ? '' : null,
+    // A rep who wrote their own greeting gets no second one — and no blank
+    // first line where ours would have been.
+    ...(greeting ? [greeting, ''] : []),
     body,
     '',
     url,
