@@ -20,8 +20,10 @@
  * QUANTITY-tracked and are correctly skipped — that's why the four "gaps"
  * found on 2026-08-25 were really one.
  *
- * Idempotent by (booking, category, window): re-sending a quote must not
- * stack duplicate holds.
+ * Idempotent per category: the quantity a quote asks for is recomputed
+ * from the order on every send and SET on one BookingItem, so re-sending
+ * neither stacks duplicates nor loses a second line for the same
+ * category.
  *
  * NON-FATAL by contract. The caller sends the email first; a hold failure
  * must never make a delivered quote look like it failed.
@@ -34,14 +36,57 @@ import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 export interface HoldOnQuoteResult {
   created: number
   reused: number
+  /** Existing hold whose quantity was corrected to match the quote. */
+  adjusted: number
   skippedNoDates: number
   skippedNotUnitTracked: number
+  /** VEHICLES/STAGES lines we could NOT hold because the line resolves to
+   *  no AssetCategory — free-typed, or a catalog row with no
+   *  legacyAssetCategoryId. A quoted vehicle nobody is holding. */
+  unresolvedVehicles: string[]
   error: string | null
+}
+
+
+/** The line shape both the hold logic and the action-item provider read. */
+export interface HoldableLineShape {
+  department: LineItemDepartment | null
+  assetCategoryId: string | null
+  assetCategory?: { department: LineItemDepartment | null } | null
+  inventoryItem?: {
+    department: LineItemDepartment | null
+    trackingMode: string | null
+    legacyAssetCategoryId: string | null
+  } | null
+}
+
+/**
+ * A VEHICLES/STAGES line that resolves to NO AssetCategory — so quoting
+ * it reserves nothing at all, anywhere.
+ *
+ * Two ways in: a free-typed line with no catalog row ("Production Truck"
+ * on S260903-002), or a unit-tracked catalog row with no
+ * legacyAssetCategoryId to hold against. Both used to disappear into the
+ * same counter as the ladders and folding tables, which are skipped
+ * correctly.
+ *
+ * Exported so lib/actionItems/providers/holdUnassigned reports the same
+ * lines this module fails to hold — one definition, no drift.
+ */
+export function isUnholdableVehicleLine(li: HoldableLineShape): boolean {
+  const dept = li.assetCategoryId ? li.assetCategory?.department : (li.inventoryItem?.department ?? li.department)
+  if (dept !== LineItemDepartment.VEHICLES && dept !== LineItemDepartment.STAGES) return false
+  if (li.assetCategoryId) return false
+  const inv = li.inventoryItem
+  if (!inv) return true
+  if (inv.trackingMode !== 'UNIT_TRACKED') return false
+  return !inv.legacyAssetCategoryId
 }
 
 export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResult> {
   const out: HoldOnQuoteResult = {
-    created: 0, reused: 0, skippedNoDates: 0, skippedNotUnitTracked: 0, error: null,
+    created: 0, reused: 0, adjusted: 0, skippedNoDates: 0, skippedNotUnitTracked: 0,
+    unresolvedVehicles: [], error: null,
   }
   try {
     const order = await prisma.order.findUnique({
@@ -52,7 +97,7 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
         lineItems: {
           select: {
             quantity: true, pickupDate: true, returnDate: true, assetCategoryId: true,
-            description: true,
+            description: true, department: true,
             assetCategory: { select: { id: true, department: true } },
             inventoryItem: {
               select: { department: true, trackingMode: true, legacyAssetCategoryId: true },
@@ -74,9 +119,23 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       }
       // Current lines: resolve through the catalog row.
       const inv = li.inventoryItem
-      if (!inv || inv.trackingMode !== 'UNIT_TRACKED') return null
+      if (!inv) {
+        // No catalog row at all. A free-typed VEHICLES line ("Production
+        // Truck", S260903-002) is a real vehicle on a quote that nothing
+        // can hold — and it used to vanish into skippedNotUnitTracked
+        // beside the ladders and folding tables. Name it instead.
+        if (li.department === LineItemDepartment.VEHICLES || li.department === LineItemDepartment.STAGES) {
+          out.unresolvedVehicles.push(li.description || 'unnamed line')
+        }
+        return null
+      }
+      if (inv.trackingMode !== 'UNIT_TRACKED') return null
       if (inv.department !== LineItemDepartment.VEHICLES && inv.department !== LineItemDepartment.STAGES) return null
-      return inv.legacyAssetCategoryId ?? null
+      if (!inv.legacyAssetCategoryId) {
+        out.unresolvedVehicles.push(li.description || 'unnamed line')
+        return null
+      }
+      return inv.legacyAssetCategoryId
     }
 
     const holdable = order.lineItems
@@ -87,6 +146,18 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
         return true
       })
     if (holdable.length === 0) return out
+
+    // Envelope spans EVERY held line. It used to be holdable[0]'s own
+    // dates, which is only right when the quote has one line or they all
+    // share a window. On S260903-002 (High Horses) the first line picked
+    // up 09-23 and a second cargo van picked up 09-22, so the booking
+    // started a day after the fleet was actually committed.
+    const envelopeStart = holdable
+      .map(({ li }) => li.pickupDate!)
+      .reduce((a, b) => (a < b ? a : b))
+    const envelopeEnd = holdable
+      .map(({ li }) => li.returnDate!)
+      .reduce((a, b) => (a > b ? a : b))
 
     // One Booking per order, reused across re-sends.
     let bookingId = order.bookingId
@@ -143,8 +214,8 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
           agentId: order.agentId,
           jobId: order.jobId,
           jobName: order.job?.name ?? 'Quote hold',
-          startDate: holdable[0].li.pickupDate!,
-          endDate: holdable[0].li.returnDate!,
+          startDate: envelopeStart,
+          endDate: envelopeEnd,
           source: 'AGENT_DIRECT',
           status: 'REQUEST',
         },
@@ -154,21 +225,45 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       await prisma.order.update({ where: { id: order.id }, data: { bookingId } })
     }
 
+    // Hold the TOTAL the quote asks for per category, not the first line
+    // that mentions it. The old loop skipped any category it had already
+    // seen on this booking, so S260903-002's two Cargo Vans — different
+    // lines, different windows (09-23→09-26 and 09-22→09-25) — produced
+    // ONE hold. Half the vans on a live quote read as free on the board,
+    // which is the exact over-commit this module exists to prevent.
+    //
+    // Summing rather than one-row-per-line keeps re-sends idempotent
+    // without a per-line FK: the desired quantity is recomputed from the
+    // order every time and SET, so editing a quote down releases the
+    // difference instead of stacking.
+    const wantByCategory = new Map<string, number>()
     for (const { li, categoryId } of holdable) {
-      const dupe = await prisma.bookingItem.findFirst({
+      wantByCategory.set(categoryId!, (wantByCategory.get(categoryId!) ?? 0) + (li.quantity || 1))
+    }
+
+    for (const [categoryId, want] of wantByCategory) {
+      const existing = await prisma.bookingItem.findFirst({
         where: {
           bookingId,
-          categoryId: categoryId!,
+          categoryId,
           status: { in: ['REQUESTED', 'ASSIGNED'] },
         },
-        select: { id: true },
+        select: { id: true, quantity: true, status: true },
       })
-      if (dupe) { out.reused++; continue }
+      if (existing) {
+        if (existing.quantity === want) { out.reused++; continue }
+        // Never shrink below what a human has already assigned units to —
+        // an ASSIGNED item is dispatch's work, not this function's.
+        if (existing.status === 'ASSIGNED' && want < existing.quantity) { out.reused++; continue }
+        await prisma.bookingItem.update({ where: { id: existing.id }, data: { quantity: want } })
+        out.adjusted++
+        continue
+      }
       await prisma.bookingItem.create({
         data: {
           bookingId,
-          categoryId: categoryId!,
-          quantity: li.quantity || 1,
+          categoryId,
+          quantity: want,
           dailyRate: 0,
           status: 'REQUESTED',
           // Backup rank: visible as spoken-for, doesn't hard-block.
@@ -177,6 +272,17 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       })
       out.created++
     }
+
+    // Widen an EXISTING booking whose envelope no longer covers the quote
+    // (a re-send after the dates moved, or the pre-fix rows).
+    await prisma.booking.updateMany({
+      where: { id: bookingId, startDate: { gt: envelopeStart } },
+      data: { startDate: envelopeStart },
+    })
+    await prisma.booking.updateMany({
+      where: { id: bookingId, endDate: { lt: envelopeEnd } },
+      data: { endDate: envelopeEnd },
+    })
     return out
   } catch (e) {
     return { ...out, error: e instanceof Error ? e.message : 'hold failed' }

@@ -11,6 +11,9 @@
  *   - quote-aging  (DERIVED)— open quotes gone quiet
  *   - inquiry-untouched (DERIVED) — web-form inquiries past the
  *     first-response SLA (in-app twin of the safety-net email)
+ *   - hold-unassigned (DERIVED) — a sent quote whose soft holds are not
+ *     yet on specific units. Sending a quote reserves a CATEGORY; until
+ *     someone picks the truck it appears on no unit row at all.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -55,8 +58,10 @@ import { coiMissingProvider } from '@/lib/actionItems/providers/coiMissing'
 import { quoteAgingProvider } from '@/lib/actionItems/providers/quoteAging'
 import { inquiryUntouchedProvider } from '@/lib/actionItems/providers/inquiryUntouched'
 import { rwTokenProvider } from '@/lib/actionItems/providers/rwToken'
+import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassigned'
 
 const PROVIDERS: ActionItemProvider[] = [
+  holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,
   quoteAgingProvider,
