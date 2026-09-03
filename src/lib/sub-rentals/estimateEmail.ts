@@ -159,7 +159,28 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
   const defaultBody =
     `Here's the estimate for the ${v.name}. Rates below are per the terms noted; ` +
     `let me know your dates and I'll confirm availability and lock it in.`
-  const bodyText = args.message?.trim() || defaultBody
+  const repBody = args.message?.trim() || ''
+  const bodyText = repBody || defaultBody
+  // A rep-written message carries its own greeting — the composer's "Suggest
+  // with AI" writes one, and the box's placeholder asks for one (Wes
+  // 2026-09-02: HQ composers open blank and nothing is pasted above the
+  // rep's words). Blank box → the standard wording, greeted as before.
+  const greetingText = repBody ? null : `Hi ${greetName},`
+  const greetingHtml = repBody
+    ? ''
+    : `<p style="font-size: 17px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.5;">Hi ${escapeHtml(greetName)},</p>`
+  // Multi-paragraph bodies survive: an AI suggestion (or anything a rep types
+  // with a blank line in it) used to collapse into one run-on paragraph,
+  // because the whole message went through a single escaped <p>.
+  const bodyHtml = bodyText
+    .split(/\n{2,}/)
+    .map((para) => escapeHtml(para.trim()).replace(/\n/g, '<br/>'))
+    .filter(Boolean)
+    .map(
+      (para) =>
+        `<p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${para}</p>`,
+    )
+    .join('\n              ')
 
   // ── Rate table ──────────────────────────────────────────────────────────
   const rateRows = terms
@@ -265,8 +286,8 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
           </tr>
           <tr>
             <td style="padding: 28px 32px 4px;">
-              <p style="font-size: 17px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.5;">Hi ${escapeHtml(greetName)},</p>
-              <p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${escapeHtml(bodyText)}</p>
+              ${greetingHtml}
+              ${bodyHtml}
             </td>
           </tr>
 
@@ -351,8 +372,7 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
 </html>`
 
   const textParts: string[] = [
-    `Hi ${greetName},`,
-    '',
+    ...(greetingText ? [greetingText, ''] : []),
     bodyText,
     '',
     `SIRREEL ESTIMATE — ${v.name}`,

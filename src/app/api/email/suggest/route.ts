@@ -39,6 +39,7 @@ type Kind =
   | 'followup-order'
   | 'followup-job'
   | 'ask-job-name'
+  | 'estimate'
 
 interface Body {
   kind?: string
@@ -46,6 +47,8 @@ interface Body {
   recipientName?: string | null
   companyName?: string | null
   jobName?: string | null
+  /** estimate: the unit being quoted. */
+  vehicleName?: string | null
   /** Follow-ups: which nudge in the cadence this is. */
   stage?: string | null
   /** Follow-ups: ISO date the quote is good through, when known. */
@@ -85,6 +88,13 @@ function purposeFor(kind: Kind, stage: string | null): string {
         'if we do not have it, which production company is booking. Nothing else. Keep it to a few',
         'sentences; a form link where they can answer is rendered underneath automatically.',
       ].join(' ')
+    case 'estimate':
+      return [
+        'This email sends a client a rate estimate for one production vehicle. A rate table, the',
+        'vehicle photo and a link to the unit page render underneath your words automatically — do',
+        'not retype rates or describe the vehicle. Say the estimate is below, and ask for their dates',
+        'so we can confirm availability.',
+      ].join(' ')
     case 'card-auth':
       return [
         'This email asks the client to put a credit card on file so the rental can go out the door.',
@@ -116,6 +126,7 @@ const KINDS: Kind[] = [
   // job name" send behind the same review modal) — listed so its composer's
   // Suggest button works the day it ships.
   'ask-job-name',
+  'estimate',
 ]
 
 function firstNameOf(full: string | null | undefined): string {
@@ -144,6 +155,7 @@ export async function POST(req: NextRequest) {
     `Recipient's first name: ${recipientFirst}`,
     body.companyName?.trim() ? `Their company: ${body.companyName.trim()}` : null,
     body.jobName?.trim() ? `The production/job: ${body.jobName.trim()}` : null,
+    body.vehicleName?.trim() ? `The vehicle being quoted: ${body.vehicleName.trim()}` : null,
     body.validUntil?.trim() ? `The quote is valid through: ${body.validUntil.trim()}` : null,
     `You are writing AS: ${agentName}, a SirReel account rep`,
   ]

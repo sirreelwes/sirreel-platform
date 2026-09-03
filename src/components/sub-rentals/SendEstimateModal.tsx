@@ -60,6 +60,8 @@ export default function SendEstimateModal({
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<SendResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [suggestBusy, setSuggestBusy] = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
 
   const compose = useCallback(async () => {
     setLoading(true)
@@ -83,6 +85,39 @@ export default function SendEstimateModal({
     const t = setTimeout(compose, 350)
     return () => clearTimeout(t)
   }, [compose])
+
+  /**
+   * "Suggest with AI" — the same button the other HQ composers carry (Wes
+   * 2026-09-02: the box is a blank page and a button fills it). The draft
+   * lands in the message box, editable, and carries its own greeting: a
+   * rep-written message stands the template's "Hi <First>," down, exactly
+   * as it does on every other client email. Nothing sends.
+   */
+  async function suggest() {
+    if (suggestBusy) return
+    setSuggestBusy(true); setSuggestError(null)
+    try {
+      const r = await fetch('/api/email/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'estimate',
+          recipientName: firstName.trim() || null,
+          vehicleName,
+          jobName: job?.name ?? null,
+          draft: message.trim() || null,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false || typeof j?.body !== 'string') {
+        setSuggestError(j?.error ?? `Suggestion failed (${r.status})`)
+        return
+      }
+      setMessage(j.body)
+    } catch (e) {
+      setSuggestError(e instanceof Error ? e.message : 'Suggestion failed')
+    } finally { setSuggestBusy(false) }
+  }
 
   async function send() {
     setSending(true); setError(null)
@@ -154,7 +189,10 @@ export default function SendEstimateModal({
               </div>
               <div>
                 <label className={label}>
-                  First name <span className="font-normal normal-case text-gray-400">(greeting)</span>
+                  First name{' '}
+                  <span className="font-normal normal-case text-gray-400">
+                    (greets them when the message box is blank)
+                  </span>
                 </label>
                 <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="there" className={field} />
               </div>
@@ -208,10 +246,38 @@ export default function SendEstimateModal({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={3}
-                  placeholder={composed?.defaultBody ?? ''}
+                  placeholder="Write the note — start with a greeting. Or press Suggest."
                   className={field}
                 />
-                <p className="mt-1 text-xs text-gray-500">Leave blank to use the standard wording shown in the preview.</p>
+                {/* The button that fills the blank page, same as the other
+                    composers. Write anything and the greeting is yours: the
+                    template only adds "Hi <First>," when this box is empty,
+                    so a suggestion (which writes its own) can't double it. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { void suggest() }}
+                    disabled={suggestBusy || sending}
+                    className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-2.5 py-1 text-xs font-bold text-white"
+                  >
+                    {suggestBusy ? 'Writing…' : message.trim() ? '✨ Finish with AI' : '✨ Suggest with AI'}
+                  </button>
+                  {composed?.defaultBody && !message.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setMessage(composed.defaultBody)}
+                      disabled={sending}
+                      className="rounded-lg border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-2.5 py-1 text-xs font-semibold text-gray-700"
+                    >
+                      Use standard wording
+                    </button>
+                  )}
+                </div>
+                {suggestError && <p className="mt-1 text-xs text-rose-700">{suggestError}</p>}
+                <p className="mt-1 text-xs text-gray-500">
+                  Blank still sends the standard wording, greeting included — the preview below is exactly
+                  what goes out either way.
+                </p>
               </div>
             </div>
 
