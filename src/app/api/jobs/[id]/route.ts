@@ -343,6 +343,22 @@ export async function GET(
           },
         })
       : []
+    // How badly the client is struggling with the card step, if at all.
+    // Recorded by src/lib/portal/cardTrouble.ts; the desk gets an email in
+    // the moment, and this is the same fact on the job itself for whoever
+    // opens it afterwards.
+    const paperworkIds = paperwork.map((p) => p.id)
+    const [troubleCount, lastTrouble] = paperworkIds.length
+      ? await Promise.all([
+          prisma.portalCardAttempt.count({ where: { paperworkRequestId: { in: paperworkIds } } }),
+          prisma.portalCardAttempt.findFirst({
+            where: { paperworkRequestId: { in: paperworkIds } },
+            orderBy: { createdAt: 'desc' },
+            select: { kind: true, detail: true, createdAt: true },
+          }),
+        ])
+      : [0, null]
+
     const cardRow = paperwork.find((p) => !!p.ccCardNumberEncrypted)
     const cardAuth = cardRow
       ? {
@@ -356,6 +372,9 @@ export async function GET(
           /** False when the $0 validation did not come back approved. The
            *  card may still charge; staff should know before counting on it. */
           validated: cardRow.ccAuthRespStat === 'A',
+          troubleCount,
+          lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+          lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
         }
       : {
           onFile: false,
@@ -364,6 +383,9 @@ export async function GET(
           cardholderName: null,
           paymentPreference: null,
           validated: false,
+          troubleCount,
+          lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+          lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
         }
     // Three states, not two. A vehicle whose client DECLINED the waiver and
     // one nobody has asked yet both used to send `false`, so the badge read

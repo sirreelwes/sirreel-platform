@@ -158,6 +158,15 @@ export function CcAuthCard({
             setCardError('')
           } else if (invalid) {
             setCpToken('')
+            // Tell HQ. A client fighting this field used to be invisible
+            // until they gave up and asked for the old form — and a card is
+            // usually needed same or next day (Wes 2026-09-03). Fire and
+            // forget: their form must not depend on our alerting.
+            void fetch(`/api/portal/${token}/cc-trouble`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ kind: 'CARD_INVALID', detail: invalid }),
+            }).catch(() => {})
             setCardError(
               // The gateway's own wording is terse ("Invalid card number").
               // Say what to DO, since the field is inside an iframe the page
@@ -170,7 +179,7 @@ export function CcAuthCard({
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [])
+  }, [token])
 
   const status = done ? 'done' : locked ? 'locked' : 'todo'
   const { first: repFirst, last: repLast } = splitName(intake.fullName)
@@ -450,6 +459,14 @@ export function CcAuthCard({
                   // sent clients round the same loop until they gave up.
                   const d = (await r.json().catch(() => ({}))) as { error?: string }
                   setError(d.error || 'Failed to submit authorization — please try again.')
+                  void fetch(`/api/portal/${token}/cc-trouble`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      kind: 'SUBMIT_REJECTED',
+                      detail: d.error || `HTTP ${r.status}`,
+                    }),
+                  }).catch(() => {})
                   return
                 }
                 onAuthorized()
