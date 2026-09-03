@@ -7,6 +7,7 @@ import type { LineItemDepartment, ProductionType, RateType } from '@prisma/clien
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { JobResolverModal } from '@/components/shared/JobResolverModal';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
+import { InquirySourceDrawer } from '@/components/inquiries/InquirySourceDrawer';
 import { needsJobDisambiguation } from '@/lib/jobs/jobDisambiguation';
 // selectedClientId is usually a Company id but is sometimes an ANSWER
 // ('__new__' / '__unknown__'). Anything wanting a real id asks through
@@ -452,6 +453,10 @@ function NewQuotePageInner() {
   const [candidateJobs, setCandidateJobs] = useState<AttachableJob[]>([]);
 
   const [inquiry, setInquiry] = useState<InquiryRecord | null>(null);
+  // "View original" opens the source email OVER the form. It used to be a
+  // link to /inquiries/[id]: on the Review step that navigation threw away
+  // every un-saved edit on the page.
+  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false);
 
   const [inputMode, setInputMode] = useState<'paste' | 'pdf'>('paste');
   // Server detail for a failed PDF parse — rendered as an inline banner
@@ -2122,6 +2127,15 @@ function NewQuotePageInner() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────
 
+  // Rendered on BOTH steps — the banner that triggers it exists on both.
+  const inquirySourceDrawer = inquiry ? (
+    <InquirySourceDrawer
+      inquiryId={sourceDrawerOpen ? inquiry.id : null}
+      title={inquiry.title}
+      onClose={() => setSourceDrawerOpen(false)}
+    />
+  ) : null;
+
   // Step 1: Input
   if (!parsed && items.length === 0) {
     return (
@@ -2143,12 +2157,13 @@ function NewQuotePageInner() {
               Created from Inquiry: <span className="font-semibold text-chip-good-fg">{inquiry.title}</span>
               {inquiry.company && <> · <span className="font-semibold text-chip-good-fg">{inquiry.company.name}</span></>}
             </span>
-            <a
-              href={`/inquiries/${inquiry.id}`}
+            <button
+              type="button"
+              onClick={() => setSourceDrawerOpen(true)}
               className="font-semibold text-chip-good-fg hover:opacity-80 hover:underline whitespace-nowrap"
             >
               View original →
-            </a>
+            </button>
           </div>
         )}
 
@@ -2262,6 +2277,7 @@ function NewQuotePageInner() {
           Or skip parsing and add line items manually
         </button>
         </div>
+        {inquirySourceDrawer}
       </div>
     );
   }
@@ -2277,9 +2293,13 @@ function NewQuotePageInner() {
         <div className="text-[11.5px] text-lt-fg3">
           Created from Inquiry: <span className="text-lt-fg3 font-medium">{inquiry.title}</span>
           {' · '}
-          <a href={`/inquiries/${inquiry.id}`} className="text-lt-fg3 hover:text-lt-fg hover:underline">
+          <button
+            type="button"
+            onClick={() => setSourceDrawerOpen(true)}
+            className="text-lt-fg3 hover:text-lt-fg hover:underline"
+          >
             View original →
-          </a>
+          </button>
         </div>
       )}
       <div>
@@ -3023,6 +3043,7 @@ function NewQuotePageInner() {
 
       <LineItemUndoToast toast={undoToast} />
       </div>
+      {inquirySourceDrawer}
     </div>
   );
 }
