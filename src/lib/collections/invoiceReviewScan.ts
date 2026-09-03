@@ -112,10 +112,20 @@ export interface ScanResult {
   evidence: EvidenceHit[]
 }
 
-/** Evidence + verdict for one invoice. Never throws — a failed scan records
- *  NO_EVIDENCE with the reason so the row still renders. */
-export async function scanInvoice(inv: ScanTarget): Promise<ScanResult> {
-  const evidence = await findInvoiceEmails(inv)
+/**
+ * Evidence + verdict for one invoice. Never throws — a failed scan records
+ * NO_EVIDENCE with the reason so the row still renders.
+ *
+ * `opts.evidence` overrides the search. The synced corpus only reaches back to
+ * 2026-03-11 and never held `jobs@` at all, so a caller that has gone to Gmail
+ * directly can hand the messages in and get the same verdict logic applied to
+ * them — one definition of "what does this thread say", two ways of finding it.
+ */
+export async function scanInvoice(
+  inv: ScanTarget,
+  opts: { evidence?: EvidenceHit[] } = {},
+): Promise<ScanResult> {
+  const evidence = opts.evidence ?? (await findInvoiceEmails(inv))
 
   if (evidence.length === 0) {
     return {
