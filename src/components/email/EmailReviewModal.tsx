@@ -942,7 +942,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         : target.kind === 'quick-reply'
                           ? 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the “add gear or vehicles” button and the sign-off stay.'
                           : target.kind === 'ask-job-name'
-                            ? 'The standard ask, yours to edit. The link the client taps to answer, and the sign-off, stay — without the link there is nothing for them to fill in.'
+                            ? 'Blank page — write it, or press Suggest. Your words are the whole ask, greeting included; the link the client taps to answer, and the sign-off, stay — without the link there is nothing for them to fill in.'
                             : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
                   </p>
                   <div className="mt-2 space-y-2">
