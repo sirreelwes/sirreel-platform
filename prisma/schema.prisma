@@ -3558,6 +3558,16 @@ model OrderCheckReport {
   preppedBy     String?  @map("prepped_by")
   notes         String?  @db.Text
 
+  /// A pull (or a return) that covers only PART of the order — Wes,
+  /// 2026-09-04: "we should have the ability to send a partial pick
+  /// list." Set when any line on the report is marked off-sheet.
+  ///
+  /// It is what keeps a half-order safe: the lines that were not on
+  /// this sheet are recorded as untouched rather than as "did not
+  /// send", so nothing is zeroed on the order and no shrunken quote
+  /// goes to the client. The row also stays OPEN on the yard board,
+  /// because the rest of the gear still has to move.
+  partial        Boolean   @default(false)
   /// True when submitting this report changed the order. Drives the
   /// sales-agent flag: this is the "tell the agent" bit, and it is
   /// stored rather than derived so that acknowledging it is possible.
@@ -3609,6 +3619,12 @@ model OrderCheckReportLine {
   actualQty   Int    @map("actual_qty")
 
   change        OrderCheckLineChange @default(NONE)
+  /// False when this line was deliberately left OFF this pull — not
+  /// pulled yet, not missing. Its `actualQty` says nothing and it is
+  /// never classified or written back to the order. Defaults true, so
+  /// every report filed before partial pulls existed still reads as a
+  /// complete count.
+  onSheet       Boolean              @default(true) @map("on_sheet")
   /// For SUBSTITUTE: the description of the item this one replaced.
   substituteFor String?              @map("substitute_for")
   note          String?              @db.Text

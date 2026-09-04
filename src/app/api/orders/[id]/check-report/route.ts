@@ -100,6 +100,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         actualQty: actual,
         substituteFor: typeof raw.substituteFor === 'string' ? raw.substituteFor : null,
         note: typeof raw.note === 'string' ? raw.note : null,
+        // Off-sheet = this line was not part of this pull. Absent means
+        // on-sheet, so every existing caller keeps filing full counts.
+        onSheet: raw.onSheet !== false,
       })
     } else {
       // An ADDED row — something on the truck that was never on the
@@ -137,7 +140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // either way. See settleGearAfterReport for the full why.
   let gear: { pickListAdvanced: boolean; jobReturned: boolean } | null = null
   try {
-    gear = await settleGearAfterReport(id, edge, auth.userId)
+    gear = await settleGearAfterReport(id, edge, auth.userId, result.partial)
   } catch (err) {
     console.error('[check-report] gear settle failed:', err)
   }

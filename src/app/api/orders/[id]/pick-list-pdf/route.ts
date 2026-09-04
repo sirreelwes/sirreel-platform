@@ -54,7 +54,27 @@ export async function GET(
     return NextResponse.json({ error: 'Order has no pickable line items' }, { status: 400 })
   }
 
-  const lines: PickListLine[] = pickable.map((li) => {
+  // ?lines=<id,id,…> — a PARTIAL pull (Wes, 2026-09-04). Half an order
+  // going out today is ordinary on a quote the client is still deciding
+  // on, and the floor should carry a sheet for what is actually being
+  // pulled rather than a full one with fourteen lines crossed out.
+  //
+  // Unknown ids are ignored rather than 400ing: the selection comes off
+  // a screen that may be a few seconds behind an edit, and a supervisor
+  // standing at the printer needs paper, not a validation error. An
+  // empty intersection falls back to the whole order for the same
+  // reason — a blank sheet is worse than a complete one.
+  const wanted = new Set(
+    (req.nextUrl.searchParams.get('lines') ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+  )
+  const selected = wanted.size > 0 ? pickable.filter((li) => wanted.has(li.id)) : pickable
+  const onSheet = selected.length > 0 ? selected : pickable
+  const omittedLineCount = pickable.length - onSheet.length
+
+  const lines: PickListLine[] = onSheet.map((li) => {
     // "Out" = already pulled. Warehouse lines advance through the
     // digital picking floor; fleet lines flip in bulk when the fleet
     // lane is stamped ready. Pre-book lines (no lane yet) are all
@@ -92,6 +112,7 @@ export async function GET(
       pickDate: order.startDate,
       lines,
       generatedAt: new Date(),
+      omittedLineCount,
     }) as React.ReactElement<DocumentProps>
     pdfBytes = await renderToBuffer(element)
   } catch (err) {
@@ -103,9 +124,12 @@ export async function GET(
   }
 
   const wantDownload = req.nextUrl.searchParams.get('download') === '1'
+  const stem = omittedLineCount > 0
+    ? `PickList-${order.orderNumber}-partial`
+    : `PickList-${order.orderNumber}`
   const disposition = wantDownload
-    ? `attachment; filename="PickList-${order.orderNumber}.pdf"`
-    : `inline; filename="PickList-${order.orderNumber}.pdf"`
+    ? `attachment; filename="${stem}.pdf"`
+    : `inline; filename="${stem}.pdf"`
 
   return new NextResponse(new Uint8Array(pdfBytes), {
     status: 200,

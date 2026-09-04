@@ -55,6 +55,9 @@ const cart = (over: Partial<GearList> = {}): GearList => ({
   outFiled: false,
   inFiled: false,
   reportShort: 0,
+  outLeftOffSheet: 0,
+  inLeftOffSheet: 0,
+  preBooked: false,
   ...over,
 })
 
@@ -201,6 +204,25 @@ check('a filed check-out sheet closes the outbound row', () => {
   const back = gearEntry(cart({ status: 'LOADED', outFiled: true }), 'back').row
   assert.equal(back.state, 'todo')
   assert.equal(back.action, 'Check in')
+})
+
+check('a partial pull stays open on the board', () => {
+  // Wes, 2026-09-04: a quote can go out in pieces. The sheet is filed,
+  // but four lines are still on the shelf — a green row would lose them.
+  const row = gearEntry(cart({ total: 9, outFiled: true, outLeftOffSheet: 4 }), 'out').row
+  assert.equal(row.state, 'doing')
+  assert.equal(row.action, 'Pull the rest')
+  assert.match(row.stateLabel, /Partial — 4 lines left/)
+  const back = gearEntry(cart({ total: 9, inFiled: true, inLeftOffSheet: 1 }), 'back').row
+  assert.equal(back.state, 'doing')
+  assert.match(back.stateLabel, /1 line still out/)
+})
+
+check('a quote-form order says so on the row', () => {
+  // The lane was widened past BOOKED, so the row has to name the
+  // document the crew is pulling against.
+  assert.equal(gearEntry(cart({ preBooked: true }), 'out').row.chip, 'Quote')
+  assert.equal(gearEntry(cart(), 'out').row.chip, null)
 })
 
 check('a filed check-in sheet with shortfalls flags rather than passing', () => {

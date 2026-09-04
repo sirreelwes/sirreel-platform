@@ -72,6 +72,14 @@ function RowCard({ row }: { row: YardRow }) {
             <span className={`inline-block text-[11px] font-medium rounded-full border px-2 py-0.5 ${STATE_CHIP[row.state]}`}>
               {row.stateLabel}
             </span>
+            {/* "Quote" — the order behind this gear is not booked yet.
+                The crew still pulls it; they just shouldn't be surprised
+                when the paperwork says quote. */}
+            {row.chip && (
+              <span className="inline-block text-[11px] font-medium rounded-full border border-sky-800 bg-sky-950/60 text-sky-300 px-2 py-0.5">
+                {row.chip}
+              </span>
+            )}
             {row.time && <span className="text-zinc-500 text-[11px]">{row.time}</span>}
           </span>
           {row.progress !== null && row.progress > 0 && row.progress < 100 && (

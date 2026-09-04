@@ -86,6 +86,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
     /** What filing this sheet settled in the yard. */
     gear: { pickListAdvanced: boolean; jobReturned: boolean } | null
+    /** The sheet covered only part of the order. */
+    partial: boolean
+    offSheet: number
   } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
@@ -100,6 +103,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const changeList = useMemo(() => {
     const out: Array<{ key: string; text: string; added: boolean }> = []
     for (const r of rows) {
+      // A line left off this pull says nothing about itself — it is not
+      // a change, it is a line that has not happened yet.
+      if (!r.onSheet) continue
       const change = classifyCheckLine(r)
       if (change === 'NONE') continue
       out.push({ key: r.orderLineItemId, text: describeCheckChange(r, change), added: false })
@@ -118,6 +124,42 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     return out
   }, [rows, extras])
   const diffs = changeList.length
+
+  /**
+   * The partial pull (Wes, 2026-09-04: "we should have the ability to
+   * send a partial pick list"). Ticking a line off this sheet is the
+   * same gesture twice over: it is left off the printed paper, and it
+   * is left out of the count when the paper comes back. Which is the
+   * point — the alternative was typing a zero, and a zero here means
+   * "the client didn't get it", which rewrites the order and emails
+   * them a smaller quote.
+   */
+  const offSheet = rows.filter((r) => !r.onSheet)
+  const onSheetIds = rows.filter((r) => r.onSheet).map((r) => r.orderLineItemId)
+  /**
+   * Which lines the printer should give them, which flips once a
+   * partial sheet is already on file:
+   *
+   *   - setting up the first partial → the lines still ticked ON are
+   *     what is going, so print those;
+   *   - coming back for the second pull → the ones ticked ON were
+   *     counted last time, so what is left is the OFF set.
+   *
+   * Getting this backwards would hand the floor a sheet for gear that
+   * is already on the truck.
+   */
+  const pickedUpWhereWeLeftOff = !!draft.filed?.partial && offSheet.length > 0
+  const printIds = pickedUpWhereWeLeftOff
+    ? offSheet.map((r) => r.orderLineItemId)
+    : onSheetIds
+  const sheetLabel = pickedUpWhereWeLeftOff
+    ? `Print what's left (${offSheet.length})`
+    : offSheet.length
+      ? `Print these ${onSheetIds.length} line${onSheetIds.length === 1 ? '' : 's'}`
+      : 'Print a fresh sheet'
+  const sheetHref = offSheet.length
+    ? `/api/orders/${draft.orderId}/pick-list-pdf?lines=${printIds.join(',')}`
+    : `/api/orders/${draft.orderId}/pick-list-pdf`
 
   // Any edit reopens the question. Without this, a supervisor who hits
   // File, spots a wrong digit in the read-back, fixes it behind the panel
@@ -251,6 +293,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               actualQty: r.actualQty,
               substituteFor: (r.substituteFor ?? '').trim() || null,
               note: (r.note ?? '').trim() || null,
+              onSheet: r.onSheet,
             })),
             ...extras
               .filter((e) => e.description.trim())
@@ -273,6 +316,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         changes: data.changes ?? [],
         resend: data.resend ?? null,
         gear: data.gear ?? null,
+        partial: !!data.partial,
+        offSheet: data.offSheet ?? 0,
       })
       router.refresh()
     } catch (e) {
@@ -325,6 +370,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {/* Filing the inbound sheet is what closes the gear lane —
               say so, because the next question a supervisor has is
               whether anyone still has to mark the job returned. */}
+          {done.partial && (
+            <p className="mt-3 text-[14px] text-sky-800">
+              {done.offSheet} line{done.offSheet === 1 ? '' : 's'} weren&rsquo;t on this sheet — the
+              order is unchanged there, and the job stays open on the board until they
+              {isOut ? ' go out' : ' come back'}.
+            </p>
+          )}
           {done.gear?.jobReturned && (
             <p className="mt-3 text-[14px] text-emerald-700">
               Everything on this job is back — it&rsquo;s marked returned.
@@ -384,8 +436,17 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         {draft.filed && (
           <p className="text-[13px] text-zinc-600 mt-2 border border-zinc-200 bg-white rounded-lg px-3 py-2">
             Already filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}
-            {draft.filed.preppedBy ? ` · prepped by ${draft.filed.preppedBy}` : ''}. Submitting again
-            replaces it.
+            {draft.filed.preppedBy ? ` · prepped by ${draft.filed.preppedBy}` : ''}.{' '}
+            {draft.filed.partial ? (
+              <>
+                That was a <b>partial</b> {isOut ? 'pull' : 'count'} — the lines below marked
+                &ldquo;{isOut ? 'stays on the shelf' : 'still out'}&rdquo; are what is left. Print
+                those, then put them back and count them here; filing again keeps the counts already
+                on record.
+              </>
+            ) : (
+              'Submitting again replaces it.'
+            )}
           </p>
         )}
       </header>
@@ -452,13 +513,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               streams a PDF, and the client router has no business
               prefetching or intercepting it. */}
           <a
-            href={`/api/orders/${draft.orderId}/pick-list-pdf`}
+            href={sheetHref}
             target="_blank"
             rel="noreferrer"
             className="text-[13px] font-semibold text-zinc-700 hover:text-amber-600 inline-flex items-center gap-1.5"
           >
             <Printer size={14} aria-hidden />
-            Print a fresh sheet
+            {sheetLabel}
           </a>
         </div>
         {photo && !readWarn && (
@@ -498,7 +559,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           <span className="text-[12px] uppercase tracking-wide text-zinc-700 font-semibold">
             {isOut ? 'What actually went out' : 'What actually came back'}
           </span>
-          <span className="text-[12px] text-zinc-500">{rows.length} lines · pre-filled from the order</span>
+          <span className="text-[12px] text-zinc-500">
+            {offSheet.length
+              ? `${onSheetIds.length} of ${rows.length} lines on this pull`
+              : `${rows.length} lines · pre-filled from the order`}
+          </span>
         </div>
 
         {rows.length === 0 && (
@@ -506,7 +571,34 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         )}
 
         {rows.map((r) => {
-          const differs = r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim()
+          const differs =
+            r.onSheet && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+          // A line held back for a later pull: dimmed, no count, and no
+          // controls that would imply something happened to it.
+          if (!r.onSheet) {
+            return (
+              <div
+                key={r.orderLineItemId}
+                className="px-3 py-2.5 border-b border-zinc-200 last:border-b-0 bg-zinc-50 flex items-center gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-zinc-500 text-[16px] font-medium truncate line-through decoration-zinc-300">
+                    {r.description}
+                  </div>
+                  <div className="text-zinc-500 text-[13px] truncate">
+                    ordered {r.expectedQty} · stays on the shelf for a later pull
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => patch(r.orderLineItemId, { onSheet: true })}
+                  className="flex-none text-[12px] font-semibold text-zinc-700 hover:text-amber-600 border border-zinc-300 rounded-lg px-2.5 py-1.5"
+                >
+                  Put back
+                </button>
+              </div>
+            )
+          }
           return (
             <div
               key={r.orderLineItemId}
@@ -557,6 +649,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   className="text-[12px] font-semibold text-zinc-700 hover:text-amber-600 px-2 py-1.5 flex-none"
                 >
                   {r.open ? 'Hide' : 'Swap / note'}
+                </button>
+                {/* NOT a zero. Zero means the client didn't get it and
+                    rewrites the order; this means it hasn't gone yet. */}
+                <button
+                  type="button"
+                  title={isOut ? 'Leave this line off this pull' : 'This line has not come back yet'}
+                  onClick={() => patch(r.orderLineItemId, { onSheet: false, open: false })}
+                  className="text-[12px] font-semibold text-zinc-500 hover:text-amber-600 px-2 py-1.5 flex-none"
+                >
+                  {isOut ? 'Not this pull' : 'Still out'}
                 </button>
               </div>
 
@@ -673,6 +775,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 leading-relaxed"
         />
       </label>
+
+      {/* A partial pull is the one case where filing does LESS than it
+          looks like it does — say so plainly, both because the
+          supervisor should know the order is untouched and because
+          somebody still has to pull the rest. */}
+      {offSheet.length > 0 && !confirming && (
+        <p className="mb-3 text-[14px] text-sky-900 border border-sky-300 bg-sky-50 rounded-lg px-3 py-2">
+          <b>Partial {isOut ? 'pull' : 'return'}.</b> {offSheet.length} line
+          {offSheet.length === 1 ? ' is' : 's are'}{' '}
+          {isOut ? 'not on this sheet' : 'still out'} — {isOut ? 'they stay' : 'nothing is'} on the
+          order untouched, and this job stays open on the yard board until the rest{' '}
+          {isOut ? 'goes out' : 'comes back'}. Re-open this screen for the next{' '}
+          {isOut ? 'pull' : 'count'} and it picks up where this one stopped.
+        </p>
+      )}
 
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && !confirming && (

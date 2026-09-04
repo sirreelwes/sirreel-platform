@@ -161,7 +161,15 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       // the previous day west of Greenwich.
       ymd: d ? d.toISOString().slice(0, 10) : '',
       lineCount: o._count.lineItems,
-      filed: o.checkReports[0] ?? null,
+      filed: o.checkReports[0]
+        ? {
+            submittedAt: o.checkReports[0].submittedAt,
+            preppedBy: o.checkReports[0].preppedBy,
+            changedOrder: o.checkReports[0].changedOrder,
+            partial: o.checkReports[0].partial,
+            offSheet: o.checkReports[0].lines.length,
+          }
+        : null,
     }
   })
 }
@@ -199,6 +207,7 @@ export interface ReportDraft {
     preppedBy: string | null
     notes: string | null
     changedOrder: boolean
+    partial: boolean
     sheetPhotoUrl: string | null
   } | null
   preppedBy: string
@@ -238,11 +247,12 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         where: { edge },
         select: {
           submittedAt: true, preppedBy: true, notes: true, changedOrder: true,
-          sheetPhotoUrl: true,
+          partial: true, sheetPhotoUrl: true,
           lines: {
             select: {
               orderLineItemId: true, description: true, expectedQty: true,
               actualQty: true, change: true, substituteFor: true, note: true,
+              onSheet: true,
             },
           },
         },
@@ -276,6 +286,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           preppedBy: prior.preppedBy,
           notes: prior.notes,
           changedOrder: prior.changedOrder,
+          partial: prior.partial,
           sheetPhotoUrl: prior.sheetPhotoUrl,
         }
       : null,
@@ -293,6 +304,10 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         // exceptions. A blank column would make every line a decision.
         actualQty: p ? p.actualQty : li.quantity,
         change: p ? p.change : 'NONE',
+        // Re-opening a partial: the lines that stayed on the shelf come
+        // back still off the sheet, so the second pull starts where the
+        // first one stopped instead of re-counting what already went.
+        onSheet: p ? p.onSheet : true,
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,
       }
@@ -527,7 +542,14 @@ export async function settleGearAfterReport(
   orderId: string,
   edge: OrderCheckEdge,
   userId: string,
+  /** A partial sheet settles NOTHING: half the gear is still on the
+   *  shelf (OUT) or still on the truck (IN). Closing the pick list here
+   *  would tick the row green and, on the inbound edge, stamp the job
+   *  returned while cases are still out. */
+  partial = false,
 ): Promise<GearSettleResult> {
+  if (partial) return { pickListAdvanced: false, jobReturned: false }
+
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: { jobId: true },

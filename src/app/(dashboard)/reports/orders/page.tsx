@@ -136,7 +136,14 @@ function Lane({
                   </div>
 
                   {r.filed ? (
-                    r.filed.changedOrder ? (
+                    /* A partial sheet is NOT a filed sheet — the rest of
+                       the order still has to move, and this row is where
+                       the supervisor comes back to finish it. */
+                    r.filed.partial ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-800 border border-sky-300 bg-sky-50 rounded-md px-2 py-1">
+                        Partial · {r.filed.offSheet} left
+                      </span>
+                    ) : r.filed.changedOrder ? (
                       <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-900 border border-amber-300 bg-amber-50 rounded-md px-2 py-1">
                         <AlertTriangle size={12} aria-hidden />
                         Filed · order changed

@@ -82,6 +82,15 @@ export interface PickListDocumentProps {
   pickDate: Date | string | null
   lines: PickListLine[]
   generatedAt?: Date
+  /**
+   * A pull that covers only part of the order (Wes, 2026-09-04: "we
+   * should have the ability to send a partial pick list"). Holds the
+   * count of lines LEFT OFF this sheet — the paper has to say so in
+   * ink, because a sheet that looks complete is how the rest of an
+   * order gets counted as "did not send" when it comes back to be
+   * typed in.
+   */
+  omittedLineCount?: number
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -207,6 +216,9 @@ const styles = StyleSheet.create({
   titleCol: { width: '36%', alignItems: 'center' },
   docTitle: { fontFamily: 'Helvetica-Bold', fontSize: 24, letterSpacing: 1.5, lineHeight: 1 },
   titleSub: { fontSize: 9, color: C.muted, marginTop: 8 },
+  // Loud on purpose: this is the one line that stops a half-order from
+  // reading as the whole order.
+  partialNote: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: C.ink, marginTop: 3 },
   barcodeCol: { width: '28%', alignItems: 'flex-end' },
   barcodeLabel: { fontFamily: 'Helvetica-Bold', fontSize: 9, marginBottom: 3 },
   barcodeNum: { fontSize: 9, letterSpacing: 3, marginTop: 2 },
@@ -385,8 +397,16 @@ export function PickListDocument(props: PickListDocumentProps) {
             </View>
           </View>
           <View style={styles.titleCol}>
-            <Text style={styles.docTitle}>PICK LIST</Text>
+            <Text style={styles.docTitle}>
+              {props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST'}
+            </Text>
             <Text style={styles.titleSub}>No: {props.orderNumber}</Text>
+            {!!props.omittedLineCount && (
+              <Text style={styles.partialNote}>
+                {props.lines.length} of {props.lines.length + props.omittedLineCount} lines ·{' '}
+                {props.omittedLineCount} not on this pull
+              </Text>
+            )}
           </View>
           <View style={styles.barcodeCol}>
             <Text style={styles.barcodeLabel}>Order No:</Text>

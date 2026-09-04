@@ -29,6 +29,10 @@
 import { prisma } from '@/lib/prisma'
 import type { PickListStatus } from '@prisma/client'
 import { companyLabel } from '@/lib/scheduling/infoGaps'
+// One list of "alive" statuses shared with the check-report surface —
+// the board and /reports/orders must not disagree about which sheets
+// exist.
+import { REPORTABLE_ORDER_STATUSES } from '@/lib/orders/checkReports'
 import { fleetMovementsOn, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
 
 export type YardEdge = 'out' | 'back'
@@ -65,6 +69,12 @@ export interface YardRow {
    * document to hand the floor. Null everywhere else.
    */
   printHref: string | null
+  /**
+   * A short qualifier on the row — currently only "Quote", for gear
+   * whose order has not been booked. Null on everything else; this is
+   * not a second status, it is a caption on the document.
+   */
+  chip: string | null
   /** The verb on the button. One action per row, never a menu. */
   action: string
   state: YardState
@@ -98,14 +108,27 @@ export interface YardBoard {
   back: YardGroup[]
 }
 
-// A PickList only belongs on the board once its order is actually
-// booked. syncPickListOnLineAdd files a list on every warehouse line
-// add "regardless of order status", so quotes grow lists too — on
-// 2026-09-01, 19 of 20 open lists belonged to orders nobody had booked.
-// Same guard as /api/picklists; keep the two in step.
-const BOOKED_ORDER_STATES = [
-  'BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED',
-] as const
+/**
+ * Which orders' gear belongs on the day board.
+ *
+ * This used to be booked-and-later, because syncPickListOnLineAdd files
+ * a list on every warehouse line add regardless of order status and
+ * quotes therefore grow lists too — on 2026-09-01, 19 of 20 OPEN lists
+ * belonged to orders nobody had booked.
+ *
+ * Wes, 2026-09-04: "We can widen to quotes." The flood that guard was
+ * built against was a list of every open pick list; this board is a
+ * single DAY, and a quote whose gear is going out this morning is real
+ * work whatever the status says. It is the same document the supervisor
+ * is holding, and /reports/orders already refuses to hide it — so the
+ * rule is now the same on both surfaces: alive, not far along. The row
+ * says "Quote" so nobody has to guess.
+ *
+ * Kept out by the where-clause below rather than by omission here:
+ * archived orders, and quoteStatus LOST (a dead quote is not going
+ * anywhere — different status axis, needs its own clause).
+ */
+const BOARD_ORDER_STATES = [...REPORTABLE_ORDER_STATUSES] as const
 
 /** Pick statuses that mean "this line has left the shelf". */
 const OUTBOUND_DONE = new Set(['PICKED', 'STAGED', 'LOADED', 'RETURNED', 'SHORT'])
@@ -135,6 +158,13 @@ export interface GearList {
   inFiled: boolean
   /** Lines the filed check-IN sheet recorded as short or missing. */
   reportShort: number
+  /** Lines a PARTIAL sheet left off — still to pull / still to come
+   *  back. Zero when the filed sheet covered the whole order. */
+  outLeftOffSheet: number
+  inLeftOffSheet: number
+  /** The order is still in quote form — say so on the row rather than
+   *  hiding it. The paperwork on the truck routinely is. */
+  preBooked: boolean
 }
 
 async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
@@ -142,7 +172,9 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
     where: {
       status: { not: 'CANCELLED' },
       order: {
-        status: { in: [...BOOKED_ORDER_STATES] },
+        status: { in: [...BOARD_ORDER_STATES] },
+        quoteStatus: { not: 'LOST' },
+        archivedAt: null,
         ...(edge === 'out' ? { startDate: dbDate } : { endDate: dbDate }),
       },
     },
@@ -154,6 +186,7 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
         select: {
           id: true,
           orderNumber: true,
+          status: true,
           company: { select: { name: true } },
           job: { select: { id: true, name: true } },
         },
@@ -170,15 +203,28 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
   const reports = rows.length
     ? await prisma.orderCheckReport.findMany({
         where: { orderId: { in: [...new Set(rows.map((r) => r.order.id))] } },
-        select: { orderId: true, edge: true, lines: { select: { change: true } } },
+        select: {
+          orderId: true, edge: true, partial: true,
+          lines: { select: { change: true, onSheet: true } },
+        },
       })
     : []
-  const filed = new Map<string, { out: boolean; in: boolean; shortIn: number }>()
+  const filed = new Map<
+    string,
+    { out: boolean; in: boolean; shortIn: number; outLeft: number; inLeft: number }
+  >()
   for (const rep of reports) {
-    const cur = filed.get(rep.orderId) ?? { out: false, in: false, shortIn: 0 }
-    if (rep.edge === 'OUT') cur.out = true
-    else {
+    const cur = filed.get(rep.orderId)
+      ?? { out: false, in: false, shortIn: 0, outLeft: 0, inLeft: 0 }
+    // A partial sheet leaves the row OPEN — the count that matters is
+    // how many lines it did not speak to.
+    const left = rep.partial ? rep.lines.filter((l) => !l.onSheet).length : 0
+    if (rep.edge === 'OUT') {
+      cur.out = true
+      cur.outLeft = left
+    } else {
       cur.in = true
+      cur.inLeft = left
       // A case that did not come back is a shortfall, and the board
       // must not fold it behind a green tick — same rule the scan
       // session's SHORT status gets.
@@ -215,9 +261,15 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
       outFiled: f?.out ?? false,
       inFiled: f?.in ?? false,
       reportShort: f?.shortIn ?? 0,
+      outLeftOffSheet: f?.outLeft ?? 0,
+      inLeftOffSheet: f?.inLeft ?? 0,
+      preBooked: PRE_BOOKED.has(r.order.status),
     }
   })
 }
+
+/** Statuses that mean the paperwork is still a quote. */
+const PRE_BOOKED: ReadonlySet<string> = new Set(['DRAFT', 'QUOTE_SENT', 'APPROVED'])
 
 const pct = (done: number, total: number) => (total > 0 ? Math.round((done / total) * 100) : 0)
 
@@ -241,6 +293,7 @@ export function gearRow(g: GearList, edge: YardEdge): YardRow {
     title: `${g.total} item${g.total === 1 ? '' : 's'}`,
     detail: g.orderNumber,
     time: null,
+    chip: g.preBooked ? 'Quote' : null,
     href: `/reports/orders/${g.orderId}?edge=${edge === 'out' ? 'OUT' : 'IN'}`,
     // The sheet the floor actually carries. Kept on the row because
     // the paper loop starts here: print it, mark it up, type it back in.
@@ -249,6 +302,17 @@ export function gearRow(g: GearList, edge: YardEdge): YardRow {
 
   if (edge === 'out') {
     if (g.outFiled) {
+      // A partial pull is still work: the rest of the order is on the
+      // shelf, and the row must say so rather than tick green.
+      if (g.outLeftOffSheet > 0) {
+        return {
+          ...base,
+          action: 'Pull the rest',
+          state: 'doing',
+          stateLabel: `Partial — ${g.outLeftOffSheet} line${g.outLeftOffSheet === 1 ? '' : 's'} left`,
+          progress: pct(g.total - g.outLeftOffSheet, g.total),
+        }
+      }
       return {
         ...base,
         action: 'View sheet',
@@ -279,6 +343,15 @@ export function gearRow(g: GearList, edge: YardEdge): YardRow {
   // Inbound. A list that never made it out the door still shows up on
   // its return day — better an odd-looking row than a silent gap.
   if (g.inFiled) {
+    if (g.inLeftOffSheet > 0) {
+      return {
+        ...base,
+        action: 'Count the rest',
+        state: 'doing',
+        stateLabel: `Partial — ${g.inLeftOffSheet} line${g.inLeftOffSheet === 1 ? '' : 's'} still out`,
+        progress: pct(g.total - g.inLeftOffSheet, g.total),
+      }
+    }
     return {
       ...base,
       action: 'View sheet',
@@ -372,6 +445,7 @@ export function vehicleEntry(m: FleetMovement, edge: YardEdge): YardEntry {
       href: edge === 'out' ? `/fleet/inspection/${m.assignmentId}` : `/fleet/return/${m.assignmentId}`,
       // A walkaround is done on the screen; there is no sheet to print.
       printHref: null,
+      chip: null,
       action: edge === 'out' ? (inspected ? 'View' : 'Inspect') : received ? 'View' : 'Check in',
       state: (edge === 'out' ? inspected : received) ? 'done' : 'todo',
       stateLabel:
