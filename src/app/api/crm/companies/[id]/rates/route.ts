@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { canEditCompanyTerms } from '@/lib/portal/companyTermsEditors'
 import { getPermissions } from '@/lib/permissions'
 import { parseMoney } from '@/lib/pricing/resolveRate'
 
@@ -33,8 +34,10 @@ async function gate(write: boolean) {
   if (!user) return { error: NextResponse.json({ error: 'unauthenticated' }, { status: 401 }) }
   const perms = getPermissions({ role: user.role, salesOnly: user.salesOnly, email: user.email })
   if (!perms.seePricing) return { error: NextResponse.json({ error: 'forbidden' }, { status: 403 }) }
-  if (write && user.role !== 'ADMIN') {
-    return { error: NextResponse.json({ error: 'forbidden', reason: 'Setting a client rate is admin-only.' }, { status: 403 }) }
+  // Wes 2026-09-04: "Only Wes and Jose and Dani can make changes to terms"
+  // — a named list, not a role, because Jose is an AGENT.
+  if (write && !canEditCompanyTerms(user.email)) {
+    return { error: NextResponse.json({ error: 'forbidden', reason: 'Client terms are changed by Wes, Dani or Jose.' }, { status: 403 }) }
   }
   return { user }
 }

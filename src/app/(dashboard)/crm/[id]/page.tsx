@@ -10,6 +10,7 @@ import { NegotiatedRatesPanel } from "@/components/crm/NegotiatedRatesPanel";
 import { AnnualAgreementPanel } from "@/components/crm/AnnualAgreementPanel";
 import { CompanyPortalAccessPanel } from "@/components/crm/CompanyPortalAccessPanel";
 import { CompanyDiscountsPanel } from "@/components/crm/CompanyDiscountsPanel";
+import { canEditCompanyTerms } from "@/lib/portal/companyTermsEditors";
 import { CompanyCardsPanel } from "@/components/crm/CompanyCardsPanel";
 
 type Activity = {
@@ -861,7 +862,7 @@ export default function CompanyDetailPage() {
             mostly FOR. */}
         <CompanyDiscountsPanel
           companyId={company.id}
-          canEdit={(session?.user as any)?.role === 'ADMIN'}
+          canEdit={canEditCompanyTerms(session?.user?.email)}
         />
 
         {/* Who at the client can open that portal, and their logo. */}
@@ -869,7 +870,7 @@ export default function CompanyDetailPage() {
           companyId={company.id}
           companyName={company.name}
           hasLogo={!!company.logoUrl}
-          canEdit={(session?.user as any)?.role === 'ADMIN'}
+          canEdit={canEditCompanyTerms(session?.user?.email)}
         />
       </div>
 

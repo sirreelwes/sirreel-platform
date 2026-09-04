@@ -1,45 +1,57 @@
 /**
- * /crm/portals — every client with an account portal, in one place.
+ * /crm/portals — Company Portals: every client with an account portal.
  *
- * Wes 2026-09-04: "Is there a tab somewhere for this portal?" There
- * wasn't — access lived only as a panel at the bottom of each company's
- * CRM page, so "who has one, and have we told them" meant opening
- * companies one at a time. This is the tab.
+ * Wes 2026-09-04: "Is there a tab somewhere for this portal?" — there
+ * wasn't. Then: "Rename … 'Company Portals' and make each one start
+ * collapsed with basically a word mark and a couple of icons 'Annual
+ * Agreement' (green showing on file) 'COI' (maybe red if expired) and
+ * then drop down to open and inspect. Only Wes and Jose and Dani can make
+ * changes to terms etc."
  *
- * One row per company with at least one grant (live or revoked). The
- * columns are the questions a rep actually asks: who's on it, have they
- * been invited, have they ever opened it, is it branded, what rates are
- * they on. Every row links to the company page, where the editing lives —
- * and — Wes 2026-09-04: "The tab for me should allow me to change the
- * terms for each dept and discount etc" — the same rates and access
- * panels the company page carries, inline, so the terms are edited from
- * here without a detour.
- *
- * Server component on the light staff shell (lt-* tokens).
+ * One collapsed row per company with at least one grant. The chips answer
+ * the two questions a glance should: is the paper in place, and is the
+ * insurance current. Open a row for the rates and access panels — the
+ * same components the company page carries, so the terms are edited from
+ * here without a detour. Editing is gated by the named allowlist
+ * (companyTermsEditors.ts), enforced on the write routes as well.
  */
 
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2, ImageIcon, Percent } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { COMPANY_PORTAL_ROLE_LABEL } from '@/lib/portal/companyPortal'
+import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
+import { canEditCompanyTerms } from '@/lib/portal/companyTermsEditors'
 import { CompanyDiscountsPanel } from '@/components/crm/CompanyDiscountsPanel'
 import { CompanyPortalAccessPanel } from '@/components/crm/CompanyPortalAccessPanel'
+import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalRow'
 
 export const dynamic = 'force-dynamic'
 
-function fmt(d: Date | null): string {
-  if (!d) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+function fmtDay(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
-export default async function AccountPortalsPage() {
+/**
+ * COI chip. `Company.coiOnFile` + `coiExpiry` are the account-level facts
+ * (the annual cert that carries forward to jobs). Expired reads RED even
+ * when the flag is still on — a lapsed cert is the thing to notice.
+ */
+function coiChip(coiOnFile: boolean, coiExpiry: Date | null, now: Date): { tone: ChipTone; label: string } {
+  if (coiExpiry && coiExpiry.getTime() < now.getTime()) {
+    return { tone: 'bad', label: `COI expired ${fmtDay(coiExpiry)}` }
+  }
+  if (coiOnFile && coiExpiry) return { tone: 'good', label: `COI through ${fmtDay(coiExpiry)}` }
+  if (coiOnFile) return { tone: 'good', label: 'COI on file' }
+  return { tone: 'neutral', label: 'COI per job' }
+}
+
+export default async function CompanyPortalsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) redirect('/login')
-  // Same gate the CRM company page uses for these panels.
-  const canEdit = (session.user as { role?: string }).role === 'ADMIN'
+  const canEdit = canEditCompanyTerms(session.user.email)
+  const now = new Date()
 
   const companies = await prisma.company.findMany({
     where: { portalAccesses: { some: {} } },
@@ -48,135 +60,73 @@ export default async function AccountPortalsPage() {
       id: true,
       name: true,
       logoUrl: true,
+      coiOnFile: true,
+      coiExpiry: true,
       portalAccesses: {
-        orderBy: [{ revokedAt: 'asc' }, { grantedAt: 'desc' }],
-        select: {
-          id: true,
-          role: true,
-          title: true,
-          invitedAt: true,
-          lastAccessedAt: true,
-          accessCount: true,
-          revokedAt: true,
-          person: { select: { firstName: true, lastName: true, email: true } },
-        },
-      },
-      discounts: {
-        where: { isActive: true },
-        orderBy: [{ sortOrder: 'asc' }, { percentOff: 'desc' }],
-        select: { percentOff: true, label: true },
+        where: { revokedAt: null },
+        select: { id: true, invitedAt: true },
       },
     },
   })
+
+  const rows = await Promise.all(
+    companies.map(async (c) => {
+      const annual = await findCompanyAnnualCoverage(c.id)
+      return {
+        ...c,
+        annualChip: annual
+          ? { tone: 'good' as ChipTone, label: annual.expiryDate ? `Annual through ${fmtDay(annual.expiryDate)}` : 'Annual agreement' }
+          : { tone: 'neutral' as ChipTone, label: 'Per-job agreement' },
+        coiChip: coiChip(c.coiOnFile, c.coiExpiry, now),
+        peopleCount: c.portalAccesses.length,
+        uninvited: c.portalAccesses.filter((a) => !a.invitedAt).length,
+      }
+    }),
+  )
 
   return (
     <div className="max-w-[1100px] mx-auto">
       <div className="flex items-end justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-lt-fg">Account portals</h1>
+          <h1 className="text-2xl font-semibold text-lt-fg">Company Portals</h1>
           <p className="text-sm text-lt-fg2 mt-1 max-w-[70ch]">
-            Clients whose executives can see their whole account — every show, invoices,
-            agreements and standing rates. Grant access, upload a logo or enter rates from the
-            company&apos;s page.
+            Clients whose executives see their whole account — shows, invoices, agreements and
+            standing deals. Open a company to inspect or change its terms.
+            {!canEdit && ' Changes here are made by Wes, Dani or Jose.'}
           </p>
         </div>
-        <Link href="/crm" className="text-sm text-lt-fg2 hover:text-lt-fg shrink-0">
-          All clients →
-        </Link>
       </div>
 
-      {companies.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
           <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
           <p className="text-sm text-lt-fg2">
-            No client has account access yet. Open a company under Clients and use
-            &ldquo;Account portal access&rdquo; to add their executives.
+            No client has a portal yet. Open a company under Clients and use &ldquo;Account portal
+            access&rdquo; to add their executives.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {companies.map((c) => {
-            const live = c.portalAccesses.filter((a) => !a.revokedAt)
-            const uninvited = live.filter((a) => !a.invitedAt).length
-            const opened = live.filter((a) => a.lastAccessedAt).length
-            return (
-              <details key={c.id} open className="group bg-lt-card border border-lt-hairline rounded-xl">
-                <summary className="list-none cursor-pointer p-4 [&::-webkit-details-marker]:hidden">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-lt-fg truncate">{c.name}</span>
-                      {c.logoUrl ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">
-                          <ImageIcon className="w-3 h-3" /> logo
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg">
-                          no logo
-                        </span>
-                      )}
-                      {c.discounts.length > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg">
-                          <Percent className="w-3 h-3" />
-                          {c.discounts.map((d) => `${d.percentOff}% ${d.label}`).join(' · ')}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-2 space-y-1">
-                      {live.length === 0 && (
-                        <div className="text-xs text-lt-fg3">All access revoked.</div>
-                      )}
-                      {live.map((a) => (
-                        <div key={a.id} className="text-xs text-lt-fg2 flex items-center gap-2 flex-wrap">
-                          <span className="text-lt-fg font-medium">
-                            {a.person.firstName} {a.person.lastName}
-                          </span>
-                          <span className="text-lt-fg3">
-                            {COMPANY_PORTAL_ROLE_LABEL[a.role]}
-                            {a.title ? ` · ${a.title}` : ''}
-                          </span>
-                          <span className="text-lt-fg3">·</span>
-                          <span>{a.person.email}</span>
-                          <span className="text-lt-fg3">·</span>
-                          <span className={a.invitedAt ? '' : 'text-chip-warn-fg'}>
-                            {a.invitedAt ? `invited ${fmt(a.invitedAt)}` : 'not invited'}
-                          </span>
-                          <span className="text-lt-fg3">·</span>
-                          <span>
-                            {a.lastAccessedAt
-                              ? `opened ${fmt(a.lastAccessedAt)} (${a.accessCount}×)`
-                              : 'never opened'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 text-right text-xs text-lt-fg3">
-                    <div className="text-lt-fg text-sm font-medium">
-                      {live.length} {live.length === 1 ? 'person' : 'people'}
-                    </div>
-                    {uninvited > 0 && <div className="text-chip-warn-fg">{uninvited} to invite</div>}
-                    <div>{opened} opened</div>
-                    <Link href={`/crm/${c.id}`} className="block mt-1 text-lt-fg2 hover:text-lt-fg underline">
-                      company page
-                    </Link>
-                  </div>
-                </div>
-                </summary>
-                <div className="px-4 pb-4 space-y-4 border-t border-lt-hairline pt-4">
-                  <CompanyDiscountsPanel companyId={c.id} canEdit={canEdit} />
-                  <CompanyPortalAccessPanel
-                    companyId={c.id}
-                    companyName={c.name}
-                    hasLogo={!!c.logoUrl}
-                    canEdit={canEdit}
-                  />
-                </div>
-              </details>
-            )
-          })}
+        <div className="space-y-2">
+          {rows.map((c) => (
+            <CompanyPortalRow
+              key={c.id}
+              companyId={c.id}
+              name={c.name}
+              hasLogo={!!c.logoUrl}
+              annual={c.annualChip}
+              coi={c.coiChip}
+              peopleCount={c.peopleCount}
+              uninvited={c.uninvited}
+            >
+              <CompanyDiscountsPanel companyId={c.id} canEdit={canEdit} />
+              <CompanyPortalAccessPanel
+                companyId={c.id}
+                companyName={c.name}
+                hasLogo={!!c.logoUrl}
+                canEdit={canEdit}
+              />
+            </CompanyPortalRow>
+          ))}
         </div>
       )}
     </div>

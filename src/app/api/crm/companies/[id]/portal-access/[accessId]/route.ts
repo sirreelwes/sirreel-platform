@@ -17,6 +17,7 @@ import { getServerSession } from 'next-auth'
 import type { CompanyPortalRole } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderCompanyPortalInvite } from '@/lib/email/templates/companyPortal'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -44,8 +45,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; accessId: string } },
 ) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const g = await requireCompanyTermsEditor()
+  if ('error' in g) return g.error
+  const user = g.user
 
   const access = await prisma.companyPortalAccess.findFirst({
     where: { id: params.accessId, companyId: params.id },
@@ -122,8 +124,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string; accessId: string } },
 ) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const g = await requireCompanyTermsEditor()
+  if ('error' in g) return g.error
+  const user = g.user
 
   const access = await prisma.companyPortalAccess.findFirst({
     where: { id: params.accessId, companyId: params.id },

@@ -575,7 +575,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Account portals', icon: 'Building2', href: '/crm/portals' },
+          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
           // Billing reads the OTHER end of this one: what sales did (or
           // didn't) do before the balance landed on Collections.
           { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
@@ -618,7 +618,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Account portals', icon: 'Building2', href: '/crm/portals' },
+          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
           // The how-to sits with the work it describes (same rule as
           // "How to collect"): this is the flow that replaces emailing
           // the booking package, so it belongs in the sales list the
@@ -702,7 +702,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // action is sending a client an estimate.
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Account portals', icon: 'Building2', href: '/crm/portals' },
+          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
         // Phase 3 composer. Safe to expose before the sending domain
         // exists — the guard closes every send and the page says so.
         { id: 'outreach', label: 'Outreach', icon: 'Send', href: '/outreach' },

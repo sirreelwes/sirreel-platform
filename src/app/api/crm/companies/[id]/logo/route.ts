@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
 
@@ -64,8 +65,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const g = await requireCompanyTermsEditor()
+  if ('error' in g) return g.error
+  const user = g.user
 
   const company = await prisma.company.findUnique({
     where: { id: params.id },
@@ -115,8 +117,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser()
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const g = await requireCompanyTermsEditor()
+  if ('error' in g) return g.error
+  const user = g.user
 
   await prisma.company
     .update({
