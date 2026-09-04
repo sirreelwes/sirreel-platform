@@ -109,6 +109,10 @@ interface FinalInvoice {
   remittanceRef: string | null
   remittanceNote: string | null
   remittanceBy: string | null
+  /** The document the client sent — advice, wire confirmation, screenshot. */
+  remittanceProofUrl: string | null
+  remittanceProofKey: string | null
+  remittanceProofName: string | null
   /** RW mirror balance for the linked invoice — 0 on a READY row means the
    *  money likely already landed at the bank. */
   rwRemaining: number | null
@@ -257,6 +261,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [remitPicker, setRemitPicker] = useState<string | null>(null)
   const [remitRef, setRemitRef] = useState('')
   const [remitting, setRemitting] = useState(false)
+  /** The uploaded proof waiting to be logged with the method. */
+  const [remitProof, setRemitProof] = useState<
+    { url: string; key: string; name: string } | null
+  >(null)
+  const [remitUploading, setRemitUploading] = useState(false)
   const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [reversing, setReversing] = useState<string | null>(null)
@@ -392,24 +401,61 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // and in that gap this row is indistinguishable from a client who never
   // replied (Ana, 2026-09-04). Deliberately does not collect the invoice —
   // the money still has to arrive.
+  // The proof document itself. Uploaded first, logged with the method — the
+  // same two-step the charge panel uses for an invoice PDF, and it means a
+  // failed upload never leaves a half-written remittance behind.
+  const uploadRemittanceProof = useCallback(async (file: File) => {
+    setRemitUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('kind', 'remittance')
+      const r = await fetch('/api/collections/upload', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (d.ok) setRemitProof({ url: d.url ?? d.pdfUrl, key: d.key ?? d.pdfKey, name: d.name ?? file.name })
+      else setResult({ ok: false, message: d.error || 'Upload failed.' })
+    } catch {
+      setResult({ ok: false, message: 'Upload failed — network error.' })
+    } finally {
+      setRemitUploading(false)
+    }
+  }, [])
+
   const logRemittance = useCallback(
-    async (fv: FinalInvoice, via: string, ref: string) => {
+    async (
+      fv: FinalInvoice,
+      via: string,
+      ref: string,
+      proof: { url: string; key: string; name: string } | null,
+    ) => {
       if (remitting) return
       setRemitting(true)
       try {
         const r = await fetch(`/api/collections/final-invoices/${fv.id}/remittance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ via, ref: ref.trim() || undefined }),
+          body: JSON.stringify({
+            via,
+            ref: ref.trim() || undefined,
+            // A POST replaces the record wholesale, so an existing file has to
+            // be sent back to survive a re-log. The form seeds it for exactly
+            // that reason.
+            proofUrl: proof?.url,
+            proofKey: proof?.key,
+            proofName: proof?.name,
+          }),
         })
         const d = await r.json()
         if (d.ok) {
           setResult({
             ok: true,
-            message: `Proof of remittance logged (${via.toLowerCase()}) — still in the queue until the money lands.`,
+            message: `Proof of remittance logged (${via.toLowerCase()})${
+              proof ? ` with ${proof.name}` : ''
+            } — still in the queue until the money lands.`,
           })
           setRemitPicker(null)
           setRemitRef('')
+          setRemitProof(null)
           loadFinals()
         } else {
           setResult({ ok: false, message: d.error || 'Could not log the remittance.' })
@@ -1058,6 +1104,18 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         })}
                       </span>
                     )}
+                    {fv.remittanceAt && fv.remittanceProofUrl && (
+                      <a
+                        href={fv.remittanceProofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-amber-700 hover:text-amber-800 underline max-w-[200px] truncate"
+                        title={fv.remittanceProofName ?? 'Open the remittance proof'}
+                      >
+                        {fv.remittanceProofName || 'proof document'}
+                      </a>
+                    )}
                     {/* Payment-behavior chip. Latency shows once observed
                         (n=sample size); until then, current exposure. */}
                     {fv.client && fv.client.avgDaysToPay !== null && (
@@ -1106,12 +1164,41 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           onChange={(e) => setRemitRef(e.target.value)}
                           aria-label="Remittance reference"
                         />
+                        {/* The advice itself. Whatever their AP department
+                            could export — a PDF or a screenshot. */}
+                        {remitProof ? (
+                          <span className="text-[11px] text-emerald-700 max-w-[160px] truncate">
+                            {remitProof.name}
+                            <button
+                              type="button"
+                              onClick={() => setRemitProof(null)}
+                              className="ml-1 text-zinc-500 hover:text-zinc-700"
+                              title="Remove the attached file"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ) : (
+                          <label className="text-[11px] px-1.5 py-0.5 rounded border border-zinc-300 text-zinc-700 hover:bg-zinc-100 cursor-pointer">
+                            {remitUploading ? 'Uploading…' : '+ file'}
+                            <input
+                              type="file"
+                              accept="application/pdf,image/*"
+                              className="hidden"
+                              onChange={(e) =>
+                                e.target.files?.[0] &&
+                                void uploadRemittanceProof(e.target.files[0])
+                              }
+                            />
+                          </label>
+                        )}
                         {['ACH', 'WIRE', 'ZELLE', 'CHECK', 'OTHER'].map((via) => (
                           <button
                             key={via}
                             type="button"
-                            onClick={() => void logRemittance(fv, via, remitRef)}
-                            className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 border border-sky-300 text-sky-800 hover:bg-sky-100"
+                            disabled={remitUploading}
+                            onClick={() => void logRemittance(fv, via, remitRef, remitProof)}
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 border border-sky-300 text-sky-800 hover:bg-sky-100 disabled:opacity-50"
                           >
                             {remitting ? '…' : via}
                           </button>
@@ -1121,6 +1208,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           onClick={() => {
                             setRemitPicker(null)
                             setRemitRef('')
+                            setRemitProof(null)
                           }}
                           className="text-[11px] px-1.5 py-0.5 text-zinc-600 hover:text-zinc-700"
                         >
@@ -1128,17 +1216,47 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         </button>
                       </span>
                     ) : fv.remittanceAt ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void clearRemittance(fv)
-                        }}
-                        className="text-xs px-2 py-0.5 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100 shrink-0"
-                        title="Remove the proof of remittance — it was wrong, or it never arrived"
-                      >
-                        Clear proof
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            // Seeded from what is already logged, so re-saving
+                            // to add the file doesn't drop the reference — or
+                            // the file, which a POST would otherwise replace.
+                            setRemitPicker(fv.id)
+                            setRemitRef(fv.remittanceRef ?? '')
+                            setRemitProof(
+                              fv.remittanceProofUrl
+                                ? {
+                                    url: fv.remittanceProofUrl,
+                                    key: fv.remittanceProofKey ?? '',
+                                    name: fv.remittanceProofName ?? 'proof',
+                                  }
+                                : null,
+                            )
+                          }}
+                          className="text-xs px-2 py-0.5 rounded border border-sky-200 text-sky-800 hover:bg-sky-50 shrink-0"
+                          title={
+                            fv.remittanceProofUrl
+                              ? 'Change the logged remittance or its file'
+                              : 'Attach the advice the client sent, or fix the details'
+                          }
+                        >
+                          {fv.remittanceProofUrl ? 'Edit proof' : 'Attach file'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void clearRemittance(fv)
+                          }}
+                          className="text-xs px-2 py-0.5 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100 shrink-0"
+                          title="Remove the proof of remittance — it was wrong, or it never arrived"
+                        >
+                          Clear proof
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="button"
@@ -1146,6 +1264,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           e.stopPropagation()
                           setRemitPicker(fv.id)
                           setRemitRef('')
+                          setRemitProof(null)
                         }}
                         className="text-xs px-2 py-0.5 rounded border border-sky-200 text-sky-800 hover:bg-sky-50 shrink-0"
                         title="The client sent proof they have paid — an ACH advice, a wire confirmation, a check number. Records the claim; the money still has to land."

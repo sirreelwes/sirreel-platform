@@ -7795,6 +7795,16 @@ model JobFinalInvoice {
   remittanceRef  String?   @map("remittance_ref")
   remittanceNote String?   @map("remittance_note")
   remittanceById String?   @map("remittance_by_id")
+  /// The document the client actually sent — an ACH advice, a wire
+  /// confirmation, a screenshot of their AP portal. Private blob, same store
+  /// as the invoice PDF above. Ana asked for the file itself because "they
+  /// said they sent it" and a paid remittance advice are different facts, and
+  /// only one of them survives a dispute.
+  remittanceProofUrl  String? @map("remittance_proof_url")
+  remittanceProofKey  String? @map("remittance_proof_key")
+  /// The operator-facing filename, so the link reads as a document rather
+  /// than a uuid.
+  remittanceProofName String? @map("remittance_proof_name")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

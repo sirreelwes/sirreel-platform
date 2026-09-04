@@ -155,6 +155,12 @@ export async function GET() {
       remittanceRef: r.remittanceRef,
       remittanceNote: r.remittanceNote,
       remittanceBy: r.remittanceById ? (names.get(r.remittanceById) ?? null) : null,
+      // The document the client actually sent, when there is one.
+      remittanceProofUrl: r.remittanceProofUrl,
+      // The blob key travels too — a re-log has to send the file back to keep
+      // it, and this is a collections-gated staff route.
+      remittanceProofKey: r.remittanceProofKey,
+      remittanceProofName: r.remittanceProofName,
       rwRemaining: r.rwInvoiceId ? (remaining.get(r.rwInvoiceId) ?? null) : null,
       ageDays: Math.floor((Date.now() - r.uploadedAt.getTime()) / 86_400_000),
       jobId: r.job.id,
@@ -360,6 +366,9 @@ function selectShape() {
     remittanceRef: true,
     remittanceNote: true,
     remittanceById: true,
+    remittanceProofUrl: true,
+    remittanceProofKey: true,
+    remittanceProofName: true,
     job: {
       select: {
         id: true,
