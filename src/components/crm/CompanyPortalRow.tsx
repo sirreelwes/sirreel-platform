@@ -56,11 +56,15 @@ export function CompanyPortalRow({
           setEverOpened(true)
         }}
         aria-expanded={open}
-        className="w-full text-left p-4 flex items-center gap-4"
+        className="w-full text-left px-3 py-2.5 flex items-center gap-3"
       >
-        <ChevronRight
-          className={`w-4 h-4 text-lt-fg3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
+        {/* The arrow is the affordance — a bordered button, not a bare
+            glyph, so it reads as "press me" (Wes 2026-09-04). */}
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-lt-hairline bg-lt-inner shrink-0">
+          <ChevronRight
+            className={`w-4 h-4 text-lt-fg2 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+        </span>
 
         {/* The wordmark — theirs if filed, else the name in the display face. */}
         <div className="min-w-0 flex-1 flex items-center">
@@ -69,10 +73,10 @@ export function CompanyPortalRow({
             <img
               src={`/api/crm/companies/${companyId}/logo`}
               alt={name}
-              className="block h-7 w-auto max-w-[200px] object-contain object-left"
+              className="block h-6 w-auto max-w-[180px] object-contain object-left"
             />
           ) : (
-            <span className="font-display text-[18px] leading-none text-lt-fg tracking-tight truncate">
+            <span className="font-display text-[16px] leading-none text-lt-fg tracking-tight truncate">
               {name}
             </span>
           )}
@@ -104,7 +108,7 @@ export function CompanyPortalRow({
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-4 border-t border-lt-hairline pt-4">
+        <div className="px-3 pb-3 space-y-3 border-t border-lt-hairline pt-3">
           <div className="flex justify-end -mb-2">
             <Link href={`/crm/${companyId}`} className="text-xs text-lt-fg2 hover:text-lt-fg underline">
               Open company page →

@@ -222,8 +222,8 @@ export function CompanyPortalAccessPanel({
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-lt-fg">Their logo</div>
           <p className="text-xs text-lt-fg2 mt-0.5">
-            Sits at the top of their portal. PNG, JPG, WEBP or SVG, up to 5&nbsp;MB — any colour
-            works, it renders on a white plate.
+            Sits in the masthead of their portal beside ours, on a white band. PNG, JPG, WEBP or
+            SVG, up to 5&nbsp;MB — a vector is best; it's stored inline and stays crisp.
           </p>
           {logoError && <p className="text-xs text-chip-bad-fg mt-1">{logoError}</p>}
         </div>
