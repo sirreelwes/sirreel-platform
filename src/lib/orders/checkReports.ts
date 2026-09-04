@@ -28,6 +28,7 @@
 
 import type { OrderCheckEdge, OrderCheckLineChange, PickListStatus, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
@@ -87,7 +88,16 @@ export interface ReportListRow {
   ymd: string
   lineCount: number
   /** Filed report for this edge, if any. */
-  filed: { submittedAt: Date; preppedBy: string | null; changedOrder: boolean } | null
+  filed: {
+    submittedAt: Date
+    preppedBy: string | null
+    changedOrder: boolean
+    /** The sheet covered only part of the order — the rest is still to
+     *  go (or still to come back), so the row is not finished. */
+    partial: boolean
+    /** How many lines were left off it. */
+    offSheet: number
+  } | null
 }
 
 function dayWindow(): string[] {
@@ -128,7 +138,10 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       _count: { select: { lineItems: true } },
       checkReports: {
         where: { edge },
-        select: { submittedAt: true, preppedBy: true, changedOrder: true },
+        select: {
+          submittedAt: true, preppedBy: true, changedOrder: true, partial: true,
+          lines: { where: { onSheet: false }, select: { id: true } },
+        },
       },
     },
     orderBy: edge === 'OUT' ? { startDate: 'asc' } : { endDate: 'asc' },
@@ -164,6 +177,9 @@ export interface DraftLine {
   change: OrderCheckLineChange
   substituteFor: string | null
   note: string | null
+  /** False when a previous partial pull left this line off the sheet.
+   *  Re-opening the report shows it still waiting rather than counted. */
+  onSheet: boolean
 }
 
 export interface ReportDraft {
@@ -294,6 +310,16 @@ export interface SubmitLineInput {
   actualQty: number
   substituteFor?: string | null
   note?: string | null
+  /**
+   * False = this line was NOT part of this pull. Defaults true.
+   *
+   * The distinction it draws is the whole point of partial sheets: a
+   * line at zero because it stayed on the shelf for tomorrow is not a
+   * line the client didn't get. Without it the only way to file a half
+   * pull was to type zeros, which classifies as REMOVED, zeroes the
+   * quantity on the order and emails the client a shrunken quote.
+   */
+  onSheet?: boolean
 }
 
 export interface SubmitResult {
@@ -301,20 +327,17 @@ export interface SubmitResult {
   changedOrder: boolean
   /** Human-readable list of what changed, for the audit row + the flag. */
   changes: string[]
+  /** The sheet covered only part of the order. */
+  partial: boolean
+  /** Lines left off it — still to pull, or still to come back. */
+  offSheet: number
 }
 
-/** What kind of difference this row records. Derived, never trusted from
- *  the client — the classification drives what we write to the order.
- *  Exported for the test: this function decides whether a client gets
- *  billed differently, and the order of its branches is load-bearing. */
-export function classifyCheckLine(line: SubmitLineInput): OrderCheckLineChange {
-  if (!line.orderLineItemId) return 'ADDED'
-  if (line.substituteFor && line.substituteFor.trim()) return 'SUBSTITUTE'
-  if (line.actualQty === 0 && line.expectedQty > 0) return 'REMOVED'
-  if (line.actualQty < line.expectedQty) return 'SHORT'
-  if (line.actualQty > line.expectedQty) return 'EXTRA'
-  return 'NONE'
-}
+// The classifier and its wording now live in checkLineChange.ts, with no
+// prisma import, so the supervisor's screen can read a change back in the
+// same words this module writes. Re-exported: it is still part of this
+// module's surface for the test and the route.
+export { classifyCheckLine, describeCheckChange }
 
 /**
  * File the report and, on the OUT edge, write its differences onto the
@@ -343,18 +366,26 @@ export async function submitCheckReport(opts: {
 }): Promise<SubmitResult> {
   const { orderId, edge, submittedById, preppedBy, notes, lines } = opts
 
-  const classified = lines.map((l) => ({ ...l, change: classifyCheckLine(l) }))
+  // A line that was not on this sheet is not a count at all — it is
+  // silence about that line. Classify only what the paper actually
+  // spoke to; everything else is recorded as untouched (change NONE,
+  // actual = expected) so nothing downstream reads a zero and
+  // concludes the client didn't get it.
+  const classified = lines.map((l) => {
+    const onSheet = l.onSheet !== false
+    return {
+      ...l,
+      onSheet,
+      actualQty: onSheet ? l.actualQty : l.expectedQty,
+      change: onSheet ? classifyCheckLine(l) : ('NONE' as OrderCheckLineChange),
+    }
+  })
+  const offSheet = classified.filter((l) => !l.onSheet).length
+  const partial = offSheet > 0
   const differing = classified.filter((l) => l.change !== 'NONE')
   const applyToOrder = edge === 'OUT' && differing.length > 0
 
-  const changes: string[] = differing.map((l) => {
-    switch (l.change) {
-      case 'SUBSTITUTE': return `${l.substituteFor} → ${l.description} (×${l.actualQty})`
-      case 'ADDED':      return `added ${l.description} ×${l.actualQty}`
-      case 'REMOVED':    return `did not send ${l.description}`
-      default:           return `${l.description}: ${l.expectedQty} → ${l.actualQty}`
-    }
-  })
+  const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
 
   const reportId = await prisma.$transaction(async (tx) => {
     // Replace-in-place: one current report per edge (see the @@unique).
@@ -375,6 +406,7 @@ export async function submitCheckReport(opts: {
         sheetPhotoKey: opts.sheetPhotoKey ?? null,
         sheetPhotoUrl: opts.sheetPhotoUrl ?? null,
         changedOrder: applyToOrder,
+        partial,
         // A re-submission that changes something is unacknowledged
         // again — the agent has to see the NEW state, not remember
         // having cleared the old one.
@@ -390,6 +422,10 @@ export async function submitCheckReport(opts: {
           : {}),
         submittedAt: new Date(),
         changedOrder: applyToOrder,
+        // A second pull re-files the same report with the remaining
+        // lines ticked on — which is exactly how a partial becomes
+        // complete. It must be able to go back to false.
+        partial,
         agentAckedAt: null,
         agentAckedById: null,
       },
@@ -404,6 +440,7 @@ export async function submitCheckReport(opts: {
         expectedQty: l.expectedQty,
         actualQty: l.actualQty,
         change: l.change,
+        onSheet: l.onSheet,
         substituteFor: l.substituteFor?.trim() || null,
         note: l.note?.trim() || null,
       })),
@@ -433,6 +470,8 @@ export async function submitCheckReport(opts: {
           preppedBy,
           lineCount: classified.length,
           changedOrder: applyToOrder,
+          partial,
+          offSheet,
           changes,
         },
       },
@@ -446,7 +485,7 @@ export async function submitCheckReport(opts: {
   // own terms.
   if (applyToOrder) await recalcOrderTotals(orderId)
 
-  return { reportId, changedOrder: applyToOrder, changes }
+  return { reportId, changedOrder: applyToOrder, changes, partial, offSheet }
 }
 
 /**

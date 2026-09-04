@@ -15,7 +15,7 @@
  */
 
 import assert from 'node:assert'
-import { classifyCheckLine } from '../../src/lib/orders/checkReports'
+import { classifyCheckLine, describeCheckChange } from '../../src/lib/orders/checkLineChange'
 
 let pass = 0
 function check(name: string, fn: () => void) {
@@ -89,6 +89,34 @@ check('an added row stays ADDED even when the counts match', () => {
   assert.equal(
     classifyCheckLine({ orderLineItemId: null, description: 'furni pad', expectedQty: 0, actualQty: 0 }),
     'ADDED',
+  )
+})
+
+// describeCheckChange is the wording the supervisor confirms, the audit
+// row stores, the agent reads and the client's corrected quote quotes.
+// One function feeds all four; these pin the sentences so a change to
+// the confirm screen cannot quietly reword what the client is told.
+check('a count change reads as a count change', () => {
+  assert.equal(describeCheckChange(line({ actualQty: 1 })), '5-ton grip truck: 2 → 1')
+})
+
+check('a swap names what it replaced', () => {
+  assert.equal(
+    describeCheckChange(line({ description: '3-ton grip truck', substituteFor: '5-ton grip truck' })),
+    '5-ton grip truck → 3-ton grip truck (×2)',
+  )
+})
+
+check('nothing sent says so, rather than "→ 0"', () => {
+  assert.equal(describeCheckChange(line({ actualQty: 0 })), 'did not send 5-ton grip truck')
+})
+
+check('an unsold row reads as added', () => {
+  assert.equal(
+    describeCheckChange({
+      orderLineItemId: null, description: 'furni pad', expectedQty: 0, actualQty: 4,
+    }),
+    'added furni pad ×4',
   )
 })
 

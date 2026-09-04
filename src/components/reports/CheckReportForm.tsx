@@ -22,11 +22,12 @@
  * agent."
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine } from '@/lib/orders/checkReports'
+import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 
 type Row = DraftLine & { open: boolean }
 type Extra = { key: string; description: string; actualQty: number; note: string }
@@ -75,6 +76,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const [fromPhoto, setFromPhoto] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState(draft.notes)
   const [saving, setSaving] = useState(false)
+  /** Second click. See the confirm panel at the foot of the form. */
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{
     changedOrder: boolean
@@ -88,12 +91,39 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const patch = (id: string, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.orderLineItemId === id ? { ...r, ...next } : r)))
 
-  const diffs = useMemo(
-    () =>
-      rows.filter((r) => r.actualQty !== r.expectedQty || (r.substituteFor ?? '').trim()).length +
-      extras.filter((e) => e.description.trim()).length,
-    [rows, extras],
-  )
+  /**
+   * Every difference on the sheet, described the way the order, the audit
+   * row and the client's re-sent quote will describe it — same functions
+   * the server runs, so the confirm step cannot promise one thing and
+   * file another.
+   */
+  const changeList = useMemo(() => {
+    const out: Array<{ key: string; text: string; added: boolean }> = []
+    for (const r of rows) {
+      const change = classifyCheckLine(r)
+      if (change === 'NONE') continue
+      out.push({ key: r.orderLineItemId, text: describeCheckChange(r, change), added: false })
+    }
+    for (const e of extras) {
+      const description = e.description.trim()
+      if (!description) continue
+      out.push({
+        key: e.key,
+        text: describeCheckChange({
+          orderLineItemId: null, description, expectedQty: 0, actualQty: e.actualQty,
+        }),
+        added: true,
+      })
+    }
+    return out
+  }, [rows, extras])
+  const diffs = changeList.length
+
+  // Any edit reopens the question. Without this, a supervisor who hits
+  // File, spots a wrong digit in the read-back, fixes it behind the panel
+  // and clicks the confirm button would be confirming a list they never
+  // actually read.
+  useEffect(() => { setConfirming(false) }, [rows, extras])
 
   /**
    * Both doors into the reader — the camera/file picker and a dropped
@@ -645,7 +675,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       </label>
 
       {/* Say what Submit will do before it does it. */}
-      {diffs > 0 && (
+      {diffs > 0 && !confirming && (
         <p className="mb-3 text-[14px] text-amber-900 border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 flex items-start gap-2">
           <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
           <span>
@@ -662,18 +692,107 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
       {error && <p className="mb-3 text-[14px] text-rose-600">{error}</p>}
 
-      <div className="flex items-center gap-3 pb-8">
-        <button
-          onClick={() => void submit()}
-          disabled={saving}
-          className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
-        >
-          {saving ? 'Filing…' : draft.filed ? 'Replace the filed report' : 'File the report'}
-        </button>
-        <Link href="/reports/orders" className="text-[14px] text-zinc-600 hover:text-zinc-900">
-          Cancel
-        </Link>
-      </div>
+      {/* ── The read-back ───────────────────────────────────────────
+          Wes, 2026-09-04: a mis-keyed digit used to rewrite the order
+          and email the client on one tap. A sheet that matches the
+          order still files on one tap — that is the common case and
+          costs nothing. A sheet that DIFFERS gets read back, line by
+          line, in the words the client and the agent will see. */}
+      {confirming ? (
+        <div className="mb-8 rounded-xl border-2 border-amber-400 bg-amber-50 p-4">
+          <h2 className="text-[15px] font-bold text-amber-900 flex items-center gap-2">
+            <AlertTriangle size={16} aria-hidden className="flex-none" />
+            Check this back against the sheet
+          </h2>
+
+          {changeList.some((c) => !c.added) && (
+            <>
+              <p className="mt-3 text-[13px] font-semibold text-amber-900">
+                {isOut
+                  ? 'Written onto the order:'
+                  : 'Recorded against the order — the order itself is not changed:'}
+              </p>
+              <ul className="mt-1 space-y-1">
+                {changeList.filter((c) => !c.added).map((c) => (
+                  <li key={c.key} className="text-[15px] text-zinc-900 font-medium">{c.text}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {changeList.some((c) => c.added) && (
+            <>
+              <p className="mt-3 text-[13px] font-semibold text-amber-900">
+                Flagged to {draft.agentName || 'the agent'} to price — not added to the order:
+              </p>
+              <ul className="mt-1 space-y-1">
+                {changeList.filter((c) => c.added).map((c) => (
+                  <li key={c.key} className="text-[15px] text-zinc-900 font-medium">{c.text}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <p className="mt-3 text-[13px] text-amber-900 leading-relaxed">
+            {isOut ? (
+              <>
+                Filing this changes what {draft.company} is billed for and flags{' '}
+                {draft.agentName || 'the agent'} to review it.
+                {draft.preBooked
+                  ? ' The corrected quote is emailed to the client automatically, copying the office.'
+                  : ''}
+              </>
+            ) : (
+              <>
+                A check-in never changes what was rented — this is recorded and flagged to{' '}
+                {draft.agentName || 'the agent'}, who decides what a shortfall costs.
+              </>
+            )}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => void submit()}
+              disabled={saving}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
+            >
+              {saving
+                ? 'Filing…'
+                : isOut
+                  ? 'Yes — file it and update the order'
+                  : 'Yes — file it'}
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              disabled={saving}
+              className="text-[14px] font-semibold text-zinc-700 hover:text-zinc-900 disabled:opacity-50"
+            >
+              Go back and fix it
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 pb-8">
+          <button
+            onClick={() => {
+              // Nothing differs → nothing to read back. One tap, as before.
+              if (diffs > 0) { setConfirming(true); return }
+              void submit()
+            }}
+            disabled={saving}
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
+          >
+            {saving
+              ? 'Filing…'
+              : diffs > 0
+                ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
+                : draft.filed ? 'Replace the filed report' : 'File the report'}
+          </button>
+          <Link href="/reports/orders" className="text-[14px] text-zinc-600 hover:text-zinc-900">
+            Cancel
+          </Link>
+        </div>
+      )}
     </div>
   )
 }
