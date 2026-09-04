@@ -81,7 +81,23 @@ export interface CompanyDiscountLine {
   expiryDate: Date | null
 }
 
+/** A negotiated per-item price, as the client reads it. */
+export interface CompanyNegotiatedRateLine {
+  id: string
+  /** The catalog item's client-facing name. */
+  label: string
+  dailyRate: number
+  weeklyRate: number | null
+}
+
 export interface CompanyTermsSummary {
+  /**
+   * Negotiated prices (CompanyRate) — "$125 on cubes". These REPLACE the
+   * list rate on the line; they are not discounts and never render as one.
+   * Only rows with a positive daily figure: a weekly-only deal has no
+   * headline number to put on a tile.
+   */
+  negotiatedRates: CompanyNegotiatedRateLine[]
   /**
    * Standing discounts, the first thing on the page (Wes 2026-09-04).
    * Only ACTIVE, in-window rows — a lapsed deal is history for the desk,
@@ -215,7 +231,7 @@ function resolveAccountRep(
 /** The account-level terms block that sits above the job tiles. */
 export async function buildCompanyTerms(companyId: string): Promise<CompanyTermsSummary> {
   const now = new Date()
-  const [company, discounts, agreements, coverage, topAgent] = await Promise.all([
+  const [company, discounts, agreements, coverage, rates, topAgent] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -266,6 +282,15 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
       },
     }),
     findCompanyAnnualCoverage(companyId),
+    prisma.companyRate.findMany({
+      where: { companyId, dailyRate: { gt: 0 } },
+      select: {
+        id: true,
+        dailyRate: true,
+        weeklyRate: true,
+        inventoryItem: { select: { code: true, description: true } },
+      },
+    }),
     // The agent on the most of this client's jobs — the fallback rep.
     prisma.job.groupBy({
       by: ['agentId'],
@@ -308,6 +333,14 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
   })
 
   return {
+    negotiatedRates: rates
+      .map((r) => ({
+        id: r.id,
+        label: r.inventoryItem.description || r.inventoryItem.code,
+        dailyRate: Number(r.dailyRate),
+        weeklyRate: r.weeklyRate != null && Number(r.weeklyRate) > 0 ? Number(r.weeklyRate) : null,
+      }))
+      .sort((a, b) => b.dailyRate - a.dailyRate || a.label.localeCompare(b.label)),
     discounts: discounts.map((d) => ({
       id: d.id,
       label: d.label,

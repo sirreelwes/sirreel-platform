@@ -175,21 +175,28 @@ export default async function CompanyPortalPage({
         {/* Wes 2026-09-04: "right justify SirReel and Left justify
             Radical. Make Radical image 10% smaller." Their mark holds the
             left edge, ours the right, the rule keeps ours company. */}
-        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between gap-5">
-          {terms.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/portal/company/${params.companyId}/logo`}
-              alt={overview.companyName}
-              className="block h-[29px] w-auto max-w-[220px] object-contain object-left"
-            />
-          ) : (
-            <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">
-              {overview.companyName}
-            </span>
-          )}
-          <div className="flex items-center gap-5 shrink-0">
-            <span className="block w-px h-9 bg-zinc-300" aria-hidden />
+        {/* Wes 2026-09-04: "right justify SirReel and Left justify
+            Radical. Make Radical image 10% smaller" … "Center the vertical
+            line between word marks on the page." Three columns: their mark
+            pinned left, ours pinned right, the rule in a fixed centre
+            column — so it stays centred whatever the marks' widths. */}
+        <div className="max-w-5xl mx-auto px-6 py-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+          <div className="min-w-0 flex justify-start">
+            {terms.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/portal/company/${params.companyId}/logo`}
+                alt={overview.companyName}
+                className="block h-[29px] w-auto max-w-[220px] object-contain object-left"
+              />
+            ) : (
+              <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">
+                {overview.companyName}
+              </span>
+            )}
+          </div>
+          <span className="block w-px h-9 bg-zinc-300" aria-hidden />
+          <div className="min-w-0 flex justify-end">
             {/* Ours carries a second line (STUDIO SERVICES), so at equal box
                 height its wordmark reads smaller. A little taller so the two
                 wordmarks sit at the same cap height. */}
@@ -235,17 +242,32 @@ export default async function CompanyPortalPage({
             under the paperwork would be answering the second question
             first. Rendered only when the account actually has one — an
             empty "Your rates" heading reads as a deal that fell through. */}
-        {terms.discounts.length > 0 && (
+        {(terms.discounts.length > 0 || terms.negotiatedRates.length > 0) && (
           <section>
+            {/* Wes 2026-09-04: 'Call it "Your deals with SirReel"'. Two
+                kinds of deal, one section: a negotiated RATE prints as the
+                price ("$125 /day · Cargo Van w/ Liftgate") and a standing
+                DISCOUNT prints as the percent — the same split the quote
+                itself makes, so the portal and the paperwork agree. */}
             <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
-              Your rates with SirReel
+              Your deals with SirReel
             </h2>
-            {/* Wes 2026-09-04: "feature the terms prominently … in large
-                but not as bold of letters." The figure is the tile — big,
-                medium weight, tight — and the noun sits under it at a size
-                that still reads from across a desk. No chip, no bold: the
-                number carries it. */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {terms.negotiatedRates.map((r) => (
+                <div key={r.id} className="bg-white border border-zinc-200 rounded-xl px-6 py-5">
+                  <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
+                    <span className="text-[26px] font-normal text-zinc-500 mr-0.5">$</span>
+                    {r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    <span className="text-[26px] font-normal text-zinc-500 ml-0.5">/day</span>
+                  </div>
+                  <div className="mt-2 text-[17px] font-normal text-zinc-800 leading-snug">{r.label}</div>
+                  {r.weeklyRate != null && (
+                    <div className="text-xs text-zinc-500 mt-1.5">
+                      ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/week
+                    </div>
+                  )}
+                </div>
+              ))}
               {terms.discounts.map((d) => (
                 <div
                   key={d.id}
