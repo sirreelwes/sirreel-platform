@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   Send,
+  FileText,
+  Upload,
 } from "lucide-react";
 import { CANONICAL_CLAUSES } from "@/lib/contracts/contractClauses";
 import { diffClause } from "@/lib/contracts/clauseDiff";
@@ -51,13 +53,15 @@ interface Unmatched {
   why: string;
 }
 
-interface PastedImage {
+interface Attachment {
+  kind: "image" | "pdf";
   media_type: string;
   data: string;
   name: string;
 }
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const ACCEPTED = "image/png,image/jpeg,image/gif,image/webp,application/pdf";
 
 /**
  * One clause, marked up: what the client struck in red, what they added in
@@ -104,7 +108,8 @@ export default function EnterRedlineModal({
   const [error, setError] = useState("");
 
   const [redlineText, setRedlineText] = useState("");
-  const [images, setImages] = useState<PastedImage[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dragging, setDragging] = useState(false);
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState("");
   const [unmatched, setUnmatched] = useState<Unmatched[]>([]);
@@ -150,15 +155,28 @@ export default function EnterRedlineModal({
 
   const attachFiles = (files: FileList | File[] | null) => {
     if (!files) return;
-    const picked = Array.from(files).filter((f) => IMAGE_TYPES.has(f.type));
-    for (const file of picked.slice(0, 4)) {
+    const usable = Array.from(files).filter(
+      (f) => IMAGE_TYPES.has(f.type) || f.type === "application/pdf",
+    );
+    if (usable.length === 0) {
+      setReadError("Drop a screenshot or a PDF — that file type can't be read.");
+      return;
+    }
+    setReadError("");
+    for (const file of usable.slice(0, 5)) {
       const reader = new FileReader();
       reader.onload = () => {
         const result = String(reader.result || "");
         const data = result.slice(result.indexOf(",") + 1);
-        setImages((prev) =>
-          prev.length >= 4 ? prev : [...prev, { media_type: file.type, data, name: file.name || "pasted image" }],
-        );
+        const kind = file.type === "application/pdf" ? "pdf" : "image";
+        setAttachments((prev) => {
+          // One PDF at a time: a second redline document is a second
+          // negotiation, and merging two into one set of clauses would
+          // silently pick a winner.
+          if (kind === "pdf" && prev.some((a) => a.kind === "pdf")) return prev;
+          if (prev.length >= 5) return prev;
+          return [...prev, { kind, media_type: file.type, data, name: file.name || "pasted image" }];
+        });
       };
       reader.readAsDataURL(file);
     }
@@ -166,8 +184,8 @@ export default function EnterRedlineModal({
 
   const readRedline = async () => {
     setReadError("");
-    if (!redlineText.trim() && images.length === 0) {
-      setReadError("Paste the email, or the screenshot, or both.");
+    if (!redlineText.trim() && attachments.length === 0) {
+      setReadError("Paste the email, or drop the file they sent.");
       return;
     }
     setReading(true);
@@ -177,7 +195,10 @@ export default function EnterRedlineModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: redlineText,
-          images: images.map((i) => ({ media_type: i.media_type, data: i.data })),
+          images: attachments
+            .filter((a) => a.kind === "image")
+            .map((a) => ({ media_type: a.media_type, data: a.data })),
+          pdf: attachments.find((a) => a.kind === "pdf")?.data,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -306,7 +327,25 @@ export default function EnterRedlineModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center p-4 overflow-y-auto">
+    <div
+      onDragOver={(e) => {
+        if (step !== "edit" || sent) return;
+        e.preventDefault();
+        if (!dragging) setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        // Anywhere on the dialog counts. Without this the browser treats a
+        // near-miss as "open this file", which navigates away from HQ and
+        // loses everything typed so far.
+        e.preventDefault();
+        setDragging(false);
+        if (step === "edit" && !sent) attachFiles(e.dataTransfer?.files ?? null);
+      }}
+      className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-lt-card border border-lt-hairline rounded-2xl w-full max-w-3xl my-8">
         <div className="flex items-start justify-between gap-3 p-5 border-b border-lt-hairline">
           <div>
@@ -323,9 +362,9 @@ export default function EnterRedlineModal({
                 </>
               ) : (
                 <>
-                  Paste what the client sent{jobName ? ` on ${jobName}` : ""} — the email, a
-                  screenshot of the marked-up page, or both — and it reads the clauses out. You
-                  review every one before sending. This papers{" "}
+                  Give it what the client sent{jobName ? ` on ${jobName}` : ""} — paste the email,
+                  or drag their marked-up PDF or a screenshot anywhere onto this window — and it
+                  reads the clauses out. You review every one before sending. This papers{" "}
                   <span className="font-semibold text-lt-fg2">this job only</span>; it does not
                   change the standard agreement or this client&rsquo;s other jobs.
                 </>
@@ -344,8 +383,37 @@ export default function EnterRedlineModal({
         {step === "edit" && !sent && (
         <div className="p-5 space-y-4">
           {/* ── What the client sent ─────────────────────────────── */}
-          <div className="border border-lt-hairline rounded-xl p-3 space-y-2">
-            <div className="text-xs font-semibold text-lt-fg2">What the client sent</div>
+          {/* The whole panel is the drop target, not a strip inside it: a
+              file dragged at a modal gets let go over the middle of it. */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!dragging) setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              // Only clear when the pointer actually leaves the panel —
+              // dragging across a child element fires leave on the child.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              attachFiles(e.dataTransfer?.files ?? null);
+            }}
+            className={`border rounded-xl p-3 space-y-2 transition-colors ${
+              dragging
+                ? "border-amber-500 border-dashed bg-amber-500/10"
+                : "border-lt-hairline"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-lt-fg2">What the client sent</div>
+              {dragging && (
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
+                  <Upload size={13} /> Drop it here
+                </div>
+              )}
+            </div>
             <textarea
               value={redlineText}
               onChange={(e) => setRedlineText(e.target.value)}
@@ -355,17 +423,20 @@ export default function EnterRedlineModal({
               }}
               rows={5}
               placeholder={
-                'Paste their email or list of changes here — e.g. "Section 5, strike the red and add the green…". You can paste a screenshot straight into this box too.'
+                'Paste their email or list of changes here — e.g. "Section 5, strike the red and add the green…". You can paste a screenshot straight in, or drop their PDF anywhere on this panel.'
               }
               className="w-full bg-lt-inner border border-lt-hairline rounded-lg p-3 text-xs text-lt-fg leading-relaxed"
             />
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
+              accept={ACCEPTED}
               multiple
               className="hidden"
-              onChange={(e) => attachFiles(e.target.files)}
+              onChange={(e) => {
+                attachFiles(e.target.files);
+                e.target.value = "";
+              }}
             />
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
@@ -373,18 +444,20 @@ export default function EnterRedlineModal({
                   onClick={() => fileRef.current?.click()}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg2 text-xs font-semibold rounded-lg"
                 >
-                  <ImageIcon size={13} /> Attach a screenshot
+                  <ImageIcon size={13} /> Attach a file
                 </button>
-                {images.map((img, i) => (
+                <span className="text-[11px] text-lt-fg3">or drag it in</span>
+                {attachments.map((att, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-lt-inner rounded-lg text-[11px] text-lt-fg2"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-lt-inner rounded-lg text-[11px] text-lt-fg2 max-w-[220px]"
                   >
-                    {img.name}
+                    {att.kind === "pdf" ? <FileText size={11} /> : <ImageIcon size={11} />}
+                    <span className="truncate">{att.name}</span>
                     <button
-                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="text-lt-fg3 hover:text-lt-fg"
-                      aria-label="Remove image"
+                      onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-lt-fg3 hover:text-lt-fg shrink-0"
+                      aria-label="Remove attachment"
                     >
                       <X size={11} />
                     </button>

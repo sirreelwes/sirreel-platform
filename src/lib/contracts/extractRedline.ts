@@ -2,6 +2,11 @@ import Anthropic from '@anthropic-ai/sdk'
 import { CANONICAL_CLAUSES } from './contractClauses'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { REDLINE_EXTRACTION_MODEL } from '@/lib/ai/models'
+import {
+  buildAnnotationManifest,
+  extractPdfTextLayer,
+  renderPdfPageImages,
+} from './annotationManifest'
 
 /**
  * Read a client redline out of whatever form it arrived in.
@@ -80,14 +85,74 @@ Return ONLY a JSON object:
   ]
 }`
 
+/** Pages of a dropped PDF we rasterize. Beyond this the redline is a whole
+ *  re-drafted agreement, which belongs in the full contract-review tool. */
+const MAX_PDF_PAGES = 12
+
+/**
+ * Turn a dropped PDF into the same three inputs the full review pipeline
+ * uses: the text layer, the deterministic strike/insert manifest, and page
+ * images. The manifest matters most — a PDF strike annotation never touches
+ * the text layer, so without it the struck words read as still present.
+ */
+async function readPdf(pdf: Buffer): Promise<{ images: RedlineImage[]; notes: string }> {
+  const [pages, textLayer, manifest] = await Promise.all([
+    renderPdfPageImages(pdf),
+    extractPdfTextLayer(pdf).catch(() => [] as string[]),
+    buildAnnotationManifest(pdf).catch(() => null),
+  ])
+  const images: RedlineImage[] = pages
+    .slice(0, MAX_PDF_PAGES)
+    .map((p) => ({ media_type: 'image/jpeg' as const, data: p.jpegBase64 }))
+
+  const struck = manifest?.struck ?? []
+  const inserted = manifest?.inserted ?? []
+  const notes = [
+    textLayer.length
+      ? `=== PDF TEXT LAYER (what the words say — NOTE: struck text still appears here) ===\n${textLayer.join('\n\n').slice(0, 60_000)}`
+      : '',
+    struck.length
+      ? `=== STRUCK IN THE PDF (deterministic, from the annotations — REMOVE these) ===\n${struck.map((x: any) => `- ${x.text ?? x}`).join('\n')}`
+      : '',
+    inserted.length
+      ? `=== INSERTED IN THE PDF (deterministic, client's added text — KEEP these) ===\n${inserted.map((x: any) => `- ${x.text ?? x}`).join('\n')}`
+      : '',
+    pages.length > MAX_PDF_PAGES
+      ? `(Only the first ${MAX_PDF_PAGES} of ${pages.length} pages were rendered.)`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  return { images, notes }
+}
+
 export async function extractRedline(args: {
   text?: string
   images?: RedlineImage[]
+  /** A dropped redline PDF, raw bytes. */
+  pdf?: Buffer
 }): Promise<ExtractResult> {
-  const text = (args.text ?? '').trim()
-  const images = args.images ?? []
+  let text = (args.text ?? '').trim()
+  let images = args.images ?? []
+
+  if (args.pdf) {
+    try {
+      const read = await readPdf(args.pdf)
+      images = [...images, ...read.images]
+      text = [text, read.notes].filter(Boolean).join('\n\n')
+    } catch (err) {
+      console.error('[extract-redline] pdf read failed:', err)
+      return {
+        ok: false,
+        status: 422,
+        error: 'That PDF could not be read. Drop a screenshot of the marked-up pages instead.',
+      }
+    }
+  }
+
   if (!text && images.length === 0) {
-    return { ok: false, status: 400, error: 'Nothing to read — paste the redline or attach an image.' }
+    return { ok: false, status: 400, error: 'Nothing to read — paste the redline, or drop the file.' }
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     return { ok: false, status: 500, error: 'AI is not configured on this environment.' }

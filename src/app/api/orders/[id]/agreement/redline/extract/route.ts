@@ -4,7 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { extractRedline, type RedlineImage } from '@/lib/contracts/extractRedline'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// A dropped PDF is rasterized page-by-page before the model sees it, so this
+// runs longer than a pasted email does.
+export const maxDuration = 300
 
 /**
  * POST /api/orders/[id]/agreement/redline/extract
@@ -22,6 +24,7 @@ const ALLOWED_MEDIA = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/we
 const MAX_IMAGES = 4
 const MAX_IMAGE_BASE64 = 7_000_000 // ~5 MB of binary
 const MAX_TEXT = 100_000
+const MAX_PDF_BASE64 = 20_000_000 // ~15 MB of binary
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
@@ -41,7 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
-  const body = (await req.json().catch(() => ({}))) as { text?: unknown; images?: unknown }
+  const body = (await req.json().catch(() => ({}))) as {
+    text?: unknown
+    images?: unknown
+    pdf?: unknown
+  }
   const text = typeof body.text === 'string' ? body.text.slice(0, MAX_TEXT) : ''
 
   const images: RedlineImage[] = []
@@ -62,7 +69,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  const result = await extractRedline({ text, images })
+  let pdf: Buffer | undefined
+  if (typeof body.pdf === 'string' && body.pdf.length > 0) {
+    if (body.pdf.length > MAX_PDF_BASE64) {
+      return NextResponse.json({ error: 'That PDF is too large — under 15 MB.' }, { status: 400 })
+    }
+    pdf = Buffer.from(body.pdf, 'base64')
+  }
+
+  const result = await extractRedline({ text, images, pdf })
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
