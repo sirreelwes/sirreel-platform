@@ -39,9 +39,9 @@ export default async function OrderReportsPage() {
   if (!user) {
     return (
       <div className="max-w-sm mx-auto text-center py-16 px-6">
-        <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-400" />
-        <h1 className="text-zinc-900 text-xl font-semibold mb-2">Yard access required</h1>
-        <p className="text-zinc-600 text-[15px]">
+        <Lock size={32} aria-hidden className="mx-auto mb-3 text-lt-fg3" />
+        <h1 className="text-lt-fg text-xl font-semibold mb-2">Yard access required</h1>
+        <p className="text-lt-fg2 text-[15px]">
           Check in/out reports are for fleet and warehouse staff. Ask Wes or Hugo if you need it.
         </p>
       </div>
@@ -55,8 +55,8 @@ export default async function OrderReportsPage() {
     <div className="max-w-4xl mx-auto px-1 py-2">
       <header className="mb-5">
         <div className="text-amber-600 text-[13px] font-semibold uppercase tracking-wide mb-1">Orders</div>
-        <h1 className="text-zinc-900 text-2xl font-bold">Check In/Out Reports</h1>
-        <p className="text-zinc-600 text-[15px] mt-0.5 max-w-[70ch]">
+        <h1 className="text-lt-fg text-2xl font-bold">Check In/Out Reports</h1>
+        <p className="text-lt-fg2 text-[15px] mt-0.5 max-w-[70ch]">
           Type in the pull sheet after it comes off the floor. Everything is pre-filled with what
           the order says, so you only touch the lines that came out different — and on a check-out
           those differences update the order and tell the agent. Orders still in quote form are
@@ -95,14 +95,14 @@ function Lane({
 
   return (
     <section className="mb-8">
-      <h2 className="text-zinc-900 text-[15px] font-semibold uppercase tracking-wide mb-2">{title}</h2>
+      <h2 className="text-lt-fg text-[15px] font-semibold uppercase tracking-wide mb-2">{title}</h2>
       {rows.length === 0 ? (
-        <p className="text-zinc-600 text-[15px] border border-zinc-200 bg-white rounded-lg px-4 py-6 text-center">{empty}</p>
+        <p className="text-lt-fg2 text-[15px] border border-lt-hairline bg-lt-card rounded-lg px-4 py-6 text-center">{empty}</p>
       ) : (
         days.map((ymd) => (
           <div key={ymd} className="mb-4">
             <div className={`text-[12px] font-bold uppercase tracking-[0.16em] mb-1.5 ${
-              ymd === today ? 'text-amber-600' : 'text-zinc-500'
+              ymd === today ? 'text-amber-600' : 'text-lt-fg3'
             }`}>
               {dayLabel(ymd, today)}
             </div>
@@ -111,24 +111,24 @@ function Lane({
                 <Link
                   key={r.orderId}
                   href={`/reports/orders/${r.orderId}?edge=${edge}`}
-                  className="border border-zinc-200 rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white hover:border-zinc-400 hover:bg-zinc-50 transition-colors"
+                  className="border border-lt-hairline rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-lt-card hover:border-lt-fg3 hover:bg-lt-inner transition-colors"
                 >
-                  <ClipboardList size={16} aria-hidden className="text-zinc-400 flex-none" />
+                  <ClipboardList size={16} aria-hidden className="text-lt-fg3 flex-none" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-zinc-900 text-[16px] font-semibold truncate">
+                    <div className="text-lt-fg text-[16px] font-semibold truncate">
                       {r.jobName}
-                      <span className="text-zinc-500 font-mono font-normal text-[13px] ml-2">{r.orderNumber}</span>
+                      <span className="text-lt-fg3 font-mono font-normal text-[13px] ml-2">{r.orderNumber}</span>
                     </div>
-                    <div className="text-zinc-700 text-[13px] truncate">
+                    <div className="text-lt-fg2 text-[13px] truncate">
                       {r.company}
-                      <span className="text-zinc-500"> · {r.lineCount} line{r.lineCount === 1 ? '' : 's'}</span>
+                      <span className="text-lt-fg3"> · {r.lineCount} line{r.lineCount === 1 ? '' : 's'}</span>
                       {/* Wes, 2026-09-03: the paperwork on the truck is
                           routinely still a quote — the status catches up
                           days after the gear is back. Say so rather than
                           hiding the row, so the supervisor knows which
                           document they are writing against. */}
                       {r.preBooked && (
-                        <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wider text-sky-800 border border-sky-300 bg-sky-50 rounded px-1.5 py-0.5">
+                        <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wider text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded px-1.5 py-0.5">
                           Quote
                         </span>
                       )}
@@ -140,28 +140,28 @@ function Lane({
                        the order still has to move, and this row is where
                        the supervisor comes back to finish it. */
                     r.filed.partial ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-800 border border-sky-300 bg-sky-50 rounded-md px-2 py-1">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded-md px-2 py-1">
                         Partial · {r.filed.offSheet} left
                       </span>
                     ) : r.filed.changedOrder ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-900 border border-amber-300 bg-amber-50 rounded-md px-2 py-1">
+                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-md px-2 py-1">
                         <AlertTriangle size={12} aria-hidden />
                         Filed · order changed
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-800 border border-emerald-300 bg-emerald-50 rounded-md px-2 py-1">
+                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-chip-good-fg border border-chip-good-fg/30 bg-chip-good-bg rounded-md px-2 py-1">
                         <Check size={12} aria-hidden />
                         Filed
-                        {r.filed.preppedBy && <span className="text-emerald-700/70 font-normal">· {r.filed.preppedBy}</span>}
+                        {r.filed.preppedBy && <span className="text-chip-good-fg/70 font-normal">· {r.filed.preppedBy}</span>}
                       </span>
                     )
                   ) : (
-                    <span className="text-[12px] font-semibold text-amber-900 border border-amber-300 bg-amber-50 rounded-md px-2 py-1">
+                    <span className="text-[12px] font-semibold text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-md px-2 py-1">
                       Not entered
                     </span>
                   )}
 
-                  <ArrowRight size={14} aria-hidden className="text-zinc-400 flex-none" />
+                  <ArrowRight size={14} aria-hidden className="text-lt-fg3 flex-none" />
                 </Link>
               ))}
             </div>
