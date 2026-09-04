@@ -180,6 +180,8 @@ async function main() {
 
   console.log(`Snapshot: ${snapshotResult}`)
 
+  const counterOnlyText = text
+
   // 10. The FINALIZED render — the document a client actually signs after the
   // redline is accepted. Same clauses, same decisions; only the title and the
   // closing paragraph differ. Guarded because the counter-proposal's closing
@@ -205,6 +207,48 @@ async function main() {
   // The negotiated clause text still has to survive — a clean title over the
   // BASELINE clauses would be the worst possible version of this document.
   checkContains(finalText, 'ACCEPTED', 'finalized still marks the amended clauses')
+
+  // 11. The client sees the strikes (Wes 2026-09-04). An accepted clause must
+  // carry BOTH halves of the change on the finalized document: the words the
+  // client struck AND the words they added. The counter-proposal render shows
+  // only the resolved text, so this is the assertion that separates them.
+  // Tracked so a fixture that stops carrying an ACCEPT with real strikes
+  // fails the test rather than silently skipping the only assertion that
+  // proves the client sees them.
+  let markupExercised = false
+  const acceptedChange = fixture.decisions.find((d: any) => d.decision === 'ACCEPT')
+  if (acceptedChange) {
+    const change = fixture.aiChanges.find(
+      (c: any) => String(c.clause) === String(acceptedChange.clauseRef),
+    )
+    const baseline = CANONICAL_CLAUSES.find((c) => c.ref === String(acceptedChange.clauseRef))
+    if (change?.proposed && baseline) {
+      const { diffClause } = await import('../../src/lib/contracts/clauseDiff')
+      const segs = diffClause(baseline.body, String(change.proposed))
+      const removed = segs
+        .filter((x) => x.op === 'del')
+        .map((x) => x.text.trim())
+        .filter((x) => x.length > 12)[0]
+      const added = segs
+        .filter((x) => x.op === 'ins')
+        .map((x) => x.text.trim())
+        .filter((x) => x.length > 12)[0]
+      if (removed) {
+        markupExercised = true
+        checkContains(finalText, normalize(removed), 'finalized keeps the struck words visible')
+        checkNotContains(
+          normalize(counterOnlyText),
+          normalize(removed),
+          'counter-proposal does NOT carry the struck words',
+        )
+      }
+      if (added) {
+        markupExercised = true
+        checkContains(finalText, normalize(added), 'finalized carries the added words')
+      }
+    }
+  }
+  check(markupExercised, 'fixture must contain an ACCEPT whose diff has real strikes/additions')
 
   if (failures.length > 0) {
     console.error(`\n${failures.length} assertion(s) failed:`)

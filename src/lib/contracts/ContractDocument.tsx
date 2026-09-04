@@ -7,6 +7,7 @@ import {
   LCDW_ADDENDUM,
   type CanonicalClause,
 } from './contractClauses'
+import { diffClause } from './clauseDiff'
 import { WORDMARK_BLACK_DATA_URI } from './brandAssets'
 
 export type ChangeDecisionValue = 'PENDING' | 'ACCEPT' | 'COUNTER' | 'REJECT'
@@ -268,6 +269,13 @@ const styles = StyleSheet.create({
   clauseNum: { fontFamily: 'Helvetica-Bold', fontSize: 10, marginRight: 4 },
   clauseTitle: { fontFamily: 'Helvetica-Bold', fontSize: 10 },
   clauseBody: { fontSize: 10, textAlign: 'justify' },
+  // Inline redline markup, shown to the CLIENT on the finalized agreement
+  // (Wes 2026-09-04: "let the client see the strikes too"). Struck text is
+  // also greyed, and added text also bolded, so the markup survives a
+  // black-and-white print — a production's insurance broker reads this on
+  // paper as often as on screen.
+  struck: { textDecoration: 'line-through', color: C.rejectText },
+  added: { color: C.acceptText, fontFamily: 'Helvetica-Bold' },
   clauseBodyAccept: {
     fontSize: 10,
     textAlign: 'justify',
@@ -342,6 +350,44 @@ function clauseBodyStyle(decision?: ChangeDecisionValue) {
   if (decision === 'ACCEPT') return styles.clauseBodyAccept
   if (decision === 'COUNTER') return styles.clauseBodyCounter
   return styles.clauseBody
+}
+
+/**
+ * A clause body with the client's redline left visible: their strikes struck,
+ * the agreed additions in green, our unchanged wording plain.
+ *
+ * Only on the finalized agreement. The client should be able to see, on the
+ * document they are signing, exactly which words moved — an agreement that
+ * silently reads differently from the standard one is the version people
+ * later argue about.
+ */
+const MarkedUpBody: React.FC<{
+  canonical: string
+  resolved: ResolvedClause
+}> = ({ canonical, resolved }) => {
+  const style = clauseBodyStyle(resolved.decision)
+  const changed = resolved.decision === 'ACCEPT' || resolved.decision === 'COUNTER'
+  if (!changed || resolved.body === canonical) {
+    return <Text style={style}>{resolved.body}</Text>
+  }
+  const segments = diffClause(canonical, resolved.body)
+  return (
+    <Text style={style}>
+      {segments.map((seg, i) =>
+        seg.op === 'del' ? (
+          <Text key={i} style={styles.struck}>
+            {seg.text}
+          </Text>
+        ) : seg.op === 'ins' ? (
+          <Text key={i} style={styles.added}>
+            {seg.text}
+          </Text>
+        ) : (
+          <Text key={i}>{seg.text}</Text>
+        ),
+      )}
+    </Text>
+  )
 }
 
 /**
@@ -446,6 +492,14 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             Please read carefully. You are liable for our equipment and vehicles from the time
             they leave our premises until the time they are returned to us and we sign for them.
           </Text>
+          {finalized && (
+            <Text style={styles.sectionLede}>
+              Your requested changes are shown in place:{' '}
+              <Text style={styles.struck}>struck-through text</Text> has been removed and{' '}
+              <Text style={styles.added}>text in green</Text> has been added. Both are part of this
+              agreement as signed. Every other clause is unchanged.
+            </Text>
+          )}
           {CANONICAL_CLAUSES.map((cc) => {
             const resolved = resolveClause(cc, byClauseRef.get(cc.ref))
             return (
@@ -455,7 +509,11 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                   <Text style={styles.clauseTitle}>{cc.title}</Text>
                   <DecisionTag decision={resolved.decision} />
                 </View>
-                <Text style={clauseBodyStyle(resolved.decision)}>{resolved.body}</Text>
+                {finalized ? (
+                  <MarkedUpBody canonical={cc.body} resolved={resolved} />
+                ) : (
+                  <Text style={clauseBodyStyle(resolved.decision)}>{resolved.body}</Text>
+                )}
               </View>
             )
           })}
@@ -537,8 +595,9 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
           {finalized ? (
             <Text>
               This is the rental agreement for this job. The clauses marked above were amended at
-              the client&apos;s request and agreed by SirReel; every other clause stands as
-              written. Signing in the client portal executes this agreement as printed here.
+              the client&apos;s request and agreed by SirReel; the strikes and additions shown are
+              part of the agreement, and every other clause stands as written. Signing in the
+              client portal executes this agreement as printed here.
             </Text>
           ) : (
             <Text>

@@ -80,18 +80,80 @@ export function diffClause(original: string, amended: string): DiffSegment[] {
   while (i < a.length) push('del', a[i++])
   while (j < b.length) push('ins', b[j++])
 
-  // Whitespace that only moved is not a change worth showing in red. A
-  // deleted or inserted run of pure whitespace, with unchanged text on both
-  // sides, is re-wrapping — it reads as a phantom edit otherwise.
+  return coalesce(out)
+}
+
+/**
+ * Group each changed region into "what went, then what came".
+ *
+ * The raw diff alternates token by token, which on contract prose renders as
+ * `replacement`actual` cost`cash value` — legible only to whoever already
+ * knows the answer. A client reading the agreement they are about to sign
+ * needs the struck phrase whole and the added phrase whole, in that order.
+ *
+ * Whitespace inside a region is collapsed (it belongs to no side), and a
+ * separator is re-inserted where trimming would otherwise weld the group to
+ * the words around it.
+ */
+function coalesce(segments: DiffSegment[]): DiffSegment[] {
+  const out: DiffSegment[] = []
+  const push = (op: DiffOp, text: string) => {
+    if (!text) return
+    const last = out[out.length - 1]
+    if (last && last.op === op) last.text += text
+    else out.push({ op, text })
+  }
+
+  let i = 0
+  while (i < segments.length) {
+    if (segments[i].op === 'same') {
+      push('same', segments[i].text)
+      i++
+      continue
+    }
+
+    let removed = ''
+    let added = ''
+    while (i < segments.length) {
+      const seg = segments[i]
+      if (seg.op === 'del') {
+        removed += seg.text
+        i++
+        continue
+      }
+      if (seg.op === 'ins') {
+        added += seg.text
+        i++
+        continue
+      }
+      // A run of changed words is nearly always stitched together by spaces
+      // the LCS matched on both sides — "replacement cost" -> "actual cash
+      // value" comes back as del|space|ins|del|space|ins. Treat a space
+      // BETWEEN two changes as part of the region, or nothing ever groups.
+      if (isSpace(seg.text) && segments[i + 1] && segments[i + 1].op !== 'same') {
+        removed += seg.text
+        added += seg.text
+        i++
+        continue
+      }
+      break
+    }
+
+    const leading = /^\s/.test(removed) || /^\s/.test(added)
+    const trailing = /\s$/.test(removed) || /\s$/.test(added)
+    const del = removed.replace(/\s+/g, ' ').trim()
+    const ins = added.replace(/\s+/g, ' ').trim()
+    if (!del && !ins) continue
+
+    const prev = out[out.length - 1]
+    if (leading && prev && !/\s$/.test(prev.text)) push('same', ' ')
+    push('del', del)
+    if (del && ins) push('same', ' ')
+    push('ins', ins)
+    if (trailing) push('same', ' ')
+  }
+
   return out
-    .map((seg, idx) => {
-      if (seg.op === 'same' || !isSpace(seg.text)) return seg
-      const prev = out[idx - 1]
-      const next = out[idx + 1]
-      const isolated = (!prev || prev.op === 'same') && (!next || next.op === 'same')
-      return isolated ? { op: 'same' as DiffOp, text: seg.text } : seg
-    })
-    .filter((seg) => seg.text.length > 0)
 }
 
 /** True when the amendment actually changes wording (not just whitespace). */

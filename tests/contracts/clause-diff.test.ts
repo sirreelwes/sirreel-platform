@@ -13,6 +13,16 @@ function check(name: string, cond: boolean, detail?: unknown) {
 const render = (segs: ReturnType<typeof diffClause>) =>
   segs.map((s) => (s.op === 'same' ? s.text : `[${s.op}:${s.text}]`)).join('')
 
+// Changed regions are coalesced into "what went, then what came", which
+// collapses whitespace inside the region. Round-trips are therefore asserted
+// on normalized whitespace — the words and their order must survive exactly,
+// the spacing inside an edit is presentation.
+const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+const rebuildOriginal = (segs: ReturnType<typeof diffClause>) =>
+  norm(segs.filter((s) => s.op !== 'ins').map((s) => s.text).join(''))
+const rebuildAmended = (segs: ReturnType<typeof diffClause>) =>
+  norm(segs.filter((s) => s.op !== 'del').map((s) => s.text).join(''))
+
 // The three real My Darling California edits.
 {
   const before = 'covering owned, non-owned, hired and rented vehicles'
@@ -20,8 +30,8 @@ const render = (segs: ReturnType<typeof diffClause>) =>
   const segs = diffClause(before, after)
   check('strike of a single word is a del', segs.some((s) => s.op === 'del' && s.text.includes('owned,')), render(segs))
   check('no insertions when only striking', !segs.some((s) => s.op === 'ins'), render(segs))
-  check('rejoining dels + sames rebuilds the original', segs.filter((s) => s.op !== 'ins').map((s) => s.text).join('') === before)
-  check('rejoining ins + sames rebuilds the amendment', segs.filter((s) => s.op !== 'del').map((s) => s.text).join('') === after)
+  check('rejoining dels + sames rebuilds the original', rebuildOriginal(segs) === norm(before), render(segs))
+  check('rejoining ins + sames rebuilds the amendment', rebuildAmended(segs) === norm(after), render(segs))
 }
 
 {
@@ -66,8 +76,43 @@ const render = (segs: ReturnType<typeof diffClause>) =>
   const after =
     'Unless otherwise agreed in writing, you shall be responsible to us for the replacement cost value or repair cost of the Equipment, and the actual cash value as it pertains to vehicles (if the Equipment can be restored, by repair, to its pre-loss condition) whichever is less.'
   const segs = diffClause(before, after)
-  check('full clause: original round-trips', segs.filter((s) => s.op !== 'ins').map((s) => s.text).join('') === before)
-  check('full clause: amendment round-trips', segs.filter((s) => s.op !== 'del').map((s) => s.text).join('') === after)
+  check('full clause: original round-trips', rebuildOriginal(segs) === norm(before), render(segs))
+  check('full clause: amendment round-trips', rebuildAmended(segs) === norm(after), render(segs))
+}
+
+// Readability: a changed region shows the struck phrase WHOLE and then the
+// added phrase WHOLE. Token-by-token alternation renders as
+// "replacementactual costcash value" — legible only to someone who already
+// knows what changed, which is the opposite of the point on a document a
+// client signs.
+{
+  const before = 'and include replacement cost for physical damage'
+  const after = 'and include actual cash value for physical damage'
+  const segs = diffClause(before, after)
+  const dels = segs.filter((s) => s.op === 'del')
+  const ins = segs.filter((s) => s.op === 'ins')
+  check('one struck run, not several', dels.length === 1, render(segs))
+  check('one added run, not several', ins.length === 1, render(segs))
+  check('struck run is the whole phrase', dels[0]?.text === 'replacement cost', render(segs))
+  check('added run is the whole phrase', ins[0]?.text === 'actual cash value', render(segs))
+  check('struck comes before added', segs.indexOf(dels[0]) < segs.indexOf(ins[0]), render(segs))
+  check('the two are separated', segs[segs.indexOf(dels[0]) + 1]?.op === 'same', render(segs))
+}
+
+// Words must not weld to their neighbours when a region is trimmed.
+{
+  const segs = diffClause('covering owned, non-owned and hired', 'covering non-owned and hired')
+  const flat = render(segs)
+  check('no welded words after a strike', flat.includes('[del:owned,] non-owned'), flat)
+}
+
+{
+  const before = '(ii) theft by fraudulent scheme (iii) mysterious disappearance (iv) loss of use'
+  const after = '(ii) theft by fraudulent scheme (iv) actual and verifiable loss of use'
+  const segs = diffClause(before, after)
+  const flat = render(segs)
+  check('clause 5 reads as one strike then one addition', /\[del:[^\]]*mysterious disappearance[^\]]*\]/.test(flat), flat)
+  check('clause 5 addition is whole', /\[ins:[^\]]*actual and verifiable[^\]]*\]/.test(flat), flat)
 }
 
 if (failures > 0) {
