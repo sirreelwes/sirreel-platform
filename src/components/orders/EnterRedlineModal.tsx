@@ -633,7 +633,10 @@ export default function EnterRedlineModal({
                     <>It is emailed to the job&rsquo;s primary contact with a link to sign.</>
                   )}
                 </li>
-                <li>HQ is copied on that email, so the desk sees it go out.</li>
+                <li>
+                  The job&rsquo;s other contacts and HQ are copied, so the whole production team
+                  and the desk see it go out.
+                </li>
                 <li>The other clauses of the rental agreement are unchanged.</li>
               </ul>
             </div>

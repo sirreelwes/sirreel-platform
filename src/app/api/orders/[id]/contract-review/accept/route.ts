@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import { portalJobUrl, portalTokenUrl } from '@/lib/portal/portalUrl'
-import { pickCanonicalRecipient } from '@/lib/email/recipients'
+import { pickCanonicalRecipient, rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { randomUUID } from 'crypto'
@@ -217,9 +217,22 @@ export async function POST(
     // internal trace at all — the client was told, nobody here was. Read
     // from the channel registry rather than hardcoded, so who sees it is
     // changed at /admin/notifications and not in a deploy.
-    ccList = (await channelRecipients('hq-documents')).filter(
-      (e) => e.trim().toLowerCase() !== recipientEmail.trim().toLowerCase(),
-    )
+    // Everyone on the production, plus HQ. A negotiated agreement is the
+    // document the whole client team works from — the quote already goes to
+    // all of them, and sending the CONTRACT to one person means the
+    // coordinator who has to act on it never sees it. Ranked list minus the
+    // primary (who is on `to`), then the HQ channel.
+    const others = rankRecipients(order.job, order.jobContact)
+      .map((r) => r.email)
+      .filter(Boolean)
+    ccList = [...others, ...(await channelRecipients('hq-documents'))]
+    const seen = new Set([recipientEmail.trim().toLowerCase()])
+    ccList = ccList.filter((e) => {
+      const norm = e.trim().toLowerCase()
+      if (!norm || seen.has(norm)) return false
+      seen.add(norm)
+      return true
+    })
     const firstName = (picked?.name || '').split(' ')[0] || 'there'
     const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
