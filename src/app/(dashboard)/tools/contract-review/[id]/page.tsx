@@ -52,6 +52,7 @@ interface ReviewRecord {
   uploadedBy: { id: string; name: string; email: string } | null;
   humanDecisionBy: { id: string; name: string; email: string } | null;
   changeDecisions: ServerDecision[];
+  fileKey: string | null;
   counterPdfKey: string | null;
   counterGeneratedAt: string | null;
   counterGeneratedBy: { id: string; name: string; email: string } | null;
@@ -170,6 +171,15 @@ export default function ContractReviewDetailPage() {
   const allDecided = totalChanges > 0 && counts.pending === 0;
   const canGenerate = allDecided && !decisionsDirty;
   const counterExists = !!record?.counterPdfKey;
+  // An operator-entered redline (the client emailed their changes rather
+  // than sending a marked-up PDF) has no source document to show.
+  const hasSourcePdf = !!record?.fileKey;
+
+  // Nothing to look at on the Original tab when there is no source
+  // document, so don't land there.
+  useEffect(() => {
+    if (record && !record.fileKey && tab === 'original') setTab('counter');
+  }, [record, tab]);
 
   const handleDecisionChange = (changeIndex: number, next: DecisionState) => {
     setDecisions((prev) => ({ ...prev, [changeIndex]: next }));
@@ -387,16 +397,18 @@ export default function ContractReviewDetailPage() {
       <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setTab('original')}
-              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg ${
-                tab === 'original'
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Original
-            </button>
+            {hasSourcePdf && (
+              <button
+                onClick={() => setTab('original')}
+                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg ${
+                  tab === 'original'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Original
+              </button>
+            )}
             <button
               onClick={() => setTab('counter')}
               className={`px-3 py-1.5 text-[11px] font-bold rounded-lg ${
@@ -411,7 +423,7 @@ export default function ContractReviewDetailPage() {
           </div>
         </div>
 
-        {tab === 'original' && (
+        {tab === 'original' && hasSourcePdf && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Original PDF</div>
@@ -429,6 +441,14 @@ export default function ContractReviewDetailPage() {
               className="w-full h-[600px] rounded-lg border border-gray-100 bg-gray-50"
               title="Contract PDF"
             />
+          </div>
+        )}
+
+        {tab === 'original' && !hasSourcePdf && (
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-[11px] text-gray-500">
+            No source document — this redline was entered by hand from what the client sent
+            (email, a call, a Word doc). The amended clause text is the record; generate the
+            counter proposal to see it laid into the agreement.
           </div>
         )}
 

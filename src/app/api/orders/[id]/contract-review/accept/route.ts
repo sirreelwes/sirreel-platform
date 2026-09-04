@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
-import { portalTokenUrl } from '@/lib/portal/portalUrl'
+import { portalJobUrl, portalTokenUrl } from '@/lib/portal/portalUrl'
+import { pickCanonicalRecipient } from '@/lib/email/recipients'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,9 +47,22 @@ export async function POST(
       id: true,
       orderNumber: true,
       bookingId: true,
+      portalSlug: true,
       company: { select: { name: true } },
-      job: { select: { name: true, jobCode: true } },
-      jobContact: { select: { email: true, firstName: true, lastName: true } },
+      job: {
+        select: {
+          name: true,
+          jobCode: true,
+          jobContacts: {
+            select: {
+              role: true,
+              isPrimary: true,
+              person: { select: { id: true, firstName: true, lastName: true, email: true } },
+            },
+          },
+        },
+      },
+      jobContact: { select: { id: true, email: true, firstName: true, lastName: true } },
       agent: { select: { email: true } },
       signedAgreements: {
         where: { contractType: 'RENTAL_AGREEMENT' },
@@ -111,9 +126,26 @@ export async function POST(
     },
   })
 
-  // Look up the paperwork portal magic link for this order's booking so we can
-  // include it in the client email. Orders without a booking won't get a link;
-  // the email body falls back to a generic note in that case.
+  // Who gets told. The order-level jobContact override wins; otherwise fall
+  // back to the job's ranked contacts (PM -> PC -> primary -> first). Before
+  // this fallback the route quietly emailed NOBODY whenever the order carried
+  // no override — the agreement flipped to NEGOTIATED_READY and the client
+  // never heard, which is the one failure mode this whole handoff exists to
+  // avoid.
+  const picked =
+    order.jobContact?.email
+      ? {
+          id: order.jobContact.id,
+          email: order.jobContact.email,
+          name: [order.jobContact.firstName, order.jobContact.lastName].filter(Boolean).join(' '),
+        }
+      : pickCanonicalRecipient(order.job, order.jobContact)
+
+  // The signing link. Legacy paperwork-portal token when the order has a
+  // booking that carries one; otherwise the job portal's own magic link,
+  // which is where the native flow signs. Only a job with neither leaves the
+  // email linkless.
+  let portalUrl: string | null = null
   let portalToken: string | null = null
   if (order.bookingId) {
     const paperwork = await prisma.paperworkRequest.findFirst({
@@ -122,13 +154,21 @@ export async function POST(
       select: { token: true },
     })
     portalToken = paperwork?.token || null
+    if (portalToken) portalUrl = portalTokenUrl(portalToken)
+  }
+  if (!portalUrl && order.portalSlug && picked?.id) {
+    try {
+      const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: picked.id })
+      portalUrl = portalJobUrl(order.portalSlug, link.token)
+    } catch (err) {
+      console.error('[contract-review/accept] magic link failed:', order.id, err)
+    }
   }
 
-  const recipientEmail = order.jobContact?.email
+  const recipientEmail = picked?.email
   let emailResult: EmailResult | null = null
   if (recipientEmail) {
-    const portalUrl = portalToken ? portalTokenUrl(portalToken) : null
-    const firstName = order.jobContact?.firstName || 'there'
+    const firstName = (picked?.name || '').split(' ')[0] || 'there'
     const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
@@ -171,8 +211,8 @@ export async function POST(
     ok: true,
     status: 'NEGOTIATED_READY',
     documentToSignUrl: agreement.contractReview.counterPdfUrl,
-    portalUrl: portalToken ? portalTokenUrl(portalToken) : null,
+    portalUrl,
     emailResult,
-    recipientEmail,
+    recipientEmail: recipientEmail ?? null,
   })
 }

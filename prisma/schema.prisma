@@ -5752,12 +5752,19 @@ enum ChangeDecision {
 }
 
 model ContractReview {
-  id               String @id @default(uuid())
-  fileKey          String @map("file_key")
-  fileUrl          String @map("file_url")
-  originalFilename String @map("original_filename")
-  fileSize         Int    @map("file_size")
-  mimeType         String @map("mime_type")
+  id String @id @default(uuid())
+
+  /// The client's redline AS RECEIVED. Nullable since 2026-09-04: a
+  /// redline can also arrive as prose — an email, a marked-up Word doc
+  /// nobody exports, a phone call — and the operator enters the agreed
+  /// clause text directly (see POST /api/orders/[id]/agreement/redline).
+  /// Those reviews have no source file; every reader already guards on
+  /// fileKey before fetching the blob, and the desk hides the PDF pane.
+  fileKey          String? @map("file_key")
+  fileUrl          String? @map("file_url")
+  originalFilename String  @map("original_filename")
+  fileSize         Int     @map("file_size")
+  mimeType         String  @map("mime_type")
 
   jobId     String? @map("job_id")
   companyId String? @map("company_id")

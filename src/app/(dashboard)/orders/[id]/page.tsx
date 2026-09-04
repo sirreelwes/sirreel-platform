@@ -25,6 +25,7 @@ import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescrip
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
+import EnterRedlineModal from "@/components/orders/EnterRedlineModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus, LineItemDepartment, OrderStatus } from "@prisma/client";
@@ -648,6 +649,7 @@ export default function OrderDetailPage() {
   // info-strip text. Jose's report — "click Resend, see nothing" — was
   // because the 409 response landed in agreementMsg's quiet style.
   const [portalLinkError, setPortalLinkError] = useState<string | null>(null);
+  const [showRedlineModal, setShowRedlineModal] = useState(false);
   // Standing-agreement context — when set, this order's
   // SignedAgreement was auto-pointed at the Company's negotiated PDF
   // by ensureSignedAgreementForOrder. Drives the banner above the
@@ -2696,6 +2698,48 @@ export default function OrderDetailPage() {
             );
           })()}
           </div>
+
+          {/* Yard paperwork (Wes, 2026-09-04: "I need a button for
+              check-in and check-out for warehouse"). The floor pulls on
+              paper: this prints the sheet and opens the two screens a
+              supervisor types it back in on. Deliberately here rather
+              than in the Fulfillment-lanes panel, which only renders
+              between BOOKED and LOADED_READY — the sheet on the truck
+              is routinely still a quote, and it is corrected days after
+              the gear is home.
+
+              The check-OUT report is also the YARD's only way to change
+              this order: /api/orders/[id]/check-report is the single
+              route through which it may, and it writes the counts back
+              onto these line items and flags the agent. Sales edits the
+              order right here on this page. */}
+          {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
+            <div className="mt-5 pt-4 border-t border-lt-hairline flex flex-wrap items-center gap-2">
+              <span className="text-lt-fg3 text-xs uppercase tracking-wider font-semibold mr-1">
+                Warehouse
+              </span>
+              <a
+                href={`/api/orders/${orderId}/pick-list-pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+              >
+                Print pull sheet ↗
+              </a>
+              <Link
+                href={`/reports/orders/${orderId}?edge=OUT`}
+                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+              >
+                Check-out report
+              </Link>
+              <Link
+                href={`/reports/orders/${orderId}?edge=IN`}
+                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+              >
+                Check-in report
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -4241,6 +4285,19 @@ export default function OrderDetailPage() {
                 Open contract review
               </a>
             )}
+            {/* A redline that arrived as an email rather than a marked-up PDF
+                had nowhere to go: /tools/contract-review only takes a file, and
+                the review it made was never linked to this agreement, so the
+                "make it signable" handoff never appeared. */}
+            {agreement.status !== "SIGNED_BASELINE" &&
+              agreement.status !== "SIGNED_NEGOTIATED" && (
+                <button
+                  onClick={() => setShowRedlineModal(true)}
+                  className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
+                >
+                  {agreement.contractReviewId ? "Enter another redline" : "Client sent a redline"}
+                </button>
+              )}
             <button
               onClick={resendPortalLink}
               disabled={agreementBusy || !portalLinkPrecondition.ok}
@@ -4727,6 +4784,20 @@ export default function OrderDetailPage() {
           line={subRentalLine}
           onClose={() => setSubRentalLine(null)}
           onChanged={() => { /* phase 1: no order-total impact; refresh is internal */ }}
+        />
+      )}
+
+      {showRedlineModal && (
+        <EnterRedlineModal
+          orderId={order.id}
+          jobName={order.job?.name ?? null}
+          onClose={() => setShowRedlineModal(false)}
+          onSaved={(result) => {
+            setShowRedlineModal(false);
+            // Straight to the review desk: generating the document and
+            // sending it for signature both live there.
+            router.push(`/tools/contract-review/${result.reviewId}`);
+          }}
         />
       )}
 
