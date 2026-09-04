@@ -51,7 +51,11 @@ const RW_CATEGORY_MAP: Record<string, Mapping> = {
   'Distro & Power': { invCategorySlug: 'electrical-equipment', dept: 'GE' },
   // Grip
   Stands:           { invCategorySlug: 'grip-equipment',       dept: 'GE' },
-  Dolly:            { invCategorySlug: 'grip-equipment',       dept: 'GE' },
+  // Dolly moved to Pro Supplies on 2026-09-04 (Wes) along with the rest
+  // of the furniture/dolly gear — see
+  // scripts/reclassify-furniture-dolly-pro-supplies.ts. Left here so a
+  // re-run can't quietly put dollies back under G&E.
+  Dolly:            { invCategorySlug: 'production-supplies',  dept: 'PRO_SUPPLIES' },
   'Steel Deck':     { invCategorySlug: 'grip-equipment',       dept: 'GE' },
   // Production-side tooling / consumables / accessories
   'Tents & Access': { invCategorySlug: 'production-supplies',  dept: 'PRO_SUPPLIES' },

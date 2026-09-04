@@ -175,9 +175,12 @@ Use this guide on the line item's description to pick the best department:
   VEHICLES        — vans, trucks, SUVs, sprinters, vehicle-mount accessories
   COMMUNICATIONS  — radios, walkies, headsets, intercom, comtek
   STAGES          — soundstages, cyc walls, green screens, stage rentals
-  PRO_SUPPLIES    — production paper goods, tape, sharpies, gaff, batteries (catch-all for furniture/operations)
+  PRO_SUPPLIES    — production paper goods, tape, sharpies, gaff, batteries (catch-all for furniture/operations).
+                    Furniture — pads, clamps, tables, chairs. Dollies and everything that rolls gear —
+                    magliners, hand trucks, doorway/western/Dana dollies, dolly track, pallet jacks, carts.
   EXPENDABLES     — consumables (gels, foam core, gaff tape, etc.). Overlap with PRO_SUPPLIES is fine; pick the better fit.
-  GE              — grip + electric: stands, flags, generators, distro, cable, lights, dimmers, sandbags, c-stands, apple boxes
+  GE              — grip + electric: stands, flags, generators, distro, cable, lights, dimmers, sandbags, c-stands, apple boxes.
+                    NOT dollies or furniture — those are PRO_SUPPLIES (Wes, 2026-09-04), even the ones a grip uses.
   ART             — set dressing, props, paint, scenic
 
 If catalogProductId IS set, the server will OVERRIDE this department with the

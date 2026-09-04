@@ -34,6 +34,11 @@ const APPLY = process.argv.includes('--apply')
 // First match wins. PRO_SUPPLIES is the catch-all.
 // ─────────────────────────────────────────────────────────────────────
 const DEPT_PATTERNS: { pattern: RegExp; dept: LineItemDepartment }[] = [
+  // Furniture + anything that rolls gear is Pro Supplies (Wes,
+  // 2026-09-04) — ABOVE the GE rule so a "GRIP DOLLY" doesn't land in
+  // G&E on the word "grip". See
+  // scripts/reclassify-furniture-dolly-pro-supplies.ts.
+  { dept: 'PRO_SUPPLIES',   pattern: /\b(doll(?:y|ies)|hand ?truck|pallet jack|furniture)\b/i },
   { dept: 'COMMUNICATIONS', pattern: /\b(radio|walkie|surveillance|comtek|headset|two[- ]?way|wireless|earpiece|intercom|shoulder mic|cp200)\b/i },
   { dept: 'GE',             pattern: /\b(sandbag|c[- ]?stand|grip|electric|generator|distro|cable|apple ?box|dimmer|gaffer|stinger|cardellini|flag|silk|bates|camlok|socapex|cheeseboro|fresnel|kino|tungsten|chimera|sumo|lens|frame|combo|stand|light|flexvolt|dewalt)\b/i },
   { dept: 'EXPENDABLES',    pattern: /\b(tape|gel|foam|expendable|sharpie|gaff|black ?wrap|cinefoil|glove|battery|batteries)\b/i },

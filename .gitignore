@@ -75,3 +75,4 @@ scripts/*
 !scripts/rotate-rw-prod.sh
 !scripts/merge-companies.ts
 !scripts/promote-user.ts
+!scripts/reclassify-furniture-dolly-pro-supplies.ts

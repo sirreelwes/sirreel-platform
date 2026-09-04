@@ -2,7 +2,8 @@
   "categories": [
     {
       "name": "Basecamp Basics",
-      "slug": "basecamp-basics"
+      "slug": "basecamp-basics",
+      "department": "PRO_SUPPLIES"
     },
     {
       "name": "Climate Controls",
@@ -18,7 +19,8 @@
     },
     {
       "name": "Dollies & Carts",
-      "slug": "dollies-carts"
+      "slug": "dollies-carts",
+      "department": "PRO_SUPPLIES"
     },
     {
       "name": "Effects",
