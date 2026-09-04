@@ -29,8 +29,10 @@ import { prisma } from '@/lib/prisma'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
+import { svgResponse } from '@/lib/companies/logoSvg'
 
 export const dynamic = 'force-dynamic'
+
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',
@@ -55,8 +57,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const company = await prisma.company.findUnique({
     where: { id: params.id },
-    select: { name: true, logoUrl: true },
+    select: { name: true, logoUrl: true, logoSvg: true },
   })
+  if (company?.logoSvg) return svgResponse(company.logoSvg)
   if (!company?.logoUrl) return NextResponse.json({ error: 'no logo on file' }, { status: 404 })
   return streamPrivateBlobAsResponse({
     fileUrl: company.logoUrl,
@@ -94,16 +97,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
+    const bytes = Buffer.from(await file.arrayBuffer())
     const { fileUrl } = await uploadPrivateImage({
       keyPrefix: 'company-logos',
       ownerId: params.id,
       filename: file.name || 'logo',
       contentType: file.type,
-      data: Buffer.from(await file.arrayBuffer()),
+      data: bytes,
     })
+    // A vector mark is kept inline too (see Company.logoSvg). Sniffed, not
+    // trusted from the declared type: it must actually be an <svg> document.
+    const INLINE_SVG_MAX = 256 * 1024
+    const asText = file.type === 'image/svg+xml' && bytes.length <= INLINE_SVG_MAX ? bytes.toString('utf8') : null
+    const logoSvg = asText && /<svg[\s>]/i.test(asText.slice(0, 2000)) ? asText : null
     const updated = await prisma.company.update({
       where: { id: params.id },
-      data: { logoUrl: fileUrl, logoUploadedAt: new Date(), logoUploadedById: user.id },
+      data: { logoUrl: fileUrl, logoSvg, logoUploadedAt: new Date(), logoUploadedById: user.id },
       select: { id: true, logoUrl: true, logoUploadedAt: true },
     })
     return NextResponse.json({ ok: true, company: updated })
@@ -124,7 +133,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   await prisma.company
     .update({
       where: { id: params.id },
-      data: { logoUrl: null, logoUploadedAt: null, logoUploadedById: null },
+      data: { logoUrl: null, logoSvg: null, logoUploadedAt: null, logoUploadedById: null },
     })
     .catch(() => null)
   return NextResponse.json({ ok: true })

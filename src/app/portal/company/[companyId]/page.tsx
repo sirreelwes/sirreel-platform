@@ -261,8 +261,14 @@ export default async function CompanyPortalPage({
                 price ("$125 /day · Cargo Van w/ Liftgate") and a standing
                 DISCOUNT prints as the percent — the same split the quote
                 itself makes, so the portal and the paperwork agree. */}
-            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
-              Your deals with SirReel <span className="text-zinc-400 normal-case tracking-normal">(Confidential)</span>
+            {/* Wes 2026-09-04: 'have it say "your deals with (S) logo" and
+                center it.' The S mark stands in for the word; the section
+                is centred as a whole — heading, tiles, chips, footnote. */}
+            <h2 className="flex items-center justify-center gap-2 text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-4">
+              <span>Your deals with</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/s-logo-black.png" alt="SirReel" className="h-[18px] w-auto inline-block" />
+              <span className="text-zinc-400 normal-case tracking-normal font-normal">(Confidential)</span>
             </h2>
 
             {/* Wes 2026-09-04: "keep % tiles at top, individual unit rates
@@ -272,7 +278,7 @@ export default async function CompanyPortalPage({
             {/* Two across from the smallest screen up (Wes: "stack the 40%
                 side by side"); three when the account has three+. */}
             {terms.discounts.length > 0 && (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 max-w-3xl mx-auto">
                 {terms.discounts.map((d) => (
                   <a
                     key={d.id}
@@ -298,7 +304,7 @@ export default async function CompanyPortalPage({
             )}
 
             {terms.negotiatedRates.length > 0 && (
-              <div className={`flex flex-wrap gap-x-2 gap-y-2 ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
+              <div className={`flex flex-wrap justify-center gap-x-2 gap-y-2 max-w-3xl mx-auto ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
                 {terms.negotiatedRates.map((r) => (
                   <a
                     key={r.id}
@@ -332,7 +338,7 @@ export default async function CompanyPortalPage({
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-zinc-400 mt-2.5">
+            <p className="text-[11px] text-zinc-400 mt-3 text-center">
               Applied automatically to every order your teams place. If a quote doesn&apos;t
               reflect these, tell your rep before you approve it.
             </p>

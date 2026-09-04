@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCompanyPortalSessionFromRequest } from '@/lib/portal/companyPortal'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
+import { svgResponse } from '@/lib/companies/logoSvg'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,8 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: { companyId: s
 
   const company = await prisma.company.findUnique({
     where: { id: session.companyId },
-    select: { logoUrl: true, name: true },
+    select: { logoUrl: true, logoSvg: true, name: true },
   })
+  // A vector mark is served from the row — no blob round-trip, and it
+  // renders on a dev box with no blob token. See Company.logoSvg.
+  if (company?.logoSvg) return svgResponse(company.logoSvg)
   if (!company?.logoUrl) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const res = await streamPrivateBlobAsResponse({
