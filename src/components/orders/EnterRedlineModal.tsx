@@ -121,7 +121,11 @@ export default function EnterRedlineModal({
   const [recipient, setRecipient] = useState<{ name: string | null; email: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendStage, setSendStage] = useState("");
-  const [sent, setSent] = useState<{ email: string | null; portalUrl: string | null } | null>(null);
+  const [sent, setSent] = useState<{
+    email: string | null;
+    cc: string[];
+    portalUrl: string | null;
+  } | null>(null);
 
   // Who the send will reach. Fetched when the review opens so it is on screen
   // BEFORE the button, not in the receipt after it.
@@ -316,6 +320,7 @@ export default function EnterRedlineModal({
       }
       setSent({
         email: accData.recipientEmail ?? null,
+        cc: Array.isArray(accData.cc) ? accData.cc : [],
         portalUrl: accData.portalUrl ?? null,
       });
     } catch {
@@ -628,6 +633,7 @@ export default function EnterRedlineModal({
                     <>It is emailed to the job&rsquo;s primary contact with a link to sign.</>
                   )}
                 </li>
+                <li>HQ is copied on that email, so the desk sees it go out.</li>
                 <li>The other clauses of the rental agreement are unchanged.</li>
               </ul>
             </div>
@@ -647,6 +653,7 @@ export default function EnterRedlineModal({
               <div className="text-[11px] text-chip-good-fg leading-relaxed">
                 {rows.length} amended clause{rows.length === 1 ? "" : "s"} (
                 {rows.map((r) => r.clauseRef).join(", ")}) are in the document they signed for.
+                {sent.cc.length > 0 && <> Copied to {sent.cc.join(", ")}.</>}
               </div>
               {sent.portalUrl && (
                 <a

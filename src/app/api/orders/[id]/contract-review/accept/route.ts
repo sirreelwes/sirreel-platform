@@ -5,6 +5,7 @@ import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementE
 import { portalJobUrl, portalTokenUrl } from '@/lib/portal/portalUrl'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { randomUUID } from 'crypto'
 import { put } from '@vercel/blob'
 import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
@@ -209,7 +210,16 @@ export async function POST(
 
   const recipientEmail = picked?.email
   let emailResult: EmailResult | null = null
+  let ccList: string[] = []
   if (recipientEmail) {
+    // HQ is copied on the send (Wes 2026-09-04). This is the moment a
+    // negotiated agreement becomes signable, and until now it left no
+    // internal trace at all — the client was told, nobody here was. Read
+    // from the channel registry rather than hardcoded, so who sees it is
+    // changed at /admin/notifications and not in a deploy.
+    ccList = (await channelRecipients('hq-documents')).filter(
+      (e) => e.trim().toLowerCase() !== recipientEmail.trim().toLowerCase(),
+    )
     const firstName = (picked?.name || '').split(' ')[0] || 'there'
     const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -241,6 +251,8 @@ export async function POST(
     emailResult = await sendAgreementEmail({
       label: 'orders/contract-review/accept',
       to: [recipientEmail],
+      cc: ccList.length > 0 ? ccList : undefined,
+      orderId: order.id,
       // The body says "reply to this email" — so a reply must reach the
       // agent's watched inbox, not the unmonitored notifications@ sender.
       replyTo: order.agent?.email ?? undefined,
@@ -257,5 +269,6 @@ export async function POST(
     portalUrl,
     emailResult,
     recipientEmail: recipientEmail ?? null,
+    cc: ccList,
   })
 }
