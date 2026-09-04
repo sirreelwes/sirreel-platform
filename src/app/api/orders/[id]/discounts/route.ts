@@ -28,6 +28,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 import { auditLineItemEdit, extractIp, resolveOperatorId } from '@/lib/orders/auditLineItemEdit'
 import { isMoneyEditable } from '@/lib/orders/editability'
+import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,6 +126,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json(
       { error: 'FLAT_TOTAL discount is ORDER scope only' },
       { status: 400 },
+    )
+  }
+
+  // Standing-deal accounts: a further discount is an admin's call.
+  // See src/lib/orders/standingDealGate.ts.
+  const gate = await gateFurtherDiscount(orderId, me.id)
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: 'approval required', reason: gate.reason, standingDeals: gate.deals },
+      { status: 403 },
     )
   }
 

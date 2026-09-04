@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
 import { auditLineItemEdit, extractIp } from '@/lib/orders/auditLineItemEdit'
 import { isMoneyEditable } from '@/lib/orders/editability'
+import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       },
       { status: 409 },
     )
+  }
+
+  // Raising a discount on a standing-deal account is the same act as
+  // adding one; lowering it is not gated. See standingDealGate.ts.
+  {
+    const nextValue =
+      typeof body.value === 'number' ? body.value
+      : typeof body.value === 'string' ? Number(body.value) : NaN
+    if (Number.isFinite(nextValue) && nextValue > Number(existing.value)) {
+      const gate = await gateFurtherDiscount(orderId, me.id)
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: 'approval required', reason: gate.reason, standingDeals: gate.deals },
+          { status: 403 },
+        )
+      }
+    }
   }
 
   const data: Record<string, unknown> = {}

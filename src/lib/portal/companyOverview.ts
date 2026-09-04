@@ -94,6 +94,28 @@ export interface CompanyNegotiatedRateLine {
    * same day, or the saving it implies is fiction.
    */
   listDailyRate: number | null
+  /**
+   * Public page for the thing the deal is on — a vehicle's own page when
+   * the item backs a VehicleCategory, else the department's landing.
+   * Path only; the renderer prefixes the public origin.
+   */
+  href: string
+}
+
+/**
+ * Where a department's public page lives. Wes 2026-09-04: "make sure every
+ * tile links the item it references." Paths on sirreel.com — the PORTAL
+ * host does not serve these, so callers must prefix PUBLIC_SITE_ORIGIN.
+ */
+export const DEPARTMENT_PUBLIC_PATH: Record<string, string> = {
+  VEHICLES: '/vehicles',
+  STAGES: '/stages',
+  PRO_SUPPLIES: '/order/supplies',
+  EXPENDABLES: '/order/supplies',
+  COMMUNICATIONS: '/order/supplies',
+  GE: '/order/supplies',
+  ART: '/order/supplies',
+  WARDROBE_MAKEUP: '/order/supplies',
 }
 
 export interface CompanyTermsSummary {
@@ -294,7 +316,15 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         id: true,
         dailyRate: true,
         weeklyRate: true,
-        inventoryItem: { select: { code: true, description: true, dailyRate: true } },
+        inventoryItem: {
+          select: {
+            code: true,
+            description: true,
+            dailyRate: true,
+            department: true,
+            vehicleCategories: { where: { published: true }, select: { slug: true }, take: 1 },
+          },
+        },
       },
     }),
     // The agent on the most of this client's jobs — the fallback rep.
@@ -349,6 +379,12 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
           r.inventoryItem.dailyRate != null && Number(r.inventoryItem.dailyRate) > 0
             ? Number(r.inventoryItem.dailyRate)
             : null,
+        href: r.inventoryItem.vehicleCategories[0]?.slug
+          ? `/vehicles/${r.inventoryItem.vehicleCategories[0].slug}`
+          : r.inventoryItem.department === 'STAGES' &&
+              /set\b/i.test(r.inventoryItem.description || '')
+            ? '/standing-sets'
+            : DEPARTMENT_PUBLIC_PATH[r.inventoryItem.department] || '/vehicles',
       }))
       .sort((a, b) => b.dailyRate - a.dailyRate || a.label.localeCompare(b.label)),
     discounts: discounts.map((d) => ({

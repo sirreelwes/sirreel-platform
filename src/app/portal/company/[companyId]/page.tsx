@@ -28,7 +28,13 @@ import {
   User as UserIcon,
 } from 'lucide-react'
 import { getCompanyPortalSession, COMPANY_PORTAL_ROLE_LABEL } from '@/lib/portal/companyPortal'
-import { buildCompanyOverview, JOB_STATE_LABEL, type CompanyJobTile } from '@/lib/portal/companyOverview'
+import {
+  buildCompanyOverview,
+  DEPARTMENT_PUBLIC_PATH,
+  JOB_STATE_LABEL,
+  type CompanyJobTile,
+} from '@/lib/portal/companyOverview'
+import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { buildServiceCatalog } from '@/lib/portal/companyServices'
 import { prisma } from '@/lib/prisma'
 import { PORTAL } from '@/lib/brand/portalTokens'
@@ -257,10 +263,18 @@ export default async function CompanyPortalPage({
                 much smaller and lined up left to right underneath." The
                 percentages are the headline; a unit rate is a fact for the
                 coordinator building the order. */}
+            {/* Two across from the smallest screen up (Wes: "stack the 40%
+                side by side"); three when the account has three+. */}
             {terms.discounts.length > 0 && (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {terms.discounts.map((d) => (
-                  <div key={d.id} className="bg-white border border-zinc-200 rounded-xl px-6 py-5">
+                  <a
+                    key={d.id}
+                    href={`${PUBLIC_SITE_ORIGIN}${d.departmentKey ? DEPARTMENT_PUBLIC_PATH[d.departmentKey] || '/vehicles' : '/vehicles'}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block bg-white border border-zinc-200 rounded-xl px-6 py-5 hover:border-zinc-400 transition-colors"
+                  >
                     <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
                       {d.percentOff}
                       <span className="text-[26px] font-normal text-zinc-500 ml-0.5">% off</span>
@@ -272,7 +286,7 @@ export default async function CompanyPortalPage({
                     {d.expiryDate && (
                       <div className="text-[11px] text-zinc-400 mt-1.5">Through {fmtDay(d.expiryDate)}</div>
                     )}
-                  </div>
+                  </a>
                 ))}
               </div>
             )}
@@ -280,7 +294,13 @@ export default async function CompanyPortalPage({
             {terms.negotiatedRates.length > 0 && (
               <div className={`flex flex-wrap gap-x-2 gap-y-2 ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
                 {terms.negotiatedRates.map((r) => (
-                  <div key={r.id} className="bg-white border border-zinc-200 rounded-lg px-3.5 py-2">
+                  <a
+                    key={r.id}
+                    href={`${PUBLIC_SITE_ORIGIN}${r.href}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block bg-white border border-zinc-200 rounded-lg px-3.5 py-2 hover:border-zinc-400 transition-colors"
+                  >
                     <div className="flex items-baseline gap-2">
                       <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
                         ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -302,7 +322,7 @@ export default async function CompanyPortalPage({
                         regularly ${r.listDailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/day
                       </div>
                     )}
-                  </div>
+                  </a>
                 ))}
               </div>
             )}
@@ -490,7 +510,7 @@ export default async function CompanyPortalPage({
             {services.lines.map((line) => (
               <a
                 key={line.key}
-                href={line.href}
+                href={`${PUBLIC_SITE_ORIGIN}${line.href}`}
                 target="_blank"
                 rel="noreferrer"
                 className="block bg-white border border-zinc-200 rounded-xl p-4 hover:border-zinc-400 transition-colors"
