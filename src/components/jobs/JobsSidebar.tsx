@@ -41,6 +41,7 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 import { readinessApplies, readinessChipText } from '@/lib/jobs/readiness'
+import { AlertTriangle } from 'lucide-react'
 
 export function JobsSidebar() {
   const { rows, loading, error, status } = useJobsList()
@@ -375,9 +376,25 @@ function JobsSidebarItem({
           // BEFORE readiness, because booking comes first: the readiness
           // checks describe an order that is already on the books.
           const toBook = (j.approvedUnbooked ?? 0) > 0
-          if (!r && !toBook && (value == null || value <= 0)) return null
+          // The client sent the agreement back with changes and nobody has
+          // answered. Shown on EVERY row state and first in the line: unlike
+          // readiness (our own to-do, outbound rows only) this is a client
+          // waiting on us, and it is just as true on a job three weeks out.
+          const redlines = j.redlinePending ?? 0
+          if (!r && !toBook && redlines === 0 && (value == null || value <= 0)) return null
           return (
             <span className="flex items-baseline gap-1.5">
+              {redlines > 0 && (
+                <span
+                  title={`Client redlined the agreement on ${redlines} order${redlines === 1 ? '' : 's'} — waiting on us`}
+                  className={`inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider px-1 py-px rounded whitespace-nowrap ${
+                    selected ? 'bg-rose-900 text-rose-50' : 'bg-rose-600 text-white'
+                  }`}
+                >
+                  <AlertTriangle size={9} aria-hidden />
+                  Redline{redlines > 1 ? ` ×${redlines}` : ''}
+                </span>
+              )}
               {toBook && (
                 <span
                   title={`${j.approvedUnbooked} approved order${j.approvedUnbooked === 1 ? '' : 's'} waiting to be booked`}

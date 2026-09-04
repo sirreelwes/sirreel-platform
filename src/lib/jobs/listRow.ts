@@ -99,6 +99,10 @@ export interface JobRow {
    *  cadence rollup folds APPROVED into 'booked', so without this the
    *  board cannot tell "locked in" from "one click away". */
   approvedUnbooked?: number
+  /** Agreements this client has redlined that nobody has answered yet.
+   *  See lib/jobs/redlineAlert — the rail chip and the detail header
+   *  both read it. */
+  redlinePending?: number
   cadence?: { state: string; partial: boolean }
   hasLD?: boolean
   hasStageScope?: boolean

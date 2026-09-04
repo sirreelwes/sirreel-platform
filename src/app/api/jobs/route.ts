@@ -21,6 +21,7 @@ import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomp
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 
@@ -483,6 +484,9 @@ export async function GET(req: NextRequest) {
       // it into 'booked', so the board showed it as work already locked
       // in. Carried as its own count rather than a new CadenceState,
       // which would have to re-tier the colours, legend and sort.
+      // The client answered the agreement and we have not answered back.
+      const redlinePending = countRedlinesAwaitingAction(allAgreements)
+
       const approvedUnbooked = liveOrders.filter(
         (o) => (o as { status: OrderStatus }).status === 'APPROVED',
       ).length
@@ -561,6 +565,7 @@ export async function GET(req: NextRequest) {
         billing,
         readiness,
         approvedUnbooked,
+        redlinePending,
         cadence,
         hasLD,
         hasStageScope,

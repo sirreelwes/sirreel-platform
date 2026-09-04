@@ -42,6 +42,7 @@ import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
 import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import EnterRedlineModal from '@/components/orders/EnterRedlineModal';
+import { isRedlineAwaitingAction } from '@/lib/jobs/redlineAlert';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -57,7 +58,7 @@ import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
-import { Check, User } from 'lucide-react'
+import { AlertTriangle, Check, User } from 'lucide-react'
 
 /**
  * Job status, honestly split.
@@ -869,6 +870,13 @@ export default function JobDetailPage() {
       ),
     );
 
+  // The client answered the agreement and we have not answered back. Same
+  // predicate the /jobs rail chip uses, so the board and the job cannot
+  // disagree about whether someone is waiting on us.
+  const redlinedAgreements = signedOrderAgreements.filter(({ agreement: a }) =>
+    isRedlineAwaitingAction(a.status),
+  );
+
   const signTargetOrder =
     liveOrders.find((o) =>
       // Target an order whose agreement is NOT yet signed — a filed
@@ -1235,6 +1243,22 @@ const driverTone = (d: any): string => {
                 >
                   Returned
                 </span>
+              )}
+              {/* Solid, not outlined, and a link rather than a label: a
+                  redline is a client waiting on an answer, and the answer is
+                  four sections down the page. */}
+              {redlinedAgreements.length > 0 && (
+                <a
+                  href="#agreement"
+                  title={`Client redlined ${redlinedAgreements
+                    .map(({ order }) => order.orderNumber)
+                    .join(', ')} — nobody has answered yet`}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-rose-600 text-white hover:bg-rose-500 transition-colors"
+                >
+                  <AlertTriangle size={12} aria-hidden />
+                  Redline back
+                  {redlinedAgreements.length > 1 ? ` ×${redlinedAgreements.length}` : ''}
+                </a>
               )}
               {job.assistantAuthCode && (
                 <span
