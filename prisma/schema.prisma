@@ -546,6 +546,14 @@ model Company {
   /// near-black hero. Many production-company logos are dark; on cream any
   /// of them reads as itself with no plate or light variant needed.
   logoUrl          String?   @map("logo_url")
+  /// The SVG source itself, when the uploaded mark is a vector. A wordmark
+  /// is a few KB of text; serving it from the row means the portal never
+  /// makes a blob round-trip for it, and local dev — which has no blob
+  /// token — renders the real mark instead of a broken image (Wes
+  /// 2026-09-04: "fix the radicalmedia wordmark"). Raster logos stay on
+  /// `logoUrl` alone. Capped at 256 KB at upload; larger SVGs fall back to
+  /// the blob like a PNG would.
+  logoSvg          String?   @map("logo_svg") @db.Text
   logoUploadedAt   DateTime? @map("logo_uploaded_at")
   logoUploadedById String?   @map("logo_uploaded_by_id")
 
@@ -7766,6 +7774,27 @@ model JobFinalInvoice {
   collectedAt   DateTime? @map("collected_at")
   collectedVia  String?   @map("collected_via")
   collectedById String?   @map("collected_by_id")
+
+  /// PROOF OF REMITTANCE — the client's own evidence that they have SENT the
+  /// money, recorded in the days before it lands. Ana, 2026-09-04: "if a
+  /// client is choosing to pay by ACH, it would be good to have a spot where
+  /// we can confirm whether or not they sent us proof of remittance."
+  ///
+  /// Deliberately NOT the same thing as collected. An ACH takes days, and in
+  /// that gap the queue looked identical to a client who has said nothing —
+  /// so the invoice either got chased twice or got marked collected early,
+  /// against money that had not arrived. This records the CLAIM; collectedAt
+  /// still records the arrival.
+  ///
+  /// `remittanceVia` reuses the collected-via vocabulary (WIRE / ACH / ZELLE
+  /// / CHECK / OTHER) so the two read alike and Mark-collected can prefill
+  /// from it. `remittanceRef` is whatever identifies it on a bank statement —
+  /// an ACH trace, a wire reference, a check number.
+  remittanceAt   DateTime? @map("remittance_at")
+  remittanceVia  String?   @map("remittance_via")
+  remittanceRef  String?   @map("remittance_ref")
+  remittanceNote String?   @map("remittance_note")
+  remittanceById String?   @map("remittance_by_id")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

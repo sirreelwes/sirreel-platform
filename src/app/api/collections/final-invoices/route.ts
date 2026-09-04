@@ -115,7 +115,13 @@ export async function GET() {
   const behavior = await clientPaymentBehavior(clientNames)
 
   // Names for collected-by attribution.
-  const byIds = [...new Set(rows.map((r) => r.collectedById).filter((v): v is string => !!v))]
+  const byIds = [
+    ...new Set(
+      rows
+        .flatMap((r) => [r.collectedById, r.remittanceById])
+        .filter((v): v is string => !!v),
+    ),
+  ]
   const users = byIds.length
     ? await prisma.user.findMany({ where: { id: { in: byIds } }, select: { id: true, name: true } })
     : []
@@ -141,11 +147,22 @@ export async function GET() {
       collectedAt: r.collectedAt,
       collectedVia: r.collectedVia,
       collectedBy: r.collectedById ? (names.get(r.collectedById) ?? null) : null,
+      // Proof of remittance: the client says the money is on its way. NOT
+      // collected — the row stays in the queue, it just stops reading like a
+      // client who has gone quiet.
+      remittanceAt: r.remittanceAt,
+      remittanceVia: r.remittanceVia,
+      remittanceRef: r.remittanceRef,
+      remittanceNote: r.remittanceNote,
+      remittanceBy: r.remittanceById ? (names.get(r.remittanceById) ?? null) : null,
       rwRemaining: r.rwInvoiceId ? (remaining.get(r.rwInvoiceId) ?? null) : null,
       ageDays: Math.floor((Date.now() - r.uploadedAt.getTime()) / 86_400_000),
       jobId: r.job.id,
       jobName: r.job.name,
       jobCode: r.job.jobCode,
+      // The Company id, so the charge panel can scope cards on file to this
+      // client by identity rather than by matching names.
+      companyId: r.job.company?.id ?? null,
       companyName: r.job.company?.name ?? null,
       alreadyCharged: r.rwInvoiceId ? (charged.get(r.rwInvoiceId) ?? 0) : 0,
       client: r.job.company?.name
@@ -338,12 +355,17 @@ function selectShape() {
     collectedAt: true,
     collectedVia: true,
     collectedById: true,
+    remittanceAt: true,
+    remittanceVia: true,
+    remittanceRef: true,
+    remittanceNote: true,
+    remittanceById: true,
     job: {
       select: {
         id: true,
         name: true,
         jobCode: true,
-        company: { select: { name: true } },
+        company: { select: { id: true, name: true } },
       },
     },
   } as const

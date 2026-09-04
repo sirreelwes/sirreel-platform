@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
+import { resolveCardToken } from '@/lib/payments/companyCards'
 import {
   chargeCard,
   isApproved,
@@ -15,10 +16,23 @@ export const dynamic = 'force-dynamic'
  * invoice, for money collected before billing moves into HQ.
  *
  * Two token sources, both ending in the same charge:
- *   savedPaperworkId → the CardSecure token captured by the portal
- *                      CC-authorization step. Nothing is re-keyed.
+ *   savedCardId +    → a card already on file. `savedCardOrigin` says which
+ *   savedCardOrigin    table it lives in ('company' = the CompanyCard wallet,
+ *                      'paperwork' = a legacy per-booking authorization).
+ *                      Required, never guessed: both tables use uuids, and a
+ *                      silent fallback between them is how a charge lands on
+ *                      a card nobody chose. `savedPaperworkId` is the old
+ *                      spelling of the paperwork case and still works.
  *   cardToken        → minted client-side by the CardSecure iframe when an
  *                      operator takes a card over the phone.
+ *
+ * WRONG-CLIENT GUARD: when the card on file belongs to a different company
+ * than the invoice being settled, the charge is REFUSED unless the caller
+ * passes confirmCrossClientCard. A parent company paying a subsidiary's
+ * invoice is real, so this is a speed bump and not a wall — but it has to be
+ * server-side, because the operator's list is the thing that misled them
+ * (Ana, 2026-09-04). Only enforced when both sides are known; an RW-only
+ * invoice has no HQ company and is left alone rather than blocked on a guess.
  *
  * The raw PAN never reaches this server on either path. `cardToken` is
  * already a CardSecure token when it arrives — the iframe posts to
@@ -57,6 +71,9 @@ export async function POST(req: NextRequest) {
     cardToken?: unknown
     expiry?: unknown
     savedPaperworkId?: unknown
+    savedCardId?: unknown
+    savedCardOrigin?: unknown
+    confirmCrossClientCard?: unknown
     cardholderName?: unknown
     pdfUrl?: unknown
     pdfKey?: unknown
@@ -73,14 +90,26 @@ export async function POST(req: NextRequest) {
   // agent agreed the number and queued it) or a raw RW invoice id (the older
   // path, still needed for anything finalized outside HQ).
   let rwInvoiceId = typeof body.rwInvoiceId === 'string' ? body.rwInvoiceId.trim() : ''
+  // The client this invoice belongs to, for the wrong-client card guard.
+  // Null on a raw RW invoice — RW customers aren't HQ companies.
+  let invoiceCompanyId: string | null = null
+  let invoiceCompanyName: string | null = null
   if (finalInvoiceId) {
     const fi = await prisma.jobFinalInvoice.findUnique({
       where: { id: finalInvoiceId },
-      select: { id: true, rwInvoiceId: true, invoiceNumber: true, status: true },
+      select: {
+        id: true,
+        rwInvoiceId: true,
+        invoiceNumber: true,
+        status: true,
+        job: { select: { company: { select: { id: true, name: true } } } },
+      },
     })
     if (!fi) {
       return NextResponse.json({ ok: false, error: 'final invoice not found' }, { status: 404 })
     }
+    invoiceCompanyId = fi.job?.company?.id ?? null
+    invoiceCompanyName = fi.job?.company?.name ?? null
     if (fi.status !== 'READY') {
       return NextResponse.json(
         { ok: false, error: `that invoice is already ${fi.status.toLowerCase()}` },
@@ -118,40 +147,63 @@ export async function POST(req: NextRequest) {
   let cardPostal =
     typeof body.postal === 'string' ? body.postal.replace(/[^0-9-]/g, '').slice(0, 10) : ''
 
-  if (typeof body.savedPaperworkId === 'string' && body.savedPaperworkId.trim()) {
-    const pw = await prisma.paperworkRequest.findUnique({
-      where: { id: body.savedPaperworkId.trim() },
-      select: {
-        ccCardNumberEncrypted: true,
-        ccCardLast4: true,
-        ccCardType: true,
-        ccCardholderFirst: true,
-        ccCardholderLast: true,
-        ccCardExpiry: true,
-        ccBillingPostal: true,
-      },
-    })
-    if (!pw?.ccCardNumberEncrypted) {
+  const savedCardId =
+    typeof body.savedCardId === 'string' && body.savedCardId.trim()
+      ? body.savedCardId.trim()
+      : typeof body.savedPaperworkId === 'string' && body.savedPaperworkId.trim()
+        ? body.savedPaperworkId.trim()
+        : ''
+  // Default to 'paperwork' so the pre-wallet callers (savedPaperworkId alone)
+  // keep resolving exactly where they always did.
+  const savedCardOrigin: 'company' | 'paperwork' =
+    body.savedCardOrigin === 'company' ? 'company' : 'paperwork'
+
+  if (savedCardId) {
+    const card = await resolveCardToken(savedCardOrigin, savedCardId)
+    if (!card) {
       return NextResponse.json(
-        { ok: false, error: 'that authorization has no stored card' },
+        { ok: false, error: 'that card is no longer on file' },
         { status: 400 },
       )
     }
-    cardToken = pw.ccCardNumberEncrypted
-    cardLast4 = pw.ccCardLast4
-    cardType = pw.ccCardType
-    cardholderName =
-      cardholderName ||
-      [pw.ccCardholderFirst, pw.ccCardholderLast].filter(Boolean).join(' ') ||
-      null
+
+    // Whose card is this? Only the wallet knows — a legacy paperwork card
+    // reaches a company through its booking's job.
+    const cardCompany = await cardCompanyFor(savedCardOrigin, savedCardId)
+    if (
+      invoiceCompanyId &&
+      cardCompany?.id &&
+      cardCompany.id !== invoiceCompanyId &&
+      body.confirmCrossClientCard !== true
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            `That card is on file for ${cardCompany.name ?? 'another client'}, not ` +
+            `${invoiceCompanyName ?? 'this client'}. Confirm you mean to charge it before it goes through.`,
+          crossClientCard: {
+            cardCompanyName: cardCompany.name,
+            invoiceCompanyName,
+          },
+        },
+        { status: 409 },
+      )
+    }
+
+    cardToken = card.cardToken
+    cardLast4 = card.last4
+    cardType = card.cardType
+    cardholderName = cardholderName || card.cardholderName || null
     // Captured with the authorization. The saved-card path used to leave this
     // empty, so a merchant-initiated charge against a card on file reached the
     // gateway with no expiry — the same defect the keyed path guards against
     // above, on the branch nobody had exercised yet.
-    cardExpiry = pw.ccCardExpiry ?? ''
-    cardPostal = cardPostal || (pw.ccBillingPostal ?? '')
-    // The client signed this authorization themselves in the portal, so it is
-    // not a mail/telephone order.
+    cardExpiry = card.expiry ?? ''
+    cardPostal = cardPostal || (card.postal ?? '')
+    // The client signed this authorization themselves — in the portal, or on
+    // the written authorization a staff-keyed card is filed against. Either
+    // way it is not a mail/telephone order.
     moto = false
   } else if (typeof body.cardToken === 'string' && body.cardToken.trim()) {
     cardToken = body.cardToken.trim()
@@ -169,7 +221,7 @@ export async function POST(req: NextRequest) {
 
   if (!cardToken) {
     return NextResponse.json(
-      { ok: false, error: 'either savedPaperworkId or cardToken is required' },
+      { ok: false, error: 'either savedCardId or cardToken is required' },
       { status: 400 },
     )
   }
@@ -322,4 +374,42 @@ export async function POST(req: NextRequest) {
         : `Approved — $${total.toFixed(2)} charged. No card fee applied (cardholder not eligible for surcharging).`
       : `Declined: ${resp.resptext || 'no reason given'}`,
   })
+}
+
+/**
+ * The company a card on file belongs to.
+ *
+ * Wallet cards carry it directly. A legacy paperwork authorization reaches one
+ * only through its booking's job — and may not reach one at all, in which case
+ * the wrong-client guard stays quiet rather than blocking on an unknown.
+ */
+async function cardCompanyFor(
+  origin: 'company' | 'paperwork',
+  id: string,
+): Promise<{ id: string; name: string | null } | null> {
+  if (origin === 'company') {
+    const c = await prisma.companyCard.findUnique({
+      where: { id },
+      select: { company: { select: { id: true, name: true } } },
+    })
+    return c?.company ? { id: c.company.id, name: c.company.name } : null
+  }
+  const p = await prisma.paperworkRequest.findUnique({
+    where: { id },
+    select: {
+      booking: {
+        select: {
+          job: { select: { company: { select: { id: true, name: true } } } },
+          orders: {
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { job: { select: { company: { select: { id: true, name: true } } } } },
+          },
+        },
+      },
+    },
+  })
+  const company =
+    p?.booking?.job?.company ?? p?.booking?.orders?.[0]?.job?.company ?? null
+  return company ? { id: company.id, name: company.name } : null
 }

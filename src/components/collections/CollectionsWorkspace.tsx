@@ -25,11 +25,25 @@ import { EodReportPanel } from '@/components/collections/EodReportPanel'
 
 interface Authorization {
   id: string
+  /** Which table the card lives in — the charge route needs it to resolve the
+   *  token, and must never guess (both tables use uuids). */
+  origin: 'company' | 'paperwork'
   cardholderName: string | null
   cardType: string | null
   last4: string | null
+  expiry: string | null
+  expired: boolean
+  /** Wallet cards only — the client's own name for it ("AmEx — gear"). */
+  label: string | null
+  isDefault: boolean
+  validated: boolean
   authorizedAt: string | null
   paymentPreference: string
+  /** WHOSE card this is. The picker groups on it; without it the list is a
+   *  flat pile of every client's cards. */
+  companyId: string | null
+  companyName: string | null
+  jobId: string | null
   jobName: string | null
   jobCode: string | null
   orderNumber: string | null
@@ -40,6 +54,9 @@ interface RwInvoice {
   rwInvoiceId: string
   invoiceNumber: string | null
   customerName: string | null
+  /** Set when the row came from an HQ final invoice, which knows its Company.
+   *  A raw RentalWorks row has only the customer NAME. */
+  companyId?: string | null
   dealName: string | null
   orderNumber: string | null
   invoiceDate: string | null
@@ -68,6 +85,7 @@ interface FinalInvoice {
   note: string | null
   jobName: string | null
   jobCode: string | null
+  companyId: string | null
   companyName: string | null
   alreadyCharged: number
   uploadedAt: string
@@ -83,6 +101,14 @@ interface FinalInvoice {
   collectedAt: string | null
   collectedVia: string | null
   collectedBy: string | null
+  /** The client says they have SENT the money — logged before it lands, so an
+   *  ACH in flight stops reading like a client who has gone quiet. Not
+   *  collected: the row stays in the queue until the money is actually in. */
+  remittanceAt: string | null
+  remittanceVia: string | null
+  remittanceRef: string | null
+  remittanceNote: string | null
+  remittanceBy: string | null
   /** RW mirror balance for the linked invoice — 0 on a READY row means the
    *  money likely already landed at the bank. */
   rwRemaining: number | null
@@ -196,6 +222,28 @@ function invoiceAge(
   return { days, cls, bucket }
 }
 
+/**
+ * A comparable key for a client name. Case and punctuation are noise —
+ * "Chad Powers, LLC" and "Chad Powers LLC" are one client — but nothing
+ * cleverer is attempted: a name this does NOT match simply lands in the
+ * picker's "other clients" group, which is the side that fails safe.
+ */
+function companyKey(name: string | null | undefined): string {
+  return (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/** One line for a card in the picker: who, what, and anything worrying. */
+function cardOptionLabel(a: Authorization): string {
+  const bits = [
+    a.label || a.cardholderName || 'Unnamed',
+    `${a.cardType || 'card'} ****${a.last4 ?? '????'}`,
+  ]
+  if (a.isDefault) bits.push('default')
+  if (a.expired) bits.push('EXPIRED')
+  if (a.jobName) bits.push(a.jobName)
+  return bits.join(' · ')
+}
+
 export function CollectionsWorkspace({ operatorName }: { operatorName: string }) {
   const [auths, setAuths] = useState<Authorization[]>([])
   const [invoices, setInvoices] = useState<RwInvoice[]>([])
@@ -205,6 +253,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   /** id of the row whose Mark-collected method picker is open */
   const [collectPicker, setCollectPicker] = useState<string | null>(null)
   const [collecting, setCollecting] = useState(false)
+  /** id of the row whose proof-of-remittance form is open, and its reference */
+  const [remitPicker, setRemitPicker] = useState<string | null>(null)
+  const [remitRef, setRemitRef] = useState('')
+  const [remitting, setRemitting] = useState(false)
   const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [reversing, setReversing] = useState<string | null>(null)
@@ -221,6 +273,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
 
   const [source, setSource] = useState<'saved' | 'new'>('new')
   const [savedId, setSavedId] = useState('')
+  // Ticked only to charge a card that is on file for a DIFFERENT client than
+  // the invoice. Resets on every card change — an acknowledgement has to be
+  // about the card in front of the operator, not one chosen two clicks ago.
+  const [crossClientOk, setCrossClientOk] = useState(false)
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
   const [cardToken, setCardToken] = useState<string | null>(null)
   // Bumped after a successful charge to REMOUNT the tokenizer iframe.
@@ -252,6 +308,15 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // native dialog invites a reflexive OK; a re-labeled button makes the
   // operator read the amount.
   const [confirming, setConfirming] = useState(false)
+
+  // A card chosen for one invoice must not survive into the next. Switching
+  // invoices used to leave the previous client's card selected and armed —
+  // exactly the wrong-card charge the grouping below exists to prevent.
+  useEffect(() => {
+    setSavedId('')
+    setCrossClientOk(false)
+    setConfirming(false)
+  }, [invoice?.rwInvoiceId])
 
   // Outcome toast. `result` used to render only inside the charge panel's
   // invoice-selected branch, so Mark collected / Send options / reversals —
@@ -320,6 +385,69 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       }
     },
     [collecting, loadFinals],
+  )
+
+  // Proof of remittance — the client has told us the money is on its way and
+  // sent something to prove it. Recorded BEFORE it lands: an ACH takes days,
+  // and in that gap this row is indistinguishable from a client who never
+  // replied (Ana, 2026-09-04). Deliberately does not collect the invoice —
+  // the money still has to arrive.
+  const logRemittance = useCallback(
+    async (fv: FinalInvoice, via: string, ref: string) => {
+      if (remitting) return
+      setRemitting(true)
+      try {
+        const r = await fetch(`/api/collections/final-invoices/${fv.id}/remittance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ via, ref: ref.trim() || undefined }),
+        })
+        const d = await r.json()
+        if (d.ok) {
+          setResult({
+            ok: true,
+            message: `Proof of remittance logged (${via.toLowerCase()}) — still in the queue until the money lands.`,
+          })
+          setRemitPicker(null)
+          setRemitRef('')
+          loadFinals()
+        } else {
+          setResult({ ok: false, message: d.error || 'Could not log the remittance.' })
+        }
+      } catch {
+        setResult({ ok: false, message: 'Could not log the remittance — network error.' })
+      } finally {
+        setRemitting(false)
+      }
+    },
+    [remitting, loadFinals],
+  )
+
+  // Reversible: "we sent it Tuesday" is sometimes wrong, and a proof flag
+  // that cannot be taken back leaves the queue quietly lying.
+  const clearRemittance = useCallback(
+    async (fv: FinalInvoice) => {
+      if (remitting) return
+      if (!window.confirm('Remove the proof of remittance on this invoice?')) return
+      setRemitting(true)
+      try {
+        const r = await fetch(`/api/collections/final-invoices/${fv.id}/remittance`, {
+          method: 'DELETE',
+        })
+        const d = await r.json()
+        if (d.ok) {
+          setResult({ ok: true, message: 'Proof of remittance removed.' })
+          loadFinals()
+        } else {
+          setResult({ ok: false, message: d.error || 'Could not remove it.' })
+        }
+      } catch {
+        setResult({ ok: false, message: 'Could not remove it — network error.' })
+      } finally {
+        setRemitting(false)
+      }
+    },
+    [remitting, loadFinals],
   )
 
   // Payment-options (re)send for a queued final invoice. Same code path as
@@ -448,16 +576,43 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // card type at all — and the one moment it matters is a dispute, months
   // later, when nobody remembers. It is a single tap while the operator is
   // already holding the card.
+  const selectedAuth = auths.find((a) => a.id === savedId) ?? null
+
+  // ── whose cards are these? ──────────────────────────────────────
+  // The picker used to be one flat list of every card in the platform, with
+  // no client on it — Ana, 2026-09-04: "none of them are for the company I'm
+  // charging out for." Cards for the selected invoice's client come first;
+  // everything else is a separate group you have to mean to reach.
+  //
+  // Matching prefers the Company id (exact, available on HQ final invoices)
+  // and falls back to the name, since a raw RentalWorks invoice carries only
+  // a customer name. Punctuation and case are ignored; nothing else is
+  // guessed — a near-miss lands in "other clients", which is the safe side.
+  const targetCompanyId = invoice?.companyId ?? null
+  const targetCompanyName = invoice?.customerName ?? null
+  const targetKey = companyKey(targetCompanyName)
+  const knowsClient = !!targetCompanyId || !!targetKey
+  const cardIsForClient = (a: Authorization) => {
+    if (!knowsClient) return false
+    if (targetCompanyId && a.companyId) return a.companyId === targetCompanyId
+    return !!targetKey && companyKey(a.companyName) === targetKey
+  }
+  const clientAuths = auths.filter(cardIsForClient)
+  const otherAuths = auths.filter((a) => !cardIsForClient(a))
+  // A card whose client we KNOW differs from the invoice's. An unattributed
+  // card (no company on file at all) is not flagged — that is ignorance, not
+  // a mismatch, and crying wolf on it would train the warning away.
+  const crossClient =
+    !!selectedAuth && knowsClient && !!selectedAuth.companyId && !cardIsForClient(selectedAuth)
+
   const cardReady =
     source === 'saved'
-      ? !!savedId
+      ? !!savedId && (!crossClient || crossClientOk)
       : !!cardToken &&
         cardExpiry.length === 4 &&
         cardPostal.trim().length >= 5 &&
         !!cardBrand
   const canCharge = !!invoice && validAmount && cardReady && !busy
-
-  const selectedAuth = auths.find((a) => a.id === savedId) ?? null
 
   async function uploadPdf(file: File) {
     setUploading(true)
@@ -491,7 +646,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           invoiceNumber: invoice.invoiceNumber,
           customerName: invoice.customerName,
           amount: base,
-          savedPaperworkId: source === 'saved' ? savedId : undefined,
+          savedCardId: source === 'saved' ? savedId : undefined,
+          savedCardOrigin: source === 'saved' ? selectedAuth?.origin : undefined,
+          // The server refuses a cross-client card without this; the checkbox
+          // above is the only thing that sets it.
+          confirmCrossClientCard: source === 'saved' && crossClient ? crossClientOk : undefined,
           cardToken: source === 'new' ? cardToken : undefined,
           expiry: source === 'new' ? cardExpiry : undefined,
           cardholderName: cardholderName || undefined,
@@ -517,6 +676,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setCardPostal('')
         setCardBrand('')
         setCardFormKey((k) => k + 1)
+        // The saved-card selection too — leaving it armed after a successful
+        // charge is how the same card gets run twice.
+        setSavedId('')
+        setCrossClientOk(false)
         setAmount('')
         setFinalPick(null)
         loadInvoices(q)
@@ -786,6 +949,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       rwInvoiceId: fv.rwInvoiceId || `final:${fv.id}`,
                       invoiceNumber: fv.invoiceNumber,
                       customerName: fv.companyName,
+                      companyId: fv.companyId,
                       dealName: fv.jobName,
                       orderNumber: null,
                       invoiceDate: null,
@@ -870,6 +1034,30 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         ↩ replied {new Date(fv.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     )}
+                    {/* The client says it is sent. Loud enough to stop a
+                        second chase, quiet enough not to read as collected —
+                        the money is still not in. */}
+                    {fv.remittanceAt && (
+                      <span
+                        className="text-xs text-emerald-700 font-semibold"
+                        title={
+                          [
+                            fv.remittanceNote,
+                            fv.remittanceBy ? `logged by ${fv.remittanceBy}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || undefined
+                        }
+                      >
+                        proof of remittance ·{' '}
+                        {(fv.remittanceVia ?? 'sent').toLowerCase()}
+                        {fv.remittanceRef ? ` · ${fv.remittanceRef}` : ''} ·{' '}
+                        {new Date(fv.remittanceAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    )}
                     {/* Payment-behavior chip. Latency shows once observed
                         (n=sample size); until then, current exposure. */}
                     {fv.client && fv.client.avgDaysToPay !== null && (
@@ -903,6 +1091,68 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     >
                       {sendingOptions === fv.id ? 'Sending…' : fv.emailedAt ? 'Resend options' : 'Send options'}
                     </button>
+                    {/* Proof of remittance. Sits beside Mark collected on
+                        purpose: they are the two halves of an ACH — the
+                        client's claim, then the money. */}
+                    {remitPicker === fv.id ? (
+                      <span
+                        className="flex items-center gap-1 flex-wrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          className="text-[11px] px-1.5 py-0.5 rounded border border-zinc-300 bg-white text-zinc-800 w-32"
+                          placeholder="ref / trace #"
+                          value={remitRef}
+                          onChange={(e) => setRemitRef(e.target.value)}
+                          aria-label="Remittance reference"
+                        />
+                        {['ACH', 'WIRE', 'ZELLE', 'CHECK', 'OTHER'].map((via) => (
+                          <button
+                            key={via}
+                            type="button"
+                            onClick={() => void logRemittance(fv, via, remitRef)}
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 border border-sky-300 text-sky-800 hover:bg-sky-100"
+                          >
+                            {remitting ? '…' : via}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemitPicker(null)
+                            setRemitRef('')
+                          }}
+                          className="text-[11px] px-1.5 py-0.5 text-zinc-600 hover:text-zinc-700"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ) : fv.remittanceAt ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void clearRemittance(fv)
+                        }}
+                        className="text-xs px-2 py-0.5 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100 shrink-0"
+                        title="Remove the proof of remittance — it was wrong, or it never arrived"
+                      >
+                        Clear proof
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setRemitPicker(fv.id)
+                          setRemitRef('')
+                        }}
+                        className="text-xs px-2 py-0.5 rounded border border-sky-200 text-sky-800 hover:bg-sky-50 shrink-0"
+                        title="The client sent proof they have paid — an ACH advice, a wire confirmation, a check number. Records the claim; the money still has to land."
+                      >
+                        Proof of remittance
+                      </button>
+                    )}
                     {collectPicker === fv.id ? (
                       <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         {['WIRE', 'ACH', 'ZELLE', 'CHECK', 'OTHER'].map((via) => (
@@ -910,7 +1160,19 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                             key={via}
                             type="button"
                             onClick={() => void markCollected(fv, via)}
-                            className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                            // The method the client's own remittance named is
+                            // ringed, so the two records agree by default
+                            // rather than by memory.
+                            className={`text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 border text-emerald-700 hover:bg-emerald-100 ${
+                              fv.remittanceVia === via
+                                ? 'border-emerald-600 ring-1 ring-emerald-500 font-semibold'
+                                : 'border-emerald-300'
+                            }`}
+                            title={
+                              fv.remittanceVia === via
+                                ? 'What the client’s remittance said'
+                                : undefined
+                            }
                           >
                             {collecting ? '…' : via}
                           </button>
@@ -1269,7 +1531,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                           : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                       }`}
                     >
-                      {s === 'saved' ? `On file (${auths.length})` : 'Key a card'}
+                      {s === 'saved'
+                        ? knowsClient
+                          ? `On file (${clientAuths.length})`
+                          : `On file (${auths.length})`
+                        : 'Key a card'}
                     </button>
                   ))}
                 </div>
@@ -1277,26 +1543,87 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 {source === 'saved' ? (
                   auths.length === 0 ? (
                     <p className="text-xs text-zinc-600 bg-zinc-50 rounded-lg px-3 py-2.5 leading-relaxed">
-                      No authorizations on file yet. This fills as clients complete the card
-                      authorization step in the portal — historical authorizations live in Cognito
-                      and can&rsquo;t be charged from here. Use <b className="text-zinc-700">Key a
-                      card</b> in the meantime.
+                      No cards on file yet. This fills as clients save a card in the portal, and as
+                      staff key one from a signed authorization on the client&rsquo;s CRM page —
+                      historical authorizations live in Cognito and can&rsquo;t be charged from
+                      here. Use <b className="text-zinc-700">Key a card</b> in the meantime.
                     </p>
                   ) : (
                     <>
                       <select
                         className={input}
                         value={savedId}
-                        onChange={(e) => setSavedId(e.target.value)}
+                        onChange={(e) => {
+                          setSavedId(e.target.value)
+                          // A fresh card needs a fresh acknowledgement.
+                          setCrossClientOk(false)
+                        }}
                       >
-                        <option value="">Select an authorization…</option>
-                        {auths.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.cardholderName || 'Unnamed'} · {a.cardType || 'card'} ****{a.last4}
-                            {a.jobName ? ` · ${a.jobName}` : ''}
-                          </option>
-                        ))}
+                        <option value="">Select a card…</option>
+                        {knowsClient ? (
+                          <>
+                            <optgroup
+                              label={
+                                clientAuths.length > 0
+                                  ? `On file for ${targetCompanyName || 'this client'}`
+                                  : `Nothing on file for ${targetCompanyName || 'this client'}`
+                              }
+                            >
+                              {clientAuths.map((a) => (
+                                <option key={`${a.origin}:${a.id}`} value={a.id}>
+                                  {cardOptionLabel(a)}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {otherAuths.length > 0 && (
+                              <optgroup label={`Other clients (${otherAuths.length})`}>
+                                {otherAuths.map((a) => (
+                                  <option key={`${a.origin}:${a.id}`} value={a.id}>
+                                    {a.companyName ? `${a.companyName} — ` : ''}
+                                    {cardOptionLabel(a)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </>
+                        ) : (
+                          auths.map((a) => (
+                            <option key={`${a.origin}:${a.id}`} value={a.id}>
+                              {a.companyName ? `${a.companyName} — ` : ''}
+                              {cardOptionLabel(a)}
+                            </option>
+                          ))
+                        )}
                       </select>
+                      {knowsClient && clientAuths.length === 0 && (
+                        <p className="mt-2 text-xs text-zinc-600 bg-zinc-50 rounded-lg px-3 py-2">
+                          No card on file for {targetCompanyName || 'this client'}. Key the card
+                          instead, or add one on their client page so it is here next time.
+                        </p>
+                      )}
+                      {crossClient && (
+                        <div className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900">
+                          <p className="font-semibold">
+                            This card is on file for {selectedAuth?.companyName}, not{' '}
+                            {targetCompanyName || 'this client'}.
+                          </p>
+                          <label className="mt-2 flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={crossClientOk}
+                              onChange={(e) => {
+                                setCrossClientOk(e.target.checked)
+                                setConfirming(false)
+                              }}
+                            />
+                            <span>
+                              Charge {selectedAuth?.companyName}&rsquo;s card for this invoice
+                              anyway — they are paying on this client&rsquo;s behalf.
+                            </span>
+                          </label>
+                        </div>
+                      )}
                       {selectedAuth && (
                         <div className="mt-2 text-xs bg-zinc-50 rounded-lg px-3 py-2 space-y-1">
                           {selectedAuth.authorizedAt && (
