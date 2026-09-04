@@ -88,6 +88,12 @@ export interface CompanyNegotiatedRateLine {
   label: string
   dailyRate: number
   weeklyRate: number | null
+  /**
+   * Catalog list price at read time — "regularly $400" under the deal.
+   * Live, not snapshotted: a list-price change should move this line the
+   * same day, or the saving it implies is fiction.
+   */
+  listDailyRate: number | null
 }
 
 export interface CompanyTermsSummary {
@@ -288,7 +294,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         id: true,
         dailyRate: true,
         weeklyRate: true,
-        inventoryItem: { select: { code: true, description: true } },
+        inventoryItem: { select: { code: true, description: true, dailyRate: true } },
       },
     }),
     // The agent on the most of this client's jobs — the fallback rep.
@@ -339,6 +345,10 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         label: r.inventoryItem.description || r.inventoryItem.code,
         dailyRate: Number(r.dailyRate),
         weeklyRate: r.weeklyRate != null && Number(r.weeklyRate) > 0 ? Number(r.weeklyRate) : null,
+        listDailyRate:
+          r.inventoryItem.dailyRate != null && Number(r.inventoryItem.dailyRate) > 0
+            ? Number(r.inventoryItem.dailyRate)
+            : null,
       }))
       .sort((a, b) => b.dailyRate - a.dailyRate || a.label.localeCompare(b.label)),
     discounts: discounts.map((d) => ({

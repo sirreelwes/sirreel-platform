@@ -280,19 +280,27 @@ export default async function CompanyPortalPage({
             {terms.negotiatedRates.length > 0 && (
               <div className={`flex flex-wrap gap-x-2 gap-y-2 ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
                 {terms.negotiatedRates.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-white border border-zinc-200 rounded-lg px-3.5 py-2 flex items-baseline gap-2"
-                  >
-                    <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
-                      ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      <span className="text-[12px] font-normal text-zinc-500">/day</span>
-                    </span>
-                    <span className="text-[13px] text-zinc-700">{r.label}</span>
-                    {r.weeklyRate != null && (
-                      <span className="text-[11px] text-zinc-400">
-                        · ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/wk
+                  <div key={r.id} className="bg-white border border-zinc-200 rounded-lg px-3.5 py-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
+                        ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                        <span className="text-[12px] font-normal text-zinc-500">/day</span>
                       </span>
+                      <span className="text-[13px] text-zinc-700">{r.label}</span>
+                      {r.weeklyRate != null && (
+                        <span className="text-[11px] text-zinc-400">
+                          · ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/wk
+                        </span>
+                      )}
+                    </div>
+                    {/* Wes 2026-09-04: 'a small font "regularly $450" or whatever
+                        regular price under unit prices.' Only when the deal
+                        actually beats list — a "regularly" that isn't lower
+                        would advertise the opposite of a deal. */}
+                    {r.listDailyRate != null && r.listDailyRate > r.dailyRate && (
+                      <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">
+                        regularly ${r.listDailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/day
+                      </div>
                     )}
                   </div>
                 ))}
