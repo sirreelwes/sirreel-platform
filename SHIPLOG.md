@@ -22,6 +22,52 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-04
+
+### Furniture and dollies are Pro Supplies, not G&E
+
+`50abd37` furnitureDollyClass + reclassify sweep + the three sources of the drift
+
+Wes: "we need to reclassify furniture, dolly to pro supplies." Department
+AND category, every such row, "even the ones a grip uses."
+
+**Both axes, because either one alone comes undone.** InventoryCategory has
+owned the department since 2026-08-28, so moving only the department leaves
+the next hand truck someone adds under Grip Equipment inheriting GE all over
+again; moving only the category leaves today's rows billing on the G&E rule.
+`scripts/reclassify-furniture-dolly-pro-supplies.ts` does both, plus the two
+target categories: dollies (magliners, hand trucks, appliance and furniture
+dollies, doorway/western/Dana camera dollies, dolly track, pallet jacks) →
+Dollies & Carts; furniture (pads, clamps) → Basecamp Basics.
+
+**It is a price change, not a relabel.** BILLING_RULES bills GE seven days per
+7-day window and PRO_SUPPLIES three, so a weekly rental of a moved item bills
+LESS. The preflight prints every row that crosses that line under "REPRICES ON
+WEEKLY RENTALS" and takes an EXCLUDE_CODES veto list, so the rows a grip would
+argue about — the three furniture clamps, the two doorway dollies — get decided
+with the list in hand instead of arriving as a silent side effect. Existing
+OrderLineItems are never rewritten (department + rate are snapshotted at line
+create so a catalog edit can't reprice booked work); open orders carrying a
+moved item are REPORTED with their order numbers.
+
+**Racks are not dollies.** "Dolly Track Rack, Single" bolts into a truck and
+stays in Vehicle Outfitting — the same carve-out the public order form already
+makes for a Director's Chair Rack. A bare "cart" isn't a trigger word either: a
+Lighting Cart stays G&E. Both are printed under SKIPPED rather than left silent.
+
+**The three places that re-created the drift now agree with the ruling:** the RW
+triage map (RW category "Dolly" pointed at grip-equipment/GE), the RW importer's
+keyword pass (a "GRIP DOLLY" landed in G&E on the word "grip" — the new rule
+sits ABOVE the GE pattern), and the quote parser's department guide.
+
+Match rules live in `src/lib/inventory/furnitureDollyClass.ts`, not inside the
+one-off, so `npm run test:furniture-dolly` holds them to real catalog names.
+Scope against the June export: 24 rows matched, 1 skipped (the rack), 6 already
+correct, **18 move** — 5 off GE and 13 out of the legacy "Production Supplies"
+dump into the curated categories. Sweep is preflight-by-default, writes BY
+CAPTURED ID only, journals to `tmp/` + AuditLog (`inventory.reclassify_furniture_dolly`),
+idempotent. `npm run build` exits 0.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
