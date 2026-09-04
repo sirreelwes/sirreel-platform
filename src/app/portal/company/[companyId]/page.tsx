@@ -250,45 +250,54 @@ export default async function CompanyPortalPage({
                 DISCOUNT prints as the percent — the same split the quote
                 itself makes, so the portal and the paperwork agree. */}
             <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
-              Your deals with SirReel
+              Your deals with SirReel <span className="text-zinc-400 normal-case tracking-normal">(Confidential)</span>
             </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {terms.negotiatedRates.map((r) => (
-                <div key={r.id} className="bg-white border border-zinc-200 rounded-xl px-6 py-5">
-                  <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
-                    <span className="text-[26px] font-normal text-zinc-500 mr-0.5">$</span>
-                    {r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    <span className="text-[26px] font-normal text-zinc-500 ml-0.5">/day</span>
-                  </div>
-                  <div className="mt-2 text-[17px] font-normal text-zinc-800 leading-snug">{r.label}</div>
-                  {r.weeklyRate != null && (
-                    <div className="text-xs text-zinc-500 mt-1.5">
-                      ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/week
+
+            {/* Wes 2026-09-04: "keep % tiles at top, individual unit rates
+                much smaller and lined up left to right underneath." The
+                percentages are the headline; a unit rate is a fact for the
+                coordinator building the order. */}
+            {terms.discounts.length > 0 && (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {terms.discounts.map((d) => (
+                  <div key={d.id} className="bg-white border border-zinc-200 rounded-xl px-6 py-5">
+                    <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
+                      {d.percentOff}
+                      <span className="text-[26px] font-normal text-zinc-500 ml-0.5">% off</span>
                     </div>
-                  )}
-                </div>
-              ))}
-              {terms.discounts.map((d) => (
-                <div
-                  key={d.id}
-                  className="bg-white border border-zinc-200 rounded-xl px-6 py-5"
-                >
-                  <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
-                    {d.percentOff}
-                    <span className="text-[26px] font-normal text-zinc-500 ml-0.5">% off</span>
+                    <div className="mt-2 text-[17px] font-normal text-zinc-800 leading-snug">{d.label}</div>
+                    {d.conditions && (
+                      <div className="text-xs text-zinc-500 mt-1.5 leading-relaxed">{d.conditions}</div>
+                    )}
+                    {d.expiryDate && (
+                      <div className="text-[11px] text-zinc-400 mt-1.5">Through {fmtDay(d.expiryDate)}</div>
+                    )}
                   </div>
-                  <div className="mt-2 text-[17px] font-normal text-zinc-800 leading-snug">
-                    {d.label}
+                ))}
+              </div>
+            )}
+
+            {terms.negotiatedRates.length > 0 && (
+              <div className={`flex flex-wrap gap-x-2 gap-y-2 ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
+                {terms.negotiatedRates.map((r) => (
+                  <div
+                    key={r.id}
+                    className="bg-white border border-zinc-200 rounded-lg px-3.5 py-2 flex items-baseline gap-2"
+                  >
+                    <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
+                      ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      <span className="text-[12px] font-normal text-zinc-500">/day</span>
+                    </span>
+                    <span className="text-[13px] text-zinc-700">{r.label}</span>
+                    {r.weeklyRate != null && (
+                      <span className="text-[11px] text-zinc-400">
+                        · ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/wk
+                      </span>
+                    )}
                   </div>
-                  {d.conditions && (
-                    <div className="text-xs text-zinc-500 mt-1.5 leading-relaxed">{d.conditions}</div>
-                  )}
-                  {d.expiryDate && (
-                    <div className="text-[11px] text-zinc-400 mt-1.5">Through {fmtDay(d.expiryDate)}</div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-zinc-400 mt-2.5">
               Applied automatically to every order your teams place. If a quote doesn&apos;t
               reflect these, tell your rep before you approve it.
