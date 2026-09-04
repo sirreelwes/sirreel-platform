@@ -48,5 +48,19 @@ export const MESSAGE_EXTRACTION_MODEL = 'claude-haiku-4-5-20251001'
  */
 export const COLLECTIONS_EVIDENCE_MODEL = 'claude-opus-5'
 
+/**
+ * Reading a client's redline out of whatever they actually sent — an
+ * email, a pasted list of edits, a screenshot of a marked-up page — and
+ * returning the FULL amended text of each numbered clause.
+ *
+ * Opus rather than the review tier, for the same asymmetry that put
+ * collections on Opus: the output is the literal contract language the
+ * client is asked to sign. A summary where a clause should be, or a
+ * silently dropped strike, reaches a signature. The operator reviews
+ * every clause before saving, but the model's job is to hand them the
+ * real text, not a draft to reconstruct. Runs once per redline.
+ */
+export const REDLINE_EXTRACTION_MODEL = 'claude-opus-5'
+
 /** Minimal-cost API health probe. */
 export const HEALTH_CHECK_MODEL = 'claude-haiku-4-5-20251001'

@@ -1,23 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { X, Plus, Trash2, RotateCcw } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { X, Plus, Trash2, RotateCcw, Sparkles, ImageIcon, AlertTriangle } from "lucide-react";
 import { CANONICAL_CLAUSES } from "@/lib/contracts/contractClauses";
 
 /**
- * "Client sent a redline back" — the staff-side entry desk.
+ * "The client sent a redline back" — the staff-side entry desk.
  *
- * The portal's upload path only takes a marked-up PDF. Plenty of redlines
- * never exist as one: they come back as an email listing "Section 5, strike
- * the red and add the green". This modal is where that gets typed in — the
- * operator opens each amended clause with the STANDARD text already loaded
- * and edits it to read the way both sides agreed.
+ * The portal's upload path assumes an annotated PDF. Most redlines are not
+ * that: they are an email that says "Section 5, strike the red and add the
+ * green", or a screenshot of a marked-up page. So the first thing this asks
+ * for is what the client actually sent — paste the text, paste the image, or
+ * both — and it reads the clauses out of it.
  *
- * What you paste is the whole clause as it should finally read, not the
- * diff. That is what gets printed into the client's agreement, and the
- * counter-PDF renderer deliberately falls back to the standard clause when
- * the accepted text looks like a summary — so a diff would silently undo
- * the redline. The API enforces the same rule.
+ * The operator still reviews and edits every clause before saving. What the
+ * AI removes is the guessing: which numbered clauses were touched, and what
+ * the full amended text of each one reads like.
+ *
+ * What gets saved is the WHOLE clause as it should finally read, never a
+ * diff or a summary. The counter-PDF renderer falls back to the standard
+ * clause when accepted text looks like a summary, so a diff would silently
+ * undo the redline. The API enforces the same rule.
  */
 
 export interface EnterRedlineResult {
@@ -28,7 +31,22 @@ export interface EnterRedlineResult {
 interface Row {
   clauseRef: string;
   proposed: string;
+  /** What the AI says changed. Null for a clause added by hand. */
+  summary: string | null;
 }
+
+interface Unmatched {
+  text: string;
+  why: string;
+}
+
+interface PastedImage {
+  media_type: string;
+  data: string;
+  name: string;
+}
+
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
 export default function EnterRedlineModal({
   orderId,
@@ -47,6 +65,14 @@ export default function EnterRedlineModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [redlineText, setRedlineText] = useState("");
+  const [images, setImages] = useState<PastedImage[]>([]);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState("");
+  const [unmatched, setUnmatched] = useState<Unmatched[]>([]);
+  const [hasRead, setHasRead] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const clauseByRef = useMemo(
     () => new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c])),
     [],
@@ -57,8 +83,66 @@ export default function EnterRedlineModal({
   const addRow = (ref: string) => {
     const canonical = clauseByRef.get(ref);
     if (!canonical) return;
-    setRows((prev) => [...prev, { clauseRef: ref, proposed: canonical.body }]);
+    setRows((prev) => [...prev, { clauseRef: ref, proposed: canonical.body, summary: null }]);
     setPendingRef("");
+  };
+
+  const attachFiles = (files: FileList | File[] | null) => {
+    if (!files) return;
+    const picked = Array.from(files).filter((f) => IMAGE_TYPES.has(f.type));
+    for (const file of picked.slice(0, 4)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        const data = result.slice(result.indexOf(",") + 1);
+        setImages((prev) =>
+          prev.length >= 4 ? prev : [...prev, { media_type: file.type, data, name: file.name || "pasted image" }],
+        );
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const readRedline = async () => {
+    setReadError("");
+    if (!redlineText.trim() && images.length === 0) {
+      setReadError("Paste the email, or the screenshot, or both.");
+      return;
+    }
+    setReading(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/agreement/redline/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: redlineText,
+          images: images.map((i) => ({ media_type: i.media_type, data: i.data })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReadError(data.error || "Could not read the redline.");
+        return;
+      }
+      const found: Row[] = (data.amendments ?? []).map((a: any) => ({
+        clauseRef: String(a.clauseRef),
+        proposed: String(a.proposed),
+        summary: a.summary ? String(a.summary) : null,
+      }));
+      // Replace rather than merge: re-reading means the operator changed what
+      // they pasted, and silently keeping a clause from the previous read is
+      // how a clause nobody meant to send ends up in the agreement.
+      setRows(found);
+      setUnmatched(data.unmatched ?? []);
+      setHasRead(true);
+      if (found.length === 0) {
+        setReadError("No clause edits found in that. Add the clauses by hand below.");
+      }
+    } catch {
+      setReadError("Could not read the redline.");
+    } finally {
+      setReading(false);
+    }
   };
 
   const save = async () => {
@@ -106,8 +190,9 @@ export default function EnterRedlineModal({
           <div>
             <h2 className="text-lg font-bold text-lt-fg">Client redline</h2>
             <p className="text-xs text-lt-fg3 mt-1 max-w-xl">
-              Type the clauses the client changed{jobName ? ` on ${jobName}` : ""}. Each one opens
-              with our standard text — edit it to read the way you agreed. This papers{" "}
+              Paste what the client sent{jobName ? ` on ${jobName}` : ""} — the email, a screenshot
+              of the marked-up page, or both — and it reads the clauses out. You review every one
+              before saving. This papers{" "}
               <span className="font-semibold text-lt-fg2">this job only</span>; it does not change
               the standard agreement or this client&rsquo;s other jobs.
             </p>
@@ -122,6 +207,85 @@ export default function EnterRedlineModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {/* ── What the client sent ─────────────────────────────── */}
+          <div className="border border-lt-hairline rounded-xl p-3 space-y-2">
+            <div className="text-xs font-semibold text-lt-fg2">What the client sent</div>
+            <textarea
+              value={redlineText}
+              onChange={(e) => setRedlineText(e.target.value)}
+              onPaste={(e) => {
+                const files = e.clipboardData?.files;
+                if (files && files.length > 0) attachFiles(files);
+              }}
+              rows={5}
+              placeholder={
+                'Paste their email or list of changes here — e.g. "Section 5, strike the red and add the green…". You can paste a screenshot straight into this box too.'
+              }
+              className="w-full bg-lt-inner border border-lt-hairline rounded-lg p-3 text-xs text-lt-fg leading-relaxed"
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => attachFiles(e.target.files)}
+            />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg2 text-xs font-semibold rounded-lg"
+                >
+                  <ImageIcon size={13} /> Attach a screenshot
+                </button>
+                {images.map((img, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-lt-inner rounded-lg text-[11px] text-lt-fg2"
+                  >
+                    {img.name}
+                    <button
+                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-lt-fg3 hover:text-lt-fg"
+                      aria-label="Remove image"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={readRedline}
+                disabled={reading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-xs font-bold rounded-lg"
+              >
+                <Sparkles size={13} />
+                {reading ? "Reading…" : hasRead ? "Read it again" : "Read the clauses"}
+              </button>
+            </div>
+            {readError && <div className="text-[11px] text-chip-bad-fg">{readError}</div>}
+          </div>
+
+          {unmatched.length > 0 && (
+            <div className="border border-chip-warn-fg/30 bg-chip-warn-bg rounded-xl p-3 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-chip-warn-fg">
+                <AlertTriangle size={13} /> Not turned into a clause edit
+              </div>
+              {unmatched.map((u, i) => (
+                <div key={i} className="text-[11px] text-chip-warn-fg leading-relaxed">
+                  <span className="italic">&ldquo;{u.text}&rdquo;</span> — {u.why}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── The clauses ──────────────────────────────────────── */}
+          {rows.length > 0 && (
+            <div className="text-xs font-semibold text-lt-fg2">
+              {rows.length} clause{rows.length === 1 ? "" : "s"} to review
+            </div>
+          )}
           {rows.map((row, i) => {
             const canonical = clauseByRef.get(row.clauseRef);
             const dirty = canonical && row.proposed.trim() !== canonical.body;
@@ -154,6 +318,11 @@ export default function EnterRedlineModal({
                     </button>
                   </div>
                 </div>
+                {row.summary && (
+                  <div className="text-[11px] text-lt-fg3 leading-relaxed">
+                    What changed: {row.summary}
+                  </div>
+                )}
                 <textarea
                   value={row.proposed}
                   onChange={(e) =>
@@ -182,7 +351,7 @@ export default function EnterRedlineModal({
               }}
               className="flex-1 bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg"
             >
-              <option value="">Add a clause the client changed…</option>
+              <option value="">Add a clause by hand…</option>
               {available.map((c) => (
                 <option key={c.ref} value={c.ref}>
                   {c.ref} · {c.title}
