@@ -173,6 +173,36 @@ export function CompanyDiscountsPanel({
     }
   }
 
+  // Wes 2026-09-04: "change the terms for each dept" — the number is the
+  // term. Edit it in place; the label and scope stay (a different scope is
+  // a different deal — add a row).
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editPct, setEditPct] = useState('')
+  async function savePercent(id: string) {
+    const pct = Math.round(Number(editPct))
+    if (!Number.isFinite(pct) || pct < 1 || pct > 100) {
+      setError('Percent off must be between 1 and 100.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}/discounts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ percentOff: pct }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || 'Could not save')
+      setEditingId(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function deactivate(id: string) {
     setBusy(true)
     await fetch(`/api/crm/companies/${companyId}/discounts/${id}`, { method: 'DELETE' })
@@ -224,9 +254,44 @@ export function CompanyDiscountsPanel({
                   key={d.id}
                   className="flex items-start gap-3 border border-lt-hairline rounded-lg p-3"
                 >
-                  <div className="shrink-0 rounded-md bg-lt-inner px-2 py-1 text-sm font-bold tabular-nums text-lt-fg">
-                    {d.percentOff}%
-                  </div>
+                  {canEdit && editingId === d.id ? (
+                    <div className="shrink-0 flex items-center gap-1">
+                      <input
+                        autoFocus
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={editPct}
+                        onChange={(e) => setEditPct(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') savePercent(d.id)
+                          if (e.key === 'Escape') setEditingId(null)
+                        }}
+                        className="w-16 text-sm border border-lt-hairline rounded-md px-2 py-1 bg-lt-card text-lt-fg tabular-nums"
+                      />
+                      <span className="text-sm text-lt-fg3">%</span>
+                      <button
+                        onClick={() => savePercent(d.id)}
+                        disabled={busy}
+                        className="text-xs font-semibold text-lt-fg hover:text-black ml-1"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canEdit) return
+                        setEditingId(d.id)
+                        setEditPct(String(d.percentOff))
+                      }}
+                      title={canEdit ? 'Change the percent' : undefined}
+                      className={`shrink-0 rounded-md bg-lt-inner px-2 py-1 text-sm font-bold tabular-nums text-lt-fg ${canEdit ? 'hover:bg-lt-hairline cursor-pointer' : 'cursor-default'}`}
+                    >
+                      {d.percentOff}%
+                    </button>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-lt-fg">off {d.label}</div>
                     <div className="text-xs text-lt-fg2 mt-0.5">

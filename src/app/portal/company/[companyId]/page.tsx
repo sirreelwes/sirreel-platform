@@ -159,36 +159,67 @@ export default async function CompanyPortalPage({
   ])
 
   const { terms, active, past, totals } = overview
-  const firstName = session.personName.split(' ')[0] || 'there'
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
-        <div className="max-w-5xl mx-auto px-6 py-8 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
-            <div
-              className="mt-3 text-[10px] uppercase font-semibold"
-              style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
-            >
-              {COMPANY_PORTAL_ROLE_LABEL[session.role]} · Account portal
-            </div>
-            {/* Block face, not the serif italic the job portal inherited —
-                Wes 2026-09-04 on the first account portal: "don't use that
-                font. Use block non italic font." Same Archivo Black he chose
-                for the job title on 9/1. */}
-            <h1 className="mt-1 text-white text-[28px] font-display leading-tight tracking-tight truncate">
+      {/* ── Masthead ─────────────────────────────────────────────────
+          Wes 2026-09-04: "put their word logo and ours at the top of
+          page. Make them similar in size and put either an '&' sign or
+          '|' between" — then "use | instead of &". Its own white band ABOVE the dark row rather than
+          inside it: on a dark ground their mark would have to be
+          recoloured to white, which works for a bare SVG and turns a PNG
+          with a background into a white block. Here every format reads
+          as itself. No logo yet → their name in the display face, so the
+          page is still theirs. */}
+      <div className="w-full bg-white border-b border-zinc-200">
+        {/* Wes 2026-09-04: "right justify SirReel and Left justify
+            Radical. Make Radical image 10% smaller." Their mark holds the
+            left edge, ours the right, the rule keeps ours company. */}
+        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between gap-5">
+          {terms.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/portal/company/${params.companyId}/logo`}
+              alt={overview.companyName}
+              className="block h-[29px] w-auto max-w-[220px] object-contain object-left"
+            />
+          ) : (
+            <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">
               {overview.companyName}
-            </h1>
-            <div className="text-xs text-white/60 mt-1 truncate">
-              {firstName} · {session.personEmail}
-            </div>
+            </span>
+          )}
+          <div className="flex items-center gap-5 shrink-0">
+            <span className="block w-px h-9 bg-zinc-300" aria-hidden />
+            {/* Ours carries a second line (STUDIO SERVICES), so at equal box
+                height its wordmark reads smaller. A little taller so the two
+                wordmarks sit at the same cap height. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/sirreel-logo.png" alt="SirReel" className="block h-10 w-auto max-w-[220px] object-contain object-right" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Who's signed in ──────────────────────────────────────────
+          Wes 2026-09-04: "Make the header a thinner row with name and
+          email and position only." The masthead now carries the company;
+          this strip carries the person. */}
+      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          {/* Wraps rather than truncates — the position is the part that
+              would fall off the end, and it is the part that matters. */}
+          <div className="min-w-0 text-[13px] text-white/85 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="font-semibold text-white">{session.personName}</span>
+            <span className="text-white/40 hidden sm:inline">·</span>
+            <span className="truncate max-w-full">{session.personEmail}</span>
+            <span className="text-white/40 hidden sm:inline">·</span>
+            <span style={{ color: PORTAL.gold }}>
+              {session.title || COMPANY_PORTAL_ROLE_LABEL[session.role]}
+            </span>
           </div>
           <form action="/api/portal/auth/signout" method="POST" className="shrink-0">
             <button
               type="submit"
-              className="text-[11px] font-semibold border text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+              className="text-[11px] font-semibold border text-white/80 hover:text-white px-2.5 py-1 rounded-md transition-colors"
               style={{ borderColor: 'rgba(255,255,255,0.2)' }}
             >
               Sign out
@@ -198,32 +229,6 @@ export default async function CompanyPortalPage({
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
-        {/* ── The lockup ───────────────────────────────────────────────
-            Wes 2026-09-04: "place logo just above 'your terms with
-            SirReel'" and "the SirReel word mark should also be on the
-            right side so it looks like a partnership." Their mark left,
-            ours right, a hairline between: two names on one page rather
-            than a client inside a vendor's tool. Sits on the cream ground,
-            so a grey or black wordmark needs no plate. Rendered only when
-            the account has a logo — a lockup with one half missing reads
-            as a mistake, and the hero already carries SirReel. */}
-        {terms.logoUrl && (
-          <div className="flex items-center justify-between gap-6 pb-5 -mb-4 border-b border-zinc-200">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/api/portal/company/${params.companyId}/logo`}
-              alt={overview.companyName}
-              className="block h-9 w-auto max-w-[240px] object-contain object-left"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/sirreel-logo.png"
-              alt="SirReel"
-              className="block h-7 w-auto max-w-[180px] object-contain object-right opacity-90"
-            />
-          </div>
-        )}
-
         {/* ── Your rates ───────────────────────────────────────────────
             Wes 2026-09-04: standing discounts sit at the TOP. It is the
             fact an executive opens this page to confirm, and burying it
@@ -235,37 +240,36 @@ export default async function CompanyPortalPage({
             <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
               Your rates with SirReel
             </h2>
+            {/* Wes 2026-09-04: "feature the terms prominently … in large
+                but not as bold of letters." The figure is the tile — big,
+                medium weight, tight — and the noun sits under it at a size
+                that still reads from across a desk. No chip, no bold: the
+                number carries it. */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {terms.discounts.map((d) => (
                 <div
                   key={d.id}
-                  className="bg-white border border-zinc-200 rounded-xl p-4 flex items-start gap-3"
+                  className="bg-white border border-zinc-200 rounded-xl px-6 py-5"
                 >
-                  <div
-                    className="shrink-0 rounded-lg px-2.5 py-1.5 text-white font-bold text-sm tabular-nums"
-                    style={{ backgroundColor: PORTAL.dark }}
-                  >
-                    {d.percentOff}%
+                  <div className="text-[44px] leading-none font-medium tracking-tight text-zinc-900 tabular-nums">
+                    {d.percentOff}
+                    <span className="text-[26px] font-normal text-zinc-500 ml-0.5">% off</span>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-zinc-900 leading-snug">
-                      off {d.label}
-                    </div>
-                    {d.conditions && (
-                      <div className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.conditions}</div>
-                    )}
-                    {d.expiryDate && (
-                      <div className="text-[11px] text-zinc-400 mt-1">
-                        Through {fmtDay(d.expiryDate)}
-                      </div>
-                    )}
+                  <div className="mt-2 text-[17px] font-normal text-zinc-800 leading-snug">
+                    {d.label}
                   </div>
+                  {d.conditions && (
+                    <div className="text-xs text-zinc-500 mt-1.5 leading-relaxed">{d.conditions}</div>
+                  )}
+                  {d.expiryDate && (
+                    <div className="text-[11px] text-zinc-400 mt-1.5">Through {fmtDay(d.expiryDate)}</div>
+                  )}
                 </div>
               ))}
             </div>
             <p className="text-[11px] text-zinc-400 mt-2.5">
-              Applied by your rep when they build the quote. If a quote doesn&apos;t reflect these,
-              say so before you approve it.
+              Applied automatically to every order your teams place. If a quote doesn&apos;t
+              reflect these, tell your rep before you approve it.
             </p>
           </section>
         )}
