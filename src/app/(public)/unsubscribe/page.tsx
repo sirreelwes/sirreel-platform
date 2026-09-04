@@ -59,7 +59,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       >
         {children}
         <p style={{ marginTop: '28px', fontSize: '12px', color: '#a8a29e' }}>
-          SirReel Production Vehicles
+          SirReel Studio Services
         </p>
       </div>
     </main>

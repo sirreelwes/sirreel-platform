@@ -687,7 +687,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
   return (
     <Document
       title={`SirReel Quote ${props.orderNumber}`}
-      author="SirReel Production Vehicles"
+      author="SirReel Studio Services"
       subject={props.description || 'Rental Quote'}
     >
       <Page size="LETTER" style={styles.page}>

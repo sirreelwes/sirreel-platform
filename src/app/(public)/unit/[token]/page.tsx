@@ -30,7 +30,7 @@ export async function generateMetadata({
   const unit = await getPublicUnitByToken(params.token)
   if (!unit) return { title: 'SirReel', robots: { index: false, follow: false } }
   return {
-    title: `${unit.name} — SirReel Production Vehicles`,
+    title: `${unit.name} — SirReel Studio Services`,
     description: unit.description?.slice(0, 160) ?? `${unit.name} — available through SirReel.`,
     // Overrides the (public) layout's index:true. Shallow metadata merge
     // means this page's value wins; without it the link would be indexable

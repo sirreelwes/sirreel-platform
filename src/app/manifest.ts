@@ -20,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'SirReel HQ',
     short_name: 'SirReel HQ',
-    description: 'SirReel Production Vehicles — internal operations platform',
+    description: 'SirReel HQ — internal operations platform',
     start_url: '/',
     scope: '/',
     display: 'standalone',

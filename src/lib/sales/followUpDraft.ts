@@ -38,7 +38,7 @@ export function composeDraft(stage: LegacyStage, ctx: DraftContext): { subject: 
     ``,
     `Thanks,`,
     ctx.agentName,
-    `SirReel Production Vehicles`,
+    `SirReel Studio Services`,
   ].join('\n');
 
   return { subject, body };

@@ -17,7 +17,7 @@ import type { Metadata } from 'next'
 import { PublicSiteJsonLd } from '@/components/site/PublicSiteJsonLd'
 
 export const metadata: Metadata = {
-  title: 'SirReel Production Vehicles — Production Trucks, Stages & Standing Sets in LA',
+  title: 'SirReel Studio Services — Production Trucks, Stages & Standing Sets in LA',
   description:
     'Production vehicle and stage rentals for film and TV in Los Angeles. Cube trucks, cargo and passenger vans, camera cubes, sound stages and standing sets — with 24/7 production support.',
   alternates: { canonical: '/' },

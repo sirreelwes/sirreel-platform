@@ -46,7 +46,7 @@ const hanken = Hanken_Grotesk({
  */
 export const metadata: Metadata = {
   title: {
-    default: 'SirReel Production Vehicles — Production Trucks, Stages & Standing Sets in LA',
+    default: 'SirReel Studio Services — Production Trucks, Stages & Standing Sets in LA',
     template: '%s',
   },
   description:
@@ -62,10 +62,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   openGraph: {
     type: 'website',
-    siteName: 'SirReel Production Vehicles',
+    siteName: 'SirReel Studio Services',
     locale: 'en_US',
     url: '/',
-    images: [{ url: '/full-logo.jpg', alt: 'SirReel Production Vehicles' }],
+    images: [{ url: '/full-logo.jpg', alt: 'SirReel Studio Services' }],
   },
   twitter: {
     card: 'summary_large_image',

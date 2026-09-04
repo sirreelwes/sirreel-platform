@@ -197,7 +197,7 @@ export function ConditionReportDocument({
         ))}
 
         <Text style={s.foot} fixed>
-          SirReel Production Vehicles · every photo carries the date and time it was taken.
+          SirReel Studio Services · every photo carries the date and time it was taken.
         </Text>
       </Page>
     </Document>

@@ -25,7 +25,7 @@ export function PublicSiteJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     '@id': `${PUBLIC_SITE_ORIGIN}/#business`,
-    name: 'SirReel Production Vehicles',
+    name: 'SirReel Studio Services',
     description:
       'Production vehicle, sound stage and standing-set rentals for film and television production in Los Angeles.',
     url: PUBLIC_SITE_ORIGIN,
