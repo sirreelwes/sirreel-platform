@@ -262,7 +262,17 @@ export async function GET(req: NextRequest) {
           where: {
             status: { in: ['ASSIGNED', 'CHECKED_OUT', 'RETURNED'] },
             bookingItem: { bookingId: order.bookingId },
-            asset: { category: { slug: { contains: 'vehicle' } } },
+            // Department, never the slug. This read `slug: { contains:
+            // 'vehicle' }`, and NOT ONE live VEHICLES slug contains that
+            // string — they are popvan, cube-truck, cargo-van-liftgate,
+            // proscout-vtr, passenger-van, dlux… So the client's DOT
+            // section matched nothing on every job it has ever rendered:
+            // present, empty, silent. Same failure shape as the portal's
+            // 'COMPLETE'/'CLOSED' lock strings (src/lib/bookings/status.ts)
+            // and the reason ensureStagePaperworkRequest detects stages by
+            // department too ("the live category is named Studios").
+            // src/lib/fleet/dotSheet.ts had it right all along.
+            asset: { category: { department: 'VEHICLES' } },
           },
           select: {
             id: true,

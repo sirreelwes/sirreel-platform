@@ -173,6 +173,26 @@ async function main() {
     await prisma.booking.update({ where: { id: live }, data: { status: 'REQUEST' } })
   }
 
+  console.log('\nThe client\'s DOT section matches vehicles by DEPARTMENT')
+  {
+    // Read-only, against the real catalog. The portal filtered this
+    // section on `slug: { contains: 'vehicle' }` and NOT ONE live
+    // VEHICLES slug contains that string, so it rendered empty on every
+    // job it ever served. Assert the dead match stays dead, so nobody
+    // reintroduces it thinking it works.
+    const vehicleCats = await prisma.assetCategory.findMany({
+      where: { department: 'VEHICLES' },
+      select: { name: true, slug: true },
+    })
+    check(vehicleCats.length > 0, 'the catalog has VEHICLES categories to match', vehicleCats.length)
+    const bySlug = vehicleCats.filter((c) => c.slug.includes('vehicle'))
+    check(
+      bySlug.length === 0,
+      "matching on slug ~ 'vehicle' still finds NOTHING — department is the only discriminator that works",
+      bySlug,
+    )
+  }
+
   console.log('\nA staff re-send reuses the link the client already has')
   {
     // Put the request back on the retired booking to replay the send path.
