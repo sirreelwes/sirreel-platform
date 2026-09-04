@@ -59,6 +59,12 @@ export interface YardRow {
   time: string | null
   /** Where a tap goes — the screen that does the work. */
   href: string
+  /**
+   * The paper the row runs on, when it has one: a direct link to the
+   * printable pull sheet. Gear only — a vehicle's walkaround has no
+   * document to hand the floor. Null everywhere else.
+   */
+  printHref: string | null
   /** The verb on the button. One action per row, never a menu. */
   action: string
   state: YardState
@@ -119,6 +125,16 @@ export interface GearList {
   outDone: number
   inDone: number
   short: number
+  /**
+   * The paper sheet, typed in. The floor pulls on PAPER (Hugo,
+   * 2026-09-03) and a supervisor transcribes it on /reports/orders, so
+   * a filed report — not a scan session nobody runs — is what "this
+   * cart is handled" actually means on this board.
+   */
+  outFiled: boolean
+  inFiled: boolean
+  /** Lines the filed check-IN sheet recorded as short or missing. */
+  reportShort: number
 }
 
 async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
@@ -147,6 +163,30 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
     orderBy: { createdAt: 'asc' },
   })
 
+  // The filed paper sheets for those same orders, in one round trip.
+  // Read separately rather than nested under PickList because the
+  // report hangs off the ORDER, and an order can carry a report with
+  // no pick list at all.
+  const reports = rows.length
+    ? await prisma.orderCheckReport.findMany({
+        where: { orderId: { in: [...new Set(rows.map((r) => r.order.id))] } },
+        select: { orderId: true, edge: true, lines: { select: { change: true } } },
+      })
+    : []
+  const filed = new Map<string, { out: boolean; in: boolean; shortIn: number }>()
+  for (const rep of reports) {
+    const cur = filed.get(rep.orderId) ?? { out: false, in: false, shortIn: 0 }
+    if (rep.edge === 'OUT') cur.out = true
+    else {
+      cur.in = true
+      // A case that did not come back is a shortfall, and the board
+      // must not fold it behind a green tick — same rule the scan
+      // session's SHORT status gets.
+      cur.shortIn = rep.lines.filter((l) => l.change === 'SHORT' || l.change === 'REMOVED').length
+    }
+    filed.set(rep.orderId, cur)
+  }
+
   return rows.map((r) => {
     let outDone = 0
     let inDone = 0
@@ -158,6 +198,7 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
       if (INBOUND_DONE.has(s)) inDone += 1
       if (s === 'SHORT') short += 1
     }
+    const f = filed.get(r.order.id)
     return {
       id: r.id,
       status: r.status,
@@ -171,12 +212,28 @@ async function gearListsOn(dbDate: Date, edge: YardEdge): Promise<GearList[]> {
       outDone,
       inDone,
       short,
+      outFiled: f?.out ?? false,
+      inFiled: f?.in ?? false,
+      reportShort: f?.shortIn ?? 0,
     }
   })
 }
 
 const pct = (done: number, total: number) => (total > 0 ? Math.round((done / total) * 100) : 0)
 
+/**
+ * Wes, 2026-09-04: "I need a button for check-in and check-out for
+ * warehouse." This is that button, and it is the row's ONE action —
+ * the board sends the crew to the check report, not to the scan
+ * session the floor declined. The scan session is untouched and still
+ * one tap away from /warehouse/pick; it is simply no longer what this
+ * board asks anyone to do.
+ *
+ * Which also fixes a quieter lie: before this, a gear row's state came
+ * only from scan statuses nobody was writing, so a cart that had been
+ * pulled, loaded, sent out and counted back on paper read "Not
+ * started" all week.
+ */
 export function gearRow(g: GearList, edge: YardEdge): YardRow {
   const base = {
     id: g.id,
@@ -184,31 +241,52 @@ export function gearRow(g: GearList, edge: YardEdge): YardRow {
     title: `${g.total} item${g.total === 1 ? '' : 's'}`,
     detail: g.orderNumber,
     time: null,
-    href: `/warehouse/pick/${g.id}`,
+    href: `/reports/orders/${g.orderId}?edge=${edge === 'out' ? 'OUT' : 'IN'}`,
+    // The sheet the floor actually carries. Kept on the row because
+    // the paper loop starts here: print it, mark it up, type it back in.
+    printHref: `/api/orders/${g.orderId}/pick-list-pdf`,
   }
 
   if (edge === 'out') {
-    // LOADED and beyond means the gear is on the truck — the outbound
-    // pass is finished even though the list itself stays open for the
-    // return count.
-    const finished = g.status === 'LOADED' || g.status === 'CHECKING_IN' || g.status === 'CHECKED_IN'
-    const label: Record<string, string> = {
-      DRAFT: 'Not started',
-      PICKING: `${g.outDone} of ${g.total} picked`,
-      READY_TO_STAGE: 'Picked — stage it',
-      STAGED: 'Staged — load it',
+    if (g.outFiled) {
+      return {
+        ...base,
+        action: 'View sheet',
+        state: 'done',
+        stateLabel: 'Checked out',
+        progress: 100,
+      }
     }
+    // No sheet yet. Anything the scan session DID record still shows —
+    // it is real progress by someone, just not the finish line.
+    const loaded = g.status === 'LOADED' || g.status === 'CHECKING_IN' || g.status === 'CHECKED_IN'
+    const started = loaded || g.outDone > 0 || g.status !== 'DRAFT'
     return {
       ...base,
-      action: finished ? 'View' : 'Pick',
-      state: finished ? 'done' : g.status === 'DRAFT' ? 'todo' : 'doing',
-      stateLabel: finished ? 'Loaded' : label[g.status] ?? g.status.replaceAll('_', ' '),
-      progress: finished ? 100 : pct(g.outDone, g.total),
+      action: 'Check out',
+      state: started ? 'doing' : 'todo',
+      stateLabel: loaded
+        ? 'Loaded — enter the sheet'
+        : g.outDone > 0
+          ? `${g.outDone} of ${g.total} picked`
+          : g.status === 'DRAFT'
+            ? 'Not checked out'
+            : g.status.replaceAll('_', ' '),
+      progress: pct(g.outDone, g.total),
     }
   }
 
   // Inbound. A list that never made it out the door still shows up on
   // its return day — better an odd-looking row than a silent gap.
+  if (g.inFiled) {
+    return {
+      ...base,
+      action: 'View sheet',
+      state: g.reportShort > 0 ? 'flag' : 'done',
+      stateLabel: g.reportShort > 0 ? `${g.reportShort} short` : 'All back',
+      progress: 100,
+    }
+  }
   if (g.status === 'CHECKED_IN') {
     return {
       ...base,
@@ -218,12 +296,12 @@ export function gearRow(g: GearList, edge: YardEdge): YardRow {
       progress: 100,
     }
   }
-  const started = g.status === 'CHECKING_IN'
+  const started = g.status === 'CHECKING_IN' || g.inDone > 0
   return {
     ...base,
-    action: 'Count',
+    action: 'Check in',
     state: started ? 'doing' : 'todo',
-    stateLabel: started ? `${g.inDone} of ${g.total} counted` : 'Not counted',
+    stateLabel: started ? `${g.inDone} of ${g.total} counted` : 'Not checked in',
     progress: pct(g.inDone, g.total),
   }
 }
@@ -292,6 +370,8 @@ export function vehicleEntry(m: FleetMovement, edge: YardEdge): YardEntry {
       // Each edge has its own screen: the pre-rental walkaround going
       // out, the return check-in coming back.
       href: edge === 'out' ? `/fleet/inspection/${m.assignmentId}` : `/fleet/return/${m.assignmentId}`,
+      // A walkaround is done on the screen; there is no sheet to print.
+      printHref: null,
       action: edge === 'out' ? (inspected ? 'View' : 'Inspect') : received ? 'View' : 'Check in',
       state: (edge === 'out' ? inspected : received) ? 'done' : 'todo',
       stateLabel:

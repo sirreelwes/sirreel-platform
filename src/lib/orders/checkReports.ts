@@ -26,9 +26,10 @@
  * on OrderCheckReport.
  */
 
-import type { OrderCheckEdge, OrderCheckLineChange, Prisma } from '@prisma/client'
+import type { OrderCheckEdge, OrderCheckLineChange, PickListStatus, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
+import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 
 /**
@@ -446,4 +447,94 @@ export async function submitCheckReport(opts: {
   if (applyToOrder) await recalcOrderTotals(orderId)
 
   return { reportId, changedOrder: applyToOrder, changes }
+}
+
+/**
+ * What a filed sheet means to the REST of HQ.
+ *
+ * The report is a transcription, and for its first day that is all it
+ * was — which left a hole nobody could see from this file. The gear
+ * lane's "is it settled" signal is `PickList.status`, and the only
+ * thing that ever advanced it was the scan session the floor declined
+ * to run. So a cart could be pulled, loaded, sent out and counted back
+ * on paper while its pick list sat at DRAFT forever, which meant:
+ *
+ *   - the yard board's gear row read "Not started" all week, and
+ *   - `settleJobReturn` never stamped `Job.returnedAt`, because it
+ *     waits for every pick list to reach CHECKED_IN — so every job
+ *     with gear on it drifted into a phantom "Not returned", the
+ *     exact class of ghost Wes purged 54 of on 2026-08-28.
+ *
+ * A filed check-IN sheet IS the gear being counted back. Saying so here
+ * is what makes the check-in button on the board mean something.
+ *
+ * Deliberately one-directional and guarded: it only advances a list
+ * that has not got there yet, never regresses one, and never touches a
+ * CANCELLED list. Filing a sheet cannot un-close anything.
+ */
+const OUT_NOT_YET: PickListStatus[] = ['DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED']
+const IN_NOT_YET: PickListStatus[] = [
+  'DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED', 'LOADED', 'CHECKING_IN',
+]
+
+export interface GearSettleResult {
+  /** Whether this order's pick list moved (0 or 1 — one list per order). */
+  pickListAdvanced: boolean
+  /** Whether this sheet is what stamped Job.returnedAt. */
+  jobReturned: boolean
+}
+
+export async function settleGearAfterReport(
+  orderId: string,
+  edge: OrderCheckEdge,
+  userId: string,
+): Promise<GearSettleResult> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { jobId: true },
+  })
+
+  const list = await prisma.pickList.findUnique({
+    where: { orderId },
+    select: { id: true, status: true },
+  })
+
+  const now = new Date()
+  const nextStatus: PickListStatus = edge === 'OUT' ? 'LOADED' : 'CHECKED_IN'
+  // updateMany with the status guard rather than update: two people
+  // filing the same sheet, or a re-file over an already-closed list,
+  // must not walk it backwards or re-stamp who closed it.
+  const advanced = await prisma.pickList.updateMany({
+    where: {
+      orderId,
+      status: { in: edge === 'OUT' ? OUT_NOT_YET : IN_NOT_YET },
+    },
+    data:
+      edge === 'OUT'
+        ? { status: nextStatus, completedAt: now }
+        : { status: nextStatus, checkedInAt: now, checkedInById: userId },
+  })
+
+  // Nobody clicked a button in the pick session, so leave a record of
+  // what moved the list and why.
+  if (advanced.count > 0 && list) {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'picklist.settled_by_check_report',
+        entityType: 'PickList',
+        entityId: list.id,
+        oldValues: { status: list.status },
+        newValues: { status: nextStatus, edge, orderId },
+      },
+    })
+  }
+
+  // Only the inbound sheet can close a job out. Going out settles
+  // nothing — the gear has just left.
+  const settled = edge === 'IN'
+    ? await settleJobReturnSafe(order?.jobId ?? null, userId)
+    : { stamped: false }
+
+  return { pickListAdvanced: advanced.count > 0, jobReturned: settled.stamped }
 }

@@ -5,8 +5,10 @@
  *
  * Design rules, all of them in service of "the crew is holding a phone
  * in a loading bay" (Wes, 2026-09-02):
- *   - ONE action per card. No menus, no secondary links. The button says
- *     the verb: Inspect / Start pick / Count in.
+ *   - ONE action per card. No menus. The button says the verb: Inspect /
+ *     Check out / Check in. The single exception is the printer icon on
+ *     a gear row (Wes, 2026-09-04) — the pull sheet is not a second
+ *     action, it is the paper the one action is written on.
  *   - Nothing to configure. No filters, no sort, no status picker. The
  *     board decides the order: unfinished work first.
  *   - Finished groups collapse to a single line so the screen shrinks as
@@ -17,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Truck, Package, AlertTriangle, Check, RotateCw,
-  ChevronLeft, ChevronRight, ChevronDown, ArrowLeft,
+  ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Printer,
 } from 'lucide-react'
 import type { YardBoard as Board, YardGroup, YardRow } from '@/lib/yard/board'
 
@@ -49,46 +51,63 @@ function RowCard({ row }: { row: YardRow }) {
   // A row with no work left is quiet: dimmed card, plain-text button.
   const done = row.state === 'done'
   return (
-    <a
-      href={row.href}
+    <div
       className={`flex items-center gap-3 rounded-xl border p-3.5 min-h-[44px] transition-colors ${
         done
           ? 'bg-zinc-900/40 border-zinc-800 active:border-zinc-700'
           : 'bg-zinc-800 border-zinc-700 active:border-amber-600 hover:border-zinc-600'
       }`}
     >
-      <span className="flex-none text-zinc-400" aria-hidden>
-        {row.kind === 'VEHICLE' ? <Truck size={20} /> : <Package size={20} />}
-      </span>
-      <span className="min-w-0 flex-1">
-        {/* Title and detail stack rather than sharing a line: on a 375px
-            phone "Unit Cargo 37 · Cargo Van w/ Liftgate" truncated to
-            "Unit Cargo 37 · Cargo …", which is the half nobody needed. */}
-        <span className="block text-white font-semibold text-[15px] truncate">{row.title}</span>
-        <span className="block text-zinc-500 text-xs truncate">{row.detail}</span>
-        <span className="mt-1.5 flex items-center gap-2 flex-wrap">
-          <span className={`inline-block text-[11px] font-medium rounded-full border px-2 py-0.5 ${STATE_CHIP[row.state]}`}>
-            {row.stateLabel}
-          </span>
-          {row.time && <span className="text-zinc-500 text-[11px]">{row.time}</span>}
+      <a href={row.href} className="flex items-center gap-3 flex-1 min-w-0">
+        <span className="flex-none text-zinc-400" aria-hidden>
+          {row.kind === 'VEHICLE' ? <Truck size={20} /> : <Package size={20} />}
         </span>
-        {row.progress !== null && row.progress > 0 && row.progress < 100 && (
-          <span className="mt-2 block h-1 w-full rounded-full bg-zinc-700 overflow-hidden">
-            <span className="block h-full bg-amber-500" style={{ width: `${row.progress}%` }} />
+        <span className="min-w-0 flex-1">
+          {/* Title and detail stack rather than sharing a line: on a 375px
+              phone "Unit Cargo 37 · Cargo Van w/ Liftgate" truncated to
+              "Unit Cargo 37 · Cargo …", which is the half nobody needed. */}
+          <span className="block text-white font-semibold text-[15px] truncate">{row.title}</span>
+          <span className="block text-zinc-500 text-xs truncate">{row.detail}</span>
+          <span className="mt-1.5 flex items-center gap-2 flex-wrap">
+            <span className={`inline-block text-[11px] font-medium rounded-full border px-2 py-0.5 ${STATE_CHIP[row.state]}`}>
+              {row.stateLabel}
+            </span>
+            {row.time && <span className="text-zinc-500 text-[11px]">{row.time}</span>}
           </span>
-        )}
-      </span>
-      {/* One verb, kept short enough that it never squeezes the row on a
-          phone. What state the thing is in is the chip's job, not the
-          button's. */}
-      <span
-        className={`flex-none text-[12px] font-semibold rounded-lg px-3 py-2 ${
-          done ? 'text-zinc-500' : 'bg-amber-600 text-white'
-        }`}
-      >
-        {row.action}
-      </span>
-    </a>
+          {row.progress !== null && row.progress > 0 && row.progress < 100 && (
+            <span className="mt-2 block h-1 w-full rounded-full bg-zinc-700 overflow-hidden">
+              <span className="block h-full bg-amber-500" style={{ width: `${row.progress}%` }} />
+            </span>
+          )}
+        </span>
+        {/* One verb, kept short enough that it never squeezes the row on a
+            phone. What state the thing is in is the chip's job, not the
+            button's. */}
+        <span
+          className={`flex-none text-[12px] font-semibold rounded-lg px-3 py-2 ${
+            done ? 'text-zinc-500' : 'bg-amber-600 text-white'
+          }`}
+        >
+          {row.action}
+        </span>
+      </a>
+      {/* The paper the floor carries. Second target on the card, and
+          the only one — printing is not "another action", it is the
+          step before the action. Icon-only so the verb still reads as
+          the row's one job, 44px so it survives a glove. */}
+      {row.printHref && (
+        <a
+          href={row.printHref}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Print pull sheet"
+          title="Print pull sheet"
+          className="flex-none w-11 h-11 -mr-1 rounded-lg border border-zinc-700 text-zinc-400 flex items-center justify-center active:bg-zinc-700 hover:text-zinc-200"
+        >
+          <Printer size={16} aria-hidden />
+        </a>
+      )}
+    </div>
   )
 }
 

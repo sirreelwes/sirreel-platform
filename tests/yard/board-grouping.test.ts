@@ -52,6 +52,9 @@ const cart = (over: Partial<GearList> = {}): GearList => ({
   outDone: 0,
   inDone: 0,
   short: 0,
+  outFiled: false,
+  inFiled: false,
+  reportShort: 0,
   ...over,
 })
 
@@ -164,12 +167,50 @@ check('a short count flags rather than passing as done', () => {
   assert.equal(g.flagCount, 1)
 })
 
-check('loaded gear is done outbound but still to-do inbound', () => {
+check('gear rows send the crew to the check report, not the scan session', () => {
+  // Wes, 2026-09-04. The floor pulls on paper, so the board's one
+  // action per gear row is the sheet — and the printer icon rides
+  // along because that is where the paper comes from.
+  const out = gearEntry(cart(), 'out').row
+  assert.equal(out.action, 'Check out')
+  assert.equal(out.href, '/reports/orders/o1?edge=OUT')
+  assert.equal(out.printHref, '/api/orders/o1/pick-list-pdf')
+  const back = gearEntry(cart(), 'back').row
+  assert.equal(back.action, 'Check in')
+  assert.equal(back.href, '/reports/orders/o1?edge=IN')
+})
+
+check('a loaded cart with no sheet typed in is NOT done', () => {
+  // The pick list reaching LOADED used to close the outbound row on its
+  // own. Under paper that is the wrong finish line: the supervisor
+  // still has a marked-up sheet in their hand, and a green row is how
+  // it never gets entered.
   const loaded = cart({ status: 'LOADED', outDone: 9 })
-  assert.equal(gearEntry(loaded, 'out').row.state, 'done')
-  const back = gearEntry(loaded, 'back').row
+  const row = gearEntry(loaded, 'out').row
+  assert.equal(row.state, 'doing')
+  assert.equal(row.action, 'Check out')
+  assert.match(row.stateLabel, /enter the sheet/)
+})
+
+check('a filed check-out sheet closes the outbound row', () => {
+  const row = gearEntry(cart({ status: 'LOADED', outDone: 9, outFiled: true }), 'out').row
+  assert.equal(row.state, 'done')
+  assert.equal(row.stateLabel, 'Checked out')
+  assert.equal(row.action, 'View sheet')
+  // ...and says nothing about the return: that edge has its own sheet.
+  const back = gearEntry(cart({ status: 'LOADED', outFiled: true }), 'back').row
   assert.equal(back.state, 'todo')
-  assert.equal(back.action, 'Count')
+  assert.equal(back.action, 'Check in')
+})
+
+check('a filed check-in sheet with shortfalls flags rather than passing', () => {
+  const [g] = assemble([
+    gearEntry(cart({ status: 'LOADED', inFiled: true, reportShort: 2 }), 'back'),
+  ])
+  assert.equal(g.rows[0].state, 'flag')
+  assert.equal(g.rows[0].stateLabel, '2 short')
+  assert.equal(g.openCount, 0)
+  assert.equal(g.flagCount, 1, 'a short count must not collapse behind a green tick')
 })
 
 check('groups with open work sort above finished ones', () => {

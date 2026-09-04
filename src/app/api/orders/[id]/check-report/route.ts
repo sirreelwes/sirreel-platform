@@ -26,7 +26,9 @@ import type { OrderCheckEdge } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireYardAccess } from '@/lib/yard/requireYardAccess'
-import { reportDraft, submitCheckReport, type SubmitLineInput } from '@/lib/orders/checkReports'
+import {
+  reportDraft, settleGearAfterReport, submitCheckReport, type SubmitLineInput,
+} from '@/lib/orders/checkReports'
 import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
 
 export const dynamic = 'force-dynamic'
@@ -127,6 +129,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     sheetPhotoUrl: typeof body.sheetPhotoUrl === 'string' ? body.sheetPhotoUrl : null,
   })
 
+  // The sheet is also the gear lane's status. Advancing the pick list
+  // here is what lets a paper check-IN close the job out — without it
+  // the list sits at DRAFT forever and Job.returnedAt is never stamped,
+  // so a job whose gear is physically back reads "Not returned". Same
+  // non-fatal treatment as the re-send: the transcription is filed
+  // either way. See settleGearAfterReport for the full why.
+  let gear: { pickListAdvanced: boolean; jobReturned: boolean } | null = null
+  try {
+    gear = await settleGearAfterReport(id, edge, auth.userId)
+  } catch (err) {
+    console.error('[check-report] gear settle failed:', err)
+  }
+
   // Wes, 2026-09-03: "re-send the quote automatically when the check-out
   // changes it but copy hq notifications." The order's lines have just
   // moved under a client who is usually still holding a quote, so the
@@ -147,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ ok: true, ...result, resend })
+  return NextResponse.json({ ok: true, ...result, resend, gear })
 }
 
 /** The agent marking "I've seen what the yard changed." */
