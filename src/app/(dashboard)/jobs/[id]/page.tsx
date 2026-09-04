@@ -41,6 +41,7 @@ import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
 import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
+import EnterRedlineModal from '@/components/orders/EnterRedlineModal';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -450,6 +451,8 @@ export default function JobDetailPage() {
   // Header affordance for re-pointing the job at the right production company.
   const [companyChangeOpen, setCompanyChangeOpen] = useState(false);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  // Which order's agreement a client redline is being entered against.
+  const [redlineOrder, setRedlineOrder] = useState<{ id: string; orderNumber: string } | null>(null);
   // "Send for signature" — the paperwork portal invite, surfaced here
   // because this is where both contracts' status already lives. The only
   // other entry point is the order page's "Portal access" section, 11
@@ -2178,6 +2181,19 @@ const driverTone = (d: any): string => {
                       ) : (
                         <span className="text-[12px] text-zinc-600">No executed PDF filed for this one.</span>
                       )}
+                      {/* The client redlined this one. Entering it here beats
+                          sending people to the order page to find the same
+                          action — the job page is where paperwork is worked. */}
+                      {!executed && a.contractType === 'RENTAL_AGREEMENT' && (
+                        <button
+                          onClick={() =>
+                            setRedlineOrder({ id: order.id, orderNumber: order.orderNumber })
+                          }
+                          className="text-[13px] font-semibold text-amber-700 hover:text-amber-800"
+                        >
+                          Client sent a redline →
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -3091,6 +3107,18 @@ const driverTone = (d: any): string => {
           load();
         }}
       />
+
+      {redlineOrder && (
+        <EnterRedlineModal
+          orderId={redlineOrder.id}
+          jobName={job.name}
+          onClose={() => setRedlineOrder(null)}
+          onSaved={(result) => {
+            setRedlineOrder(null);
+            router.push(`/tools/contract-review/${result.reviewId}`);
+          }}
+        />
+      )}
 
       {agreementModalOpen && (
         <LinkJobAgreementModal
