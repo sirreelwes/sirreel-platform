@@ -29,7 +29,7 @@ import { Prisma } from '@prisma/client'
 import type { RateType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { normalizeCatalogRef } from '@/lib/catalog/resolve'
-import { overlayCompanyRate, type RatePair } from '@/lib/pricing/companyRate'
+import { applyStandingDiscount, bestStandingDiscount, overlayCompanyRate, type RatePair } from '@/lib/pricing/companyRate'
 
 /** Works with the singleton client or a transaction client. */
 export type Db = Prisma.TransactionClient
@@ -65,7 +65,13 @@ export interface RateResolutionInput {
 export interface ResolvedRates {
   dailyRate: Prisma.Decimal | null
   weeklyRate: Prisma.Decimal | null
-  source: 'COMPANY_RATE' | 'INVENTORY_ITEM' | 'ASSET_CATEGORY' | 'VEHICLE_CATEGORY' | 'NONE'
+  source:
+    | 'COMPANY_RATE'
+    | 'COMPANY_DISCOUNT'
+    | 'INVENTORY_ITEM'
+    | 'ASSET_CATEGORY'
+    | 'VEHICLE_CATEGORY'
+    | 'NONE'
 }
 
 /**
@@ -74,6 +80,38 @@ export interface ResolvedRates {
  * come back null so a typed-in rate on an unpriced item never reads as
  * an "override of $0".
  */
+/**
+ * The ITEM-scoped standing discount governing this catalog item for this
+ * client, or null.
+ *
+ * Only in-window, active rows count — a lapsed deal must stop pricing the
+ * day it lapses, not the day someone remembers to untick it. Department-
+ * scoped rows are deliberately NOT consulted here: those auto-apply as an
+ * OrderDiscount row at order creation (see
+ * src/lib/orders/applyStandingDiscounts.ts), and honouring them in both
+ * places would discount the same line twice.
+ */
+export async function findItemStandingDiscount(
+  companyId: string,
+  inventoryItemId: string,
+  db: Db = prisma,
+): Promise<{ id: string; label: string; percentOff: number } | null> {
+  const now = new Date()
+  const rows = await db.companyDiscount.findMany({
+    where: {
+      companyId,
+      isActive: true,
+      inventoryItemIds: { has: inventoryItemId },
+      AND: [
+        { OR: [{ effectiveDate: null }, { effectiveDate: { lte: now } }] },
+        { OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] },
+      ],
+    },
+    select: { id: true, label: true, percentOff: true },
+  })
+  return bestStandingDiscount(rows)
+}
+
 export async function resolveRate(
   input: RateResolutionInput,
   db: Db = prisma,
@@ -97,12 +135,25 @@ export async function resolveRate(
       select: { dailyRate: true, weeklyRate: true },
     })
     const merged = overlayCompanyRate(catalog, negotiatedRate)
-    return {
-      dailyRate: merged.dailyRate,
-      weeklyRate: merged.weeklyRate,
-      source:
-        merged.dailyFromCompany || merged.weeklyFromCompany ? 'COMPANY_RATE' : fallbackSource,
+    const fromCard = merged.dailyFromCompany || merged.weeklyFromCompany
+
+    // A negotiated rate is ALREADY the deal. Taking a standing percentage
+    // off it as well hands the client the same concession twice, and the
+    // rep who typed the negotiated number would never see where the extra
+    // came from. The rate card wins; the standing discount stands down.
+    if (fromCard) {
+      return { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate, source: 'COMPANY_RATE' }
     }
+
+    const standing = await findItemStandingDiscount(input.companyId, itemId, db)
+    if (!standing) {
+      return { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate, source: fallbackSource }
+    }
+    const cut = applyStandingDiscount(
+      { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate },
+      standing.percentOff,
+    )
+    return { dailyRate: cut.dailyRate, weeklyRate: cut.weeklyRate, source: 'COMPANY_DISCOUNT' }
   }
 
   // One lookup for both shapes — a legacy assetCategoryId resolves to the

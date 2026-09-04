@@ -8,6 +8,8 @@ import { ClientArPanel } from "@/components/crm/ClientArPanel";
 import { CopyCoiLinkButton } from "@/components/coi/CopyCoiLinkButton";
 import { NegotiatedRatesPanel } from "@/components/crm/NegotiatedRatesPanel";
 import { AnnualAgreementPanel } from "@/components/crm/AnnualAgreementPanel";
+import { CompanyPortalAccessPanel } from "@/components/crm/CompanyPortalAccessPanel";
+import { CompanyDiscountsPanel } from "@/components/crm/CompanyDiscountsPanel";
 import { CompanyCardsPanel } from "@/components/crm/CompanyCardsPanel";
 
 type Activity = {
@@ -51,6 +53,8 @@ type CompanyDetail = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
   website: string | null; billingEmail: string | null; industry: string;
   coiOnFile: boolean; coiExpiry: string | null; notes: string | null;
+  /** Client's own mark, shown on their account portal. */
+  logoUrl: string | null;
   // Discount / negotiation profile — added in 859ca8e. Drives the
   // "Negotiates" chip in the header + the next pass's CRM-list badge.
   discountTendency: DiscountTendency;
@@ -850,6 +854,23 @@ export default function CompanyDetailPage() {
             />
           </>
         )}
+
+        {/* Standing discounts — the client reads these at the top of their
+            account portal, and every new order is priced with them. Sits
+            above portal access because the discounts are what the portal is
+            mostly FOR. */}
+        <CompanyDiscountsPanel
+          companyId={company.id}
+          canEdit={(session?.user as any)?.role === 'ADMIN'}
+        />
+
+        {/* Who at the client can open that portal, and their logo. */}
+        <CompanyPortalAccessPanel
+          companyId={company.id}
+          companyName={company.name}
+          hasLogo={!!company.logoUrl}
+          canEdit={(session?.user as any)?.role === 'ADMIN'}
+        />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">

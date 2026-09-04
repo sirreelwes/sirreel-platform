@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { nextOrderNumber } from '@/lib/orders'
+import { applyStandingDiscounts } from '@/lib/orders/applyStandingDiscounts'
 import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
@@ -160,6 +161,8 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
         },
         select: { id: true, portalSlug: true },
       })
+      // Standing company discounts, seeded with the order.
+      await applyStandingDiscounts(order.id, resolvedJob.companyId, tx)
       // Inquiry.convertedJobId is @unique — when the agent attached this
       // inquiry to a Job that ALREADY converted another inquiry (the
       // duplicate-shoot case), mark CONVERTED without the link.

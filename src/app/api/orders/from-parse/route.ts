@@ -59,6 +59,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { normalizeCatalogRef } from '@/lib/catalog/resolve'
 import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/orders'
+import { applyStandingDiscounts } from '@/lib/orders/applyStandingDiscounts'
 import { computeLineTotal } from '@/lib/orders/billing'
 import { computeDays, isClaimEligible, sanitizeClaimedDays } from '@/lib/orders/days'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
@@ -332,6 +333,9 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true, bookingId: true },
       })
+      // Standing company discounts, seeded with the order (see
+      // src/lib/orders/applyStandingDiscounts.ts).
+      await applyStandingDiscounts(order.id, companyId, tx)
 
       // 5) Items — one OrderLineItem per ResolvedItem. The dept
       //    resolution + date fallback + days math mirrors POST

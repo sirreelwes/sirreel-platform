@@ -95,6 +95,10 @@
     {
       "path": "/api/cron/unassigned-units",
       "schedule": "0 0,1 * * *"
+    },
+    {
+      "path": "/api/cron/company-portal-notices",
+      "schedule": "0 15 * * *"
     }
   ],
   "functions": {

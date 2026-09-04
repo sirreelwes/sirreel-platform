@@ -37,10 +37,19 @@ export default function PortalSignInPage() {
     setSubmitting(true)
     setError(null)
     try {
+      // Carry ?next= through to the mailed link. A person sent to
+      // /portal/company who has to sign in first should land BACK on
+      // /portal/company, not on the generic job list — the verify route
+      // already honours the param (and allowlists it); nothing was
+      // forwarding it from here.
+      const nextPath =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('next')
+          : null
       await fetch('/api/portal/auth/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), ...(nextPath ? { next: nextPath } : {}) }),
       })
       setSubmitted(true)
     } catch {

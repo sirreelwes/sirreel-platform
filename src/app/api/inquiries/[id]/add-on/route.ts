@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { nextOrderNumber } from '@/lib/orders'
+import { applyStandingDiscounts } from '@/lib/orders/applyStandingDiscounts'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -106,6 +107,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
       select: { id: true, orderNumber: true, jobId: true, companyId: true },
     })
+    // Standing company discounts, seeded with the order.
+    await applyStandingDiscounts(order.id, job.companyId, tx)
     const updatedInquiry = await tx.inquiry.update({
       where: { id: inquiry.id },
       data: {

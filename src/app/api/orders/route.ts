@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrderCreateAccess } from '@/lib/orders/requireOrderCreateAccess';
 import { prisma } from "@/lib/prisma";
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
+import { applyStandingDiscounts } from "@/lib/orders/applyStandingDiscounts";
 import { getServerSession } from "next-auth";
 import { resolveDataScope, orderScopeWhere } from "@/lib/auth/scope";
 
@@ -207,6 +208,9 @@ export async function POST(req: NextRequest) {
           agent: { select: { id: true, name: true } },
         },
       });
+      // The client's standing discounts become rows on THIS order, inside
+      // the same transaction — a rolled-back order takes them with it.
+      await applyStandingDiscounts(created.id, companyId, tx);
       return { order: created };
     });
 

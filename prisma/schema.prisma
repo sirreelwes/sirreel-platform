@@ -529,6 +529,25 @@ model Company {
   negotiatedTermsActiveAsOf    DateTime? @map("negotiated_terms_active_as_of")
   negotiatedTermsReviewDueDate DateTime? @map("negotiated_terms_review_due_date")
 
+  /// The client's own mark, shown on their account portal.
+  ///
+  /// Wes 2026-09-04: "let's add a logo upload for each company too so it
+  /// looks good on their side."
+  ///
+  /// Stored in the PRIVATE blob store and served through a session-gated
+  /// proxy (/api/portal/company/[id]/logo), not as a public URL. A public
+  /// URL would make the company-id → logo mapping enumerable, which is a
+  /// client list leaking one guess at a time — and the only surface that
+  /// needs the image is one an authorized reader is already looking at.
+  ///
+  /// Rendered on a white plate regardless of the mark's own colours: the
+  /// portal hero is near-black and a large share of production-company
+  /// logos are dark. Asking every account for a light variant to make the
+  /// hero work is a worse trade than a plate that makes any logo legible.
+  logoUrl          String?   @map("logo_url")
+  logoUploadedAt   DateTime? @map("logo_uploaded_at")
+  logoUploadedById String?   @map("logo_uploaded_by_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -550,6 +569,8 @@ model Company {
   outreachActivities              OutreachActivity[]     @relation("CompanyOutreach")
   negotiatedRates                 CompanyRate[]
   cardsOnFile                     CompanyCard[]
+  portalAccesses                  CompanyPortalAccess[]
+  discounts                       CompanyDiscount[]
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -652,30 +673,31 @@ model Person {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assignedAgent        User?                       @relation("PersonAgent", fields: [assignedAgentId], references: [id])
-  worksWith            Person?                     @relation("WorksWith", fields: [worksWithId], references: [id])
-  worksWithBack        Person[]                    @relation("WorksWith")
-  affiliations         Affiliation[]
-  bookings             Booking[]                   @relation("BookingContact")
-  referredBookings     Booking[]                   @relation("BookingReferrer")
-  user                 User?                       @relation("ContactUser")
-  emailMessages        EmailMessage[]
-  jobContacts          JobContact[]
-  orderContacts        Order[]                     @relation("OrderJobContact")
-  inquiries            Inquiry[]                   @relation("InquiryContact")
-  portalAccesses       PortalAccess[]              @relation("PortalAccessContact")
-  welcomeInvites       WelcomeInvite[]             @relation("WelcomeInvitePerson")
-  personSessions       PersonSession[]
-  inquiryCaptures      InquiryCapture[]            @relation("CaptureContact")
-  outreachActivities   OutreachActivity[]          @relation("PersonOutreach")
-  suppressions         EmailSuppression[]          @relation("PersonSuppressions")
-  campaignRecipients   OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
-  touchPlanEnrollments TouchPlanEnrollment[]       @relation("TouchPlanEnrollee")
-  emailAliases         PersonEmailAlias[]          @relation("PersonAliases")
+  assignedAgent         User?                       @relation("PersonAgent", fields: [assignedAgentId], references: [id])
+  worksWith             Person?                     @relation("WorksWith", fields: [worksWithId], references: [id])
+  worksWithBack         Person[]                    @relation("WorksWith")
+  affiliations          Affiliation[]
+  bookings              Booking[]                   @relation("BookingContact")
+  referredBookings      Booking[]                   @relation("BookingReferrer")
+  user                  User?                       @relation("ContactUser")
+  emailMessages         EmailMessage[]
+  jobContacts           JobContact[]
+  orderContacts         Order[]                     @relation("OrderJobContact")
+  inquiries             Inquiry[]                   @relation("InquiryContact")
+  portalAccesses        PortalAccess[]              @relation("PortalAccessContact")
+  companyPortalAccesses CompanyPortalAccess[]       @relation("CompanyPortalPerson")
+  welcomeInvites        WelcomeInvite[]             @relation("WelcomeInvitePerson")
+  personSessions        PersonSession[]
+  inquiryCaptures       InquiryCapture[]            @relation("CaptureContact")
+  outreachActivities    OutreachActivity[]          @relation("PersonOutreach")
+  suppressions          EmailSuppression[]          @relation("PersonSuppressions")
+  campaignRecipients    OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
+  touchPlanEnrollments  TouchPlanEnrollment[]       @relation("TouchPlanEnrollee")
+  emailAliases          PersonEmailAlias[]          @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
   // on PersonMerge), so there's no loser-side back-relation to model.
-  mergesAsSurvivor     PersonMerge[]               @relation("MergeSurvivor")
+  mergesAsSurvivor      PersonMerge[]               @relation("MergeSurvivor")
 
   @@map("people")
 }
@@ -2343,6 +2365,10 @@ model User {
   dataExportsDecided    DataExportRequest[] @relation("DataExportApprover")
   detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
 
+  // Account-level client portal grants this user issued.
+  companyPortalGrants     CompanyPortalAccess[] @relation("CompanyPortalGrantor")
+  companyDiscountsCreated CompanyDiscount[]     @relation("CompanyDiscountCreator")
+
   @@map("users")
 }
 
@@ -2599,18 +2625,18 @@ model PaperworkRequest {
   // Signer info
   signerName String? @map("signer_name")
 
-  booking                      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking                      Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   cardAttempts                 PortalCardAttempt[]
   coi_ai_review                Json?
-  coi_review_at                DateTime? @db.Timestamp(6)
-  coi_admin_approved           Boolean?  @default(false)
+  coi_review_at                DateTime?           @db.Timestamp(6)
+  coi_admin_approved           Boolean?            @default(false)
   coi_admin_approved_by        String?
   coi_admin_approval_note      String?
-  coi_admin_approved_at        DateTime? @db.Timestamp(6)
+  coi_admin_approved_at        DateTime?           @db.Timestamp(6)
   contract_redline_status      String?
   contract_redline_review      String?
-  contract_redline_uploaded_at DateTime? @db.Timestamp(6)
-  updated_at                   DateTime  @default(now()) @db.Timestamp(6)
+  contract_redline_uploaded_at DateTime?           @db.Timestamp(6)
+  updated_at                   DateTime            @default(now()) @db.Timestamp(6)
 
   @@map("paperwork_requests")
 }
@@ -6422,7 +6448,7 @@ model CompanyCard {
   /// Where it came from: PORTAL_JOB | PAPERWORK | STAFF. `sourceJobId` and
   /// `sourcePaperworkRequestId` are provenance only — a card on file belongs
   /// to the COMPANY and is chargeable on any of its jobs.
-  source                   String  @default("STAFF")
+  source String @default("STAFF")
 
   /// STAFF cards only: where the client's signed authorization lives, in the
   /// staffer's own words — "Cognito CCA #4182, signed 9/2". A card the client
@@ -6430,7 +6456,7 @@ model CompanyCard {
   /// and HQ deliberately does not keep the document (it carries the PAN).
   /// Free text on purpose: the authorization lives in Cognito, in email, or
   /// in a drawer, and naming which is the whole value.
-  authorizationRef String? @map("authorization_ref")
+  authorizationRef         String? @map("authorization_ref")
   sourceJobId              String? @map("source_job_id")
   sourcePaperworkRequestId String? @map("source_paperwork_request_id")
 
@@ -6676,12 +6702,12 @@ model AfterHoursShare {
 
   /// Who it was sent to. Kept so the client can see their own share list and
   /// so a re-share to the same driver replaces rather than accumulates.
-  email     String
+  email   String
   /// "Marco", "the PA" — whatever the sender typed. Greeting only.
-  name      String? @map("recipient_name")
+  name    String? @map("recipient_name")
   /// Free text from the sender, shown above the standing instructions —
   /// separate from Job.afterHoursNote, which is the AGENT's line.
-  message   String? @db.Text
+  message String? @db.Text
 
   sharedByPortalAccessId String? @map("shared_by_portal_access_id")
   sharedByUserId         String? @map("shared_by_user_id")
@@ -7834,8 +7860,8 @@ model RwCollectionCharge {
 /// be read against exactly what the model saw, not what the mailbox looks like
 /// today.
 model RwInvoiceReview {
-  id          String  @id @default(uuid())
-  rwInvoiceId String  @unique @map("rw_invoice_id")
+  id          String @id @default(uuid())
+  rwInvoiceId String @unique @map("rw_invoice_id")
 
   /// Ana's or an admin's own words. Survives every re-scan — the AI never
   /// overwrites a human note.
@@ -8291,4 +8317,268 @@ model PortalCardAttempt {
 
   @@index([paperworkRequestId, createdAt])
   @@map("sr_portal_card_attempts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRODUCTION COMPANY PORTAL
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Who at a client's shop gets the ACCOUNT view, as opposed to a job view.
+///
+/// Wes 2026-09-04: "Production Company portal — accessible to Head of
+/// Production and Executives at the Production Company."
+///
+/// The distinction that makes this a separate model rather than a flag:
+/// every existing portal credential is scoped to a piece of WORK. A
+/// PortalAccess is one order; a PersonSession shows the jobs that person is
+/// personally a JobContact on. A Head of Production is on none of them —
+/// they are not the PM, they did not book the truck, and they will never
+/// appear in JobContact. Yet they are exactly the person who needs to see
+/// the whole account: every show the company has with us, what got invoiced,
+/// what got signed, and what the standing terms are.
+///
+/// So the grant is company-scoped and explicit. It is issued by SirReel
+/// staff from the CRM company page — never self-serve, never inferred from
+/// an email domain (see the CRM outreach work: domain→company matching is a
+/// dead end here, and guessing wrong would hand one production company
+/// another's invoices).
+///
+/// AUTHENTICATION is unchanged: the person signs in at
+/// /portal/auth/sign-in and gets a PersonSession like anyone else. This row
+/// is AUTHORIZATION only — what that session is allowed to see. The two are
+/// deliberately separate so revoking account access does not lock someone
+/// out of the job portal they are legitimately a contact on.
+model CompanyPortalAccess {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  personId  String  @map("person_id")
+  person    Person  @relation("CompanyPortalPerson", fields: [personId], references: [id], onDelete: Cascade)
+
+  role CompanyPortalRole @default(EXECUTIVE)
+
+  /// Verbatim title as the client would print it — "VP, Physical
+  /// Production". Person.rawTitle is the CRM's guess off a mail signature;
+  /// this is what staff was told when the grant was issued.
+  title String?
+
+  // ── Notification elections ────────────────────────────────────────────
+  // Wes: "an option for what notifications they would like: Job Start,
+  // Invoices Paid and job closed, etc."
+  //
+  // Defaults are the three named events ON — an executive who asked for the
+  // portal asked to be kept current — and the noisier per-quote signal OFF,
+  // since a busy account quotes far more often than it shoots.
+  notifyJobStart    Boolean @default(true) @map("notify_job_start")
+  notifyInvoicePaid Boolean @default(true) @map("notify_invoice_paid")
+  notifyJobClosed   Boolean @default(true) @map("notify_job_closed")
+  notifyQuoteSent   Boolean @default(false) @map("notify_quote_sent")
+
+  /// Digest cadence. IMMEDIATE sends one mail per event; WEEKLY rolls the
+  /// week up into a Monday summary. NONE mutes everything without
+  /// destroying the per-event elections, so muting is reversible to the
+  /// same settings.
+  cadence CompanyPortalCadence @default(IMMEDIATE)
+
+  grantedById String?  @map("granted_by_id")
+  grantedBy   User?    @relation("CompanyPortalGrantor", fields: [grantedById], references: [id])
+  grantedAt   DateTime @default(now()) @map("granted_at")
+
+  revokedAt   DateTime? @map("revoked_at")
+  revokedById String?   @map("revoked_by_id")
+
+  lastAccessedAt DateTime? @map("last_accessed_at")
+  accessCount    Int       @default(0) @map("access_count")
+
+  /// When the invite mail was last sent, so staff can tell "granted" from
+  /// "told about it".
+  invitedAt DateTime? @map("invited_at")
+
+  notices CompanyPortalNotice[]
+  shares  CompanyPortalShare[]
+
+  @@unique([companyId, personId])
+  @@index([personId])
+  @@index([companyId, revokedAt])
+  @@map("sr_company_portal_accesses")
+}
+
+enum CompanyPortalRole {
+  EXECUTIVE
+  HEAD_OF_PRODUCTION
+  FINANCE
+  OTHER
+}
+
+enum CompanyPortalCadence {
+  IMMEDIATE
+  WEEKLY
+  NONE
+}
+
+enum CompanyPortalEvent {
+  JOB_START
+  INVOICE_PAID
+  JOB_CLOSED
+  QUOTE_SENT
+}
+
+/// One row per (recipient, event, subject) that has been sent.
+///
+/// The notifier is a nightly SWEEP, not a write-path hook: it looks for
+/// jobs that started, invoices that got paid and jobs that closed, rather
+/// than asking twenty write sites to remember to call it. That design is
+/// only safe if re-running the sweep cannot re-send, so this ledger is the
+/// idempotency key — the unique constraint is the guarantee, not a
+/// convention the cron is trusted to honour.
+model CompanyPortalNotice {
+  id       String              @id @default(uuid())
+  accessId String              @map("access_id")
+  access   CompanyPortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
+
+  event CompanyPortalEvent
+
+  /// The thing that happened — a Job id for JOB_START / JOB_CLOSED /
+  /// QUOTE_SENT, an Invoice id for INVOICE_PAID. Not a foreign key on
+  /// purpose: it points at two different tables, and a notice is a record
+  /// that a mail went out, which stays true after the subject is deleted.
+  subjectId String @map("subject_id")
+
+  /// What the recipient was actually told, so "did we tell them the wrong
+  /// number" is answerable a month later.
+  summary String? @db.Text
+
+  sentAt   DateTime  @default(now()) @map("sent_at")
+  /// Null while queued for a WEEKLY digest — the row is written when the
+  /// event is DETECTED so it is never detected twice, and stamped when the
+  /// mail actually goes.
+  mailedAt DateTime? @map("mailed_at")
+
+  @@unique([accessId, event, subjectId])
+  @@index([accessId, sentAt])
+  @@index([mailedAt])
+  @@map("sr_company_portal_notices")
+}
+
+/// "Send this to my production teams" — the one outbound button on the
+/// account portal.
+///
+/// An executive reads the terms and the service list and their next thought
+/// is that their PMs should have this. The button forwards a rendered copy
+/// of the account overview to people they name. Recorded because it is mail
+/// leaving our domain on a client's instruction: who sent it, to whom, and
+/// when has to be answerable.
+model CompanyPortalShare {
+  id       String              @id @default(uuid())
+  accessId String              @map("access_id")
+  access   CompanyPortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
+
+  /// Array of { email, name } as sent. Snapshot, not a join — the point is
+  /// what the client typed at the time.
+  recipients Json
+
+  message String? @db.Text
+
+  /// Resend accepted this many. A partial failure records the count that
+  /// actually went, and `error` carries the rest.
+  sentCount Int     @default(0) @map("sent_count")
+  error     String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([accessId, createdAt])
+  @@map("sr_company_portal_shares")
+}
+
+/// A standing discount this client has negotiated — the thing an executive
+/// opens the portal to confirm.
+///
+/// Wes 2026-09-04: "At the top should be their company discounts if entered
+/// by SirReel. For example '50% off of Production Supply Orders' and '30%
+/// off Communication Orders' and '20% off Cube Trucks and Cargo Vans'."
+///
+/// ── Why a new model and not the columns already here ───────────────────
+/// Company already carries `discountTendency` / `typicalDiscountPct` /
+/// `discountNotes`, and none of them can serve this. They are the CRM's
+/// NEGOTIATION PROFILE — "always asks for free delivery", "angles for 15%"
+/// — internal notes about how this client bargains. Rendering that to the
+/// client would be showing them our read on them, and `typicalDiscountPct`
+/// is what they ASK for, not what they GOT. CompanyRate is closer but
+/// answers a different question: it replaces the price of one item, and
+/// cannot express "20% off cube trucks and cargo vans".
+///
+/// ── What it does and does not do ───────────────────────────────────────
+/// This is the AGREED TERM, published. It is not a pricing engine: nothing
+/// reads it at quote time, and a rep still applies the discount on the
+/// order (OrderDiscount, which already has a DEPARTMENT scope this mirrors
+/// deliberately). Saying so plainly matters — a client reading "50% off
+/// supplies" on their portal and receiving a quote without it is worse than
+/// no portal. The staff-side order page surfaces these as a reminder for
+/// exactly that reason.
+///
+/// `departmentKey` is optional because the real deals do not all land on a
+/// department boundary. "Cube trucks and cargo vans" is a slice of
+/// VEHICLES, so it carries the department for grouping and a `label` that
+/// says what it actually covers. The label is CLIENT-FACING copy — it is
+/// what the executive reads.
+model CompanyDiscount {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Client-facing name of what the discount covers — "Production supply
+  /// orders", "Cube trucks & cargo vans". Rendered verbatim.
+  label String
+
+  /// Whole-number percent off list, 1–100.
+  percentOff Int @map("percent_off")
+
+  /// Which billing department this sits under, when the deal IS a whole
+  /// department. A department discount auto-applies as an OrderDiscount row
+  /// on every new order — the client sees the full list rate on each line
+  /// and one "Production supplies discount −50%" row under the section
+  /// subtotal, which is how a discount should read.
+  departmentKey LineItemDepartment? @map("department_key")
+
+  /// Catalog items this discount covers, when the deal is a SLICE of a
+  /// department rather than the whole thing — "20% off cube trucks and
+  /// cargo vans" is a handful of items inside VEHICLES, and applying it as
+  /// a VEHICLES department discount would silently discount honeywagons
+  /// too.
+  ///
+  /// Item-scoped discounts apply at the RATE, not as a discount row: the
+  /// line prints the reduced daily rate, the same way a negotiated
+  /// CompanyRate does. They never stack on top of a CompanyRate — a
+  /// negotiated price is already the deal, and taking another 20% off it
+  /// would give away a discount twice (see resolveRate).
+  inventoryItemIds String[] @map("inventory_item_ids")
+
+  /// Optional qualifier the client should see — "orders over $2,500",
+  /// "excludes partner units". Kept separate from the label so the label
+  /// stays a clean noun phrase.
+  conditions String? @db.Text
+
+  /// Internal-only context — never rendered to the client. Same discipline
+  /// as CompanyRate.note.
+  internalNote String? @map("internal_note") @db.Text
+
+  /// Coverage window. Both nullable: most standing discounts are open-ended
+  /// and giving them a fake expiry would make the portal lie about when the
+  /// deal ends.
+  effectiveDate DateTime? @map("effective_date")
+  expiryDate    DateTime? @map("expiry_date")
+
+  /// Off switch that keeps the record. A discount that ended is history the
+  /// account needs, not a row to delete.
+  isActive Boolean @default(true) @map("is_active")
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("CompanyDiscountCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId, isActive])
+  @@map("sr_company_discounts")
 }
