@@ -89,8 +89,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - RentalWorks API: agent field is `Agent` (NOT `CustomerServiceRepresentative`), formatted `Lastname, Firstname` — reverse and trim to match UI display names. Outstanding balance = `Total - InvoicedAmount`
 
 ### UI Conventions
-- Dark theme: `bg-zinc-900` containers, `bg-zinc-800` inputs, `border-zinc-700`, `text-white`, `text-zinc-400` labels, `text-zinc-500` hints
+- **The staff shell's content area is LIGHT** — `<main>` in
+  `src/app/(dashboard)/layout.tsx` is `bg-[#F7F6F3]` and `globals.css`
+  `:root` is a light palette. Only the left nav is dark. A page written
+  to the old "dark theme" note renders white text on cream — present,
+  selectable, unreadable (2026-09-04: the whole check in/out report
+  screen shipped that way).
+- Default: `bg-white border-zinc-200` cards, `text-zinc-900` headings and
+  item names, `text-zinc-700` detail, `text-zinc-500` hints, light-tinted
+  notices (`bg-amber-50 border-amber-300 text-amber-900`). `text-white`
+  belongs on filled buttons only.
+- Dark styling is legal ONLY inside a card that paints its own opaque
+  dark background (`bg-zinc-800` / `bg-zinc-900`, no alpha) — see
+  `src/components/yard/YardBoard.tsx`. `bg-zinc-900/40` is not that; over
+  cream it is a washed mid-grey.
 - Accent: `bg-amber-600 hover:bg-amber-500` for primary CTAs
+- Yard/warehouse surfaces are read standing at a terminal — keep item
+  names ~16px and detail ~13px, not the desktop 14/12.
 - Reference existing components in `src/components/orders/` for styling
 
 ## Git
