@@ -776,12 +776,12 @@ export default function JobDetailPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
         <div className="text-zinc-600 text-[15px]">{error || 'Job not found'}</div>
-        <button
-          onClick={() => router.back()}
+        <Link
+          href="/jobs"
           className="text-[13px] text-amber-700 hover:text-amber-600"
         >
-          ← Back
-        </button>
+          ← Back to jobs
+        </Link>
       </div>
     );
   }
@@ -1213,12 +1213,17 @@ const driverTone = (d: any): string => {
           {toast}
         </div>
       )}
-      <button
-        onClick={() => router.back()}
+      {/* Deliberately a link to the list, NOT router.back(). The rail
+          pushes a history entry per job, so history-back landed on
+          whichever job you happened to look at before this one — Wes
+          read that as the page "defaulting to a random job". Back means
+          the top of the jobs page, every time. */}
+      <Link
+        href="/jobs"
         className="text-[13px] text-zinc-600 hover:text-zinc-900 transition-colors"
       >
-        ← Back
-      </button>
+        ← Back to jobs
+      </Link>
 
       {/* Header */}
       <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
