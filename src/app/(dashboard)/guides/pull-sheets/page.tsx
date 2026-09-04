@@ -15,9 +15,13 @@
  * pages and not a docs model.
  *
  * Facts this page asserts, and where they live — keep them in lockstep:
- *   - There is no "send to warehouse" button. Booking creates the pick
- *     list, find-or-create, with every WAREHOUSE-lane line →
- *     lib/orders/bookOrder.ts.
+ *   - There is no "send to warehouse" button. A warehouse line files the
+ *     pick list THE MOMENT IT IS ADDED, at any order status
+ *     (syncPickListOnLineAdd); booking find-or-creates the same list
+ *     → lib/orders/pickListSync.ts + lib/orders/bookOrder.ts. Corrected
+ *     2026-09-04: this page first said booking was what created it,
+ *     which was already imprecise and became visibly wrong when the
+ *     yard board widened to quotes the same day.
  *   - A line added after booking is appended even to a terminated list
  *     → lib/orders/pickListSync.ts (case c).
  *   - Which departments reach the floor → routeDepartment() in
@@ -101,7 +105,7 @@ export default function PullSheetsGuidePage() {
         <div className="mb-9 grid gap-2.5 sm:grid-cols-3">
           <Hand
             who="Sales"
-            does="Puts the gear on the order and hits Book it. That is the entire handoff — there is no separate send-to-warehouse step."
+            does="Puts the gear on the order with real dates. That is the entire handoff — there is no separate send-to-warehouse step."
           />
           <Hand
             who="The floor"
@@ -116,8 +120,11 @@ export default function PullSheetsGuidePage() {
         <section className="mb-10">
           <h2 className="mb-1 text-xl font-semibold text-lt-fg">1 · Sales: getting the sheet to the warehouse</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
-            Short version: build the order, book it. The pull sheet is a consequence of booking, not a
-            thing you send.
+            Short version: put the gear on the order and give it dates. The pull sheet is a consequence
+            of the line, not a thing you send — the full version, vehicles included, is{' '}
+            <Link href="/guides/sending-orders" className="font-semibold underline underline-offset-2">
+              how to send orders to Warehouse &amp; Fleet
+            </Link>.
           </p>
           <ol className="list-none border-b border-lt-hairline p-0">
             <Step n={1} title="Put the gear on the order as line items">
@@ -136,15 +143,18 @@ export default function PullSheetsGuidePage() {
                 the floor&rsquo;s sheet.
               </Note>
             </Step>
-            <Step n={2} title="Book it">
+            <Step n={2} title="The sheet exists already — what it needs is dates">
               <p>
-                Order page → <strong>Book it</strong>. That is the handoff. Booking builds the pull sheet
-                out of every warehouse line on the order, and from that moment it is visible to the floor
-                on <strong>All Pick Lists</strong> and on their <strong>Today</strong> board.
+                A warehouse line files the pull sheet the moment it is added, whatever the order&rsquo;s
+                status. A quote has one. There is{' '}
+                <strong>no button that sends a pick list to the warehouse</strong>, and nothing to email.
               </p>
               <p>
-                There is <strong>no button that sends a pick list to the warehouse</strong>, and nothing
-                to email. If you find yourself about to email a list, the order isn&rsquo;t booked.
+                What puts it in front of the floor is the <strong>date</strong>: their{' '}
+                <strong>Today</strong> board shows the day, and <strong>Check In/Out Reports</strong>{' '}
+                reaches three days back and four forward. Quotes are included and say{' '}
+                <strong>Quote</strong> on the row. <strong>Book it</strong> firms the numbers and stamps
+                the lanes — it is not what makes the gear visible.
               </p>
             </Step>
             <Step n={3} title="Added something later? It is already on their sheet">
