@@ -493,6 +493,13 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // delivery/pickup from view for now — this needs to be worked
           // on before they see it." The ROUTE is untouched and still in
           // the admin nav; only the yard crew's entry is gone.
+          //
+          // The how-to sits with the work it describes (same rule as
+          // "How to collect"). This one is deliberately the SAME page
+          // sales gets: the handoff is the subject, and two versions of
+          // it would let each side keep believing the other does
+          // something it doesn't.
+          { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
         ],
       },
     ];
@@ -613,6 +620,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // reps already live in.
           { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
           { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
+          // Booking an order IS the pick-list handoff, and reps kept
+          // looking for a send-to-warehouse button that has never
+          // existed. Their half of the loop is section 1.
+          { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
         ],
       },
       {
@@ -691,6 +702,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // Everyone who can start a job should be able to find out how.
         { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
         { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
+        { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
       ],
     },
     {

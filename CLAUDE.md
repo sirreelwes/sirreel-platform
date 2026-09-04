@@ -95,10 +95,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   to the old "dark theme" note renders white text on cream — present,
   selectable, unreadable (2026-09-04: the whole check in/out report
   screen shipped that way).
-- Default: `bg-white border-zinc-200` cards, `text-zinc-900` headings and
-  item names, `text-zinc-700` detail, `text-zinc-500` hints, light-tinted
-  notices (`bg-amber-50 border-amber-300 text-amber-900`). `text-white`
-  belongs on filled buttons only.
+- **Use the `lt-*` / `chip-*` tokens, not raw zinc.** tailwind.config.ts
+  defines the light palette: `bg-lt-page` / `bg-lt-card` / `bg-lt-inner`,
+  `border-lt-hairline`, and the measured text ramp `text-lt-fg` (primary)
+  → `text-lt-fg2` (secondary) → `text-lt-fg3` (muted). The muted steps
+  were chosen against the LIGHTEST surface in the system so they clear AA
+  everywhere — eyeballing a `zinc-500` does not. Notices use the `chip-*`
+  pairs (`bg-chip-warn-bg text-chip-warn-fg`, `-good-`, `-bad-`,
+  `-neutral-`). `text-white` belongs on filled buttons only.
+  `src/app/(dashboard)/guides/*/page.tsx` is the cleanest reference.
 - Dark styling is legal ONLY inside a card that paints its own opaque
   dark background (`bg-zinc-800` / `bg-zinc-900`, no alpha) — see
   `src/components/yard/YardBoard.tsx`. `bg-zinc-900/40` is not that; over
