@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { adoptJobPaperworkRequest } from '@/lib/paperwork/livePaperworkBooking'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,12 +45,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     )
   }
 
-  // Reuse the booking's PaperworkRequest if present; otherwise mint one.
-  let pr = await prisma.paperworkRequest.findFirst({
-    where: { bookingId: booking.id },
-    orderBy: { sentAt: 'desc' },
-    select: { token: true },
-  })
+  // Reuse the JOB's PaperworkRequest if present; otherwise mint one.
+  // Job-scoped so a rebook (cancel the hold, create the reservation)
+  // doesn't hand the client a second token while the one they already
+  // have points at the retired booking.
+  let pr: { token: string } | null = await adoptJobPaperworkRequest(job.id, booking.id)
   if (!pr) {
     const primary = job.jobContacts.find((c) => c.isPrimary) ?? job.jobContacts[0]
     const sentTo = primary?.person?.email || ''

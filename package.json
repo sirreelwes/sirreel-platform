@@ -40,6 +40,7 @@
     "test:role-mapping": "tsx tests/crm/role-mapping.test.ts",
     "test:cluster-classify": "tsx tests/crm/cluster-classify.test.ts",
     "test:booking-status": "tsx tests/bookings/status.test.ts",
+    "test:live-paperwork": "tsx tests/paperwork/live-booking.test.ts",
     "test:unsubscribe-token": "tsx tests/outreach/unsubscribe-token.test.ts",
     "test:send-guard": "tsx tests/outreach/send-guard.test.ts",
     "test:lcdw": "tsx tests/pricing/lcdw-eligibility.test.ts",

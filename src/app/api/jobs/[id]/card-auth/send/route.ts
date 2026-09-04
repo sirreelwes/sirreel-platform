@@ -32,6 +32,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { portalV2Url } from '@/lib/portal/portalUrl'
+import { adoptJobPaperworkRequest } from '@/lib/paperwork/livePaperworkBooking'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,14 +64,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return bad(409, 'No reservation on this job yet — add one before requesting a card.')
   }
 
-  // Reuse the booking's PaperworkRequest if one exists; otherwise mint.
+  // Reuse the job's PaperworkRequest if one exists; otherwise mint.
   // `sentTo` starts empty and is filled in below only on a real send, so a
   // freshly minted row never claims an ask that didn't happen.
-  let pr = await prisma.paperworkRequest.findFirst({
-    where: { bookingId },
-    orderBy: { sentAt: 'desc' },
-    select: { id: true, token: true },
-  })
+  //
+  // Job-scoped, not booking-scoped: a rebook retires the booking the last
+  // link was minted against, and minting a second token there would leave
+  // the client holding two links — the one they were already sent, dead,
+  // and a new one whose row cannot see the card on the first.
+  let pr = await adoptJobPaperworkRequest(params.id, bookingId)
   if (!pr) {
     pr = await prisma.paperworkRequest.create({
       data: { bookingId, sentTo: '' },
