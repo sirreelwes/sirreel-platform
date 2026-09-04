@@ -59,7 +59,7 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'hq-documents',
     label: 'HQ notifications',
     description:
-      'The main internal feed: public form submissions (rental intake, contact, supply requests, space inquiries), signed rental agreements with the PDF attached, client COI drops, and portal paperwork events. Default is the hq@ distribution group.',
+      'The main internal feed: public form submissions (rental intake, contact, supply requests, space inquiries), signed rental agreements with the PDF attached, client COI drops, client redlines arriving, negotiated agreements going back out for signature, and portal paperwork events. Default is the hq@ distribution group — which Jose and Oliver already read.',
     defaults: () => [hqNotifyInbox()],
   },
   {

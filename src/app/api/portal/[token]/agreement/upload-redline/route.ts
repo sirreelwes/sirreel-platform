@@ -12,7 +12,23 @@ export const maxDuration = 60
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
 
-const REVIEW_RECIPIENTS = ['wes@sirreel.com', 'dani@sirreel.com']
+// Who hears that a client redlined the agreement.
+//
+// Was hardcoded to Wes + Dani, so the agent whose job it is never learned
+// their own client had sent one back (Wes 2026-09-04). Now the hq-documents
+// channel — hq@ by default, which Jose and Oliver already read — and
+// changeable at /admin/notifications rather than in a deploy.
+//
+// Falls back to the previous pair only if the channel resolves to nothing:
+// a redline arriving is not something to drop on the floor because a
+// distribution list was misconfigured.
+const REVIEW_FALLBACK = ['wes@sirreel.com', 'dani@sirreel.com']
+
+async function reviewRecipients(): Promise<string[]> {
+  const { channelRecipients } = await import('@/lib/email/notificationChannels')
+  const list = await channelRecipients('hq-documents')
+  return list.length > 0 ? list : REVIEW_FALLBACK
+}
 
 const ACCEPTED_MIME = new Set([
   'application/pdf',
@@ -93,7 +109,7 @@ async function emailReviewers(args: {
 </body></html>`
   return sendAgreementEmail({
     label: 'portal/agreement/upload-redline',
-    to: REVIEW_RECIPIENTS,
+    to: await reviewRecipients(),
     subject: `Redline received: ${args.companyName} · ${args.jobName || args.jobCode || ''}`,
     html,
   })
