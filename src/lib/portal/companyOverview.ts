@@ -89,6 +89,7 @@ export interface CompanyNegotiatedRateLine {
   label: string
   dailyRate: number
   weeklyRate: number | null
+  department: string
   /**
    * Catalog list price at read time — "regularly $400" under the deal.
    * Live, not snapshotted: a list-price change should move this line the
@@ -266,6 +267,13 @@ function resolveAccountRep(
   return null
 }
 
+/** Display order for negotiated-rate tiles: vehicles first, stages last. */
+function deptRank(d: string): number {
+  if (d === 'VEHICLES') return 0
+  if (d === 'STAGES') return 2
+  return 1
+}
+
 /** The account-level terms block that sits above the job tiles. */
 export async function buildCompanyTerms(companyId: string): Promise<CompanyTermsSummary> {
   const now = new Date()
@@ -392,6 +400,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         label: r.inventoryItem.description || r.inventoryItem.code,
         dailyRate: Number(r.dailyRate),
         weeklyRate: r.weeklyRate != null && Number(r.weeklyRate) > 0 ? Number(r.weeklyRate) : null,
+        department: r.inventoryItem.department,
         listDailyRate:
           r.inventoryItem.dailyRate != null && Number(r.inventoryItem.dailyRate) > 0
             ? Number(r.inventoryItem.dailyRate)
@@ -409,7 +418,10 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
             ? '/standing-sets'
             : DEPARTMENT_PUBLIC_PATH[r.inventoryItem.department] || '/vehicles',
       }))
-      .sort((a, b) => b.dailyRate - a.dailyRate || a.label.localeCompare(b.label)),
+      // Wes 2026-09-04: "move cube trucks and cargo vans up to top of list.
+      // Stage items below." Vehicles lead, stages/sets trail; within a
+      // group the pricier deal first.
+      .sort((a, b) => deptRank(a.department) - deptRank(b.department) || b.dailyRate - a.dailyRate || a.label.localeCompare(b.label)),
     discounts: discounts.map((d) => ({
       id: d.id,
       label: d.label,
