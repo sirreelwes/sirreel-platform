@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { ClientArPanel } from "@/components/crm/ClientArPanel";
@@ -104,7 +104,12 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-US"
 export default function CompanyDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const companyId = params.id as string;
+  // Arriving from a job's Card Authorization tile. Carried so a keyed card
+  // records WHICH job sent staff here — without it every keyed card lands on
+  // the account with no idea which show it was taken for.
+  const sourceJobId = searchParams.get('job');
   const { data: session } = useSession();
 
   const [company, setCompany] = useState<CompanyDetail | null>(null);
@@ -391,7 +396,7 @@ export default function CompanyDetailPage() {
       {/* Cards on file. Next to AR because they answer consecutive
           questions: what's owed, and what we can charge it to. */}
       <div id="cards" className="mb-6 scroll-mt-4">
-        <CompanyCardsPanel companyId={companyId} />
+        <CompanyCardsPanel companyId={companyId} sourceJobId={sourceJobId} />
       </div>
 
       {/* CRM Notes — pinned client relationship notes (Company.notes).

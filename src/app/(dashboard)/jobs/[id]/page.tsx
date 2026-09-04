@@ -313,16 +313,27 @@ interface JobDetail {
   reportToUpdatedAt: string | null;
   /** Derived operational position — same rollup the /jobs board renders. */
   cadence: CadenceRollup;
-  // Job-level card-on-file status (derived from the job's bookings'
-  // paperwork). Token never leaves the server — display fields only.
+  // Job-level card-on-file status. TWO stores answer this: the client's
+  // portal authorization on the booking's paperwork row, and a card staff
+  // keyed in from a signed off-portal CCA, which lives on the COMPANY.
+  // Token never leaves the server — display fields only.
   cardAuth: {
     onFile: boolean;
+    /** 'job' — authorized in the portal for this job. 'account' — on the
+     *  company's wallet, put there for the account rather than this job. */
+    origin: 'job' | 'account' | null;
     last4: string | null;
     cardType: string | null;
     cardholderName: string | null;
     paymentPreference: 'CARD' | 'CHECK_WIRE' | 'UNDECIDED' | null;
     /** The $0 stored-credential validation came back approved. */
     validated: boolean;
+    /** The card's own MM/YY is already past. */
+    expired: boolean;
+    /** account cards: where the signed authorization lives, and the label
+     *  staff gave the card. */
+    authorizationRef: string | null;
+    label: string | null;
     /** Failed portal attempts at this card step, and the latest one. */
     troubleCount: number;
     lastTroubleAt: string | null;
@@ -1102,6 +1113,12 @@ const driverTone = (d: any): string => {
   // Distinct from security-only: the client authorized the card but has not
   // said how they'll pay. Do not read that as consent to the processing fee.
   const cardPrefUndecided = job.cardAuth?.paymentPreference === 'UNDECIDED';
+  // Keyed from a signed authorization onto the company's wallet, not typed by
+  // this client in the portal.
+  const cardFromAccount = job.cardAuth?.origin === 'account';
+  // Amber, not green: the gateway refused the $0 check, or the card's own
+  // expiry has passed. Either way someone should ask before the truck rolls.
+  const cardWarn = !job.cardAuth?.validated || !!job.cardAuth?.expired;
   // Five-check readiness — SAME helper the /jobs sidebar chip uses
   // (src/lib/jobs/readiness.ts), so the strip and the list agree. The
   // page's own richer statuses are mapped down to the helper's pass/fail
@@ -1575,13 +1592,11 @@ const driverTone = (d: any): string => {
               <>
                 <div
                   className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
-                    job.cardAuth.validated ? 'text-emerald-700' : 'text-amber-700'
+                    cardWarn ? 'text-amber-700' : 'text-emerald-700'
                   }`}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full ${
-                      job.cardAuth.validated ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`}
+                    className={`w-2 h-2 rounded-full ${cardWarn ? 'bg-amber-500' : 'bg-emerald-500'}`}
                   />
                   On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
                 </div>
@@ -1591,8 +1606,31 @@ const driverTone = (d: any): string => {
                       still ask for another card before the rental goes out. */}
                   {!job.cardAuth.validated
                     ? 'The $0 check was not approved — ask for another card'
-                    : cardSecurityOnly ? 'Security only — client pays another way' : cardPrefUndecided ? 'Payment method not chosen yet' : job.cardAuth.cardholderName || 'Authorized'}
+                    : job.cardAuth.expired
+                      ? 'That card has expired — ask for another'
+                      : cardSecurityOnly ? 'Security only — client pays another way' : cardPrefUndecided ? 'Payment method not chosen yet' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
+                {/* Where the card came from. An account card was NOT authorized
+                    for this job — staff keyed it from paper the client signed
+                    elsewhere — so the tile says so rather than implying this
+                    client sat down and typed it into the portal. */}
+                {cardFromAccount && (
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    On the {job.company?.name || 'client'} account
+                    {job.cardAuth.authorizationRef ? ` · ${job.cardAuth.authorizationRef}` : ''}
+                    {job.company?.id ? (
+                      <>
+                        {' '}
+                        <a
+                          href={`/crm/${job.company.id}#cards`}
+                          className="underline underline-offset-2 hover:text-zinc-900"
+                        >
+                          view
+                        </a>
+                      </>
+                    ) : null}
+                  </div>
+                )}
               </>
             ) : !stripScored ? (
               <>
@@ -1646,7 +1684,7 @@ const driverTone = (d: any): string => {
                 {job.company?.id && (
                   <div className="mt-1 text-[11px] text-zinc-500">
                     <a
-                      href={`/crm/${job.company.id}#cards`}
+                      href={`/crm/${job.company.id}?job=${job.id}#cards`}
                       className="underline underline-offset-2 hover:text-zinc-900"
                     >
                       Already have a signed authorization? Key it in

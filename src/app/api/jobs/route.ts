@@ -22,6 +22,7 @@ import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { computeReadiness } from '@/lib/jobs/readiness'
+import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 
 export const dynamic = 'force-dynamic'
 
@@ -273,6 +274,12 @@ export async function GET(req: NextRequest) {
       take: 300,
     })
 
+    // A card keyed in from a signed off-portal authorization lives on the
+    // COMPANY (CompanyCard), not on a booking's paperwork row — so the chip
+    // has to ask both stores or it calls a job a blocker with a live card on
+    // the account. One query for the page; see lib/payments/jobCardOnFile.ts.
+    const walletCardCompanies = await companiesWithWalletCards(jobs.map((j) => j.companyId))
+
     // Kanban manual placements (side table, presentation-only). One
     // query for the whole page of jobs. PREJOB/OUT only — RETURNED is
     // semantic (Job.returnedAt) now; legacy 'RETURNED' override rows
@@ -484,9 +491,10 @@ export async function GET(req: NextRequest) {
         coi: paperwork.coi.state,
         rental: paperwork.rental.state,
         stage: paperwork.stage?.state ?? null,
-        cardOnFile: liveBookings.some(
-          (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
-        ),
+        cardOnFile:
+          liveBookings.some(
+            (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
+          ) || (!!j.companyId && walletCardCompanies.has(j.companyId)),
         gear: {
           total: liveItems.length,
           assigned: liveItems.filter((it) => it.status === 'ASSIGNED').length,

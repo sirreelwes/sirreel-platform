@@ -52,7 +52,14 @@ function expiryLabel(e: string | null): string {
   return `${e.slice(0, 2)}/${e.slice(2)}`;
 }
 
-export function CompanyCardsPanel({ companyId }: { companyId: string }) {
+export function CompanyCardsPanel({
+  companyId,
+  sourceJobId = null,
+}: {
+  companyId: string;
+  /** The job whose Card Authorization tile sent staff here, when one did. */
+  sourceJobId?: string | null;
+}) {
   const [cards, setCards] = useState<CardOnFile[] | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -127,6 +134,7 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
         {adding ? (
           <KeyedCardForm
             companyId={companyId}
+            sourceJobId={sourceJobId}
             onCancel={() => setAdding(false)}
             onAdded={(next) => {
               setAdding(false);
@@ -348,10 +356,12 @@ export function CompanyCardsPanel({ companyId }: { companyId: string }) {
  */
 function KeyedCardForm({
   companyId,
+  sourceJobId,
   onCancel,
   onAdded,
 }: {
   companyId: string;
+  sourceJobId?: string | null;
   onCancel: () => void;
   onAdded: (cards: CardOnFile[]) => void;
 }) {
@@ -428,6 +438,7 @@ function KeyedCardForm({
           cardholderName: name.trim(),
           authorizationRef: ref.trim(),
           label: label.trim() || null,
+          sourceJobId: sourceJobId || null,
         }),
       });
       const j = await r.json().catch(() => ({}));

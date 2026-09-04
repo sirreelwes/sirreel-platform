@@ -32,6 +32,7 @@
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
+import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 
 export interface HoldOnQuoteResult {
   created: number
@@ -336,6 +337,7 @@ export async function clientPaperworkIn(orderId: string): Promise<{
       signedAgreements: { select: { contractType: true, status: true, coveredByAgreementId: true } },
       job: {
         select: {
+          companyId: true,
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
@@ -361,9 +363,14 @@ export async function clientPaperworkIn(orderId: string): Promise<{
     rental.length > 0 &&
     rental.every((a) => isSignedAgreementStatus(a.status) || !!a.coveredByAgreementId)
 
-  const cardOk = (order.job?.bookings ?? []).some((b) =>
-    b.paperworkRequests.some((p) => !!p.ccCardNumberEncrypted),
-  )
+  // Both stores, same as the job page: a portal authorization on one of the
+  // job's bookings, OR a card staff keyed onto the company from paper the
+  // client signed. Reading only the first left a hold soft while a live card
+  // sat on the account (Wes, 2026-09-04).
+  const cardOk =
+    (order.job?.bookings ?? []).some((b) =>
+      b.paperworkRequests.some((p) => !!p.ccCardNumberEncrypted),
+    ) || (await companiesWithWalletCards([order.job?.companyId])).size > 0
 
   const missing: string[] = []
   if (!coiOk) missing.push('COI')

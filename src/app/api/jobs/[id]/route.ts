@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
+import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
@@ -361,9 +362,15 @@ export async function GET(
       : [0, null]
 
     const cardRow = paperwork.find((p) => !!p.ccCardNumberEncrypted)
+    // No portal card for this job's bookings does NOT mean no card. Staff key
+    // in authorizations the client signed off-portal, and those land in the
+    // company wallet — see src/lib/payments/jobCardOnFile.ts. The portal card
+    // wins when there is one; it is the authorization tied to this booking.
+    const walletCard = cardRow ? null : await resolveWalletCardForJob(job.companyId, job.id)
     const cardAuth = cardRow
       ? {
           onFile: true,
+          origin: 'job' as const,
           last4: cardRow.ccCardLast4 ?? null,
           cardType: cardRow.ccCardType ?? null,
           cardholderName:
@@ -373,21 +380,35 @@ export async function GET(
           /** False when the $0 validation did not come back approved. The
            *  card may still charge; staff should know before counting on it. */
           validated: cardRow.ccAuthRespStat === 'A',
+          expired: false,
+          authorizationRef: null,
+          label: null,
           troubleCount,
           lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
           lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
         }
-      : {
-          onFile: false,
-          last4: null,
-          cardType: null,
-          cardholderName: null,
-          paymentPreference: null,
-          validated: false,
-          troubleCount,
-          lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
-          lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
-        }
+      : walletCard
+        ? {
+            ...walletCard,
+            troubleCount,
+            lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+            lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
+          }
+        : {
+            onFile: false,
+            origin: null,
+            last4: null,
+            cardType: null,
+            cardholderName: null,
+            paymentPreference: null,
+            validated: false,
+            expired: false,
+            authorizationRef: null,
+            label: null,
+            troubleCount,
+            lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
+            lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,
+          }
     // Three states, not two. A vehicle whose client DECLINED the waiver and
     // one nobody has asked yet both used to send `false`, so the badge read
     // "LCDW not accepted" for both and the team could not tell a refusal
