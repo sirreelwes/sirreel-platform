@@ -100,6 +100,13 @@ export interface CompanyNegotiatedRateLine {
    * Path only; the renderer prefixes the public origin.
    */
   href: string
+  /**
+   * Catalog photo for the thing, via the PUBLIC image proxy (which the
+   * portal host serves). Only when the vehicle passes the public
+   * visibility gate — the proxy 404s otherwise and a broken image is
+   * worse than none. Sets have no item-level photo; null.
+   */
+  photoPath: string | null
 }
 
 /**
@@ -322,7 +329,12 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
             description: true,
             dailyRate: true,
             department: true,
-            vehicleCategories: { where: { published: true }, select: { slug: true }, take: 1 },
+            imageUrl: true,
+            vehicleCategories: {
+              where: { published: true, active: true },
+              select: { id: true, slug: true, photoUrl: true, photos: { select: { id: true }, take: 1 } },
+              take: 1,
+            },
           },
         },
       },
@@ -379,6 +391,12 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
           r.inventoryItem.dailyRate != null && Number(r.inventoryItem.dailyRate) > 0
             ? Number(r.inventoryItem.dailyRate)
             : null,
+        photoPath: (() => {
+          const vc = r.inventoryItem.vehicleCategories[0]
+          if (!vc) return null
+          const hasImage = vc.photos.length > 0 || !!vc.photoUrl || !!r.inventoryItem.imageUrl
+          return hasImage ? `/api/public/catalog-image/vehicle/${vc.id}` : null
+        })(),
         href: r.inventoryItem.vehicleCategories[0]?.slug
           ? `/vehicles/${r.inventoryItem.vehicleCategories[0].slug}`
           : r.inventoryItem.department === 'STAGES' &&

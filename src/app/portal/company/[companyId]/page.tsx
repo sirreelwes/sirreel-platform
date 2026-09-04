@@ -199,7 +199,7 @@ export default async function CompanyPortalPage({
               <img
                 src={`/api/portal/company/${params.companyId}/logo`}
                 alt={overview.companyName}
-                className="block h-[29px] w-auto max-w-[220px] object-contain object-left"
+                className="block h-6 sm:h-[29px] w-auto max-w-[38vw] sm:max-w-[220px] object-contain object-left"
               />
             ) : (
               <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">
@@ -213,7 +213,7 @@ export default async function CompanyPortalPage({
                 height its wordmark reads smaller. A little taller so the two
                 wordmarks sit at the same cap height. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/sirreel-logo.png" alt="SirReel" className="block h-10 w-auto max-w-[220px] object-contain object-right" />
+            <img src="/sirreel-logo.png" alt="SirReel" className="block h-8 sm:h-10 w-auto max-w-[38vw] sm:max-w-[220px] object-contain object-right" />
           </div>
         </div>
       </div>
@@ -235,12 +235,11 @@ export default async function CompanyPortalPage({
               {session.title || COMPANY_PORTAL_ROLE_LABEL[session.role]}
             </span>
           </div>
+          {/* A quiet link, not a button. Access is a 30-day magic-link
+              session, so nobody signs in and out; this exists for a shared
+              machine and should read like a footnote (Wes 2026-09-04). */}
           <form action="/api/portal/auth/signout" method="POST" className="shrink-0">
-            <button
-              type="submit"
-              className="text-[11px] font-semibold border text-white/80 hover:text-white px-2.5 py-1 rounded-md transition-colors"
-              style={{ borderColor: 'rgba(255,255,255,0.2)' }}
-            >
+            <button type="submit" className="text-[11px] text-white/45 hover:text-white/80 underline-offset-2 hover:underline">
               Sign out
             </button>
           </form>
@@ -311,8 +310,19 @@ export default async function CompanyPortalPage({
                     href={`${PUBLIC_SITE_ORIGIN}${r.href}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="block bg-white border border-zinc-200 rounded-lg px-3.5 py-2 hover:border-zinc-400 transition-colors"
+                    className="flex items-center gap-3 bg-white border border-zinc-200 rounded-lg pl-2 pr-3.5 py-2 hover:border-zinc-400 transition-colors"
                   >
+                    {/* Wes 2026-09-04: "should we add images by items? Vehicles
+                        etc?" — the catalog photo, when the vehicle has one. */}
+                    {r.photoPath && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={r.photoPath}
+                        alt=""
+                        className="block h-11 w-16 rounded-md object-cover bg-zinc-100 shrink-0"
+                      />
+                    )}
+                    <div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
                         ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -334,6 +344,7 @@ export default async function CompanyPortalPage({
                         regularly ${r.listDailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/day
                       </div>
                     )}
+                    </div>
                   </a>
                 ))}
               </div>
@@ -575,7 +586,7 @@ export default async function CompanyPortalPage({
             info@sirreel.com
           </a>
         )}{' '}
-        · SirReel Production Vehicles
+        · SirReel Studio Services
       </footer>
     </div>
   )
