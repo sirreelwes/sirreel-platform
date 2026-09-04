@@ -26,6 +26,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { withBillingCc } from '@/lib/email/billingVisibility'
 import { rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl, portalSignInUrl } from '@/lib/portal/portalUrl'
@@ -141,8 +142,14 @@ export async function sendPreInvoice(args: {
     'If something looks off, tell us on that page — easier to fix now than after the invoice goes out.',
   ])
 
+  // Billing is copied on the review copy too (Wes 2026-09-04) — a
+  // pre-invoice is the figures the client is about to be billed, and the
+  // "changes requested" reply comes back to billing either way.
+  const ccList = await withBillingCc([], primary.email)
+
   const result = await sendAgreementEmail({
     to: [primary.email],
+    cc: ccList.length > 0 ? ccList : undefined,
     // Billing signs it and billing answers it — same as the real invoice.
     replyTo: 'billing@sirreel.com',
     subject: `Pre-invoice for ${jobLabel} — please review`,

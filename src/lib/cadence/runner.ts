@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { CadenceEvent, CadenceEventType } from '@prisma/client'
 import { sendCadenceEmail } from '@/lib/email/sendCadenceEmail'
+import { withBillingCc } from '@/lib/email/billingVisibility'
 import { loadCadenceContextForOrder, buildTemplateContext } from '@/lib/cadence/context'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 
@@ -210,6 +211,10 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
     case 'INVOICE_DELIVERY':
       return handleStateGatedEmail(event, 'INVOICE_DELIVERY', {
         requiredStates: ['RETURNED', 'INVOICED'],
+        // An invoice reaching a client copies billing, whichever path
+        // sent it (Wes 2026-09-04) — the manual send in sendInvoice does
+        // the same thing.
+        ccBilling: true,
       })
     case 'PAYMENT_REMINDER_T14':
       return handleStateGatedEmail(event, 'PAYMENT_REMINDER_T14', {
@@ -256,6 +261,8 @@ async function handleStateGatedEmail(
   opts: {
     requiredStates: import('@prisma/client').CadenceState[]
     requirePickupHoursAhead?: number
+    /** Copy billing on the send — invoice mail only. */
+    ccBilling?: boolean
   },
 ): Promise<HandlerResult> {
   const ctx = await loadCadenceContextForOrder(event.orderId)
@@ -275,10 +282,12 @@ async function handleStateGatedEmail(
   }
 
   const templateCtx = buildTemplateContext(ctx)
+  const cc = opts.ccBilling ? await withBillingCc([], ctx.jobContact.email) : []
   const result = await sendCadenceEmail({
     eventType,
     label: `cadence/${eventType}`,
     to: [ctx.jobContact.email],
+    cc: cc.length > 0 ? cc : undefined,
     from: { name: ctx.agent.name, email: ctx.agent.email },
     replyTo: ctx.agent.email,
     context: templateCtx,

@@ -18,6 +18,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { withBillingCc } from '@/lib/email/billingVisibility'
 import { buildFinalInvoiceEmail, type CardOnFile } from '@/lib/email/templates/finalInvoiceReady'
 import { fetchBlobBuffer } from '@/lib/email/paymentInfoAttachments'
 import { loadPaymentRecord } from '@/lib/payments/sendPaymentDetails'
@@ -160,8 +161,13 @@ export async function sendFinalInvoicePaymentOptions(
     pdfAttached: !!attachment,
   })
 
+  // Billing sees the invoice leave, not just the replies to it
+  // (Wes 2026-09-04). Channel-driven — /admin/notifications.
+  const ccList = await withBillingCc([], recipient.email)
+
   const sent = await sendAgreementEmail({
     to: [recipient.email],
+    cc: ccList.length > 0 ? ccList : undefined,
     replyTo: 'billing@sirreel.com',
     subject: email.subject,
     html: email.html,

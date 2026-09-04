@@ -187,6 +187,10 @@ export default function FinishingAJobGuidePage() {
                 plus the link to their portal, where they can pay by card or get the bank details.
               </p>
               <p>The order moves to invoiced, and the balance starts showing on Collections.</p>
+              <p>
+                <strong>billing@ is copied on it</strong> — on the pre-invoice round too — so Ana sees the
+                invoice go out rather than only the replies to it. Nobody has to remember to forward it.
+              </p>
             </Step>
             <Step n={2} title="You can issue without an approval — know that you are">
               <p>

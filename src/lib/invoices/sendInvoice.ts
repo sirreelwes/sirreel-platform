@@ -34,6 +34,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { rankRecipients } from '@/lib/email/recipients'
+import { withBillingCc } from '@/lib/email/billingVisibility'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { renderCadenceTemplate } from '@/lib/email/templates/renderCadenceTemplate'
 import { portalJobUrl, portalSignInUrl } from '@/lib/portal/portalUrl'
@@ -189,6 +190,15 @@ export async function sendInvoice(args: {
   const others = ccOverride
     ? ranked.filter((r) => r.email !== primary.email && ccOverride.includes(r.email))
     : ranked.filter((r) => r.email !== primary.email)
+  // Billing is copied on every invoice that leaves (Wes 2026-09-04) — the
+  // Reply-To below only caught clients who wrote back, so an invoice going
+  // out was invisible to Ana. Channel-driven: editable at
+  // /admin/notifications, empty list turns it off. Not part of `others`,
+  // which stays the CLIENT-side CC list the operator can override.
+  const ccList = await withBillingCc(
+    others.map((o) => o.email),
+    primary.email,
+  )
 
   // ── Magic link (reuse the contract pattern) ─────────────────────
   let portalUrl: string | null = null
@@ -251,7 +261,7 @@ export async function sendInvoice(args: {
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       sentTo: primary.email,
-      cc: others.map((o) => o.email),
+      cc: ccList,
       orderAdvancedToInvoiced: false,
       preview: {
         subject: rendered.subject,
@@ -269,7 +279,7 @@ export async function sendInvoice(args: {
     // card", "wiring Friday") must reach the billing inbox, not the
     // unmonitored notifications@ sender. Same as sendFinalInvoiceEmail.
     replyTo: 'billing@sirreel.com',
-    cc: others.length > 0 ? others.map((o) => o.email) : undefined,
+    cc: ccList.length > 0 ? ccList : undefined,
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -288,7 +298,7 @@ export async function sendInvoice(args: {
     await recordEmailDelivery({
       resendMessageId: result.id,
       toAddress: primary.email,
-      ccAddresses: others.map((o) => o.email),
+      ccAddresses: ccList,
       subject: rendered.subject,
       label: `send-invoice:${invoice.invoiceNumber}`,
       orderId: invoice.order.id,
@@ -351,7 +361,7 @@ export async function sendInvoice(args: {
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
     sentTo: primary.email,
-    cc: others.map((o) => o.email),
+    cc: ccList,
     orderAdvancedToInvoiced,
   }
 }

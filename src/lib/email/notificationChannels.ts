@@ -34,6 +34,7 @@ export type NotificationChannelKey =
   | 'sales-team-cc'
   | 'signed-contract-sales'
   | 'signed-contract-billing'
+  | 'invoice-billing-cc'
   | 'coi-team'
   | 'pickup-picklists'
   | 'daily-brief'
@@ -90,6 +91,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     label: 'Signed contracts — billing copies',
     description: 'Billing people copied on signed rental agreements and stage contracts.',
     defaults: () => [...COPY_RECIPIENTS.billing],
+  },
+  {
+    key: 'invoice-billing-cc',
+    label: 'Invoices — billing copy',
+    description:
+      'CC\u2019d on every invoice that goes to a client: the invoice itself with its PDF, the pre-invoice review copy, and the recorded final invoice with payment options. Billing already answers the replies \u2014 this makes the outbound send visible too, at the moment it leaves. An empty list turns the copy off.',
+    defaults: () => ['billing@sirreel.com'],
   },
   {
     key: 'coi-team',
