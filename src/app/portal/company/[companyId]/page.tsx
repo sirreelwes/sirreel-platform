@@ -277,7 +277,7 @@ export default async function CompanyPortalPage({
             {/* Two across from the smallest screen up (Wes: "stack the 40%
                 side by side"); three when the account has three+. */}
             {terms.discounts.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 max-w-3xl mx-auto">
+              <div className="grid grid-cols-2 gap-3 max-w-4xl mx-auto">
                 {terms.discounts.map((d) => (
                   <a
                     key={d.id}
@@ -302,15 +302,20 @@ export default async function CompanyPortalPage({
               </div>
             )}
 
+            {/* A grid, not a wrapping row: every tile the same width, rows
+                aligned, no orphan floating in the last row (Wes 2026-09-04:
+                "make all tiles the same width for cleaner spacing"). Four
+                across on a desk, one column on a phone — two-across with a
+                thumbnail wrapped every name onto three lines. */}
             {terms.negotiatedRates.length > 0 && (
-              <div className={`flex flex-wrap justify-center gap-x-2 gap-y-2 max-w-3xl mx-auto ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 max-w-4xl mx-auto ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
                 {terms.negotiatedRates.map((r) => (
                   <a
                     key={r.id}
                     href={`${PUBLIC_SITE_ORIGIN}${r.href}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-3 bg-white border border-zinc-200 rounded-lg pl-2 pr-3.5 py-2 hover:border-zinc-400 transition-colors"
+                    className="flex items-center gap-3 bg-white border border-zinc-200 rounded-lg pl-2 pr-3 py-2 min-h-[60px] hover:border-zinc-400 transition-colors"
                   >
                     {/* Wes 2026-09-04: "should we add images by items? Vehicles
                         etc?" — the catalog photo, when the vehicle has one. */}
@@ -322,13 +327,13 @@ export default async function CompanyPortalPage({
                         className="block h-11 w-16 rounded-md object-cover bg-zinc-100 shrink-0"
                       />
                     )}
-                    <div>
-                    <div className="flex items-baseline gap-2">
+                    <div className="min-w-0">
+                    <div className="flex items-baseline gap-x-2 flex-wrap">
                       <span className="text-[17px] font-medium text-zinc-900 tabular-nums leading-none">
                         ${r.dailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                         <span className="text-[12px] font-normal text-zinc-500">/day</span>
                       </span>
-                      <span className="text-[13px] text-zinc-700">{r.label}</span>
+                      <span className="text-[13px] text-zinc-700 leading-snug">{r.label}</span>
                       {r.weeklyRate != null && (
                         <span className="text-[11px] text-zinc-400">
                           · ${r.weeklyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/wk
