@@ -8,7 +8,7 @@
  */
 
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, BadgeCheck, Download, FileText, Mail, Phone } from 'lucide-react'
 import { getCompanyPortalSession } from '@/lib/portal/companyPortal'
 import { buildCompanyJobDetail } from '@/lib/portal/companyJobDetail'
@@ -43,7 +43,8 @@ export default async function CompanyPortalJobPage({
   params: { companyId: string; jobId: string }
 }) {
   const session = await getCompanyPortalSession(params.companyId)
-  if (!session) notFound()
+  // Same door as the company page — see the note there.
+  if (!session) redirect(`/portal/company?next=${encodeURIComponent(`/portal/company/${params.companyId}`)}`)
 
   // companyId comes from the SESSION, not the URL — the two are equal here
   // only because the session resolved against that URL segment.

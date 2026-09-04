@@ -25,12 +25,23 @@ import { PORTAL } from '@/lib/brand/portalTokens'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CompanyPortalIndexPage() {
+export default async function CompanyPortalIndexPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string }
+}) {
   const { signedIn, personName, grants } = await listCompanyPortalGrants(
     cookies().get(PERSON_SESSION_COOKIE)?.value,
   )
 
-  if (!signedIn) redirect('/portal/auth/sign-in?next=/portal/company')
+  // Only our own company paths ride along — never an arbitrary URL.
+  const next =
+    typeof searchParams?.next === 'string' && /^\/portal\/company\/[A-Za-z0-9-]+$/.test(searchParams.next)
+      ? searchParams.next
+      : null
+
+  if (!signedIn) redirect(`/portal/auth/sign-in?next=${encodeURIComponent(next ?? '/portal/company')}`)
+  if (next && grants.some((g) => next.startsWith(`/portal/company/${g.companyId}`))) redirect(next)
   if (grants.length === 1) redirect(`/portal/company/${grants[0].companyId}`)
 
   return (

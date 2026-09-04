@@ -18,7 +18,7 @@
  */
 
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import {
   ArrowRight,
   BadgeCheck,
@@ -147,7 +147,13 @@ export default async function CompanyPortalPage({
   params: { companyId: string }
 }) {
   const session = await getCompanyPortalSession(params.companyId, { touch: true })
-  if (!session) notFound()
+  // A miss goes to the door, not to a 404. Wes 2026-09-04: "I'd rather
+  // reply to the email with a link" — so this URL is what a first-time
+  // visitor clicks, cold, from a mail thread. /portal/company sends the
+  // signed-out to sign-in (and back here after the magic link), and gives
+  // the signed-in-but-unlisted an honest explanation. Nothing about the
+  // company leaks either way: every miss redirects identically.
+  if (!session) redirect(`/portal/company?next=${encodeURIComponent(`/portal/company/${params.companyId}`)}`)
 
   const [overview, services, access] = await Promise.all([
     buildCompanyOverview(params.companyId),
