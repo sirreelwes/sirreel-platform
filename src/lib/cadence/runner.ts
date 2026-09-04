@@ -219,6 +219,10 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
     case 'PAYMENT_REMINDER_T14':
       return handleStateGatedEmail(event, 'PAYMENT_REMINDER_T14', {
         requiredStates: ['INVOICED'],
+        // Chasing an unpaid invoice is billing's own work (Wes
+        // 2026-09-04) — a reminder that went out without them seeing it
+        // is a second, contradictory chase waiting to happen.
+        ccBilling: true,
       })
     case 'REPEAT_BUSINESS_T30':
       return handleStateGatedEmail(event, 'REPEAT_BUSINESS_T30', {
@@ -261,7 +265,7 @@ async function handleStateGatedEmail(
   opts: {
     requiredStates: import('@prisma/client').CadenceState[]
     requirePickupHoursAhead?: number
-    /** Copy billing on the send — invoice mail only. */
+    /** Copy billing on the send — invoice and payment mail only. */
     ccBilling?: boolean
   },
 ): Promise<HandlerResult> {

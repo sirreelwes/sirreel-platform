@@ -96,7 +96,7 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'invoice-billing-cc',
     label: 'Invoices — billing copy',
     description:
-      'CC\u2019d on every invoice that goes to a client: the invoice itself with its PDF, the pre-invoice review copy, and the recorded final invoice with payment options. Billing already answers the replies \u2014 this makes the outbound send visible too, at the moment it leaves. An empty list turns the copy off.',
+      'CC\u2019d on every invoice that goes to a client: the invoice itself with its PDF, the pre-invoice review copy, the recorded final invoice with payment options, and the 14-day payment reminder. Billing already answers the replies \u2014 this makes the outbound send visible too, at the moment it leaves, so nobody chases an invoice twice. An empty list turns the copy off.',
     defaults: () => ['billing@sirreel.com'],
   },
   {
