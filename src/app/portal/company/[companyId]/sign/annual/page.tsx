@@ -115,7 +115,7 @@ export default function SignAnnualPage() {
             <p className="text-sm text-zinc-700 mt-2 leading-relaxed">
               Thank you. Your annual agreement is on file and covers every show your teams book through its term
               {done.paperedOrders > 0 ? ` — including ${done.paperedOrders} open order${done.paperedOrders === 1 ? '' : 's'} already on the account` : ''}.
-              Your coordinators won&apos;t be asked to sign a rental agreement per show.
+              From here on, each show is confirmed with a one-page addendum that logs it under this agreement — nobody re-signs the full document.
             </p>
             <Link href={`/portal/company/${companyId}`} className="inline-block mt-4 text-sm font-semibold underline text-zinc-900">Back to your account</Link>
           </div>

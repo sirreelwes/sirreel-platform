@@ -157,7 +157,7 @@ export function CompanyPortalAccessPanel({
       const res = await fetch(`/api/crm/companies/${companyId}/agreements/offer-annual`, { method: 'POST' })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || 'Could not file the annual')
-      setNotice(`Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign.`)
+      setNotice(`Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign; each job still logs a one-page addendum under it.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not file the annual')
     } finally {

@@ -3,6 +3,13 @@
  *
  * Wes 2026-09-04: "Make their default Annual Rental Agreement" → "build it".
  *
+ * ── What "covered" means (Wes 2026-09-04) ─────────────────────────────
+ * Not "never signs again". Each job is still confirmed with a one-page
+ * addendum that logs the show under the master (JobAgreementAddendum +
+ * the per-job LcdwElection acknowledgement); what the annual removes is
+ * re-signing the full agreement per show. Every client-facing sentence
+ * about the annual says exactly that and no more.
+ *
  * ── Why this exists ────────────────────────────────────────────────────
  * Every annual master on file so far is a RECORD of a signature given in
  * Cognito. Radical Media never signed one, and marking them auto-covered

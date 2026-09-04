@@ -61,7 +61,7 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
     ),
     i.annualAgreementTitle
       ? calloutBox(
-          `Your annual agreement — <strong>${esc(i.annualAgreementTitle)}</strong> — papers every job your company books, so your coordinators aren't asked to sign per show.`,
+          `Your annual agreement, <strong>${esc(i.annualAgreementTitle)}</strong>, runs every show your company books. Each job is confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show.`,
         )
       : '',
     p(

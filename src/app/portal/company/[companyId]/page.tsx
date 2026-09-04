@@ -380,8 +380,9 @@ export default async function CompanyPortalPage({
                       {terms.annual.title || terms.annual.originalFilename}
                     </div>
                     <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
-                      Every job your company books is papered by this agreement — your teams
-                      aren&apos;t asked to sign a rental agreement per show.
+                      Every show your company books runs under this agreement. Each job is
+                      confirmed with a one-page addendum that logs it under the annual — nobody
+                      re-signs the full agreement per show.
                       {terms.standingLcdw === 'ACCEPTED' &&
                         ' Damage waiver (LCDW) is accepted for all fleet vehicle rentals under it.'}
                       {terms.standingLcdw === 'DECLINED' &&
@@ -412,9 +413,10 @@ export default async function CompanyPortalPage({
                     </div>
                     <div className="text-sm font-semibold text-zinc-900 mt-2">{terms.pendingAnnual.title}</div>
                     <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
-                      Sign once for the year and none of your coordinators are asked to sign a rental
-                      agreement per show. You&apos;ll choose the damage-waiver (LCDW) election for the
-                      account as part of signing.
+                      Sign the full agreement once for the year. After that, each show is confirmed
+                      with a one-page addendum that logs it under the annual — your coordinators never
+                      re-sign the whole thing. You&apos;ll choose the damage-waiver (LCDW) election for
+                      the account as part of signing.
                     </p>
                     <div className="text-xs text-zinc-500 mt-2 font-mono">
                       {fmtDay(terms.pendingAnnual.effectiveDate)} → {fmtDay(terms.pendingAnnual.expiryDate)}

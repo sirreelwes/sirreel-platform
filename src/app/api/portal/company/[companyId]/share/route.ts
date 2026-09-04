@@ -183,7 +183,7 @@ export async function POST(req: NextRequest, { params }: { params: { companyId: 
     })
     termsRows.push({
       label: 'Signing',
-      value: 'Covered for the year — no per-show rental agreement to sign',
+      value: 'Signed once for the year — each show is logged with a one-page addendum, not a fresh agreement',
     })
   } else {
     termsRows.push({
