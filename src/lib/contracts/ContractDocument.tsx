@@ -83,6 +83,14 @@ export interface ContractDocumentProps {
    *  a doc mislabeled "Counter Proposal". Presentation only — does NOT
    *  affect any clause text. */
   documentTitle?: string
+  /**
+   * This render IS the document the client signs, not a negotiation
+   * proposal. Changes the title and, critically, the closing paragraph —
+   * the counter-proposal's closing says the document "does not itself
+   * constitute an executed contract", which is exactly wrong printed
+   * above a signature block.
+   */
+  finalized?: boolean
 }
 
 interface ResolvedClause {
@@ -361,13 +369,14 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
   generatedAt,
   grantedScope,
   documentTitle,
+  finalized,
 }) => {
   const generated = generatedAt || new Date()
   const { byClauseRef, unmapped } = indexChanges(aiChanges, decisions)
   const c = company || {}
   const j = job || {}
   const contact = j.primaryContact || null
-  const docTitle = documentTitle || 'Rental Agreement — Counter Proposal'
+  const docTitle = documentTitle || (finalized ? 'Rental Agreement' : 'Rental Agreement — Counter Proposal')
 
   return (
     <Document
@@ -525,11 +534,19 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         )}
 
         <View style={styles.closing}>
-          <Text>
-            This document reflects SirReel&apos;s negotiation position based on per-clause review
-            of the client&apos;s redlined agreement. It is a proposal for discussion and does not
-            itself constitute an executed contract.
-          </Text>
+          {finalized ? (
+            <Text>
+              This is the rental agreement for this job. The clauses marked above were amended at
+              the client&apos;s request and agreed by SirReel; every other clause stands as
+              written. Signing in the client portal executes this agreement as printed here.
+            </Text>
+          ) : (
+            <Text>
+              This document reflects SirReel&apos;s negotiation position based on per-clause review
+              of the client&apos;s redlined agreement. It is a proposal for discussion and does not
+              itself constitute an executed contract.
+            </Text>
+          )}
         </View>
 
         <Text

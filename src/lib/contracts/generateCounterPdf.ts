@@ -30,6 +30,8 @@ export interface RenderArgs {
    *  counter-proposal label); the baseline doc-to-sign passes "Rental
    *  Agreement". Presentation only — no effect on clause text. */
   documentTitle?: string
+  /** Render as the document to SIGN rather than a counter-proposal. */
+  finalized?: boolean
 }
 
 export async function generateCounterPdf(args: RenderArgs): Promise<Buffer> {

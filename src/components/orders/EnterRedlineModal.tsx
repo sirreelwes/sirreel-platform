@@ -1,8 +1,19 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { X, Plus, Trash2, RotateCcw, Sparkles, ImageIcon, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  X,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Sparkles,
+  ImageIcon,
+  AlertTriangle,
+  ArrowLeft,
+  Send,
+} from "lucide-react";
 import { CANONICAL_CLAUSES } from "@/lib/contracts/contractClauses";
+import { diffClause } from "@/lib/contracts/clauseDiff";
 
 /**
  * "The client sent a redline back" — the staff-side entry desk.
@@ -48,6 +59,33 @@ interface PastedImage {
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
+/**
+ * One clause, marked up: what the client struck in red, what they added in
+ * green, everything they left alone in plain text. This is the screen an
+ * agreement gets approved from, so it shows the change rather than asking
+ * anyone to spot it between two paragraphs.
+ */
+function MarkedUpClause({ original, amended }: { original: string; amended: string }) {
+  const segments = useMemo(() => diffClause(original, amended), [original, amended]);
+  return (
+    <p className="text-xs leading-relaxed text-lt-fg2">
+      {segments.map((seg, i) =>
+        seg.op === "del" ? (
+          <span key={i} className="line-through text-chip-bad-fg bg-chip-bad-bg/60 rounded-sm">
+            {seg.text}
+          </span>
+        ) : seg.op === "ins" ? (
+          <span key={i} className="text-chip-good-fg bg-chip-good-bg font-semibold rounded-sm">
+            {seg.text}
+          </span>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
 export default function EnterRedlineModal({
   orderId,
   jobName,
@@ -72,6 +110,29 @@ export default function EnterRedlineModal({
   const [unmatched, setUnmatched] = useState<Unmatched[]>([]);
   const [hasRead, setHasRead] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Step 2: the finished changes, marked up, with the send at the end of it.
+  const [step, setStep] = useState<"edit" | "review">("edit");
+  const [recipient, setRecipient] = useState<{ name: string | null; email: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendStage, setSendStage] = useState("");
+  const [sent, setSent] = useState<{ email: string | null; portalUrl: string | null } | null>(null);
+
+  // Who the send will reach. Fetched when the review opens so it is on screen
+  // BEFORE the button, not in the receipt after it.
+  useEffect(() => {
+    if (step !== "review" || recipient) return;
+    let cancelled = false;
+    fetch(`/api/orders/${orderId}/agreement/redline`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.recipient) setRecipient(d.recipient);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [step, recipient, orderId]);
 
   const clauseByRef = useMemo(
     () => new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c])),
@@ -145,41 +206,102 @@ export default function EnterRedlineModal({
     }
   };
 
-  const save = async () => {
-    setError("");
+  const validate = (): string => {
+    if (rows.length === 0) return "Add at least one clause the client changed.";
     const unchanged = rows.filter(
       (r) => r.proposed.trim() === (clauseByRef.get(r.clauseRef)?.body ?? ""),
     );
-    if (rows.length === 0) {
-      setError("Add at least one clause the client changed.");
-      return;
-    }
     if (unchanged.length > 0) {
-      setError(
-        `Clause ${unchanged.map((r) => r.clauseRef).join(", ")} still reads exactly like the standard text — edit it or remove it.`,
-      );
-      return;
+      return `Clause ${unchanged
+        .map((r) => r.clauseRef)
+        .join(", ")} still reads exactly like the standard text — edit it or remove it.`;
     }
+    return "";
+  };
+
+  /** Record the approved redline. Returns the review id, or null on failure. */
+  const persist = async (): Promise<string | null> => {
+    const res = await fetch(`/api/orders/${orderId}/agreement/redline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amendments: rows.map((r) => ({ clauseRef: r.clauseRef, proposed: r.proposed })),
+        sourceNote: sourceNote.trim() || undefined,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error || "Could not save the redline.");
+      return null;
+    }
+    return String(data.reviewId);
+  };
+
+  const saveOnly = async () => {
+    const problem = validate();
+    if (problem) return setError(problem);
+    setError("");
     setSaving(true);
     try {
-      const res = await fetch(`/api/orders/${orderId}/agreement/redline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amendments: rows.map((r) => ({ clauseRef: r.clauseRef, proposed: r.proposed })),
-          sourceNote: sourceNote.trim() || undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Could not save the redline.");
-        return;
-      }
-      onSaved({ reviewId: data.reviewId, clauses: data.clauses ?? [] });
+      const reviewId = await persist();
+      if (reviewId) onSaved({ reviewId, clauses: [] });
     } catch {
       setError("Could not save the redline.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Approve and send, in the order the words imply: record the redline,
+   * render the document from it, then release it to the client and email the
+   * link. Three existing endpoints rather than one new orchestration route —
+   * so a failure names the step it failed at instead of "something went
+   * wrong", and a half-finished send leaves the redline recorded rather than
+   * lost.
+   */
+  const approveAndSend = async () => {
+    const problem = validate();
+    if (problem) return setError(problem);
+    setError("");
+    setSending(true);
+    try {
+      setSendStage("Recording the approved redline…");
+      const reviewId = await persist();
+      if (!reviewId) return;
+
+      setSendStage("Building the agreement…");
+      const gen = await fetch(`/api/tools/contract-review/${reviewId}/generate-counter-pdf`, {
+        method: "POST",
+      });
+      if (!gen.ok) {
+        const d = await gen.json().catch(() => ({}));
+        setError(
+          (d.error || "Could not build the agreement.") +
+            " The redline is saved — open the contract review to finish.",
+        );
+        return;
+      }
+
+      setSendStage("Sending for signature…");
+      const acc = await fetch(`/api/orders/${orderId}/contract-review/accept`, { method: "POST" });
+      const accData = await acc.json().catch(() => ({}));
+      if (!acc.ok) {
+        setError(
+          (accData.error || "Could not send for signature.") +
+            " The agreement is built — open the contract review to send it.",
+        );
+        return;
+      }
+      setSent({
+        email: accData.recipientEmail ?? null,
+        portalUrl: accData.portalUrl ?? null,
+      });
+    } catch {
+      setError("Could not finish sending. Open the contract review to pick it up.");
+    } finally {
+      setSending(false);
+      setSendStage("");
     }
   };
 
@@ -188,13 +310,26 @@ export default function EnterRedlineModal({
       <div className="bg-lt-card border border-lt-hairline rounded-2xl w-full max-w-3xl my-8">
         <div className="flex items-start justify-between gap-3 p-5 border-b border-lt-hairline">
           <div>
-            <h2 className="text-lg font-bold text-lt-fg">Client redline</h2>
+            <h2 className="text-lg font-bold text-lt-fg">
+              {sent ? "Sent for signature" : step === "review" ? "The finished changes" : "Client redline"}
+            </h2>
             <p className="text-xs text-lt-fg3 mt-1 max-w-xl">
-              Paste what the client sent{jobName ? ` on ${jobName}` : ""} — the email, a screenshot
-              of the marked-up page, or both — and it reads the clauses out. You review every one
-              before saving. This papers{" "}
-              <span className="font-semibold text-lt-fg2">this job only</span>; it does not change
-              the standard agreement or this client&rsquo;s other jobs.
+              {sent ? (
+                <>The client has the agreement and the portal is open for signing.</>
+              ) : step === "review" ? (
+                <>
+                  Struck text is what the client removed, green is what they added, everything else
+                  is our standard clause unchanged. Approve to build the agreement and send it.
+                </>
+              ) : (
+                <>
+                  Paste what the client sent{jobName ? ` on ${jobName}` : ""} — the email, a
+                  screenshot of the marked-up page, or both — and it reads the clauses out. You
+                  review every one before sending. This papers{" "}
+                  <span className="font-semibold text-lt-fg2">this job only</span>; it does not
+                  change the standard agreement or this client&rsquo;s other jobs.
+                </>
+              )}
             </p>
           </div>
           <button
@@ -206,6 +341,7 @@ export default function EnterRedlineModal({
           </button>
         </div>
 
+        {step === "edit" && !sent && (
         <div className="p-5 space-y-4">
           {/* ── What the client sent ─────────────────────────────── */}
           <div className="border border-lt-hairline rounded-xl p-3 space-y-2">
@@ -378,25 +514,152 @@ export default function EnterRedlineModal({
           {error && <div className="text-xs text-chip-bad-fg">{error}</div>}
         </div>
 
+        )}
+
+        {step === "review" && !sent && (
+          <div className="p-5 space-y-4">
+            {rows.map((row) => {
+              const canonical = clauseByRef.get(row.clauseRef);
+              if (!canonical) return null;
+              return (
+                <div key={row.clauseRef} className="border border-lt-hairline rounded-xl p-3 space-y-2">
+                  <div className="text-sm font-semibold text-lt-fg">
+                    Clause {row.clauseRef} · {canonical.title}
+                  </div>
+                  {row.summary && (
+                    <div className="text-[11px] text-lt-fg3 leading-relaxed">{row.summary}</div>
+                  )}
+                  <MarkedUpClause original={canonical.body} amended={row.proposed} />
+                </div>
+              );
+            })}
+
+            <div className="border border-lt-hairline rounded-xl p-3 space-y-1">
+              <div className="text-xs font-semibold text-lt-fg2">What happens when you approve</div>
+              <ul className="text-[11px] text-lt-fg3 leading-relaxed list-disc pl-4 space-y-0.5">
+                <li>
+                  The full agreement is built with these clauses in place of ours — clean text, no
+                  markup, the amended clauses marked so the client can see which ones moved.
+                </li>
+                <li>
+                  {recipient ? (
+                    <>
+                      It is emailed to{" "}
+                      <span className="font-semibold text-lt-fg2">
+                        {recipient.name ? `${recipient.name} · ` : ""}
+                        {recipient.email}
+                      </span>{" "}
+                      with a link to sign in their portal.
+                    </>
+                  ) : (
+                    <>It is emailed to the job&rsquo;s primary contact with a link to sign.</>
+                  )}
+                </li>
+                <li>The other clauses of the rental agreement are unchanged.</li>
+              </ul>
+            </div>
+
+            {error && <div className="text-xs text-chip-bad-fg">{error}</div>}
+          </div>
+        )}
+
+        {sent && (
+          <div className="p-5 space-y-3">
+            <div className="border border-chip-good-fg/30 bg-chip-good-bg rounded-xl p-3 space-y-1.5">
+              <div className="text-xs font-semibold text-chip-good-fg">
+                {sent.email
+                  ? `The agreement went to ${sent.email}.`
+                  : "The agreement is ready to sign, but no client email was on file to send it to."}
+              </div>
+              <div className="text-[11px] text-chip-good-fg leading-relaxed">
+                {rows.length} amended clause{rows.length === 1 ? "" : "s"} (
+                {rows.map((r) => r.clauseRef).join(", ")}) are in the document they signed for.
+              </div>
+              {sent.portalUrl && (
+                <a
+                  href={sent.portalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-[11px] font-semibold text-chip-good-fg underline break-all"
+                >
+                  Open the portal as the client &rarr;
+                </a>
+              )}
+            </div>
+            {!sent.email && (
+              <div className="text-[11px] text-chip-warn-fg">
+                Add a contact to the job, then use Resend portal link on the order.
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 p-5 border-t border-lt-hairline">
           <div className="text-[11px] text-lt-fg3">
-            Saving records the redline as approved and opens the review, where you generate the
-            document and send it for signature.
+            {sending
+              ? sendStage
+              : sent
+                ? "Nothing further is needed unless the client comes back with more changes."
+                : step === "review"
+                  ? "Nothing has gone to the client yet."
+                  : "You will see the finished changes before anything is sent."}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm font-semibold text-lt-fg2 hover:text-lt-fg"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={save}
-              disabled={saving || rows.length === 0}
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg"
-            >
-              {saving ? "Saving…" : "Save redline"}
-            </button>
+            {sent ? (
+              <button
+                onClick={onClose}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-lg"
+              >
+                Done
+              </button>
+            ) : step === "edit" ? (
+              <>
+                <button
+                  onClick={onClose}
+                  className="px-3 py-1.5 text-sm font-semibold text-lt-fg2 hover:text-lt-fg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const problem = validate();
+                    if (problem) return setError(problem);
+                    setError("");
+                    setStep("review");
+                  }}
+                  disabled={rows.length === 0}
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg"
+                >
+                  Review the changes
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setStep("edit")}
+                  disabled={sending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-lt-fg2 hover:text-lt-fg disabled:opacity-40"
+                >
+                  <ArrowLeft size={14} /> Back to edit
+                </button>
+                <button
+                  onClick={saveOnly}
+                  disabled={saving || sending}
+                  title="Record the redline without emailing the client"
+                  className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-40 text-lt-fg2 text-sm font-semibold rounded-lg"
+                >
+                  {saving ? "Saving…" : "Save without sending"}
+                </button>
+                <button
+                  onClick={approveAndSend}
+                  disabled={sending || saving}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg"
+                >
+                  <Send size={14} />
+                  {sending ? "Sending…" : "Approve & send for signature"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

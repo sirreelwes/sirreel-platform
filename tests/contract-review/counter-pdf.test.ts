@@ -180,6 +180,32 @@ async function main() {
 
   console.log(`Snapshot: ${snapshotResult}`)
 
+  // 10. The FINALIZED render — the document a client actually signs after the
+  // redline is accepted. Same clauses, same decisions; only the title and the
+  // closing paragraph differ. Guarded because the counter-proposal's closing
+  // ("does not itself constitute an executed contract") sat above a signature
+  // request until 2026-09-04, and nothing would have caught it coming back.
+  const finalBuffer = await generateCounterPdf({
+    company: fixture.company,
+    job: fixture.job,
+    aiChanges: fixture.aiChanges,
+    decisions: fixture.decisions,
+    generatedAt: new Date('2026-05-08T00:00:00Z'),
+    finalized: true,
+  })
+  const finalText = normalize(await extractText(finalBuffer))
+
+  checkContains(finalText, 'This is the rental agreement for this job', 'finalized closing')
+  checkNotContains(
+    finalText,
+    'does not itself constitute an executed contract',
+    'finalized drops the proposal disclaimer',
+  )
+  checkNotContains(finalText, 'Counter Proposal', 'finalized is not titled a counter proposal')
+  // The negotiated clause text still has to survive — a clean title over the
+  // BASELINE clauses would be the worst possible version of this document.
+  checkContains(finalText, 'ACCEPTED', 'finalized still marks the amended clauses')
+
   if (failures.length > 0) {
     console.error(`\n${failures.length} assertion(s) failed:`)
     for (const f of failures) console.error(`  - ${f}`)

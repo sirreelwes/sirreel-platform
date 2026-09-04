@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses'
+import { pickCanonicalRecipient } from '@/lib/email/recipients'
 
 export const dynamic = 'force-dynamic'
 
@@ -276,5 +277,57 @@ export async function POST(
     agreementId: agreement.id,
     status: 'REDLINE_UPLOADED',
     clauses: amendments.map((a) => ({ ref: a.ref, title: a.title })),
+  })
+}
+
+/**
+ * GET /api/orders/[id]/agreement/redline
+ *
+ * Who the "send for signature" step will actually email. Shown BEFORE the
+ * send, not reported after it: the ranked recipient is often not the person
+ * who mailed the redline (primary-flagged contacts outrank the PM role), and
+ * discovering that from a delivery receipt is discovering it too late.
+ */
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      orderNumber: true,
+      jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
+      job: {
+        select: {
+          jobContacts: {
+            select: {
+              role: true,
+              isPrimary: true,
+              person: { select: { id: true, firstName: true, lastName: true, email: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  const picked =
+    order.jobContact?.email
+      ? {
+          id: order.jobContact.id,
+          email: order.jobContact.email,
+          name: [order.jobContact.firstName, order.jobContact.lastName].filter(Boolean).join(' '),
+        }
+      : pickCanonicalRecipient(order.job, order.jobContact)
+
+  return NextResponse.json({
+    ok: true,
+    recipient: picked?.email ? { name: picked.name || null, email: picked.email } : null,
   })
 }

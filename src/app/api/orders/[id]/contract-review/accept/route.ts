@@ -5,6 +5,10 @@ import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementE
 import { portalJobUrl, portalTokenUrl } from '@/lib/portal/portalUrl'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { randomUUID } from 'crypto'
+import { put } from '@vercel/blob'
+import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
+import { buildReviewPdfProps } from '@/lib/contracts/buildReviewPdfProps'
 
 export const dynamic = 'force-dynamic'
 
@@ -117,12 +121,50 @@ export async function POST(
     )
   }
 
+  // Render the DOCUMENT TO SIGN, distinct from the counter-proposal.
+  //
+  // Pointing documentToSignUrl straight at counterPdfUrl (what this route did
+  // until 2026-09-04) asked clients to sign a page titled "Counter Proposal"
+  // that closed with "It is a proposal for discussion and does not itself
+  // constitute an executed contract." Same clauses, same decisions — the
+  // finalized flag only changes the title and that closing paragraph — so the
+  // client signs exactly what they were shown, under a document that admits
+  // to being one.
+  //
+  // Best-effort: a render or upload failure falls back to the counter-PDF
+  // rather than blocking the handoff, and says so in the response.
+  let documentToSignUrl = agreement.contractReview.counterPdfUrl
+  let finalizedPdf: 'rendered' | 'fell-back-to-counter' = 'fell-back-to-counter'
+  try {
+    const built = await buildReviewPdfProps(agreement.contractReview.id)
+    if (built.ok) {
+      const { counterPdfKey: _k, reviewId: _r, ...renderProps } = built.props
+      const pdfBytes = await generateCounterPdf({
+        ...renderProps,
+        generatedAt: new Date(),
+        finalized: true,
+      })
+      const now = new Date()
+      const key = `contracts/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}-to-sign.pdf`
+      const blob = await put(key, pdfBytes, {
+        access: 'private' as any,
+        contentType: 'application/pdf',
+      })
+      documentToSignUrl = blob.url
+      finalizedPdf = 'rendered'
+    } else {
+      console.error('[contract-review/accept] props build failed:', built.error)
+    }
+  } catch (err) {
+    console.error('[contract-review/accept] finalized render failed:', order.id, err)
+  }
+
   await prisma.signedAgreement.update({
     where: { id: agreement.id },
     data: {
       status: 'NEGOTIATED_READY',
       documentType: 'NEGOTIATED',
-      documentToSignUrl: agreement.contractReview.counterPdfUrl,
+      documentToSignUrl,
     },
   })
 
@@ -210,7 +252,8 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     status: 'NEGOTIATED_READY',
-    documentToSignUrl: agreement.contractReview.counterPdfUrl,
+    documentToSignUrl,
+    finalizedPdf,
     portalUrl,
     emailResult,
     recipientEmail: recipientEmail ?? null,
