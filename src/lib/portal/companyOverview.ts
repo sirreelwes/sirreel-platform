@@ -60,6 +60,12 @@ export interface CompanyJobTile {
   balanceDue: number
   orderCount: number
   agreementSigned: boolean
+  /**
+   * False when the job has no live order AND nothing scheduled — there is
+   * literally nothing to tell the client about it. Filtered out below
+   * rather than given a state it does not have.
+   */
+  hasSomethingToShow: boolean
 }
 
 /**
@@ -179,10 +185,37 @@ function deriveState(
   return range.start ? 'UPCOMING' : 'QUOTED'
 }
 
+/**
+ * Who the client should write to.
+ *
+ * `Company.defaultAgent` is the right answer when it is set, but most rows
+ * do not have one — Radical Media, the first live account portal, had none
+ * while both of its jobs were plainly Wes's. Rendering "SirReel team" at
+ * someone whose rep has been on every one of their shows is a worse answer
+ * than the true one sitting on the jobs.
+ *
+ * So: the company's declared agent, else whoever actually runs their work.
+ *
+ * The fallback is gated on an ACTIVE user, because the placeholder agent is
+ * a real row: `Unassigned <unassigned@sirreel.com>` (isActive: false) owns
+ * every Planyo-era job, and the first regression check rendered "Your rep:
+ * Unassigned" with a mailto to a mailbox nobody reads. A generic "SirReel
+ * team" is worse than a name and better than a wrong name.
+ */
+function resolveAccountRep(
+  declared: { name: string | null; email: string | null } | null,
+  fromJobs: { name: string | null; email: string | null } | null,
+): { name: string; email: string } | null {
+  for (const c of [declared, fromJobs]) {
+    if (c?.email) return { name: c.name || c.email, email: c.email }
+  }
+  return null
+}
+
 /** The account-level terms block that sits above the job tiles. */
 export async function buildCompanyTerms(companyId: string): Promise<CompanyTermsSummary> {
   const now = new Date()
-  const [company, discounts, agreements, coverage] = await Promise.all([
+  const [company, discounts, agreements, coverage, topAgent] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -233,7 +266,26 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
       },
     }),
     findCompanyAnnualCoverage(companyId),
+    // The agent on the most of this client's jobs — the fallback rep.
+    prisma.job.groupBy({
+      by: ['agentId'],
+      // Placeholder agents are excluded at the SOURCE rather than filtered
+      // after: taking the top agent first and then rejecting it would leave
+      // an account whose top agent is Unassigned with no rep at all, even
+      // when a real one is second.
+      where: { companyId, status: { not: 'LOST' }, agent: { isActive: true } },
+      _count: { agentId: true },
+      orderBy: { _count: { agentId: 'desc' } },
+      take: 1,
+    }),
   ])
+
+  const repFromJobs = topAgent[0]?.agentId
+    ? await prisma.user.findFirst({
+        where: { id: topAgent[0].agentId, isActive: true },
+        select: { name: true, email: true },
+      })
+    : null
 
   const filed = agreements.map((a) => {
     const started = !a.effectiveDate || a.effectiveDate.getTime() <= now.getTime()
@@ -274,9 +326,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
     billingEmail: company?.billingEmail ?? null,
     coiOnFile: company?.coiOnFile ?? false,
     coiExpiry: company?.coiExpiry ?? null,
-    accountRep: company?.defaultAgent?.email
-      ? { name: company.defaultAgent.name || company.defaultAgent.email, email: company.defaultAgent.email }
-      : null,
+    accountRep: resolveAccountRep(company?.defaultAgent ?? null, repFromJobs),
   }
 }
 
@@ -395,11 +445,28 @@ export async function buildCompanyOverview(
       balanceDue: balance,
       orderCount: job.orders.length,
       agreementSigned: signed,
+      hasSomethingToShow:
+        job.orders.some((o) => !DEAD_ORDER_STATUSES.includes(o.status)) ||
+        range.start != null ||
+        range.end != null,
     }
   })
 
-  const active = tiles.filter((t) => t.state !== 'WRAPPED')
-  const past = tiles.filter((t) => t.state === 'WRAPPED').slice(0, pastLimit)
+  // A job with NOTHING on it is not a show — it is a row.
+  //
+  // Found on the first real account (Radical Media, 2026-09-04):
+  // SR-JOB-0131 had zero orders and one CANCELLED booking, and rendered to
+  // the client as "Quoted — Morango Rebelz" with no dates and no lead. That
+  // reads as an open quote awaiting their decision. There is no quote, and
+  // there never was one; the hold was cancelled and nothing replaced it.
+  //
+  // The filter is deliberately narrow — nothing scheduled AND nothing
+  // ordered. A job whose only schedule is a live BOOKING must stay (223
+  // Planyo-era jobs are exactly that shape and are real work), and so must
+  // a job with orders but no dates yet.
+  const showable = tiles.filter((t) => t.hasSomethingToShow)
+  const active = showable.filter((t) => t.state !== 'WRAPPED')
+  const past = showable.filter((t) => t.state === 'WRAPPED').slice(0, pastLimit)
 
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
   let invoicedYtd = 0
