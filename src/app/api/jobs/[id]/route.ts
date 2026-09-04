@@ -153,6 +153,12 @@ export async function GET(
                 signerName: true,
                 signedDocumentUrl: true,
                 updatedAt: true,
+                // A redline already recorded against this agreement. The
+                // row's action has to know: offering "Client sent a
+                // redline" on an agreement that HAS one reads as a second
+                // redline arriving (Wes 2026-09-04: "why are there two
+                // redlines showing?").
+                contractReviewId: true,
               },
             },
             invoices: {

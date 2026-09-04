@@ -199,6 +199,8 @@ interface OrderSignedAgreement {
   signerName: string | null;
   signedDocumentUrl: string | null;
   updatedAt: string;
+  /** Set once a redline has been recorded against this agreement. */
+  contractReviewId: string | null;
 }
 
 interface JobAgreementAddendum {
@@ -2251,15 +2253,30 @@ const driverTone = (d: any): string => {
                       {/* The client redlined this one. Entering it here beats
                           sending people to the order page to find the same
                           action — the job page is where paperwork is worked. */}
+                      {/* Two different things, and they were wearing the same
+                          words. On an agreement that already HAS a redline this
+                          is a link to that redline; on one that does not it is
+                          the way to enter one. Rendering "Client sent a redline"
+                          on both read as two redlines having arrived. */}
                       {!executed && a.contractType === 'RENTAL_AGREEMENT' && (
-                        <button
-                          onClick={() =>
-                            setRedlineOrder({ id: order.id, orderNumber: order.orderNumber })
-                          }
-                          className="text-[13px] font-semibold text-amber-700 hover:text-amber-800"
-                        >
-                          Client sent a redline →
-                        </button>
+                        a.contractReviewId ? (
+                          <Link
+                            href={`/tools/contract-review/${a.contractReviewId}`}
+                            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-rose-700 hover:text-rose-800"
+                          >
+                            <AlertTriangle size={13} aria-hidden />
+                            Redline on file — open it →
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setRedlineOrder({ id: order.id, orderNumber: order.orderNumber })
+                            }
+                            className="text-[13px] font-semibold text-amber-700 hover:text-amber-800"
+                          >
+                            Client sent a redline →
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
