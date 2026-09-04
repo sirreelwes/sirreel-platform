@@ -12,7 +12,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, BadgeCheck, Download, FileText, Mail, Phone } from 'lucide-react'
 import { getCompanyPortalSession } from '@/lib/portal/companyPortal'
 import { buildCompanyJobDetail } from '@/lib/portal/companyJobDetail'
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,10 +67,7 @@ export default async function CompanyPortalJobPage({
           >
             {job.jobCode}
           </div>
-          <h1
-            className="mt-1 text-white text-[26px] font-light italic leading-tight"
-            style={{ fontFamily: PORTAL_SERIF }}
-          >
+          <h1 className="mt-1 text-white text-[28px] font-display leading-tight tracking-tight">
             {job.name}
           </h1>
           <div className="text-xs text-white/60 mt-1">

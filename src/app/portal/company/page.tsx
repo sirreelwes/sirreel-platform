@@ -21,7 +21,7 @@ import {
   listCompanyPortalGrants,
   COMPANY_PORTAL_ROLE_LABEL,
 } from '@/lib/portal/companyPortal'
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,10 +44,7 @@ export default async function CompanyPortalIndexPage() {
           >
             Account portal
           </div>
-          <h1
-            className="mt-1 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: PORTAL_SERIF }}
-          >
+          <h1 className="mt-1 text-white text-[26px] font-display leading-tight tracking-tight">
             {grants.length === 0 ? `Hi ${personName.split(' ')[0] || 'there'}.` : 'Choose an account'}
           </h1>
         </div>

@@ -31,7 +31,7 @@ import { getCompanyPortalSession, COMPANY_PORTAL_ROLE_LABEL } from '@/lib/portal
 import { buildCompanyOverview, JOB_STATE_LABEL, type CompanyJobTile } from '@/lib/portal/companyOverview'
 import { buildServiceCatalog } from '@/lib/portal/companyServices'
 import { prisma } from '@/lib/prisma'
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
+import { PORTAL } from '@/lib/brand/portalTokens'
 import { ShareWithTeamsButton } from '@/components/portal/company/ShareWithTeamsButton'
 import { NotificationSettings } from '@/components/portal/company/NotificationSettings'
 
@@ -189,10 +189,11 @@ export default async function CompanyPortalPage({
             >
               {COMPANY_PORTAL_ROLE_LABEL[session.role]} · Account portal
             </div>
-            <h1
-              className="mt-1 text-white text-[26px] font-light italic leading-tight truncate"
-              style={{ fontFamily: PORTAL_SERIF }}
-            >
+            {/* Block face, not the serif italic the job portal inherited —
+                Wes 2026-09-04 on the first account portal: "don't use that
+                font. Use block non italic font." Same Archivo Black he chose
+                for the job title on 9/1. */}
+            <h1 className="mt-1 text-white text-[28px] font-display leading-tight tracking-tight truncate">
               {overview.companyName}
             </h1>
             <div className="text-xs text-white/60 mt-1 truncate">
