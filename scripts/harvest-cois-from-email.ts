@@ -43,6 +43,7 @@
  *   vercel env run -e production -- npx tsx scripts/harvest-cois-from-email.ts
  *   vercel env run -e production -- npx tsx scripts/harvest-cois-from-email.ts --write
  *   ... --company "Fox Sports"     limit to one account
+ *   ... --company "Radical Media" --domain radicalmedia.com   a non-annual account, explicit domain
  *   ... --limit 5                  cap accounts processed (dry runs)
  */
 import fs from 'fs'
@@ -60,6 +61,15 @@ import { coiCheckWriteFields } from '../src/lib/coi/checks'
 
 const WRITE = process.argv.includes('--write')
 const ONLY_COMPANY = argValue('--company')
+// --domain: search this client domain for the --company account even when it
+// is not an annual account (its domain isn't in the Cognito sheet either).
+// Added 2026-09-04 for the first portal account, Radical Media — a portal
+// shows "insurance on file", and the certificate is in mail like everyone
+// else's. Comma-separate several.
+const ONLY_DOMAINS = (argValue('--domain') ?? '')
+  .split(',')
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean)
 const LIMIT = Number(argValue('--limit') || '0')
 
 function argValue(flag: string): string | null {
@@ -209,6 +219,18 @@ async function main() {
 
   if (ONLY_COMPANY) {
     targets = targets.filter((t) => t.name.toLowerCase().includes(ONLY_COMPANY.toLowerCase()))
+  }
+  // Explicit domain + company: target that account directly, annual or not.
+  if (ONLY_COMPANY && ONLY_DOMAINS.length > 0) {
+    const company = await prisma.company.findFirst({
+      where: { name: { equals: ONLY_COMPANY, mode: 'insensitive' } },
+      select: { id: true, name: true },
+    })
+    if (!company) {
+      console.error(`--company "${ONLY_COMPANY}": no company by that exact name`)
+      process.exit(1)
+    }
+    targets = [{ companyId: company.id, name: company.name, cognitoName: undefined, domains: ONLY_DOMAINS }]
   }
   if (LIMIT > 0) targets = targets.slice(0, LIMIT)
 
