@@ -6255,6 +6255,24 @@ model CompanyAgreement {
   signedAt   DateTime? @map("signed_at")
   note       String?   @db.Text
 
+  // ── Signed in the ACCOUNT portal (Wes 2026-09-04: "build it") ───────────
+  // Until now every annual master was a RECORD of a signature given
+  // elsewhere (Cognito). An executive can now sign the annual in their own
+  // company portal, so the row carries the signature evidence the per-order
+  // SignedAgreement already carries: who, from where, what they affirmed.
+  // A row with `pendingSignature` true is the unsigned master offered for
+  // signature — it MUST NOT auto-cover (autoCoverJobs stays false) until
+  // the sign route flips both together.
+  pendingSignature        Boolean @default(false) @map("pending_signature")
+  signerTitle             String? @map("signer_title")
+  signerEmail             String? @map("signer_email")
+  signerIpAddress         String? @map("signer_ip_address")
+  signerUserAgent         String? @map("signer_user_agent") @db.Text
+  signatureImageData      String? @map("signature_image_data") @db.Text
+  acknowledgmentText      String? @map("acknowledgment_text") @db.Text
+  /// The CompanyPortalAccess that signed — a name attached to the signature.
+  signedViaPortalAccessId String? @map("signed_via_portal_access_id")
+
   source       String? // INTERNAL
   uploadedById String? @map("uploaded_by_id")
   uploadedBy   User?   @relation("CompanyAgreementUploader", fields: [uploadedById], references: [id])
@@ -7790,21 +7808,21 @@ model JobFinalInvoice {
   /// / CHECK / OTHER) so the two read alike and Mark-collected can prefill
   /// from it. `remittanceRef` is whatever identifies it on a bank statement —
   /// an ACH trace, a wire reference, a check number.
-  remittanceAt   DateTime? @map("remittance_at")
-  remittanceVia  String?   @map("remittance_via")
-  remittanceRef  String?   @map("remittance_ref")
-  remittanceNote String?   @map("remittance_note")
-  remittanceById String?   @map("remittance_by_id")
+  remittanceAt        DateTime? @map("remittance_at")
+  remittanceVia       String?   @map("remittance_via")
+  remittanceRef       String?   @map("remittance_ref")
+  remittanceNote      String?   @map("remittance_note")
+  remittanceById      String?   @map("remittance_by_id")
   /// The document the client actually sent — an ACH advice, a wire
   /// confirmation, a screenshot of their AP portal. Private blob, same store
   /// as the invoice PDF above. Ana asked for the file itself because "they
   /// said they sent it" and a paid remittance advice are different facts, and
   /// only one of them survives a dispute.
-  remittanceProofUrl  String? @map("remittance_proof_url")
-  remittanceProofKey  String? @map("remittance_proof_key")
+  remittanceProofUrl  String?   @map("remittance_proof_url")
+  remittanceProofKey  String?   @map("remittance_proof_key")
   /// The operator-facing filename, so the link reads as a document rather
   /// than a uuid.
-  remittanceProofName String? @map("remittance_proof_name")
+  remittanceProofName String?   @map("remittance_proof_name")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

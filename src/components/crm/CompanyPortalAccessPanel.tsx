@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
 
 const ROLES: { value: string; label: string }[] = [
   { value: 'EXECUTIVE', label: 'Executive' },
@@ -149,6 +149,22 @@ export function CompanyPortalAccessPanel({
     }
   }
 
+  async function offerAnnual() {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}/agreements/offer-annual`, { method: 'POST' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || 'Could not file the annual')
+      setNotice(`Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not file the annual')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function revoke(accessId: string) {
     setBusy(true)
     await fetch(`/api/crm/companies/${companyId}/portal-access/${accessId}`, { method: 'DELETE' })
@@ -196,12 +212,25 @@ export function CompanyPortalAccessPanel({
           </p>
         </div>
         {canEdit && !adding && (
-          <button
-            onClick={() => setAdding(true)}
-            className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-lt-fg hover:text-black"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add people
-          </button>
+          <div className="shrink-0 flex items-center gap-3">
+            {/* Wes 2026-09-04: "Make their default Annual Rental Agreement" —
+                files the annual UNSIGNED, offered in their portal; auto-cover
+                turns on only when an executive signs it there. */}
+            <button
+              onClick={offerAnnual}
+              disabled={busy}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-lt-fg hover:text-black"
+              title="File the annual rental agreement for signature in their portal"
+            >
+              <FileSignature className="w-3.5 h-3.5" /> Offer annual agreement
+            </button>
+            <button
+              onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-lt-fg hover:text-black"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add people
+            </button>
+          </div>
         )}
       </div>
 

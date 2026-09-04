@@ -31,6 +31,7 @@ import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { findCompanyAnnualCoverage, type AnnualCoverage } from '@/lib/orders/annualCoverage'
+import { findPendingAnnual, type PendingAnnual } from '@/lib/portal/companyAnnual'
 
 /** Coarse, client-legible job state. */
 export type CompanyJobState = 'UPCOMING' | 'ON_JOB' | 'WRAPPED' | 'HOLD' | 'QUOTED'
@@ -144,6 +145,8 @@ export interface CompanyTermsSummary {
   /** Live annual master, or null when the account signs per job. */
   annual: AnnualCoverage | null
   annualCurrent: boolean
+  /** An annual master OFFERED for signature in the portal, not yet signed. */
+  pendingAnnual: PendingAnnual | null
   /** Every filed master, current or not — the record, not the coverage. */
   filedAgreements: {
     id: string
@@ -266,7 +269,7 @@ function resolveAccountRep(
 /** The account-level terms block that sits above the job tiles. */
 export async function buildCompanyTerms(companyId: string): Promise<CompanyTermsSummary> {
   const now = new Date()
-  const [company, discounts, agreements, coverage, rates, topAgent] = await Promise.all([
+  const [company, discounts, agreements, coverage, pendingAnnual, rates, topAgent] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -314,9 +317,11 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         expiryDate: true,
         signerName: true,
         signedAt: true,
+        pendingSignature: true,
       },
     }),
     findCompanyAnnualCoverage(companyId),
+    findPendingAnnual(companyId),
     prisma.companyRate.findMany({
       where: { companyId, dailyRate: { gt: 0 } },
       select: {
@@ -360,7 +365,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
       })
     : null
 
-  const filed = agreements.map((a) => {
+  const filed = agreements.filter((a) => !a.pendingSignature).map((a) => {
     const started = !a.effectiveDate || a.effectiveDate.getTime() <= now.getTime()
     let notExpired = true
     if (a.expiryDate) {
@@ -416,6 +421,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
     logoUrl: company?.logoUrl ?? null,
     annual: coverage,
     annualCurrent: coverage != null,
+    pendingAnnual: coverage ? null : pendingAnnual,
     filedAgreements: filed,
     standingLcdw: coverage?.standingLcdwDecision ?? null,
     negotiatedSummary: company?.negotiatedTermsSummary ?? null,

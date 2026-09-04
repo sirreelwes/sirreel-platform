@@ -404,6 +404,40 @@ export default async function CompanyPortalPage({
                     <FileText className="w-4 h-4" /> Read the agreement
                   </a>
                 </div>
+              ) : terms.pendingAnnual ? (
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-50 px-2 py-0.5 rounded">
+                      <FileText className="w-3.5 h-3.5" /> Annual agreement — ready to sign
+                    </div>
+                    <div className="text-sm font-semibold text-zinc-900 mt-2">{terms.pendingAnnual.title}</div>
+                    <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
+                      Sign once for the year and none of your coordinators are asked to sign a rental
+                      agreement per show. You&apos;ll choose the damage-waiver (LCDW) election for the
+                      account as part of signing.
+                    </p>
+                    <div className="text-xs text-zinc-500 mt-2 font-mono">
+                      {fmtDay(terms.pendingAnnual.effectiveDate)} → {fmtDay(terms.pendingAnnual.expiryDate)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`/api/portal/company/${params.companyId}/agreement/${terms.pendingAnnual.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-300 text-zinc-800 hover:border-zinc-500"
+                    >
+                      <FileText className="w-4 h-4" /> Read
+                    </a>
+                    <Link
+                      href={`/portal/company/${params.companyId}/sign/annual`}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg text-white"
+                      style={{ backgroundColor: PORTAL.gold }}
+                    >
+                      Sign the annual agreement <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
               ) : (
                 <div>
                   <div className="text-sm font-semibold text-zinc-900">Per-job rental agreement</div>
