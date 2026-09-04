@@ -540,10 +540,11 @@ model Company {
   /// client list leaking one guess at a time — and the only surface that
   /// needs the image is one an authorized reader is already looking at.
   ///
-  /// Rendered on a white plate regardless of the mark's own colours: the
-  /// portal hero is near-black and a large share of production-company
-  /// logos are dark. Asking every account for a light variant to make the
-  /// hero work is a worse trade than a plate that makes any logo legible.
+  /// Rendered at the top of the portal BODY on the cream ground, in a
+  /// lockup with SirReel's own wordmark (Wes 2026-09-04: "just above 'your
+  /// terms with SirReel'" … "so it looks like a partnership") — not in the
+  /// near-black hero. Many production-company logos are dark; on cream any
+  /// of them reads as itself with no plate or light variant needed.
   logoUrl          String?   @map("logo_url")
   logoUploadedAt   DateTime? @map("logo_uploaded_at")
   logoUploadedById String?   @map("logo_uploaded_by_id")

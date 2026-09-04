@@ -167,22 +167,7 @@ export default async function CompanyPortalPage({
       <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
         <div className="max-w-5xl mx-auto px-6 py-8 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            {/* The client's own mark, on a white plate. Production-company
-                logos are as often dark as light and we only ever hold one
-                file, so the plate — not a light/dark variant per account —
-                is what makes any of them legible on this band. */}
-            {terms.logoUrl ? (
-              <div className="inline-flex items-center justify-center bg-white rounded-lg px-3 py-2 mb-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/portal/company/${params.companyId}/logo`}
-                  alt={overview.companyName}
-                  className="block h-8 w-auto max-w-[180px] object-contain"
-                />
-              </div>
-            ) : (
-              <div style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
-            )}
+            <div style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
             <div
               className="mt-3 text-[10px] uppercase font-semibold"
               style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
@@ -213,6 +198,32 @@ export default async function CompanyPortalPage({
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+        {/* ── The lockup ───────────────────────────────────────────────
+            Wes 2026-09-04: "place logo just above 'your terms with
+            SirReel'" and "the SirReel word mark should also be on the
+            right side so it looks like a partnership." Their mark left,
+            ours right, a hairline between: two names on one page rather
+            than a client inside a vendor's tool. Sits on the cream ground,
+            so a grey or black wordmark needs no plate. Rendered only when
+            the account has a logo — a lockup with one half missing reads
+            as a mistake, and the hero already carries SirReel. */}
+        {terms.logoUrl && (
+          <div className="flex items-center justify-between gap-6 pb-5 -mb-4 border-b border-zinc-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/portal/company/${params.companyId}/logo`}
+              alt={overview.companyName}
+              className="block h-9 w-auto max-w-[240px] object-contain object-left"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/sirreel-logo.png"
+              alt="SirReel"
+              className="block h-7 w-auto max-w-[180px] object-contain object-right opacity-90"
+            />
+          </div>
+        )}
+
         {/* ── Your rates ───────────────────────────────────────────────
             Wes 2026-09-04: standing discounts sit at the TOP. It is the
             fact an executive opens this page to confirm, and burying it
