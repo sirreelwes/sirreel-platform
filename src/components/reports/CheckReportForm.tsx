@@ -66,6 +66,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   // else. The supervisor still reviews and files, because a misread
   // digit here would rewrite a client's order and email them about it.
   const [reading, setReading] = useState(false)
+  /** Highlighted while a file is held over the drop zone. */
+  const [dragging, setDragging] = useState(false)
   const [photo, setPhoto] = useState<{ key: string; url: string } | null>(null)
   const [readNote, setReadNote] = useState<string | null>(null)
   const [readWarn, setReadWarn] = useState<string | null>(null)
@@ -79,6 +81,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     changes: string[]
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
+    /** What filing this sheet settled in the yard. */
+    gear: { pickListAdvanced: boolean; jobReturned: boolean } | null
   } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
@@ -90,6 +94,24 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       extras.filter((e) => e.description.trim()).length,
     [rows, extras],
   )
+
+  /**
+   * Both doors into the reader — the camera/file picker and a dropped
+   * file — come through here. A drop can hand over anything at all (a
+   * PDF of the same sheet, a folder, a screenshot of an email), so the
+   * type is checked once, in words, rather than failing in the API.
+   */
+  function acceptFile(file: File | null | undefined) {
+    if (!file || reading) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setReadNote(null)
+      setReadWarn(
+        `${file.name || 'That file'} is not a photo — drop a JPEG, PNG or WEBP of the sheet.`,
+      )
+      return
+    }
+    void readPhoto(file)
+  }
 
   async function readPhoto(file: File) {
     setReading(true)
@@ -220,6 +242,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         changedOrder: !!data.changedOrder,
         changes: data.changes ?? [],
         resend: data.resend ?? null,
+        gear: data.gear ?? null,
       })
       router.refresh()
     } catch (e) {
@@ -232,18 +255,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   if (done) {
     return (
       <div className="max-w-2xl mx-auto px-1 py-8">
-        <div className="border border-zinc-800 rounded-xl p-6 bg-zinc-900/40 text-center">
-          <Check size={28} aria-hidden className="mx-auto mb-3 text-emerald-400" />
-          <h1 className="text-white text-lg font-semibold mb-1">
+        <div className="border border-zinc-200 rounded-xl p-6 bg-white text-center">
+          <Check size={28} aria-hidden className="mx-auto mb-3 text-emerald-600" />
+          <h1 className="text-zinc-900 text-xl font-semibold mb-1">
             {isOut ? 'Check-out report filed' : 'Check-in report filed'}
           </h1>
           {done.changedOrder ? (
             <>
-              <p className="text-zinc-400 text-sm max-w-[52ch] mx-auto">
+              <p className="text-zinc-600 text-[15px] max-w-[52ch] mx-auto">
                 The order has been updated and {draft.agentName || 'the agent'} has been flagged to
                 review what changed.
               </p>
-              <ul className="mt-3 text-[13px] text-amber-300 space-y-0.5">
+              <ul className="mt-3 text-[14px] text-amber-800 space-y-0.5">
                 {done.changes.map((c, i) => <li key={i}>{c}</li>)}
               </ul>
               {/* Say plainly whether the client was told. A supervisor
@@ -251,11 +274,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   own — or worse, assume one went and nothing did. */}
               {done.resend && (
                 done.resend.sent ? (
-                  <p className="mt-3 text-[13px] text-emerald-400">
+                  <p className="mt-3 text-[14px] text-emerald-700">
                     The updated quote was emailed to {done.resend.to}, copying the office.
                   </p>
                 ) : (
-                  <p className="mt-3 text-[13px] text-zinc-400">
+                  <p className="mt-3 text-[14px] text-zinc-600">
                     The client was <b>not</b> emailed — {done.resend.reason}. The agent still has
                     the flag.
                   </p>
@@ -263,18 +286,33 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               )}
             </>
           ) : (
-            <p className="text-zinc-400 text-sm">
+            <p className="text-zinc-600 text-[15px]">
               {isOut
                 ? 'Everything went out as ordered — nothing to change.'
                 : 'Everything came back as expected.'}
             </p>
           )}
+          {/* Filing the inbound sheet is what closes the gear lane —
+              say so, because the next question a supervisor has is
+              whether anyone still has to mark the job returned. */}
+          {done.gear?.jobReturned && (
+            <p className="mt-3 text-[14px] text-emerald-700">
+              Everything on this job is back — it&rsquo;s marked returned.
+            </p>
+          )}
+
           <div className="mt-5 flex items-center justify-center gap-2">
             <Link
               href="/reports/orders"
-              className="text-[12px] font-bold px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white"
+              className="text-[13px] font-bold px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white"
             >
               Back to reports
+            </Link>
+            <Link
+              href="/yard"
+              className="text-[13px] font-semibold px-3 py-2 rounded-lg border border-zinc-300 text-zinc-700 hover:bg-zinc-100"
+            >
+              Today&rsquo;s board
             </Link>
           </div>
         </div>
@@ -286,18 +324,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     <div className="max-w-3xl mx-auto px-1 py-2">
       <Link
         href="/reports/orders"
-        className="inline-flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-amber-500 mb-3"
+        className="inline-flex items-center gap-1.5 text-[13px] text-zinc-600 hover:text-amber-600 mb-3"
       >
         <ArrowLeft size={13} aria-hidden />
         All reports
       </Link>
 
       <header className="mb-5">
-        <div className="text-amber-500 text-xs font-semibold uppercase tracking-wide mb-1">
+        <div className="text-amber-600 text-[13px] font-semibold uppercase tracking-wide mb-1">
           {isOut ? 'Check out' : 'Check in'}
         </div>
-        <h1 className="text-white text-2xl font-bold">{draft.jobName}</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">
+        <h1 className="text-zinc-900 text-2xl font-bold">{draft.jobName}</h1>
+        <p className="text-zinc-600 text-[15px] mt-0.5">
           <span className="font-mono">{draft.orderNumber}</span>
           <span> · {draft.company}</span>
           <span> · {fmtDay(draft.startDate)} – {fmtDay(draft.endDate)}</span>
@@ -308,13 +346,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             keeps the supervisor from wondering whether they have the
             right screen. */}
         {draft.preBooked && (
-          <p className="text-[12px] text-sky-300 mt-2 border border-sky-900 bg-sky-950/40 rounded-lg px-3 py-2">
+          <p className="text-[13px] text-sky-900 mt-2 border border-sky-200 bg-sky-50 rounded-lg px-3 py-2">
             This is still a <b>quote</b> ({draft.status.replace(/_/g, ' ').toLowerCase()}). File the
             sheet anyway — it goes onto the same lines, and the agent sees whatever changed.
           </p>
         )}
         {draft.filed && (
-          <p className="text-[12px] text-zinc-500 mt-2 border border-zinc-800 rounded-lg px-3 py-2">
+          <p className="text-[13px] text-zinc-600 mt-2 border border-zinc-200 bg-white rounded-lg px-3 py-2">
             Already filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}
             {draft.filed.preppedBy ? ` · prepped by ${draft.filed.preppedBy}` : ''}. Submitting again
             replaces it.
@@ -326,13 +364,31 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           The sheet comes off the floor covered in pen. Typing 40 lines
           out of it is the whole cost of this screen, so the phone in
           their hand does the first pass and the supervisor confirms. */}
-      <div className="mb-4 border border-zinc-800 rounded-xl p-3 bg-zinc-900/40">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (!reading) setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          // Moving onto a child fires dragleave on the parent; only a
+          // pointer that has actually left the card should un-highlight.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          acceptFile(e.dataTransfer.files?.[0])
+        }}
+        className={`mb-4 border-2 border-dashed rounded-xl p-3 transition-colors ${
+          dragging ? 'border-amber-500 bg-amber-50' : 'border-zinc-300 bg-white'
+        }`}
+      >
         <div className="flex flex-wrap items-center gap-3">
           <label
-            className={`inline-flex items-center gap-2 text-[13px] font-semibold rounded-lg px-3 py-2 ${
+            className={`inline-flex items-center gap-2 text-[14px] font-semibold rounded-lg px-3 py-2 ${
               reading
-                ? 'bg-zinc-800 text-zinc-500 cursor-wait'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer'
+                ? 'bg-zinc-100 text-zinc-500 cursor-wait'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-white cursor-pointer'
             }`}
           >
             <Camera size={15} aria-hidden />
@@ -346,15 +402,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               className="hidden"
               disabled={reading}
               onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) void readPhoto(f)
+                acceptFile(e.target.files?.[0])
                 e.target.value = ''
               }}
             />
           </label>
-          <span className="text-[12px] text-zinc-500 flex-1 min-w-[16rem]">
-            Fills the counts below from the handwriting. Nothing is filed until you check it and
-            hit File — the photo is kept with the report either way.
+          <span className="text-[13px] text-zinc-600 flex-1 min-w-[16rem]">
+            {dragging ? (
+              <b className="text-amber-700">Drop the photo to read it.</b>
+            ) : (
+              <>
+                <b className="text-zinc-800">Or drag a photo of the sheet onto this box.</b> Fills
+                the counts below from the handwriting. Nothing is filed until you check it and hit
+                File — the photo is kept with the report either way.
+              </>
+            )}
           </span>
           {/* A plain anchor, not next/link: this is an API route that
               streams a PDF, and the client router has no business
@@ -363,24 +425,24 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             href={`/api/orders/${draft.orderId}/pick-list-pdf`}
             target="_blank"
             rel="noreferrer"
-            className="text-[12px] font-semibold text-zinc-400 hover:text-amber-500 inline-flex items-center gap-1.5"
+            className="text-[13px] font-semibold text-zinc-700 hover:text-amber-600 inline-flex items-center gap-1.5"
           >
             <Printer size={14} aria-hidden />
             Print a fresh sheet
           </a>
         </div>
         {photo && !readWarn && (
-          <p className="mt-2 text-[12px] text-emerald-400">Photo attached to this report.</p>
+          <p className="mt-2 text-[13px] text-emerald-700">Photo attached to this report.</p>
         )}
-        {readNote && <p className="mt-2 text-[12px] text-sky-300">{readNote}</p>}
+        {readNote && <p className="mt-2 text-[13px] text-sky-800">{readNote}</p>}
         {readWarn && (
-          <p className="mt-2 text-[12px] text-amber-300 flex items-start gap-1.5">
+          <p className="mt-2 text-[13px] text-amber-800 flex items-start gap-1.5">
             <AlertTriangle size={13} aria-hidden className="flex-none mt-0.5" />
             <span>{readWarn}</span>
           </p>
         )}
         {draft.filed?.sheetPhotoUrl && !photo && (
-          <p className="mt-2 text-[12px] text-zinc-500">
+          <p className="mt-2 text-[13px] text-zinc-600">
             A photo of the sheet is already on the filed report.
           </p>
         )}
@@ -389,28 +451,28 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       {/* Who prepped it — the name on the paper. */}
       <div className="mb-4">
         <label className="block">
-          <span className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
+          <span className="text-[12px] uppercase tracking-wide text-zinc-600 font-semibold">
             Prepped &amp; loaded by
           </span>
           <input
             value={preppedBy}
             onChange={(e) => setPreppedBy(e.target.value)}
             placeholder="The associate who pulled it"
-            className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600"
+            className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400"
           />
         </label>
       </div>
 
-      <div className="border border-zinc-800 rounded-xl overflow-hidden mb-4">
-        <div className="px-3 py-2 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold">
+      <div className="border border-zinc-200 bg-white rounded-xl overflow-hidden mb-4">
+        <div className="px-3 py-2 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
+          <span className="text-[12px] uppercase tracking-wide text-zinc-700 font-semibold">
             {isOut ? 'What actually went out' : 'What actually came back'}
           </span>
-          <span className="text-[11px] text-zinc-500">{rows.length} lines · pre-filled from the order</span>
+          <span className="text-[12px] text-zinc-500">{rows.length} lines · pre-filled from the order</span>
         </div>
 
         {rows.length === 0 && (
-          <p className="px-3 py-6 text-center text-sm text-zinc-500">This order has no line items.</p>
+          <p className="px-3 py-6 text-center text-[15px] text-zinc-500">This order has no line items.</p>
         )}
 
         {rows.map((r) => {
@@ -418,19 +480,19 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           return (
             <div
               key={r.orderLineItemId}
-              className={`px-3 py-2.5 border-b border-zinc-800 last:border-b-0 ${differs ? 'bg-amber-950/20' : ''}`}
+              className={`px-3 py-2.5 border-b border-zinc-200 last:border-b-0 ${differs ? 'bg-amber-50' : ''}`}
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-white text-[14px] truncate">{r.description}</div>
-                  <div className="text-zinc-500 text-[12px] truncate">
+                  <div className="text-zinc-900 text-[16px] font-medium truncate">{r.description}</div>
+                  <div className="text-zinc-700 text-[13px] truncate">
                     {r.qualifier && <span>{r.qualifier} · </span>}
                     ordered {r.expectedQty}
-                    {r.lane && <span className="text-zinc-600"> · {r.lane.toLowerCase()}</span>}
+                    {r.lane && <span className="text-zinc-500"> · {r.lane.toLowerCase()}</span>}
                   </div>
                 </div>
                 <label className="flex items-center gap-1.5 flex-none">
-                  <span className="text-[11px] text-zinc-500 uppercase tracking-wide">
+                  <span className="text-[12px] text-zinc-500 uppercase tracking-wide">
                     {isOut ? 'Out' : 'In'}
                   </span>
                   <input
@@ -439,8 +501,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     inputMode="numeric"
                     value={r.actualQty}
                     onChange={(e) => patch(r.orderLineItemId, { actualQty: Math.max(0, Number(e.target.value) || 0) })}
-                    className={`w-16 text-center bg-zinc-800 border rounded-lg px-2 py-1.5 text-sm text-white ${
-                      differs ? 'border-amber-600' : 'border-zinc-700'
+                    className={`w-20 text-center bg-white border rounded-lg px-2 py-1.5 text-[16px] text-zinc-900 ${
+                      differs ? 'border-amber-500' : 'border-zinc-300'
                     }`}
                   />
                 </label>
@@ -450,10 +512,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                 {fromPhoto[r.orderLineItemId] !== undefined && (
                   <span
                     title={`Read from the photo (${Math.round(fromPhoto[r.orderLineItemId] * 100)}% confident)`}
-                    className={`text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-none border ${
+                    className={`text-[11px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-none border ${
                       fromPhoto[r.orderLineItemId] < 0.75
-                        ? 'text-amber-300 border-amber-900 bg-amber-950/50'
-                        : 'text-sky-300 border-sky-900 bg-sky-950/50'
+                        ? 'text-amber-800 border-amber-300 bg-amber-50'
+                        : 'text-sky-800 border-sky-300 bg-sky-50'
                     }`}
                   >
                     {fromPhoto[r.orderLineItemId] < 0.75 ? 'Check' : 'Photo'}
@@ -462,7 +524,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                 <button
                   type="button"
                   onClick={() => patch(r.orderLineItemId, { open: !r.open })}
-                  className="text-[11px] font-semibold text-zinc-400 hover:text-amber-500 px-2 py-1.5 flex-none"
+                  className="text-[12px] font-semibold text-zinc-700 hover:text-amber-600 px-2 py-1.5 flex-none"
                 >
                   {r.open ? 'Hide' : 'Swap / note'}
                 </button>
@@ -471,39 +533,39 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               {r.open && (
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <label className="block">
-                    <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">
+                    <span className="text-[11px] uppercase tracking-wide text-zinc-600 font-semibold">
                       Sent something else instead
                     </span>
                     <input
                       value={r.substituteFor ?? ''}
                       onChange={(e) => patch(r.orderLineItemId, { substituteFor: e.target.value })}
                       placeholder="What this replaced"
-                      className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[13px] text-white placeholder:text-zinc-600"
+                      className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-2.5 py-1.5 text-[14px] text-zinc-900 placeholder:text-zinc-400"
                     />
                     {/* The order line is RENAMED, not deleted — it keeps
                         its rate and dates, and the report holds the
                         original wording. */}
-                    <span className="text-[10px] text-zinc-600 mt-0.5 block">
+                    <span className="text-[11px] text-zinc-500 mt-0.5 block">
                       Put the swapped-in item in the line name above; this field records what it replaced.
                     </span>
                   </label>
                   <label className="block">
-                    <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">Note</span>
+                    <span className="text-[11px] uppercase tracking-wide text-zinc-600 font-semibold">Note</span>
                     <input
                       value={r.note ?? ''}
                       onChange={(e) => patch(r.orderLineItemId, { note: e.target.value })}
                       placeholder="Anything the agent should know"
-                      className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[13px] text-white placeholder:text-zinc-600"
+                      className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-2.5 py-1.5 text-[14px] text-zinc-900 placeholder:text-zinc-400"
                     />
                   </label>
                   <label className="block sm:col-span-2">
-                    <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">
+                    <span className="text-[11px] uppercase tracking-wide text-zinc-600 font-semibold">
                       Line name
                     </span>
                     <input
                       value={r.description}
                       onChange={(e) => patch(r.orderLineItemId, { description: e.target.value })}
-                      className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[13px] text-white"
+                      className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-2.5 py-1.5 text-[14px] text-zinc-900"
                     />
                   </label>
                 </div>
@@ -516,24 +578,24 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       {/* Things that went that were never on the order. Recorded and
           flagged, never priced here — the yard cannot see rates, and a
           line added at $0 would silently under-bill the job. */}
-      <div className="border border-zinc-800 rounded-xl overflow-hidden mb-4">
-        <div className="px-3 py-2 bg-zinc-900 border-b border-zinc-800">
-          <span className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold">
+      <div className="border border-zinc-200 bg-white rounded-xl overflow-hidden mb-4">
+        <div className="px-3 py-2 bg-zinc-50 border-b border-zinc-200">
+          <span className="text-[12px] uppercase tracking-wide text-zinc-700 font-semibold">
             Not on the order
           </span>
-          <span className="text-[11px] text-zinc-500 ml-2">
+          <span className="text-[12px] text-zinc-500 ml-2">
             Flagged to the agent to price — nothing is added to the order here.
           </span>
         </div>
         {extras.map((e, i) => (
-          <div key={e.key} className="px-3 py-2.5 border-b border-zinc-800 last:border-b-0 flex items-center gap-2">
+          <div key={e.key} className="px-3 py-2.5 border-b border-zinc-200 last:border-b-0 flex items-center gap-2">
             <input
               value={e.description}
               onChange={(ev) =>
                 setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))
               }
               placeholder="What went out that isn't on the order"
-              className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[13px] text-white placeholder:text-zinc-600"
+              className="flex-1 min-w-0 bg-white border border-zinc-300 rounded-lg px-2.5 py-1.5 text-[14px] text-zinc-900 placeholder:text-zinc-400"
             />
             <input
               type="number"
@@ -545,13 +607,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   prev.map((x, j) => (j === i ? { ...x, actualQty: Math.max(0, Number(ev.target.value) || 0) } : x)),
                 )
               }
-              className="w-16 text-center bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white flex-none"
+              className="w-20 text-center bg-white border border-zinc-300 rounded-lg px-2 py-1.5 text-[16px] text-zinc-900 flex-none"
             />
             <button
               type="button"
               onClick={() => setExtras((prev) => prev.filter((_, j) => j !== i))}
               aria-label="Remove this row"
-              className="text-zinc-500 hover:text-rose-400 px-1.5 py-1.5 flex-none"
+              className="text-zinc-500 hover:text-rose-600 px-1.5 py-1.5 flex-none"
             >
               <Trash2 size={15} aria-hidden />
             </button>
@@ -562,7 +624,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           onClick={() =>
             setExtras((prev) => [...prev, { key: `new-${Date.now()}`, description: '', actualQty: 1, note: '' }])
           }
-          className="w-full px-3 py-2.5 text-[12px] font-semibold text-zinc-400 hover:text-amber-500 inline-flex items-center justify-center gap-1.5"
+          className="w-full px-3 py-2.5 text-[13px] font-semibold text-zinc-700 hover:text-amber-600 inline-flex items-center justify-center gap-1.5"
         >
           <Plus size={13} aria-hidden />
           Add a row
@@ -570,7 +632,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       </div>
 
       <label className="block mb-4">
-        <span className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">
+        <span className="text-[12px] uppercase tracking-wide text-zinc-600 font-semibold">
           Notes on the sheet
         </span>
         <textarea
@@ -578,13 +640,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           placeholder="Anything written on the paper that doesn't belong to one line."
-          className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 leading-relaxed"
+          className="mt-1 w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 leading-relaxed"
         />
       </label>
 
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && (
-        <p className="mb-3 text-[13px] text-amber-300 border border-amber-900 bg-amber-950/40 rounded-lg px-3 py-2 flex items-start gap-2">
+        <p className="mb-3 text-[14px] text-amber-900 border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 flex items-start gap-2">
           <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
           <span>
             {diffs} line{diffs === 1 ? '' : 's'} differ from the order.
@@ -598,17 +660,17 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         </p>
       )}
 
-      {error && <p className="mb-3 text-[13px] text-rose-400">{error}</p>}
+      {error && <p className="mb-3 text-[14px] text-rose-600">{error}</p>}
 
       <div className="flex items-center gap-3 pb-8">
         <button
           onClick={() => void submit()}
           disabled={saving}
-          className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+          className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
         >
           {saving ? 'Filing…' : draft.filed ? 'Replace the filed report' : 'File the report'}
         </button>
-        <Link href="/reports/orders" className="text-[13px] text-zinc-500 hover:text-zinc-300">
+        <Link href="/reports/orders" className="text-[14px] text-zinc-600 hover:text-zinc-900">
           Cancel
         </Link>
       </div>
