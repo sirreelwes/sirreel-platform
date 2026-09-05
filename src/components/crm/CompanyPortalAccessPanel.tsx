@@ -202,7 +202,7 @@ export function CompanyPortalAccessPanel({
 
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-lt-fg">Account portal access</h2>
           <p className="text-xs text-lt-fg2 mt-0.5 max-w-[62ch] leading-relaxed">
@@ -212,7 +212,7 @@ export function CompanyPortalAccessPanel({
           </p>
         </div>
         {canEdit && !adding && (
-          <div className="shrink-0 flex items-center gap-3">
+          <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Wes 2026-09-04: "Make their default Annual Rental Agreement" —
                 files the annual UNSIGNED, offered in their portal; auto-cover
                 turns on only when an executive signs it there. */}
@@ -235,7 +235,7 @@ export function CompanyPortalAccessPanel({
       </div>
 
       {/* ── Logo ──────────────────────────────────────────────────────── */}
-      <div className="mt-4 flex items-center gap-4 border border-lt-hairline rounded-lg p-3">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 border border-lt-hairline rounded-lg p-3">
         <div className="w-24 h-14 bg-white border border-lt-hairline rounded flex items-center justify-center shrink-0 overflow-hidden">
           {logoPresent ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -257,7 +257,7 @@ export function CompanyPortalAccessPanel({
           {logoError && <p className="text-xs text-chip-bad-fg mt-1">{logoError}</p>}
         </div>
         {canEdit && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 sm:shrink-0">
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-lt-fg hover:text-black cursor-pointer border border-lt-hairline rounded-lg px-2.5 py-1.5">
               {logoBusy ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -313,7 +313,7 @@ export function CompanyPortalAccessPanel({
 
           <div className="space-y-2">
             {drafts.map((d, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                 <input
                   value={d.email}
                   onChange={(e) =>
@@ -322,7 +322,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="email@production.com"
-                  className="col-span-4 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-4 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <input
                   value={d.name}
@@ -332,7 +332,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="Name (optional)"
-                  className="col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <input
                   value={d.title}
@@ -342,7 +342,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="Title (optional)"
-                  className="col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <select
                   value={d.role}
@@ -351,7 +351,7 @@ export function CompanyPortalAccessPanel({
                       prev.map((r, j) => (j === i ? { ...r, role: e.target.value } : r)),
                     )
                   }
-                  className="col-span-2 text-sm border border-lt-hairline rounded-lg px-2 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-2 text-sm border border-lt-hairline rounded-lg px-2 py-2 bg-lt-card text-lt-fg"
                 >
                   {ROLES.map((r) => (
                     <option key={r.value} value={r.value}>
@@ -400,7 +400,7 @@ export function CompanyPortalAccessPanel({
           {live.map((r) => (
             <div
               key={r.id}
-              className="flex items-center justify-between gap-3 border border-lt-hairline rounded-lg p-3"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 border border-lt-hairline rounded-lg p-3"
             >
               <div className="min-w-0">
                 <div className="text-sm font-medium text-lt-fg truncate">
@@ -420,7 +420,7 @@ export function CompanyPortalAccessPanel({
                 </div>
               </div>
               {canEdit && (
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 sm:shrink-0">
                   <button
                     onClick={() => sendInvite(r.id)}
                     disabled={busy}

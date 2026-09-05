@@ -56,7 +56,7 @@ export function CompanyPortalRow({
           setEverOpened(true)
         }}
         aria-expanded={open}
-        className="w-full text-left px-3 py-2.5 flex items-center gap-3"
+        className="w-full text-left px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2"
       >
         {/* The arrow is the affordance — a bordered button, not a bare
             glyph, so it reads as "press me" (Wes 2026-09-04). */}
@@ -66,8 +66,9 @@ export function CompanyPortalRow({
           />
         </span>
 
-        {/* The wordmark — theirs if filed, else the name in the display face. */}
-        <div className="min-w-0 flex-1 flex items-center">
+        {/* The wordmark — theirs if filed, else the name in the display face.
+            On a phone the chips wrap under it (w-full below sm). */}
+        <div className="min-w-0 flex-1 basis-32 flex items-center">
           {hasLogo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -82,7 +83,7 @@ export function CompanyPortalRow({
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:shrink-0 pl-10 sm:pl-0">
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded ${TONE[annual.tone]}`}
             title="Annual agreement"

@@ -215,7 +215,7 @@ export function CompanyDiscountsPanel({
 
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
-      <div className="flex items-start justify-between gap-3 mb-1">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-1">
         <div>
           <h2 className="text-base font-semibold text-lt-fg">Standing discounts</h2>
           <p className="text-xs text-lt-fg2 mt-0.5 max-w-[62ch] leading-relaxed">
@@ -371,7 +371,7 @@ export function CompanyDiscountsPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-[80px_1fr] gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-[80px_1fr] gap-2">
             <div>
               <label className="block text-[11px] text-lt-fg3 mb-1">% off</label>
               <input
