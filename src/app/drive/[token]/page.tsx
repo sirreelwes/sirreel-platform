@@ -50,7 +50,12 @@ interface DriveData {
   vehicle: { unitName: string; description: string | null; makeModel: string | null; licensePlate: string | null }
   job: { productionName: string; companyName: string | null; startDate: string; endDate: string }
   instructions: { pickup: string | null; dropoff: string | null; unattendedPickup: boolean; unattendedReturn: boolean }
-  access: { gateCode: string | null; lockboxCode: string | null }
+  access: {
+    gateCode: string | null
+    lockboxCode: string | null
+    locked: { reason: 'incomplete' | 'expired'; missing: string[] } | null
+    lockboxApplies: boolean
+  }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
@@ -145,7 +150,9 @@ export default function DriverJobPage({ params }: { params: { token: string } })
     )
   }
 
-  const licenceDone = data.license.hasFront && data.license.hasBack
+  // The FRONT is what unlocks things — it carries everything we read and
+  // check. The back is still asked for, never required.
+  const licenceDone = data.license.hasFront
   const sameDay = data.job.startDate === data.job.endDate
 
   return (
@@ -173,15 +180,16 @@ export default function DriverJobPage({ params }: { params: { token: string } })
         {!licenceDone && (
           <Section title="Before you pick up" tone="warn">
             <p className="text-[14px] leading-relaxed text-zinc-200">
-              We need a photo of your driver&rsquo;s license — both sides. Without it we
-              can&rsquo;t hand over the keys.
+              We need a photo of the front of your driver&rsquo;s license. Without it we
+              can&rsquo;t release the gate or lockbox codes or hand over the keys. The back
+              helps too if you have a second.
             </p>
             {upErr && <p className="mt-2 text-[13px] text-rose-300">{upErr}</p>}
             <div className="mt-3 space-y-2">
               <SidePicker label="Front of license" hint="The side with your photo"
                 done={data.license.hasFront} busy={busy === 'front'} disabled={busy !== null}
                 onPick={(f) => upload('front', f)} />
-              <SidePicker label="Back of license" hint="The side with the barcode"
+              <SidePicker label="Back of license (optional)" hint="The side with the barcode"
                 done={data.license.hasBack} busy={busy === 'back'} disabled={busy !== null}
                 onPick={(f) => upload('back', f)} />
             </div>
@@ -189,7 +197,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
         )}
         {licenceDone && (
           <div className="mb-4 rounded-xl border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-[14px] text-emerald-200">
-            License received — nothing else needed from you before pickup.
+            License received{data.license.hasBack ? '' : ' — add the back if you get a second, but you’re set'}.
           </div>
         )}
 
@@ -297,6 +305,26 @@ export default function DriverJobPage({ params }: { params: { token: string } })
         {/* Real access codes — a named driver gets these directly
             (Wes 2026-08-22). Kept together and marked, because a driver
             forwarding this screenshot is how a lot code walks. */}
+        {/* Codes withheld until the driver has given us who they are and
+            a licence (Wes 2026-09-05). Say exactly what unlocks them. */}
+        {data.access.locked && (
+          <Section title="Getting in" tone="warn">
+            <div className="flex items-start gap-3">
+              <KeyRound size={22} aria-hidden className="mt-0.5 flex-shrink-0 text-amber-400" />
+              <div>
+                <p className="text-[15px] font-semibold text-amber-100">
+                  {data.access.locked.reason === 'expired' ? 'We can’t release the codes on an expired license' : 'Gate and lockbox codes unlock once we have your details'}
+                </p>
+                <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
+                  {data.access.locked.reason === 'expired'
+                    ? 'The license on file has expired. Please call the number below before heading to the yard.'
+                    : `Still needed above: ${data.access.locked.missing.join(', ')}. The gate code${data.access.lockboxApplies ? ' and the lockbox code for the keys' : ''} will appear here the moment that’s done.`}
+                </p>
+              </div>
+            </div>
+          </Section>
+        )}
+
         {(data.access.gateCode || data.access.lockboxCode) && (
           <Section title="Getting in">
             <div className="space-y-2.5">

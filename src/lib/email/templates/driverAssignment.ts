@@ -69,8 +69,9 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
   const licenseAsk = input.needsLicense
     ? calloutBox(
         `<strong>Before you can take the vehicle</strong><br/>` +
-          `We need a photo of your driver&rsquo;s license — both sides. It takes about a minute ` +
-          `from your phone on the page below. Without it we can&rsquo;t hand the keys over.`,
+          `We need a photo of the front of your driver&rsquo;s license (the back too, if you can). It takes ` +
+          `about a minute from your phone on the page below. Without it we can&rsquo;t release the gate ` +
+          `or lockbox codes or hand the keys over.`,
       )
     : ''
 
@@ -123,7 +124,7 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
     ...(input.needsLicense
       ? [
           `BEFORE YOU CAN TAKE THE VEHICLE:`,
-          `We need a photo of your driver's license, both sides. About a minute from your phone.`,
+          `We need a photo of the front of your driver's license (the back too, if you can). About a minute from your phone.`,`Without it we can't release the gate or lockbox codes or hand the keys over.`,
           ``,
         ]
       : []),

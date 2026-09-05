@@ -151,9 +151,34 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     })),
   )
 
+  const gate = evaluateLicenseGate(da.driver)
+
+  // ── Codes are earned, not given (Wes 2026-09-05: "neither the gate code
+  //    or lockbox code is given without that info"). Before this, opening
+  //    the link was enough — Joel on Forgotten Island saw the gate code at
+  //    2:03pm with no licence, no last name and no phone on file. Now the
+  //    driver must have confirmed who they are (name + mobile) AND put the
+  //    FRONT of an unexpired licence on file. The front is the side that
+  //    carries the photo, number, class and expiry — everything the
+  //    extraction reads and the handover gate checks; nothing in HQ decodes
+  //    the back, so it stays an ask, not a lock (Wes, same day: "why do we
+  //    need both sides"). "Nobody has checked the licence yet" does not
+  //    withhold either — same line as the self check-out; there is nobody
+  //    awake at 5am to check it.
+  const needsDetails = !da.driver.lastName || !da.driver.phone
+  const licenceOnFile = !!da.driver.licenseFrontUrl
+  const missing: string[] = []
+  if (!da.driver.lastName) missing.push('your full name')
+  if (!da.driver.phone) missing.push('a mobile number')
+  if (!licenceOnFile) missing.push('the front of your license')
+  const codesLocked =
+    needsDetails || !licenceOnFile || gate.code === 'EXPIRED'
+      ? { reason: gate.code === 'EXPIRED' ? 'expired' as const : 'incomplete' as const, missing }
+      : null
+
   // Real gate code for a named driver. Read late so the cheap failure
-  // paths (bad token, expired) never touch the secret at all.
-  const site = await prisma.siteSetting.findFirst({ select: { gateCode: true } })
+  // paths (bad token, expired, not yet earned) never touch the secret.
+  const site = codesLocked ? null : await prisma.siteSetting.findFirst({ select: { gateCode: true } })
   const gateCode = site?.gateCode ?? null
   if (gateCode && !da.gateCodeViewedAt) {
     await prisma.driverAssignment.update({
@@ -161,8 +186,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       data: { gateCodeViewedAt: new Date() },
     })
   }
-
-  const gate = evaluateLicenseGate(da.driver)
 
   // The driver's own check-out (blind pickup). What they already did, if
   // anything, and whether the step is open — see lib/drivers/selfCheckout.
@@ -201,7 +224,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       phone: da.driver.phone,
       // An invite only carries an email, so the name we hold may just be
       // the address's local part. The form nags until they confirm it.
-      needsDetails: !da.driver.lastName || !da.driver.phone,
+      needsDetails,
     },
     license: {
       hasFront: !!da.driver.licenseFrontUrl,
@@ -231,8 +254,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     access: {
       gateCode,
       // Only for the vehicle they're driving, only when nobody will be
-      // there to hand over keys.
-      lockboxCode: isBlindPickup ? (asg.asset.accessCode ?? null) : null,
+      // there to hand over keys — and only once the codes are earned.
+      lockboxCode: isBlindPickup && !codesLocked ? (asg.asset.accessCode ?? null) : null,
+      // Why the codes are withheld, so the page can say what unlocks them
+      // instead of silently showing nothing.
+      locked: codesLocked,
+      // Whether this pickup would carry a lockbox code once unlocked.
+      lockboxApplies: isBlindPickup && !!asg.asset.accessCode,
     },
     loadList,
     checkout: selfCheckout,
