@@ -5696,6 +5696,13 @@ model Job {
   /// instructions. Free text: the exceptions are never the same twice.
   afterHoursNote         String?   @map("after_hours_note") @db.Text
 
+  /// "Who's driving?" — when a rep last asked the production to name
+  /// their driver from the portal (2026-09-05, Wes: "I don't have the
+  /// driver's email so we need to prompt Luis to input it"). The driver
+  /// then uploads their own licence from the link they get.
+  driverRequestSentAt DateTime? @map("driver_request_sent_at")
+  driverRequestSentTo String?   @map("driver_request_sent_to")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

@@ -143,7 +143,8 @@ export function PortalDriversSection() {
   if (!vehicles || (vehicles.length === 0 && pendingHolds.length === 0)) return null
 
   return (
-    <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-3 shadow-sm">
+    // id="drivers": the "Who's driving?" email lands here (#drivers).
+    <section id="drivers" className="scroll-mt-4 bg-white rounded-2xl border border-gray-200 p-6 space-y-3 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-900">Your drivers</h2>
         {vehicles.length > 0 ? (

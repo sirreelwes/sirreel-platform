@@ -282,6 +282,8 @@ interface JobDetail {
   rwInvoicedTotal: number;
   rwOrderCount: number;
   notes: string | null;
+  driverRequestSentAt?: string | null;
+  driverRequestSentTo?: string | null;
   createdAt: string;
   updatedAt: string;
   company: { id: string; name: string; notes: string | null };
@@ -2552,6 +2554,9 @@ const driverTone = (d: any): string => {
         pendingHolds={pendingHolds}
         onChanged={load}
         onAssign={(bookingItemId) => setAssignHoldId(bookingItemId)}
+        jobId={job.id}
+        driverRequest={job.driverRequestSentAt && job.driverRequestSentTo ? { sentAt: job.driverRequestSentAt, sentTo: job.driverRequestSentTo } : null}
+        askContactName={signatory ? `${signatory.person.firstName} ${signatory.person.lastName}`.trim() : null}
       />
       )}
 

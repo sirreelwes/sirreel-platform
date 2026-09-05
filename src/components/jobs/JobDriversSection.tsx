@@ -75,10 +75,19 @@ export function JobDriversSection({
   pendingHolds = [],
   onChanged,
   onAssign,
+  jobId,
+  driverRequest,
+  askContactName,
 }: {
   vehicles: Vehicle[]
   pendingHolds?: PendingHold[]
   onChanged?: () => void
+  /** Enables "Ask the client to name their driver" (POST /api/jobs/[id]/driver-request). */
+  jobId?: string
+  /** When the client was last asked, from Job.driverRequestSentAt/To. */
+  driverRequest?: { sentAt: string; sentTo: string } | null
+  /** Who the ask goes to — shown on the button so the rep isn't guessing. */
+  askContactName?: string | null
   /** Opens the unit picker in place. Without it the row falls back to
    *  the calendar deep link, which a phone cannot use — see the job page. */
   onAssign?: (bookingItemId: string) => void
@@ -126,6 +135,25 @@ export function JobDriversSection({
     } finally { setBusy(false) }
   }
 
+  const [asking, setAsking] = useState(false)
+  // Wes 2026-09-05: "I don't have the driver's email so we need to prompt
+  // Luis to input it." The client names the driver from their portal; the
+  // driver then uploads their own licence. This just sends the nudge.
+  async function askClient() {
+    if (!jobId) return
+    setAsking(true); setErr(null); setMsg(null)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/driver-request`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Could not send that request')
+      setMsg(j.emailOk
+        ? `Asked ${j.contactName} (${j.sentTo}) to name the driver for ${j.vehicles.join(', ')}.`
+        : `Could not email ${j.sentTo}: ${j.emailError || 'unknown'}`)
+      onChanged?.()
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not send that request') }
+    finally { setAsking(false) }
+  }
+
   async function invite() {
     if (!target) { setErr('Pick which vehicle this driver is taking.'); return }
     setBusy(true); setErr(null); setMsg(null)
@@ -169,6 +197,27 @@ export function JobDriversSection({
 
       {msg && <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{msg}</div>}
       {err && <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">{err}</div>}
+
+      {/* Units with no driver, and the client is the one who knows. The
+          ask lands on the drivers section of their portal; the driver
+          then gets their own link and uploads their own licence. */}
+      {jobId && vehicles.some((v) => v.drivers.length === 0) && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <div className="min-w-0 text-[12px] text-amber-900">
+            {driverRequest
+              ? <>Asked <span className="font-semibold">{driverRequest.sentTo}</span> on {new Date(driverRequest.sentAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — no driver named yet.</>
+              : <>Don&rsquo;t have the driver&rsquo;s email? Ask {askContactName || 'the client'} to add it from their portal — the driver uploads their own licence.</>}
+          </div>
+          <button
+            type="button"
+            onClick={askClient}
+            disabled={asking || busy}
+            className="min-h-[40px] rounded-lg bg-amber-600 px-3 text-[12px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
+          >
+            {asking ? 'Sending…' : driverRequest ? 'Ask again' : `Ask ${askContactName ? askContactName.split(' ')[0] : 'the client'} to name the driver`}
+          </button>
+        </div>
+      )}
 
       {/* Driver first, vehicle second — the order the information actually
           arrives in. */}
