@@ -4456,6 +4456,18 @@ model Vendor {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// The partner's ACCOUNT link — one page listing every job we have their
+  /// units on, across shows, rather than one link per unit (Wes 2026-09-05:
+  /// "King Kong has dozens of vehicles and potentially we could book
+  /// multiple of them on one job or across multiple jobs"). Each row on it
+  /// opens the per-unit conduit page (SubRental.vendorToken), which is
+  /// where location / call time / driver are exchanged. 32 random bytes,
+  /// base64url; long-lived, rotated from HQ.
+  portalToken         String?   @unique @map("portal_token")
+  portalTokenMintedAt DateTime? @map("portal_token_minted_at")
+  portalViewedAt      DateTime? @map("portal_viewed_at")
+  portalViewCount     Int       @default(0) @map("portal_view_count")
+
   subRentals            SubRental[]
   // Reverse relation: InventoryItems with this vendor as their
   // preferred reorder source. Same Vendor table feeds both

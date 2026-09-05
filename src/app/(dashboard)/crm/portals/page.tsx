@@ -29,6 +29,7 @@ import { CompanyPortalAccessPanel } from '@/components/crm/CompanyPortalAccessPa
 import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalRow'
 import { PortalsTabs } from '@/components/crm/PortalsTabs'
 import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
+import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -193,6 +194,17 @@ export default async function CompanyPortalsPage() {
   }
   const clientPeople = [...peopleMap.values()]
 
+  // Vendor ACCOUNTS: one row per partner with anything on the books.
+  const vendorAccounts = await prisma.vendor.findMany({
+    where: { isActive: true, subRentals: { some: {} } },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true, name: true, contactName: true,
+      portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
+      _count: { select: { subRentals: true, subcontractedVehicles: true } },
+    },
+  })
+
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
 
@@ -290,6 +302,41 @@ export default async function CompanyPortalsPage() {
           ),
           vendor: (
             <div>
+              {/* Partner ACCOUNT links — one per vendor, every job at once
+                  (Wes 2026-09-05: "multiple jobs for the vendor to look at
+                  as well as multiple vehicles"). The per-unit links follow. */}
+              <h3 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
+                Partner accounts · {vendorAccounts.length}
+              </h3>
+              <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8">
+                {vendorAccounts.map((va) => (
+                  <div key={va.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-lt-fg truncate">{va.name}</div>
+                      <div className="text-xs text-lt-fg2 truncate">
+                        {va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}
+                        {va.contactName ? ` · ${va.contactName}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                      {va.portalToken ? (
+                        <span className={`px-2 py-1 rounded ${va.portalViewedAt ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
+                          {va.portalViewedAt ? `opened ${fmtStamp(va.portalViewedAt)} (${va.portalViewCount}×)` : `link minted ${fmtStamp(va.portalTokenMintedAt)} · never opened`}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">no account link yet</span>
+                      )}
+                      <Link href={`/crm/portals/preview/vendor-account/${va.id}`} className="border border-lt-hairline rounded-md px-2 py-1 text-lt-fg hover:text-black">
+                        Preview
+                      </Link>
+                      {canEdit && <VendorAccountLinkButton vendorId={va.id} />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <h3 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
+                Unit links · latest {vendorPortals.length}
+              </h3>
       {/* ── Vendor portals ───────────────────────────────────────────
           Wes 2026-09-05: "Will Vendor portals also fold into that tab?"
           Yes. A partner's link for a sub-rental: sent, opened, acted. */}
