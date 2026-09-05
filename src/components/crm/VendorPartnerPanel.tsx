@@ -2,7 +2,7 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, FileText, Loader2, Trash2, Upload, X } from 'lucide-react'
 
 export interface RateProposalRow {
   unitId: string
@@ -45,6 +45,14 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}/agreement`, { method: 'POST', body: fd })
     if (r.ok) { setAg({ title: agTitle, signedAt: null, signerName: null, uploadedAt: new Date().toISOString() }); setAgFile(null); setMsg('Agreement filed — it is now on their account page to sign.') }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Upload failed')
+    setBusy(null)
+  }
+  async function fileStandard() {
+    if (ag && !window.confirm(ag.signedAt ? 'This replaces the signed agreement — they will need to sign again. Continue?' : 'This replaces the agreement waiting for signature. Continue?')) return
+    setBusy('standard'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}/agreement/standard`, { method: 'POST' })
+    if (r.ok) { const j = await r.json(); setAg({ title: j.title, signedAt: null, signerName: null, uploadedAt: new Date().toISOString() }); setAgTitle(j.title); setMsg('SirReel\u2019s standard Partner Vehicle Agreement is filed \u2014 it is now on their account page to sign.') }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
   async function decide(unitId: string, decision: 'accept' | 'decline') {
@@ -98,9 +106,16 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
             {' · '}<a href={`/api/vendors/${vendorId}/agreement`} target="_blank" rel="noreferrer" className="underline">open</a>
           </div>
         ) : (
-          <div className="text-xs text-lt-fg3 mt-1">None filed. Upload the PDF they should sign — it appears on their page immediately.</div>
+          <div className="text-xs text-lt-fg3 mt-1">None filed. File SirReel&apos;s standard agreement, or upload your own PDF — it appears on their page immediately.</div>
         )}
+        <div className="mt-2">
+          <button onClick={fileStandard} disabled={busy === 'standard'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
+            {busy === 'standard' ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} {ag ? 'Re-file SirReel\u2019s standard agreement' : 'File SirReel\u2019s standard agreement'}
+          </button>
+          <span className="ml-2 text-[11px] text-lt-fg3">Partner Vehicle Agreement, pre-filled with their name and address.</span>
+        </div>
         <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <span className="text-[11px] text-lt-fg3 sm:w-auto">Or upload your own:</span>
           <input value={agTitle} onChange={(e) => setAgTitle(e.target.value)} placeholder="Title" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg sm:w-56" />
           <input type="file" accept="application/pdf" onChange={(e) => setAgFile(e.target.files?.[0] ?? null)} className="text-xs text-lt-fg2" />
           <button onClick={uploadAgreement} disabled={!agFile || busy === 'agreement'} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">

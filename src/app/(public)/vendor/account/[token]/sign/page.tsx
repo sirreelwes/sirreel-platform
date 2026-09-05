@@ -4,8 +4,8 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { SignaturePad } from '@/components/portal/SignaturePad'
+import { VENDOR_AGREEMENT_ACK as ACK } from '@/lib/contracts/vendorAgreementClauses'
 
-const ACK = 'I have read the partner agreement above and agree to its terms on behalf of my company. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.'
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 const inp: React.CSSProperties = { width: '100%', padding: '9px 11px', border: '1px solid #d6d1c4', borderRadius: 8, fontSize: 15, color: '#111', background: '#fff' }
 
