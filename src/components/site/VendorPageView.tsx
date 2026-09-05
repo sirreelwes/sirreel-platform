@@ -2,6 +2,7 @@ import type { VendorView } from '@/lib/sub-rentals/potentialSubRental'
 import VehicleGallery from '@/components/site/VehicleGallery'
 import VendorDriverCard from '@/components/site/VendorDriverCard'
 import VendorHoldCard from '@/components/site/VendorHoldCard'
+import VendorOriginCard from '@/components/site/VendorOriginCard'
 
 /**
  * The vendor's page, as a component — rendered at /vendor/[token] for the
@@ -47,6 +48,9 @@ const fmtDay = (ymd: string) =>
 
 const EYEBROW = 'text-[12px] font-semibold tracking-[0.16em] uppercase text-[#8b857a] mb-3'
 const ROW = 'flex items-start justify-between gap-4 px-4 py-3'
+// Rows whose value is a sentence, not a figure: stack on a phone, side-by-side from sm.
+const ROW_TEXT = 'flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4 px-4 py-3'
+const DD_TEXT = 'text-[15px] text-[#3a362f] leading-relaxed sm:text-right whitespace-pre-line'
 const DT = 'text-[13px] font-semibold uppercase tracking-[0.06em] text-[#8b857a] shrink-0'
 const DD = 'text-[15px] font-semibold text-[#0c0c0d] text-right'
 
@@ -89,18 +93,20 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             readOnly={preview}
           />
 
+          <VendorOriginCard token={token} lotAddress={v.lotAddress} originAddress={v.originAddress} unitName={v.vehicleName} readOnly={preview} />
+
           {/* Where and when — set by the production on their portal. */}
           {showLogistics && (
             <div className="mt-6">
               <div className={EYEBROW} style={{ fontFamily: 'Archivo, sans-serif' }}>Location &amp; call time</div>
               {l.hasAny ? (
                 <dl className="rounded-[14px] border border-[#e4dfd4] bg-white overflow-hidden">
-                  {l.address && <div className={ROW}><dt className={DT}>Report to</dt><dd className={DD}>{l.address}</dd></div>}
-                  {l.accessNotes && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Gate / access</dt><dd className="text-[14px] text-[#3a362f] text-right leading-relaxed">{l.accessNotes}</dd></div>}
+                  {l.address && <div className={ROW_TEXT}><dt className={DT}>Report to</dt><dd className={`${DD_TEXT} font-semibold text-[#0c0c0d]`}>{l.address}</dd></div>}
+                  {l.accessNotes && <div className={`${ROW_TEXT} border-t border-[#efe9dd]`}><dt className={DT}>Gate / access</dt><dd className={DD_TEXT}>{l.accessNotes}</dd></div>}
                   {(l.callTime || l.arriveTime) && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Call time</dt><dd className={DD}>{l.callTime ?? l.arriveTime}</dd></div>}
                   {l.onSiteContactName && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Ask for</dt><dd className={DD}>{l.onSiteContactName}</dd></div>}
-                  {l.driverNotes && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Note for driver</dt><dd className="text-[14px] text-[#3a362f] text-right leading-relaxed whitespace-pre-line">{l.driverNotes}</dd></div>}
-                  {l.pickupAddress && l.pickupAddress !== l.address && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Collect from</dt><dd className={DD}>{l.pickupAddress}</dd></div>}
+                  {l.driverNotes && <div className={`${ROW_TEXT} border-t border-[#efe9dd]`}><dt className={DT}>Note for driver</dt><dd className={DD_TEXT}>{l.driverNotes}</dd></div>}
+                  {l.pickupAddress && l.pickupAddress !== l.address && <div className={`${ROW_TEXT} border-t border-[#efe9dd]`}><dt className={DT}>Collect from</dt><dd className={`${DD_TEXT} font-semibold text-[#0c0c0d]`}>{l.pickupAddress}</dd></div>}
                   {l.pickupTime && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Collect</dt><dd className={DD}>{l.pickupTime}</dd></div>}
                   {l.updatedAt && (
                     <div className="px-4 py-2.5 border-t border-[#efe9dd] bg-[#faf7f0] text-[12px] text-[#8b857a]">
@@ -120,6 +126,10 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
 
           <VendorDriverCard
             token={token}
+            status={v.status}
+            unitName={v.vehicleName}
+            roster={v.roster}
+            assignedVendorDriverId={v.assignedVendorDriverId}
             initialDriverName={v.driverName}
             initialDriverEmail={v.driverEmail}
             initialDriverPhone={v.driverPhone}
@@ -141,9 +151,11 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
                   <div key={e.workDate} className={`${ROW} ${i ? 'border-t border-[#efe9dd]' : ''}`}>
                     <dt className="min-w-0">
                       <div className="text-[14px] font-semibold text-[#0c0c0d]">{fmtDay(e.workDate)}</div>
-                      <div className="text-[12px] text-[#8b857a]">{e.startTime}–{e.endTime}{e.breakMinutes ? ` · ${e.breakMinutes} min break` : ''}{e.notes ? ` · ${e.notes}` : ''}</div>
+                      <div className="text-[12px] text-[#8b857a]">
+                        Left lot {e.startTime}{e.onSetTime ? ` · on set ${e.onSetTime}` : ''}{e.leftSetTime ? ` · left set ${e.leftSetTime}` : ''}{e.endTime ? ` · wrap ${e.endTime}` : ' · not wrapped yet'}{e.notes ? ` · ${e.notes}` : ''}
+                      </div>
                     </dt>
-                    <dd className={DD}>{e.hours} h</dd>
+                    <dd className={DD}>{e.hours === null ? <span className="text-[#a37f2c]">open</span> : `${e.hours} h`}</dd>
                   </div>
                 ))}
                 <div className={`${ROW} border-t border-[#efe9dd] bg-[#faf7f0]`}>
@@ -151,7 +163,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
                   <dd className={DD}>{v.hours.total} h</dd>
                 </div>
               </dl>
-              <p className="mt-2 text-[12px] text-[#8b857a]">As logged by {v.driverName ?? 'the driver'} on their page. Query anything here with SirReel before invoicing.</p>
+              <p className="mt-2 text-[12px] text-[#8b857a]">Portal to portal (wrap minus left lot), as logged by {v.driverName ?? 'the driver'} on their page. Query anything here with SirReel before invoicing.</p>
             </div>
           )}
 

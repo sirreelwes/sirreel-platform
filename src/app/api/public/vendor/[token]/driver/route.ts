@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { assignDriver } from '@/lib/sub-rentals/driverRelay'
 import { notifyDriverAssigned } from '@/lib/sub-rentals/conduit'
+import { assignRosterDriver } from '@/lib/sub-rentals/vendorDrivers'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,24 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+
+  // Roster path (2026-09-05): the partner picked one of their drivers for
+  // THIS booking. Snapshot + link + fan-out all happen in assignRosterDriver.
+  if (typeof body.vendorDriverId === 'string' && body.vendorDriverId) {
+    const a = await assignRosterDriver(sub.id, body.vendorDriverId)
+    if (!a.ok) return NextResponse.json({ error: a.error }, { status: 400 })
+    await prisma.auditLog.create({
+      data: {
+        action: 'sub_rental.driver_assigned',
+        entityType: 'SubRental',
+        entityId: sub.id,
+        newValues: { vendorDriverId: body.vendorDriverId, driverName: a.driverName, relayAddress: a.relayAddress, via: 'vendor-page' },
+      },
+    })
+    return NextResponse.json(a)
+  }
+
+  // Legacy path: name + email typed straight in (kept for the older card).
   const res = await assignDriver({
     subRentalId: sub.id,
     driverName: typeof body.driverName === 'string' ? body.driverName : '',

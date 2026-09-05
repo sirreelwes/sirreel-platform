@@ -3,8 +3,8 @@
  *
  * Both driver pages (a partner's driver on a sub-rented unit at
  * /drive/unit/[token], a production's driver on one of our trucks at
- * /drive/[token]) post the same shape: a work date, a start and end clock
- * reading, and a break. This module turns that into a stored `hours` figure
+ * /drive/[token]) post the same shape: a work date and up to four clock
+ * readings — left lot, on set, left set, wrap. This module turns that into a stored `hours` figure
  * and decides what is and isn't a valid entry. No Prisma, no Date.now() —
  * every input is passed in so `npm run test:conduit` can assert exact
  * numbers.
@@ -33,50 +33,88 @@ export function normalizeClock(value: string): string | null {
   return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
 }
 
-export interface HoursInput {
-  startTime: string
-  endTime: string
-  breakMinutes?: number | null
+export interface PortalStamps {
+  /** Left the lot — required; the day starts here. */
+  leftLot: string
+  /** On set / the production's call time. */
+  onSet?: string | null
+  /** Left set. */
+  leftSet?: string | null
+  /** Wrap — vehicle cleaned, dumped, fuelled, parked. Closes the day. */
+  wrap?: string | null
 }
 
-export type HoursResult =
-  | { ok: true; hours: number; startTime: string; endTime: string; breakMinutes: number; overnight: boolean }
+export type PortalHoursResult =
+  | {
+      ok: true
+      startTime: string
+      onSetTime: string | null
+      leftSetTime: string | null
+      endTime: string | null
+      /** wrap − left lot, portal to portal. Null while the day is open. */
+      hours: number | null
+      overnight: boolean
+    }
   | { ok: false; error: string }
 
 /**
- * Hours worked for one day.
+ * Portal-to-portal hours from up to four clock readings (Wes 2026-09-05):
+ * LEFT LOT → ON SET → LEFT SET → WRAP. Hours are wrap minus left-lot — the
+ * whole day the vehicle was out, which is what the partner bills and what
+ * we pass through. No break: a driver's meal on a 14-hour day is inside the
+ * portal-to-portal span by definition.
  *
- * An end time at or before the start is read as the NEXT day — a driver
- * who reports at 18:00 and wraps at 02:00 worked eight hours, not minus
- * sixteen. That is the common night-shoot case and the reason a same-clock
- * pair (06:00 → 06:00) reads as 24 hours rather than zero: nobody logs a
- * zero-hour day, and a 24-hour one is at least a figure a human will
- * question.
- *
- * The break comes off the span. Not the payroll module's "no meal under
- * six hours" rule — that decides what SirReel PAYS its crew; this records
- * what a driver SAYS they worked, and the break is whatever they enter.
+ * Stamps are read IN ORDER. A later stamp that reads earlier than the one
+ * before it is taken as after midnight (18:00 → 02:00 is eight hours), and
+ * the day may cross midnight once. A stamp can be skipped (a driver who
+ * forgot to log "left set" still gets a total) but not re-ordered.
  */
-export function computeHours(input: HoursInput): HoursResult {
-  const start = parseClock(input.startTime)
-  const end = parseClock(input.endTime)
-  if (start === null) return { ok: false, error: 'Start time must be a clock time like 06:00.' }
-  if (end === null) return { ok: false, error: 'End time must be a clock time like 18:30.' }
-  const brk = Math.max(0, Math.round(Number(input.breakMinutes ?? 0) || 0))
-  if (brk > 8 * 60) return { ok: false, error: 'Break can’t be longer than eight hours.' }
+export function computePortalHours(input: PortalStamps): PortalHoursResult {
+  const labels: Array<[keyof PortalStamps, string]> = [
+    ['leftLot', 'Left lot'],
+    ['onSet', 'On set'],
+    ['leftSet', 'Left set'],
+    ['wrap', 'Wrap'],
+  ]
+  const mins: Array<number | null> = []
+  const norm: Array<string | null> = []
+  for (const [key, label] of labels) {
+    const raw = input[key]
+    if (raw === undefined || raw === null || raw === '') {
+      if (key === 'leftLot') return { ok: false, error: 'When did you leave the lot?' }
+      mins.push(null); norm.push(null); continue
+    }
+    const m = parseClock(raw)
+    if (m === null) return { ok: false, error: `${label} must be a clock time like 06:00.` }
+    mins.push(m); norm.push(normalizeClock(raw))
+  }
 
-  const overnight = end <= start
-  const span = (overnight ? end + 24 * 60 : end) - start
-  const worked = span - brk
-  if (worked <= 0) return { ok: false, error: 'The break is as long as the whole day — check the times.' }
+  // Walk the sequence; each present stamp must not precede the last one
+  // unless we cross midnight (once).
+  let last = mins[0]!
+  let offset = 0
+  for (let i = 1; i < mins.length; i++) {
+    const m = mins[i]
+    if (m === null) continue
+    let abs = m + offset
+    if (abs < last) {
+      if (offset === 0) { offset = 24 * 60; abs = m + offset }
+      else return { ok: false, error: `${labels[i][1]} can’t be before the stamp above it.` }
+    }
+    last = abs
+  }
+  const span = mins[3] === null ? null : last - mins[0]!
+  if (span !== null && span <= 0) return { ok: false, error: 'Wrap is the same as left lot — check the times.' }
+  if (span !== null && span > 24 * 60) return { ok: false, error: 'That day is longer than 24 hours — check the times.' }
 
   return {
     ok: true,
-    hours: Math.round((worked / 60) * 100) / 100,
-    startTime: normalizeClock(input.startTime)!,
-    endTime: normalizeClock(input.endTime)!,
-    breakMinutes: brk,
-    overnight,
+    startTime: norm[0]!,
+    onSetTime: norm[1],
+    leftSetTime: norm[2],
+    endTime: norm[3],
+    hours: span === null ? null : Math.round((span / 60) * 100) / 100,
+    overnight: offset > 0,
   }
 }
 
@@ -112,8 +150,8 @@ export function workDateInWindow(
 }
 
 /** Total across entries; tolerant of Prisma Decimals arriving as strings. */
-export function sumHours(entries: Array<{ hours: number | string | { toString(): string } }>): number {
-  const total = entries.reduce((acc, e) => acc + (Number(e.hours.toString()) || 0), 0)
+export function sumHours(entries: Array<{ hours: number | string | { toString(): string } | null }>): number {
+  const total = entries.reduce((acc, e) => acc + (e.hours === null ? 0 : Number(e.hours.toString()) || 0), 0)
   return Math.round(total * 100) / 100
 }
 

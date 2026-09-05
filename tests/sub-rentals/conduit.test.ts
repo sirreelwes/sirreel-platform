@@ -14,7 +14,7 @@
  *
  * Run: npm run test:conduit
  */
-import { computeHours, isAckStale, parseClock, sumHours, workDateInWindow, hoursPromptOpen } from '@/lib/drivers/hoursEntry'
+import { computePortalHours, isAckStale, parseClock, sumHours, workDateInWindow, hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import {
   receivesLogistics,
   logisticsFor,
@@ -23,6 +23,7 @@ import {
   buildDriverNamedForProduction,
   buildDriverAckForProduction,
 } from '@/lib/sub-rentals/conduit'
+import { isProfileComplete, driverDisplayName } from '@/lib/sub-rentals/vendorDrivers'
 
 let fail = 0
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -33,18 +34,21 @@ const eq = (label: string, got: unknown, want: unknown) => {
 const yes = (label: string, cond: boolean) => eq(label, cond, true)
 const no = (label: string, cond: boolean) => eq(label, cond, false)
 
-// ── Hours ────────────────────────────────────────────────────────────────────
-eq('06:00 → 18:00, 30 min break = 11.5h', (computeHours({ startTime: '06:00', endTime: '18:00', breakMinutes: 30 }) as any).hours, 11.5)
-eq('18:00 → 02:00 is a night shoot: 8h', (computeHours({ startTime: '18:00', endTime: '02:00' }) as any).hours, 8)
-yes('night shoot flagged overnight', (computeHours({ startTime: '18:00', endTime: '02:00' }) as any).overnight)
-eq('6:00 accepted without the leading zero', (computeHours({ startTime: '6:00', endTime: '14:00' }) as any).startTime, '06:00')
-eq('same clock reads as 24h, not 0', (computeHours({ startTime: '06:00', endTime: '06:00' }) as any).hours, 24)
-no('garbage start refused', computeHours({ startTime: 'six', endTime: '14:00' }).ok)
-no('25:00 refused', computeHours({ startTime: '25:00', endTime: '14:00' }).ok)
-no('break longer than the day refused', computeHours({ startTime: '08:00', endTime: '09:00', breakMinutes: 90 }).ok)
+// ── Hours — portal to portal ─────────────────────────────────────────────────
+const h = (x: Parameters<typeof computePortalHours>[0]) => computePortalHours(x) as any
+eq('lot 05:00 → wrap 19:30 = 14.5h, no break deducted', h({ leftLot: '05:00', onSet: '06:00', leftSet: '18:30', wrap: '19:30' }).hours, 14.5)
+eq('lot 18:00 → wrap 02:00 crosses midnight = 8h', h({ leftLot: '18:00', wrap: '02:00' }).hours, 8)
+yes('midnight crossing flagged', h({ leftLot: '18:00', wrap: '02:00' }).overnight)
+eq('open day (no wrap) has null hours', h({ leftLot: '05:00', onSet: '06:00' }).hours, null)
+eq('stamps are normalised to HH:MM', h({ leftLot: '5:00' }).startTime, '05:00')
+no('left lot is required', computePortalHours({ leftLot: '' }).ok)
+no('garbage stamp refused', computePortalHours({ leftLot: 'five' }).ok)
+no('re-ordered stamps refused (left set before on set, no midnight)', computePortalHours({ leftLot: '05:00', onSet: '09:00', leftSet: '08:00', wrap: '10:00' }).ok)
+no('a second midnight crossing refused', computePortalHours({ leftLot: '18:00', onSet: '02:00', leftSet: '01:00', wrap: '03:00' }).ok)
+eq('skipped middle stamps still total', h({ leftLot: '06:00', wrap: '18:00' }).hours, 12)
 eq('parseClock 23:59', parseClock('23:59'), 1439)
 eq('parseClock 24:00 is null', parseClock('24:00'), null)
-eq('sumHours tolerates Decimal-like strings', sumHours([{ hours: '10.50' }, { hours: 1.25 }]), 11.75)
+eq('sumHours skips open days and tolerates Decimal strings', sumHours([{ hours: '10.50' }, { hours: null }, { hours: 1.25 }]), 11.75)
 
 // window: rental Sep 10–11, padded a day
 const w = { startDate: '2026-09-10', endDate: '2026-09-11' }
@@ -121,6 +125,15 @@ const ackMail = buildDriverAckForProduction({
 })
 yes('ack mail carries the driver\'s note', ackMail.text.includes('From Sam Driver: Will arrive 15 early'))
 yes('ack mail restates what was confirmed', ackMail.text.includes('Call time: 5:30 AM'))
+
+// ── Roster profile completeness ──────────────────────────────────────────────
+const full = { firstName: 'Sam', phone: '818', licenseFrontUrl: 'u', licenseBackUrl: 'u' }
+yes('name + phone + both licence sides = complete', isProfileComplete(full))
+no('missing back of licence = incomplete', isProfileComplete({ ...full, licenseBackUrl: null }))
+no('missing phone = incomplete', isProfileComplete({ ...full, phone: '  ' }))
+no('missing first name = incomplete', isProfileComplete({ ...full, firstName: null }))
+eq('display name falls back to the email', driverDisplayName({ firstName: null, lastName: null, email: 'sam@kk.com' }), 'sam@kk.com')
+eq('display name joins first + last', driverDisplayName({ firstName: 'Sam', lastName: 'Driver', email: 'x' }), 'Sam Driver')
 
 console.log(fail ? `\n${fail} FAILED` : '\nall ok')
 process.exit(fail ? 1 : 0)

@@ -20,6 +20,7 @@ import { KeyRound, MapPin, Clock, CheckCircle2, MessageSquare } from 'lucide-rea
 import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
 
 interface Logistics {
+  leavingFrom: string | null
   address: string | null
   accessNotes: string | null
   arriveTime: string | null
@@ -167,6 +168,11 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
         <Section title="Where and when" tone={needsAck && !data.closed ? 'warn' : undefined}>
           {l.hasAny ? (
             <dl className="space-y-3">
+              {l.leavingFrom && (
+                <Row label="Leaving from">
+                  <div className="text-[15px] text-zinc-200">{l.leavingFrom}</div>
+                </Row>
+              )}
               {l.address && (
                 <Row icon={<MapPin size={16} aria-hidden />} label="Report to">
                   <div className="text-[17px] font-semibold leading-snug text-white">{l.address}</div>

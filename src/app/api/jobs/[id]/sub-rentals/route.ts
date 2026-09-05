@@ -73,12 +73,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
       driverHours: { select: { hours: true, workDate: true } },
+      vendorDriver: {
+        select: {
+          id: true, profileCompletedAt: true, licenseFrontUrl: true, licenseBackUrl: true,
+          trainedVehicles: { select: { name: true } },
+        },
+      },
       job: {
         select: { reportToAddress: true, reportToTime: true, reportToUpdatedAt: true },
       },
       vendorTotal: seePricing,
       clientTotal: seePricing,
-      vendor: { select: { id: true, name: true, email: true, poEmail: true, phone: true } },
+      vendor: { select: { id: true, name: true, email: true, poEmail: true, phone: true, lotAddress: true } },
+      originAddress: true,
       subcontractedVehicle: { select: { id: true, name: true } },
       order: { select: { id: true, orderNumber: true } },
       orderLineItem: { select: { id: true, description: true } },
@@ -106,8 +113,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       hoursTotal: sumHours(r.driverHours),
       hoursDays: r.driverHours.length,
       driverHours: undefined,
+      vendorDriver: r.vendorDriver
+        ? {
+            id: r.vendorDriver.id,
+            profileComplete: !!r.vendorDriver.profileCompletedAt,
+            licenseFront: !!r.vendorDriver.licenseFrontUrl,
+            licenseBack: !!r.vendorDriver.licenseBackUrl,
+            trainedVehicles: r.vendorDriver.trainedVehicles.map((v) => v.name),
+          }
+        : null,
       reportToAddress: r.job?.reportToAddress ?? null,
       reportToTime: r.job?.reportToTime ?? null,
+      leavingFrom: r.originAddress ?? r.vendor.lotAddress ?? null,
       job: undefined,
     })),
   })

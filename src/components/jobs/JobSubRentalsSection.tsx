@@ -52,6 +52,7 @@ export interface JobSubRental {
   logisticsNotifiedAt?: string | null
   reportToAddress?: string | null
   reportToTime?: string | null
+  leavingFrom?: string | null
   driverUrl?: string | null
   driverViewedAt?: string | null
   driverAckedAt?: string | null
@@ -62,6 +63,7 @@ export interface JobSubRental {
   vendorConfirmedAt?: string | null
   vendorDeclinedAt?: string | null
   vendorDeclineNote?: string | null
+  vendorDriver?: { id: string; profileComplete: boolean; licenseFront: boolean; licenseBack: boolean; trainedVehicles: string[] } | null
 }
 
 const STATUS_CHIP: Record<string, string> = {
@@ -326,6 +328,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               {/* Where and when — what the client set on their portal, and whether it reached the other side. */}
               {COMMITTED.includes(s.status) && (
                 <div className="mt-1 text-[12px] text-zinc-600">
+                  {s.leavingFrom && <span className="block">Leaves from <span className="text-zinc-800">{s.leavingFrom}</span></span>}
                   {s.reportToAddress || s.callTime || s.reportToTime ? (
                     <>
                       {s.reportToAddress && <span className="text-zinc-800">{s.reportToAddress}</span>}
@@ -367,8 +370,24 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                       <span>page sent, not opened</span>
                     ) : null}
                     {s.driverAckNote && <> · &ldquo;{s.driverAckNote}&rdquo;</>}
+                    {s.vendorDriver && (
+                      <>
+                        {' · '}
+                        {s.vendorDriver.licenseFront && s.vendorDriver.licenseBack ? (
+                          <span className="text-emerald-700">
+                            licence on file (
+                            <a href={`/api/sub-rentals/vendor-drivers/${s.vendorDriver.id}/license/front`} target="_blank" rel="noreferrer" className="underline">front</a>
+                            {' / '}
+                            <a href={`/api/sub-rentals/vendor-drivers/${s.vendorDriver.id}/license/back`} target="_blank" rel="noreferrer" className="underline">back</a>)
+                          </span>
+                        ) : (
+                          <span className="text-amber-700">licence not on file</span>
+                        )}
+                        {s.vendorDriver.trainedVehicles.length > 0 && <> · trained on {s.vendorDriver.trainedVehicles.join(', ')}</>}
+                      </>
+                    )}
                     {(s.hoursDays ?? 0) > 0 && (
-                      <> · <span className="text-zinc-800">{s.hoursTotal} hrs</span> logged over {s.hoursDays} {s.hoursDays === 1 ? 'day' : 'days'}</>
+                      <> · <span className="text-zinc-800">{s.hoursTotal} hrs</span> portal-to-portal over {s.hoursDays} {s.hoursDays === 1 ? 'day' : 'days'}</>
                     )}
                   </>
                 ) : COMMITTED.includes(s.status) ? (

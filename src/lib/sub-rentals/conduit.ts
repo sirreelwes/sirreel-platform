@@ -95,8 +95,9 @@ const CONDUIT_SELECT = {
   vendorToken: true,
   vendorConfirmedAt: true,
   vendorDeclinedAt: true,
+  originAddress: true,
   subcontractedVehicle: { select: { name: true } },
-  vendor: { select: { id: true, name: true, email: true, poEmail: true } },
+  vendor: { select: { id: true, name: true, email: true, poEmail: true, lotAddress: true } },
   driverHours: { select: { hours: true } },
   job: {
     select: {
@@ -171,6 +172,9 @@ export function fmtRange(start: string | null, end: string | null): string {
  * see the header. `hasAny` gates the "awaiting the production" empty state.
  */
 export interface LogisticsView {
+  /** Point of origin — where the unit leaves from (booking override, else the
+   *  partner's lot). The partner's own fact; shown to the driver and HQ. */
+  leavingFrom: string | null
   address: string | null
   accessNotes: string | null
   /** The production's general arrival window for deliveries ("6–7am"). */
@@ -191,6 +195,8 @@ export function logisticsFor(row: {
   callTime: string | null
   driverNotes: string | null
   logisticsUpdatedAt: Date | null
+  originAddress?: string | null
+  vendor?: { lotAddress: string | null } | null
   job: {
     reportToAddress: string | null
     reportToAccessNotes: string | null
@@ -206,6 +212,7 @@ export function logisticsFor(row: {
   const j = row.job
   const same = j?.pickupSameAsDelivery ?? true
   const v: Omit<LogisticsView, 'hasAny'> = {
+    leavingFrom: row.originAddress ?? row.vendor?.lotAddress ?? null,
     address: j?.reportToAddress ?? null,
     accessNotes: j?.reportToAccessNotes ?? null,
     arriveTime: j?.reportToTime ?? null,
@@ -229,6 +236,7 @@ export function logisticsFor(row: {
 /** Rows for a detailTable — only the facts that are set. */
 function logisticsRows(l: LogisticsView): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = []
+  if (l.leavingFrom) rows.push({ label: 'Leaving from', value: l.leavingFrom })
   if (l.address) rows.push({ label: 'Report to', value: l.address })
   if (l.accessNotes) rows.push({ label: 'Gate / access', value: l.accessNotes })
   if (l.callTime) rows.push({ label: 'Call time', value: l.callTime })

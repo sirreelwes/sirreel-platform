@@ -4445,6 +4445,12 @@ model Vendor {
   // Standing delivery / pickup terms shown on a PO (lead time, cutoffs,
   // dock hours). Distinct from general `notes`.
   deliveryTerms String? @map("delivery_terms") @db.Text
+  // POINT OF ORIGIN for the partner's units (Wes 2026-09-05): the lot their
+  // vehicles leave from unless a booking says otherwise — King Kong is
+  // 8924 Lankershim Blvd, Sun Valley. Editable by the partner on their page;
+  // read by the driver page ("leaving from") and the mileage fee later.
+  // Distinct from `address`, which is where mail and POs go.
+  lotAddress    String? @map("lot_address") @db.Text
 
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
@@ -4461,6 +4467,8 @@ model Vendor {
   // This vendor's standing ancillary-fee schedule (driver, mileage,
   // generator, supplies) — rows with vehicleId NULL apply fleet-wide.
   subcontractedFees     SubcontractedFee[]
+  // The partner's own driver roster — see VendorDriver.
+  drivers               VendorDriver[]
 
   @@map("vendors")
 }
@@ -4615,10 +4623,21 @@ model SubRental {
   vendorDeclinedAt  DateTime? @map("vendor_declined_at")
   vendorDeclineNote String?   @map("vendor_decline_note") @db.Text
 
+  /// The roster driver assigned to THIS booking (Wes 2026-09-05: "when
+  /// vendor sees a job in the portal they can assign driver to that vehicle
+  /// for that job only"). driverName/Email/Phone above stay as the
+  /// denormalised snapshot every reader already uses; this is the link back
+  /// to the person, so a completed profile can refresh the snapshot.
+  vendorDriverId String? @map("vendor_driver_id")
+  /// This booking leaves from somewhere other than the partner's lot (a unit
+  /// staged on another job, a second yard). Null = Vendor.lotAddress.
+  originAddress  String? @map("origin_address") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   driverHours          DriverHoursEntry[]
+  vendorDriver         VendorDriver?         @relation(fields: [vendorDriverId], references: [id])
   order                Order?                @relation(fields: [orderId], references: [id])
   job                  Job?                  @relation(fields: [jobId], references: [id])
   subcontractedVehicle SubcontractedVehicle? @relation(fields: [subcontractedVehicleId], references: [id])
@@ -4663,12 +4682,23 @@ model DriverHoursEntry {
   driverAssignmentId String? @map("driver_assignment_id")
 
   workDate     DateTime @map("work_date") @db.Date
-  /// "HH:MM", 24h. Strings rather than timestamps: a call time is a clock
-  /// reading at the location, not an instant, and drivers type it that way.
+  /// Portal-to-portal, four clock readings (Wes 2026-09-05): LEFT LOT →
+  /// ON SET (the production's call time) → LEFT SET → WRAP (vehicle cleaned,
+  /// dumped, fuelled and parked). "HH:MM" 24h strings, not timestamps — a
+  /// call time is a clock reading, and drivers type it that way. Entered as
+  /// the day goes, so only the first stamp is required at write time.
+  ///   startTime   = left the lot
+  ///   onSetTime   = on set / call
+  ///   leftSetTime = left set
+  ///   endTime     = wrap
   startTime    String   @map("start_time") @db.VarChar(5)
-  endTime      String   @map("end_time") @db.VarChar(5)
+  onSetTime    String?  @map("on_set_time") @db.VarChar(5)
+  leftSetTime  String?  @map("left_set_time") @db.VarChar(5)
+  endTime      String?  @map("end_time") @db.VarChar(5)
+  /// Unused since portal-to-portal (kept, default 0, never dropped).
   breakMinutes Int      @default(0) @map("break_minutes")
-  hours        Decimal  @db.Decimal(5, 2)
+  /// wrap − left lot, once wrap is in. Null while the day is open.
+  hours        Decimal? @db.Decimal(5, 2)
   notes        String?  @db.Text
 
   submittedAt DateTime @default(now()) @map("submitted_at")
@@ -4680,6 +4710,65 @@ model DriverHoursEntry {
   @@unique([subRentalId, workDate])
   @@unique([driverAssignmentId, workDate])
   @@map("sr_driver_hours")
+}
+
+// ── Vendor driver roster ──────────────────────────────────────────
+// A partner's (King Kong's) own drivers. Wes 2026-09-05: on the vendor
+// portal, "Add driver" takes an EMAIL; the driver gets a link and fills
+// out the rest themselves — name, phone, a photo of both sides of their
+// licence, and which of the partner's vehicles they are trained to drive.
+// A booking page then assigns one of these to that vehicle for that job
+// only (SubRental.vendorDriverId).
+//
+// Deliberately NOT the `Driver` table: that is people who collect OUR
+// units (licence gate, gate code, checkouts). A partner's driver never
+// touches our yard and has no DriverAssignment; mixing the two would put
+// King Kong's staff in Hugo's roster.
+//
+// Licence images: private blob, served only through token-scoped proxies
+// (the partner's own page) and the authed HQ proxy. The blob URL never
+// reaches a browser. Same posture as Driver.
+model VendorDriver {
+  id       String @id @default(uuid())
+  vendorId String @map("vendor_id")
+
+  /// The invite identity — the one thing the partner types.
+  email     String
+  firstName String? @map("first_name")
+  lastName  String? @map("last_name")
+  phone     String? @db.VarChar(30)
+
+  licenseFrontKey      String?   @map("license_front_key")
+  licenseFrontUrl      String?   @map("license_front_url")
+  licenseFrontMimeType String?   @map("license_front_mime_type")
+  licenseBackKey       String?   @map("license_back_key")
+  licenseBackUrl       String?   @map("license_back_url")
+  licenseBackMimeType  String?   @map("license_back_mime_type")
+  licenseUploadedAt    DateTime? @map("license_uploaded_at")
+
+  /// The driver's no-login profile page (/drive/profile/[token]). Minted on
+  /// add, re-minted on "resend"; the old link keeps working until then.
+  profileToken         String?   @unique @map("profile_token")
+  profileTokenMintedAt DateTime? @map("profile_token_minted_at")
+  invitedAt            DateTime? @map("invited_at")
+  profileViewedAt      DateTime? @map("profile_viewed_at")
+  /// Name + phone + both licence sides present. Stamped once; the partner
+  /// is emailed when it lands.
+  profileCompletedAt   DateTime? @map("profile_completed_at")
+
+  notes    String? @db.Text
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id])
+  trainedVehicles SubcontractedVehicle[] @relation("VendorDriverTrainedVehicles")
+  subRentals      SubRental[]
+
+  /// One roster row per address per partner — re-adding refreshes the invite.
+  @@unique([vendorId, email])
+  @@map("sr_vendor_drivers")
 }
 
 // ── Subcontracted vehicles ─────────────────────────────────────────
@@ -4757,10 +4846,12 @@ model SubcontractedVehicle {
   /// note someone happened to type. NULL renders no blurb at all.
   publicDescription String? @map("public_description") @db.Text
 
-  vendor     Vendor                      @relation(fields: [vendorId], references: [id])
-  fees       SubcontractedFee[]
-  photos     SubcontractedVehiclePhoto[]
-  subRentals SubRental[]
+  vendor         Vendor                      @relation(fields: [vendorId], references: [id])
+  fees           SubcontractedFee[]
+  photos         SubcontractedVehiclePhoto[]
+  subRentals     SubRental[]
+  /// Roster drivers the partner says are trained on this unit.
+  trainedDrivers VendorDriver[]              @relation("VendorDriverTrainedVehicles")
 
   @@index([vendorId])
   @@map("sub_contracted_vehicles")

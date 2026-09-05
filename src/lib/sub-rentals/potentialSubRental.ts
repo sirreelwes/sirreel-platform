@@ -26,6 +26,7 @@ import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 import { logisticsFor, type LogisticsView } from '@/lib/sub-rentals/conduit'
 import { isAckStale } from '@/lib/drivers/hoursEntry'
 import { listHours, type HoursView } from '@/lib/drivers/hoursStore'
+import { rosterForVendor, type RosterDriver } from '@/lib/sub-rentals/vendorDrivers'
 
 const TOKEN_BYTES = 32
 
@@ -152,6 +153,13 @@ export interface VendorView {
   vendorConfirmedAt: Date | null
   vendorDeclinedAt: Date | null
   vendorDeclineNote: string | null
+  /** The partner's roster (all their bookings share it) and who is on THIS one. */
+  roster: RosterDriver[]
+  assignedVendorDriverId: string | null
+  unitVehicleId: string | null
+  /** Point of origin: the partner's lot, and this booking's override if any. */
+  lotAddress: string | null
+  originAddress: string | null
 }
 
 /**
@@ -188,6 +196,11 @@ export async function getVendorViewByToken(
       vendorConfirmedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
+      vendorId: true,
+      vendorDriverId: true,
+      subcontractedVehicleId: true,
+      originAddress: true,
+      vendor: { select: { lotAddress: true } },
       job: {
         select: {
           jobCode: true,
@@ -256,6 +269,11 @@ export async function getVendorViewByToken(
     vendorConfirmedAt: s.vendorConfirmedAt,
     vendorDeclinedAt: s.vendorDeclinedAt,
     vendorDeclineNote: s.vendorDeclineNote,
+    roster: await rosterForVendor(s.vendorId, s.subcontractedVehicleId),
+    assignedVendorDriverId: s.vendorDriverId,
+    unitVehicleId: s.subcontractedVehicleId,
+    lotAddress: s.vendor.lotAddress,
+    originAddress: s.originAddress,
   }
 }
 
