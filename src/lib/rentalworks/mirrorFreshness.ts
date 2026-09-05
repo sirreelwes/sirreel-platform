@@ -63,9 +63,11 @@ export interface MirrorHealth {
 }
 
 const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
-  // Daily at 11:00 UTC, all-or-nothing → two missed runs plus slack. No
+  // Every 30 minutes (since 2026-09-05 — Ana asked for the balances to
+  // keep up with her as she works), all-or-nothing, ~35s a run. 3h is
+  // six missed runs: one lost run is jitter, six is an outage. No
   // cursor, so no cycle age to check.
-  invoice: { label: 'Invoices', hours: 36, cycleHours: null },
+  invoice: { label: 'Invoices', hours: 3, cycleHours: null },
   // Every 6h; a full cycle measured ~330s so it takes two runs. Allowing
   // 24h to close one is generous even if several runs are lost.
   quote: { label: 'Quotes', hours: 36, cycleHours: 24 },

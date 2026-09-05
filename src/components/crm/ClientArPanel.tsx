@@ -124,7 +124,7 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
   const t = ar.totals!;
   const open = ar.invoices.filter((i) => i.remainingTotal > 0.005);
   const shown = showAll ? ar.invoices : open;
-  const stale = ar.syncedAt ? Date.now() - new Date(ar.syncedAt).getTime() > 36 * 3_600_000 : true;
+  const stale = ar.syncedAt ? Date.now() - new Date(ar.syncedAt).getTime() > 6 * 3_600_000 : true; // sync runs every 30 min; 6h is a dozen missed runs
 
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 mb-6">

@@ -98,13 +98,21 @@ export async function runPagedSync<T>(spec: PagedSyncSpec<T>): Promise<PagedSync
   let page = resuming ? existing!.nextPage : 1
   let rowsThisCycle = resuming ? existing!.rowsThisCycle : 0
 
-  if (!resuming) {
-    await prisma.rwSyncCursor.upsert({
-      where: { mirror: spec.mirror },
-      create: { mirror: spec.mirror, cycleStartedAt, nextPage: 1, rowsThisCycle: 0, completedAt: null, lastError: null },
-      update: { cycleStartedAt, nextPage: 1, rowsThisCycle: 0, completedAt: null, lastError: null },
-    })
-  }
+  // Leave a trace BEFORE any page is fetched. A run that Vercel kills at
+  // maxDuration executes no catch and no `stop()`, so without this it
+  // vanishes without a word — which is exactly how the order mirror froze
+  // for two days from 2026-09-03: five scheduled runs, each killed inside
+  // page 1, and a cursor that still said nothing had ever run. Every
+  // clean exit below overwrites this note; if it is still here the next
+  // time anyone looks, the run died.
+  const startedNote = `run started ${new Date(startedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC at page ${page} — still running, or killed before it could report`
+  await prisma.rwSyncCursor.upsert({
+    where: { mirror: spec.mirror },
+    create: { mirror: spec.mirror, cycleStartedAt, nextPage: page, rowsThisCycle, completedAt: null, lastError: startedNote },
+    update: resuming
+      ? { lastError: startedNote }
+      : { cycleStartedAt, nextPage: 1, rowsThisCycle: 0, completedAt: null, lastError: startedNote },
+  })
 
   let pagesThisRun = 0
   let rowsThisRun = 0

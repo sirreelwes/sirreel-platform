@@ -52,16 +52,20 @@ interface SyncResult {
 
 type Tone = 'ok' | 'warn' | 'bad'
 
-/** Cron is `0 11 * * *` in vercel.json — 11:00 UTC, i.e. 4am Pacific. */
-const CRON_LABEL = '4:00am Pacific'
+/**
+ * The cron in vercel.json fires on the hour and half-hour, all day (the
+ * schedule is star-slash-30, which cannot be written inside this comment). It was nightly (11:00 UTC) until 2026-09-05, when Ana asked for the
+ * balances to keep up with her through the working day.
+ */
+const CRON_LABEL = 'every 30 minutes'
 
 /**
- * A healthy mirror is at most ~24h old. 26h allows for cron jitter without
- * crying wolf; past 50h at least two nightly runs have been missed, which is
- * no longer ambiguous.
+ * A healthy mirror is at most ~30 minutes old. 2h allows for a run or two
+ * lost to jitter without crying wolf; past 6h a dozen runs in a row have
+ * been missed, which is no longer ambiguous.
  */
-const AGING_HOURS = 26
-const STALE_HOURS = 50
+const AGING_HOURS = 2
+const STALE_HOURS = 6
 
 function hoursSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 3_600_000
@@ -147,15 +151,15 @@ function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string 
     return {
       tone: 'bad',
       headline: `The mirror has not refreshed since ${relTime(syncedAt)}.`,
-      detail: `At least two nightly runs have been missed and the token is not the cause. ${frozen} Check the cron logs for /api/admin/rw-invoice-sync, then try a manual sync below.`,
+      detail: `Every half-hourly run for the last six hours has been missed and the token is not the cause. ${frozen} Check the cron logs for /api/admin/rw-invoice-sync, then try a manual sync below.`,
     }
   }
 
   if (age != null && age > AGING_HOURS) {
     return {
       tone: 'warn',
-      headline: `Last night's sync did not land — the mirror is ${relTime(syncedAt)}.`,
-      detail: `One run has been missed. ${frozen} A manual sync below will confirm whether this is a transient failure or the start of an outage.`,
+      headline: `The last few runs did not land — the mirror is ${relTime(syncedAt)}.`,
+      detail: `More than one half-hourly run has been missed. ${frozen} A manual sync below will confirm whether this is a transient failure or the start of an outage.`,
     }
   }
 
@@ -294,8 +298,8 @@ export default function RwInvoiceSyncPage() {
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">RentalWorks Invoice Sync</h1>
           <p className="text-sm text-zinc-600 mt-1">
-            The nightly job ({CRON_LABEL}) that refreshes the invoice mirror behind Collections,
-            Receivables (RW) and Reconcile RW. When it stops, those balances quietly go stale.
+            The job that refreshes the invoice mirror behind Collections, Receivables (RW) and
+            Reconcile RW. It runs {CRON_LABEL}; when it stops, those balances quietly go stale.
           </p>
         </div>
         <button

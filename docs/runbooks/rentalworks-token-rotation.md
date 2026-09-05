@@ -221,7 +221,7 @@ have nothing to do with credentials:
 
 | Mirror | Job | Notes |
 |---|---|---|
-| Invoices | `/api/admin/rw-invoice-sync` daily 11:00 UTC | ~35s, all-or-nothing |
+| Invoices | `/api/admin/rw-invoice-sync` every 30 min (:00 / :30) | ~35s, all-or-nothing; was nightly until 2026-09-05 |
 | Quotes | `/api/cron/rw-quote-sync` 02:20/08:20/14:20/20:20 UTC | resumable; a full cycle is ~330s so it may span runs |
 | Order index | `/api/cron/rw-order-refs` daily 03:40 UTC | resumable |
 
@@ -234,7 +234,7 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" \
 
 `stale: 0` means every mirror is current. Anything else names the mirror,
 its age, and — for the resumable ones — where its cycle stopped and why.
-That endpoint also runs itself daily at 16:00 UTC and emails the
+That endpoint also runs itself four times a day (04/10/16/22 UTC) and emails the
 `rw-token` channel when something has gone quiet, so this check is a
 confirmation rather than the only line of defence.
 

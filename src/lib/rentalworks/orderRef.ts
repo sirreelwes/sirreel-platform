@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { rwFetch } from '@/lib/rentalworks/rwClient'
 import { runPagedSync } from '@/lib/rentalworks/pagedSync'
@@ -114,31 +115,32 @@ export async function syncRwOrderRefs(opts?: { budgetMs?: number }): Promise<RwO
 
     async commitPage(rows, cycleStartedAt) {
       if (!rows.length) return
-      // Bulk create for the new ones, then a per-row header refresh for
-      // the rest. Sequential upserts were measured at ~8 MINUTES for
-      // 3,771 rows against Neon (2026-08-22) — createMany lands the set
-      // in seconds and the updates only touch what already existed.
-      await prisma.rwOrderRef.createMany({
-        data: rows.map((r) => ({ ...r, syncedAt: cycleStartedAt })),
-        skipDuplicates: true,
-      })
-      await Promise.all(
-        rows.map((r) =>
-          prisma.rwOrderRef.updateMany({
-            where: { rwOrderId: r.rwOrderId },
-            data: {
-              orderNumber: r.orderNumber,
-              description: r.description,
-              customerName: r.customerName,
-              dealName: r.dealName,
-              status: r.status,
-              total: r.total,
-              orderDate: r.orderDate,
-              syncedAt: cycleStartedAt,
-            },
-          }),
-        ),
+      // ONE statement per page. Until 2026-09-05 this was createMany
+      // followed by 500 parallel updateMany calls, which ran in ~25s from
+      // a laptop and looked fine — but on Vercel it never finished: every
+      // scheduled run from 2026-09-03 17:40 onward was killed at the 300s
+      // ceiling part-way through page 1's updates (332 rows stamped, the
+      // cursor never advanced, and — because a killed function runs no
+      // catch — no alert). The mirror sat frozen for two days with the
+      // freshness check just under its threshold. A single upsert costs
+      // one round trip regardless of pool size or region.
+      const values = rows.map(
+        (r) => Prisma.sql`(gen_random_uuid(), ${r.rwOrderId}, ${r.orderNumber}, ${r.description}, ${r.customerName}, ${r.dealName}, ${r.status}, ${r.total}, ${r.orderDate}, ${cycleStartedAt})`,
       )
+      await prisma.$executeRaw`
+        INSERT INTO sr_rw_order_refs
+          (id, rw_order_id, order_number, description, customer_name, deal_name, status, total, order_date, synced_at)
+        VALUES ${Prisma.join(values)}
+        ON CONFLICT (rw_order_id) DO UPDATE SET
+          order_number  = EXCLUDED.order_number,
+          description   = EXCLUDED.description,
+          customer_name = EXCLUDED.customer_name,
+          deal_name     = EXCLUDED.deal_name,
+          status        = EXCLUDED.status,
+          total         = EXCLUDED.total,
+          order_date    = EXCLUDED.order_date,
+          synced_at     = EXCLUDED.synced_at
+      `
     },
 
     async sweep(cycleStartedAt) {
