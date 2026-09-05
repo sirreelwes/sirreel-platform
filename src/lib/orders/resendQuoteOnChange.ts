@@ -1,15 +1,26 @@
 /**
- * Re-send the quote when the dock changed it.
+ * Re-send the quote when something other than the rep changed it.
  *
  * Wes, 2026-09-03: "yes, re-send the quote automatically when the
  * check-out changes it but copy hq notifications."
+ * Wes, 2026-09-05, after Subplot elected LCDW in the portal and nothing
+ * told them the number moved: make sure the updated quote is flagged to
+ * the client.
  *
- * Context. The check-out report writes what actually went out onto the
- * order's lines, and at SirReel the document on the truck is routinely
- * still a QUOTE — the status catches up days after the gear is back. So
- * a supervisor typing in a swap can silently leave the client holding a
- * quote that no longer matches the order. The action item tells the
- * AGENT; this tells the CLIENT, which is the half that was missing.
+ * Two callers, one sender:
+ *
+ *  · 'check-out' — the yard's check-out report wrote what actually went
+ *    out onto the order's lines. At SirReel the document on the truck is
+ *    routinely still a QUOTE — the status catches up days after the gear
+ *    is back — so a supervisor typing in a swap can silently leave the
+ *    client holding a quote that no longer matches the order.
+ *  · 'lcdw-election' — the client accepted (or declined) the damage
+ *    waiver in the portal and the fee line was applied for them. They
+ *    made the change themselves, so this is a confirmation with the new
+ *    number on it, not a surprise.
+ *
+ * In both cases the action item tells the AGENT; this tells the CLIENT,
+ * which is the half that was missing.
  *
  * ── What it deliberately will NOT do ──────────────────────────────
  *
@@ -22,8 +33,9 @@
  *    against a signed job would be confusing at best.
  *  · It never re-stamps quoteSentAt. This is a correction, not a new
  *    quote, and the aging/cadence surfaces read that timestamp.
- *  · It never blocks the report. Every failure path returns a reason and
- *    the sheet still files — the yard's work must not depend on Resend.
+ *  · It never blocks the caller. Every failure path returns a reason and
+ *    the report still files / the election still records — neither the
+ *    yard's work nor the client's answer may depend on Resend.
  *
  * Relationship to POST /api/orders/[id]/send-quote: that route is the
  * rep-driven send, with CC overrides, a typed message, portal grants for
@@ -53,28 +65,55 @@ export type ResendOutcome =
   | { sent: true; to: string; cc: string[] }
   | { sent: false; reason: string }
 
+export type QuoteChangeReason = 'check-out' | 'lcdw-election'
+
+const INTRO: Record<QuoteChangeReason, string> = {
+  'check-out': 'Your order changed at load-out, so here is the updated quote.',
+  'lcdw-election':
+    'Thanks for confirming your Limited Collision Damage Waiver election — ' +
+    'here is your updated quote with it applied.',
+}
+
+const CLOSING: Record<QuoteChangeReason, string> = {
+  'check-out':
+    'The attached PDF and the portal both reflect what actually went out. ' +
+    'If anything here looks wrong, reply to this email and we will sort it out.',
+  'lcdw-election':
+    'The attached PDF and the portal both reflect the updated total. ' +
+    'If anything here looks wrong, reply to this email and we will sort it out.',
+}
+
+const AUDIT_ACTION: Record<QuoteChangeReason, string> = {
+  'check-out': 'order.quote_resent_after_check_out',
+  'lcdw-election': 'order.quote_resent_after_lcdw_election',
+}
+
 /**
  * The note that goes above the standard quote body. It has to answer the
  * question a client will actually have — "why am I getting this again?"
  * — in the first sentence, and it names the changes rather than making
  * them hunt through the PDF for the difference.
  */
-function changeNote(changes: string[]): string {
+function changeNote(reason: QuoteChangeReason, changes: string[]): string {
   const list = changes.slice(0, 8).join('\n• ')
   const more = changes.length > 8 ? `\n• …and ${changes.length - 8} more` : ''
-  return (
-    'Your order changed at load-out, so here is the updated quote.\n\n' +
-    `• ${list}${more}\n\n` +
-    'The attached PDF and the portal both reflect what actually went out. ' +
-    'If anything here looks wrong, reply to this email and we will sort it out.'
-  )
+  return `${INTRO[reason]}\n\n• ${list}${more}\n\n${CLOSING[reason]}`
 }
 
-export async function resendQuoteAfterCheckOut(opts: {
+/** The check-out report's entry point — unchanged signature. */
+export function resendQuoteAfterCheckOut(opts: {
   orderId: string
   changes: string[]
 }): Promise<ResendOutcome> {
-  const { orderId, changes } = opts
+  return resendQuoteOnChange({ ...opts, reason: 'check-out' })
+}
+
+export async function resendQuoteOnChange(opts: {
+  orderId: string
+  changes: string[]
+  reason: QuoteChangeReason
+}): Promise<ResendOutcome> {
+  const { orderId, changes, reason } = opts
   if (changes.length === 0) return { sent: false, reason: 'nothing changed' }
 
   const order = await prisma.order.findUnique({
@@ -130,7 +169,7 @@ export async function resendQuoteAfterCheckOut(opts: {
   // the send route does, and for the same reason.
   const preliminary = await composeQuoteEmail({
     orderId,
-    message: changeNote(changes),
+    message: changeNote(reason, changes),
     customMessage: null,
     overrideContactId: null,
     portalUrl: null,
@@ -151,7 +190,7 @@ export async function resendQuoteAfterCheckOut(opts: {
 
   const final = await composeQuoteEmail({
     orderId,
-    message: changeNote(changes),
+    message: changeNote(reason, changes),
     customMessage: null,
     overrideContactId: null,
     portalUrl,
@@ -193,7 +232,7 @@ export async function resendQuoteAfterCheckOut(opts: {
     html: final.html,
     text: final.text,
     attachments,
-    label: `resend-quote-on-change:${order.orderNumber}`,
+    label: `resend-quote-on-change:${reason}:${order.orderNumber}`,
   })
   if (!emailResult.ok) return { sent: false, reason: emailResult.reason }
 
@@ -203,7 +242,7 @@ export async function resendQuoteAfterCheckOut(opts: {
       toAddress: primary.email,
       ccAddresses: cc,
       subject: final.subject,
-      label: `resend-quote-on-change:${order.orderNumber}`,
+      label: `resend-quote-on-change:${reason}:${order.orderNumber}`,
       orderId: order.id,
     })
   }
@@ -213,11 +252,11 @@ export async function resendQuoteAfterCheckOut(opts: {
   await prisma.auditLog.create({
     data: {
       userId: null,
-      action: 'order.quote_resent_after_check_out',
+      action: AUDIT_ACTION[reason],
       entityType: 'Order',
       entityId: order.id,
       oldValues: {},
-      newValues: { to: primary.email, cc, changes, at: new Date().toISOString() },
+      newValues: { to: primary.email, cc, changes, reason, at: new Date().toISOString() },
     },
   })
 

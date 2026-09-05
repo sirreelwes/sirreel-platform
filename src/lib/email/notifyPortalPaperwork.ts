@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, detailTable, calloutBox } from '@/lib/email/templates/shell'
+import { resolveDisplayJobName } from '@/lib/jobs/displayName'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
 /**
  * Internal notification when a client submits paperwork through the HQ
@@ -125,5 +127,105 @@ async function send(ev: PortalPaperworkEvent): Promise<void> {
     text,
     replyTo: clientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail) ? clientEmail : undefined,
     label: `paperwork-submitted:${ev.step}:${ev.token.slice(0, 8)}`,
+  })
+}
+
+/**
+ * The JOB-portal twin of notifyPortalPaperwork.
+ *
+ * The job portal (/portal/job/[slug]) has no PaperworkRequest token — it is
+ * keyed to the Job and answers from the ORDER — so the token-based sender
+ * above can never fire for it, and until 2026-09-05 a client's LCDW election
+ * there reached nobody: Subplot elected the waiver, approved the quote, and
+ * the only trace was an audit row. Same subject shape, same channel, same
+ * fire-and-forget posture; only the lookup differs.
+ */
+export interface JobPortalPaperworkEvent {
+  jobId: string
+  step: PaperworkStep
+  /** Reply-To target — the contact who submitted. */
+  clientEmail?: string | null
+  details?: Array<{ label: string; value: string }>
+}
+
+export function notifyJobPortalPaperwork(ev: JobPortalPaperworkEvent): void {
+  void sendForJob(ev).catch((err) =>
+    console.error(`[notify:paperwork:job:${ev.step}] threw (submission unaffected):`, err),
+  )
+}
+
+async function sendForJob(ev: JobPortalPaperworkEvent): Promise<void> {
+  const job = await prisma.job.findUnique({
+    where: { id: ev.jobId },
+    select: {
+      id: true,
+      name: true,
+      jobCode: true,
+      company: { select: { name: true } },
+      bookings: { select: { jobName: true }, take: 1, orderBy: { createdAt: 'asc' } },
+      orders: {
+        where: { archivedAt: null, status: { notIn: ['CANCELLED', 'CLOSED'] } },
+        select: {
+          orderNumber: true,
+          startDate: true,
+          endDate: true,
+          lineItems: { select: { pickupDate: true, returnDate: true } },
+          booking: { select: { startDate: true, endDate: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  })
+  if (!job) return
+
+  const company = job.company?.name?.trim() || '—'
+  const jobName = resolveDisplayJobName({
+    jobName: job.name,
+    bookingJobName: job.bookings[0]?.jobName,
+    companyName: job.company?.name,
+  })
+  const label = STEP_LABEL[ev.step]
+  const subject = `${label} | ${company} | ${jobName}`
+  const link = `${HQ_APP_URL}/jobs/${job.id}`
+
+  const fmt = (d: Date | null) =>
+    d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—'
+  const windows = job.orders.map((o) => deriveOrderWindow(o))
+  const starts = windows.map((w) => w.start).filter((d): d is Date => !!d)
+  const ends = windows.map((w) => w.end).filter((d): d is Date => !!d)
+  const start = starts.length ? new Date(Math.min(...starts.map(Number))) : null
+  const end = ends.length ? new Date(Math.max(...ends.map(Number))) : null
+
+  const rows = [
+    { label: 'Job', value: `${jobName}${job.jobCode ? ` (${job.jobCode})` : ''}` },
+    { label: 'Company', value: company },
+    { label: 'Client', value: ev.clientEmail?.trim() || '—' },
+    { label: 'Dates', value: `${fmt(start)} → ${fmt(end)}` },
+    { label: 'Orders', value: job.orders.map((o) => o.orderNumber).join(', ') || '—' },
+    ...(ev.details ?? []),
+  ]
+
+  const html = renderEmailShell({
+    eyebrow: 'Portal paperwork',
+    heading: label,
+    preheader: `${company} · ${jobName}`,
+    bodyHtml: [
+      detailTable(rows),
+      calloutBox(
+        'Signed documents live on the job page. Replying to this email goes straight to the client.',
+      ),
+    ].join(''),
+    cta: { label: 'Open the job in HQ', href: link },
+  })
+  const text = renderEmailText([subject, '', ...rows.map((r) => `${r.label}: ${r.value}`), '', link])
+
+  const clientEmail = ev.clientEmail?.trim()
+  await sendAgreementEmail({
+    to: await channelRecipients('hq-documents'),
+    subject,
+    html,
+    text,
+    replyTo: clientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail) ? clientEmail : undefined,
+    label: `paperwork-submitted:job:${ev.step}:${job.id.slice(0, 8)}`,
   })
 }

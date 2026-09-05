@@ -17,6 +17,9 @@
  *   - check-report-changes (DERIVED) — a yard check-out report that had
  *     to change the order (a swap, a short, something extra on the
  *     truck) and the agent has not acknowledged it. Clears on ack.
+ *   - lcdw-unapplied (DERIVED) — the client's damage-waiver answer and
+ *     the order's money disagree: elected but no fee line, or declined
+ *     with the fee still on. Clears when the line matches the answer.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -63,11 +66,15 @@ import { inquiryUntouchedProvider } from '@/lib/actionItems/providers/inquiryUnt
 import { rwTokenProvider } from '@/lib/actionItems/providers/rwToken'
 import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassigned'
 import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkReportChanges'
+import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied'
 
 const PROVIDERS: ActionItemProvider[] = [
   // The yard changed a booked order at the dock and the agent hasn't
   // seen it yet — the money moved without them.
   checkReportChangesProvider,
+  // The client answered the waiver question and the quote's money
+  // doesn't match the answer — usually the auto-apply could not run.
+  lcdwUnappliedProvider,
   holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,

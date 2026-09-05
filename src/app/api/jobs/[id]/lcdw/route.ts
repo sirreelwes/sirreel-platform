@@ -16,9 +16,12 @@
  * acknowledgement text — which is honest only because a rep is attesting that
  * the client said it. That attestation is the audit row.
  *
- * Neither method touches money. Applying the $24/day fee stays with
- * /api/orders/[id]/lcdw, the only path that runs the per-line eligibility
- * rule.
+ * Recording an answer applies it to the job's orders too (2026-09-05):
+ * ACCEPTED adds the $24/day fee line to every live order with an eligible
+ * vehicle, DECLINED removes it, and any order whose quote the client has
+ * already seen gets the "Updated quote" email — the same helper the portal
+ * election and the order-page button use, so one place prices it. The
+ * re-cut (PUT) still touches no money.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -29,6 +32,7 @@ import {
   fileJobAddendum,
   summarizeJobLcdwCoverage,
 } from '@/lib/lcdw/jobElection'
+import { applyLcdwElectionToJobOrders } from '@/lib/lcdw/applyElectionToOrders'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -90,11 +94,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     recordedById: user.id,
   })
 
+  let applied: Awaited<ReturnType<typeof applyLcdwElectionToJobOrders>> | null = null
+  try {
+    applied = await applyLcdwElectionToJobOrders({
+      jobId: job.id,
+      decision,
+      source: 'STAFF',
+      recordedById: user.id,
+    })
+  } catch (err) {
+    console.error('[jobs/lcdw] applying the election to orders failed:', err)
+  }
+
   return NextResponse.json({
     ok: true,
     decision: election.decision,
     decidedAt: election.decidedAt,
     addendumFiled: !!addendumId,
+    quoteSummary: applied?.summary ?? 'The fee could not be applied automatically — add it on the order.',
   })
 }
 

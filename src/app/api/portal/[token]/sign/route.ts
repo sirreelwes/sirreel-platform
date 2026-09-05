@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
 import { recordCardTrouble } from '@/lib/portal/cardTrouble'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
+import { applyLcdwElectionToJobOrders } from '@/lib/lcdw/applyElectionToOrders'
 import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
 import { normalizePaymentPreference, paymentPreferenceLabel } from '@/lib/payments/paymentPreference'
 import { prisma } from '@/lib/prisma'
@@ -39,6 +40,29 @@ async function applyLcdwElection(
   })
 }
 
+/**
+ * Carry the booking-token election onto the job's orders (fee line on /
+ * off + the "Updated quote" email). Best-effort and never awaited past a
+ * failure — the PaperworkRequest row is the record; this is the money.
+ */
+async function applyElectionToJobOrders(bookingId: string, accepted: boolean) {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { jobId: true },
+    })
+    if (!booking?.jobId) return null
+    return await applyLcdwElectionToJobOrders({
+      jobId: booking.jobId,
+      decision: accepted ? 'ACCEPTED' : 'DECLINED',
+      source: 'PORTAL_BOOKING',
+    })
+  } catch (err) {
+    console.error('[portal/sign] applying the LCDW election to orders failed:', err)
+    return null
+  }
+}
+
 /** The team-email line for an election, so both paths word it identically. */
 function lcdwDetail(accepted: boolean) {
   return {
@@ -48,6 +72,10 @@ function lcdwDetail(accepted: boolean) {
       : 'DECLINED — client carries their own coverage',
   }
 }
+
+// An election now re-cuts the quote PDF and sends the client the updated
+// one — same 30s ceiling the other send routes use.
+export const maxDuration = 30
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
@@ -71,6 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // the election, posts no `lcdwAccepted`, and keeps a NULL decision —
       // which is a different fact from declining.
       const lcdwAnswered = typeof body.lcdwAccepted === 'boolean'
+      let lcdwApplied: Awaited<ReturnType<typeof applyElectionToJobOrders>> = null
       if (lcdwAnswered) {
         await applyLcdwElection(
           params.token,
@@ -84,6 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           },
           now,
         )
+        lcdwApplied = await applyElectionToJobOrders(request.bookingId, body.lcdwAccepted === true)
       }
 
       // Fire-and-forget hq@ notification with a deep link to the job —
@@ -94,6 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         details: [
           { label: 'Signed by', value: String(body.signerName ?? '—') },
           ...(lcdwAnswered ? [lcdwDetail(body.lcdwAccepted === true)] : []),
+          ...(lcdwApplied ? [{ label: 'Quote', value: lcdwApplied.summary }] : []),
         ],
       })
     }
@@ -119,12 +150,16 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         },
         now,
       )
+      const lcdwApplied = await applyElectionToJobOrders(request.bookingId, accepted)
       notifyPortalPaperwork({
         token: params.token,
         step: 'lcdw',
         // The team's email said a decision had been made but never which
         // one, which is half the reason nobody could tell.
-        details: [lcdwDetail(accepted)],
+        details: [
+          lcdwDetail(accepted),
+          ...(lcdwApplied ? [{ label: 'Quote', value: lcdwApplied.summary }] : []),
+        ],
       })
     }
 

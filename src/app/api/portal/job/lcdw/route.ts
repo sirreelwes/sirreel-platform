@@ -32,6 +32,8 @@ import {
   LCDW_ACKNOWLEDGEMENT_TEXT,
 } from '@/lib/lcdw/jobElection'
 import { LCDW_ADDENDUM } from '@/lib/contracts/contractClauses'
+import { applyLcdwElectionToJobOrders } from '@/lib/lcdw/applyElectionToOrders'
+import { notifyJobPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 
 export const dynamic = 'force-dynamic'
@@ -196,6 +198,45 @@ export async function POST(req: NextRequest) {
     source: 'PORTAL_JOB',
   })
 
+  // The election is recorded; now the money. A signed acceptance of
+  // $24/day is applied to the job's live orders here — not left for a rep
+  // to notice — and every order whose quote the client has already seen
+  // gets the "Updated quote" email with the new total. Best-effort: a
+  // pricing or email failure is reported to the team, never to the client
+  // as an error over an answer we in fact recorded.
+  let applied: Awaited<ReturnType<typeof applyLcdwElectionToJobOrders>> | null = null
+  try {
+    applied = await applyLcdwElectionToJobOrders({
+      jobId: ctx.jobId,
+      decision,
+      source: 'PORTAL_JOB',
+    })
+  } catch (err) {
+    console.error('[portal/job/lcdw] applying the election to orders failed:', err)
+  }
+
+  // The team hears about it the way they hear about every other portal
+  // submission — one email, same subject shape as the booking-token
+  // portal's. Before this the job portal's election was silent.
+  notifyJobPortalPaperwork({
+    jobId: ctx.jobId,
+    step: 'lcdw',
+    clientEmail: ctx.resolved.contact?.email ?? null,
+    details: [
+      {
+        label: 'LCDW',
+        value: decision === 'ACCEPTED'
+          ? `ACCEPTED — $${LCDW_DAILY_RATE}/day/vehicle`
+          : 'DECLINED — client carries their own coverage',
+      },
+      { label: 'Signed by', value: signerName },
+      {
+        label: 'Quote',
+        value: applied ? applied.summary : 'NOT applied automatically — add the fee on the order.',
+      },
+    ],
+  })
+
   return NextResponse.json({
     ok: true,
     decision: election.decision,
@@ -204,5 +245,9 @@ export async function POST(req: NextRequest) {
     // Only true when the addendum actually got filed — the client is told
     // "added to your file" only when it is.
     addendumFiled: !!addendumId,
+    // Whether the quote moved and the client was sent the new one, so the
+    // portal can say "we've emailed you an updated quote" only when true.
+    quoteUpdated: !!applied?.orders.some((o) => o.result.kind === 'applied' || o.result.kind === 'removed'),
+    updatedQuoteEmailed: !!applied?.orders.some((o) => o.resend?.sent),
   })
 }

@@ -14,6 +14,9 @@ import {
 } from '@/lib/orders/signedAgreement'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { requestSubRentalsOnApproval } from '@/lib/sub-rentals/requestOnApproval'
+import { effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
+import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
+import { LCDW_FEE_CODE } from '@/lib/pricing/lcdwEligibility'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -87,6 +90,7 @@ export async function POST(req: NextRequest) {
       quotePdfUrl: true,
       total: true,
       archivedAt: true,
+      companyId: true,
       _count: { select: { lineItems: true } },
       agent: { select: { id: true, name: true, email: true } },
       company: { select: { name: true } },
@@ -236,6 +240,45 @@ export async function POST(req: NextRequest) {
     console.error('[approve-quote] sub-rental hold request failed:', err)
   }
 
+  // ── LCDW: what the client answered, and whether the money agrees ──
+  // The approval email said nothing about the waiver before 2026-09-05,
+  // so a rep read "approved, $800" while the client had just elected $96
+  // of coverage the order did not yet carry. The election is read fresh
+  // here (it may have landed seconds ago) and compared to the fee line.
+  const lcdwLine = await (async () => {
+    try {
+      const [election, coverage] = await Promise.all([
+        prisma.lcdwElection.findUnique({
+          where: { jobId: order.job?.id ?? '' },
+          select: { decision: true, source: true },
+        }),
+        order.companyId ? findCompanyAnnualCoverage(order.companyId) : Promise.resolve(null),
+      ])
+      const effective = effectiveLcdwDecision(election, coverage?.standingLcdwDecision ?? null)
+      const onOrder = await prisma.orderLineItem.count({
+        where: { orderId: order.id, type: 'FEE', feeItem: { code: LCDW_FEE_CODE } },
+      })
+      if (!effective) {
+        return onOrder > 0
+          ? 'LCDW: on the quote, but the client has not answered the election yet.'
+          : 'LCDW: not answered yet.'
+      }
+      const where = effective.source === 'ANNUAL' ? 'on their annual agreement' : 'for this job'
+      if (effective.decision === 'ACCEPTED') {
+        return onOrder > 0
+          ? `LCDW: ACCEPTED ${where} — the fee is on the order.`
+          : `LCDW: ACCEPTED ${where} — ACTION NEEDED: the fee is NOT on the order yet. Add it on the order page.`
+      }
+      return onOrder > 0
+        ? `LCDW: DECLINED ${where} — ACTION NEEDED: the fee is still on the order. Remove it.`
+        : `LCDW: DECLINED ${where}.`
+    } catch (err) {
+      console.error('[approve-quote] LCDW summary failed:', err)
+      return null
+    }
+  })()
+  const lcdwNeedsAction = !!lcdwLine && lcdwLine.includes('ACTION NEEDED')
+
   // ── Tell the rep: email + in-app Alert (Wes, 2026-08-25) ───────────
   const orderLink = `/orders/${order.id}`
   const headline = `${order.company?.name || 'A client'} approved quote ${order.orderNumber}`
@@ -261,8 +304,8 @@ export async function POST(req: NextRequest) {
         agreementError
           ? ' The rental agreement could NOT be released automatically — release it manually.'
           : ' The rental agreement has been released for signature.'
-      }${subRentalAlertLine}`,
-      severity: agreementError || subRentals.unnotified.length ? 'high' : 'medium',
+      }${subRentalAlertLine}${lcdwLine ? ` ${lcdwLine}` : ''}`,
+      severity: agreementError || subRentals.unnotified.length || lcdwNeedsAction ? 'high' : 'medium',
       link: orderLink,
     },
   }).catch((err) => console.error('[approve-quote] alert write failed:', err))
@@ -303,6 +346,7 @@ export async function POST(req: NextRequest) {
         <p><strong>${approverName}</strong> just approved quote <strong>${order.orderNumber}</strong> in the client portal.</p>
         <p>Job: ${jobLabel}<br/>Client: ${order.company?.name || '—'}<br/>Total: $${Number(order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         ${agreementLine}
+        ${lcdwLine ? `<p${lcdwNeedsAction ? ' style="color:#b91c1c"' : ''}>${lcdwNeedsAction ? '<strong>' : ''}${lcdwLine}${lcdwNeedsAction ? '</strong>' : ''}</p>` : ''}
         ${subRentalHtml}
         <p>The order is now APPROVED and ready to book.</p>
       `,
@@ -312,6 +356,7 @@ export async function POST(req: NextRequest) {
         (agreementError
           ? `ACTION NEEDED: the rental agreement could not be released automatically (${agreementError}).\n`
           : `The rental agreement has been released to their portal.\n`) +
+        (lcdwLine ? `${lcdwLine}\n` : '') +
         subRentalText +
         `The order is now APPROVED and ready to book.`,
     }).catch((err) => console.error('[approve-quote] rep email failed:', err))
