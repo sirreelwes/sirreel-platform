@@ -15,7 +15,8 @@ Rules:
   dry-run shows what was proposed, the write shows what happened.
 - Do not put fixtures, previews, reports, or pull caches here. Those stay in
   `tmp/` (still untracked): `*-fixture-*.json`, `zz-*`, `unnamed-*.json`,
-  `short-hold-sweep-*`, `rw-items-raw-*`, preflight markdown, the
-  `annual-agreements.tsv` input.
+  `short-hold-sweep-*`, `rw-items-raw-*`, preflight markdown.
+- `annual-agreements.tsv` lives here too. It is the input the annual-agreement
+  import and the COI/agreement harvesters read, and it exists nowhere else.
 - Journals name real clients, jobs, and contacts. The repo is private; keep it
   that way and never copy this directory into an export.

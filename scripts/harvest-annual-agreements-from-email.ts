@@ -130,7 +130,7 @@ async function collect(): Promise<Found[]> {
 
 async function main() {
   // The Cognito name each filed master came from, via its entry marker.
-  const lines = fs.readFileSync('tmp/annual-agreements.tsv', 'utf8').split('\n').filter((l) => l.trim())
+  const lines = fs.readFileSync('journals/annual-agreements.tsv', 'utf8').split('\n').filter((l) => l.trim())
   const entryToName = new Map<string, string>()
   for (const line of lines.slice(1)) {
     const c = line.split('\t')

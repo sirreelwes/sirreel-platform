@@ -177,7 +177,7 @@ async function main() {
   // Domains come from the COGNITO submissions — the Company table's own
   // website/billingEmail columns are empty across the book, which is the
   // dead end recorded in the CRM outreach work. Different inputs here.
-  const lines = fs.readFileSync('tmp/annual-agreements.tsv', 'utf8').split('\n').filter((l) => l.trim())
+  const lines = fs.readFileSync('journals/annual-agreements.tsv', 'utf8').split('\n').filter((l) => l.trim())
   const now = Date.now()
   const cognito = new Map<string, Set<string>>()
   for (const line of lines.slice(1)) {

@@ -45,7 +45,7 @@ import { put } from '@vercel/blob'
 import { prisma } from '../src/lib/prisma'
 import { generateCounterPdf } from '../src/lib/contracts/generateCounterPdf'
 
-const TSV = path.join(process.cwd(), 'tmp/annual-agreements.tsv')
+const TSV = path.join(process.cwd(), 'journals/annual-agreements.tsv')
 const WRITE = process.argv.includes('--write')
 
 interface Row {
