@@ -74,10 +74,14 @@ export function JobDriversSection({
   vehicles,
   pendingHolds = [],
   onChanged,
+  onAssign,
 }: {
   vehicles: Vehicle[]
   pendingHolds?: PendingHold[]
   onChanged?: () => void
+  /** Opens the unit picker in place. Without it the row falls back to
+   *  the calendar deep link, which a phone cannot use — see the job page. */
+  onAssign?: (bookingItemId: string) => void
 }) {
   const [formOpen, setFormOpen] = useState(false)
   const [target, setTarget] = useState<string | null>(null)
@@ -339,17 +343,25 @@ export function JobDriversSection({
                   {h.category}{h.quantity > 1 ? ` ×${h.quantity}` : ''}
                 </div>
                 <div className="text-[11px] text-zinc-600">
-                  No unit assigned yet — pick one on the calendar to name a driver
+                  No unit assigned yet — pick one to name a driver
                 </div>
               </div>
-              {h.startDate && (
+              {onAssign ? (
+                <button
+                  type="button"
+                  onClick={() => onAssign(h.bookingItemId)}
+                  className="flex-shrink-0 min-h-[44px] px-2 text-[13px] font-semibold text-amber-700 hover:text-amber-800"
+                >
+                  Assign a unit →
+                </button>
+              ) : h.startDate ? (
                 <a
                   href={`/gantt?assign=${encodeURIComponent(h.bookingItemId)}&date=${h.startDate.slice(0, 10)}`}
                   className="flex-shrink-0 text-[12px] font-semibold text-amber-700 hover:text-amber-700"
                 >
                   Assign a unit →
                 </a>
-              )}
+              ) : null}
             </div>
           ))}
         </div>

@@ -278,9 +278,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <header className="flex items-start justify-between px-6 py-4 border-b border-zinc-200">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg shadow-xl w-full max-w-3xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
+        <header className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-zinc-200 sticky top-0 bg-white z-10">
           <div className="flex items-start gap-3">
             {data && <CategoryThumb categoryId={data.category.id} alt={data.category.name} />}
             <div>
@@ -293,10 +293,10 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
             )}
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>
+          <button onClick={onClose} aria-label="Close" className="min-h-[44px] min-w-[44px] -mr-2 -mt-2 text-zinc-500 hover:text-zinc-800 text-2xl leading-none">×</button>
         </header>
 
-        <div className="px-6 py-4 space-y-4">
+        <div className="px-4 sm:px-6 py-4 space-y-4">
           {loading && <div className="text-sm text-zinc-500">Loading…</div>}
 
           {data && (
@@ -472,18 +472,18 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                       const isBooked = c.state === 'booked'
                       const isPendingThis = submitting === c.assetId
                       return (
-                        <li key={c.assetId} className="px-3 py-2 text-sm flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-zinc-900">{c.unitName}</span>
+                        <li key={c.assetId} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
+                            <span className="font-mono text-[15px] sm:text-sm text-zinc-900">{c.unitName}</span>
                             <span className="text-xs text-zinc-500">{c.tier}</span>
                             <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
-                              {c.state}
+                              {STATE_LABEL[c.state] ?? c.state}
                             </span>
                           </div>
                           <button
                             onClick={() => assign(c, false)}
                             disabled={isBooked || !!submitting}
-                            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-xs font-medium px-2.5 py-1 rounded"
+                            className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
                           >
                             {isPendingThis ? 'Assigning…' : 'Assign'}
                           </button>

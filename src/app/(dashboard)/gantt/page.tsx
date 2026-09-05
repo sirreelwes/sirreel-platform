@@ -24,6 +24,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 import { GanttBoard } from '@/components/schedule/GanttBoard'
 import { AgendaView } from '@/components/scheduling/AgendaView'
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle'
@@ -47,6 +48,28 @@ function ScheduleSurface() {
   const narrow = useIsNarrow()
   const searchParams = useSearchParams()
   const forced = searchParams?.get('view')
+
+  // /gantt?assign=<bookingItemId> on a NARROW screen. The timeline board
+  // consumes this param itself, but a phone lands on the Agenda, where the
+  // board is never mounted — so the picker never opened and the link read
+  // as a dead end (Wes 2026-09-05, trying to put Cube 29 on a hold from
+  // his phone). Read once, strip, and open the same picker here.
+  const [agendaAssign, setAgendaAssign] = useState<string | null>(null)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const assign = sp.get('assign')
+    if (assign && /^[A-Za-z0-9_-]{6,64}$/.test(assign)) {
+      const view = sp.get('view')
+      const isNarrow = window.matchMedia('(max-width: 767px)').matches
+      const agenda = view === 'agenda' || (isNarrow && view !== 'timeline')
+      if (agenda) {
+        setAgendaAssign(assign)
+        sp.delete('assign')
+        const qs = sp.toString()
+        window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+      }
+    }
+  }, [])
 
   if (narrow === null) {
     return <div className="p-6 text-sm text-gray-400">Loading…</div>
@@ -93,6 +116,13 @@ function ScheduleSurface() {
         <ScheduleViewToggle current="agenda" />
       </header>
       <AgendaView />
+      {agendaAssign && (
+        <AssignUnitsModal
+          bookingItemId={agendaAssign}
+          bufferDays={1}
+          onClose={() => setAgendaAssign(null)}
+        />
+      )}
     </div>
   )
 }

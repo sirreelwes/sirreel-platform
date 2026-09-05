@@ -46,6 +46,7 @@ import { isRedlineAwaitingAction } from '@/lib/jobs/redlineAlert';
 import { isPlaceholderJobName } from '@/lib/jobs/displayName';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
@@ -460,6 +461,12 @@ export default function JobDetailPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
+  // "Assign a unit" opens the picker HERE (Wes 2026-09-05, from his phone:
+  // "there was never an opportunity to choose the specific truck"). The
+  // old path deep-linked to /gantt?assign=, which on a narrow screen
+  // renders the Agenda view — and the picker only lived on the timeline
+  // board, so a phone never got the list of trucks at all.
+  const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
   // Which filed certificate is open in the review desk (approve/reject, AI
   // re-run, named-insured mismatch + its fixes).
   const [reviewCoiId, setReviewCoiId] = useState<string | null>(null);
@@ -2501,11 +2508,12 @@ const driverTone = (d: any): string => {
                 before this they only surfaced in the Drivers card, so a
                 held category read as "nothing reserved" on this panel. */}
             {pendingHolds.map((h) => (
-              <Link
+              <button
                 key={h.bookingItemId}
-                href={`/gantt?assign=${encodeURIComponent(h.bookingItemId)}${h.startDate ? `&date=${h.startDate.slice(0, 10)}` : ''}`}
-                title="Held at category level — open the calendar to assign a specific unit"
-                className="group rounded-xl border border-dashed border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                type="button"
+                onClick={() => setAssignHoldId(h.bookingItemId)}
+                title="Held at category level — pick the specific unit"
+                className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">
@@ -2521,8 +2529,8 @@ const driverTone = (d: any): string => {
                     {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
                   </div>
                 )}
-                <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">Assign a unit on the calendar →</div>
-              </Link>
+                <div className="mt-1.5 text-[11px] font-semibold text-amber-700">Assign a unit →</div>
+              </button>
             ))}
           </div>
         )}
@@ -2543,7 +2551,17 @@ const driverTone = (d: any): string => {
         }))}
         pendingHolds={pendingHolds}
         onChanged={load}
+        onAssign={(bookingItemId) => setAssignHoldId(bookingItemId)}
       />
+      )}
+
+      {assignHoldId && (
+        <AssignUnitsModal
+          bookingItemId={assignHoldId}
+          bufferDays={1}
+          onClose={() => setAssignHoldId(null)}
+          onChanged={load}
+        />
       )}
 
       {/* Sub-rentals — the partner-sourced units on this job. Self-hides
