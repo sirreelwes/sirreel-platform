@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 import { KeyRound } from 'lucide-react'
 import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
+import { DriverSelfCheckoutCard, type SelfCheckoutView } from '@/components/drivers/DriverSelfCheckoutCard'
 
 type Side = 'front' | 'back'
 
@@ -53,6 +54,8 @@ interface DriveData {
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
+  checkout: SelfCheckoutView
+  bookingAssignmentId: string
 }
 
 const fmtDay = (ymd: string) =>
@@ -313,6 +316,21 @@ export default function DriverJobPage({ params }: { params: { token: string } })
               of this screen — the gate code is the same one every driver uses.
             </p>
           </Section>
+        )}
+
+        {/* The driver's own check-out — blind pickups only. Sits right
+            under the codes because it is the next thing they do after
+            opening the lockbox (Wes 2026-09-05: four sides, mileage or an
+            odometer shot, then check it out). */}
+        {(data.checkout.enabled || data.checkout.done || data.checkout.reason === 'already-done') && (
+          <DriverSelfCheckoutCard
+            token={token}
+            bookingAssignmentId={data.bookingAssignmentId}
+            unitName={data.vehicle.unitName}
+            state={data.checkout}
+            licenceDone={licenceDone}
+            onDone={load}
+          />
         )}
 
         {data.loadList.length > 0 && (

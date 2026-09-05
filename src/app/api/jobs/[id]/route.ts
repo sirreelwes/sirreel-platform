@@ -236,6 +236,11 @@ export async function GET(
                         emailSentTo: true,
                         firstViewedAt: true,
                         invitedBySource: true,
+                        // A driver self check-out (blind pickup) stamps
+                        // these; the job page shows when and at what mileage.
+                        pickedUpAt: true,
+                        pickupMileage: true,
+                        checkoutInspectionId: true,
                         driver: {
                           select: {
                             id: true, firstName: true, lastName: true, phone: true,

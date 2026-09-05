@@ -4,6 +4,7 @@ import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
 import { listHours } from '@/lib/drivers/hoursStore'
 import { hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import { todayPacific } from '@/lib/sub-rentals/driverUnitView'
+import { selfCheckoutState } from '@/lib/drivers/selfCheckout'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +39,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     where: { token },
     select: {
       id: true, status: true, expiresAt: true, firstViewedAt: true, gateCodeViewedAt: true,
+      pickedUpAt: true, pickupMileage: true, checkoutInspectionId: true,
       driver: {
         select: {
           id: true, firstName: true, lastName: true, phone: true, email: true,
@@ -47,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       },
       bookingAssignment: {
         select: {
-          id: true, startDate: true, endDate: true,
+          id: true, startDate: true, endDate: true, status: true,
           asset: {
             select: {
               unitName: true, make: true, model: true, licensePlate: true,
@@ -161,6 +163,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const gate = evaluateLicenseGate(da.driver)
+
+  // The driver's own check-out (blind pickup). What they already did, if
+  // anything, and whether the step is open — see lib/drivers/selfCheckout.
+  const selfCheckout = await (async () => {
+    let done = null
+    if (da.pickedUpAt) {
+      const photoCount = da.checkoutInspectionId
+        ? await prisma.inspectionPhoto.count({ where: { inspectionId: da.checkoutInspectionId } })
+        : 0
+      const insp = da.checkoutInspectionId
+        ? await prisma.inspection.findUnique({ where: { id: da.checkoutInspectionId }, select: { fuelLevel: true } })
+        : null
+      done = { at: da.pickedUpAt.toISOString(), mileage: da.pickupMileage, fuelLevel: insp?.fuelLevel ?? null, photoCount }
+    }
+    return selfCheckoutState({
+      driverAssignment: { status: da.status, pickedUpAt: da.pickedUpAt, pickupMileage: da.pickupMileage },
+      bookingAssignment: { status: asg.status },
+      isBlindPickup,
+      driver: da.driver,
+      done,
+    })
+  })()
+
   const startDate = asg.startDate.toISOString().slice(0, 10)
   const endDate = asg.endDate.toISOString().slice(0, 10)
 
@@ -210,5 +235,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       lockboxCode: isBlindPickup ? (asg.asset.accessCode ?? null) : null,
     },
     loadList,
+    checkout: selfCheckout,
+    // The photo stager keys blobs under the assignment; the page needs
+    // the id only to hand it back to that route.
+    bookingAssignmentId: asg.id,
   })
 }

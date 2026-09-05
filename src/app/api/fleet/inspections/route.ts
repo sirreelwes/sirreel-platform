@@ -215,6 +215,7 @@ export async function GET(req: NextRequest) {
       fuelLevel: true,
       notes: true,
       inspectedByUser: { select: { name: true, email: true } },
+      inspectedByDriver: { select: { firstName: true, lastName: true } },
       bookingAssignment: {
         select: { id: true, asset: { select: { unitName: true } } },
       },

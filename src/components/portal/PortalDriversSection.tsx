@@ -31,6 +31,7 @@ interface DriverRow {
   ready: boolean
   /** They have the keys. */
   pickedUp?: boolean
+  pickedUpAt?: string | null
   /** Pending only — a driver who has sent a licence is staff-only to change. */
   removable?: boolean
   /** Hours the driver logged on their page — theirs, shown to the production. */
@@ -269,7 +270,8 @@ export function PortalDriversSection() {
                           : d.ready ? 'bg-emerald-100 text-emerald-700'
                           : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {d.pickedUp ? 'Collected the vehicle'
+                        {d.pickedUp
+                          ? `Collected the vehicle${d.pickedUpAt ? ' · ' + new Date(d.pickedUpAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}`
                           : d.ready ? 'License received'
                           : d.opened ? 'Opened — no license yet' : 'Emailed'}
                       </span>

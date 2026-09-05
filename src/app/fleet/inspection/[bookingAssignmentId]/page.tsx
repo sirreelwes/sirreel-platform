@@ -67,7 +67,11 @@ export default async function FleetInspectionPage({ params }: Params) {
       },
       inspections: {
         where: { type: 'CHECKOUT' },
-        select: { id: true, inspectionDate: true, inspectedByUser: { select: { name: true } } },
+        select: {
+          id: true, inspectionDate: true,
+          inspectedByUser: { select: { name: true } },
+          inspectedByDriver: { select: { firstName: true, lastName: true } },
+        },
         take: 1,
       },
     },
@@ -108,7 +112,7 @@ export default async function FleetInspectionPage({ params }: Params) {
             <CheckCircle2 size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
             <p className="text-white font-semibold">Inspection already completed</p>
             <p className="text-zinc-400 text-sm mt-1">
-              {existing.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by {existing.inspectedByUser.name || 'fleet'}
+              {existing.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by {existing.inspectedByUser?.name || (existing.inspectedByDriver ? `${existing.inspectedByDriver.firstName} ${existing.inspectedByDriver.lastName}`.trim() + ' (driver, self check-out)' : 'fleet')}
             </p>
             {/* The walkaround's actual next step: the driver turns up and the
                 keys move. Without this the handover screen has no entry point

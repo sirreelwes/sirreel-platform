@@ -69,7 +69,7 @@ async function resolveClientJobVehicles(req: NextRequest) {
         where: { status: { not: 'CANCELLED' } },
         orderBy: { invitedAt: 'desc' },
         select: {
-          id: true, status: true, emailSentTo: true, firstViewedAt: true,
+          id: true, status: true, emailSentTo: true, firstViewedAt: true, pickedUpAt: true,
           driver: { select: { firstName: true, lastName: true } },
           driverHours: { select: { hours: true } },
         },
@@ -140,6 +140,7 @@ export async function GET(req: NextRequest) {
         opened: !!d.firstViewedAt,
         ready: d.status === 'READY' || d.status === 'PICKED_UP',
         pickedUp: d.status === 'PICKED_UP',
+        pickedUpAt: d.pickedUpAt ? d.pickedUpAt.toISOString() : null,
         // The server decides removability, not the browser — the DELETE
         // re-checks it anyway, but this keeps the button off rows that
         // would only bounce.

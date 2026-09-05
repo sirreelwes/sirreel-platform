@@ -117,6 +117,7 @@ export async function buildInspectionReport(
           mileageAtInspection: true,
           notes: true,
           inspectedByUser: { select: { name: true } },
+          inspectedByDriver: { select: { firstName: true, lastName: true } },
           photos: {
             select: { id: true, position: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
@@ -143,7 +144,14 @@ export async function buildInspectionReport(
     return {
       inspectionId: i.id,
       at: i.inspectionDate.toISOString(),
-      inspector: i.inspectedByUser?.name ?? null,
+      // Staff name, or the driver's on a blind pickup where the driver
+      // did the walk-around themselves — the report should say who was
+      // holding the phone.
+      inspector:
+        i.inspectedByUser?.name ??
+        (i.inspectedByDriver
+          ? `${i.inspectedByDriver.firstName} ${i.inspectedByDriver.lastName}`.trim() + ' (driver)'
+          : null),
       condition: i.overallCondition,
       fuelLevel: i.fuelLevel,
       mileage: i.mileageAtInspection,

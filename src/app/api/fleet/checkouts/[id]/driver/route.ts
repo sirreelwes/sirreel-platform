@@ -149,11 +149,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           bookingAssignmentId: rec.bookingAssignmentId,
         },
       },
-      update: { status: 'PICKED_UP' },
+      update: { status: 'PICKED_UP', pickedUpAt: new Date() },
       create: {
         driverId,
         bookingAssignmentId: rec.bookingAssignmentId,
         status: 'PICKED_UP',
+        pickedUpAt: new Date(),
         // A walk-up driver gets a live token like any other: they still
         // need the gate code to get out and the drop-off instructions to
         // come back. Not emailed — they're standing here.

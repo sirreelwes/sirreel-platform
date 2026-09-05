@@ -55,7 +55,7 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
       bookingItem: {
         select: {
           booking: {
-            select: { jobName: true, company: { select: { name: true } } },
+            select: { jobId: true, jobName: true, company: { select: { name: true } } },
           },
         },
       },
@@ -128,6 +128,16 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
   const url = `${base}/drive/${token}`
   const booking = assignment.bookingItem.booking
 
+  // Unattended pickup? Then the email should say so up front — the page
+  // carries the gate and lockbox codes and the driver's own check-out
+  // step, and a driver who expects to be met will not look for them.
+  const unattendedPickup = booking.jobId
+    ? !!(await prisma.order.findFirst({
+        where: { jobId: booking.jobId, status: { not: 'CANCELLED' }, blindPickup: true },
+        select: { id: true },
+      }))
+    : false
+
   const mail = buildDriverAssignmentEmail({
     driverFirstName: driver.firstName,
     unitName: assignment.asset.unitName,
@@ -137,6 +147,7 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
     pickupDate: assignment.startDate.toISOString().slice(0, 10),
     jobLink: url,
     needsLicense,
+    unattendedPickup,
   })
 
   const emailResult = await sendAgreementEmail({

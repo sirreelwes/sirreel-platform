@@ -32,6 +32,10 @@ interface DriverRow {
   emailSentTo: string | null
   firstViewedAt: string | null
   invitedBySource: string
+  /** Stamped by a driver self check-out (blind pickup) or the staff handover. */
+  pickedUpAt?: string | null
+  pickupMileage?: number | null
+  checkoutInspectionId?: string | null
   driver: {
     id: string; firstName: string; lastName: string; phone: string | null
     licenseFrontUrl: string | null; licenseBackUrl: string | null
@@ -275,12 +279,27 @@ export function JobDriversSection({
                           {d.emailSentTo}
                           {d.invitedBySource === 'CLIENT' && ' · named by client'}
                         </div>
+                        {d.status === 'PICKED_UP' && d.pickedUpAt && (
+                          <div className="text-[11px] text-violet-700 truncate">
+                            {d.checkoutInspectionId ? 'Checked out by the driver' : 'Handed over'}
+                            {' · '}
+                            {new Date(d.pickedUpAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {d.pickupMileage != null && ` · ${d.pickupMileage.toLocaleString('en-US')} mi`}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {hasImages && (
                           <a href={`/api/drivers/${dr.id}/license/front`} target="_blank" rel="noopener noreferrer"
                             className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700 hover:border-amber-400">
                             Licence ↗
+                          </a>
+                        )}
+                        {d.status === 'PICKED_UP' && d.checkoutInspectionId && (
+                          <a href={`/api/fleet/inspections/report/${v.bookingAssignmentId}`} target="_blank" rel="noopener noreferrer"
+                            title="The driver's check-out photos and mileage, as a PDF"
+                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700 hover:border-amber-400">
+                            Photos ↗
                           </a>
                         )}
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>

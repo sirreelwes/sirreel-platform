@@ -113,7 +113,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
     },
     orderBy: { createdAt: 'asc' },
   })
-  const shape = (i: { id: string; inspectionDate: Date; inspectedByUser: { name: string | null } } | undefined) =>
+  const shape = (i: { id: string; inspectionDate: Date; inspectedByUser: { name: string | null } | null } | undefined) =>
     i
       ? {
           id: i.id,

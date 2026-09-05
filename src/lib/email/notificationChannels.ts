@@ -47,6 +47,7 @@ export type NotificationChannelKey =
   | 'portal-opens'
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
+  | 'driver-checkouts'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -58,6 +59,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'driver-checkouts',
+    label: 'Driver self check-outs',
+    description:
+      'A driver on an UNATTENDED (blind) pickup photographed the vehicle and checked it out from their driver page — nobody from SirReel was there. One email per check-out with the mileage, the photo count, whether the driver reported existing damage, whether their licence has been checked yet, and a link to the condition report. Defaults to the hq@ feed plus Wes (Wes 2026-09-05).',
+    defaults: () => [hqNotifyInbox(), 'wes@sirreel.com'],
+  },
   {
     key: 'vendor-portal',
     label: 'Partner portal activity',

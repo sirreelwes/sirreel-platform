@@ -26,6 +26,8 @@ export interface DriverAssignmentEmailInput {
   pickupDate?: string | null
   jobLink: string
   needsLicense: boolean
+  /** Blind pickup — nobody meets the driver; the page carries codes + check-out. */
+  unattendedPickup?: boolean
 }
 
 export interface BuiltEmail {
@@ -72,10 +74,21 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
       )
     : ''
 
+  const unattended = input.unattendedPickup
+    ? calloutBox(
+        `<strong>Nobody will meet you at the yard.</strong><br/>` +
+          `This is an unattended pickup. Your driver page has the gate code, the lockbox code for the ` +
+          `keys, and the pickup instructions &mdash; and before you drive off it will ask you to ` +
+          `photograph all four sides of the vehicle and note the mileage. That takes about two minutes ` +
+          `and is your record of how the vehicle was when you took it.`,
+      )
+    : ''
+
   const bodyHtml = [
     p(`${greeting} you&rsquo;ve been listed as the driver for a SirReel production vehicle.`),
     detailTable(rows),
     licenseAsk,
+    unattended,
     p(
       `Your driver page has everything you need on the day — where to go, pickup and ` +
         `drop-off instructions, what&rsquo;s loaded on the vehicle, and how to reach someone ` +
@@ -111,6 +124,15 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
       ? [
           `BEFORE YOU CAN TAKE THE VEHICLE:`,
           `We need a photo of your driver's license, both sides. About a minute from your phone.`,
+          ``,
+        ]
+      : []),
+    ...(input.unattendedPickup
+      ? [
+          `NOBODY WILL MEET YOU AT THE YARD.`,
+          `This is an unattended pickup. Your driver page has the gate code, the lockbox code for the keys,`,
+          `and the pickup instructions. Before you drive off it will ask you to photograph all four sides`,
+          `of the vehicle and note the mileage - about two minutes, and your record of how you found it.`,
           ``,
         ]
       : []),

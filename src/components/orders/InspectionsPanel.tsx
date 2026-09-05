@@ -29,7 +29,9 @@ interface PanelInspection {
   mileageAtInspection: number | null;
   fuelLevel: string | null;
   notes: string | null;
-  inspectedByUser: { name: string | null; email: string };
+  inspectedByUser: { name: string | null; email: string } | null;
+  /** Set instead of inspectedByUser when the driver did the walk-around (blind pickup). */
+  inspectedByDriver?: { firstName: string; lastName: string } | null;
   bookingAssignment: { id: string; asset: { unitName: string } } | null;
   photos: { id: string; filename: string | null }[];
   damageItems: {
@@ -80,7 +82,11 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
                 {insp.fuelLevel && <span className="text-zinc-500 font-normal"> · fuel {insp.fuelLevel}</span>}
               </div>
               <div className="text-zinc-500 text-xs">
-                {new Date(insp.inspectionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} — {insp.inspectedByUser.name || insp.inspectedByUser.email}
+                {new Date(insp.inspectionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} — {insp.inspectedByUser
+                  ? (insp.inspectedByUser.name || insp.inspectedByUser.email)
+                  : insp.inspectedByDriver
+                    ? `${insp.inspectedByDriver.firstName} ${insp.inspectedByDriver.lastName}`.trim() + ' (driver, self check-out)'
+                    : 'fleet'}
               </div>
             </div>
             {insp.notes && <p className="text-zinc-400 text-sm mb-2">{insp.notes}</p>}

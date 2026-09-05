@@ -90,6 +90,7 @@ export default async function FleetReturnPage({ params }: Params) {
           mileageAtInspection: true,
           notes: true,
           inspectedByUser: { select: { name: true } },
+          inspectedByDriver: { select: { firstName: true, lastName: true } },
           // The check-out walk-around, laid beside the new shots
           // slot-by-slot. Ordered so the guided slots come before
           // anything free-form or pre-guided-capture (position null).
@@ -158,7 +159,7 @@ export default async function FleetReturnPage({ params }: Params) {
           <p className="text-white font-semibold">Already checked in</p>
           <p className="text-zinc-400 text-sm mt-1">
             {returnRow.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by{' '}
-            {returnRow.inspectedByUser.name || 'fleet'}
+            {returnRow.inspectedByUser?.name || 'fleet'}
           </p>
           <p className="text-zinc-500 text-xs mt-2">
             Condition {returnRow.overallCondition.toLowerCase()}
@@ -196,7 +197,12 @@ export default async function FleetReturnPage({ params }: Params) {
   const checkout: CheckoutSnapshot | null = checkoutRow
     ? {
         inspectionDate: checkoutRow.inspectionDate.toISOString(),
-        inspectorName: checkoutRow.inspectedByUser.name,
+        // A blind pickup's check-out was done by the DRIVER, not a tech.
+        inspectorName:
+          checkoutRow.inspectedByUser?.name ??
+          (checkoutRow.inspectedByDriver
+            ? `${checkoutRow.inspectedByDriver.firstName} ${checkoutRow.inspectedByDriver.lastName}`.trim() + ' (driver)'
+            : null),
         overallCondition: checkoutRow.overallCondition,
         fuelLevel: checkoutRow.fuelLevel,
         mileage: checkoutRow.mileageAtInspection,

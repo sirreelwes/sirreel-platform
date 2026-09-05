@@ -70,11 +70,27 @@ export function GuidedPhotoCapture({
   bookingAssignmentId,
   compareTo,
   onChange,
+  uploadEndpoint = '/api/fleet/inspections/photos/stage',
+  requiredPositions = REQUIRED_POSITIONS,
+  optionalPositions = [],
+  title = 'Walk-around',
 }: {
   bookingAssignmentId: string;
   /** Check-out photos keyed by position — return screen only. */
   compareTo?: ComparePhoto[];
   onChange: (photos: StagedPhoto[]) => void;
+  /**
+   * Where each photo is POSTed as taken. The staff form uses the
+   * session-gated fleet route; the driver's page (blind pickup,
+   * 2026-09-05) passes its own token-gated twin. Same multipart shape,
+   * same response, same staging prefix — only the credential differs.
+   */
+  uploadEndpoint?: string;
+  /** Slots that count toward "N of M". Default: the full seven. */
+  requiredPositions?: readonly PhotoPosition[];
+  /** Slots offered but not counted — rendered after the required ones. */
+  optionalPositions?: readonly PhotoPosition[];
+  title?: string;
 }) {
   const [photos, setPhotos] = useState<StagedPhoto[]>([]);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -99,7 +115,7 @@ export function GuidedPhotoCapture({
         fd.append('file', file);
         fd.append('bookingAssignmentId', bookingAssignmentId);
         if (draft.position) fd.append('position', draft.position);
-        const res = await fetch('/api/fleet/inspections/photos/stage', { method: 'POST', body: fd });
+        const res = await fetch(uploadEndpoint, { method: 'POST', body: fd });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `upload failed (${res.status})`);
         patch(draft.localId, {
@@ -115,7 +131,7 @@ export function GuidedPhotoCapture({
         });
       }
     },
-    [bookingAssignmentId],
+    [bookingAssignmentId, uploadEndpoint],
   );
 
   // Files are held so a failed upload can be retried without asking the
@@ -175,7 +191,7 @@ export function GuidedPhotoCapture({
   );
   const byPosition = new Map(photos.filter((p) => p.position).map((p) => [p.position as string, p]));
   const damagePhotos = photos.filter((p) => p.position === DAMAGE_POSITION);
-  const doneRequired = REQUIRED_POSITIONS.filter((s) => byPosition.has(s.id)).length;
+  const doneRequired = requiredPositions.filter((s) => byPosition.has(s.id)).length;
 
   const Overlay = ({ p }: { p: StagedPhoto }) => (
     <>
@@ -210,7 +226,7 @@ export function GuidedPhotoCapture({
     </>
   );
 
-  function Slot({ slot }: { slot: PhotoPosition }) {
+  function Slot({ slot, optional }: { slot: PhotoPosition; optional?: boolean }) {
     const taken = byPosition.get(slot.id);
     const before = compareByPosition.get(slot.id);
     return (
@@ -223,7 +239,7 @@ export function GuidedPhotoCapture({
               Got it
             </span>
           ) : (
-            <span className="text-zinc-500 text-[11px]">Needed</span>
+            <span className="text-zinc-500 text-[11px]">{optional ? 'Optional' : 'Needed'}</span>
           )}
         </div>
         <p className="text-zinc-500 text-xs mb-2">{slot.hint}</p>
@@ -290,15 +306,18 @@ export function GuidedPhotoCapture({
       />
 
       <div className="flex items-baseline justify-between">
-        <label className="text-zinc-400 text-sm">Walk-around</label>
-        <span className={`text-xs font-medium ${doneRequired === REQUIRED_POSITIONS.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
-          {doneRequired} of {REQUIRED_POSITIONS.length}
+        <label className="text-zinc-400 text-sm">{title}</label>
+        <span className={`text-xs font-medium ${doneRequired === requiredPositions.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
+          {doneRequired} of {requiredPositions.length}
         </span>
       </div>
 
       <div className="space-y-3">
-        {REQUIRED_POSITIONS.map((slot) => (
+        {requiredPositions.map((slot) => (
           <Slot key={slot.id} slot={slot} />
+        ))}
+        {optionalPositions.map((slot) => (
+          <Slot key={slot.id} slot={slot} optional />
         ))}
       </div>
 

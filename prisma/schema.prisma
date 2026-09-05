@@ -899,6 +899,8 @@ model Driver {
   checkoutRecords   CheckoutRecord[]
   dispatchTasks     DispatchTask[]     @relation("TaskDriver")
   driverAssignments DriverAssignment[]
+  /// Walk-arounds the driver did themselves (blind pickups).
+  selfInspections   Inspection[]       @relation("InspectedByDriver")
 
   @@map("drivers")
 }
@@ -945,6 +947,17 @@ model DriverAssignment {
   /// leaked code can be traced to who had it and from when — the price
   /// of putting a shared secret on a page.
   gateCodeViewedAt DateTime? @map("gate_code_viewed_at")
+
+  /// When the driver took the vehicle. Stamped by the driver's own
+  /// check-out on a blind pickup (self check-out) and by the staff
+  /// handover route; the PICKED_UP status alone never said WHEN.
+  pickedUpAt DateTime? @map("picked_up_at")
+  /// Odometer the driver typed at self check-out. Kept here as well as
+  /// on the Inspection so the job page can show it without a join.
+  pickupMileage Int? @map("pickup_mileage")
+  /// The CHECKOUT Inspection the driver's photos landed on. Plain id, no
+  /// relation — a staff walk-around may already own that row.
+  checkoutInspectionId String? @map("checkout_inspection_id")
 
   notes String? @db.Text
 
@@ -1259,7 +1272,14 @@ model CheckoutRecord {
   // before the client's driver is known; the driver attaches at
   // physical pickup. Relaxed with the table empty — approved 2026-07-02.
   driverId            String? @map("driver_id")
-  checkedOutBy        String  @map("checked_out_by") // Fleet team member
+  /// Fleet team member. NULL on a driver self check-out (blind pickup —
+  /// nobody from SirReel handed the keys over; see `selfCheckout`).
+  checkedOutBy        String? @map("checked_out_by")
+  /// The driver checked the vehicle out themselves from their driver
+  /// page: photos, mileage, and a tap. `driverId` is then the person who
+  /// did it and `licenseVerified` records whether staff had checked their
+  /// licence by that moment.
+  selfCheckout        Boolean @default(false) @map("self_checkout")
 
   // Checkout
   checkoutTime         DateTime @map("checkout_time")
@@ -1287,7 +1307,7 @@ model CheckoutRecord {
   bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
   asset             Asset             @relation(fields: [assetId], references: [id])
   driver            Driver?           @relation(fields: [driverId], references: [id])
-  checkedOutByUser  User              @relation("CheckedOutBy", fields: [checkedOutBy], references: [id])
+  checkedOutByUser  User?             @relation("CheckedOutBy", fields: [checkedOutBy], references: [id])
 
   @@map("checkout_records")
 }
@@ -1441,7 +1461,14 @@ model Inspection {
   assetId             String           @map("asset_id")
   bookingAssignmentId String?          @map("booking_assignment_id")
   type                InspectionType
-  inspectedBy         String           @map("inspected_by")
+  /// The HQ user who did the walk-around. NULL when the DRIVER did it —
+  /// a blind (unattended) pickup has nobody from SirReel on site, so the
+  /// driver photographs the truck from their own page and the record
+  /// carries `inspectedByDriverId` instead (2026-09-05, Wes: "make the
+  /// driver take pictures of the vehicle, 4 sides, confirm mileage").
+  /// Exactly one of the two is set on every row written since then.
+  inspectedBy         String?          @map("inspected_by")
+  inspectedByDriverId String?          @map("inspected_by_driver_id")
   inspectionDate      DateTime         @map("inspection_date")
   overallCondition    VehicleCondition @map("overall_condition")
   mileageAtInspection Int?             @map("mileage_at_inspection")
@@ -1459,7 +1486,8 @@ model Inspection {
   // Relations
   asset             Asset              @relation(fields: [assetId], references: [id])
   bookingAssignment BookingAssignment? @relation("AssignmentInspections", fields: [bookingAssignmentId], references: [id])
-  inspectedByUser   User               @relation("InspectedBy", fields: [inspectedBy], references: [id])
+  inspectedByUser   User?              @relation("InspectedBy", fields: [inspectedBy], references: [id])
+  inspectedByDriver Driver?            @relation("InspectedByDriver", fields: [inspectedByDriverId], references: [id])
   damageItems       DamageItem[]
   photos            InspectionPhoto[]
 
