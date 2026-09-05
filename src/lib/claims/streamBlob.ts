@@ -57,10 +57,19 @@ export async function streamPrivateBlobAsResponse(args: {
   /** Force `attachment` even for a type that would otherwise render inline. */
   forceDownload?: boolean
 }): Promise<Response> {
+  // A missing BLOB_READ_WRITE_TOKEN is configuration, not an outage —
+  // say so (503) rather than folding it into the 502 every real blob
+  // error gets. 2026-09-05: a dev box without the token 502'd every
+  // category thumbnail with "blob unreachable" and nothing in the log.
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error('[streamPrivateBlobAsResponse] BLOB_READ_WRITE_TOKEN is not set — cannot serve', args.fileUrl)
+    return NextResponse.json({ error: 'blob storage not configured' }, { status: 503 })
+  }
   let blob
   try {
     blob = await getBlob(args.fileUrl, { access: 'private' })
-  } catch {
+  } catch (err) {
+    console.error('[streamPrivateBlobAsResponse] blob fetch failed:', err instanceof Error ? err.message : err, args.fileUrl)
     return NextResponse.json({ error: 'blob unreachable' }, { status: 502 })
   }
   if (!blob || blob.statusCode !== 200 || !blob.stream) {
