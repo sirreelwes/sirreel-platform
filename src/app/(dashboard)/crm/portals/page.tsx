@@ -19,7 +19,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2, Link2 } from 'lucide-react'
+import { Building2, Link2, Truck } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -106,6 +106,26 @@ export default async function CompanyPortalsPage() {
       },
     },
   })
+  // Vendor portals: one link per sub-rental the vendor was sent.
+  const vendorPortals = await prisma.subRental.findMany({
+    where: { vendorToken: { not: null } },
+    orderBy: { vendorTokenMintedAt: 'desc' },
+    take: 40,
+    select: {
+      id: true,
+      status: true,
+      vendorTokenMintedAt: true,
+      vendorNotifiedAt: true,
+      vendorViewedAt: true,
+      vendorViewCount: true,
+      vendorHoldRequestedAt: true,
+      vendor: { select: { name: true } },
+      subcontractedVehicle: { select: { name: true } },
+      order: { select: { orderNumber: true, job: { select: { id: true, jobCode: true, name: true } } } },
+      job: { select: { id: true, jobCode: true, name: true } },
+    },
+  })
+
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
 
@@ -115,9 +135,10 @@ export default async function CompanyPortalsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-lt-fg">Portals</h1>
           <p className="text-sm text-lt-fg2 mt-1 max-w-[70ch]">
-            Two kinds. <strong className="text-lt-fg">Company portals</strong> — executives who see
+            Three kinds. <strong className="text-lt-fg">Company portals</strong> — executives who see
             their whole account. <strong className="text-lt-fg">Job portals</strong> — the paperwork
-            link each show&apos;s contact gets. Both show who has opened what.
+            link each show&apos;s contact gets. <strong className="text-lt-fg">Vendor portals</strong> —
+            a partner&apos;s link for a sub-rental. All three show who has opened what.
             {!canEdit && ' Company terms here are changed by Wes, Dani or Jose.'}
           </p>
         </div>
@@ -205,6 +226,57 @@ export default async function CompanyPortalsPage() {
                   {dead && (
                     <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
                       {p.revokedAt ? 'revoked' : 'link expired'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Vendor portals ───────────────────────────────────────────
+          Wes 2026-09-05: "Will Vendor portals also fold into that tab?"
+          Yes. A partner's link for a sub-rental: sent, opened, acted. */}
+      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mt-10 mb-3">
+        Vendor portals · latest {vendorPortals.length}
+      </h2>
+      {vendorPortals.length === 0 ? (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+          <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+          <p className="text-sm text-lt-fg2">No vendor links have been issued yet.</p>
+        </div>
+      ) : (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
+          {vendorPortals.map((v) => {
+            const job = v.order?.job ?? v.job
+            const opened = !!v.vendorViewedAt
+            const acted = !!v.vendorHoldRequestedAt
+            return (
+              <div key={v.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-lt-fg truncate">{v.vendor.name}</span>
+                    {v.subcontractedVehicle?.name && <span className="text-xs text-lt-fg2 truncate">· {v.subcontractedVehicle.name}</span>}
+                  </div>
+                  <div className="text-xs text-lt-fg2 mt-0.5 truncate">
+                    {job ? (
+                      <Link href={`/jobs/${job.id}`} className="hover:underline">{job.name || job.jobCode}</Link>
+                    ) : 'No job'}
+                    {v.order?.orderNumber ? ` · ${v.order.orderNumber}` : ''}
+                    {' · '}<span className="text-lt-fg3">{v.status.toLowerCase().replace(/_/g, ' ')}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:shrink-0 text-[11px] font-semibold">
+                  <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
+                    {v.vendorNotifiedAt ? `sent ${fmtStamp(v.vendorNotifiedAt)}` : `minted ${fmtStamp(v.vendorTokenMintedAt)}`}
+                  </span>
+                  <span className={`px-2 py-1 rounded ${opened ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
+                    {opened ? `opened ${fmtStamp(v.vendorViewedAt)} (${v.vendorViewCount}×)` : 'never opened'}
+                  </span>
+                  {acted && (
+                    <span className="px-2 py-1 rounded bg-chip-good-bg text-chip-good-fg">
+                      hold requested {fmtStamp(v.vendorHoldRequestedAt)}
                     </span>
                   )}
                 </div>

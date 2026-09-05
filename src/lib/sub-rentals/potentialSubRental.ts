@@ -179,6 +179,17 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
       },
     },
   })
+  // The vendor opened their page: stamp it so the Portals tab can say so
+  // (Wes 2026-09-05). Fire-and-forget — a failed counter must never 404
+  // the vendor's view.
+  if (s) {
+    prisma.subRental
+      .update({
+        where: { id: s.id },
+        data: { vendorViewedAt: new Date(), vendorViewCount: { increment: 1 } },
+      })
+      .catch(() => {})
+  }
   if (!s) return null
 
   return {

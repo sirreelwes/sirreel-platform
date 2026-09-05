@@ -4535,6 +4535,12 @@ model SubRental {
   /// get exchanged, still without the two sides talking directly.
   vendorToken           String?   @unique @map("vendor_token")
   vendorTokenMintedAt   DateTime? @map("vendor_token_minted_at")
+  /// The vendor opened their page. Stamped by /vendor/[token] on load so the
+  /// Portals tab can say "opened Sep 5 (2×)" for a vendor link the same way
+  /// it does for a client's (Wes 2026-09-05: "Will Vendor portals also fold
+  /// into that tab?"). Sent ≠ opened ≠ acted; this is the middle one.
+  vendorViewedAt        DateTime? @map("vendor_viewed_at")
+  vendorViewCount       Int       @default(0) @map("vendor_view_count")
   /// When the vendor was told we had quoted these dates.
   vendorNotifiedAt      DateTime? @map("vendor_notified_at")
   /// When the vendor was asked to actually HOLD the dates — stamped on the
