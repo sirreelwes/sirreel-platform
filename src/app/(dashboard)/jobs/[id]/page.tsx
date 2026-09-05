@@ -1238,7 +1238,10 @@ const driverTone = (d: any): string => {
     wc: wcCerts.length === 0,
     agreement: agreementStatus === 'none',
     reservations: (job.bookings ?? []).length === 0,
-    assets: reservedAssets.length === 0,
+    // A held category with no unit picked lives in the assets card too —
+    // hiding the card on "no units" hid the one control that assigns one
+    // (Wes 2026-09-05: "I don't see where to choose hold no unit").
+    assets: reservedAssets.length === 0 && pendingHolds.length === 0,
     drivers: reservedAssets.length === 0 && pendingHolds.length === 0,
     orders: job.orders.length === 0,
     money: job.orders.length === 0 && job.rwOrderCount === 0,
