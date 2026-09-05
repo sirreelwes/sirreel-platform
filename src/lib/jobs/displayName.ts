@@ -34,11 +34,18 @@
  *  free) is not swallowed by the fallback. */
 const PLACEHOLDER_RE = /^planyo import\s*[—–-]\s*cart\s*\d+$/i
 
-/** True for a value that is not actually a name: blank, or the
- *  importer's invented cart placeholder. */
+/** "Music Video (TBD)", "TBD", "Untitled — TBD". Word-bounded so a real
+ *  title that happens to contain those letters mid-word is untouched. */
+const TBD_RE = /\bTBD\b/i
+
+/** True for a value that is not actually a name: blank, the importer's
+ *  invented cart placeholder, or a name the rep left as TBD (Wes
+ *  2026-09-05: "treat TBD as unnamed" — it prompts for a real name before
+ *  paperwork goes out, and client-facing surfaces fall through to the
+ *  company rather than headline a show as "TBD"). */
 export function isPlaceholderJobName(name: string | null | undefined): boolean {
   const t = (name ?? '').trim()
-  return t === '' || PLACEHOLDER_RE.test(t)
+  return t === '' || PLACEHOLDER_RE.test(t) || TBD_RE.test(t)
 }
 
 export interface JobNameSources {
