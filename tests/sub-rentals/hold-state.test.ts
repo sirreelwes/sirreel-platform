@@ -18,6 +18,7 @@
  * Run: npm run test:sub-rental-hold
  */
 import { isUnaskedHold, type JobSubRental } from '@/components/jobs/JobSubRentalsSection'
+import { isClientCommittedOrder } from '@/lib/sub-rentals/commitment'
 
 let fail = 0
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -26,8 +27,8 @@ const eq = (label: string, got: unknown, want: unknown) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label} → ${got}${ok ? '' : ` (want ${want})`}`)
 }
 
-const row = (status: string, vendorHoldRequestedAt: string | null): JobSubRental => ({
-  id: 'x', status, vehicleName: 'EcoFlux', quantity: 1,
+const row = (status: string, vendorHoldRequestedAt: string | null, clientCommitted = false): JobSubRental => ({
+  id: 'x', status, vehicleName: 'EcoFlux', quantity: 1, clientCommitted,
   startDate: '2026-09-10', endDate: '2026-09-11',
   receiveMethod: null, poNumber: null,
   vendorNotifiedAt: '2026-08-28T00:00:00.000Z', vendorHoldRequestedAt,
@@ -51,6 +52,24 @@ eq('ON_RENT + asked → quiet', isUnaskedHold(row('ON_RENT', '2026-08-29T00:00:0
 //    un-asked partner is the correct state, not a failure. This is the
 //    live shape of the EcoFlux row on SR-JOB-0235 right now.
 eq('ESTIMATED + never asked → quiet (nobody accepted)', isUnaskedHold(row('ESTIMATED', null)), false)
+
+// ── The HQ-side yes (2026-09-05). The client approved or booked through HQ,
+//    not the portal, so the row never left ESTIMATED and the partner's last
+//    notice from us says "this is NOT a booking". The row's own status can't
+//    see it; the order can. This is the FIGUROV shape.
+eq('ESTIMATED + order committed + never asked → alarm', isUnaskedHold(row('ESTIMATED', null, true)), true)
+eq('ESTIMATED + order committed + asked → quiet', isUnaskedHold(row('ESTIMATED', '2026-09-05T00:00:00.000Z', true)), false)
+eq('ESTIMATED + order NOT committed → quiet', isUnaskedHold(row('ESTIMATED', null, false)), false)
+
+// ── Which order statuses count as the client's yes. ────────────────────
+for (const st of ['APPROVED', 'BOOKED', 'LOADED_READY', 'ON_JOB']) {
+  eq(`order ${st} → committed`, isClientCommittedOrder(st), true)
+}
+// Not yet a yes — and the post-rental tail, where a hold is moot and a stale
+// ESTIMATED row must not shout (or mail "please hold" for past dates).
+for (const st of ['DRAFT', 'QUOTE_SENT', 'CANCELLED', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED', null, undefined, '']) {
+  eq(`order ${String(st)} → not committed`, isClientCommittedOrder(st), false)
+}
 
 // ── Terminal rows never shout: there is nothing left to hold. ──────────
 eq('RETURNED + never asked → quiet', isUnaskedHold(row('RETURNED', null)), false)

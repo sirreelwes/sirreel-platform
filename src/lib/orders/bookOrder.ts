@@ -46,6 +46,7 @@ import { prisma } from '@/lib/prisma'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
+import { requestSubRentalsForOrder } from '@/lib/sub-rentals/requestOnApproval'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -307,6 +308,16 @@ export async function bookOrder(args: {
     // Non-fatal — the order is BOOKED. Cadence drift can be reconciled
     // separately; we don't want to roll back a successful book.
   }
+
+  // ── Phase 2b: ask sub-rental partners to hold (post-tx) ────────
+  // "Book it" is the client's yes arriving through HQ. The portal's
+  // approve-quote route asks every partner whose unit is on the order to
+  // hold; this path never did (found 2026-09-05), so an order approved
+  // and booked by a rep left the partner with only the estimate notice.
+  // Idempotent — only ESTIMATED rows move — so it is a no-op when the
+  // portal already ran it. Non-fatal: the order is BOOKED either way,
+  // and a partner we could not reach is raised as an Alert inside.
+  await requestSubRentalsForOrder({ orderId, via: 'hq-book', userId })
 
   // ── Phase 3: LOADED_READY rollup (post-tx) ─────────────────────
   // For all-trivial-lane orders (STAGE-only, or orders with zero

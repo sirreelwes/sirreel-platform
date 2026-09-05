@@ -42,8 +42,11 @@ export interface JobSubRental {
   vendorUrl: string | null
   vendorTotal: number | null
   clientTotal: number | null
+  /** The CLIENT has said yes — the linked order (or, for a job-level row,
+   *  any order on the job) is APPROVED or beyond. Computed server-side. */
+  clientCommitted: boolean
   vendor: { id: string; name: string; email: string | null; poEmail: string | null; phone: string | null }
-  order: { id: string; orderNumber: string } | null
+  order: { id: string; orderNumber: string; status?: string } | null
   orderLineItem: { id: string; description: string } | null
 }
 
@@ -83,10 +86,21 @@ const money = (n: number | null) =>
 
 /**
  * The partner was never actually asked. True only once the client has
- * committed — an ESTIMATED row is correctly un-asked, not broken.
+ * committed — an ESTIMATED row on an un-approved order is correctly
+ * un-asked, not broken.
+ *
+ * Two ways to get here:
+ *   · the row is REQUESTED (or later) but the notice never left — the
+ *     approval hook's durable-flip / best-effort-mail posture;
+ *   · the row is still ESTIMATED while the ORDER is approved or booked —
+ *     the client said yes through HQ and, before 2026-09-05, nothing on
+ *     that path asked the partner. The row's own status can't see this;
+ *     only the order can, which is why `clientCommitted` rides along.
  */
 export function isUnaskedHold(s: JobSubRental): boolean {
-  return COMMITTED.includes(s.status) && !s.vendorHoldRequestedAt
+  if (s.vendorHoldRequestedAt) return false
+  if (COMMITTED.includes(s.status)) return true
+  return s.status === 'ESTIMATED' && s.clientCommitted
 }
 
 export function JobSubRentalsSection({ jobId }: { jobId: string }) {
@@ -270,9 +284,11 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                 {unaskedRow ? (
                   <span className="text-red-700">
                     <strong className="font-semibold">Not asked to hold.</strong>{' '}
-                    {s.vendor.poEmail || s.vendor.email
-                      ? 'The notice never sent.'
-                      : `${s.vendor.name} has no email on file — add one on the vendor record, or call ${s.vendor.phone || 'them'}.`}
+                    {!(s.vendor.poEmail || s.vendor.email)
+                      ? `${s.vendor.name} has no email on file — add one on the vendor record, or call ${s.vendor.phone || 'them'}.`
+                      : s.status === 'ESTIMATED'
+                        ? 'The client is committed, but the partner only ever got the estimate notice — which says this is not a booking.'
+                        : 'The notice never sent.'}
                   </span>
                 ) : s.vendorHoldRequestedAt ? (
                   <span className="text-zinc-600">

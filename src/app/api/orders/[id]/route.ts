@@ -11,6 +11,8 @@ import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
 import { transitionCadenceState, rebaselineCadenceForOrder } from "@/lib/cadence/scheduler";
 import { projectCadenceFromOrderStatus } from "@/lib/orders/cadenceProjection";
+import { requestSubRentalsForOrder } from '@/lib/sub-rentals/requestOnApproval';
+import { isClientCommittedOrder } from '@/lib/sub-rentals/commitment';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -373,6 +375,31 @@ export async function PUT(req: NextRequest, { params }: Params) {
       } catch (err) {
         console.error('[orders/PUT] cadence projection failed:', err);
       }
+    }
+
+    // The client's yes, arriving through HQ: a rep marking the order
+    // APPROVED (or BOOKED) here must ask any sub-rental partner to hold,
+    // exactly as the portal's approve-quote route does. Until 2026-09-05
+    // only the portal path did, so an order approved on this page left the
+    // partner holding our "this is NOT a booking" notice (the FIGUROV job).
+    // Idempotent — only ESTIMATED rows move — and non-throwing.
+    if (
+      status !== undefined
+      && priorStatus !== null
+      && status !== priorStatus
+      && isClientCommittedOrder(status)
+    ) {
+      let userId: string | null = null;
+      try {
+        const actor = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true },
+        });
+        userId = actor?.id ?? null;
+      } catch {
+        /* non-fatal — the audit row is nullable on userId */
+      }
+      await requestSubRentalsForOrder({ orderId: id, via: 'hq-order-status', userId });
     }
 
     // If pickup/return dates moved, re-baseline the cadence so all future

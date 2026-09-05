@@ -22,6 +22,56 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-05
+
+### Vendor portal: the HQ-side yes now asks the partner to hold
+
+`(this commit)` fix(sub-rentals): approve/book from HQ asks partners to hold; job panel + resend catch the ESTIMATED-on-booked gap; read-only verify script
+
+Wes: "The alexey job booked. Let's make sure the vendor portal works."
+Reading the whole path end to end (estimate → vendor notice → client yes →
+hold request → vendor page → driver relay) turned up one real hole, and it
+is exactly the one a job booked from HQ falls into. `requestSubRentalsOnApproval`
+— the hook that flips a sub-rental ESTIMATED → REQUESTED and mails the
+partner "please hold" — had ONE caller: the client portal's approve-quote
+route. A rep marking the order APPROVED on the order page, or clicking
+"Book it", committed the client without a word to the partner, whose last
+notice from us still read "**this is not a booking** and holds nothing".
+The job panel stayed quiet too, because `isUnaskedHold` correctly treats an
+ESTIMATED row as un-asked-by-design — it could not see the ORDER. And the
+panel's "Send hold request" refused ESTIMATED with 409. So the unit sat
+bookable by anyone else with nothing in HQ saying so.
+
+- **`requestSubRentalsForOrder({ orderId, via, userId })`** in
+  `requestOnApproval.ts` — the same hook keyed by order: loads job/agent,
+  refuses unless the order is actually committed, runs the existing
+  ESTIMATED-only (idempotent) hook, and raises a high-severity Alert on the
+  order for any partner it could not reach. Called from `PUT /api/orders/[id]`
+  on any transition INTO a committed status and from `bookOrder()` post-tx.
+  Double-running (portal approve, then HQ book) sends nothing twice.
+- **`src/lib/sub-rentals/commitment.ts`** — `isClientCommittedOrder()` =
+  APPROVED / BOOKED / LOADED_READY / ON_JOB — the yes, while the rental is
+  still ahead or under way. NOT the post-rental tail: a stale ESTIMATED row
+  on a CLOSED order must not shout forever or mail "please hold" for past
+  dates. Its own prisma-free module because the job panel (client
+  component) and the server paths need the same answer.
+- **Job panel** — `/api/jobs/[id]/sub-rentals` now returns `order.status` and
+  a per-row `clientCommitted` (linked order, or for a job-level estimate row
+  any committed order on the job — the same scope the hook binds by).
+  `isUnaskedHold` shouts for ESTIMATED + committed, with copy that says why
+  ("the partner only ever got the estimate notice"). Guarded both ways in
+  `test:sub-rental-hold`.
+- **`POST /api/sub-rentals/[id]/resend-hold`** accepts an ESTIMATED row whose
+  client is committed: flips to REQUESTED (audit `sub_rental.hold_requested`,
+  via `job-panel`) and sends. Still 409s when nobody has accepted.
+- **`scripts/verify-vendor-portal.ts`** (read-only, allow-listed) — for a
+  search term or `--job`, prints every sub-rental's record / notice / page
+  verdict: token minted, told-we-quoted, asked-to-hold vs. order commitment,
+  driver + relay, and fetches `sirreel.com/vendor/<token>` to confirm 200
+  through the middleware, the unit is shown, and NO client name, company or
+  contact leaks (the conduit rule). Exit 1 on any failure. This session had
+  no DATABASE_URL, so the live FIGUROV rows were NOT inspected — run it.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks

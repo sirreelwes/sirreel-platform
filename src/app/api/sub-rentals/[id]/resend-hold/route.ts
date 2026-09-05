@@ -10,15 +10,19 @@
  * Shares `sendHoldRequest` with the approval hook rather than composing a
  * second notice — the thing a fork would break first is the conduit rule.
  *
- * Deliberately does NOT flip status: the row is already REQUESTED, and
- * re-stamping it would misdate when the client said yes. It also refuses on
- * ESTIMATED — nobody has accepted, so "please hold" would be a lie. Use the
- * client's approval (or PATCH) to get there.
+ * Deliberately does NOT flip status on a REQUESTED row: re-stamping it would
+ * misdate when the client said yes. It refuses on ESTIMATED when nobody has
+ * accepted — "please hold" would be a lie. But an ESTIMATED row whose ORDER
+ * is approved or booked is the other silent state (the client said yes
+ * through HQ and the hook never ran, 2026-09-05): there the client's yes IS
+ * durable, so this flips ESTIMATED → REQUESTED and sends, exactly as the
+ * approval hook would have.
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 import { sendHoldRequest } from '@/lib/sub-rentals/requestOnApproval'
+import { isClientCommittedOrder } from '@/lib/sub-rentals/commitment'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,16 +39,30 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       orderId: true,
       jobId: true,
       job: { select: { jobCode: true } },
-      order: { select: { jobId: true, job: { select: { jobCode: true } }, agent: { select: { name: true, email: true } } } },
+      order: { select: { status: true, jobId: true, job: { select: { jobCode: true } }, agent: { select: { name: true, email: true } } } },
     },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
+  // Same commitment test the job panel uses: the linked order, or for a
+  // job-level row (estimate flow, no order yet) any committed order on the job.
+  let flip = false
   if (sub.status === 'ESTIMATED') {
-    return NextResponse.json(
-      { error: 'Nobody has accepted this yet — asking the partner to hold would be wrong. Approve the quote first.' },
-      { status: 409 },
-    )
+    let committed = sub.order ? isClientCommittedOrder(sub.order.status) : false
+    if (!committed && !sub.order && sub.jobId) {
+      const jobOrders = await prisma.order.findMany({
+        where: { jobId: sub.jobId, archivedAt: null },
+        select: { status: true },
+      })
+      committed = jobOrders.some((o) => isClientCommittedOrder(o.status))
+    }
+    if (!committed) {
+      return NextResponse.json(
+        { error: 'Nobody has accepted this yet — asking the partner to hold would be wrong. Approve the quote first.' },
+        { status: 409 },
+      )
+    }
+    flip = true
   }
   if (sub.status === 'CANCELLED' || sub.status === 'RETURNED') {
     return NextResponse.json(
@@ -63,17 +81,19 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     agentName: agent?.name ?? user.name ?? null,
     agentEmail: agent?.email ?? user.email ?? null,
     orderId: sub.orderId,
-    flip: false,
+    flip,
   })
   if (!outcome) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   await prisma.auditLog.create({
     data: {
-      action: 'sub_rental.hold_resent',
+      action: flip ? 'sub_rental.hold_requested' : 'sub_rental.hold_resent',
       entityType: 'SubRental',
       entityId: sub.id,
       userId: user.id,
+      ...(flip ? { oldValues: { status: 'ESTIMATED' } } : {}),
       newValues: {
+        ...(flip ? { status: 'REQUESTED' } : {}),
         vendor: outcome.vendorName,
         vehicle: outcome.vehicleName,
         notified: outcome.notified,

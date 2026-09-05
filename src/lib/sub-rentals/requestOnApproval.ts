@@ -31,6 +31,7 @@ import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { isClientCommittedOrder } from '@/lib/sub-rentals/commitment'
 
 const TOKEN_BYTES = 32
 
@@ -180,6 +181,10 @@ export async function requestSubRentalsOnApproval(args: {
   /** The rep who owns the order; becomes Reply-To and signs the note. */
   agentName: string | null
   agentEmail: string | null
+  /** Which path committed the client — recorded on the audit row. */
+  via?: 'portal-quote-approval' | 'hq-order-status' | 'hq-book' | 'job-panel'
+  /** Staff member acting, when it is staff and not the client. */
+  userId?: string | null
 }): Promise<RequestOnApprovalResult> {
   const subs = await prisma.subRental.findMany({
     where: {
@@ -210,7 +215,9 @@ export async function requestSubRentalsOnApproval(args: {
         action: 'sub_rental.hold_requested',
         entityType: 'SubRental',
         entityId: id,
-        // No userId: the actor is the client approving in the portal.
+        // Null on the portal path: the actor is the client approving, not a
+        // signed-in member of staff.
+        userId: args.userId ?? null,
         oldValues: { status: 'ESTIMATED' },
         newValues: {
           status: 'REQUESTED',
@@ -219,7 +226,7 @@ export async function requestSubRentalsOnApproval(args: {
           startDate: outcome.startDate,
           endDate: outcome.endDate,
           notified: outcome.notified,
-          via: 'portal-quote-approval',
+          via: args.via ?? 'portal-quote-approval',
           orderId: args.orderId,
         },
       },
@@ -229,4 +236,74 @@ export async function requestSubRentalsOnApproval(args: {
   }
 
   return { requested, unnotified: requested.filter((r) => !r.notified) }
+}
+
+/**
+ * The same hook, keyed by ORDER — for the paths where the client's yes arrives
+ * through HQ rather than the portal.
+ *
+ * Found 2026-09-05 (the FIGUROV job booked): only the portal's approve-quote
+ * route ever called requestSubRentalsOnApproval. A rep marking the order
+ * APPROVED on the order page, or clicking "Book it", committed the client
+ * without a word to the partner — whose last notice from us still read "this
+ * is NOT a booking". The job panel stayed quiet too, because an ESTIMATED row
+ * is by design not an "unasked hold". So the unit sat bookable by anyone
+ * else until somebody noticed.
+ *
+ * Idempotent: only ESTIMATED rows move, so calling it on APPROVED and again
+ * on BOOKED (or after the portal already ran it) sends nothing twice. It
+ * refuses to act on an order that is not actually committed — a status write
+ * that lands on DRAFT must never ask a partner to hold.
+ *
+ * Best-effort and non-throwing, like every caller's posture: the order's
+ * status change is the durable fact and has already happened. A partner we
+ * could not reach becomes a high-severity Alert on the order, the same
+ * signal the portal path raises, so the staff path is not the quiet one.
+ */
+export async function requestSubRentalsForOrder(args: {
+  orderId: string
+  via: 'hq-order-status' | 'hq-book'
+  userId: string | null
+}): Promise<RequestOnApprovalResult> {
+  const empty: RequestOnApprovalResult = { requested: [], unnotified: [] }
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: args.orderId },
+      select: {
+        id: true,
+        status: true,
+        orderNumber: true,
+        job: { select: { id: true, jobCode: true } },
+        agent: { select: { name: true, email: true } },
+      },
+    })
+    if (!order || !isClientCommittedOrder(order.status)) return empty
+
+    const result = await requestSubRentalsOnApproval({
+      orderId: order.id,
+      jobId: order.job?.id ?? null,
+      jobCode: order.job?.jobCode ?? null,
+      agentName: order.agent?.name ?? null,
+      agentEmail: order.agent?.email ?? null,
+      via: args.via,
+      userId: args.userId,
+    })
+
+    if (result.unnotified.length > 0) {
+      const names = result.unnotified.map((r) => `${r.vendorName} (${r.vehicleName})`).join(', ')
+      await prisma.alert.create({
+        data: {
+          type: 'sub_rental.hold_unsent',
+          title: `${order.orderNumber}: a sub-rental partner has NOT been asked to hold`,
+          body: `${order.orderNumber} is ${order.status.toLowerCase()} but the hold request did not reach ${names}. The unit is still bookable by someone else — send it from the job page or call them.`,
+          severity: 'high',
+          link: `/orders/${order.id}`,
+        },
+      }).catch((err) => console.error('[hold-request] alert write failed:', err))
+    }
+    return result
+  } catch (err) {
+    console.error(`[hold-request] ${args.via} hook failed for order ${args.orderId}:`, err)
+    return empty
+  }
 }

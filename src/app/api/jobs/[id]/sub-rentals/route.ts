@@ -25,6 +25,7 @@ import { getPermissions } from '@/lib/permissions'
 import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { isClientCommittedOrder } from '@/lib/sub-rentals/commitment'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,10 +64,22 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       clientTotal: seePricing,
       vendor: { select: { id: true, name: true, email: true, poEmail: true, phone: true } },
       subcontractedVehicle: { select: { id: true, name: true } },
-      order: { select: { id: true, orderNumber: true } },
+      order: { select: { id: true, orderNumber: true, status: true } },
       orderLineItem: { select: { id: true, description: true } },
     },
   })
+
+  // Has the CLIENT committed? Read off the orders, not the sub-rental: a row
+  // quoted from the estimate flow hangs off the job with no order at all, and
+  // the approval hook binds those by jobId — so for them, any committed order
+  // on the job is the client's yes. This is what lets the panel shout about an
+  // ESTIMATED row on a booked job, which is exactly the state an HQ-side
+  // approval used to leave behind with nobody the wiser.
+  const jobOrders = await prisma.order.findMany({
+    where: { jobId: params.id, archivedAt: null },
+    select: { status: true },
+  })
+  const jobCommitted = jobOrders.some((o) => isClientCommittedOrder(o.status))
 
   return NextResponse.json({
     seePricing,
@@ -80,6 +93,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // authenticated response.
       vendorUrl: r.vendorToken ? `${PUBLIC_SITE_ORIGIN}${vendorPagePath(r.vendorToken)}` : null,
       relayAddress: r.relayTag ? relayAddress(r.relayTag) : null,
+      clientCommitted: r.order ? isClientCommittedOrder(r.order.status) : jobCommitted,
     })),
   })
 }
