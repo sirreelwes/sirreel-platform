@@ -89,15 +89,35 @@ const AUDIT_ACTION: Record<QuoteChangeReason, string> = {
 }
 
 /**
- * The note that goes above the standard quote body. It has to answer the
- * question a client will actually have — "why am I getting this again?"
- * — in the first sentence, and it names the changes rather than making
- * them hunt through the PDF for the difference.
+ * The BODY of the email — not a note beside the standard one. It has to
+ * answer the question a client will actually have — "why am I getting
+ * this again?" — in the first sentence, and it names the changes rather
+ * than making them hunt through the PDF for the difference.
+ *
+ * Wes, 2026-09-05, after Luis at Subplot got the LCDW confirmation: "the
+ * email to Luis sent a 'we'd love to work with you again' text rather
+ * than 'your quote was updated'. Stop adding that welcome message to
+ * future emails." This used to go in as `message` (the italic side note),
+ * which left the composer's standard opener — "It's great to hear from
+ * you — we'd love to work with you on this one" — as the first thing the
+ * client read on a quote they already had. It now goes in as
+ * `customMessage`, which REPLACES the opener; the greeting, the quote
+ * block with the new total, the portal button and the sign-off stay.
  */
-function changeNote(reason: QuoteChangeReason, changes: string[]): string {
+function changeNote(reason: QuoteChangeReason, changes: string[], firstName: string | null): string {
   const list = changes.slice(0, 8).join('\n• ')
   const more = changes.length > 8 ? `\n• …and ${changes.length - 8} more` : ''
-  return `${INTRO[reason]}\n\n• ${list}${more}\n\n${CLOSING[reason]}`
+  // A supplied body is the WHOLE email as far as the composer is concerned
+  // — it stands its own greeting down (the rep's box is assumed to carry
+  // one) — so the greeting has to be here.
+  const greeting = firstName ? `Hi ${firstName},\n\n` : 'Hi there,\n\n'
+  return `${greeting}${INTRO[reason]}\n\n• ${list}${more}\n\n${CLOSING[reason]}`
+}
+
+/** First name off a ranked recipient's display name, or null. */
+function firstNameOf(name: string | null | undefined): string | null {
+  const token = name?.trim().split(/\s+/)[0] ?? ''
+  return token && !token.includes('@') ? token : null
 }
 
 /** The check-out report's entry point — unchanged signature. */
@@ -169,8 +189,8 @@ export async function resendQuoteOnChange(opts: {
   // the send route does, and for the same reason.
   const preliminary = await composeQuoteEmail({
     orderId,
-    message: changeNote(reason, changes),
-    customMessage: null,
+    message: null,
+    customMessage: changeNote(reason, changes, null),
     overrideContactId: null,
     portalUrl: null,
     includeAttachmentMeta: false,
@@ -190,8 +210,8 @@ export async function resendQuoteOnChange(opts: {
 
   const final = await composeQuoteEmail({
     orderId,
-    message: changeNote(reason, changes),
-    customMessage: null,
+    message: null,
+    customMessage: changeNote(reason, changes, firstNameOf(primary.name)),
     overrideContactId: null,
     portalUrl,
     includeAttachmentMeta: false,
