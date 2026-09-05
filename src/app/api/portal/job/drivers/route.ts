@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { inviteDriver } from '@/lib/drivers/inviteDriver'
+import { sumHours } from '@/lib/drivers/hoursEntry'
 import type { DriverAssignmentStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +71,7 @@ async function resolveClientJobVehicles(req: NextRequest) {
         select: {
           id: true, status: true, emailSentTo: true, firstViewedAt: true,
           driver: { select: { firstName: true, lastName: true } },
+          driverHours: { select: { hours: true } },
         },
       },
     },
@@ -142,6 +144,9 @@ export async function GET(req: NextRequest) {
         // re-checks it anyway, but this keeps the button off rows that
         // would only bounce.
         removable: CLIENT_CANCELLABLE.includes(d.status),
+        // Hours the driver logged on their page — the production's own
+        // driver, so their hours are the production's to see.
+        hours: { total: sumHours(d.driverHours), days: d.driverHours.length },
       })),
     })),
   })

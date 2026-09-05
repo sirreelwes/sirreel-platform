@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { assignDriver } from '@/lib/sub-rentals/driverRelay'
+import { notifyDriverAssigned } from '@/lib/sub-rentals/conduit'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,5 +51,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   })
 
-  return NextResponse.json({ ok: true, ...res })
+  // The conduit: the driver gets their own page, the production hears who is
+  // coming (Wes 2026-09-05). Awaited so the vendor's page can say whether the
+  // driver was actually mailed; caught so a mail failure never undoes the
+  // assignment itself.
+  const fanout = await notifyDriverAssigned(sub.id).catch((err) => {
+    console.warn('[vendor/driver] conduit fan-out failed:', err instanceof Error ? err.message : err)
+    return { driverUrl: null, driverMailed: false, productionMailed: 0 }
+  })
+
+  return NextResponse.json({ ok: true, ...res, driverMailed: fanout.driverMailed, productionMailed: fanout.productionMailed })
 }

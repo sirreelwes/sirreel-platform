@@ -19,7 +19,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2, Link2, Truck, Users } from 'lucide-react'
+import { Building2, Eye, Link2, Truck, Users } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -100,6 +100,13 @@ export default async function CompanyPortalsPage() {
       vendorViewedAt: true,
       vendorViewCount: true,
       vendorHoldRequestedAt: true,
+      vendorConfirmedAt: true,
+      vendorDeclinedAt: true,
+      driverName: true,
+      driverToken: true,
+      driverViewedAt: true,
+      driverAckedAt: true,
+      logisticsUpdatedAt: true,
       vendor: { select: { name: true } },
       subcontractedVehicle: { select: { name: true } },
       order: { select: { orderNumber: true, job: { select: { id: true, jobCode: true, name: true } } } },
@@ -319,10 +326,39 @@ export default async function CompanyPortalsPage() {
                   <span className={`px-2 py-1 rounded ${opened ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
                     {opened ? `opened ${fmtStamp(v.vendorViewedAt)} (${v.vendorViewCount}×)` : 'never opened'}
                   </span>
-                  {acted && (
+                  {v.vendorDeclinedAt ? (
+                    <span className="px-2 py-1 rounded bg-chip-bad-bg text-chip-bad-fg">can&rsquo;t hold {fmtStamp(v.vendorDeclinedAt)}</span>
+                  ) : v.vendorConfirmedAt ? (
+                    <span className="px-2 py-1 rounded bg-chip-good-bg text-chip-good-fg">confirmed {fmtStamp(v.vendorConfirmedAt)}</span>
+                  ) : acted ? (
                     <span className="px-2 py-1 rounded bg-chip-good-bg text-chip-good-fg">
                       hold requested {fmtStamp(v.vendorHoldRequestedAt)}
                     </span>
+                  ) : null}
+                  {v.driverName && (
+                    <span
+                      className={`px-2 py-1 rounded ${
+                        v.driverAckedAt && !(v.logisticsUpdatedAt && v.driverAckedAt < v.logisticsUpdatedAt)
+                          ? 'bg-chip-good-bg text-chip-good-fg'
+                          : v.driverViewedAt
+                            ? 'bg-chip-warn-bg text-chip-warn-fg'
+                            : 'bg-chip-neutral-bg text-chip-neutral-fg'
+                      }`}
+                      title={v.driverName}
+                    >
+                      driver {v.driverAckedAt && !(v.logisticsUpdatedAt && v.driverAckedAt < v.logisticsUpdatedAt) ? 'confirmed' : v.driverViewedAt ? 'opened page' : v.driverToken ? 'page sent' : 'named'}
+                    </span>
+                  )}
+                </div>
+                {/* Wes 2026-09-05: see what the portal looks like for the vendor / the driver. */}
+                <div className="flex items-center gap-3 sm:shrink-0 text-xs">
+                  <Link href={`/crm/portals/preview/vendor/${v.id}`} className="inline-flex items-center gap-1 text-lt-fg2 hover:text-lt-fg">
+                    <Eye className="w-3.5 h-3.5" /> Vendor view
+                  </Link>
+                  {v.driverName && (
+                    <Link href={`/crm/portals/preview/driver/${v.id}`} className="inline-flex items-center gap-1 text-lt-fg2 hover:text-lt-fg">
+                      <Eye className="w-3.5 h-3.5" /> Driver view
+                    </Link>
                   )}
                 </div>
               </div>

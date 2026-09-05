@@ -45,6 +45,7 @@ export type NotificationChannelKey =
   | 'eod-collections'
   | 'eod-unassigned-units'
   | 'portal-opens'
+  | 'sub-rental-conduit-cc'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -56,6 +57,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'sub-rental-conduit-cc',
+    label: 'Sub-rental conduit CC',
+    description:
+      'Copied on every email the sub-rental conduit sends between a production, a partner (King Kong etc.) and the partner\'s driver: location and call time going out, a driver being named, the driver confirming, the partner confirming or declining a hold, a driver\'s question. Wes 2026-09-05: "cc Wes on all of these emails for the time being" — so this defaults to Wes alone. Save an empty list here to stop the copies once the flow has proven itself.',
+    defaults: () => ['wes@sirreel.com'],
+  },
   {
     key: 'portal-opens',
     label: 'Portal first opens',

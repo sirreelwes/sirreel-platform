@@ -33,6 +33,8 @@ interface DriverRow {
   pickedUp?: boolean
   /** Pending only — a driver who has sent a licence is staff-only to change. */
   removable?: boolean
+  /** Hours the driver logged on their page — theirs, shown to the production. */
+  hours?: { total: number; days: number }
 }
 interface VehicleRow {
   bookingAssignmentId: string
@@ -271,6 +273,11 @@ export function PortalDriversSection() {
                           : d.ready ? 'License received'
                           : d.opened ? 'Opened — no license yet' : 'Emailed'}
                       </span>
+                      {d.hours && d.hours.days > 0 && (
+                        <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                          {d.hours.total} hrs logged · {d.hours.days} {d.hours.days === 1 ? 'day' : 'days'}
+                        </span>
+                      )}
                       {/* Only while pending. Once a licence is in we keep the
                           driver and let the client call — see the route. */}
                       {d.removable && (

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
+import { listHours } from '@/lib/drivers/hoursStore'
+import { hoursPromptOpen } from '@/lib/drivers/hoursEntry'
+import { todayPacific } from '@/lib/sub-rentals/driverUnitView'
 
 export const dynamic = 'force-dynamic'
 
@@ -158,9 +161,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const gate = evaluateLicenseGate(da.driver)
+  const startDate = asg.startDate.toISOString().slice(0, 10)
+  const endDate = asg.endDate.toISOString().slice(0, 10)
 
   return NextResponse.json({
     ok: true,
+    // Hours the driver logs on this page (Wes 2026-09-05). Their own record;
+    // the production sees the total on their portal.
+    hours: await listHours({ driverAssignmentId: da.id }),
+    hoursPromptOpen: hoursPromptOpen({ startDate, endDate }, todayPacific()),
     driver: {
       firstName: da.driver.firstName,
       lastName: da.driver.lastName,

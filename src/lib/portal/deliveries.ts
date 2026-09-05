@@ -26,6 +26,7 @@
  * else's yard, which is the exact thing the conduit exists to prevent.
  */
 import { prisma } from '@/lib/prisma'
+import { isAckStale, sumHours } from '@/lib/drivers/hoursEntry'
 
 /** Client-visible delivery row. Every field here is safe to render. */
 export interface DeliveryUnit {
@@ -39,6 +40,16 @@ export interface DeliveryUnit {
   /** Both dates equal — renders as "back same day" rather than a range. */
   sameDay: boolean
   driver: { name: string; assignedAt: string | null } | null
+  /** Delivered by a partner's driver — the production may set a call time
+   *  and a note for them here. False for our own fleet drops (dispatch). */
+  editable: boolean
+  callTime: string | null
+  driverNotes: string | null
+  /** The driver pressed "I have the location and call time". `stale` when
+   *  the plan changed after they did. The note is theirs to the production. */
+  driverAck: { at: string; note: string | null; stale: boolean } | null
+  /** Hours the driver has logged on their page — total and days. */
+  hours: { total: number; days: number }
 }
 
 export interface ReportTo {
@@ -131,8 +142,14 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         endDate: true,
         driverName: true,
         driverAssignedAt: true,
-        // NOTE: driverEmail / driverPhone / relayTag / vendor are NOT selected.
-        // Keep it that way — see the header.
+        callTime: true,
+        driverNotes: true,
+        logisticsUpdatedAt: true,
+        driverAckedAt: true,
+        driverAckNote: true,
+        driverHours: { select: { hours: true } },
+        // NOTE: driverEmail / driverPhone / relayTag / driverToken / vendor are
+        // NOT selected. Keep it that way — see the header.
         subcontractedVehicle: { select: { vehicleType: true } },
       },
     }),
@@ -168,6 +185,17 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
       driver: s.driverName
         ? { name: s.driverName, assignedAt: s.driverAssignedAt?.toISOString() ?? null }
         : null,
+      editable: true,
+      callTime: s.callTime,
+      driverNotes: s.driverNotes,
+      driverAck: s.driverAckedAt
+        ? {
+            at: s.driverAckedAt.toISOString(),
+            note: s.driverAckNote,
+            stale: isAckStale(s.driverAckedAt, s.logisticsUpdatedAt),
+          }
+        : null,
+      hours: { total: sumHours(s.driverHours), days: s.driverHours.length },
     })
   }
 
@@ -199,6 +227,11 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         // sub-rental shows before the vendor names one — one empty state, not
         // two, so the client never learns the difference.
         driver: null,
+        editable: false,
+        callTime: null,
+        driverNotes: null,
+        driverAck: null,
+        hours: { total: 0, days: 0 },
       })
     }
   }

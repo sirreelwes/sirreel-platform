@@ -36,6 +36,11 @@ interface DeliveryUnit {
   endDate: string | null
   sameDay: boolean
   driver: { name: string; assignedAt: string | null } | null
+  editable: boolean
+  callTime: string | null
+  driverNotes: string | null
+  driverAck: { at: string; note: string | null; stale: boolean } | null
+  hours: { total: number; days: number }
 }
 interface Payload {
   units: DeliveryUnit[]
@@ -97,6 +102,14 @@ export function PortalDeliveriesSection() {
   const [error, setError] = useState<string | null>(null)
   const [openProfile, setOpenProfile] = useState<string | null>(null)
 
+  // Per-unit drafts: call time + note for that unit's driver. Kept apart
+  // from the job-wide address form above so saving one doesn't touch the
+  // other, and so a failed save leaves the typing on screen.
+  const [unitDraft, setUnitDraft] = useState<Record<string, { callTime: string; driverNotes: string }>>({})
+  const [unitSaving, setUnitSaving] = useState<string | null>(null)
+  const [unitErr, setUnitErr] = useState<Record<string, string>>({})
+  const [unitSaved, setUnitSaved] = useState<string | null>(null)
+
   // Draft state is separate from `data` so a failed save leaves what they
   // typed on screen rather than reverting it under them.
   const [address, setAddress] = useState('')
@@ -114,6 +127,7 @@ export function PortalDeliveriesSection() {
 
   const hydrate = useCallback((p: Payload) => {
     setData(p)
+    setUnitDraft(Object.fromEntries(p.units.map((u) => [u.id, { callTime: u.callTime ?? '', driverNotes: u.driverNotes ?? '' }])))
     setAddress(p.reportTo.address ?? '')
     setAccessNotes(p.reportTo.accessNotes ?? '')
     setTime(p.reportTo.time ?? '')
@@ -175,6 +189,36 @@ export function PortalDeliveriesSection() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function saveUnit(u: DeliveryUnit) {
+    const d = unitDraft[u.id]
+    if (!d) return
+    setUnitSaving(u.id)
+    setUnitErr((e) => ({ ...e, [u.id]: '' }))
+    setUnitSaved(null)
+    try {
+      const r = await fetch('/api/portal/job/deliveries/unit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId: u.id, callTime: d.callTime, driverNotes: d.driverNotes }),
+      })
+      const j = await r.json()
+      if (!r.ok) {
+        setUnitErr((e) => ({ ...e, [u.id]: j.error ?? "That didn't save. Try again in a moment." }))
+        return
+      }
+      hydrate(j as Payload)
+      setUnitSaved(u.id)
+    } catch {
+      setUnitErr((e) => ({ ...e, [u.id]: "That didn't save — check your connection and try again." }))
+    } finally {
+      setUnitSaving(null)
+    }
+  }
+  const unitDirty = (u: DeliveryUnit) => {
+    const d = unitDraft[u.id]
+    return !!d && (d.callTime !== (u.callTime ?? '') || d.driverNotes !== (u.driverNotes ?? ''))
   }
 
   if (loading || !data || data.units.length === 0) return null
@@ -350,6 +394,41 @@ export function PortalDeliveriesSection() {
                 </div>
               </div>
 
+              {/* ── Call time + note for THIS unit's driver ─────────────────
+                  Job-wide address above; per-unit time here, because two units
+                  on one lot don't report at the same hour. Saving tells the
+                  driver (and whoever is sending them) straight away. */}
+              {u.editable && (
+                <div className="border-t border-gray-100 px-4 py-3 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,160px)_1fr] gap-2">
+                    <div>
+                      <label className={LABEL} htmlFor={`ct-${u.id}`}>Call time for this unit</label>
+                      <input id={`ct-${u.id}`} className={INPUT} value={unitDraft[u.id]?.callTime ?? ''}
+                        placeholder="6:00 AM"
+                        onChange={(e) => setUnitDraft((m) => ({ ...m, [u.id]: { callTime: e.target.value, driverNotes: m[u.id]?.driverNotes ?? '' } }))} />
+                    </div>
+                    <div>
+                      <label className={LABEL} htmlFor={`dn-${u.id}`}>Note for the driver</label>
+                      <input id={`dn-${u.id}`} className={INPUT} value={unitDraft[u.id]?.driverNotes ?? ''}
+                        placeholder="Park along the east fence; ask for Jamie at the gate"
+                        onChange={(e) => setUnitDraft((m) => ({ ...m, [u.id]: { callTime: m[u.id]?.callTime ?? '', driverNotes: e.target.value } }))} />
+                    </div>
+                  </div>
+                  {unitErr[u.id] && <div className="text-xs text-red-600">{unitErr[u.id]}</div>}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-[11px] text-gray-500">
+                      {unitSaved === u.id
+                        ? u.driver ? `Sent to ${u.driver.name}.` : 'Saved — goes to the driver the moment one is named.'
+                        : u.driver ? 'Changes go straight to the driver.' : 'Goes to the driver as soon as one is named.'}
+                    </span>
+                    <button type="button" onClick={() => saveUnit(u)} disabled={unitSaving === u.id || !unitDirty(u)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-default transition">
+                      {unitSaving === u.id ? 'Sending…' : unitDirty(u) ? (u.driver ? 'Send to driver' : 'Save') : 'Saved'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {u.driver ? (
                 <>
                   <div className="border-t border-gray-100 bg-[#FCFCFB] px-4 py-3 flex items-center gap-3 flex-wrap">
@@ -359,6 +438,23 @@ export function PortalDeliveriesSection() {
                     <div className="flex-1 min-w-[140px]">
                       <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Your driver</div>
                       <div className="text-sm font-bold text-gray-900">{u.driver.name}</div>
+                      {/* Did the details reach them? The thing a coordinator
+                          actually wants to know the night before. */}
+                      <div className="text-[11px] mt-0.5">
+                        {u.driverAck && !u.driverAck.stale ? (
+                          <span className="text-green-700 font-semibold">Confirmed location &amp; call time {fmtSaved(u.driverAck.at)}</span>
+                        ) : u.driverAck?.stale ? (
+                          <span className="text-amber-700 font-semibold">Confirmed an earlier version — we&apos;ve sent the change, waiting on them</span>
+                        ) : hasAddress || u.callTime ? (
+                          <span className="text-gray-500">Details sent — waiting for them to confirm</span>
+                        ) : (
+                          <span className="text-gray-500">Add the address and call time and they&apos;ll be sent to them</span>
+                        )}
+                        {u.driverAck?.note && <span className="block text-gray-600 mt-0.5">&ldquo;{u.driverAck.note}&rdquo;</span>}
+                        {u.hours.days > 0 && (
+                          <span className="block text-gray-600 mt-0.5">Logged {u.hours.total} hrs over {u.hours.days} {u.hours.days === 1 ? 'day' : 'days'}</span>
+                        )}
+                      </div>
                     </div>
                     <button type="button" onClick={() => setOpenProfile(isOpen ? null : u.id)} aria-expanded={isOpen}
                       className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
@@ -384,9 +480,9 @@ export function PortalDeliveriesSection() {
                         </div>
                       </div>
                       <p className="text-[11px] text-gray-500 leading-relaxed">
-                        Anything the driver needs to know — a changed gate, a later call time —
-                        goes through your SirReel rep, whose details are further down this page.
-                        We pass it straight on, and it stays on the record for your job.
+                        {u.editable
+                          ? 'A changed gate or a later call time: update it above and the driver is told straight away, through SirReel. It stays on the record for your job.'
+                          : 'Anything the driver needs to know — a changed gate, a later call time — goes through your SirReel rep, whose details are further down this page. We pass it straight on, and it stays on the record for your job.'}
                       </p>
                     </div>
                   )}

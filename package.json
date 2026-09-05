@@ -64,7 +64,8 @@
     "test:parsed-year": "tsx tests/orders/parsed-date-year.test.ts",
     "test:payroll": "tsx tests/payroll/hours.test.ts",
     "test:payroll-clock": "tsx tests/payroll/clock.test.ts",
-    "test:booking-terms": "tsx tests/sales/booking-terms.test.ts"
+    "test:booking-terms": "tsx tests/sales/booking-terms.test.ts",
+    "test:conduit": "tsx tests/sub-rentals/conduit.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

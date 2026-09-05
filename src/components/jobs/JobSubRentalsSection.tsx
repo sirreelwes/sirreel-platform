@@ -45,6 +45,23 @@ export interface JobSubRental {
   vendor: { id: string; name: string; email: string | null; poEmail: string | null; phone: string | null }
   order: { id: string; orderNumber: string } | null
   orderLineItem: { id: string; description: string } | null
+  // ── The conduit (2026-09-05). Optional so older fixtures still type. ──
+  callTime?: string | null
+  driverNotes?: string | null
+  logisticsUpdatedAt?: string | null
+  logisticsNotifiedAt?: string | null
+  reportToAddress?: string | null
+  reportToTime?: string | null
+  driverUrl?: string | null
+  driverViewedAt?: string | null
+  driverAckedAt?: string | null
+  driverAckNote?: string | null
+  ackStale?: boolean
+  hoursTotal?: number
+  hoursDays?: number
+  vendorConfirmedAt?: string | null
+  vendorDeclinedAt?: string | null
+  vendorDeclineNote?: string | null
 }
 
 const STATUS_CHIP: Record<string, string> = {
@@ -77,6 +94,9 @@ const day = (iso: string | null) =>
   iso
     ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     : '—'
+
+const stamp = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'
 
 const money = (n: number | null) =>
   n === null ? '—' : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -163,12 +183,13 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
     [load],
   )
 
-  const copy = useCallback(async (s: JobSubRental) => {
-    if (!s.vendorUrl) return
+  const copy = useCallback(async (s: JobSubRental, which: 'vendor' | 'driver' = 'vendor') => {
+    const url = which === 'vendor' ? s.vendorUrl : s.driverUrl
+    if (!url) return
     try {
-      await navigator.clipboard.writeText(s.vendorUrl)
-      setCopiedId(s.id)
-      setTimeout(() => setCopiedId((c) => (c === s.id ? null : c)), 2000)
+      await navigator.clipboard.writeText(url)
+      setCopiedId(`${s.id}:${which}`)
+      setTimeout(() => setCopiedId((c) => (c === `${s.id}:${which}` ? null : c)), 2000)
     } catch {
       setErr('Could not copy — select the link and copy it by hand.')
     }
@@ -292,6 +313,37 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                 ) : null}
               </div>
 
+              {/* The partner's own word, from their page. */}
+              {s.vendorDeclinedAt ? (
+                <div className="mt-1 text-[12px] text-red-700">
+                  <strong className="font-semibold">{s.vendor.name} says they CAN&rsquo;T hold</strong> ({stamp(s.vendorDeclinedAt)}).
+                  {s.vendorDeclineNote && <> &ldquo;{s.vendorDeclineNote}&rdquo;</>} Status unchanged — source a replacement or talk to the client.
+                </div>
+              ) : s.vendorConfirmedAt ? (
+                <div className="mt-1 text-[12px] text-emerald-700">Partner confirmed the hold on their page {stamp(s.vendorConfirmedAt)}.</div>
+              ) : null}
+
+              {/* Where and when — what the client set on their portal, and whether it reached the other side. */}
+              {COMMITTED.includes(s.status) && (
+                <div className="mt-1 text-[12px] text-zinc-600">
+                  {s.reportToAddress || s.callTime || s.reportToTime ? (
+                    <>
+                      {s.reportToAddress && <span className="text-zinc-800">{s.reportToAddress}</span>}
+                      {(s.callTime || s.reportToTime) && <> · call <span className="text-zinc-800">{s.callTime ?? s.reportToTime}</span></>}
+                      {s.driverNotes && <> · note: <span className="text-zinc-700">{s.driverNotes}</span></>}
+                      {' · '}
+                      {s.logisticsNotifiedAt && (!s.logisticsUpdatedAt || s.logisticsNotifiedAt >= s.logisticsUpdatedAt) ? (
+                        <span>sent to partner{s.driverName ? ' + driver' : ''} {stamp(s.logisticsNotifiedAt)}</span>
+                      ) : (
+                        <span className="text-amber-700">changed {stamp(s.logisticsUpdatedAt ?? null)} — not yet sent</span>
+                      )}
+                    </>
+                  ) : (
+                    <span>Client hasn&rsquo;t set a location or call time yet (they do it under Deliveries on their portal).</span>
+                  )}
+                </div>
+              )}
+
               {/* Driver — the vendor names their own on the vendor page. */}
               <div className="mt-1 text-[12px] text-zinc-600">
                 {s.driverName ? (
@@ -303,6 +355,20 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                         {' · '}
                         <span className="text-zinc-600">relay {s.relayAddress}</span>
                       </>
+                    )}
+                    {' · '}
+                    {s.driverAckedAt && !s.ackStale ? (
+                      <span className="text-emerald-700">confirmed location &amp; call time {stamp(s.driverAckedAt)}</span>
+                    ) : s.driverAckedAt && s.ackStale ? (
+                      <span className="text-amber-700">confirmed an earlier version — awaiting re-confirm</span>
+                    ) : s.driverViewedAt ? (
+                      <span>opened their page {stamp(s.driverViewedAt)}, not confirmed</span>
+                    ) : s.driverUrl ? (
+                      <span>page sent, not opened</span>
+                    ) : null}
+                    {s.driverAckNote && <> · &ldquo;{s.driverAckNote}&rdquo;</>}
+                    {(s.hoursDays ?? 0) > 0 && (
+                      <> · <span className="text-zinc-800">{s.hoursTotal} hrs</span> logged over {s.hoursDays} {s.hoursDays === 1 ? 'day' : 'days'}</>
                     )}
                   </>
                 ) : COMMITTED.includes(s.status) ? (
@@ -324,19 +390,35 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                 {s.vendorUrl && (
                   <>
                     <button
-                      onClick={() => copy(s)}
+                      onClick={() => copy(s, 'vendor')}
                       className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
                     >
-                      {copiedId === s.id ? 'Copied' : 'Copy partner link'}
+                      {copiedId === `${s.id}:vendor` ? 'Copied' : 'Copy partner link'}
                     </button>
-                    <a
-                      href={s.vendorUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    {/* Preview, not the live link: opening the real page would count
+                        as the partner opening it. */}
+                    <Link
+                      href={`/crm/portals/preview/vendor/${s.id}`}
                       className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
                     >
-                      Open their page ↗
-                    </a>
+                      Vendor view
+                    </Link>
+                  </>
+                )}
+                {s.driverUrl && (
+                  <>
+                    <button
+                      onClick={() => copy(s, 'driver')}
+                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
+                    >
+                      {copiedId === `${s.id}:driver` ? 'Copied' : 'Copy driver link'}
+                    </button>
+                    <Link
+                      href={`/crm/portals/preview/driver/${s.id}`}
+                      className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
+                    >
+                      Driver view
+                    </Link>
                   </>
                 )}
                 {!DEAD.includes(s.status) && (
@@ -364,9 +446,10 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
       </div>
 
       <p className="mt-3 text-[11px] text-zinc-600 leading-relaxed">
-        Partners see their own page only — the unit, the dates, the status and our job code. They
-        never learn the production, the company or the contacts, and the client never learns whose
-        unit it is. Keep that true of anything added here.
+        Partners see their own page only — the unit, the dates, the status, our job code, and (since
+        Sep 5) the delivery address, access notes and call time the client set. They never learn the
+        production, the company or the contacts&rsquo; numbers, and the client never learns whose unit
+        it is. Keep that true of anything added here.
       </p>
     </div>
   )

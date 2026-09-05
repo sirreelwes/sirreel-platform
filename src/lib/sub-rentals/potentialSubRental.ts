@@ -23,6 +23,9 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { relayAddress } from '@/lib/sub-rentals/driverRelay'
+import { logisticsFor, type LogisticsView } from '@/lib/sub-rentals/conduit'
+import { isAckStale } from '@/lib/drivers/hoursEntry'
+import { listHours, type HoursView } from '@/lib/drivers/hoursStore'
 
 const TOKEN_BYTES = 32
 
@@ -132,25 +135,35 @@ export interface VendorView {
   startDate: Date | null
   endDate: Date | null
   quantity: number
-  /** SirReel's own job code — the vendor's shared reference WITHOUT naming
-   *  the production. It is what both sides can quote at each other safely. */
+  /** Our job code — the one reference both sides share. Never the job name. */
   reference: string | null
   photos: { id: string }[]
   driverName: string | null
   driverEmail: string | null
   driverPhone: string | null
-  /** jobs+{tag}@sirreel.com once a driver is assigned. */
   relayAddress: string | null
+  /** The driver has been sent their own page (token minted). */
+  driverPageSent: boolean
+  driverViewedAt: Date | null
+  driverAck: { at: Date; note: string | null; stale: boolean } | null
+  /** Where and when, as the production set it. See conduit.ts for the ruling. */
+  logistics: LogisticsView
+  hours: HoursView
+  vendorConfirmedAt: Date | null
+  vendorDeclinedAt: Date | null
+  vendorDeclineNote: string | null
 }
 
 /**
- * The vendor's view of one sub-rental, by token.
- *
- * NOTHING about the client is selected here — not the job name, not the
- * company, not a contact. Only the job CODE, which is our own reference. A
- * future field on this page must clear the same bar.
+ * The vendor's page data. Loads NO production identity: the job's name,
+ * company and contacts are not selected — and since 2026-09-05 the job's
+ * report-to fields ARE (Wes: the partner and their driver see the location
+ * and call time). The on-site contact's phone stays out; see conduit.ts.
  */
-export async function getVendorViewByToken(token: string): Promise<VendorView | null> {
+export async function getVendorViewByToken(
+  token: string,
+  opts: { /** False for a STAFF preview — an HQ look must not count as the vendor opening it. */ stamp?: boolean } = {},
+): Promise<VendorView | null> {
   if (!token || token.length < 32) return null
   const s = await prisma.subRental.findFirst({
     where: { vendorToken: token },
@@ -164,8 +177,31 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
       driverName: true,
       driverEmail: true,
       driverPhone: true,
+      driverToken: true,
+      driverViewedAt: true,
+      driverAckedAt: true,
+      driverAckNote: true,
       relayTag: true,
-      job: { select: { jobCode: true } },
+      callTime: true,
+      driverNotes: true,
+      logisticsUpdatedAt: true,
+      vendorConfirmedAt: true,
+      vendorDeclinedAt: true,
+      vendorDeclineNote: true,
+      job: {
+        select: {
+          jobCode: true,
+          reportToAddress: true,
+          reportToAccessNotes: true,
+          reportToTime: true,
+          reportToContactName: true,
+          reportToUpdatedAt: true,
+          pickupSameAsDelivery: true,
+          pickupAddress: true,
+          pickupAccessNotes: true,
+          pickupTime: true,
+        },
+      },
       subcontractedVehicle: {
         select: {
           name: true,
@@ -182,7 +218,7 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
   // The vendor opened their page: stamp it so the Portals tab can say so
   // (Wes 2026-09-05). Fire-and-forget — a failed counter must never 404
   // the vendor's view.
-  if (s) {
+  if (s && opts.stamp !== false) {
     prisma.subRental
       .update({
         where: { id: s.id },
@@ -210,10 +246,19 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
     driverEmail: s.driverEmail,
     driverPhone: s.driverPhone,
     relayAddress: s.relayTag ? relayAddress(s.relayTag) : null,
+    driverPageSent: !!s.driverToken,
+    driverViewedAt: s.driverViewedAt,
+    driverAck: s.driverAckedAt
+      ? { at: s.driverAckedAt, note: s.driverAckNote, stale: isAckStale(s.driverAckedAt, s.logisticsUpdatedAt) }
+      : null,
+    logistics: logisticsFor(s),
+    hours: await listHours({ subRentalId: s.id }),
+    vendorConfirmedAt: s.vendorConfirmedAt,
+    vendorDeclinedAt: s.vendorDeclinedAt,
+    vendorDeclineNote: s.vendorDeclineNote,
   }
 }
 
-/** Photo bytes for the vendor page, gated by the vendor token. */
 export async function getVendorPhotoUrl(token: string, photoId: string): Promise<string | null> {
   if (!token || token.length < 32) return null
   const photo = await prisma.subcontractedVehiclePhoto.findFirst({

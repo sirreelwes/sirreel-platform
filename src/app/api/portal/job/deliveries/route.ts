@@ -23,6 +23,7 @@ import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { loadDeliveries, parseReportTo } from '@/lib/portal/deliveries'
+import { liveSubRentalIdsForJob, notifyLogisticsChanged } from '@/lib/sub-rentals/conduit'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,15 +63,45 @@ export async function POST(req: NextRequest) {
     select: {
       reportToAddress: true,
       reportToAccessNotes: true,
+      reportToTime: true,
       reportToContactName: true,
       reportToContactPhone: true,
+      pickupSameAsDelivery: true,
+      pickupAddress: true,
+      pickupAccessNotes: true,
+      pickupTime: true,
     },
   })
 
+  const now = new Date()
   await prisma.job.update({
     where: { id: ctx.jobId },
-    data: { ...parsed.data, reportToUpdatedAt: new Date() },
+    data: { ...parsed.data, reportToUpdatedAt: now },
   })
+
+  // ── The conduit ──────────────────────────────────────────────────────────
+  // Did anything a DRIVER acts on change? (The on-site phone number is
+  // withheld from partners and drivers, so a phone-only edit tells nobody.)
+  // If so: stamp every live sub-rental on the job NOW — synchronously, so
+  // the response already shows the driver's confirmation as stale — then
+  // tell the partners and their drivers in the background. A failed send
+  // must never fail the client's save.
+  const DRIVER_FACING = [
+    'reportToAddress', 'reportToAccessNotes', 'reportToTime', 'reportToContactName',
+    'pickupSameAsDelivery', 'pickupAddress', 'pickupAccessNotes', 'pickupTime',
+  ] as const
+  const changed = DRIVER_FACING.some(
+    (k) => k in parsed.data && (before as Record<string, unknown> | null)?.[k] !== (parsed.data as Record<string, unknown>)[k],
+  )
+  if (changed) {
+    const ids = await liveSubRentalIdsForJob(ctx.jobId)
+    if (ids.length) {
+      await prisma.subRental.updateMany({ where: { id: { in: ids } }, data: { logisticsUpdatedAt: now } })
+      void notifyLogisticsChanged({ jobId: ctx.jobId, at: now }).catch((err) =>
+        console.warn('[portal/deliveries] conduit notify failed:', err instanceof Error ? err.message : err),
+      )
+    }
+  }
 
   // Audited because dispatch acts on this: if a truck goes to the wrong gate,
   // "what did the address say at 4pm and who changed it" is the first question.

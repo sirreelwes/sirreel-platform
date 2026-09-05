@@ -951,9 +951,10 @@ model DriverAssignment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  driver            Driver            @relation(fields: [driverId], references: [id])
-  bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
-  invitedByUser     User?             @relation("DriverAssignmentInvitedBy", fields: [invitedByUserId], references: [id])
+  driver            Driver             @relation(fields: [driverId], references: [id])
+  bookingAssignment BookingAssignment  @relation(fields: [bookingAssignmentId], references: [id])
+  invitedByUser     User?              @relation("DriverAssignmentInvitedBy", fields: [invitedByUserId], references: [id])
+  driverHours       DriverHoursEntry[]
 
   /// One live row per driver per vehicle-assignment; re-inviting the same
   /// driver updates rather than piling up duplicates.
@@ -4570,9 +4571,54 @@ model SubRental {
   /// ingest path) or a catch-all routing rule.
   relayTag String? @unique @map("relay_tag")
 
+  // ── The conduit, structured (Wes 2026-09-05) ─────────────────────────────
+  // Everything the production and the partner's driver exchange about THIS
+  // unit, held here so each side reads it on their own page and nobody has
+  // to be told the other's address. Location lives on the JOB (Job.reportTo*
+  // — the production types it once for every unit arriving); the call time
+  // and the note to the driver are per unit, because a coach and a restroom
+  // trailer on the same lot do not report at the same hour.
+  //
+  // CONDUIT RULING (Wes 2026-09-05): the partner and their driver DO see the
+  // delivery address, access notes and call time — a driver cannot arrive
+  // without them. They still never see the production's name, company or
+  // contacts. The client still never sees the partner's name.
+  /// Production's call time for this unit's driver — free text ("6:00 AM").
+  callTime            String?   @map("call_time") @db.VarChar(120)
+  /// Production's note to the driver ("park along the east fence").
+  driverNotes         String?   @map("driver_notes") @db.Text
+  /// Last change to anything the driver is asked to acknowledge — the job's
+  /// report-to fields OR the per-unit fields above. A driverAckedAt older
+  /// than this means they confirmed a previous version.
+  logisticsUpdatedAt  DateTime? @map("logistics_updated_at")
+  /// Last time the partner + driver were actually told about a change.
+  logisticsNotifiedAt DateTime? @map("logistics_notified_at")
+
+  /// The partner's driver's OWN no-login page (/drive/unit/[token]) — where
+  /// they read the location and call time, confirm receipt, and log hours.
+  /// Minted when the partner names them; re-minted if the driver changes.
+  driverToken         String?   @unique @map("driver_token")
+  driverTokenMintedAt DateTime? @map("driver_token_minted_at")
+  driverViewedAt      DateTime? @map("driver_viewed_at")
+  driverViewCount     Int       @default(0) @map("driver_view_count")
+  /// Driver pressed "I have the location and call time". The production is
+  /// emailed when this lands.
+  driverAckedAt       DateTime? @map("driver_acked_at")
+  driverAckNote       String?   @map("driver_ack_note") @db.Text
+
+  /// Partner pressed "Confirm hold" on their page (REQUESTED → CONFIRMED).
+  /// Distinct from the status so a staff-side status change is never
+  /// mistaken for the partner's own word.
+  vendorConfirmedAt DateTime? @map("vendor_confirmed_at")
+  /// Partner said they cannot hold the dates. Status is NOT changed — a
+  /// human decides what to do; this is the alarm.
+  vendorDeclinedAt  DateTime? @map("vendor_declined_at")
+  vendorDeclineNote String?   @map("vendor_decline_note") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  driverHours          DriverHoursEntry[]
   order                Order?                @relation(fields: [orderId], references: [id])
   job                  Job?                  @relation(fields: [jobId], references: [id])
   subcontractedVehicle SubcontractedVehicle? @relation(fields: [subcontractedVehicleId], references: [id])
@@ -4589,6 +4635,51 @@ model SubRental {
   @@index([jobId])
   @@index([subcontractedVehicleId])
   @@map("sub_rentals")
+}
+
+// ── Driver hours ──────────────────────────────────────────────────
+// A driver's own record of the hours they worked, typed on their no-login
+// page (Wes 2026-09-05: "drivers will be prompted to input hours within
+// their portal"). Two kinds of driver, one table:
+//   · subRentalId       — a partner's driver on a sub-rented unit. The
+//                         partner bills us by the hour/shift, so these
+//                         hours are what we check their invoice against
+//                         and what we pass through to the client.
+//   · driverAssignmentId — a driver on one of OUR units (a production's
+//                         PA on a cube truck). Their hours are the
+//                         production's payroll business; we hold them
+//                         because the production asked their driver to
+//                         log them here.
+// Exactly one anchor is set (enforced in code, not the schema — Prisma has
+// no XOR). One row per driver-anchor per work date; re-submitting a day
+// replaces it rather than stacking a second row.
+//
+// `hours` is stored, not derived, so a later change to the rounding rule
+// never rewrites a number a driver already agreed to. Computed by
+// src/lib/drivers/hoursEntry.ts (pure, tested).
+model DriverHoursEntry {
+  id                 String  @id @default(uuid())
+  subRentalId        String? @map("sub_rental_id")
+  driverAssignmentId String? @map("driver_assignment_id")
+
+  workDate     DateTime @map("work_date") @db.Date
+  /// "HH:MM", 24h. Strings rather than timestamps: a call time is a clock
+  /// reading at the location, not an instant, and drivers type it that way.
+  startTime    String   @map("start_time") @db.VarChar(5)
+  endTime      String   @map("end_time") @db.VarChar(5)
+  breakMinutes Int      @default(0) @map("break_minutes")
+  hours        Decimal  @db.Decimal(5, 2)
+  notes        String?  @db.Text
+
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  subRental        SubRental?        @relation(fields: [subRentalId], references: [id])
+  driverAssignment DriverAssignment? @relation(fields: [driverAssignmentId], references: [id])
+
+  @@unique([subRentalId, workDate])
+  @@unique([driverAssignmentId, workDate])
+  @@map("sr_driver_hours")
 }
 
 // ── Subcontracted vehicles ─────────────────────────────────────────

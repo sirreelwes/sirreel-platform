@@ -25,6 +25,8 @@ import { getPermissions } from '@/lib/permissions'
 import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { driverUnitPageUrl } from '@/lib/sub-rentals/conduit'
+import { isAckStale, sumHours } from '@/lib/drivers/hoursEntry'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +61,21 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       driverPhone: true,
       driverAssignedAt: true,
       relayTag: true,
+      callTime: true,
+      driverNotes: true,
+      logisticsUpdatedAt: true,
+      logisticsNotifiedAt: true,
+      driverToken: true,
+      driverViewedAt: true,
+      driverAckedAt: true,
+      driverAckNote: true,
+      vendorConfirmedAt: true,
+      vendorDeclinedAt: true,
+      vendorDeclineNote: true,
+      driverHours: { select: { hours: true, workDate: true } },
+      job: {
+        select: { reportToAddress: true, reportToTime: true, reportToUpdatedAt: true },
+      },
       vendorTotal: seePricing,
       clientTotal: seePricing,
       vendor: { select: { id: true, name: true, email: true, poEmail: true, phone: true } },
@@ -80,6 +97,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // authenticated response.
       vendorUrl: r.vendorToken ? `${PUBLIC_SITE_ORIGIN}${vendorPagePath(r.vendorToken)}` : null,
       relayAddress: r.relayTag ? relayAddress(r.relayTag) : null,
+      // Staff-only for the same reason as vendorUrl: the driver's page is the
+      // driver's credential. This is what a rep pastes when a driver says the
+      // email never arrived.
+      driverUrl: r.driverToken ? driverUnitPageUrl(r.driverToken) : null,
+      driverToken: undefined,
+      ackStale: isAckStale(r.driverAckedAt, r.logisticsUpdatedAt),
+      hoursTotal: sumHours(r.driverHours),
+      hoursDays: r.driverHours.length,
+      driverHours: undefined,
+      reportToAddress: r.job?.reportToAddress ?? null,
+      reportToTime: r.job?.reportToTime ?? null,
+      job: undefined,
     })),
   })
 }

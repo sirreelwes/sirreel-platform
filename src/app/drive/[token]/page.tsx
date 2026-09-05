@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 import { KeyRound } from 'lucide-react'
+import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
 
 type Side = 'front' | 'back'
 
@@ -50,6 +51,8 @@ interface DriveData {
   instructions: { pickup: string | null; dropoff: string | null; unattendedPickup: boolean; unattendedReturn: boolean }
   access: { gateCode: string | null; lockboxCode: string | null }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
+  hours: { entries: HoursEntry[]; total: number }
+  hoursPromptOpen: boolean
 }
 
 const fmtDay = (ymd: string) =>
@@ -341,6 +344,16 @@ export default function DriverJobPage({ params }: { params: { token: string } })
           This page is personal to you — please don&rsquo;t forward it. Your license images are
           stored privately and are visible only to SirReel staff.
         </p>
+      {/* Hours — Wes 2026-09-05: "drivers will be prompted to input hours
+            within their portal". Prompted from the first rental day. */}
+        <DriverHoursCard
+          endpoint={`/api/drive/${token}/hours`}
+          entries={data.hours?.entries ?? []}
+          total={data.hours?.total ?? 0}
+          defaultDate={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())}
+          prompt={!!data.hoursPromptOpen}
+          onChange={(h) => setData((d) => (d ? { ...d, hours: h } : d))}
+        />
       </div>
 
       {/* Floating "Need help?" assistant — same one the public site runs. */}
