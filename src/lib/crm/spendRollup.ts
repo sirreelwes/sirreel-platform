@@ -38,6 +38,7 @@
  * factor nobody could explain.
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 export interface CompanyRollupRow {
@@ -198,19 +199,31 @@ export async function applyRollup(
 
   const rolledUpAt = new Date()
 
-  // One statement per company. 793 updates is a couple of seconds and
-  // keeps the code obvious; a CASE-based bulk update would be faster and
-  // far harder to reason about when a number looks wrong.
-  for (const row of plan.rows) {
-    await prisma.company.update({
-      where: { id: row.companyId },
-      data: {
-        totalSpend: row.totalSpend,
-        totalBookings: row.totalBookings,
-        lastRentalAt: row.lastRentalAt,
-        spendRolledUpAt: rolledUpAt,
-      },
-    })
+  // ONE statement for every company. This was a loop of per-company
+  // updates, described in its own comment as "a couple of seconds" — it
+  // was MEASURED at 42.4s for 797 companies on 2026-09-05, which is a
+  // third of the invoice sync it rides along with. That did not matter
+  // at one run a night; at one every 15 minutes it is 96 runs a day of
+  // it. Same fix as the two RW mirrors got the same day: a single
+  // UPDATE ... FROM (VALUES …) is one round trip regardless of size.
+  //
+  // The values are cast explicitly. Postgres types an unadorned VALUES
+  // parameter as text, and comparing that to a numeric/timestamp column
+  // fails outright rather than quietly coercing.
+  if (plan.rows.length > 0) {
+    const values = plan.rows.map(
+      (r) => Prisma.sql`(${r.companyId}, ${r.totalSpend}, ${r.totalBookings}, ${r.lastRentalAt})`,
+    )
+    await prisma.$executeRaw`
+      UPDATE companies AS c SET
+        total_spend        = v.total_spend::numeric,
+        total_bookings     = v.total_bookings::int,
+        last_rental_at     = v.last_rental_at::timestamp,
+        spend_rolled_up_at = ${rolledUpAt}
+      FROM (VALUES ${Prisma.join(values)})
+        AS v(id, total_spend, total_bookings, last_rental_at)
+      WHERE c.id = v.id
+    `
   }
 
   const rolledIds = plan.rows.map((r) => r.companyId)

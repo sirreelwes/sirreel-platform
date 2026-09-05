@@ -53,19 +53,20 @@ interface SyncResult {
 type Tone = 'ok' | 'warn' | 'bad'
 
 /**
- * The cron in vercel.json fires on the hour and half-hour, all day (the
- * schedule is star-slash-30, which cannot be written inside this comment). It was nightly (11:00 UTC) until 2026-09-05, when Ana asked for the
- * balances to keep up with her through the working day.
+ * The cron in vercel.json fires four times an hour, all day (the schedule
+ * is star-slash-15, which cannot be written inside this comment). It was
+ * nightly (11:00 UTC) until 2026-09-05, when Ana asked for the balances to
+ * keep up with her through the working day.
  */
-const CRON_LABEL = 'every 30 minutes'
+const CRON_LABEL = 'every 15 minutes'
 
 /**
- * A healthy mirror is at most ~30 minutes old. 2h allows for a run or two
- * lost to jitter without crying wolf; past 6h a dozen runs in a row have
+ * A healthy mirror is at most ~15 minutes old. 1h allows for a few runs
+ * lost to jitter without crying wolf; past 3h a dozen runs in a row have
  * been missed, which is no longer ambiguous.
  */
-const AGING_HOURS = 2
-const STALE_HOURS = 6
+const AGING_HOURS = 1
+const STALE_HOURS = 3
 
 function hoursSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 3_600_000
@@ -151,7 +152,7 @@ function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string 
     return {
       tone: 'bad',
       headline: `The mirror has not refreshed since ${relTime(syncedAt)}.`,
-      detail: `Every half-hourly run for the last six hours has been missed and the token is not the cause. ${frozen} Check the cron logs for /api/admin/rw-invoice-sync, then try a manual sync below.`,
+      detail: `Every quarter-hourly run for the last three hours has been missed and the token is not the cause. ${frozen} Check the cron logs for /api/admin/rw-invoice-sync, then try a manual sync below.`,
     }
   }
 
@@ -159,7 +160,7 @@ function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string 
     return {
       tone: 'warn',
       headline: `The last few runs did not land — the mirror is ${relTime(syncedAt)}.`,
-      detail: `More than one half-hourly run has been missed. ${frozen} A manual sync below will confirm whether this is a transient failure or the start of an outage.`,
+      detail: `More than one quarter-hourly run has been missed. ${frozen} A manual sync below will confirm whether this is a transient failure or the start of an outage.`,
     }
   }
 

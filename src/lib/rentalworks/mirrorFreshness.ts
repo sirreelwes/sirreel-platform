@@ -63,11 +63,11 @@ export interface MirrorHealth {
 }
 
 const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
-  // Every 30 minutes (since 2026-09-05 — Ana asked for the balances to
-  // keep up with her as she works), all-or-nothing, ~35s a run. 3h is
-  // six missed runs: one lost run is jitter, six is an outage. No
-  // cursor, so no cycle age to check.
-  invoice: { label: 'Invoices', hours: 3, cycleHours: null },
+  // Every 15 minutes (since 2026-09-05 — Ana asked for the balances to
+  // keep up with her as she works), all-or-nothing, ~110s a run. 90
+  // minutes is six missed runs: one lost run is jitter, six is an
+  // outage. No cursor, so no cycle age to check.
+  invoice: { label: 'Invoices', hours: 1.5, cycleHours: null },
   // Every 2h since 2026-09-05 (was 6h). A full cycle is ~300s of RW
   // fetch, so it still takes two runs and closes about every 4h — which
   // is also the ceiling on row age, because every row in a cycle carries

@@ -192,8 +192,8 @@ interface ChargeRow {
 /**
  * How old the RentalWorks mirror is.
  *
- * Turns amber past two hours and red past six, because the sync runs every
- * 30 minutes (nightly until 2026-09-05): a gap that large means it stopped
+ * Turns amber past an hour and red past three, because the sync runs every
+ * 15 minutes (nightly until 2026-09-05): a gap that large means it stopped
  * running, and the balances on screen are no longer what the client owes.
  * Silence was the actual failure mode — the sync stopped for 15 days and
  * nothing on this page said so.
@@ -203,8 +203,8 @@ function SyncAge({ iso }: { iso: string | null }) {
   const ageMs = Date.now() - new Date(iso).getTime()
   const minutes = Math.floor(ageMs / 60_000)
   const hours = Math.floor(ageMs / 3_600_000)
-  const stale = hours >= 6
-  const aging = hours >= 2
+  const stale = hours >= 3
+  const aging = hours >= 1
   const label =
     minutes < 2
       ? 'just now'
@@ -290,7 +290,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [reversing, setReversing] = useState<string | null>(null)
   const [q, setQ] = useState('')
   // Age of the RentalWorks mirror. Shown because these balances are a
-  // snapshot (refreshed every 30 minutes), not live — an operator quoting a
+  // snapshot (refreshed every 15 minutes), not live — an operator quoting a
   // number to a client needs to know how old it is.
   const [syncedAt, setSyncedAt] = useState<string | null>(null)
   const [invoice, setInvoice] = useState<RwInvoice | null>(null)
