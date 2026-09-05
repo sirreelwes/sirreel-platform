@@ -142,7 +142,7 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
 
   const Root = preview ? 'div' : 'main'
   return (
-    <Root className={preview ? 'rounded-[28px] bg-zinc-950 text-white pb-8 border-[6px] border-zinc-800 shadow-xl' : 'min-h-screen bg-zinc-950 text-white pb-24'}>
+    <Root className={preview ? 'rounded-[28px] bg-zinc-950 text-white pb-8 border-[6px] border-zinc-800 shadow-xl' : 'min-h-screen bg-zinc-950 text-white pb-[max(6rem,env(safe-area-inset-bottom))]'}>
       <div className="mx-auto w-full max-w-md px-5 py-7">
         <header className="mb-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500">
@@ -169,20 +169,23 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
             <dl className="space-y-3">
               {l.address && (
                 <Row icon={<MapPin size={16} aria-hidden />} label="Report to">
-                  <div className="text-[16px] font-semibold text-white">{l.address}</div>
-                  <a
-                    href={`https://maps.google.com/?q=${encodeURIComponent(l.address)}`}
-                    target="_blank" rel="noreferrer"
-                    className="mt-1 inline-block text-[13px] font-semibold text-amber-400 hover:text-amber-300"
-                  >
-                    Open in Maps →
-                  </a>
+                  <div className="text-[17px] font-semibold leading-snug text-white">{l.address}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <a href={`https://maps.apple.com/?daddr=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer"
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-700 text-[14px] font-semibold text-white active:bg-zinc-800">
+                      Apple Maps
+                    </a>
+                    <a href={`https://maps.google.com/?q=${encodeURIComponent(l.address)}`} target="_blank" rel="noreferrer"
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-700 text-[14px] font-semibold text-white active:bg-zinc-800">
+                      Google Maps
+                    </a>
+                  </div>
                 </Row>
               )}
               {l.accessNotes && <Row label="Gate / access"><p className="text-[15px] text-zinc-200 leading-relaxed">{l.accessNotes}</p></Row>}
               {(l.callTime || l.arriveTime) && (
                 <Row icon={<Clock size={16} aria-hidden />} label="Call time">
-                  <div className="text-[22px] font-bold text-white">{l.callTime ?? l.arriveTime}</div>
+                  <div className="text-[28px] font-bold leading-tight text-white">{l.callTime ?? l.arriveTime}</div>
                 </Row>
               )}
               {l.onSiteContactName && <Row label="Ask for"><p className="text-[15px] text-zinc-200">{l.onSiteContactName}</p></Row>}
@@ -228,12 +231,12 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
                 <textarea
                   value={ackNote} onChange={(e) => setAckNote(e.target.value)} rows={2}
                   placeholder="Anything they should know? (optional)"
-                  className="mt-3 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-[15px] text-white focus:outline-none focus:border-amber-500"
+                  className="mt-3 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-3 text-[16px] text-white focus:outline-none focus:border-amber-500"
                 />
                 {ackErr && <p className="mt-2 text-[13px] text-rose-300">{ackErr}</p>}
                 <button
                   onClick={ack} disabled={acking || preview}
-                  className="mt-3 w-full rounded-xl bg-amber-500 px-5 py-3.5 text-[16px] font-bold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
+                  className="mt-3 w-full min-h-[52px] rounded-xl bg-amber-500 px-5 py-3.5 text-[17px] font-bold text-zinc-950 hover:bg-amber-400 active:bg-amber-600 disabled:opacity-50"
                 >
                   {acking ? 'Sending…' : 'I have the location and call time'}
                 </button>
@@ -268,12 +271,12 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
                 <textarea
                   value={q} onChange={(e) => setQ(e.target.value)} rows={3}
                   placeholder="e.g. Is there room to turn a 40ft coach at the north gate?"
-                  className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-[15px] text-white focus:outline-none focus:border-amber-500"
+                  className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-3 text-[16px] text-white focus:outline-none focus:border-amber-500"
                 />
                 {askErr && <p className="mt-2 text-[13px] text-rose-300">{askErr}</p>}
                 <button
                   onClick={ask} disabled={preview || asking || q.trim().length < 3}
-                  className="mt-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-[14px] font-semibold text-white hover:border-zinc-500 disabled:opacity-50"
+                  className="mt-2 min-h-[48px] w-full rounded-xl border border-zinc-700 px-4 py-3 text-[15px] font-semibold text-white hover:border-zinc-500 active:bg-zinc-800 disabled:opacity-50"
                 >
                   {asking ? 'Sending…' : 'Send question'}
                 </button>
@@ -282,9 +285,11 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
           </Section>
         )}
 
-        <p className="mt-6 text-center text-[12px] text-zinc-500">
-          Problem on the day? SirReel dispatch: (888) 477-7335. This link is personal to you.
-        </p>
+        <a href="tel:+18884777335"
+          className="mt-4 flex min-h-[48px] items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-[15px] font-semibold text-white active:bg-zinc-800">
+          Problem on the day? Call SirReel dispatch
+        </a>
+        <p className="mt-3 text-center text-[12px] text-zinc-500">(888) 477-7335 · This link is personal to you.</p>
       </div>
     </Root>
   )

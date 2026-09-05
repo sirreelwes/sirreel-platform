@@ -128,7 +128,10 @@ export function DriverHoursCard({
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="text-[15px] font-bold text-white">{e.hours}h</span>
-                <button onClick={() => remove(e.workDate)} disabled={busy} className="text-[12px] text-zinc-500 hover:text-rose-300">Remove</button>
+                <button onClick={() => remove(e.workDate)} disabled={busy}
+                  className="-mr-2 min-h-[44px] min-w-[44px] px-2 text-[13px] text-zinc-500 hover:text-rose-300 active:text-rose-300">
+                  Remove
+                </button>
               </div>
             </li>
           ))}
@@ -164,19 +167,19 @@ export function DriverHoursCard({
             <button
               onClick={save}
               disabled={readOnly || busy || !workDate || !start || !end}
-              className="rounded-xl bg-amber-500 px-5 py-3 text-[15px] font-bold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
+              className="min-h-[48px] flex-1 rounded-xl bg-amber-500 px-5 py-3 text-[16px] font-bold text-zinc-950 hover:bg-amber-400 active:bg-amber-600 disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save day'}
             </button>
             {entries.length > 0 && (
-              <button onClick={() => setOpen(false)} className="text-[13px] text-zinc-400 hover:text-white">Done</button>
+              <button onClick={() => setOpen(false)} className="min-h-[48px] px-3 text-[14px] text-zinc-400 hover:text-white">Done</button>
             )}
           </div>
           <p className="col-span-2 text-[12px] text-zinc-500">A wrap time earlier than call means you worked past midnight.</p>
         </div>
       ) : (
         (prompt || entries.length > 0) && (
-          <button onClick={() => setOpen(true)} className="mt-3 rounded-xl border border-zinc-700 px-4 py-2.5 text-[14px] font-semibold text-white hover:border-zinc-500">
+          <button onClick={() => setOpen(true)} className="mt-3 min-h-[48px] w-full rounded-xl border border-zinc-700 px-4 py-3 text-[15px] font-semibold text-white hover:border-zinc-500 active:bg-zinc-800">
             {entries.length ? 'Add another day' : 'Log hours'}
           </button>
         )
