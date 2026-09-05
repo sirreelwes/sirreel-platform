@@ -124,7 +124,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
           {upErr && <p className="mt-2 text-[13px] text-rose-300">{upErr}</p>}
         </Section>
 
-        <Section title={`4 · ${data.vendorName}’s units you’re trained to drive`} done={trained.size > 0}>
+        <Section title="4 · Units you’re trained to drive" done={trained.size > 0}>
           {data.vehicles.length === 0 ? (
             <p className="text-[14px] text-zinc-400">{data.vendorName} hasn&rsquo;t listed any units with SirReel yet — nothing to tick.</p>
           ) : (

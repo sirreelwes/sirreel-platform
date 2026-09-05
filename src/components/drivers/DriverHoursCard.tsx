@@ -134,7 +134,7 @@ export function DriverHoursCard({
           {entries.map((e) => (
             <li key={e.workDate} className="px-3 py-2.5 bg-zinc-950/40">
               <div className="flex items-center justify-between gap-3">
-                <button onClick={() => { setWorkDate(e.workDate); setOpen(true) }} className="min-h-[36px] text-left text-[14px] font-semibold text-white">
+                <button onClick={() => { setWorkDate(e.workDate); setOpen(true) }} className="min-h-[44px] text-left text-[14px] font-semibold text-white">
                   {fmtDay(e.workDate)}
                 </button>
                 <div className="flex items-center gap-2 shrink-0">
