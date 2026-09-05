@@ -26,7 +26,7 @@ export default async function VendorAccountPreviewPage({ params }: { params: { v
         <span><strong>Preview</strong> — this is exactly what <strong>{v.vendorName}</strong> sees on their account page. This look does not count as them opening it.</span>
       </div>
       <div className="rounded-xl overflow-hidden border border-lt-hairline">
-        <VendorAccountView v={v} preview />
+        <VendorAccountView v={v} token="preview" preview />
       </div>
     </div>
   )

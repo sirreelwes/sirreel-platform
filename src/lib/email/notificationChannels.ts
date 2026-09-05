@@ -45,6 +45,7 @@ export type NotificationChannelKey =
   | 'eod-collections'
   | 'eod-unassigned-units'
   | 'portal-opens'
+  | 'vendor-portal'
   | 'sub-rental-conduit-cc'
 
 export interface NotificationChannelDef {
@@ -57,6 +58,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'vendor-portal',
+    label: 'Partner portal activity',
+    description:
+      'A partner did something on their account page that needs a human: proposed new rates on a unit (nothing changes until you accept), updated their contact details, or signed the partner agreement. Defaults to the hq@ feed.',
+    defaults: () => [hqNotifyInbox()],
+  },
   {
     key: 'sub-rental-conduit-cc',
     label: 'Sub-rental conduit CC',

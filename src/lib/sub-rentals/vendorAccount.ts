@@ -73,6 +73,7 @@ export interface VendorAccountUnit {
   callTime: string | null
   /** The per-unit conduit link, when one has been issued. */
   unitPageUrl: string | null
+  alerts: UnitAlert[]
 }
 
 export interface VendorAccountJob {
@@ -84,15 +85,46 @@ export interface VendorAccountJob {
   startDate: string | null
   endDate: string | null
   units: VendorAccountUnit[]
+  /** Count of alerts across the job's units. */
+  alertCount: number
+}
+
+/** Things the partner still owes on a unit — surfaced as chips. */
+export type UnitAlert = 'confirm' | 'driver' | 'driver-ack' | 'call-time'
+
+export interface VendorAccountFleetUnit {
+  id: string
+  name: string
+  vehicleType: string | null
+  listed: boolean
+  active: boolean
+  daily: number | null
+  weekly: number | null
+  monthly: number | null
+  /** A pending proposal from the partner, awaiting HQ. */
+  proposed: { daily: number | null; weekly: number | null; monthly: number | null; at: string; note: string | null } | null
+}
+
+export interface VendorAccountAgreement {
+  id: string
+  title: string
+  signedAt: string | null
+  signerName: string | null
+  expiryDate: string | null
 }
 
 export interface VendorAccountView {
   vendorId: string
   vendorName: string
   contactName: string | null
+  contactEmail: string | null
+  contactPhone: string | null
   lotAddress: string | null
+  hasLogo: boolean
   /** How many of their units we list for hire. */
   rosterCount: number
+  fleet: VendorAccountFleetUnit[]
+  agreement: VendorAccountAgreement | null
   current: VendorAccountJob[]
   past: VendorAccountJob[]
 }
@@ -115,7 +147,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, lotAddress: true, isActive: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -130,7 +162,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, lotAddress: true, isActive: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor)
@@ -140,9 +172,13 @@ async function buildVendorAccount(vendor: {
   id: string
   name: string
   contactName: string | null
+  email: string | null
+  phone: string | null
   lotAddress: string | null
+  logoUrl: string | null
+  logoSvg: string | null
 }): Promise<VendorAccountView> {
-  const [rows, rosterCount] = await Promise.all([
+  const [rows, rosterCount, fleetRows, agreementRow] = await Promise.all([
     prisma.subRental.findMany({
       where: { vendorId: vendor.id },
       orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
@@ -171,7 +207,22 @@ async function buildVendorAccount(vendor: {
       },
     }),
     prisma.subcontractedVehicle.count({ where: { vendorId: vendor.id } }),
+    prisma.subcontractedVehicle.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      select: {
+        id: true, name: true, vehicleType: true, publiclyListed: true, isActive: true,
+        listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true,
+        proposedDailyRate: true, proposedWeeklyRate: true, proposedMonthlyRate: true, rateProposedAt: true, rateProposalNote: true,
+      },
+    }),
+    prisma.vendorAgreement.findFirst({
+      where: { vendorId: vendor.id, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, signedAt: true, signerName: true, expiryDate: true },
+    }),
   ])
+  const num = (d: unknown) => (d == null ? null : Number(d))
 
   const byJob = new Map<string, VendorAccountJob>()
   for (const r of rows) {
@@ -187,11 +238,17 @@ async function buildVendorAccount(vendor: {
         startDate: null,
         endDate: null,
         units: [],
+        alertCount: 0,
       } satisfies VendorAccountJob)
     const s = iso(r.startDate)
     const e = iso(r.endDate)
     if (s && (!entry.startDate || s < entry.startDate)) entry.startDate = s
     if (e && (!entry.endDate || e > entry.endDate)) entry.endDate = e
+    const alerts: UnitAlert[] = []
+    if (r.status === 'REQUESTED' && !r.vendorConfirmedAt && !r.vendorDeclinedAt) alerts.push('confirm')
+    if ((r.status === 'REQUESTED' || r.status === 'CONFIRMED') && !r.driverName) alerts.push('driver')
+    if ((r.status === 'CONFIRMED' || r.status === 'PICKED_UP') && r.driverName && !r.driverAckedAt) alerts.push('driver-ack')
+    if (r.status === 'CONFIRMED' && !r.callTime) alerts.push('call-time')
     entry.units.push({
       subRentalId: r.id,
       unitName: unitNameOf(r),
@@ -205,7 +262,9 @@ async function buildVendorAccount(vendor: {
       vendorDeclined: !!r.vendorDeclinedAt,
       callTime: r.callTime,
       unitPageUrl: r.vendorToken ? vendorPageUrl(r.vendorToken) : null,
+      alerts,
     })
+    entry.alertCount += alerts.length
     byJob.set(key, entry)
   }
 
@@ -217,8 +276,27 @@ async function buildVendorAccount(vendor: {
     vendorId: vendor.id,
     vendorName: vendor.name,
     contactName: vendor.contactName,
+    contactEmail: vendor.email,
+    contactPhone: vendor.phone,
     lotAddress: vendor.lotAddress,
+    hasLogo: !!(vendor.logoSvg || vendor.logoUrl),
     rosterCount,
+    fleet: fleetRows.map((u) => ({
+      id: u.id,
+      name: u.name,
+      vehicleType: u.vehicleType,
+      listed: u.publiclyListed,
+      active: u.isActive,
+      daily: num(u.listDailyRate),
+      weekly: num(u.listWeeklyRate),
+      monthly: num(u.listMonthlyRate),
+      proposed: u.rateProposedAt
+        ? { daily: num(u.proposedDailyRate), weekly: num(u.proposedWeeklyRate), monthly: num(u.proposedMonthlyRate), at: u.rateProposedAt.toISOString(), note: u.rateProposalNote }
+        : null,
+    })),
+    agreement: agreementRow
+      ? { id: agreementRow.id, title: agreementRow.title, signedAt: agreementRow.signedAt?.toISOString() ?? null, signerName: agreementRow.signerName, expiryDate: agreementRow.expiryDate?.toISOString() ?? null }
+      : null,
     current,
     past,
   }

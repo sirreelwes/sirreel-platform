@@ -4468,6 +4468,14 @@ model Vendor {
   portalViewedAt      DateTime? @map("portal_viewed_at")
   portalViewCount     Int       @default(0) @map("portal_view_count")
 
+  /// The partner's mark on their account page — same treatment as
+  /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).
+  logoUrl        String?   @map("logo_url")
+  logoSvg        String?   @map("logo_svg") @db.Text
+  logoUploadedAt DateTime? @map("logo_uploaded_at")
+
+  agreements VendorAgreement[]
+
   subRentals            SubRental[]
   // Reverse relation: InventoryItems with this vendor as their
   // preferred reorder source. Same Vendor table feeds both
@@ -4814,6 +4822,18 @@ model SubcontractedVehicle {
   // Structure nuances three numbers can't hold: 3-day rental weeks,
   // delivery/driver fees, fuel, damage waiver, minimums.
   rateNotes       String?  @map("rate_notes") @db.Text
+
+  /// A NEW list rate the partner has asked for from their account page.
+  /// Never applied on its own: our client price is quoted off these and
+  /// the discount below, so a partner raising cost past what we charge is
+  /// a margin decision for HQ. Staff accept (copies into list*Rate, clears
+  /// these) or decline (clears these). Wes 2026-09-05: "a place to change
+  /// the rates on those vehicles."
+  proposedDailyRate   Decimal?  @map("proposed_daily_rate") @db.Decimal(10, 2)
+  proposedWeeklyRate  Decimal?  @map("proposed_weekly_rate") @db.Decimal(10, 2)
+  proposedMonthlyRate Decimal?  @map("proposed_monthly_rate") @db.Decimal(10, 2)
+  rateProposedAt      DateTime? @map("rate_proposed_at")
+  rateProposalNote    String?   @map("rate_proposal_note") @db.Text
 
   // SirReel's negotiated discount off list, in percent (25.00 = 25%).
   // Net cost is DERIVED at read time (list × (1 − discount/100)) and
@@ -8863,4 +8883,57 @@ model CompanyDiscount {
 
   @@index([companyId, isActive])
   @@map("sr_company_discounts")
+}
+
+/// The contract between SirReel and a partner whose units we sublease.
+///
+/// Wes 2026-09-05: "We also should have a contract of some sort between KK
+/// and SirReel and all other vendors."
+///
+/// The DOCUMENT is uploaded by staff (a PDF — the terms are Wes's to
+/// write, not ours to invent), then offered on the partner's account page,
+/// where they read it and sign with the same evidence the client
+/// agreements carry: typed name, title, drawn signature, acknowledgement,
+/// IP, UA. Signing appends a signature page to the uploaded PDF and stores
+/// that as the executed copy; the uploaded original is kept.
+///
+/// One live agreement per vendor: filing a new one supersedes (soft-deletes)
+/// the last, so "which terms govern King Kong" has one answer.
+model VendorAgreement {
+  id       String @id @default(uuid())
+  vendorId String @map("vendor_id")
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  title            String
+  /// The unsigned document as uploaded.
+  fileKey          String @map("file_key")
+  fileUrl          String @map("file_url")
+  originalFilename String @map("original_filename")
+  fileSize         Int    @map("file_size")
+
+  effectiveDate DateTime? @map("effective_date")
+  expiryDate    DateTime? @map("expiry_date")
+
+  // ── Signature ──────────────────────────────────────────────────────────
+  signedAt           DateTime? @map("signed_at")
+  signerName         String?   @map("signer_name")
+  signerTitle        String?   @map("signer_title")
+  signerEmail        String?   @map("signer_email")
+  signerIpAddress    String?   @map("signer_ip_address")
+  signerUserAgent    String?   @map("signer_user_agent") @db.Text
+  signatureImageData String?   @map("signature_image_data") @db.Text
+  acknowledgmentText String?   @map("acknowledgment_text") @db.Text
+  /// The executed copy: original + appended signature page.
+  signedFileKey      String?   @map("signed_file_key")
+  signedFileUrl      String?   @map("signed_file_url")
+
+  uploadedById String? @map("uploaded_by_id")
+  note         String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([vendorId, deletedAt])
+  @@map("sr_vendor_agreements")
 }

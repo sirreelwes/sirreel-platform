@@ -30,6 +30,7 @@ import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalR
 import { PortalsTabs } from '@/components/crm/PortalsTabs'
 import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
 import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
+import { VendorPartnerPanel } from '@/components/crm/VendorPartnerPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -199,11 +200,18 @@ export default async function CompanyPortalsPage() {
     where: { isActive: true, subRentals: { some: {} } },
     orderBy: { name: 'asc' },
     select: {
-      id: true, name: true, contactName: true,
+      id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true,
+      logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
+      agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
+      subcontractedVehicles: {
+        where: { rateProposedAt: { not: null } },
+        select: { id: true, name: true, listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true, proposedDailyRate: true, proposedWeeklyRate: true, proposedMonthlyRate: true, rateProposedAt: true, rateProposalNote: true },
+      },
     },
   })
+  const dec = (d: unknown) => (d == null ? null : Number(d))
 
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -310,9 +318,15 @@ export default async function CompanyPortalsPage() {
               </h3>
               <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8">
                 {vendorAccounts.map((va) => (
-                  <div key={va.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                  <details key={va.id} className="group">
+                  <summary className="list-none cursor-pointer px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 [&::-webkit-details-marker]:hidden">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-lt-fg truncate">{va.name}</div>
+                      <div className="text-sm font-medium text-lt-fg truncate">
+                        {va.name}
+                        {va.subcontractedVehicles.length > 0 && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">{va.subcontractedVehicles.length} rate proposal{va.subcontractedVehicles.length === 1 ? '' : 's'}</span>}
+                        {va.agreements[0] && !va.agreements[0].signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">agreement unsigned</span>}
+                        {va.agreements[0]?.signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg align-middle">agreement signed</span>}
+                      </div>
                       <div className="text-xs text-lt-fg2 truncate">
                         {va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}
                         {va.contactName ? ` · ${va.contactName}` : ''}
@@ -331,7 +345,22 @@ export default async function CompanyPortalsPage() {
                       </Link>
                       {canEdit && <VendorAccountLinkButton vendorId={va.id} />}
                     </div>
+                  </summary>
+                  <div className="px-4 pb-4 border-t border-lt-hairline pt-3">
+                    <VendorPartnerPanel
+                      vendorId={va.id}
+                      hasLogo={!!(va.logoSvg || va.logoUrl)}
+                      agreement={va.agreements[0] ? { title: va.agreements[0].title, signedAt: va.agreements[0].signedAt?.toISOString() ?? null, signerName: va.agreements[0].signerName, uploadedAt: va.agreements[0].createdAt.toISOString() } : null}
+                      proposals={va.subcontractedVehicles.map((u) => ({
+                        unitId: u.id, unitName: u.name,
+                        current: { daily: dec(u.listDailyRate), weekly: dec(u.listWeeklyRate), monthly: dec(u.listMonthlyRate) },
+                        proposed: { daily: dec(u.proposedDailyRate), weekly: dec(u.proposedWeeklyRate), monthly: dec(u.proposedMonthlyRate) },
+                        at: u.rateProposedAt!.toISOString(), note: u.rateProposalNote,
+                      }))}
+                      contact={{ name: va.contactName, email: va.email, phone: va.phone, lotAddress: va.lotAddress }}
+                    />
                   </div>
+                  </details>
                 ))}
               </div>
               <h3 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">

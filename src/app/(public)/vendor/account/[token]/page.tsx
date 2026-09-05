@@ -14,5 +14,5 @@ export const metadata: Metadata = { robots: { index: false, follow: false } }
 export default async function VendorAccountPage({ params }: { params: { token: string } }) {
   const v = await loadVendorAccount(params.token, { stamp: true })
   if (!v) notFound()
-  return <VendorAccountView v={v} />
+  return <VendorAccountView v={v} token={params.token} />
 }
