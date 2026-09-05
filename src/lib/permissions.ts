@@ -501,8 +501,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // something it doesn't. Their own loop first, then what sales
           // owes them — which is what they quote back when a truck or a
           // cart never reached them.
-          { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
-          { id: 'guide-sending-orders', label: 'How to send orders out', icon: 'BookOpen', href: '/guides/sending-orders' },
+          { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
         ],
       },
     ];
@@ -557,7 +556,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // The how-to sits with the work it describes rather than in a
           // docs section of its own — there is one guide, and a nav
           // branch for one page is worse than the page.
-          { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
+          { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
         ],
       },
       {
@@ -575,10 +574,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
+          { id: 'account-portals', label: 'Portals', icon: 'Building2', href: '/crm/portals' },
           // Billing reads the OTHER end of this one: what sales did (or
           // didn't) do before the balance landed on Collections.
-          { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
+          { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
         ],
       },
       {
@@ -618,18 +617,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // action is sending a client an estimate.
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
-          // The how-to sits with the work it describes (same rule as
-          // "How to collect"): this is the flow that replaces emailing
-          // the booking package, so it belongs in the sales list the
-          // reps already live in.
-          { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
-          { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
-          // Sending is the rep's own half, and the two lanes do not
-          // work the same way — the truck one has a second step that
-          // gets skipped. Their guide comes before the floor's.
-          { id: 'guide-sending-orders', label: 'How to send orders out', icon: 'BookOpen', href: '/guides/sending-orders' },
-          { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
+          { id: 'account-portals', label: 'Portals', icon: 'Building2', href: '/crm/portals' },
+          // Every how-to lives under one entry (Wes 2026-09-05); the
+          // registry in src/lib/guides decides what each role sees.
+          { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
         ],
       },
       {
@@ -656,7 +647,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
             : []),
           { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
           ...(canUseCollections(navRole, navEmail)
-            ? [{ id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' }]
+            ? [{ id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' }]
             : []),
         ],
       },
@@ -702,15 +693,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // action is sending a client an estimate.
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'account-portals', label: 'Company Portals', icon: 'Building2', href: '/crm/portals' },
+          { id: 'account-portals', label: 'Portals', icon: 'Building2', href: '/crm/portals' },
         // Phase 3 composer. Safe to expose before the sending domain
         // exists — the guard closes every send and the page says so.
         { id: 'outreach', label: 'Outreach', icon: 'Send', href: '/outreach' },
         // Everyone who can start a job should be able to find out how.
-        { id: 'guide-starting-a-job', label: 'How to start a job', icon: 'BookOpen', href: '/guides/starting-a-job' },
-        { id: 'guide-finishing-a-job', label: 'How to finish a job', icon: 'BookOpen', href: '/guides/finishing-a-job' },
-        { id: 'guide-sending-orders', label: 'How to send orders out', icon: 'BookOpen', href: '/guides/sending-orders' },
-        { id: 'guide-pull-sheets', label: 'How pull sheets work', icon: 'BookOpen', href: '/guides/pull-sheets' },
+        { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
       ],
     },
     {
@@ -750,7 +738,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // billing both needed it without an Admin section to find it in.
         { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
         // Everyone who can take money should be able to find out how.
-        { id: 'guide-collecting', label: 'How to collect', icon: 'BookOpen', href: '/guides/collecting' },
+        { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },
       ],
     },
     {

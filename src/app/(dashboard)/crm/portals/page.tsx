@@ -16,9 +16,10 @@
  * (companyTermsEditors.ts), enforced on the write routes as well.
  */
 
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2 } from 'lucide-react'
+import { Building2, Link2 } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -84,19 +85,47 @@ export default async function CompanyPortalsPage() {
     }),
   )
 
+  // Job portals: one link per order/contact. Newest first, capped — the
+  // question is "who's active", not the whole history.
+  const jobPortals = await prisma.portalAccess.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    select: {
+      id: true,
+      createdAt: true,
+      revokedAt: true,
+      magicLinkExpiresAt: true,
+      lastAccessedAt: true,
+      accessCount: true,
+      contact: { select: { firstName: true, lastName: true, email: true } },
+      order: {
+        select: {
+          orderNumber: true,
+          job: { select: { id: true, jobCode: true, name: true, company: { select: { name: true } } } },
+        },
+      },
+    },
+  })
+  const fmtStamp = (d: Date | null) =>
+    d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+
   return (
     <div className="max-w-[1100px] mx-auto">
       <div className="flex items-end justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-lt-fg">Company Portals</h1>
+          <h1 className="text-2xl font-semibold text-lt-fg">Portals</h1>
           <p className="text-sm text-lt-fg2 mt-1 max-w-[70ch]">
-            Clients whose executives see their whole account — shows, invoices, agreements and
-            standing deals. Open a company to inspect or change its terms.
-            {!canEdit && ' Changes here are made by Wes, Dani or Jose.'}
+            Two kinds. <strong className="text-lt-fg">Company portals</strong> — executives who see
+            their whole account. <strong className="text-lt-fg">Job portals</strong> — the paperwork
+            link each show&apos;s contact gets. Both show who has opened what.
+            {!canEdit && ' Company terms here are changed by Wes, Dani or Jose.'}
           </p>
         </div>
       </div>
 
+      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
+        Company portals · {rows.length}
+      </h2>
       {rows.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
           <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
@@ -127,6 +156,61 @@ export default async function CompanyPortalsPage() {
               />
             </CompanyPortalRow>
           ))}
+        </div>
+      )}
+
+      {/* ── Job portals ──────────────────────────────────────────────
+          Wes 2026-09-05: "Should we fold Company Portals and Contact
+          portals into one tab?" Yes — the question a rep asks is the same
+          for both: did they get it, did they open it. */}
+      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mt-10 mb-3">
+        Job portals · latest {jobPortals.length}
+      </h2>
+      {jobPortals.length === 0 ? (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+          <Link2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+          <p className="text-sm text-lt-fg2">No job portal links have been issued yet.</p>
+        </div>
+      ) : (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
+          {jobPortals.map((p) => {
+            const job = p.order.job
+            const dead = !!p.revokedAt || p.magicLinkExpiresAt.getTime() < now.getTime()
+            const opened = !!p.lastAccessedAt
+            return (
+              <div key={p.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {job ? (
+                      <Link href={`/jobs/${job.id}`} className="text-sm font-medium text-lt-fg hover:underline truncate">
+                        {job.name || job.jobCode}
+                      </Link>
+                    ) : (
+                      <span className="text-sm font-medium text-lt-fg">Order {p.order.orderNumber}</span>
+                    )}
+                    <span className="text-xs text-lt-fg3 font-mono shrink-0">{p.order.orderNumber}</span>
+                  </div>
+                  <div className="text-xs text-lt-fg2 mt-0.5 truncate">
+                    {job?.company?.name ? `${job.company.name} · ` : ''}
+                    {p.contact.firstName} {p.contact.lastName} · {p.contact.email}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:shrink-0 text-[11px] font-semibold">
+                  <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
+                    sent {fmtStamp(p.createdAt)}
+                  </span>
+                  <span className={`px-2 py-1 rounded ${opened ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
+                    {opened ? `opened ${fmtStamp(p.lastAccessedAt)} (${p.accessCount}×)` : 'never opened'}
+                  </span>
+                  {dead && (
+                    <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
+                      {p.revokedAt ? 'revoked' : 'link expired'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
