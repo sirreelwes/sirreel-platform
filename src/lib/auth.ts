@@ -29,7 +29,13 @@ export const authOptions: NextAuthOptions = {
           // the picker entirely — a second allowed domain could never appear.
           // Domain enforcement belongs in the signIn callback below, which
           // reads the full list from src/lib/authDomains.ts.
-          prompt: 'consent',
+          // select_account + consent (Wes 2026-09-05: "it doesn't let me
+          // choose wes@sirreel.com"). With `consent` alone Google skips the
+          // account chooser whenever the browser already has a default
+          // Google session and goes straight to consent for THAT account —
+          // on a phone signed into a second Google account, sirreel.com is
+          // never offered. Always show the chooser.
+          prompt: 'select_account consent',
           access_type: 'offline',
           response_type: 'code',
         },

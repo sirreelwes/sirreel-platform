@@ -12,7 +12,13 @@ const handler = NextAuth({
         params: {
           scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
           access_type: 'offline',
-          prompt: 'consent',
+          // select_account + consent (Wes 2026-09-05: "it doesn't let me
+          // choose wes@sirreel.com"). With `consent` alone Google skips the
+          // account chooser whenever the browser already has a default
+          // Google session and goes straight to consent for THAT account —
+          // on a phone signed into a second Google account, sirreel.com is
+          // never offered. Always show the chooser.
+          prompt: 'select_account consent',
         },
       },
     }),
