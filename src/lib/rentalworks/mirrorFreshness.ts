@@ -68,12 +68,14 @@ const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: n
   // six missed runs: one lost run is jitter, six is an outage. No
   // cursor, so no cycle age to check.
   invoice: { label: 'Invoices', hours: 3, cycleHours: null },
-  // Every 6h; a full cycle measured ~330s so it takes two runs. Allowing
-  // 24h to close one is generous even if several runs are lost.
-  quote: { label: 'Quotes', hours: 36, cycleHours: 24 },
-  // Three times daily; a cycle measured ~470s across three runs. Same
-  // reasoning, with more slack — it is the least time-critical mirror.
-  orderRef: { label: 'Order index', hours: 48, cycleHours: 36 },
+  // Every 2h since 2026-09-05 (was 6h). A full cycle is ~300s of RW
+  // fetch, so it still takes two runs and closes about every 4h — which
+  // is also the ceiling on row age, because every row in a cycle carries
+  // that cycle's START stamp. 12h is three missed cycles.
+  quote: { label: 'Quotes', hours: 12, cycleHours: 12 },
+  // Every 2h since 2026-09-05 (was three times daily). ~350s of fetch,
+  // two runs, same 4h cycle and the same reasoning.
+  orderRef: { label: 'Order index', hours: 12, cycleHours: 12 },
 }
 
 export async function checkRwMirrorFreshness(now = new Date()): Promise<MirrorHealth[]> {

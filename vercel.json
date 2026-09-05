@@ -82,11 +82,11 @@
     },
     {
       "path": "/api/cron/rw-quote-sync",
-      "schedule": "20 2,8,14,20 * * *"
+      "schedule": "20 */2 * * *"
     },
     {
       "path": "/api/cron/rw-order-refs",
-      "schedule": "40 3,9,17 * * *"
+      "schedule": "50 1-23/2 * * *"
     },
     {
       "path": "/api/cron/rw-mirror-freshness",

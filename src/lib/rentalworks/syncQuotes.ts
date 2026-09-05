@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { rwFetch } from '@/lib/rentalworks/rwClient'
 import { runPagedSync } from '@/lib/rentalworks/pagedSync'
@@ -156,28 +157,44 @@ export async function syncRwQuotes(opts?: { budgetMs?: number }): Promise<RwQuot
 
     async commitPage(rows, cycleStartedAt) {
       if (!rows.length) return
-      // Idempotent by rwQuoteId: a resumed cycle re-fetches the page it
-      // stopped on, and RW can hand the same record back on two pages as
-      // rows shift underneath the paging.
+      // ONE statement per page, idempotent by rwQuoteId: a resumed cycle
+      // re-fetches the page it stopped on, and RW can hand the same
+      // record back on two pages as rows shift underneath the paging.
       //
-      // NOT a loop of upserts. Sequential per-row upserts against Neon
-      // were measured at ~8 MINUTES for 3,771 rows (2026-08-22, see
-      // orderRef.ts) — that alone would blow the budget this whole
-      // rewrite exists to fit inside. createMany lands the new rows in
-      // one statement; the updates refresh what already existed and run
-      // together.
-      await prisma.rwQuote.createMany({
-        data: rows.map((r) => ({ ...r, syncedAt: cycleStartedAt })) as never,
-        skipDuplicates: true,
-      })
-      await Promise.all(
-        rows.map(({ rwQuoteId, ...rest }) =>
-          prisma.rwQuote.updateMany({
-            where: { rwQuoteId },
-            data: { ...(rest as object), syncedAt: cycleStartedAt } as never,
-          }),
-        ),
+      // NOT a loop of upserts, and no longer createMany + N parallel
+      // updateMany either. Sequential per-row upserts were ~8 MINUTES for
+      // 3,771 rows against Neon (2026-08-22). The parallel-update shape
+      // that replaced them looked fine locally and was the reason the
+      // ORDER mirror silently froze for two days on Vercel — 500 parallel
+      // statements never finished inside the function ceiling, and a
+      // killed function runs no catch (2026-09-05, see orderRef.ts). One
+      // upsert is a single round trip whatever the page size.
+      const values = rows.map(
+        (r) => Prisma.sql`(gen_random_uuid(), ${r.rwQuoteId}, ${r.quoteNumber as string | null}, ${r.orderNumber as string | null}, ${r.status as string | null}, ${r.quoteDate as Date | null}, ${r.rwCustomerId as string | null}, ${r.customerName as string | null}, ${r.dealName as string | null}, ${r.dealNumber as string | null}, ${r.description as string | null}, ${r.agent as string | null}, ${r.startDate as Date | null}, ${r.endDate as Date | null}, ${r.total as number | null}, ${r.raw == null ? null : JSON.stringify(r.raw)}::jsonb, ${cycleStartedAt})`,
       )
+      await prisma.$executeRaw`
+        INSERT INTO sr_rw_quotes
+          (id, rw_quote_id, quote_number, order_number, status, quote_date, rw_customer_id,
+           customer_name, deal_name, deal_number, description, agent, start_date, end_date,
+           total, raw, synced_at)
+        VALUES ${Prisma.join(values)}
+        ON CONFLICT (rw_quote_id) DO UPDATE SET
+          quote_number   = EXCLUDED.quote_number,
+          order_number   = EXCLUDED.order_number,
+          status         = EXCLUDED.status,
+          quote_date     = EXCLUDED.quote_date,
+          rw_customer_id = EXCLUDED.rw_customer_id,
+          customer_name  = EXCLUDED.customer_name,
+          deal_name      = EXCLUDED.deal_name,
+          deal_number    = EXCLUDED.deal_number,
+          description    = EXCLUDED.description,
+          agent          = EXCLUDED.agent,
+          start_date     = EXCLUDED.start_date,
+          end_date       = EXCLUDED.end_date,
+          total          = EXCLUDED.total,
+          raw            = EXCLUDED.raw,
+          synced_at      = EXCLUDED.synced_at
+      `
     },
 
     async sweep(cycleStartedAt) {

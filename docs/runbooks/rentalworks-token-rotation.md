@@ -222,8 +222,8 @@ have nothing to do with credentials:
 | Mirror | Job | Notes |
 |---|---|---|
 | Invoices | `/api/admin/rw-invoice-sync` every 30 min (:00 / :30) | ~35s, all-or-nothing; was nightly until 2026-09-05 |
-| Quotes | `/api/cron/rw-quote-sync` 02:20/08:20/14:20/20:20 UTC | resumable; a full cycle is ~330s so it may span runs |
-| Order index | `/api/cron/rw-order-refs` daily 03:40 UTC | resumable |
+| Quotes | `/api/cron/rw-quote-sync` every 2h (even hours, :20) | resumable; a full cycle is ~300s of fetch so it spans two runs and closes ~every 4h |
+| Order index | `/api/cron/rw-order-refs` every 2h (odd hours, :50) | resumable; ~350s of fetch, two runs, closes ~every 4h |
 
 **Check freshness rather than trusting the rotation:**
 
