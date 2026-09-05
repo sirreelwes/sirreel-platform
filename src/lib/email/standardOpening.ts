@@ -16,8 +16,9 @@ export const STANDARD_OPENING_LINE =
   "It's great to hear from you and we are looking forward to the opportunity to partner with you on this project."
 
 /**
- * The PRE-JOB variant — for the two emails that go out before anyone has
- * agreed to anything: the quote, and the first-touch welcome.
+ * The PRE-JOB variant — for the first-touch welcome, the one email that goes
+ * out before anyone has agreed to anything. (The quote used it too until
+ * 2026-09-05; Wes dropped it there — see the quote branch below.)
  *
  * Wes, 2026-08-26. The quote email opened with "really glad we get to work on
  * this with you", which claims the job is already ours. At quote time we do
@@ -71,10 +72,13 @@ export function defaultEmailBody(input: {
   // The "Take a look" closer likewise moved in from welcomeTemplate's
   // quote branch (2026-08-31): with the compose box always sent, a closer
   // outside the box would silently vanish from every quote email.
+  //
+  // No opening line (Wes 2026-09-05, after an automated re-send greeted a
+  // client who already had the quote with "great to hear from you": "drop
+  // the opener on the rep send too"). The quote goes straight to the point;
+  // PRE_JOB_OPENING_LINE now lives only on the first-touch welcome.
   if (input.kind === 'quote') {
     return [
-      PRE_JOB_OPENING_LINE,
-      '',
       "I've put together a first pass at your quote; it's waiting for you on your client portal, along with everything else we'll need for the job.",
       '',
       "Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.",

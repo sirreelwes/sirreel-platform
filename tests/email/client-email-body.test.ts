@@ -8,7 +8,9 @@
  * Two things a client would catch that nothing else guards (Wes 2026-08-26):
  *   · the quote goes out BEFORE we have the job, so it cannot open with
  *     "really glad we get to work on this with you" — it asks for the work
- *     ("we'd love to work with you on this one") rather than assuming it;
+ *     (it used to say "we'd love to work with you on this one"; since
+ *     2026-09-05 it has no opener at all — Wes: "drop the opener on the rep
+ *     send too");
  *   · "Write my own email" has to mean the WHOLE email. A hand-written note
  *     with our templated opener above it and our templated closer below it
  *     reads like two people wrote it — same rule Quick Reply already follows.
@@ -69,7 +71,10 @@ for (const para of DEFAULT_BODY.split(/\n{2,}/)) {
 }
 
 // ── pre-job voice ──
-has('opens without claiming the job', templated.text, "we'd love to work with you on this one")
+// Wes 2026-09-05: no opener on the quote at all — "drop the opener on the
+// rep send too". The quote goes straight to the point.
+lacks('no opener on the quote', templated.text, "we'd love to work with you")
+has('goes straight to the quote', templated.text, "I've put together a first pass at your quote")
 lacks('no "glad we get to work" presumption', templated.text, 'glad we get to work')
 lacks('no presumption in the HTML either', templated.html, 'glad we get to work')
 
