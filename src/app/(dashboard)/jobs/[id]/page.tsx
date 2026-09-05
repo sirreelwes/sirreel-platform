@@ -43,6 +43,7 @@ import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import EnterRedlineModal from '@/components/orders/EnterRedlineModal';
 import { isRedlineAwaitingAction } from '@/lib/jobs/redlineAlert';
+import { isPlaceholderJobName } from '@/lib/jobs/displayName';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -473,6 +474,14 @@ export default function JobDetailPage() {
   // sections down and behind a hand-typed email address.
   const [signSendBusy, setSignSendBusy] = useState(false);
   const [signSendMsg, setSignSendMsg] = useState<string>("");
+  // Wes 2026-09-05: "if there isn't a job name, prompt user to enter it."
+  // An unnamed job is fine while it's a placeholder in HQ; it stops being
+  // fine the moment we send paperwork, because the name is the headline
+  // on the client's portal AND prints on the agreement they sign.
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [namePromptValue, setNamePromptValue] = useState("");
+  const [namePromptBusy, setNamePromptBusy] = useState(false);
+  const [namePromptError, setNamePromptError] = useState<string | null>(null);
   // Header "More" overflow menu + its actions.
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -896,7 +905,51 @@ export default function JobDetailPage() {
     ({ agreement }) => !isSignedAgreementStatus(agreement.status),
   ) || signedOrderAgreements.length === 0;
 
+  /**
+   * The gate. A job with no real name must not go out for signature —
+   * the agreement PDF prints the job name and the client's portal is
+   * headlined by it, so "Reservation" or a Planyo cart placeholder would
+   * reach the client on paper they are asked to sign. Prompt, save the
+   * name (which the PATCH also carries onto the job's bookings, so the
+   * client portal headline moves with it), then send.
+   */
   const sendForSignature = async () => {
+    if (!signatory || !signTargetOrder) return;
+    if (job && isPlaceholderJobName(job.name)) {
+      setNamePromptValue(job.name ?? "");
+      setNamePromptError(null);
+      setNamePromptOpen(true);
+      return;
+    }
+    void doSendForSignature();
+  };
+
+  const saveNameThenSend = async () => {
+    const name = namePromptValue.trim();
+    if (name.length < 2) {
+      setNamePromptError("Give the show a name — this prints on the agreement.");
+      return;
+    }
+    setNamePromptBusy(true);
+    setNamePromptError(null);
+    try {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Could not save the name');
+      setNamePromptOpen(false);
+      await load();
+      await doSendForSignature();
+    } catch (e) {
+      setNamePromptError(e instanceof Error ? e.message : 'Could not save the name');
+    } finally {
+      setNamePromptBusy(false);
+    }
+  };
+
+  const doSendForSignature = async () => {
     if (!signatory || !signTargetOrder) return;
     setSignSendBusy(true);
     setSignSendMsg("");
@@ -2081,6 +2134,45 @@ const driverTone = (d: any): string => {
         {fileSignedMsg && (
           <div className="mb-2.5 text-[12px] text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
             {fileSignedMsg}
+          </div>
+        )}
+        {namePromptOpen && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-lt-card border border-lt-hairline rounded-xl w-full max-w-md p-5">
+              <h3 className="text-base font-semibold text-lt-fg">Name this show first</h3>
+              <p className="text-sm text-lt-fg2 mt-1.5 leading-relaxed">
+                This job has no name yet. It prints on the rental agreement the client signs and
+                headlines their portal, so it needs to be the show&apos;s real name — not
+                &ldquo;Reservation&rdquo;.
+              </p>
+              <input
+                autoFocus
+                value={namePromptValue}
+                onChange={(e) => setNamePromptValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveNameThenSend();
+                  if (e.key === 'Escape') setNamePromptOpen(false);
+                }}
+                placeholder="e.g. TJ Maxx Holiday Spot"
+                className="mt-3 w-full px-3 py-2 bg-white border border-lt-hairline rounded-lg text-[15px] text-lt-fg focus:outline-none focus:border-lt-fg3"
+              />
+              {namePromptError && <p className="text-xs text-chip-bad-fg mt-2">{namePromptError}</p>}
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setNamePromptOpen(false)}
+                  className="text-sm text-lt-fg2 hover:text-lt-fg px-3 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void saveNameThenSend()}
+                  disabled={namePromptBusy || namePromptValue.trim().length < 2}
+                  className="text-sm font-semibold px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40"
+                >
+                  {namePromptBusy ? 'Saving…' : 'Save name and send'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {signSendMsg && (
