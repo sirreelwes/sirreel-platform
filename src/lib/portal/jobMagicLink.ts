@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { alertFirstPortalOpen } from '@/lib/portal/firstOpenAlert'
 import { generateMagicLinkToken } from '@/lib/portal/jobSession'
 
 /**
@@ -122,7 +123,8 @@ export async function resolveJobMagicLink(args: {
           orderNumber: true,
           portalSlug: true,
           portalSunsetAt: true,
-          company: { select: { id: true, name: true } },
+          company: { select: {
+      id: true, name: true } },
         },
       },
     },
@@ -137,6 +139,17 @@ export async function resolveJobMagicLink(args: {
     where: { id: row.id },
     data: { lastAccessedAt: now, accessCount: { increment: 1 } },
   })
+  // First open → one line to HQ (Wes 2026-09-05). Counter read BEFORE the
+  // bump above, so this fires exactly once per person and portal.
+  if (row.accessCount === 0) {
+    alertFirstPortalOpen({
+      kind: 'job',
+      personName: `${row.contact.firstName} ${row.contact.lastName}`.trim(),
+      personEmail: row.contact.email,
+      subject: row.order.company?.name ? `${row.order.company.name} · ${row.order.orderNumber}` : row.order.orderNumber,
+      href: `/orders/${row.order.id}`,
+    }).catch(() => {})
+  }
 
   return {
     portalAccessId: row.id,

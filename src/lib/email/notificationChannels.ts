@@ -44,6 +44,7 @@ export type NotificationChannelKey =
   | 'hq-escalation-warehouse'
   | 'eod-collections'
   | 'eod-unassigned-units'
+  | 'portal-opens'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -55,6 +56,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'portal-opens',
+    label: 'Portal first opens',
+    description:
+      'One email the FIRST time a client opens a portal we sent them — a job paperwork portal, or an executive\'s company portal. Never repeats for the same person and portal (Wes 2026-09-05: "send the first open alert to hq"). Defaults to the hq@ feed.',
+    defaults: () => [hqNotifyInbox()],
+  },
   {
     key: 'hq-documents',
     label: 'HQ notifications',

@@ -35,6 +35,7 @@ import {
   PERSON_SESSION_COOKIE,
   verifyPersonSessionCookieValue,
 } from '@/lib/portal/personSession'
+import { alertFirstPortalOpen } from '@/lib/portal/firstOpenAlert'
 
 export interface CompanyPortalSession {
   accessId: string
@@ -131,6 +132,7 @@ export async function resolveCompanyPortalSession(
       role: true,
       title: true,
       revokedAt: true,
+      accessCount: true,
       company: { select: { id: true, name: true } },
     },
   })
@@ -144,6 +146,16 @@ export async function resolveCompanyPortalSession(
         data: { lastAccessedAt: new Date(), accessCount: { increment: 1 } },
       })
       .catch(() => {})
+    // The FIRST open is news for the desk (Wes 2026-09-05). Once.
+    if (access.accessCount === 0) {
+      alertFirstPortalOpen({
+        kind: 'company',
+        personName: `${person.firstName} ${person.lastName}`.trim(),
+        personEmail: person.email,
+        subject: access.company.name,
+        href: `/crm/portals`,
+      }).catch(() => {})
+    }
   }
 
   return {

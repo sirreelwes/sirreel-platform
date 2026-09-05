@@ -19,7 +19,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2, Link2, Truck } from 'lucide-react'
+import { Building2, Link2, Truck, Users } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -27,6 +27,8 @@ import { canEditCompanyTerms } from '@/lib/portal/companyTermsEditors'
 import { CompanyDiscountsPanel } from '@/components/crm/CompanyDiscountsPanel'
 import { CompanyPortalAccessPanel } from '@/components/crm/CompanyPortalAccessPanel'
 import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalRow'
+import { PortalsTabs } from '@/components/crm/PortalsTabs'
+import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,27 +87,6 @@ export default async function CompanyPortalsPage() {
     }),
   )
 
-  // Job portals: one link per order/contact. Newest first, capped — the
-  // question is "who's active", not the whole history.
-  const jobPortals = await prisma.portalAccess.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 60,
-    select: {
-      id: true,
-      createdAt: true,
-      revokedAt: true,
-      magicLinkExpiresAt: true,
-      lastAccessedAt: true,
-      accessCount: true,
-      contact: { select: { firstName: true, lastName: true, email: true } },
-      order: {
-        select: {
-          orderNumber: true,
-          job: { select: { id: true, jobCode: true, name: true, company: { select: { name: true } } } },
-        },
-      },
-    },
-  })
   // Vendor portals: one link per sub-rental the vendor was sent.
   const vendorPortals = await prisma.subRental.findMany({
     where: { vendorToken: { not: null } },
@@ -126,6 +107,85 @@ export default async function CompanyPortalsPage() {
     },
   })
 
+  // Jobs pane: every order with at least one portal link, grouped by job,
+  // with what the portal currently shows (releases live on the order).
+  const SIGNED = ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED', 'SIGNED_OFFLINE']
+  const ordersWithPortals = await prisma.order.findMany({
+    where: { portalAccesses: { some: {} } },
+    orderBy: { updatedAt: 'desc' },
+    take: 80,
+    select: {
+      id: true,
+      orderNumber: true,
+      quoteSentAt: true,
+      job: { select: { id: true, jobCode: true, name: true, company: { select: { name: true } } } },
+      signedAgreements: { select: { status: true, coveredByCompanyAgreementId: true, coveredByAgreementId: true } },
+      invoices: { where: { OR: [{ status: { in: ['SENT', 'PARTIAL', 'PAID'] } }, { preSentAt: { not: null } }] }, select: { id: true } },
+      portalAccesses: {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, contactId: true, createdAt: true, revokedAt: true, magicLinkExpiresAt: true, lastAccessedAt: true, accessCount: true,
+          contact: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  })
+  const jobsMap = new Map<string, JobPortalJobProps>()
+  for (const o of ordersWithPortals) {
+    if (!o.job) continue
+    const ra = o.signedAgreements.find((a) => true)
+    const agreement: JobPortalJobProps['orders'][number]['agreement'] = !ra
+      ? 'none'
+      : SIGNED.includes(ra.status)
+        ? 'signed'
+        : ra.coveredByCompanyAgreementId || ra.coveredByAgreementId
+          ? 'covered'
+          : ra.status === 'PORTAL_GENERATED'
+            ? 'none'
+            : 'released'
+    const entry = jobsMap.get(o.job.id) ?? {
+      jobId: o.job.id, jobCode: o.job.jobCode, jobName: o.job.name || o.job.jobCode,
+      companyName: o.job.company?.name ?? null, orders: [], canEdit,
+    }
+    entry.orders.push({
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      quoteSent: !!o.quoteSentAt,
+      agreement,
+      invoicesVisible: o.invoices.length,
+      people: o.portalAccesses.filter((a) => !a.revokedAt).map((a) => ({
+        accessId: a.id, contactId: a.contactId,
+        name: `${a.contact.firstName} ${a.contact.lastName}`.trim(), email: a.contact.email,
+        sentAt: a.createdAt.toISOString(), lastAccessedAt: a.lastAccessedAt?.toISOString() ?? null,
+        accessCount: a.accessCount, expired: a.magicLinkExpiresAt.getTime() < now.getTime(),
+      })),
+    })
+    jobsMap.set(o.job.id, entry)
+  }
+  const jobRows = [...jobsMap.values()]
+
+  // Clients pane: people who have actually signed in to a portal.
+  const sessions = await prisma.personSession.findMany({
+    where: { magicLinkUsedAt: { not: null } },
+    orderBy: { lastAccessedAt: 'desc' },
+    take: 200,
+    select: {
+      lastAccessedAt: true, accessCount: true, createdAt: true,
+      person: { select: { id: true, firstName: true, lastName: true, email: true, _count: { select: { jobContacts: true, companyPortalAccesses: true } } } },
+    },
+  })
+  const peopleMap = new Map<string, { id: string; name: string; email: string; lastSeen: Date | null; signIns: number; jobs: number; companies: number }>()
+  for (const s of sessions) {
+    const cur = peopleMap.get(s.person.id)
+    const seen = s.lastAccessedAt ?? s.createdAt
+    if (cur) { cur.signIns += 1; if (!cur.lastSeen || seen > cur.lastSeen) cur.lastSeen = seen; continue }
+    peopleMap.set(s.person.id, {
+      id: s.person.id, name: `${s.person.firstName} ${s.person.lastName}`.trim(), email: s.person.email,
+      lastSeen: seen, signIns: 1, jobs: s.person._count.jobContacts, companies: s.person._count.companyPortalAccesses,
+    })
+  }
+  const clientPeople = [...peopleMap.values()]
+
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
 
@@ -135,18 +195,18 @@ export default async function CompanyPortalsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-lt-fg">Portals</h1>
           <p className="text-sm text-lt-fg2 mt-1 max-w-[70ch]">
-            Three kinds. <strong className="text-lt-fg">Company portals</strong> — executives who see
-            their whole account. <strong className="text-lt-fg">Job portals</strong> — the paperwork
-            link each show&apos;s contact gets. <strong className="text-lt-fg">Vendor portals</strong> —
-            a partner&apos;s link for a sub-rental. All three show who has opened what.
+            Every link we hand out, by kind — who has it, whether they&apos;ve opened it, and where
+            to change what they see.
             {!canEdit && ' Company terms here are changed by Wes, Dani or Jose.'}
           </p>
         </div>
       </div>
 
-      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
-        Company portals · {rows.length}
-      </h2>
+      <PortalsTabs
+        counts={{ company: rows.length, job: jobRows.length, client: clientPeople.length, vendor: vendorPortals.length }}
+        panes={{
+          company: (
+            <div>
       {rows.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
           <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
@@ -180,67 +240,52 @@ export default async function CompanyPortalsPage() {
         </div>
       )}
 
-      {/* ── Job portals ──────────────────────────────────────────────
-          Wes 2026-09-05: "Should we fold Company Portals and Contact
-          portals into one tab?" Yes — the question a rep asks is the same
-          for both: did they get it, did they open it. */}
-      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mt-10 mb-3">
-        Job portals · latest {jobPortals.length}
-      </h2>
-      {jobPortals.length === 0 ? (
-        <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
-          <Link2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
-          <p className="text-sm text-lt-fg2">No job portal links have been issued yet.</p>
-        </div>
-      ) : (
-        <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
-          {jobPortals.map((p) => {
-            const job = p.order.job
-            const dead = !!p.revokedAt || p.magicLinkExpiresAt.getTime() < now.getTime()
-            const opened = !!p.lastAccessedAt
-            return (
-              <div key={p.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {job ? (
-                      <Link href={`/jobs/${job.id}`} className="text-sm font-medium text-lt-fg hover:underline truncate">
-                        {job.name || job.jobCode}
-                      </Link>
-                    ) : (
-                      <span className="text-sm font-medium text-lt-fg">Order {p.order.orderNumber}</span>
-                    )}
-                    <span className="text-xs text-lt-fg3 font-mono shrink-0">{p.order.orderNumber}</span>
-                  </div>
-                  <div className="text-xs text-lt-fg2 mt-0.5 truncate">
-                    {job?.company?.name ? `${job.company.name} · ` : ''}
-                    {p.contact.firstName} {p.contact.lastName} · {p.contact.email}
-                  </div>
+            </div>
+          ),
+          job: (
+            <div className="space-y-3">
+              {jobRows.length === 0 ? (
+                <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+                  <Link2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                  <p className="text-sm text-lt-fg2">No job portal links have been issued yet.</p>
                 </div>
-                <div className="flex items-center gap-2 sm:shrink-0 text-[11px] font-semibold">
-                  <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
-                    sent {fmtStamp(p.createdAt)}
-                  </span>
-                  <span className={`px-2 py-1 rounded ${opened ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
-                    {opened ? `opened ${fmtStamp(p.lastAccessedAt)} (${p.accessCount}×)` : 'never opened'}
-                  </span>
-                  {dead && (
-                    <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
-                      {p.revokedAt ? 'revoked' : 'link expired'}
-                    </span>
-                  )}
+              ) : (
+                jobRows.map((j) => <JobPortalRow key={j.jobId} {...j} />)
+              )}
+            </div>
+          ),
+          client: (
+            <div>
+              {clientPeople.length === 0 ? (
+                <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+                  <Users className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                  <p className="text-sm text-lt-fg2">Nobody has signed in to a portal yet.</p>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
+              ) : (
+                <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
+                  {clientPeople.map((c) => (
+                    <div key={c.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/crm/people/${c.id}`} className="text-sm font-medium text-lt-fg hover:underline">{c.name || c.email}</Link>
+                        <div className="text-xs text-lt-fg2 truncate">{c.email}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                        <span className="px-2 py-1 rounded bg-chip-good-bg text-chip-good-fg">last seen {fmtStamp(c.lastSeen)}</span>
+                        <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.signIns} sign-in{c.signIns === 1 ? '' : 's'}</span>
+                        <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.jobs} job{c.jobs === 1 ? '' : 's'}</span>
+                        {c.companies > 0 && <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.companies} company portal{c.companies === 1 ? '' : 's'}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ),
+          vendor: (
+            <div>
       {/* ── Vendor portals ───────────────────────────────────────────
           Wes 2026-09-05: "Will Vendor portals also fold into that tab?"
           Yes. A partner's link for a sub-rental: sent, opened, acted. */}
-      <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mt-10 mb-3">
-        Vendor portals · latest {vendorPortals.length}
-      </h2>
       {vendorPortals.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
           <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
@@ -285,6 +330,10 @@ export default async function CompanyPortalsPage() {
           })}
         </div>
       )}
+            </div>
+          ),
+        }}
+      />
     </div>
   )
 }
