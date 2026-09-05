@@ -169,7 +169,7 @@ export function DriverHoursCard({
               <div key={s.key} className="grid grid-cols-[1fr_auto] gap-2 items-end">
                 <div>
                   <label className={label}>{s.label} <span className="normal-case tracking-normal font-normal text-zinc-600">— {s.hint}</span></label>
-                  <input type="time" value={stamps[s.key] ?? ''} onChange={(e) => setStamps((m) => ({ ...m, [s.key]: e.target.value }))} className={field} disabled={readOnly} />
+                  <ClockInput value={stamps[s.key] ?? ''} onChange={(v) => setStamps((m) => ({ ...m, [s.key]: v }))} className={field} disabled={readOnly} />
                 </div>
                 <button
                   type="button"
@@ -198,7 +198,7 @@ export function DriverHoursCard({
               <button onClick={() => setOpen(false)} className="min-h-[48px] px-3 text-[14px] text-zinc-400 hover:text-white">Done</button>
             )}
           </div>
-          <p className="text-[12px] text-zinc-500">A wrap earlier on the clock than left-lot means you worked past midnight. Hours are wrap minus left-lot.</p>
+          <p className="text-[12px] text-zinc-500">24-hour clock — 5:30 in the evening is 17:30. A wrap earlier on the clock than left-lot means you worked past midnight. Hours are wrap minus left-lot.</p>
         </div>
       ) : (
         (prompt || entries.length > 0) && !readOnly && (
@@ -208,5 +208,43 @@ export function DriverHoursCard({
         )
       )}
     </section>
+  )
+}
+
+/**
+ * A 24-hour clock field (Wes 2026-09-05: "switch driver entry times to 24hr
+ * clock"). `<input type="time">` renders in the PHONE's locale — 12-hour with
+ * AM/PM on most US devices — and no attribute forces it otherwise, so this is
+ * a numeric text field that masks to HH:MM: type 1730 and it reads 17:30;
+ * 530 reads 05:30. Stored values were always HH:MM 24h; only entry changes.
+ */
+function ClockInput({ value, onChange, className, disabled }: { value: string; onChange: (v: string) => void; className: string; disabled?: boolean }) {
+  const [raw, setRaw] = useState(value)
+  useEffect(() => { setRaw(value) }, [value])
+  function commit(text: string) {
+    const digits = text.replace(/\D/g, '').slice(0, 4)
+    if (!digits) { setRaw(''); onChange(''); return }
+    // 3 digits → H:MM ("530" = 05:30); 1–2 digits → whole hour; 4 → HHMM.
+    const padded = digits.length <= 2 ? `${digits.padStart(2, '0')}00` : digits.padStart(4, '0')
+    const h = Number(padded.slice(0, 2))
+    const m = Number(padded.slice(2, 4))
+    if (h > 23 || m > 59) { setRaw(text); onChange(text); return } // left invalid; the server rejects it with a message
+    const out = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    setRaw(out); onChange(out)
+  }
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="HH:MM"
+      maxLength={5}
+      value={raw}
+      onChange={(e) => setRaw(e.target.value)}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') commit((e.target as HTMLInputElement).value) }}
+      className={`${className} font-mono tracking-wide`}
+      disabled={disabled}
+    />
   )
 }
