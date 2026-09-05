@@ -325,7 +325,7 @@ export function JobDriversSection({
               </div>
               {h.startDate && (
                 <a
-                  href={`/gantt?date=${h.startDate.slice(0, 10)}`}
+                  href={`/gantt?assign=${encodeURIComponent(h.bookingItemId)}&date=${h.startDate.slice(0, 10)}`}
                   className="flex-shrink-0 text-[12px] font-semibold text-amber-700 hover:text-amber-700"
                 >
                   Assign a unit →

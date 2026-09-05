@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2, Pencil, Timer, Wrench, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2, Pencil, Search, Timer, Wrench, X } from 'lucide-react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
@@ -31,6 +31,43 @@ import OutBackStrip from '@/components/scheduling/OutBackStrip';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
+
+// ── Board search (Wes 2026-09-05: "i need a search field on reservations").
+//    One case-insensitive, whitespace-tokenised match over everything a
+//    person would type to find a bar: unit name, category, client, job
+//    name / code, booking number, order numbers (HQ + RW), agent, and for
+//    delivery/pickup tasks the site address. Every token must hit
+//    somewhere, so "cube neko" finds Neko Studio's SuperCube and nothing
+//    else. Pure string work — no dates, no status.
+function searchTokens(q: string): string[] {
+  return q.toLowerCase().split(/\s+/).filter(Boolean)
+}
+function haystack(parts: unknown[]): string {
+  return parts
+    .flat()
+    .filter((x) => x !== null && x !== undefined && x !== '')
+    .map((x) => (typeof x === 'object' ? haystack(Object.values(x as Record<string, unknown>)) : String(x)))
+    .join(' ')
+    .toLowerCase()
+}
+function hitsAll(tokens: string[], hay: string): boolean {
+  return tokens.every((t) => hay.includes(t))
+}
+function bookingHaystack(b: any): string {
+  return haystack([
+    b?.clientName, b?.company, b?.jobName, b?.jobCode, b?.cartId, b?.jobNum,
+    b?.rwOrderNumber, b?.rwOrderNumbers, b?.agent, b?.productionName, b?.contact,
+    b?.attachedOrder?.orderNumber,
+    (b?.orders ?? []).map((o: any) => o?.orderNumber),
+    (b?.items ?? []).map((i: any) => [i?.unitName, i?.category, i?.categoryName]),
+  ])
+}
+function holdHaystack(h: any): string {
+  return haystack([
+    h?.clientName, h?.jobName, h?.jobCode, h?.cartId, h?.categoryName, h?.agent,
+    h?.title, h?.siteAddress, h?.deliveryItems, h?.planyoUnits,
+  ])
+}
 function diffDays(a: string, b: string): number { return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000); }
 function fDay(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }); }
 function fMonth(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
@@ -337,7 +374,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           return (
             <div
               key={`p-${j}`}
-              className={`absolute h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
+              className={`absolute h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'} ${b.dimmed ? 'opacity-25' : ''}`}
               style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
               onPointerDown={canBindUnit ? (ev) => onBarPointerDown(ev, b, entry.unit) : undefined}
               onPointerMove={canBindUnit ? onBarPointerMove : undefined}
@@ -381,7 +418,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             return (
               <div
                 key={`b-${j}`}
-                className="absolute h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
+                className={`absolute h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden ${b.dimmed ? 'opacity-25' : ''}`}
                 style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
                 onClick={(ev) => {
                   ev.stopPropagation()
@@ -497,6 +534,9 @@ export function GanttBoard() {
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
   const [catFilter, setCatFilter] = useState('all')
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
+  const tokens = useMemo(() => searchTokens(query), [query])
   const [jobs, setJobs] = useState<any[]>([])
   const [units, setUnits] = useState<any[]>([])
   const [unassignedHolds, setUnassignedHolds] = useState<any[]>([])
@@ -564,9 +604,23 @@ export function GanttBoard() {
 
   // Deep-link: /gantt?date=YYYY-MM-DD centers the window near that date
   // (used by the job page's reserved-asset links). Runs once on mount.
+  //
+  // /gantt?assign=<bookingItemId> (Wes 2026-09-05: "Assign a unit in
+  // Calendar opened reservations, but with no job cued up") opens the
+  // Assign-units picker for that hold on arrival — booking, job, category,
+  // dates and quoted lines all filled in, only the unit left to choose.
+  // The param is stripped once consumed so a reload doesn't re-open it.
   useEffect(() => {
-    const d = new URLSearchParams(window.location.search).get('date')
+    const sp = new URLSearchParams(window.location.search)
+    const d = sp.get('date')
     if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setAnchorDate(addDays(d, -3))
+    const assign = sp.get('assign')
+    if (assign && /^[A-Za-z0-9_-]{6,64}$/.test(assign)) {
+      setAssignBookingItemId(assign)
+      sp.delete('assign')
+      const qs = sp.toString()
+      window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1119,7 +1173,27 @@ export function GanttBoard() {
   }
 
   const allCats = [...new Set(units.map(u => u.cat))].sort()
-  const filteredUnits = catFilter === 'all' ? units : units.filter(u => u.cat === catFilter)
+  const catUnits = catFilter === 'all' ? units : units.filter(u => u.cat === catFilter)
+  // Search narrows the roster to units that match by NAME/CATEGORY (every
+  // bar kept) or that carry a matching BOOKING in the fetched range. On a
+  // booking-matched row the other bars are kept but dimmed — hiding them
+  // would make a busy truck look free. Idle units that don't match drop out.
+  const filteredUnits = useMemo(() => {
+    if (tokens.length === 0) return catUnits
+    const out: any[] = []
+    for (const u of catUnits) {
+      const unitHit = hitsAll(tokens, haystack([u.unitName, u.resourceName, CAT_LABELS[u.cat] ?? u.cat]))
+      const bs: any[] = Array.isArray(u.bookings) ? u.bookings : []
+      const hits = bs.map((b) => !!b && hitsAll(tokens, bookingHaystack(b)))
+      if (!unitHit && !hits.some(Boolean)) continue
+      out.push(unitHit ? u : { ...u, bookings: bs.map((b, i) => (b && !hits[i] ? { ...b, dimmed: true } : b)) })
+    }
+    return out
+  }, [catUnits, tokens])
+  const filteredJobs = useMemo(
+    () => (tokens.length === 0 ? jobs : jobs.filter((j) => hitsAll(tokens, bookingHaystack(j)))),
+    [jobs, tokens],
+  )
 
   // Drop-target validity for the WHOLE board, computed ONCE per drag gesture
   // (not per row per frame). Rows derive a DropState string from this map —
@@ -1318,7 +1392,8 @@ export function GanttBoard() {
     const visibleUnassigned = unassignedHolds.filter((h) => {
       const inWindow = h.start <= visibleEnd && h.end >= visibleStart
       const matchesCatFilter = catFilter === 'all' || h.cat === catFilter
-      return inWindow && matchesCatFilter
+      const matchesQuery = tokens.length === 0 || hitsAll(tokens, holdHaystack(h))
+      return inWindow && matchesCatFilter && matchesQuery
     })
     if (visibleUnassigned.length > 0) {
       // One compact band at the top of the chart. Two kinds ride it:
@@ -1386,7 +1461,7 @@ export function GanttBoard() {
     }
     return { rowEntries: entries }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredUnits, unassignedHolds, catFilter, weeks, startDate, totalDays])
+  }, [filteredUnits, unassignedHolds, catFilter, tokens, weeks, startDate, totalDays])
 
   return (
     <div>
@@ -1396,10 +1471,39 @@ export function GanttBoard() {
           <h1 className="text-lg font-bold text-gray-900">{SCHEDULE_LABEL}</h1>
           <ScheduleViewToggle current="gantt" />
           {loading && <span className="text-[11px] text-gray-400">Loading...</span>}
-          {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Live</span>}
+          {!loading && (
+            <span className="text-[11px] text-gray-400">
+              {tokens.length > 0
+                ? `${filteredUnits.length} of ${units.length} units · ${filteredJobs.length} of ${jobs.length} jobs match`
+                : `${units.length} units · ${jobs.length} jobs · Live`}
+            </span>
+          )}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button onClick={() => setView('asset')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'asset' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Asset</button>
             <button onClick={() => setView('job')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'job' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Job</button>
+          </div>
+          {/* Search — unit, client, job, booking #, order #, agent. Filters
+              both views and the needs-assignment lane; Esc clears. */}
+          <div className="relative flex items-center">
+            <Search size={13} className="absolute left-2.5 text-gray-400 pointer-events-none" aria-hidden />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); e.currentTarget.blur() } }}
+              placeholder="Search unit, client, job, order #…"
+              aria-label="Search reservations"
+              className="h-8 w-56 md:w-64 pl-7 pr-7 rounded-lg border border-gray-200 bg-white text-[11px] text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); searchRef.current?.focus() }}
+                className="absolute right-1.5 w-5 h-5 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                aria-label="Clear search"
+              ><X size={12} aria-hidden /></button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1657,7 +1761,7 @@ export function GanttBoard() {
                 )
               })
             ) : (
-              jobs.map((job, i) => (
+              filteredJobs.map((job, i) => (
                 <div
                   key={i}
                   className="h-8 border-b border-gray-100 px-3 flex items-center cursor-pointer hover:bg-gray-100 bg-gray-50"
@@ -1808,7 +1912,7 @@ export function GanttBoard() {
                   )
                 })
               ) : (
-                jobs.map((job, i) => (
+                filteredJobs.map((job, i) => (
                   <div key={i} className="relative h-8 border-b border-gray-100">
                     <div className="absolute inset-0 flex pointer-events-none">
                       {dayMeta.map(d => (

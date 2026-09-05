@@ -2503,7 +2503,7 @@ const driverTone = (d: any): string => {
             {pendingHolds.map((h) => (
               <Link
                 key={h.bookingItemId}
-                href={h.startDate ? `/gantt?date=${h.startDate.slice(0, 10)}` : '/gantt'}
+                href={`/gantt?assign=${encodeURIComponent(h.bookingItemId)}${h.startDate ? `&date=${h.startDate.slice(0, 10)}` : ''}`}
                 title="Held at category level — open the calendar to assign a specific unit"
                 className="group rounded-xl border border-dashed border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
