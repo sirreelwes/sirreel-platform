@@ -180,6 +180,25 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
             {v.past.map((j) => <JobCard key={j.jobId ?? j.jobName} job={j} preview={preview} unitHref={unitHref} />)}
           </>
         )}
+
+        {/* "See what HQ can do for you" — Wes 2026-09-05. The white-label
+            HQ (by VerMar Design) a partner can run their own fleet on. Once
+            they've started one, this is the way back into it. */}
+        <div style={{ marginTop: 36, borderTop: '1px solid #e2ddd0', paddingTop: 18, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          {v.hq.workspace ? (
+            <>
+              <div style={{ fontSize: 13, color: '#6b6560' }}>
+                Your own HQ is running{v.hq.workspace.status === 'TRIAL' && v.hq.workspace.trialDaysLeft != null ? ` · ${v.hq.workspace.trialDaysLeft > 0 ? `${v.hq.workspace.trialDaysLeft} day${v.hq.workspace.trialDaysLeft === 1 ? '' : 's'} left on your trial` : 'trial ended'}` : ''}.
+              </div>
+              <a href={preview ? '#' : v.hq.workspace.url} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>Open your HQ →</a>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: '#6b6560' }}>Run your whole fleet — not just what you rent us — from one place.</div>
+              <a href={preview || !v.hq.landingPath ? '#' : v.hq.landingPath} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>See what HQ can do for you →</a>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

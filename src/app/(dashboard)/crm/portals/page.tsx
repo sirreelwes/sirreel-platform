@@ -205,6 +205,8 @@ export default async function CompanyPortalsPage() {
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
       agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
+      // Their white-label HQ workspace (HQ by VerMar Design), if started.
+      workspace: { select: { status: true, plan: true, trialEndsAt: true, accessToken: true, openCount: true, lastOpenedAt: true, requestedByName: true } },
       subcontractedVehicles: {
         where: { rateProposedAt: { not: null } },
         select: { id: true, name: true, listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true, proposedDailyRate: true, proposedWeeklyRate: true, proposedMonthlyRate: true, rateProposedAt: true, rateProposalNote: true },
@@ -326,6 +328,12 @@ export default async function CompanyPortalsPage() {
                         {va.subcontractedVehicles.length > 0 && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">{va.subcontractedVehicles.length} rate proposal{va.subcontractedVehicles.length === 1 ? '' : 's'}</span>}
                         {va.agreements[0] && !va.agreements[0].signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">agreement unsigned</span>}
                         {va.agreements[0]?.signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg align-middle">agreement signed</span>}
+                        {va.workspace && (
+                          <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded align-middle ${va.workspace.status === 'ACTIVE' ? 'bg-chip-good-bg text-chip-good-fg' : va.workspace.status === 'TRIAL' ? 'bg-chip-warn-bg text-chip-warn-fg' : 'bg-chip-neutral-bg text-chip-neutral-fg'}`}>
+                            HQ {va.workspace.status === 'TRIAL' ? `trial${va.workspace.trialEndsAt ? ` to ${fmtStamp(va.workspace.trialEndsAt)}` : ''}` : va.workspace.status.toLowerCase().replace('_', ' ')}
+                            {va.workspace.openCount > 0 ? ` · opened ${va.workspace.openCount}×` : ' · never opened'}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-lt-fg2 truncate">
                         {va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}
@@ -343,6 +351,11 @@ export default async function CompanyPortalsPage() {
                       <Link href={`/crm/portals/preview/vendor-account/${va.id}`} className="border border-lt-hairline rounded-md px-2 py-1 text-lt-fg hover:text-black">
                         Preview
                       </Link>
+                      {va.workspace?.accessToken && (va.workspace.status === 'TRIAL' || va.workspace.status === 'ACTIVE') && (
+                        <a href={`/hq/${va.workspace.accessToken}`} target="_blank" rel="noreferrer" className="border border-lt-hairline rounded-md px-2 py-1 text-lt-fg hover:text-black" title="Their white-label HQ. A staff open isn't counted.">
+                          Their HQ ↗
+                        </a>
+                      )}
                       {canEdit && <VendorAccountLinkButton vendorId={va.id} />}
                     </div>
                   </summary>

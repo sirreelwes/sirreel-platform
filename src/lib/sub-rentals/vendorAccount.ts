@@ -26,6 +26,7 @@ import type { SubRentalStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { unitNameOf } from '@/lib/sub-rentals/conduit'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
+import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
 
 export function vendorAccountPath(token: string): string {
   return `/vendor/account/${token}`
@@ -127,6 +128,14 @@ export interface VendorAccountView {
   agreement: VendorAccountAgreement | null
   current: VendorAccountJob[]
   past: VendorAccountJob[]
+  /**
+   * The "See what HQ can do for you" strip at the bottom (Wes 2026-09-05).
+   * `workspace` is set once they've started one — then the strip opens it.
+   */
+  hq: {
+    landingPath: string | null
+    workspace: { url: string; status: string; trialDaysLeft: number | null } | null
+  }
 }
 
 const PAST: SubRentalStatus[] = ['RETURNED', 'CANCELLED']
@@ -155,7 +164,7 @@ export async function loadVendorAccount(
       .update({ where: { id: vendor.id }, data: { portalViewedAt: new Date(), portalViewCount: { increment: 1 } } })
       .catch(() => {})
   }
-  return buildVendorAccount(vendor)
+  return buildVendorAccount(vendor, token)
 }
 
 /** HQ preview by id — same shape, no token needed, never stamps. */
@@ -165,7 +174,7 @@ export async function loadVendorAccountById(vendorId: string): Promise<VendorAcc
     select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true },
   })
   if (!vendor) return null
-  return buildVendorAccount(vendor)
+  return buildVendorAccount(vendor, null)
 }
 
 async function buildVendorAccount(vendor: {
@@ -177,8 +186,8 @@ async function buildVendorAccount(vendor: {
   lotAddress: string | null
   logoUrl: string | null
   logoSvg: string | null
-}): Promise<VendorAccountView> {
-  const [rows, rosterCount, fleetRows, agreementRow] = await Promise.all([
+}, portalToken: string | null): Promise<VendorAccountView> {
+  const [rows, rosterCount, fleetRows, agreementRow, hqWorkspace] = await Promise.all([
     prisma.subRental.findMany({
       where: { vendorId: vendor.id },
       orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
@@ -206,9 +215,11 @@ async function buildVendorAccount(vendor: {
         },
       },
     }),
-    prisma.subcontractedVehicle.count({ where: { vendorId: vendor.id } }),
+    prisma.subcontractedVehicle.count({ where: { vendorId: vendor.id, offeredToSirReel: true } }),
     prisma.subcontractedVehicle.findMany({
-      where: { vendorId: vendor.id },
+      // Only what they OFFER us — units they keep to themselves in their
+      // own HQ workspace (offeredToSirReel false) are not our business.
+      where: { vendorId: vendor.id, offeredToSirReel: true },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       select: {
         id: true, name: true, vehicleType: true, publiclyListed: true, isActive: true,
@@ -221,6 +232,7 @@ async function buildVendorAccount(vendor: {
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, signedAt: true, signerName: true, expiryDate: true },
     }),
+    workspaceLinkForVendor(vendor.id),
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))
 
@@ -299,5 +311,9 @@ async function buildVendorAccount(vendor: {
       : null,
     current,
     past,
+    hq: {
+      landingPath: portalToken ? hqLandingPath(portalToken) : null,
+      workspace: hqWorkspace,
+    },
   }
 }

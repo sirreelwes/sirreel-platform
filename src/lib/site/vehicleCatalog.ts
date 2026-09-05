@@ -169,6 +169,8 @@ function shape(r: Row): PublicVehicle {
  * an entry that renders as a placeholder is worse than no entry.
  */
 const SUB_LISTED_WHERE: Prisma.SubcontractedVehicleWhereInput = {
+  // A unit the partner keeps for themselves in their HQ workspace is not ours to list.
+  offeredToSirReel: true,
   isActive: true,
   publiclyListed: true,
   publicSlug: { not: null },

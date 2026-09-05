@@ -24,7 +24,9 @@ export async function GET(req: NextRequest) {
 
   const includeInactive = new URL(req.url).searchParams.get('includeInactive') === '1'
   const vehicles = await prisma.subcontractedVehicle.findMany({
-    where: includeInactive ? {} : { isActive: true },
+    // Units a partner keeps for themselves in their HQ workspace
+    // (offeredToSirReel false) never reach the roster.
+    where: { offeredToSirReel: true, ...(includeInactive ? {} : { isActive: true }) },
     include: { vendor: { select: { id: true, name: true, contactName: true, phone: true, email: true } } },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })

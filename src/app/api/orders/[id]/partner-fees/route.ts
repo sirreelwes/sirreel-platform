@@ -87,7 +87,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       : []
     const onJobIds = new Set(onJob.map((s) => s.subcontractedVehicleId!))
     const vehicles = await prisma.subcontractedVehicle.findMany({
-      where: { isActive: true },
+      where: { isActive: true, offeredToSirReel: true },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, vehicleType: true },
     })

@@ -4489,6 +4489,8 @@ model Vendor {
   subcontractedFees     SubcontractedFee[]
   // The partner's own driver roster — see VendorDriver.
   drivers               VendorDriver[]
+  // The partner's white-label HQ workspace, if they've started one.
+  workspace             VendorWorkspace?
 
   @@map("vendors")
 }
@@ -4878,10 +4880,20 @@ model SubcontractedVehicle {
   /// note someone happened to type. NULL renders no blurb at all.
   publicDescription String? @map("public_description") @db.Text
 
+  /// FALSE = a unit the partner keeps in their white-label HQ for their own
+  /// bookings but does NOT offer SirReel for sublease. Every SirReel-side
+  /// reader (roster page, partner-fee picker, catalog, the partner page's
+  /// "your units with SirReel") filters on true; the partner's HQ shows all.
+  /// Default true so every row that existed before the workspace shipped
+  /// keeps meaning what it meant: a unit we can rent.
+  offeredToSirReel Boolean @default(true) @map("offered_to_sirreel")
+
   vendor         Vendor                      @relation(fields: [vendorId], references: [id])
   fees           SubcontractedFee[]
   photos         SubcontractedVehiclePhoto[]
   subRentals     SubRental[]
+  /// The partner's OWN bookings of this unit, kept in their HQ workspace.
+  workspaceBookings VendorWorkspaceBooking[]
   /// Roster drivers the partner says are trained on this unit.
   trainedDrivers VendorDriver[]              @relation("VendorDriverTrainedVehicles")
 
@@ -8936,4 +8948,148 @@ model VendorAgreement {
 
   @@index([vendorId, deletedAt])
   @@map("sr_vendor_agreements")
+}
+
+// ── White-label HQ ("HQ by VerMar Design") ──────────────────────────────
+//
+// Wes 2026-09-05: "start creating the white label HQ for vendors who use
+// our portal. Eventually we will add a link at the bottom that says 'See
+// what HQ can do for you' and we will have a simplified version of
+// SirReel's HQ that they can subscribe to — paying VerMar Design."
+//
+// One workspace per partner (Vendor). The workspace is the TENANT: it wears
+// the partner's brand (never SirReel's — the product is VerMar Design's,
+// SirReel is just the partner's biggest client inside it), holds their own
+// bookings and clients, and carries its own credential. SirReel's
+// sub-rentals of their units flow in read-only as bookings from one more
+// client, so the partner gets one calendar for their whole fleet.
+//
+// Status is the SUBSCRIPTION lifecycle, not usage: INTERESTED is a lead
+// (pressed the link, never started), TRIAL → ACTIVE once VerMar is paid,
+// PAST_DUE / CANCELLED close the door. Billing columns are deliberately
+// processor-agnostic — none is chosen yet.
+
+enum VendorWorkspaceStatus {
+  INTERESTED
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum VendorWorkspacePlan {
+  STARTER
+  PRO
+}
+
+model VendorWorkspace {
+  id       String @id @default(uuid())
+  vendorId String @unique @map("vendor_id")
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  /// The name the product wears — the partner's, editable by them.
+  brandName   String  @map("brand_name")
+  /// Their accent, hex. NULL = the product's neutral default (not SirReel gold).
+  accentColor String? @map("accent_color") @db.VarChar(9)
+  /// Reserved for a per-tenant hostname later (<slug>.hq.vermardesign.com).
+  slug        String  @unique
+
+  status VendorWorkspaceStatus @default(TRIAL)
+  plan   VendorWorkspacePlan   @default(STARTER)
+
+  interestedAt   DateTime  @default(now()) @map("interested_at")
+  trialStartedAt DateTime? @map("trial_started_at")
+  trialEndsAt    DateTime? @map("trial_ends_at")
+  subscribedAt   DateTime? @map("subscribed_at")
+  cancelledAt    DateTime? @map("cancelled_at")
+
+  /// Who at the partner pressed "start", from their SirReel partner page.
+  requestedByName  String? @map("requested_by_name")
+  requestedByEmail String? @map("requested_by_email")
+  requestNote      String? @map("request_note") @db.Text
+
+  /// Subscription bookkeeping for VerMar Design. The processor is not
+  /// chosen; these hold whatever it hands back.
+  billingEmail       String? @map("billing_email")
+  billingProvider    String? @map("billing_provider")
+  billingCustomerRef String? @map("billing_customer_ref")
+
+  /// The workspace credential — /hq/[token]. 32 random bytes, base64url,
+  /// long-lived, same contract as Vendor.portalToken.
+  accessToken         String?   @unique @map("access_token")
+  accessTokenMintedAt DateTime? @map("access_token_minted_at")
+  lastOpenedAt        DateTime? @map("last_opened_at")
+  openCount           Int       @default(0) @map("open_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  clients  VendorWorkspaceClient[]
+  bookings VendorWorkspaceBooking[]
+
+  @@index([status])
+  @@map("sr_vendor_workspaces")
+}
+
+/// The partner's OWN customers — productions that book them directly, not
+/// through SirReel. Deliberately its own table, not `companies`: those are
+/// SirReel's clients, and a tenant's book must never read or write ours.
+model VendorWorkspaceClient {
+  id          String          @id @default(uuid())
+  workspaceId String          @map("workspace_id")
+  workspace   VendorWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name        String
+  contactName String? @map("contact_name")
+  email       String?
+  phone       String? @db.VarChar(30)
+  notes       String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bookings VendorWorkspaceBooking[]
+
+  @@index([workspaceId, name])
+  @@map("sr_vendor_workspace_clients")
+}
+
+enum VendorWorkspaceBookingStatus {
+  HOLD
+  CONFIRMED
+  OUT
+  RETURNED
+  CANCELLED
+}
+
+/// A booking the partner made THEMSELVES, of one of their units, for one
+/// of their own clients. SirReel's bookings of the same units are
+/// SubRental rows and are merged in at read time — never copied here.
+model VendorWorkspaceBooking {
+  id          String          @id @default(uuid())
+  workspaceId String          @map("workspace_id")
+  workspace   VendorWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicleId   String          @map("vehicle_id")
+  vehicle     SubcontractedVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  clientId    String?         @map("client_id")
+  client      VendorWorkspaceClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  /// The show / production, as the partner names it.
+  title     String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  status    VendorWorkspaceBookingStatus @default(HOLD)
+
+  dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
+  location   String?  @db.Text
+  callTime   String?  @map("call_time") @db.VarChar(120)
+  driverName String?  @map("driver_name")
+  notes      String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId, startDate])
+  @@index([vehicleId, startDate])
+  @@map("sr_vendor_workspace_bookings")
 }
