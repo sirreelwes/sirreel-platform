@@ -23,7 +23,8 @@
  * Where the client agreement (contractClauses.ts) sets a number we mirror it
  * so the two documents do not contradict each other: 24-hour cancellation,
  * one day's rate on a late cancel, 30 days' notice on insurance changes,
- * California law.
+ * California law, and — Wes 2026-09-05 — SirReel never supplies drivers, for
+ * a partner's unit any more than for its own (client clause 12).
  */
 
 export interface VendorAgreementClause {
@@ -33,7 +34,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-05'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-05b'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -80,7 +81,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '7',
     title: 'Drivers',
-    body: 'A Vehicle may be driven by drivers SirReel approves, which may include SirReel staff, the production’s qualified drivers as permitted by the SirReel Rental Agreement, or drivers you supply. Every driver must be properly licensed for the Vehicle and insured under the coverage in Section 4. Drivers you supply remain your employees or contractors: you are responsible for their licensing, medical cards where required, wages, payroll taxes, workers’ compensation and hours-of-service compliance, and SirReel pays you the driver rate agreed for the booking. Driver time is measured portal to portal from your lot, recorded on the partner page, and paid in the increments shown there. On set your driver follows the production’s reasonable direction about the work but takes instruction about the Vehicle only from SirReel and you.',
+    body: 'SirReel does not supply drivers, for your Vehicles or for its own. A Vehicle on a booking is driven either by the production’s own qualified driver, whom the production must supply, employ and insure under the SirReel Rental Agreement, or by a driver you supply from your roster when SirReel books one for that Vehicle. Every driver must be properly licensed for the Vehicle and insured under the coverage in Section 4. Drivers you supply remain your employees or contractors: you are responsible for their licensing, medical cards where required, wages, payroll taxes, workers’ compensation and hours-of-service compliance, and SirReel pays you the driver rate agreed for the booking. Driver time is measured portal to portal from your lot, recorded on the partner page, and paid in the increments shown there. On set your driver follows the production’s reasonable direction about the work but takes instruction about the Vehicle only from SirReel and you.',
   },
   {
     ref: '8',
