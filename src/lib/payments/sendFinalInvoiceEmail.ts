@@ -14,12 +14,24 @@
  *
  * Failure never blocks the upload. A recorded invoice with no email is a
  * follow-up; an upload that failed because Resend hiccuped is lost work.
+ *
+ * The message is Ana's collections email (Wes, 2026-09-05) with the "please
+ * confirm if we're approved to charge" turned into buttons — see
+ * lib/collections/invoiceReply.ts for the token, the public page, and the
+ * 3-business-day bank window it quotes.
  */
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withBillingCc } from '@/lib/email/billingVisibility'
-import { buildFinalInvoiceEmail, type CardOnFile } from '@/lib/email/templates/finalInvoiceReady'
+import { buildFinalInvoiceEmail } from '@/lib/email/templates/finalInvoiceReady'
+import {
+  bankDueDay,
+  cardOfferedForJob,
+  ensureReplyToken,
+  formatDueDay,
+  invoiceReplyUrl,
+} from '@/lib/collections/invoiceReply'
 import { fetchBlobBuffer } from '@/lib/email/paymentInfoAttachments'
 import { loadPaymentRecord } from '@/lib/payments/sendPaymentDetails'
 import { isPaymentConfigured } from '@/lib/payments/paymentDetails'
@@ -64,28 +76,6 @@ async function resolveBillingRecipient(
   }
 }
 
-/**
- * Newest signed card authorization across the job's bookings, display fields
- * only — the token itself never leaves the row. Mirrors the job-page
- * derivation (paperwork is booking-scoped).
- */
-async function cardOnFileForJob(jobId: string): Promise<CardOnFile | null> {
-  const bookings = await prisma.booking.findMany({
-    where: { jobId },
-    select: { id: true },
-  })
-  if (bookings.length === 0) return null
-  const pw = await prisma.paperworkRequest.findFirst({
-    where: {
-      bookingId: { in: bookings.map((b) => b.id) },
-      ccCardNumberEncrypted: { not: null },
-    },
-    orderBy: { sentAt: 'desc' },
-    select: { ccCardLast4: true, ccCardType: true },
-  })
-  return pw ? { last4: pw.ccCardLast4, cardType: pw.ccCardType } : null
-}
-
 export async function sendFinalInvoicePaymentOptions(
   finalInvoiceId: string,
 ): Promise<FinalInvoiceEmailResult> {
@@ -97,7 +87,7 @@ export async function sendFinalInvoicePaymentOptions(
       amount: true,
       invoiceNumber: true,
       pdfKey: true,
-      job: { select: { id: true, name: true } },
+      job: { select: { id: true, name: true, companyId: true } },
     },
   })
   if (!fi) return { ok: false, reason: 'not_found' }
@@ -111,7 +101,22 @@ export async function sendFinalInvoicePaymentOptions(
   const recipient = await resolveBillingRecipient(fi.job.id)
   if (!recipient) return { ok: false, reason: 'no_recipient' }
 
-  const cardOnFile = await cardOnFileForJob(fi.job.id)
+  // Both stores — the portal authorization on the booking, then the company
+  // wallet. Reading only the first produced an email asking a client to
+  // authorize a card Jose had already keyed in for them.
+  const cardOnFile = await cardOfferedForJob(fi.job.id, fi.job.companyId)
+
+  // The answer buttons. One token per invoice, reused on every resend, so a
+  // button in an older copy of the email keeps working.
+  const replyToken = await ensureReplyToken(fi.id)
+  const replyLinks = {
+    card: invoiceReplyUrl(replyToken, 'CARD'),
+    bank: invoiceReplyUrl(replyToken, 'BANK'),
+  }
+  // "Within 3 business days" — counted from this send, which is what
+  // `emailedAt` is stamped with below.
+  const sendingAt = new Date()
+  const bankDueBy = formatDueDay(bankDueDay(sendingAt)!)
 
   // The pay-details link is the ONLY route to the bank details in this email
   // (link-only, Wes ruled 2026-08-18) — so unlike the operator send's
@@ -159,6 +164,8 @@ export async function sendFinalInvoicePaymentOptions(
     cardOnFile,
     payDetailsLink,
     pdfAttached: !!attachment,
+    replyLinks,
+    bankDueBy,
   })
 
   // Billing sees the invoice leave, not just the replies to it
@@ -179,7 +186,7 @@ export async function sendFinalInvoicePaymentOptions(
 
   await prisma.jobFinalInvoice.update({
     where: { id: fi.id },
-    data: { emailedAt: new Date(), emailedTo: recipient.email },
+    data: { emailedAt: sendingAt, emailedTo: recipient.email },
   })
 
   return { ok: true, to: recipient.email, pdfAttached: !!attachment }

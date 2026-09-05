@@ -252,6 +252,13 @@ export default function FinishingAJobGuidePage() {
                 options</strong>, and it queues the job on Collections for Ana. It is not a quiet internal
                 note.
               </p>
+              <p>
+                That email is Ana&rsquo;s collections email, sent for her: the invoice attached, the card
+                we hold for the project and the 3% fee, ACH or check within 3 business days to avoid it,
+                the Loss &amp; Damage inspection notice, and the W-9 link. &ldquo;Please confirm if we&rsquo;re
+                approved to charge&rdquo; is two buttons — the client&rsquo;s click lands on the
+                Collections row as <strong>approved to charge</strong> or <strong>paying by bank</strong>.
+              </p>
               <Note tone="warn" label="Read the confirmation line">
                 It tells you who the email reached. If it says NOT emailed — usually because no contact on
                 the job has an email address — the amount is still recorded and queued, but the client has

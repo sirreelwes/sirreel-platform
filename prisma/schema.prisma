@@ -8024,6 +8024,30 @@ model JobFinalInvoice {
   /// than a uuid.
   remittanceProofName String?   @map("remittance_proof_name")
 
+  /// THE CLIENT'S ANSWER to the payment-options email — Ana's template ends
+  /// "Please confirm if we're approved to charge the credit card (a 3%
+  /// processing fee will apply), or if you prefer to pay via ACH or check to
+  /// avoid the fee", and then she waits for a reply and reads it. The email
+  /// now carries two buttons that land on /invoice/[token] and record the
+  /// answer here, so the queue reads "approved — charge it" or "paying by
+  /// bank, due <date>" without anyone opening the inbox.
+  ///
+  /// `replyToken` is minted on the first send and REUSED on resends, so a
+  /// button in an older copy of the email keeps working. Not a PortalAccess:
+  /// it grants nothing but this one answer.
+  ///
+  /// `clientAnswer` is CARD (charge the card on file) | BANK (ACH / check /
+  /// wire, no fee). String, not an enum — same interim-model reasoning as
+  /// `status`. Overwritten if the client answers again; the latest answer is
+  /// the one that stands. `clientAnswerCardLast4` snapshots WHICH card the
+  /// email offered when they said yes, so a wallet change afterwards cannot
+  /// turn their consent into consent for a different card.
+  replyToken            String?   @unique @map("reply_token")
+  clientAnswer          String?   @map("client_answer")
+  clientAnsweredAt      DateTime? @map("client_answered_at")
+  clientAnswerNote      String?   @map("client_answer_note")
+  clientAnswerCardLast4 String?   @map("client_answer_card_last4")
+
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([status, uploadedAt])

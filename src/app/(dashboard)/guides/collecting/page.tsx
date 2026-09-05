@@ -170,7 +170,29 @@ export default function CollectingGuidePage() {
                 ready for you, so it comes first.
               </p>
             </Step>
-            <Step n={2} title="All RentalWorks invoices — the fallback">
+            <Step n={2} title="Read the client's answer before you do anything">
+              <p>
+                The payment-options email the agent&rsquo;s upload sent is your collections email — card on
+                file and the 3% fee, ACH or check within 3 business days, the L&amp;D notice, the W-9 — and
+                its &ldquo;please confirm if we&rsquo;re approved to charge&rdquo; is two buttons. What the
+                client clicked shows on the row:
+              </p>
+              <p>
+                <strong>approved to charge ····5544</strong> — consent is in. <strong>Charge approved
+                card</strong> opens the charge panel on that invoice; section 4 from there.
+              </p>
+              <p>
+                <strong>paying by bank · due Wed</strong> — the 3-business-day window, counted from the
+                send. It turns red when the day passes with nothing logged. Log the proof of remittance
+                when they send it; mark collected when it lands.
+              </p>
+              <p>
+                <strong>no answer · window closed</strong> — they have had the number and the options for
+                three business days and said nothing. That is the call to make today.{' '}
+                <strong>Resend options</strong> sends a fresh copy of the same email.
+              </p>
+            </Step>
+            <Step n={3} title="All RentalWorks invoices — the fallback">
               <p>
                 Underneath sits every unpaid RW invoice, oldest debt first, because that is the one most
                 in need of a call. This is where anything finalised outside HQ shows up. Each row carries
@@ -178,7 +200,7 @@ export default function CollectingGuidePage() {
                 you need contacts or history before you call.
               </p>
             </Step>
-            <Step n={3} title="Mark collected when money arrives outside HQ">
+            <Step n={4} title="Mark collected when money arrives outside HQ">
               <p>
                 A wire, ACH, Zelle or check that lands in the bank does not post itself. Use{' '}
                 <strong>Mark collected</strong> on the row the day it arrives. Card charges taken in HQ
@@ -190,7 +212,7 @@ export default function CollectingGuidePage() {
                 an awkward phone call later.
               </Note>
             </Step>
-            <Step n={4} title="Once a week, clear the aging review">
+            <Step n={5} title="Once a week, clear the aging review">
               <p>
                 <Link href="/collections/aging-review" className="font-semibold underline underline-offset-2">
                   Aging review

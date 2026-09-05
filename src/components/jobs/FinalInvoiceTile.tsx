@@ -27,6 +27,10 @@ interface FinalInvoice {
   emailedAt: string | null
   emailedTo: string | null
   rwInvoiceId: string | null
+  /** The client's answer from the email's buttons — CARD or BANK. */
+  clientAnswer?: string | null
+  clientAnsweredAt?: string | null
+  clientAnswerCardLast4?: string | null
 }
 
 function shortDate(iso: string): string {
@@ -171,6 +175,16 @@ export function FinalInvoiceTile({
             : hq && hq.sentAt
               ? `Sent to the client ${shortDate(hq.sentAt)}`
               : 'Not sent to the client yet'}
+        </div>
+      )}
+      {/* What they clicked in that email. The answer Ana acts on lives on
+          Collections; here it just says the client has spoken. */}
+      {inv?.clientAnswer && inv.status === 'READY' && (
+        <div className={`mt-1 text-[11px] font-semibold ${inv.clientAnswer === 'CARD' ? 'text-emerald-700' : 'text-sky-700'}`}>
+          {inv.clientAnswer === 'CARD'
+            ? `Approved to charge${inv.clientAnswerCardLast4 ? ` ····${inv.clientAnswerCardLast4}` : ''}`
+            : 'Client is paying by ACH / check'}
+          {inv.clientAnsweredAt ? ` · ${shortDate(inv.clientAnsweredAt)}` : ''}
         </div>
       )}
 

@@ -68,6 +68,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       emailedAt: true,
       emailedTo: true,
       rwInvoiceId: true,
+      // The client's answer from the email's buttons — the tile says
+      // "approved to charge" / "paying by bank" instead of just "Sent".
+      clientAnswer: true,
+      clientAnsweredAt: true,
+      clientAnswerCardLast4: true,
     },
   })
 

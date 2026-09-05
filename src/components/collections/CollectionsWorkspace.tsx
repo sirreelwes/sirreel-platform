@@ -113,6 +113,17 @@ interface FinalInvoice {
   remittanceProofUrl: string | null
   remittanceProofKey: string | null
   remittanceProofName: string | null
+  /** The client's one-click answer to the payment-options email — CARD
+   *  ("yes, charge it") or BANK ("ACH / check, no fee"). This is the reply
+   *  Ana used to read out of her inbox; now the row says it. */
+  clientAnswer: string | null
+  clientAnsweredAt: string | null
+  clientAnswerNote: string | null
+  clientAnswerCardLast4: string | null
+  /** "ACH or check within 3 business days" — the day that window closes,
+   *  counted from the send. Null until emailed. */
+  bankDueDay: string | null
+  bankPastDue: boolean
   /** RW mirror balance for the linked invoice — 0 on a READY row means the
    *  money likely already landed at the bank. */
   rwRemaining: number | null
@@ -1088,6 +1099,48 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         ↩ replied {new Date(fv.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     )}
+                    {/* The client's answer from the email's buttons. CARD is
+                        the loud one — it is consent, and the only thing left
+                        is Ana's click. BANK starts the 3-business-day clock. */}
+                    {fv.clientAnswer === 'CARD' && (
+                      <span
+                        className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded px-1.5 py-0.5"
+                        title={fv.clientAnswerNote ? `Client note: ${fv.clientAnswerNote}` : 'The client clicked "Yes, charge the card" in the invoice email'}
+                      >
+                        approved to charge
+                        {fv.clientAnswerCardLast4 ? ` ····${fv.clientAnswerCardLast4}` : ''}
+                        {fv.clientAnsweredAt
+                          ? ` · ${new Date(fv.clientAnsweredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                          : ''}
+                      </span>
+                    )}
+                    {fv.clientAnswer === 'BANK' && !fv.remittanceAt && (
+                      <span
+                        className={`text-xs font-semibold rounded px-1.5 py-0.5 border ${
+                          fv.bankPastDue
+                            ? 'text-red-800 bg-red-50 border-red-300'
+                            : 'text-sky-800 bg-sky-50 border-sky-300'
+                        }`}
+                        title={fv.clientAnswerNote ? `Client note: ${fv.clientAnswerNote}` : 'The client chose ACH / check in the invoice email'}
+                      >
+                        paying by bank
+                        {fv.bankDueDay
+                          ? `${fv.bankPastDue ? ' · was due' : ' · due'} ${new Date(`${fv.bankDueDay}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                          : ''}
+                      </span>
+                    )}
+                    {/* No answer and the window is gone: they have had the
+                        number and the options for 3+ business days. */}
+                    {!fv.clientAnswer && !fv.remittanceAt && !fv.repliedAt && fv.bankPastDue && (
+                      <span className="text-xs text-red-700 font-semibold" title="No answer to the payment-options email, and the 3-business-day bank window has closed">
+                        no answer · window closed
+                      </span>
+                    )}
+                    {fv.clientAnswerNote && (
+                      <span className="text-xs text-zinc-600 italic max-w-[260px] truncate" title={fv.clientAnswerNote}>
+                        “{fv.clientAnswerNote}”
+                      </span>
+                    )}
                     {/* The client says it is sent. Loud enough to stop a
                         second chase, quiet enough not to read as collected —
                         the money is still not in. */}
@@ -1147,6 +1200,23 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     {/* Real <button>s — the row wrapper is a div now, so
                         these are keyboard-reachable AND valid HTML (the old
                         markup nested role="button" spans inside a button). */}
+                    {/* Consent is in; this is the click it was waiting for.
+                        Selects the row so the charge panel opens on this
+                        invoice with its cards — the charge itself still goes
+                        through the panel's confirm and the route's guards. */}
+                    {fv.clientAnswer === 'CARD' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          ;(e.currentTarget.closest('[role="button"]') as HTMLElement | null)?.click()
+                        }}
+                        className="text-xs px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-500 shrink-0"
+                        title="The client approved the charge — open the charge panel on this invoice"
+                      >
+                        Charge approved card
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {

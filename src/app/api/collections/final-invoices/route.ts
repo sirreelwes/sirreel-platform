@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
 import { clientPaymentBehavior } from '@/lib/payments/clientPaymentBehavior'
+import { bankDueDay, isPastDueDay } from '@/lib/collections/invoiceReply'
 
 export const dynamic = 'force-dynamic'
 
@@ -161,6 +162,18 @@ export async function GET() {
       // it, and this is a collections-gated staff route.
       remittanceProofKey: r.remittanceProofKey,
       remittanceProofName: r.remittanceProofName,
+      // The client's one-click answer to the payment-options email: CARD
+      // ("yes, charge it") or BANK ("ACH / check, no fee"). This is what
+      // Ana used to read out of her inbox.
+      clientAnswer: r.clientAnswer,
+      clientAnsweredAt: r.clientAnsweredAt,
+      clientAnswerNote: r.clientAnswerNote,
+      clientAnswerCardLast4: r.clientAnswerCardLast4,
+      // "ACH or check payments must be submitted within 3 business days" —
+      // the day that window closes, counted from the send, and whether it
+      // has. Null until the email has gone out.
+      bankDueDay: r.emailedAt ? bankDueDay(r.emailedAt) : null,
+      bankPastDue: r.emailedAt ? isPastDueDay(bankDueDay(r.emailedAt)!) : false,
       rwRemaining: r.rwInvoiceId ? (remaining.get(r.rwInvoiceId) ?? null) : null,
       ageDays: Math.floor((Date.now() - r.uploadedAt.getTime()) / 86_400_000),
       jobId: r.job.id,
@@ -369,6 +382,10 @@ function selectShape() {
     remittanceProofUrl: true,
     remittanceProofKey: true,
     remittanceProofName: true,
+    clientAnswer: true,
+    clientAnsweredAt: true,
+    clientAnswerNote: true,
+    clientAnswerCardLast4: true,
     job: {
       select: {
         id: true,

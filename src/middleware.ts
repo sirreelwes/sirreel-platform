@@ -59,6 +59,10 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   // 404, and the API worked, which made it look like a content problem
   // rather than a routing one.
   '/pay-details/',
+  // Final-invoice answer page (/invoice/[token]) — the two buttons in the
+  // payment-options email land here. Same host as pay-details, for the same
+  // reason: it is the host clients recognise on a link about money.
+  '/invoice/',
   '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
   '/stage-contract',   // public stage-contract review page (FORMS → Studio Contract)
   // UNLISTED unit page (/unit/[token]) — a client-facing page for a vehicle we
@@ -143,6 +147,7 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/client-login',     // client magic-link login page (posts to /api/client/auth)
   '/api/client/',      // legacy client API
   '/pay-details/',     // A/P payment-details share link (/pay-details/[token])
+  '/invoice/',         // final-invoice answer page (/invoice/[token])
   '/unit/',            // unlisted subcontracted-unit page (/unit/[token])
   '/vendor/',          // partner's view of a sub-rental (/vendor/[token])
   '/coi/',             // no-login client COI upload (/coi/[token])
