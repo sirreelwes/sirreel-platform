@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { CadenceState, LostReason } from '@prisma/client'
 import type { CadenceTemplateContext } from '@/lib/email/templates/cadenceTemplates'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
+import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 
 const AFTER_HOURS_LINE = '(888) 477-7335'
 
@@ -50,7 +51,21 @@ export async function loadCadenceContextForOrder(orderId: string): Promise<Caden
       cadencePausedUntil: true,
       lostReason: true,
       company: { select: { id: true, name: true } },
-      job: { select: { name: true, jobCode: true } },
+      job: {
+        select: {
+          name: true,
+          jobCode: true,
+          jobContacts: {
+            select: {
+              role: true,
+              isPrimary: true,
+              person: {
+                select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+              },
+            },
+          },
+        },
+      },
       jobContact: {
         select: { id: true, firstName: true, lastName: true, email: true, phone: true },
       },
@@ -58,6 +73,15 @@ export async function loadCadenceContextForOrder(orderId: string): Promise<Caden
     },
   })
   if (!order) return null
+
+  // Order.jobContactId is optional and most orders never get one — the
+  // quote flow attaches the contact to the JOB, not the order. Reading only
+  // the order-level pointer meant every cadence email for such an order
+  // was skipped as "no-job-contact-email" (2026-09-05: BM / S260905-002 had
+  // Briana as the job's primary contact and still skipped its welcome).
+  // Fall back to the same primary-contact ladder the job page uses.
+  const jobContact =
+    order.jobContact ?? pickPrimaryContact(order.job?.jobContacts ?? [])?.person ?? null
 
   return {
     order: {
@@ -72,7 +96,7 @@ export async function loadCadenceContextForOrder(orderId: string): Promise<Caden
       lostReason: order.lostReason,
     },
     company: order.company,
-    jobContact: order.jobContact,
+    jobContact,
     agent: order.agent,
     jobName: order.job?.name || order.orderNumber,
     jobCode: order.job?.jobCode ?? null,
