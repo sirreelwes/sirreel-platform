@@ -32,7 +32,7 @@
  * Any one of those keeps the job on the main page regardless of age.
  *
  * Fully reversible: archivedAt goes back to null, the ids are captured
- * to tmp/, and an AuditLog row is written per job so a revert is
+ * to journals/, and an AuditLog row is written per job so a revert is
  * possible from the database alone.
  *
  * Run:
@@ -92,8 +92,8 @@ async function main() {
     return
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/archive-dormant-jobs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/archive-dormant-jobs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ archivedJobIds: eligible.map((e) => e.id), jobs: eligible }, null, 2))
 
   const archivedAt = new Date()

@@ -1,0 +1,55 @@
+{
+  "vehicleId": "a0740573-68da-48a8-b862-fffa9a37b5a8",
+  "created": [
+    {
+      "id": "829c57da-7796-4e63-b6eb-29f8814bea5c",
+      "caption": "Exterior",
+      "file": "EcoFlux Exterior.png"
+    },
+    {
+      "id": "f7b7ccb4-dc34-4a5b-a768-73d7c93bf6ed",
+      "caption": "Main lounge",
+      "file": "E5.jpg"
+    },
+    {
+      "id": "b0142324-e125-4910-bf8d-4aa811c55386",
+      "caption": "Lounge seating and media wall",
+      "file": "IMG_4765.jpg"
+    },
+    {
+      "id": "91a30edd-96e1-4ba9-bcf7-58904db00ba0",
+      "caption": "Media wall",
+      "file": "E8.jpg"
+    },
+    {
+      "id": "134f62e3-8e05-4c9f-afa6-a3f5e7588f60",
+      "caption": "Lounge and work counter",
+      "file": "E7.jpg"
+    },
+    {
+      "id": "6527e2ab-0598-45fb-926f-9859d918df9e",
+      "caption": "Forward lounge and cab",
+      "file": "E6.jpg"
+    },
+    {
+      "id": "2050307d-5383-405a-8894-29f52e6a6603",
+      "caption": "Sectional seating",
+      "file": "IMG_4763.jpg"
+    },
+    {
+      "id": "1f97893d-e5b2-415a-89a3-bbf8d875c91f",
+      "caption": "Private office and workstation",
+      "file": "E11.jpg"
+    },
+    {
+      "id": "6bf19954-c588-4282-86e9-2e0b323db1bc",
+      "caption": "Hair and make-up station",
+      "file": "E21.jpg"
+    },
+    {
+      "id": "3f6d6754-4c3f-4acd-8427-caed407970e8",
+      "caption": "Wardrobe",
+      "file": "E3.jpg"
+    }
+  ]
+}

@@ -38,7 +38,7 @@
  *   - Only CREATES people who do not already exist (matched by email,
  *     alias-aware via resolvePersonByEmail). Never edits an existing
  *     contact — an established record beats a CC-line guess.
- *   - --write records every created id to tmp/cc-capture-<stamp>.json
+ *   - --write records every created id to journals/cc-capture-<stamp>.json
  *     so the run is reversible BY CAPTURED ID.
  *
  * Run:
@@ -176,8 +176,8 @@ async function main() {
     }
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/cc-capture-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/cc-capture-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ createdPersonIds: createdIds }, null, 2))
   console.log(`\nCreated ${createdIds.length} contacts (${failed} skipped/failed).`)
   console.log(`Reversal list: ${path} — delete BY THESE IDS ONLY if this needs undoing.`)

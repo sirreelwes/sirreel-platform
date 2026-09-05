@@ -307,7 +307,7 @@ async function main() {
     console.log(`  filed: ${company.name} (${created.id})`)
   }
 
-  const out = path.join(process.cwd(), `tmp/annual-agreement-import-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+  const out = path.join(process.cwd(), `journals/annual-agreement-import-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
   fs.writeFileSync(out, JSON.stringify(journal, null, 2))
   console.log(`\nFiled ${journal.length}. Journal (reversible by captured id): ${out}\n`)
 }

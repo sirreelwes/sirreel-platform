@@ -37,7 +37,7 @@
  * ── Reversal ───────────────────────────────────────────────────────
  *
  * Every row is captured BY ID with its before/after to
- * tmp/planyo-job-names-*.json, plus one AuditLog row each
+ * journals/planyo-job-names-*.json, plus one AuditLog row each
  * (`booking.planyo_name_backfill` / `job.planyo_name_backfill`).
  * Nothing is deleted and nothing is matched by pattern at write time —
  * the updates run against captured ids only.
@@ -175,8 +175,8 @@ async function main() {
     return
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/planyo-job-names-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/planyo-job-names-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ changedIds: changes.map((c) => c.id), changes }, null, 2))
 
   for (const c of changes) {

@@ -38,7 +38,7 @@
  *   npx tsx scripts/merge-companies.ts --keeper <id> --dup <id> [--dup <id> ...]
  *   ... add --write to commit (omit for a dry run)
  *
- * Reverse: tmp/company-merge-<ts>.json holds every duplicate Company
+ * Reverse: journals/company-merge-<ts>.json holds every duplicate Company
  *   body, every moved row id per model, and every deleted Affiliation
  *   body. Recreate the Company rows with their original ids, then move
  *   the captured ids back. Reversal is BY CAPTURED ID only.
@@ -200,8 +200,8 @@ async function main() {
     affiliationsDeleted: affDropBodies,
     backfill,
   }
-  mkdirSync('tmp', { recursive: true })
-  const journalPath = `tmp/company-merge-${stamp}.json`
+  mkdirSync('journals', { recursive: true })
+  const journalPath = `journals/company-merge-${stamp}.json`
   writeFileSync(journalPath, JSON.stringify(journal, null, 2))
   console.log(`journal → ${journalPath}`)
 

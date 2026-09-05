@@ -28,7 +28,7 @@
  *   npx tsx scripts/dedupe-harvested-cois.ts           # dry run
  *   npx tsx scripts/dedupe-harvested-cois.ts --write
  *
- * Reverse: tmp/coi-dedupe-<ts>.json holds the full body of every deleted
+ * Reverse: journals/coi-dedupe-<ts>.json holds the full body of every deleted
  * row. Recreation is BY CAPTURED ID only.
  */
 import fs from 'fs'
@@ -159,7 +159,7 @@ async function main() {
     deleted++
   }
 
-  const out = path.join(process.cwd(), `tmp/coi-dedupe-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+  const out = path.join(process.cwd(), `journals/coi-dedupe-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
   fs.writeFileSync(out, JSON.stringify(journal, null, 2))
   console.log(`\nDeleted ${deleted}. Journal (reversible by captured id): ${out}\n`)
 }

@@ -1,0 +1,385 @@
+{
+  "at": "2026-08-28T19:11:24.667Z",
+  "reason": "not-returned purge — returns not handled in HQ yet (Wes 2026-08-28)",
+  "returnedAtStamp": "2026-08-28T19:11:24.667Z",
+  "jobs": [
+    {
+      "id": "bd06adb4-0ee2-43f3-bb5e-06e2c19da612",
+      "jobCode": "SR-JOB-0213",
+      "name": "TMLT",
+      "end": "2026-08-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "f0088bff-240b-45a6-a042-f48b7a923a13",
+      "jobCode": "SR-JOB-0211",
+      "name": "Grow Good",
+      "end": "2026-08-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "db71e263-79e7-4a9c-8bc0-eaa92d1a69d4",
+      "jobCode": "SR-JOB-0208",
+      "name": "NE August & September #2633",
+      "end": "2026-08-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "8f00aa37-9c0d-41aa-b961-0d544b977f27",
+      "jobCode": "SR-JOB-0207",
+      "name": "Shift Music Video",
+      "end": "2026-08-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "9a6ef7f2-6da3-4dd1-b6fa-5b974fc150c8",
+      "jobCode": "SR-JOB-0160",
+      "name": "Thoom",
+      "end": "2026-08-19",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "8c4db6a2-4ef6-48e5-81cb-33ab6dc2ff14",
+      "jobCode": "SR-JOB-0121",
+      "name": "Shein x Fall/Winter",
+      "end": "2026-08-13",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "b9fef49e-84a9-4b32-800d-4b5c7fb41c98",
+      "jobCode": "SR-JOB-0120",
+      "name": "Fire on Fire",
+      "end": "2026-08-10",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "2d2ae2ec-1b12-4eae-9985-d71d62a4348b",
+      "jobCode": "SR-JOB-0119",
+      "name": "Peleton",
+      "end": "2026-08-10",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "94f3cdcc-e33c-49e6-8c89-7f634b6dd1cb",
+      "jobCode": "SR-JOB-0118",
+      "name": "Theater kids",
+      "end": "2026-08-11",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "d9238c67-2590-4f3b-8cda-f5deef12c2ea",
+      "jobCode": "SR-JOB-0117",
+      "name": "KPDH Multi Retailer",
+      "end": "2026-08-06",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "9a121cde-c4f8-4025-9218-07e2b92da023",
+      "jobCode": "SR-JOB-0115",
+      "name": "AG - Cargo",
+      "end": "2026-08-13",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "f64b599d-83f7-4748-a348-fea49d0f6f87",
+      "jobCode": "SR-JOB-0113",
+      "name": "AP",
+      "end": "2026-07-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "73e87af7-e3e8-48f1-9380-1eb1c06c028b",
+      "jobCode": "SR-JOB-0112",
+      "name": "No: 1616 HLT",
+      "end": "2026-08-01",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "d56c6bd1-e4b3-4b83-bf71-468c3c64b108",
+      "jobCode": "SR-JOB-0107",
+      "name": "Streets",
+      "end": "2026-08-25",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "a29beda5-4342-4ab1-b91c-d350415a48a1",
+      "jobCode": "SR-JOB-0105",
+      "name": "Progressives Campaign Shoot",
+      "end": "2026-08-14",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "bb627731-456c-4a49-be47-5802a8accb50",
+      "jobCode": "SR-JOB-0102",
+      "name": "Black Torch",
+      "end": "2026-08-12",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "181ff10d-c7de-46a7-9921-3bca8adf1b1e",
+      "jobCode": "SR-JOB-0097",
+      "name": "abrazame",
+      "end": "2026-08-10",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "1882b50a-7312-4e81-848f-67e5fe4892ed",
+      "jobCode": "SR-JOB-0096",
+      "name": "Instructions for Jack",
+      "end": "2026-08-11",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "0cbfffe4-c58e-4c16-bda4-3f547f970c3d",
+      "jobCode": "SR-JOB-0095",
+      "name": "FIL & CC",
+      "end": "2026-08-24",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ddbcddf8-fae7-4dc5-ad47-f6a859f61709",
+      "jobCode": "SR-JOB-0094",
+      "name": "Shared Crissong Project",
+      "end": "2026-08-19",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "059702f5-bdf9-4f4c-882b-6292b3e9d810",
+      "jobCode": "SR-JOB-0093",
+      "name": "JOB# 2613",
+      "end": "2026-08-07",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "a9a5d361-c752-4d0a-bfbe-1fa23bd85d29",
+      "jobCode": "SR-JOB-0092",
+      "name": "Planyo import — cart 5714899",
+      "end": "2026-08-09",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "66800c33-d5ac-4efc-b9d1-66973879f436",
+      "jobCode": "SR-JOB-0090",
+      "name": "RB Activation",
+      "end": "2026-08-04",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "49f312ba-0980-44d0-afad-16cbe6089f93",
+      "jobCode": "SR-JOB-0088",
+      "name": "Heritage",
+      "end": "2026-08-03",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ae38a1aa-b79e-4d22-846f-7994c3126327",
+      "jobCode": "SR-JOB-0085",
+      "name": "LADT7_Secret_Agent",
+      "end": "2026-08-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ddad84ea-4238-4350-b43c-462f37ea3d6c",
+      "jobCode": "SR-JOB-0084",
+      "name": "MiR",
+      "end": "2026-08-03",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "871e92d0-2e40-4564-a9fb-1ea246284c21",
+      "jobCode": "SR-JOB-0082",
+      "name": "Lady Hawks",
+      "end": "2026-08-03",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "72f4757f-c5e7-4d3d-9e09-b83474608970",
+      "jobCode": "SR-JOB-0081",
+      "name": "Planyo import — cart 5702218",
+      "end": "2026-07-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "b305f5ae-04e4-48a7-aab5-241935712524",
+      "jobCode": "SR-JOB-0079",
+      "name": "Humana",
+      "end": "2026-08-05",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "9d9d9829-c470-468e-982b-e759f183f3cc",
+      "jobCode": "SR-JOB-0078",
+      "name": "OK",
+      "end": "2026-07-23",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "2f0ed9f5-3c47-40b4-9363-738640b9dabf",
+      "jobCode": "SR-JOB-0076",
+      "name": "Cloud",
+      "end": "2026-07-21",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "3b6c69e0-1376-4355-adbd-b46987199521",
+      "jobCode": "SR-JOB-0075",
+      "name": "Godstar",
+      "end": "2026-07-20",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "42b7e6e4-9946-4ded-9a26-13d57455d17f",
+      "jobCode": "SR-JOB-0074",
+      "name": "Avec - Cold Email",
+      "end": "2026-07-24",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "c1a87d8d-044b-4558-a0ef-8d351f5f4877",
+      "jobCode": "SR-JOB-0073",
+      "name": "Okeefe",
+      "end": "2026-07-31",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "36cf9776-3641-4cfa-8059-254ad680c162",
+      "jobCode": "SR-JOB-0072",
+      "name": "LZO",
+      "end": "2026-07-23",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "e7a041a1-620d-4155-9237-30fe05c5e2bc",
+      "jobCode": "SR-JOB-0071",
+      "name": "REX Switch 2",
+      "end": "2026-07-23",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "26095406-54f4-4f5b-9655-ee8898abb08e",
+      "jobCode": "SR-JOB-0069",
+      "name": "SharkNinja",
+      "end": "2026-07-31",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "e08a4e8c-e622-4079-a3f0-926cd289d673",
+      "jobCode": "SR-JOB-0068",
+      "name": "Number 3",
+      "end": "2026-07-20",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "b82cd1d1-d645-480c-84ce-aaf9aa274cfd",
+      "jobCode": "SR-JOB-0067",
+      "name": "NItehearts",
+      "end": "2026-07-17",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "46145185-0ed8-47f2-a318-02491310cf50",
+      "jobCode": "SR-JOB-0066",
+      "name": "SDCC 2026",
+      "end": "2026-07-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "47d166ed-b5c8-4449-b15f-a3aef52d6e83",
+      "jobCode": "SR-JOB-0065",
+      "name": "P_EACC",
+      "end": "2026-07-24",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "08a730d3-5362-4ec4-ab60-c7a5d751b5aa",
+      "jobCode": "SR-JOB-0064",
+      "name": "Planyo import — cart 5692858",
+      "end": "2026-07-23",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "8237ac39-3dab-4946-8613-148d3a6878e4",
+      "jobCode": "SR-JOB-0062",
+      "name": "PIK #2651",
+      "end": "2026-07-27",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "10d575a0-024c-4674-b4c3-e4c189884e7b",
+      "jobCode": "SR-JOB-0061",
+      "name": "Intuit Library July 2026",
+      "end": "2026-07-25",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "aeb93819-27d0-4fa0-bbb7-46765745271e",
+      "jobCode": "SR-JOB-0060",
+      "name": "Google / 31653",
+      "end": "2026-07-24",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "91cbdaab-388c-4056-9477-9cb0fda79019",
+      "jobCode": "SR-JOB-0058",
+      "name": "joy oalkodum #2536-26",
+      "end": "2026-07-20",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "1dd39ec3-d059-493e-8e7f-63adb869d0e8",
+      "jobCode": "SR-JOB-0057",
+      "name": "Beach Chairs",
+      "end": "2026-07-23",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "dc3a29f9-de02-4144-9e49-a1f4346ba35a",
+      "jobCode": "SR-JOB-0056",
+      "name": "WC x KOI",
+      "end": "2026-07-18",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "bf36c235-d252-4c42-b8ad-9233c15a9c62",
+      "jobCode": "SR-JOB-0055",
+      "name": "Planyo import — cart 5681969",
+      "end": "2026-07-17",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "000d57a4-16fb-460c-b5d5-612287f4c121",
+      "jobCode": "SR-JOB-0050",
+      "name": "Planyo import — cart 5680079",
+      "end": "2026-08-21",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ce82167b-8394-458d-826b-7925c2dc0e34",
+      "jobCode": "SR-JOB-0049",
+      "name": "Shared Crossing Feature/ Hospital Recreation",
+      "end": "2026-08-13",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "4eace98a-243b-40ca-bf04-0c3034a9dbde",
+      "jobCode": "SR-JOB-0048",
+      "name": "Planyo import — cart 5684567",
+      "end": "2026-08-16",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ac2eb411-4562-4ccd-b035-bc5e7c1b2ad7",
+      "jobCode": "SR-JOB-0046",
+      "name": "Elevate",
+      "end": "2026-08-07",
+      "prevReturnedAt": null
+    },
+    {
+      "id": "ed205a90-4a59-4e37-a90c-a50b8e81ba0f",
+      "jobCode": "SR-JOB-0044",
+      "name": "Planyo import — cart 5648285",
+      "end": "2026-07-24",
+      "prevReturnedAt": null
+    }
+  ]
+}

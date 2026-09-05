@@ -1,0 +1,25 @@
+{
+  "ranAt": "2026-09-01T21:41:54.987Z",
+  "checked": 37,
+  "journal": [
+    {
+      "orderNumber": "S260828-003",
+      "promoted": 0,
+      "demoted": 1,
+      "firm": false,
+      "missing": [
+        "COI",
+        "card on file"
+      ],
+      "error": null
+    },
+    {
+      "orderNumber": "S260831-002",
+      "promoted": 1,
+      "demoted": 0,
+      "firm": true,
+      "missing": [],
+      "error": null
+    }
+  ]
+}

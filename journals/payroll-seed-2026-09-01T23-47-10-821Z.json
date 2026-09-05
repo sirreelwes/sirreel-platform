@@ -1,0 +1,29 @@
+{
+  "ranAt": "2026-09-01T23:47:08.301Z",
+  "write": true,
+  "createdEmployeeIds": [
+    "67b0d917-28e7-47dc-9dd1-c75283570026",
+    "8c8b5fa2-a56e-40ee-a96d-4420dcfe2988",
+    "b6af1ef7-f3dd-4c91-b482-efb3e2bcb03e",
+    "946be832-1196-4ebf-ba10-f25eea6f3104",
+    "8724304a-ad58-4624-a37a-7ac1a912430c",
+    "07281e23-cf45-4eda-a023-2f49efac6811",
+    "2e50d1ca-27f0-4648-938b-9ce9e188061f"
+  ],
+  "createdProfileIds": [
+    "10d14b30-7c4b-4979-bbc5-23838d48706c",
+    "4d940f18-46d1-4e56-99d1-3e9503ff797b",
+    "cb619c66-9b3b-4843-825e-108c0949dfb1",
+    "27c121d7-9ef4-4f2c-b383-ab74a51c2949",
+    "225d7b90-c40a-4e9d-97f2-9dc5a9744b9c",
+    "10e3cc84-1e2b-471f-ac62-16676bb52fc5",
+    "642995fa-0adc-463e-ab04-481ab11b6c70",
+    "28d4c43d-ab54-43ac-83a0-7fc79ab92d4c",
+    "c5fa1ffe-1c83-4fe8-9a06-25df31b88f3f"
+  ],
+  "linkedEmployeeIds": [
+    "52fe7245-f8b7-49eb-86f3-0330069fff3f",
+    "37ef5f42-e27b-4402-97a3-a19cb86d19da"
+  ],
+  "createdPeriodId": "0095538c-56d0-4082-a85f-bbafa6b0d181"
+}

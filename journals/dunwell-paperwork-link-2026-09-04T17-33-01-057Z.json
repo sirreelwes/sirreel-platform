@@ -1,0 +1,17 @@
+{
+  "at": "2026-09-04T17:33:01.057Z",
+  "before": {
+    "id": "c48bd29f-95d7-413f-ad53-dda775e607fc",
+    "bookingId": "0afe94aa-ad00-4591-b0cb-9a220b7f8fa6",
+    "token": "e99ce0eb-75e6-4cdb-a6ae-c4fb4a6b688b",
+    "sentTo": "grace@dunwellproduction.com",
+    "ccCardLast4": null,
+    "rentalAgreement": false
+  },
+  "after": {
+    "id": "c48bd29f-95d7-413f-ad53-dda775e607fc",
+    "bookingId": "2d51a373-9b29-4f1d-a022-e35b9276690c",
+    "token": "e99ce0eb-75e6-4cdb-a6ae-c4fb4a6b688b"
+  },
+  "auditLogId": "4edc35ce-63b5-461d-8c4b-dcee83aa8a73"
+}

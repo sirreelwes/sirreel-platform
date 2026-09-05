@@ -1,0 +1,21 @@
+{
+  "ranAt": "2026-09-01T22:53:51.011Z",
+  "keep": {
+    "id": "af1eaa26-0d9d-4dc0-bb0b-a7e2ec38d08c",
+    "invoiceNumber": "SR-INV-30001",
+    "status": "VOID",
+    "total": "1324",
+    "sentAt": "2026-09-01T19:04:38.681Z",
+    "notes": "[VOIDED 2026-09-01 22:41 UTC] Superseded — issued before the 10% Vehicles and 20% Pro Supplies discounts were applied to the order."
+  },
+  "deleted": {
+    "id": "8ae4847d-651e-4802-b5cb-c41ddb4a1f3f",
+    "invoiceNumber": "SR-INV-30002",
+    "status": "DRAFT",
+    "sentAt": null,
+    "amountPaid": "0",
+    "pdfBlobKey": "invoices/2026/09/633d19e1-b930-4f70-94c1-06155738ee9f-SR-INV-30002.pdf",
+    "payments": [],
+    "damageItems": []
+  }
+}

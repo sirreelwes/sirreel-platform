@@ -1,0 +1,17 @@
+{
+  "lineIds": [
+    "ea3e6d86-cab6-49f0-93c2-ea99c3fc59f6"
+  ],
+  "before": [
+    {
+      "id": "ea3e6d86-cab6-49f0-93c2-ea99c3fc59f6",
+      "orderNumber": "S260903-002",
+      "inventoryItemId": null,
+      "type": "EQUIPMENT"
+    }
+  ],
+  "after": {
+    "inventoryItemId": "9e990153-429f-4687-9e3a-493f1def398d",
+    "type": "VEHICLE"
+  }
+}

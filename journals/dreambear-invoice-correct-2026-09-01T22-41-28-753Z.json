@@ -1,0 +1,13 @@
+{
+  "ranAt": "2026-09-01T22:41:28.753Z",
+  "voided": {
+    "id": "af1eaa26-0d9d-4dc0-bb0b-a7e2ec38d08c",
+    "invoiceNumber": "SR-INV-30001",
+    "status": "SENT",
+    "total": "1324",
+    "balanceDue": "1324",
+    "notes": null,
+    "sentAt": "2026-09-01T19:04:38.681Z"
+  },
+  "orderId": "7590d717-5775-4a8e-8161-95a5a5e1bf65"
+}

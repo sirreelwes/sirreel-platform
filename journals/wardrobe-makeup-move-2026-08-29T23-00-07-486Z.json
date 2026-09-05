@@ -1,0 +1,168 @@
+{
+  "ranAt": "2026-08-29T23:00:04.673Z",
+  "write": true,
+  "catalog": [
+    {
+      "id": "27888496-507e-4aab-b1af-859df36e775d",
+      "code": "WAR-MIRROR-HALF-W-LIGHTS",
+      "description": "Mirror, Half w/lights",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "181b5d94-4258-4573-a026-c354cd2145b9",
+      "code": "WAR-MIRROR-6-WARDROBE",
+      "description": "Mirror, 6' Wardrobe",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "e0709cfe-7906-414e-8c71-b39599e4da8b",
+      "code": "WAR-POP-UP-CHANGING-STALL",
+      "description": "Pop-Up Changing Stall",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "bddcfbde-bc50-488b-8ac1-ffc87a4a3eee",
+      "code": "WAR-IRON",
+      "description": "Iron",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "75298e0e-9e2e-4c23-9196-bf13371085c0",
+      "code": "WAR-WARDROBE-RACK-ROLLING",
+      "description": "Wardrobe Rack, Rolling",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "9acd220a-5604-4ae8-98ce-ed71df6b0786",
+      "code": "EXP-HANGER-COMBO",
+      "description": "Hanger, Combo",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "d66d2f98-ec4c-4f2e-9978-02c283d6868c",
+      "code": "EXP-HANGER-PANTS",
+      "description": "Hanger, Pants",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "27dcef43-0caf-4bf4-81d7-82a8e7544f2f",
+      "code": "EXP-HANGER-SHIRTS",
+      "description": "Hanger, Shirts",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "e59037a5-bae0-4b4e-afd5-94db363e7825",
+      "code": "103856",
+      "description": "Wardrobe Steamer",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "f774a72a-2a2f-48d1-b421-f583054f4827",
+      "code": "104434",
+      "description": "Make Up Mirror, Half (Table Top)",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "8ff6db5a-6ad3-4e06-ab32-62020ffde7ec",
+      "code": "104433",
+      "description": "Make Up Mirror - Rolling",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "0c27b15a-4615-4528-ab42-4970ae395a69",
+      "code": "ZRACK",
+      "description": "RollingWardrobe Z-Rack",
+      "from": "COMMUNICATIONS",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "c5b96e42-4b5a-4e74-a47c-1fc3c731cc7b",
+      "code": "WAR-MIRROR-ROLLING-M-U",
+      "description": "Mirror, Rolling M/U",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "08450fb5-b5a2-4aaf-94e8-a1a4fddffb97",
+      "code": "WAR-JIFFY-STEAMER",
+      "description": "Jiffy Steamer",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "acac2763-a226-4a99-9a83-48db2478eb3a",
+      "code": "WAR-IRONING-BOARD",
+      "description": "Ironing Board",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    },
+    {
+      "id": "6f703cbd-6241-4b9d-b7be-8b9d440b2c6a",
+      "code": "CAT_WARDROBE",
+      "description": "Wardrobe",
+      "from": "PRO_SUPPLIES",
+      "to": "WARDROBE_MAKEUP"
+    }
+  ],
+  "orderLines": [
+    {
+      "id": "a239565d-4875-4b24-a417-5047e33e65b9",
+      "description": "Hanger, Combo",
+      "from": {
+        "type": "EXPENDABLE",
+        "department": "PRO_SUPPLIES",
+        "billableDays": 1,
+        "lineTotal": 62.5
+      },
+      "to": {
+        "type": "EQUIPMENT",
+        "department": "WARDROBE_MAKEUP"
+      }
+    },
+    {
+      "id": "1baa6fee-40ed-4299-ac92-8a4bc7592e20",
+      "description": "Trash Liners, Roll",
+      "from": {
+        "type": "EXPENDABLE",
+        "department": "PRO_SUPPLIES",
+        "billableDays": 1,
+        "lineTotal": 15
+      },
+      "to": {
+        "type": "EXPENDABLE",
+        "department": "EXPENDABLES"
+      }
+    }
+  ],
+  "appliedIds": [
+    "27888496-507e-4aab-b1af-859df36e775d",
+    "181b5d94-4258-4573-a026-c354cd2145b9",
+    "e0709cfe-7906-414e-8c71-b39599e4da8b",
+    "bddcfbde-bc50-488b-8ac1-ffc87a4a3eee",
+    "75298e0e-9e2e-4c23-9196-bf13371085c0",
+    "9acd220a-5604-4ae8-98ce-ed71df6b0786",
+    "d66d2f98-ec4c-4f2e-9978-02c283d6868c",
+    "27dcef43-0caf-4bf4-81d7-82a8e7544f2f",
+    "e59037a5-bae0-4b4e-afd5-94db363e7825",
+    "f774a72a-2a2f-48d1-b421-f583054f4827",
+    "8ff6db5a-6ad3-4e06-ab32-62020ffde7ec",
+    "0c27b15a-4615-4528-ab42-4970ae395a69",
+    "c5b96e42-4b5a-4e74-a47c-1fc3c731cc7b",
+    "08450fb5-b5a2-4aaf-94e8-a1a4fddffb97",
+    "acac2763-a226-4a99-9a83-48db2478eb3a",
+    "6f703cbd-6241-4b9d-b7be-8b9d440b2c6a",
+    "a239565d-4875-4b24-a417-5047e33e65b9",
+    "1baa6fee-40ed-4299-ac92-8a4bc7592e20"
+  ]
+}

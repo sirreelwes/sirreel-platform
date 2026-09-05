@@ -1,0 +1,114 @@
+{
+  "takenAt": "2026-09-01T18:34:48.078Z",
+  "today": "2026-09-01",
+  "before": [
+    {
+      "orderId": "6fd12afe-0acc-4cbc-ad9a-ba76a59a9d48",
+      "orderNumber": "S260901-004",
+      "startDate": "2025-09-17T00:00:00.000Z",
+      "endDate": "2025-09-18T00:00:00.000Z",
+      "lineItems": [
+        {
+          "id": "b4a64b61-f5f5-4061-a418-4faaf78c7aab",
+          "description": "Cooler, 68 qt",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "049ae791-a4a9-43eb-a8b2-79069acab065",
+          "description": "Table, 6' Folding",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "30a33552-02c4-4e0f-bbf2-493a8d302de0",
+          "description": "Chairs, Folding",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "bd5ad06c-5f70-498b-a3e9-a0d029460400",
+          "description": "Caravan Canopy Tent-10' x 10', Blue",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "0ce01a5a-3cc7-4d5d-abd9-8d98d5b30114",
+          "description": "ShotBags - 20lb",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "9de88d8c-e859-4375-a8d9-fdc045f2f911",
+          "description": "Fan, \"Box\"",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "22414355-81aa-41a5-850e-2f334e5f7c0b",
+          "description": "Delivery Fee",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        },
+        {
+          "id": "87c3aaf6-80bc-4407-81c0-70e9403b8622",
+          "description": "Pickup Fee",
+          "pickupDate": "2025-09-17T00:00:00.000Z",
+          "returnDate": "2025-09-18T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "orderId": "901265fa-f4ad-4390-a3aa-a11551851233",
+      "orderNumber": "S260829-005",
+      "startDate": "2025-08-30T00:00:00.000Z",
+      "endDate": "2025-09-26T00:00:00.000Z",
+      "lineItems": [
+        {
+          "id": "7b82f621-a3f0-412f-bd3a-bf4f7a3586dc",
+          "description": "Cargo Van w/ Liftgate",
+          "pickupDate": "2025-08-30T00:00:00.000Z",
+          "returnDate": "2025-09-26T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "orderId": "975021bf-c50f-44e7-84aa-34f88658997d",
+      "orderNumber": "S260720-002",
+      "startDate": "2025-01-23T00:00:00.000Z",
+      "endDate": "2025-01-27T00:00:00.000Z",
+      "lineItems": [
+        {
+          "id": "6e20d9ed-1f5e-461b-a093-fcf4e41d0df3",
+          "description": "tables",
+          "pickupDate": "2025-01-23T00:00:00.000Z",
+          "returnDate": "2025-01-27T00:00:00.000Z"
+        },
+        {
+          "id": "ce57a6ef-86ba-43ae-ad57-9d245f5531ee",
+          "description": "portable fans",
+          "pickupDate": "2025-01-23T00:00:00.000Z",
+          "returnDate": "2025-01-27T00:00:00.000Z"
+        },
+        {
+          "id": "10950081-e049-4e56-952b-17b432e56c75",
+          "description": "big coolers",
+          "pickupDate": "2025-01-23T00:00:00.000Z",
+          "returnDate": "2025-01-27T00:00:00.000Z"
+        },
+        {
+          "id": "aa1297c8-2438-4b7d-a157-2d2a97917cea",
+          "description": "Chairs, Folding",
+          "pickupDate": "2025-01-23T00:00:00.000Z",
+          "returnDate": "2025-01-27T00:00:00.000Z"
+        },
+        {
+          "id": "1bdc4a8d-88b3-4987-8f3c-099286e03782",
+          "description": "Director's Chairs, Tall",
+          "pickupDate": "2025-01-23T00:00:00.000Z",
+          "returnDate": "2025-01-27T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

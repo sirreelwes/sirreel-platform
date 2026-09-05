@@ -1,0 +1,42 @@
+{
+  "ranAt": "2026-09-04T17:22:00.209Z",
+  "keep": {
+    "id": "3102e3db-1ffb-409b-81c0-2a75990b0565",
+    "jobCode": "SR-JOB-0267",
+    "notesBefore": "Includes 6 ft shelf we were talking about already\n[company: created new company \"Michael Kagan (company TBC)\"]",
+    "planyoCartIdBefore": null
+  },
+  "drop": {
+    "id": "9a341f7e-a3d2-4c8b-bc25-2dd7c5405cce",
+    "jobCode": "SR-JOB-0289",
+    "notesBefore": "Created from Planyo import — cart 5779487",
+    "planyoCartIdBefore": "5779487",
+    "statusBefore": "ACTIVE"
+  },
+  "moved": {
+    "orderIds": [
+      "7b0b9c87-d4ce-4161-87fd-9fa18026ff98"
+    ],
+    "orderNumbers": [
+      "S260904-001"
+    ],
+    "bookingIds": [
+      "fa6a0e97-fe11-4b57-a01e-b56d9acec655",
+      "9e8efc06-d2b2-476b-a903-461faf99c00f"
+    ],
+    "coiCheckIds": [
+      "8624557d-ccce-4b50-b8bf-de583c827a57"
+    ],
+    "jobContactIds": [
+      "ca6eb6f8-a220-4d71-b9c5-9d69adb411b6"
+    ]
+  },
+  "skippedContacts": [
+    {
+      "id": "73f3a535-7ace-4f48-a77d-06b073e8c3c0",
+      "email": "michaelkagan1@gmail.com",
+      "role": "OTHER",
+      "reason": "person already on SR-JOB-0267"
+    }
+  ]
+}

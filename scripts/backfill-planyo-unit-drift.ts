@@ -36,7 +36,7 @@
  * ── Reversal ───────────────────────────────────────────────────────
  *
  * Every moved assignment is captured BY ID with its before/after
- * assetId and window, to tmp/planyo-unit-drift-backfill-*.json, plus
+ * assetId and window, to journals/planyo-unit-drift-backfill-*.json, plus
  * one AuditLog row per assignment (action `assignment.planyo_unit_drift`).
  * To undo: set assetId/startDate/endDate back BY THOSE IDS. Nothing is
  * deleted and nothing is matched by pattern.
@@ -324,8 +324,8 @@ async function main() {
     await runUnitPass(retry)
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/planyo-unit-drift-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/planyo-unit-drift-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ movedAssignmentIds: journal.map((j) => j.assignmentId), moves: journal, notApplied }, null, 2))
 
   await prisma.auditLog.createMany({

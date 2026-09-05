@@ -1,0 +1,3218 @@
+{
+  "at": "2026-08-29T03:15:54.122Z",
+  "note": "Pre-write state of every supply-catalog-seed.json code. Restore by id.",
+  "before": [
+    {
+      "id": "c1640043-4840-4679-b7f2-27fd63bb3dcb",
+      "code": "BAS-TRASH-CANS-LARGE",
+      "description": "Trash Cans, Large",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "1f146c12-78a9-4410-a84b-3d89de59dc13",
+      "code": "BAS-FURNITURE-PADS",
+      "description": "Furniture Pads",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "9be6faa1-6622-4ae0-92e9-287b169709b8",
+      "code": "BAS-TARP-MEDIUM",
+      "description": "Tarp, Medium",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "6354caa1-a6ba-441d-8ffe-e05e815c06d4",
+      "code": "BAS-RUBBER-MATS-3X5",
+      "description": "Rubber Mats, 3'x5'",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "fab9af32-7789-43a7-b006-9146d2dbdd60",
+      "code": "CLI-HEATER-DISH",
+      "description": "Heater, Dish",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "6.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "ce570cc3-4d3c-47d7-ac75-431c98847321",
+      "code": "CLI-PROPANE-TANK-EXTRA",
+      "description": "Propane Tank, extra",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "25",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "c02df3c9-0e3c-4f95-9331-18926a2c5295",
+      "code": "CLI-FAN-BOX",
+      "description": "Fan, \"Box\"",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "6",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "b6fbfb68-e392-4657-8950-c10667353f86",
+      "code": "CLI-UMBRELLA-GOLF",
+      "description": "Umbrella, Golf",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "3.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "27a97365-2aef-4bc9-9123-253fe8de3a6b",
+      "code": "CLI-HOSE-50-GARDEN",
+      "description": "Hose, 50' garden",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "7.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "5b2effbc-827c-4a8d-aaec-a552e6001f74",
+      "code": "COM-HEADSET-DRIVE-THRU",
+      "description": "Headset, \"Drive-Thru\"",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "3",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "9b7e028b-c71a-480e-b13a-8c631dc216f9",
+      "code": "COM-HAND-MICS",
+      "description": "Hand Mics",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "3",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "e812cd84-ade9-42fc-8a70-5329e6016c48",
+      "code": "COM-MICROPHONE-XLR",
+      "description": "Microphone, XLR",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "5",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "4de22cc1-8921-40c5-b511-2b42a690decf",
+      "code": "CRA-TEA-KETTLE-1-7-LITER-ELECTRIC",
+      "description": "Tea Kettle (1.7 liter) - Electric",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "2807643c-a400-470f-9913-876aa88648a1",
+      "code": "CRA-COOLER-48-QT",
+      "description": "Cooler, 48 qt",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "db23bb84-2507-4270-a5bd-942a5ddd2999",
+      "code": "CRA-COOLER-68-QT",
+      "description": "Cooler, 68 qt",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "6",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "14ddef9c-ac26-4f5c-93d4-dfbc8a7a7d31",
+      "code": "CRA-COFFEE-MAKER-100-CUP",
+      "description": "Coffee Maker, 100 cup",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "c572ed85-eee6-4ced-a3ef-a9e62a310d06",
+      "code": "CRA-COOLER-100-QT",
+      "description": "Cooler, 100 qt",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "7",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "fb1db9db-b416-48ee-86cc-4802900849db",
+      "code": "CRA-COOLER-GATORADE",
+      "description": "Cooler, \"Gatorade\"",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "70c8703d-ef60-4e1a-b1d1-c3e2f628521f",
+      "code": "CRA-WATER-DISPENSER",
+      "description": "Water Dispenser",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "da3e8ec3-6033-4866-ac50-a723af5df9d1",
+      "code": "CRA-WATER-BOTTLE-5-GAL",
+      "description": "Water Bottle, 5-gal",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "11",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "42d89177-4f86-49b6-a9dc-6c226754bb1b",
+      "code": "CRA-COFFEE-THERMOS-LARGE-2QT",
+      "description": "Coffee Thermos, Large (2qt)",
+      "categoryId": "c4790806-9991-45af-96dd-60cc6bfa6634",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Craft Services & Catering",
+        "slug": "craft-services-catering"
+      }
+    },
+    {
+      "id": "26de9dd8-cf60-4819-8882-a833a4d4655e",
+      "code": "DOL-DOLLY-MAGLINER-SR-W-SHELF",
+      "description": "Dolly, Magliner Sr. w/Shelf",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "8a5283ad-c054-48c3-ba37-62ac6c410f2a",
+      "code": "DOL-DOLLY-FURNITURE",
+      "description": "Dolly, Furniture",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "03af65d4-e596-4a82-8334-996933ce9ae7",
+      "code": "DOL-DOLLY-HANDTRUCK-2-WHEEL",
+      "description": "Dolly, Handtruck (2-Wheel)",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "d93fc6f9-25f0-42bc-9f4b-c6bd2e996b3f",
+      "code": "DOL-PALLET-JACK",
+      "description": "Pallet Jack",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "8688e62f-8a6a-4d51-ad1b-9a07179066a4",
+      "code": "DOL-STEEL-DECK-2X4",
+      "description": "Steel Deck, 2x4",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "30",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": false,
+      "archivedAt": "2026-07-07T23:13:02.619Z",
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "1872f6f4-9a4d-4dad-b509-d8c0148c7856",
+      "code": "EFX-ROSCOE-FLUID-BOTTLE",
+      "description": "Roscoe Fluid, Bottle",
+      "categoryId": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "dailyRate": "25",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Effects",
+        "slug": "effects"
+      }
+    },
+    {
+      "id": "a610516f-5359-4297-b5d3-7b13d6a00073",
+      "code": "EFX-ROSCOE-V-HAZER-WATER-BASED",
+      "description": "Roscoe V-Hazer (Water Based)",
+      "categoryId": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "dailyRate": "60",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Effects",
+        "slug": "effects"
+      }
+    },
+    {
+      "id": "8f73402c-7a0f-407b-b55d-dbe5c25a0d7c",
+      "code": "EFX-ROSCOE-FOGGER-1900",
+      "description": "Roscoe Fogger 1900",
+      "categoryId": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "dailyRate": "50",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Effects",
+        "slug": "effects"
+      }
+    },
+    {
+      "id": "36f41fda-884e-4850-b29b-685cb11c329b",
+      "code": "DOL-RUBBERMAID-CART",
+      "description": "Rubbermaid Cart",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "production cart",
+        "utility cart"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "9828b6f1-d872-4eac-b240-d9bb091ed7cd",
+      "code": "EFX-DF50-HAZER",
+      "description": "DF50 Hazer",
+      "categoryId": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "dailyRate": "110",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Effects",
+        "slug": "effects"
+      }
+    },
+    {
+      "id": "6c825e8d-8528-4e54-986f-cb13d66ff156",
+      "code": "EFX-FAN-RE-FAN-W-STAND",
+      "description": "Fan, \"RE Fan\" w/stand",
+      "categoryId": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "dailyRate": "65",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Effects",
+        "slug": "effects"
+      }
+    },
+    {
+      "id": "28ccc0d7-ef46-410f-a75f-a2d811d6389a",
+      "code": "LAD-LADDER-STEP",
+      "description": "Ladder, Step",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "6",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "84c52e20-f993-4577-8b0d-35a769109a09",
+      "code": "LAD-LADDER-7",
+      "description": "Ladder, 7'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "9",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "6243e0e1-805f-4b7e-8b89-74d6bfd58b84",
+      "code": "SAF-TRAFFIC-CONES-18",
+      "description": "Traffic Cones, 18\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "309492f4-e653-4e57-8e7b-9dd6ef0cdacb",
+      "code": "SAF-TRAFFIC-CONES-28",
+      "description": "Traffic Cones, 28\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "2.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "e26393c9-5faa-49aa-839c-e4a2925e2dd1",
+      "code": "SAF-DELINEATORS-36",
+      "description": "Delineators, 36\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "ffdf8a03-9ae4-4ad0-b0b8-76b4cd5338a6",
+      "code": "SAF-STOP-SLOW-SIGN",
+      "description": "Stop/Slow Sign",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "8358927b-af13-473f-9c33-411268c11168",
+      "code": "SAF-SAFETY-VEST",
+      "description": "Safety Vest",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "1.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "d5f742df-def0-4abb-a2fb-48df15c51179",
+      "code": "SAF-SIGN-MEN-WORKING",
+      "description": "Sign, \"Men Working\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "fb0539cc-6e86-4831-bf95-796d59a8d548",
+      "code": "SAF-SIGN-PREPARE-TO-STOP",
+      "description": "Sign, \"Prepare to Stop\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "5daff131-3682-4270-9b76-1d759e2b3908",
+      "code": "SAF-SIGN-WET-PAVEMENT",
+      "description": "Sign, \"Wet Pavement\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "1c80dfbb-0ce7-43a8-8723-7412c323da33",
+      "code": "LAD-LADDER-8",
+      "description": "Ladder, 8'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "10",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "aeb18d70-4fdc-46d3-9f24-877edf5e6c00",
+      "code": "LAD-LADDER-10",
+      "description": "Ladder, 10'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "14",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "622b1723-1045-4ee0-84c4-595af4f14d68",
+      "code": "LAD-LADDER-12",
+      "description": "Ladder, 12'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "16",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "12757c9f-9f48-47ed-9855-9d8ffd64d7be",
+      "code": "SAF-SIGN-ROAD-WORK-AHEAD",
+      "description": "Sign, \"Road Work Ahead\"",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "29b8313b-30a0-46ea-a585-18f992124140",
+      "code": "SAF-BARRICADES-W-LIGHTS",
+      "description": "Barricades w/Lights",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "a98057f8-0c9b-45ee-9d03-5655c01d5f6e",
+      "code": "SAF-HARD-HAT",
+      "description": "Hard Hat",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "b9acf0cd-d0e4-4643-868b-99eb08f8c3f0",
+      "code": "SAF-CAL-OSHA-BOARD",
+      "description": "Cal OSHA Board",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "12",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "0efc46a7-7673-48be-8eaf-29548a0fbac5",
+      "code": "SAF-FIRE-EXTINGUISHER-18LB",
+      "description": "Fire Extinguisher (18LB)",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "079f6998-6cb4-42b9-a9fb-672ddfff38af",
+      "code": "SAF-FIRE-EXTINGUISHER-8LB",
+      "description": "Fire Extinguisher (8LB)",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "8",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "13e1b064-bf10-46b9-9d9a-d4cb2f4fb3af",
+      "code": "TAB-TABLE-2-FOLDING-PERSONAL",
+      "description": "Table, 2' Folding (Personal)",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "4",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "24ee9c43-eac3-4174-a868-bf74a6811848",
+      "code": "TAB-TABLE-4-FOLDING",
+      "description": "Table, 4' Folding",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "d3a062f8-0cae-4296-8a4a-6d883a14d811",
+      "code": "TAB-TABLE-6-FOLDING",
+      "description": "Table, 6' Folding",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "6",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "8bc99a00-af40-4ddc-994f-78001babcaae",
+      "code": "TAB-TABLE-6-FOLDING-HALF-FOLD",
+      "description": "Table, 6' Folding (Half Fold)",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "6.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "455f7b7c-8eaf-4f1a-a1d3-1e9635c43f91",
+      "code": "TAB-TABLE-8-FOLDING",
+      "description": "Table, 8' Folding",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "7",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "76944b7a-54a3-4057-9015-3e04eef6d12f",
+      "code": "TAB-6-TABLE-LINEN-BLACK",
+      "description": "6' Table Linen (Black)",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": false,
+      "archivedAt": "2026-07-20T01:21:23.694Z",
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "eee6b84a-f2a1-4542-8719-7a202bb1ce58",
+      "code": "TAB-6-TABLE-LINEN-WHITE",
+      "description": "6' Table Linen (White)",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": false,
+      "archivedAt": "2026-07-20T01:21:33.938Z",
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "ae433f61-2817-4273-bacf-9d49eeeb1efb",
+      "code": "TAB-CHAIRS-FOLDING",
+      "description": "Chairs, Folding",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "f7672693-b19a-4394-bcaf-9452e9ae3842",
+      "code": "TAB-DIRECTORS-CHAIRS-TALL",
+      "description": "Director's Chairs, Tall",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "7",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "1c3e1496-4623-47b1-afef-db2e2bc0a683",
+      "code": "TAB-DIRECTORS-CHAIRS-MEDIUM-PADDED",
+      "description": "Director's Chairs, Medium (Padded)",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "8b664523-c112-4a1f-ab1f-89e402f510ca",
+      "code": "TEN-CARAVAN-CANOPY-10X10",
+      "description": "Caravan Canopy, 10x10",
+      "categoryId": "3df26a05-91ae-482a-ad1e-6ef85d8ecfba",
+      "dailyRate": "30",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "pop up",
+        "popup",
+        "ez up",
+        "ez-up",
+        "tent",
+        "canopy"
+      ],
+      "publicVisible": false,
+      "isActive": false,
+      "archivedAt": "2026-07-10T14:01:42.270Z",
+      "category": {
+        "name": "Tents & Accessories",
+        "slug": "tents-accessories"
+      }
+    },
+    {
+      "id": "f188c9d3-d69b-4464-b307-977f91fb3e98",
+      "code": "TEN-SAND-BAGS-25LBS",
+      "description": "Sand Bags, 25lbs",
+      "categoryId": "3df26a05-91ae-482a-ad1e-6ef85d8ecfba",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "sandbag"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tents & Accessories",
+        "slug": "tents-accessories"
+      }
+    },
+    {
+      "id": "e56894c5-c0da-46cc-abd8-b18882f33d4c",
+      "code": "TEN-SAND-BAGS-35LBS",
+      "description": "Sand Bags, 35lbs",
+      "categoryId": "3df26a05-91ae-482a-ad1e-6ef85d8ecfba",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "sandbag"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tents & Accessories",
+        "slug": "tents-accessories"
+      }
+    },
+    {
+      "id": "a908d5dc-b53b-4a56-9cb4-f2ee20fe1831",
+      "code": "TOO-BROOM-CORN",
+      "description": "Broom, Corn",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "be66ec1d-a1af-47f8-9ee6-673cb4642c43",
+      "code": "TOO-BROOM-PUSH",
+      "description": "Broom, Push",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "4",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "1286e8db-a2de-4ce0-8992-6e0e89499e38",
+      "code": "TOO-DUST-MOP",
+      "description": "Dust Mop",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "3145e778-4312-40b1-bc59-e94a307b4794",
+      "code": "TOO-DUST-PAN",
+      "description": "Dust Pan",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "22de4d9f-cd3c-41e0-bd1f-ecb52a7cc21c",
+      "code": "SAF-1ST-AID-KIT-50-PERSON",
+      "description": "1st Aid Kit, 50 person",
+      "categoryId": "f7ceb66e-1328-4f6c-87f8-daf34b25603d",
+      "dailyRate": "25",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safety & Traffic",
+        "slug": "safety-traffic"
+      }
+    },
+    {
+      "id": "3e40a721-eb3c-44ca-a498-f1fe72a17655",
+      "code": "TOO-MOP-BUCKET",
+      "description": "Mop & Bucket",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "8",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "11737a34-8cda-4e1e-ad21-0b21d1035d21",
+      "code": "TOO-PAIL-PLASTIC-5-GALLON",
+      "description": "Pail, Plastic 5 Gallon",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "3c06d0f0-709c-4e6e-b6d4-8a3866b68645",
+      "code": "TOO-RAKE-LEAF",
+      "description": "Rake, Leaf",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "8a5a5fee-f0b3-4bb2-ab8a-39e092362977",
+      "code": "TOO-RAKE-ROCK",
+      "description": "Rake, Rock",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "73cd7b6a-2046-4a94-863f-92f474a10348",
+      "code": "TOO-RAKE-SAND",
+      "description": "Rake, Sand",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "8134e3ef-7353-4c2d-b49f-e498c4afaadf",
+      "code": "TOO-SHOVEL-FLAT",
+      "description": "Shovel, Flat",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "743a64e0-03cd-4610-ae85-f7466b6318aa",
+      "code": "TOO-SHOVEL-SPADE",
+      "description": "Shovel, Spade",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "c88481b2-2ce9-42fd-93ef-04838c38b58a",
+      "code": "TOO-SHOVEL-SNOW",
+      "description": "Shovel, Snow",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "54209a3b-fb5f-468c-84f0-920794d66d3d",
+      "code": "TOO-SLEDGE-HAMMER",
+      "description": "Sledge Hammer",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "6",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "e53d0d17-fbd0-4777-9bbf-3fbe440f1a2b",
+      "code": "TOO-BOLT-CUTTER",
+      "description": "Bolt Cutter",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "6d302c32-328b-4e34-95b2-5a40b7639742",
+      "code": "TOO-PRUNE-CUTTER",
+      "description": "Prune Cutter",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "a8081c12-549d-4050-9e44-2f75ce8f494e",
+      "code": "TOO-SHOP-VACUUM",
+      "description": "Shop Vacuum",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "efedd3a1-9259-4efc-9826-e92c2315167d",
+      "code": "TOO-LEAF-BLOWER-ELECTRIC",
+      "description": "Leaf Blower, Electric",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "31bcdc39-3fe2-4380-b2d7-83ad81c5089b",
+      "code": "TOO-PRESSURE-WASHER",
+      "description": "Pressure Washer",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "40",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "8db1b2ec-fe7f-4a66-9e9d-fda25b91f4b8",
+      "code": "TOO-WEED-WACKER-ELECTRIC",
+      "description": "Weed Wacker, Electric",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "30",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "56c6314e-a217-40ff-8714-bd062aba5035",
+      "code": "TOO-HEDGE-TRIMMER-ELECTRIC",
+      "description": "Hedge Trimmer, Electric",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "30",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "2a16f3d1-e405-47c2-a873-f37aa1892ffe",
+      "code": "TOO-TRASH-GRABBER",
+      "description": "Trash Grabber",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "1b3e3692-48f3-4e21-b1b3-7005f657ec7f",
+      "code": "VEH-4-WORK-SHELF",
+      "description": "4' Work Shelf",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "4",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "14702a8c-301b-4e97-8fa4-7a5f842fee8f",
+      "code": "VEH-8-WORK-SHELF",
+      "description": "8' Work Shelf",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "8",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "33565644-26ab-4c73-a86f-ddd6c98492a3",
+      "code": "VEH-4-WORK-BASKET",
+      "description": "4' Work Basket",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "b7f32531-12d6-4c63-ad1e-89e907b4998e",
+      "code": "VEH-MILK-CRATE",
+      "description": "Milk Crate",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "b3bac7dd-69e5-4f98-88e4-b7ac0f8e2da6",
+      "code": "VEH-STRAPS-BUNGEE-OR-D-RING",
+      "description": "Straps, Bungee or D-Ring",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "1",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "10713942-7499-4cf2-9fc5-4df940fea3a0",
+      "code": "VEH-STRAPS-RATCHET",
+      "description": "Straps, Ratchet",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "11b5d4ae-8a6d-4e24-89d4-6ea5f75ce4e3",
+      "code": "VEH-CHAIR-RACK-HANGING",
+      "description": "Chair Rack, Hanging",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "44f0a1a1-084e-4b9d-be2d-46b2f5b06c8a",
+      "code": "VEH-DIRECTORS-CHAIR-RACK-ROLLING",
+      "description": "Director's Chair Rack, Rolling",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "7d37369a-ea90-4cd3-b0d1-2845086e891f",
+      "code": "VEH-DOLLY-TRACK-RACK-SINGLE",
+      "description": "Dolly Track Rack, Single",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "1.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "0e3dd874-b90e-4242-832d-bf80076b5cca",
+      "code": "VEH-FIRE-EXTINGUISHER-RACK",
+      "description": "Fire Extinguisher Rack",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "45369e8e-cb7f-44b6-9116-1de939762361",
+      "code": "VEH-TOOL-RACK",
+      "description": "Tool Rack",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "27888496-507e-4aab-b1af-859df36e775d",
+      "code": "WAR-MIRROR-HALF-W-LIGHTS",
+      "description": "Mirror, Half w/lights",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "181b5d94-4258-4573-a026-c354cd2145b9",
+      "code": "WAR-MIRROR-6-WARDROBE",
+      "description": "Mirror, 6' Wardrobe",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "12.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "e0709cfe-7906-414e-8c71-b39599e4da8b",
+      "code": "WAR-POP-UP-CHANGING-STALL",
+      "description": "Pop-Up Changing Stall",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "8",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "bddcfbde-bc50-488b-8ac1-ffc87a4a3eee",
+      "code": "WAR-IRON",
+      "description": "Iron",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "7",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "75298e0e-9e2e-4c23-9196-bf13371085c0",
+      "code": "WAR-WARDROBE-RACK-ROLLING",
+      "description": "Wardrobe Rack, Rolling",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "garment rack",
+        "clothing rack"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "9acd220a-5604-4ae8-98ce-ed71df6b0786",
+      "code": "EXP-HANGER-COMBO",
+      "description": "Hanger, Combo",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "1.25",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "d66d2f98-ec4c-4f2e-9978-02c283d6868c",
+      "code": "EXP-HANGER-PANTS",
+      "description": "Hanger, Pants",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "0.95",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "27dcef43-0caf-4bf4-81d7-82a8e7544f2f",
+      "code": "EXP-HANGER-SHIRTS",
+      "description": "Hanger, Shirts",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "0.8",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "79f1a85d-97ac-4bbf-a6d5-c7e31fa7505b",
+      "code": "EXP-TRASH-LINERS-ROLL",
+      "description": "Trash Liners, Roll",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "15",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [
+        "trash can liner",
+        "can liner",
+        "trash liner",
+        "trash bag",
+        "garbage bag"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "1eb0a6a6-6868-4939-bd3c-ae4df5d2e32e",
+      "code": "EXP-TRASH-LINERS-2X-ROLL-BOX",
+      "description": "Trash Liners, 2x Roll Box",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "25",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "d69f95cb-a845-429e-803a-20481dc25a4e",
+      "code": "EXP-LAYOUT-BOARD-NEW",
+      "description": "Layout Board, New",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "7.5",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "3a4e3920-3175-4a73-9114-209beb6c611c",
+      "code": "EXP-LAYOUT-BOARD-USED",
+      "description": "Layout Board, Used",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "5",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "616f9be5-1d0d-4327-8670-7f875ba2826c",
+      "code": "CLI-HEATER-PROPANE",
+      "description": "Heater, Propane",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "35",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "ec246322-5cd3-4981-9539-9f466f74ef3a",
+      "code": "EXP-RAM-BOARD-ROLL",
+      "description": "Ram Board, Roll",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "65",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "7bb0dc83-ba45-41bf-8a20-838fa8b2bc6b",
+      "code": "EXP-CAUTION-TAPE-ROLL",
+      "description": "Caution Tape, Roll",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "10",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "c9c725da-31da-45ba-a3a1-659c5bbad835",
+      "code": "EXP-BOOTIES-PAIR",
+      "description": "Booties (pair)",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "0.75",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "56aad6cd-9f17-421a-ae45-a448e4d55e39",
+      "code": "EXP-PAPER-TAPE-2-LAYOUT-ROLL",
+      "description": "Paper Tape, 2\" Layout (roll)",
+      "categoryId": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "dailyRate": "10",
+      "department": "EXPENDABLES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Expendables",
+        "slug": "expendables"
+      }
+    },
+    {
+      "id": "940638d9-4a1f-4846-9c61-7fe718adafa7",
+      "code": "CLI-MISTERS-10-GALLON",
+      "description": "Misters, 10 gallon",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "55",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "0acce38f-8723-4ab6-b8ca-59b1fc410814",
+      "code": "BAS-BUTT-CANS",
+      "description": "Butt Cans",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "0c37d2ff-604a-4073-a250-6f3e07fd60f1",
+      "code": "BAS-RECYCLE-BINS-32-GAL",
+      "description": "Recycle Bins, 32 gal",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "0",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "7f638ba1-04c6-4119-aa7d-8b80ba174058",
+      "code": "COM-MOBILE-INTERNET-MIFI",
+      "description": "Mobile Internet MiFi",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "99",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "06676d9a-8346-4ed6-89f8-18175a5e6d01",
+      "code": "BAS-TARP-LARGE",
+      "description": "Tarp, Large",
+      "categoryId": "b01081ce-e712-42b4-81c4-d8f8ab9fcf37",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Basecamp Basics",
+        "slug": "basecamp-basics"
+      }
+    },
+    {
+      "id": "59cdfa17-f6f5-442e-a956-ce6ec8a0d3de",
+      "code": "LAD-LADDER-6",
+      "description": "Ladder, 6'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "8",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "8cd19311-c97b-4795-987e-457b15752526",
+      "code": "LAD-LADDER-14",
+      "description": "Ladder, 14'",
+      "categoryId": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "dailyRate": "18",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Ladders",
+        "slug": "ladders"
+      }
+    },
+    {
+      "id": "81d66922-ae0d-4665-871f-b6cc8b8118fa",
+      "code": "COM-SURVEILLANCE-KIT",
+      "description": "Surveillance Kit",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "7",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "surveillance",
+        "surveillances",
+        "earpiece",
+        "earpieces",
+        "surveillance kit"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "9cb18a34-b15f-4dbb-b716-efc01e14ac1a",
+      "code": "COM-MOTOROLA-CP200-RADIO",
+      "description": "Motorola CP200 Radio",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "walkie",
+        "walkies",
+        "walkie talkie",
+        "walkie talkies",
+        "handheld",
+        "handhelds",
+        "two-way radio",
+        "two way radio",
+        "radios",
+        "radio",
+        "cp200"
+      ],
+      "publicVisible": true,
+      "isActive": false,
+      "archivedAt": "2026-07-03T23:19:40.120Z",
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "84bdd136-2330-4229-a99f-cbb5c9f200ed",
+      "code": "CLI-AIR-CONDITIONER-1-5-TON",
+      "description": "Air Conditioner, 1.5-ton",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "150",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "ac",
+        "ac unit"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "801654df-f120-4c5f-8864-f9307edd7db2",
+      "code": "CLI-FAN-UTILITY",
+      "description": "Fan, \"Utility\"",
+      "categoryId": "a2b24eec-bec7-4296-842f-541b0cd55df9",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Climate Controls",
+        "slug": "climate-controls"
+      }
+    },
+    {
+      "id": "9e87e624-6e6d-4775-ab76-fef77d6b6fc2",
+      "code": "POW-GENERATOR-2000W",
+      "description": "Generator, 2000W",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "60",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "ecf29c9d-0f4a-4498-9d3c-8f6a543e2f70",
+      "code": "POW-GENERATOR-3000W",
+      "description": "Generator, 3000W",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "80",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "0fa9cac9-0136-4586-95b0-f537f054d00d",
+      "code": "POW-GENERATOR-6500W",
+      "description": "Generator, 6500W",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "200",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "679393f2-f436-4ff2-b0a6-2f1e4aae3521",
+      "code": "POW-GENERATOR-7000W",
+      "description": "Generator, 7000W",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "225",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "56ba8fc3-3b97-477a-82a9-a992848a91e8",
+      "code": "POW-GAS-CAN-5-GAL",
+      "description": "Gas Can, 5-gal",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "5",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "35d912ed-6a54-440f-9724-33c6342e0dce",
+      "code": "POW-EXT-CORD-25",
+      "description": "Ext. Cord, 25'",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "4",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "83436de2-3c20-4ef6-aa62-90ea903dbfa3",
+      "code": "POW-EXT-CORD-50",
+      "description": "Ext. Cord, 50'",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "5",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "e4b8ba98-8576-49da-8af3-9ebe8f9881a6",
+      "code": "POW-EXT-CORD-100",
+      "description": "Ext. Cord, 100'",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "6",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "894f261d-dbcd-4205-b4fb-9457ae5e1f55",
+      "code": "POW-POWER-STRIP",
+      "description": "Power Strip",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "2",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "87691e8f-3f02-4a26-91a1-6c9e8d2f6004",
+      "code": "POW-POWER-INVERTER-250W",
+      "description": "Power Inverter 250w",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "10",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "30f19c87-296a-4e4d-b94f-eaf050e04e53",
+      "code": "POW-WORK-LIGHT-W-STAND",
+      "description": "Work Light w/stand",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "15",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "dd8bbd10-3568-4781-8e30-70e669374eb2",
+      "code": "POW-BATTERY-PWR-WORKLIGHT",
+      "description": "Battery Pwr Worklight",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "25",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "08e0bc63-d12e-4286-9745-1bb42bc1b307",
+      "code": "POW-CLAMP-LIGHT",
+      "description": "Clamp Light",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "2",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "17c04ca4-4a0b-479f-be8f-0d901f20842a",
+      "code": "POW-FLASHLIGHT-MAG",
+      "description": "Flashlight, \"Mag\"",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "4",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "278af72b-0a18-4dbe-b4d4-a67db5a30e08",
+      "code": "POW-CABLE-CROSSOVER",
+      "description": "Cable Crossover",
+      "categoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "dailyRate": "20",
+      "department": "GE",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Lighting/Electric",
+        "slug": "lighting-electric"
+      }
+    },
+    {
+      "id": "80ea1b93-3e81-47a4-af62-5925dd4a2fe7",
+      "code": "TAB-CLIENT-LOUNGE-STANDARD",
+      "description": "Client Lounge, Standard",
+      "categoryId": "362f6bb4-f5ee-4e9b-8f12-b8db3da20b78",
+      "dailyRate": "250",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Client/VIP",
+        "slug": "client-vip"
+      }
+    },
+    {
+      "id": "f6f49a5f-8671-4197-83b8-14f338e05656",
+      "code": "TAB-CLIENT-LOUNGE-SOLO-LINE",
+      "description": "Client Lounge, SOLO Line",
+      "categoryId": "362f6bb4-f5ee-4e9b-8f12-b8db3da20b78",
+      "dailyRate": "400",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Client/VIP",
+        "slug": "client-vip"
+      }
+    },
+    {
+      "id": "169a4093-5e32-4d56-8e0f-ea7ce9bfc055",
+      "code": "SSE-HAND-WASHING-STATION",
+      "description": "Hand Washing Station",
+      "categoryId": "051f027d-7187-4d00-bfa0-94d09bc54cde",
+      "dailyRate": "95",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safe Sets Equipment",
+        "slug": "safe-sets-equipment"
+      }
+    },
+    {
+      "id": "ae1bdf06-ead9-47a6-bdaa-481952bfdc95",
+      "code": "SSE-STANDING-SANITIZING-STATION",
+      "description": "Standing Sanitizing Station",
+      "categoryId": "051f027d-7187-4d00-bfa0-94d09bc54cde",
+      "dailyRate": "25",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safe Sets Equipment",
+        "slug": "safe-sets-equipment"
+      }
+    },
+    {
+      "id": "5ece53d5-765f-46fd-bd64-dc2f1f59feee",
+      "code": "SSE-DIRECTORS-SHIELD",
+      "description": "Director's Shield",
+      "categoryId": "051f027d-7187-4d00-bfa0-94d09bc54cde",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safe Sets Equipment",
+        "slug": "safe-sets-equipment"
+      }
+    },
+    {
+      "id": "9b06910f-e1d6-48f6-9031-2de78129129e",
+      "code": "SSE-AIR-SCRUBBER-750-CFM",
+      "description": "Air Scrubber (750 CFM)",
+      "categoryId": "051f027d-7187-4d00-bfa0-94d09bc54cde",
+      "dailyRate": "100",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safe Sets Equipment",
+        "slug": "safe-sets-equipment"
+      }
+    },
+    {
+      "id": "ed9409c5-a543-4fae-9cc5-0940113de065",
+      "code": "SSE-AIR-SCRUBBER-550-CFM",
+      "description": "Air Scrubber (550 CFM)",
+      "categoryId": "051f027d-7187-4d00-bfa0-94d09bc54cde",
+      "dailyRate": "75",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Safe Sets Equipment",
+        "slug": "safe-sets-equipment"
+      }
+    },
+    {
+      "id": "69a61b26-998c-4de6-9c27-9052c6f7cc7f",
+      "code": "PPE-BLACK-KN95-FACE-MASK-10PK",
+      "description": "Black KN95 Face Mask (10pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "142eb64f-dc40-40f4-a480-592c2f210efc",
+      "code": "PPE-DISPOSABLE-FACE-MASKS-50PK",
+      "description": "Disposable Face Masks (50pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "d9497fa4-c429-4117-b7eb-b7baf2fc6fd8",
+      "code": "PPE-WHITE-N95-FACE-MASK-20PK",
+      "description": "White N95 Face Mask (20pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "30",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "c055f6b3-5b9c-4efb-96ee-06c529a9f31e",
+      "code": "PPE-FACE-SHIELD-HEADBAND",
+      "description": "Face Shield - Headband",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "f7c85977-8c21-4533-b9ce-5e1cf12356eb",
+      "code": "PPE-FACE-SHIELD-GLASSES-10PK",
+      "description": "Face Shield - Glasses (10pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "7f6a0663-114e-41fd-9ea3-57e8df0b30f2",
+      "code": "PPE-SAFETY-GLASSES",
+      "description": "Safety Glasses",
+      "categoryId": "b2c9110b-6340-41d9-9a7e-5dd7586f2e15",
+      "dailyRate": "2",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tools & Cleaning",
+        "slug": "tools-cleaning"
+      }
+    },
+    {
+      "id": "bc64e39a-46ed-48d0-8d21-699c3b18fcba",
+      "code": "PPE-LATEX-GLOVES-50-PAIRS",
+      "description": "Latex Gloves (50 pairs)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "11ebefff-bfae-4537-b681-fc9527183862",
+      "code": "PPE-ISOLATION-GOWN",
+      "description": "Isolation Gown",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "15432ded-6b73-4979-bac5-6e0cfecb6078",
+      "code": "PPE-HAND-SANITIZER-17OZ",
+      "description": "Hand Sanitizer (17oz)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "d84e7985-69be-40ba-865d-af017057afb4",
+      "code": "PPE-HAND-SANITIZER-33OZ",
+      "description": "Hand Sanitizer (33oz)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "57898c21-8343-44fd-bf8e-b877f9980b46",
+      "code": "PPE-HAND-SANITIZING-WIPES-100PK",
+      "description": "Hand Sanitizing Wipes (100pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "8",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "1f8528d9-a558-42ee-b05a-cba4ae418c80",
+      "code": "PPE-MINI-ALCOHOL-WIPES-100PK",
+      "description": "Mini Alcohol Wipes (100pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "6",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "1cf6c513-72b8-49dd-8e93-2678d2b78b18",
+      "code": "PPE-DISINFECTANT-SPRAY",
+      "description": "Disinfectant Spray",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "29b0a1e1-c76d-4406-b6ca-c7cbc872c791",
+      "code": "PPE-DISINFECTANT-LIQUID",
+      "description": "Disinfectant Liquid",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "d296b746-15be-42ce-ab7e-8a996bb8ef03",
+      "code": "PPE-ANTISEPTIC-TOWELETTES-100PK",
+      "description": "Antiseptic Towelettes (100pk)",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "e38d9a1d-6109-4a87-aaac-ff6f6f5f7bf2",
+      "code": "PPE-70-ALCOHOL-WIPE",
+      "description": "70% Alcohol Wipe",
+      "categoryId": "511a67f7-11b3-4f3e-b891-bd657040a953",
+      "dailyRate": "0.25",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "PPE",
+        "slug": "ppe"
+      }
+    },
+    {
+      "id": "caa23413-c445-43eb-8733-b52a910b3ba1",
+      "code": "HEA-NON-CONTACT-THERMOMETER",
+      "description": "Non-Contact Thermometer",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "45",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "6f22d933-3659-430d-8eec-fd8b11f8f900",
+      "code": "HEA-SAFE-SETS-SIGNAGE-PACK",
+      "description": "Safe Sets Signage Pack",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "75",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "41034661-109a-4502-86a1-2e5db84e50a0",
+      "code": "HEA-PAPER-WRISTBANDS-10PK-BLUE",
+      "description": "Paper Wristbands (10pk) - Blue",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "0.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "43cd9963-522b-4e44-b766-09783094080a",
+      "code": "HEA-PAPER-WRISTBANDS-10PK-ORANGE",
+      "description": "Paper Wristbands (10pk) - Orange",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "0.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "b3ebbbec-8e2d-4ded-9d23-4ae30095bc5f",
+      "code": "HEA-PAPER-WRISTBANDS-10PK-RED",
+      "description": "Paper Wristbands (10pk) - Red",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "0.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "49ef1375-a5f0-4502-82b4-54270cbb6ab0",
+      "code": "HEA-PAPER-WRISTBANDS-10PK-YELLOW",
+      "description": "Paper Wristbands (10pk) - Yellow",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "0.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "1a0dcbe3-a814-45aa-a618-6bdbcb082a14",
+      "code": "HEA-PAPER-WRISTBANDS-10PK-PINK",
+      "description": "Paper Wristbands (10pk) - Pink",
+      "categoryId": "16d8b24d-4820-4b13-877d-3bd89ec63db9",
+      "dailyRate": "0.5",
+      "department": "PRO_SUPPLIES",
+      "type": "EXPENDABLE",
+      "aliases": [],
+      "publicVisible": false,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Health & Safety",
+        "slug": "health-safety"
+      }
+    },
+    {
+      "id": "c5b96e42-4b5a-4e74-a47c-1fc3c731cc7b",
+      "code": "WAR-MIRROR-ROLLING-M-U",
+      "description": "Mirror, Rolling M/U",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "20",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "08450fb5-b5a2-4aaf-94e8-a1a4fddffb97",
+      "code": "WAR-JIFFY-STEAMER",
+      "description": "Jiffy Steamer",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "12",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "23150fe2-cb80-4484-a33e-4f0214ea80a9",
+      "code": "DOL-DOLLY-MAGLINER-JR",
+      "description": "Dolly, Magliner Jr.",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "e0a7d8ed-3c5d-477b-b7d3-167761c3913d",
+      "code": "DOL-DOLLY-MAGLINER-SR",
+      "description": "Dolly, Magliner Sr.",
+      "categoryId": "0ef340b6-d9c9-42c1-806e-542adbde0a5e",
+      "dailyRate": "15",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Dollies & Carts",
+        "slug": "dollies-carts"
+      }
+    },
+    {
+      "id": "e2a5f1c4-acfa-448b-8c1d-d8a775410660",
+      "code": "VEH-CHAIR-RACK-ROLLING",
+      "description": "Chair Rack, Rolling",
+      "categoryId": "cce086ef-11b9-41aa-83a8-531a9cf87910",
+      "dailyRate": "5",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Vehicle Outfitting",
+        "slug": "vehicle-outfitting"
+      }
+    },
+    {
+      "id": "d06eca6e-3698-479d-83d8-d5e6a342bc33",
+      "code": "TAB-DIRECTORS-CHAIRS-LOW",
+      "description": "Director's Chairs, Low",
+      "categoryId": "e4155da5-0fa4-4368-8273-2a2a758d85a8",
+      "dailyRate": "3",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Tables & Chairs",
+        "slug": "tables-chairs"
+      }
+    },
+    {
+      "id": "acac2763-a226-4a99-9a83-48db2478eb3a",
+      "code": "WAR-IRONING-BOARD",
+      "description": "Ironing Board",
+      "categoryId": "122d7019-3524-47a2-abc8-67bf246be65f",
+      "dailyRate": "10",
+      "department": "PRO_SUPPLIES",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Wardrobe & Makeup",
+        "slug": "wardrobe-makeup"
+      }
+    },
+    {
+      "id": "5a7a291a-b8cc-4571-9c73-ee712b9ff1ba",
+      "code": "COM-BULLHORN",
+      "description": "Bullhorn",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "10",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    },
+    {
+      "id": "9fd46179-5baa-474e-acfa-6c2092ffc7aa",
+      "code": "COM-K12-ANCHOR-SPEAKER",
+      "description": "K12 Anchor Speaker",
+      "categoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "dailyRate": "80",
+      "department": "COMMUNICATIONS",
+      "type": "EQUIPMENT",
+      "aliases": [],
+      "publicVisible": true,
+      "isActive": true,
+      "archivedAt": null,
+      "category": {
+        "name": "Communications",
+        "slug": "communications"
+      }
+    }
+  ],
+  "plannedRateChanges": [
+    {
+      "code": "BAS-BUTT-CANS",
+      "descr": "Butt Cans",
+      "from": 2,
+      "to": 1.5,
+      "publicVisible": true
+    },
+    {
+      "code": "BAS-FURNITURE-PADS",
+      "descr": "Furniture Pads",
+      "from": 2,
+      "to": 1.5,
+      "publicVisible": true
+    },
+    {
+      "code": "BAS-RUBBER-MATS-3X5",
+      "descr": "Rubber Mats, 3'x5'",
+      "from": 5,
+      "to": 3,
+      "publicVisible": true
+    },
+    {
+      "code": "BAS-TARP-LARGE",
+      "descr": "Tarp, Large",
+      "from": 5,
+      "to": 2,
+      "publicVisible": true
+    },
+    {
+      "code": "BAS-TARP-MEDIUM",
+      "descr": "Tarp, Medium",
+      "from": 5,
+      "to": 1,
+      "publicVisible": true
+    },
+    {
+      "code": "CLI-HEATER-DISH",
+      "descr": "Heater, Dish",
+      "from": 6.5,
+      "to": 6,
+      "publicVisible": true
+    },
+    {
+      "code": "CLI-PROPANE-TANK-EXTRA",
+      "descr": "Propane Tank, extra",
+      "from": 25,
+      "to": 5,
+      "publicVisible": true
+    },
+    {
+      "code": "CLI-HOSE-50-GARDEN",
+      "descr": "Hose, 50' garden",
+      "from": 7.5,
+      "to": 4,
+      "publicVisible": true
+    },
+    {
+      "code": "TAB-DIRECTORS-CHAIRS-TALL",
+      "descr": "Director's Chairs, Tall",
+      "from": 7,
+      "to": 4,
+      "publicVisible": true
+    }
+  ],
+  "plannedCategoryMoves": [
+    {
+      "code": "TAB-CLIENT-LOUNGE-STANDARD",
+      "from": "client-vip",
+      "to": "tables-chairs"
+    },
+    {
+      "code": "TAB-CLIENT-LOUNGE-SOLO-LINE",
+      "from": "client-vip",
+      "to": "tables-chairs"
+    },
+    {
+      "code": "PPE-SAFETY-GLASSES",
+      "from": "tools-cleaning",
+      "to": "ppe"
+    }
+  ],
+  "plannedTypeChanges": [],
+  "plannedCreates": [
+    "COM-KONFTEL-EGO-CONF-CALL-SPKR  $25/day  cat=communications",
+    "COM-CONFERENCE-PHONE-BLUETOOTH-SPEAKER  $35/day  cat=communications",
+    "COM-BOOM-BOX  $15/day  cat=communications",
+    "DOL-STEEL-DECK-2X6  $35/day  cat=dollies-carts",
+    "DOL-STEEL-DECK-2X8  $35/day  cat=dollies-carts",
+    "DOL-STEEL-DECK-4X8  $35/day  cat=dollies-carts",
+    "DOL-STEEL-DECK-4X4  $25/day  cat=dollies-carts",
+    "TEN-CARAVAN-CANOPY-8X8  $25/day  cat=tents-accessories",
+    "TEN-CARAVAN-CANOPY-10X15  $40/day  cat=tents-accessories",
+    "TEN-CARAVAN-CANOPY-10X20  $55/day  cat=tents-accessories",
+    "TEN-SIDEWALLS-8X8  $6/day  cat=tents-accessories",
+    "TEN-SIDEWALLS-10X10  $6/day  cat=tents-accessories",
+    "TEN-SIDEWALLS-10X15  $6/day  cat=tents-accessories",
+    "SSE-TABLETOP-SANITIZING-STATION  $20/day  cat=safe-sets-equipment",
+    "SSE-TABLE-DIVIDER  $7/day  cat=safe-sets-equipment"
+  ]
+}

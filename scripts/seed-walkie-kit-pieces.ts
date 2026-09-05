@@ -28,7 +28,7 @@
  * Idempotent: items are matched by `code` and kits by (parent, piece),
  * so a re-run updates rather than duplicates. Nothing is deleted.
  *
- * A --write run journals every id it CREATED to tmp/walkie-kit-seed-*.json.
+ * A --write run journals every id it CREATED to journals/walkie-kit-seed-*.json.
  * That file is the only safe basis for an undo: deleting these rows by
  * shape (say, "every kit piece on a CP200") would take out anything a
  * human configured in the drawer afterwards.
@@ -200,9 +200,9 @@ async function main() {
   }
 
   if (WRITE && (created.items.length > 0 || created.kitPieces.length > 0)) {
-    mkdirSync(path.join(process.cwd(), 'tmp'), { recursive: true })
+    mkdirSync(path.join(process.cwd(), 'journals'), { recursive: true })
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const journal = path.join(process.cwd(), 'tmp', `walkie-kit-seed-${stamp}.json`)
+    const journal = path.join(process.cwd(), 'journals', `walkie-kit-seed-${stamp}.json`)
     writeFileSync(journal, JSON.stringify({ createdAt: stamp, ...created }, null, 2))
     console.log(`\nJournal: ${journal}`)
     console.log('  Undo deletes ONLY these ids — never by shape.')

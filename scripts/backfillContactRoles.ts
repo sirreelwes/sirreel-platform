@@ -103,8 +103,8 @@ async function main() {
     }
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/role-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/role-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ changes: applied }, null, 2))
   console.log(`\nReclassified ${applied.length} contacts (${failed} failed).`)
   console.log(`Reversal record: ${path} — each row carries its previous role.`)

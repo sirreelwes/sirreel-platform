@@ -393,7 +393,7 @@ async function main() {
     console.log('\nDRY RUN — nothing written. Re-run with --write.\n')
     return
   }
-  const out = path.join(process.cwd(), `tmp/coi-harvest-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+  const out = path.join(process.cwd(), `journals/coi-harvest-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
   fs.writeFileSync(out, JSON.stringify(filed, null, 2))
   console.log(`\nFiled ${filed.length} PENDING certificates. Review at /admin/cois.`)
   console.log(`Journal (reversible by captured id): ${out}\n`)

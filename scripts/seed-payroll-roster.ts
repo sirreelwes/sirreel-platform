@@ -7,7 +7,7 @@
  *
  * IDEMPOTENT. Matches existing Employee rows by name before creating anything,
  * so a second run adds nobody. Every id it creates is written to a journal
- * under tmp/ so the run is reversible BY CAPTURED ID — this script never
+ * under journals/ so the run is reversible BY CAPTURED ID — this script never
  * deletes and never matches on a pattern (see CLAUDE.md, "Verification
  * fixtures & cleanup").
  *
@@ -157,7 +157,7 @@ async function main() {
         newValues: journal as object,
       },
     })
-    const path = `tmp/payroll-seed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    const path = `journals/payroll-seed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
     writeFileSync(path, JSON.stringify(journal, null, 2))
     console.log(`\n  journal → ${path}`)
     console.log(`  created ${journal.createdEmployeeIds.length} employees, ` +

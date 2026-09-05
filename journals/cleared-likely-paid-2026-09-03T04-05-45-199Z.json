@@ -1,0 +1,96 @@
+{
+  "clearedAt": "2026-09-03T04-05-45-199Z",
+  "authorizedBy": "wes@sirreel.com (2026-09-02, \"clear the 11\")",
+  "count": 11,
+  "total": 22965.42,
+  "rows": [
+    {
+      "rwInvoiceId": "A000OIG7",
+      "invoiceNumber": "403261",
+      "customerName": "Fae Pictures NY Inc",
+      "remaining": 10302.08,
+      "aiConfidence": 0.82,
+      "aiSummary": "Wes Bailey (8/26) confirms Intact insurance chk#12310 for $8,468.58 deposited 5/29/26; Ana confirmed the $1,833.50 CAD-deductible ACH 'Payment hit!' on 6/12/26. Those two sum exactly to the $10,302.08 balance — likely uncleared in RentalWorks."
+    },
+    {
+      "rwInvoiceId": "A000QUS1",
+      "invoiceNumber": "403724",
+      "customerName": "CMS Media Inc and CMS Picture Inc / Crazy Maple Studios",
+      "remaining": 1542.16,
+      "aiConfidence": 0.8,
+      "aiSummary": "Henry Hong (8/17/26) said he transferred $2,000 on 6/25/2026 for invoice 403xxx; Ana DeAngelis confirmed an overpayment reimbursement bill in QuickBooks, and Wes Bailey sent Zelle refund confirmation 8/18. Invoice appears paid/overpaid, not cleared in RentalWorks."
+    },
+    {
+      "rwInvoiceId": "A000TWSY",
+      "invoiceNumber": "404350",
+      "customerName": "Contrast Films, LLC",
+      "remaining": 3404.13,
+      "aiConfidence": 0.72,
+      "aiSummary": "Ana DeAngelis (SirReel Billing) wrote 2026-08-13 that payment was processed with receipt and final invoice attached, after Natalia Lax approved charging AX 1274 on 8/13. Caveat: invoice 404350 is dated 8/17, after that charge."
+    },
+    {
+      "rwInvoiceId": "A000U0E0",
+      "invoiceNumber": "404372",
+      "customerName": "Night Shift Pictures LLC",
+      "remaining": 1593.75,
+      "aiConfidence": 0.78,
+      "aiSummary": "On 2026-08-20, in the 'Night Shift | Impressions | Final Invoice' thread, producer Po Wei Su sent Ana an ACH confirmation screenshot after Andrew Post approved ACH on 8/18. That's a payment stated as sent, not merely promised. Verify amount/deposit against bank."
+    },
+    {
+      "rwInvoiceId": "A000U9MI",
+      "invoiceNumber": "404394",
+      "customerName": "Echobend Pictures LLC",
+      "remaining": 340,
+      "aiConfidence": 0.82,
+      "aiSummary": "Ramp notified SirReel on 2026-08-25 that Echobend sent payment for invoice #404394. Corey Barnes said he'd process the ACH on 8/21 and sent proof of remittance on 8/25 when Ana asked. Payment appears sent, not just promised."
+    },
+    {
+      "rwInvoiceId": "A000UAJ8",
+      "invoiceNumber": "404401",
+      "customerName": "Zariza",
+      "remaining": 1117.25,
+      "aiConfidence": 0.85,
+      "aiSummary": "On 2026-09-02 Ana DeAngelis (SirReel Billing) wrote 'Payment has been processed' with receipt and final invoice attached, after Naomi cleared the CC1007 fraud hold and the mileage question was resolved ('good to close out'). Card evidently ran successfully."
+    },
+    {
+      "rwInvoiceId": "A000UH4S",
+      "invoiceNumber": "404427",
+      "customerName": "Nen Creative LLC",
+      "remaining": 936.55,
+      "aiConfidence": 0.9,
+      "aiSummary": "Ramp notified SirReel on Aug 27, 2026 that Nen Creative sent payment for #404427, and on Aug 28 confirmed $936.55 processed with arrival estimated Aug 28. Ziyang also sent transaction proof Aug 26. Balance likely uncleared in RentalWorks."
+    },
+    {
+      "rwInvoiceId": "A000UQB8",
+      "invoiceNumber": "404462",
+      "customerName": "Bonfire Labs, LLC",
+      "remaining": 216,
+      "aiConfidence": 0.72,
+      "aiSummary": "Ana DeAngelis (SirReel Billing) wrote 9/2/2026 that payment was processed and receipt attached, after Durier Ryan approved charging VISA6813 that same day. Card charge on the 8/31 final invoice appears completed; RentalWorks balance likely uncleared."
+    },
+    {
+      "rwInvoiceId": "A000URQV",
+      "invoiceNumber": "404471",
+      "customerName": "Harbor Freight",
+      "remaining": 2163.5,
+      "aiConfidence": 0.75,
+      "aiSummary": "In the Off Road thread, Ernie Chavarria authorized card 8226 on 2026-09-02, and Ana DeAngelis replied same day that payment 'has been processed' with receipt attached. Other emails concern the separate Ventura Ranch job."
+    },
+    {
+      "rwInvoiceId": "A000URYB",
+      "invoiceNumber": "404474",
+      "customerName": "Chaotic Neutral LTD",
+      "remaining": 840,
+      "aiConfidence": 0.85,
+      "aiSummary": "Anh Tran approved charging the card on file 9/2/2026; SirReel Billing (Ana DeAngelis) replied same day that payment 'has been processed' with receipt and final invoice attached, and the client thanked them. That is a statement of payment made, not just approval."
+    },
+    {
+      "rwInvoiceId": "A000UQON",
+      "invoiceNumber": "404463",
+      "customerName": "Chill Studio Production LLC",
+      "remaining": 510,
+      "aiConfidence": 0.82,
+      "aiSummary": "On 9/2/2026 Vinny DePinto (Chill Studio) approved charging card CC2395; same day Ana DeAngelis of SirReel Billing replied that payment had been processed and attached a receipt and final invoice — an actual charge, not just approval."
+    }
+  ]
+}

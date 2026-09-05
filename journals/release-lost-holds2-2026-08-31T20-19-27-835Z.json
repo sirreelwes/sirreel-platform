@@ -1,0 +1,14 @@
+{
+  "ranAt": "2026-08-31T20:19:27.837Z",
+  "checked": 2,
+  "journal": [
+    {
+      "orderNumber": "S260831-001",
+      "job": "PC x MOYNAT",
+      "jobStatus": "LOST",
+      "released": 1,
+      "bookingsCancelled": 1,
+      "error": null
+    }
+  ]
+}

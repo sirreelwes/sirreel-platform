@@ -1,0 +1,35 @@
+{
+  "createdAt": "2026-08-29T23-45-36-177Z",
+  "items": [
+    {
+      "id": "c708d350-63f6-40b7-82d3-4e2307234581",
+      "code": "CP200-CHARGER-6BANK"
+    },
+    {
+      "id": "fba4a972-fdce-438f-b0b4-a0b769dbc86d",
+      "code": "CP200-BATTERY"
+    }
+  ],
+  "kitPieces": [
+    {
+      "id": "ecce5cbf-a5f0-4ca6-aa41-84f58106727c",
+      "parentCode": "103733",
+      "pieceCode": "CP200-CHARGER-6BANK"
+    },
+    {
+      "id": "0a2bf60a-8664-4ad6-8f9a-6df84db9d1a8",
+      "parentCode": "104387",
+      "pieceCode": "CP200-CHARGER-6BANK"
+    },
+    {
+      "id": "7b52e9f0-8ee6-4323-bbb2-c1b0c76f6ae7",
+      "parentCode": "103733",
+      "pieceCode": "CP200-BATTERY"
+    },
+    {
+      "id": "44037e57-a106-4abb-bdb6-19a88d57e4a0",
+      "parentCode": "104387",
+      "pieceCode": "CP200-BATTERY"
+    }
+  ]
+}

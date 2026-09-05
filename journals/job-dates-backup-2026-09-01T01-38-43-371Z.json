@@ -1,0 +1,1611 @@
+{
+  "takenAt": "2026-09-01T01:38:43.372Z",
+  "reason": "pre-DROP COLUMN snapshot of Job.startDate/endDate (Wes authorised 2026-08-31)",
+  "restore": "UPDATE jobs SET start_date=..., end_date=... WHERE id=... — columns must be re-added first",
+  "count": 229,
+  "jobs": [
+    {
+      "id": "920e6b4f-af58-4525-9717-ebcde73aef98",
+      "jobCode": "SR-JOB-0002",
+      "name": "New Job",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "b0d0a7c1-212a-4bf2-9b6c-3bd8c256726c",
+      "jobCode": "SR-JOB-0003",
+      "name": "Little One",
+      "startDate": "2026-06-17T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "72990eed-e6af-4b16-8177-83e3abd96edb",
+      "jobCode": "SR-JOB-0004",
+      "name": "I-LA10",
+      "startDate": "2026-06-20T00:00:00.000Z",
+      "endDate": "2026-07-30T00:00:00.000Z"
+    },
+    {
+      "id": "862e250f-4808-451a-a5d4-41ec7e0c4b37",
+      "jobCode": "SR-JOB-0005",
+      "name": "HOPE \"The Teenage Witch\"",
+      "startDate": "2026-06-23T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "31931f8e-8540-4009-954a-25fa4aebb2cc",
+      "jobCode": "SR-JOB-0006",
+      "name": "Shadowbrook",
+      "startDate": "2026-07-02T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "9d211ef9-d2e6-4138-8e99-420801a45ef8",
+      "jobCode": "SR-JOB-0007",
+      "name": "Lights Camera Love Me",
+      "startDate": "2026-07-03T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "9f387182-bd33-4ac3-9819-d789a8c84ad6",
+      "jobCode": "SR-JOB-0008",
+      "name": "WHB#LUN38",
+      "startDate": "2026-07-06T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "94d4d1e7-88fe-40f4-a810-5386905ed944",
+      "jobCode": "SR-JOB-0009",
+      "name": "DE - soccer pop ups & LA Galaxy",
+      "startDate": "2026-07-06T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "f048dfa5-4040-4c41-b96a-7d0ee841aedc",
+      "jobCode": "SR-JOB-0010",
+      "name": "Rosabelle, Believe",
+      "startDate": "2026-07-09T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "66bf638f-5bcd-4780-b365-1b715aa1c22e",
+      "jobCode": "SR-JOB-0011",
+      "name": "Planyo import — cart 5678268",
+      "startDate": "2026-07-10T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "a8d5b78e-d0e3-4de4-82cb-e6e3b13e3bb9",
+      "jobCode": "SR-JOB-0012",
+      "name": "Love Spells",
+      "startDate": "2026-07-10T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "5bd8793d-8b48-40a3-a5e6-131e901d2e39",
+      "jobCode": "SR-JOB-0013",
+      "name": "Never-E-Nuff",
+      "startDate": "2026-07-11T00:00:00.000Z",
+      "endDate": "2026-07-21T00:00:00.000Z"
+    },
+    {
+      "id": "f45e32f4-5300-4f97-8523-9c32bc2148b2",
+      "jobCode": "SR-JOB-0014",
+      "name": "Hunter",
+      "startDate": "2026-07-11T00:00:00.000Z",
+      "endDate": "2026-07-14T00:00:00.000Z"
+    },
+    {
+      "id": "3dda1561-dad2-43fc-871b-ddf94e8bc054",
+      "jobCode": "SR-JOB-0015",
+      "name": "My27 Highlander",
+      "startDate": "2026-07-12T00:00:00.000Z",
+      "endDate": "2026-07-18T00:00:00.000Z"
+    },
+    {
+      "id": "4f48b844-59ed-43f5-85d0-2160e5ed8464",
+      "jobCode": "SR-JOB-0016",
+      "name": "Toil",
+      "startDate": "2026-07-12T00:00:00.000Z",
+      "endDate": "2026-07-18T00:00:00.000Z"
+    },
+    {
+      "id": "d0d77004-12fa-4e7e-974f-814559301322",
+      "jobCode": "SR-JOB-0017",
+      "name": "Great Clips Origins",
+      "startDate": "2026-07-12T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "1c7d3616-58d4-487d-88dc-47a1b98ff88d",
+      "jobCode": "SR-JOB-0018",
+      "name": "REP FW 20206",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "9df672a1-f54f-4ce4-82a6-96a7b7f10413",
+      "jobCode": "SR-JOB-0019",
+      "name": "Yuto AF1 #26012 Nike SB",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "aea0131e-9939-443e-b5a7-f1451833d5bc",
+      "jobCode": "SR-JOB-0020",
+      "name": "Selling Sunset S6",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "38917015-3a22-4f37-9525-ae280cc9eb3d",
+      "jobCode": "SR-JOB-0021",
+      "name": "071426",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "de864736-cfb2-4598-bd17-58a715758850",
+      "jobCode": "SR-JOB-0022",
+      "name": "Planyo import — cart 5683283",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-18T00:00:00.000Z"
+    },
+    {
+      "id": "f1743850-57ad-4d04-9e96-4ca29851f273",
+      "jobCode": "SR-JOB-0023",
+      "name": "Blue Hour",
+      "startDate": "2026-07-13T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "59e347d5-bc4d-4245-aacc-e161963dc8d8",
+      "jobCode": "SR-JOB-0024",
+      "name": "LA Galaxy hermosa beach",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "8a9fa2f8-50b3-4a6b-a9d1-d56b3de5a73a",
+      "jobCode": "SR-JOB-0025",
+      "name": "Aetna 2026",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-08-07T00:00:00.000Z"
+    },
+    {
+      "id": "d082b803-0dda-426a-a14e-895acedef0a7",
+      "jobCode": "SR-JOB-0026",
+      "name": "EW Cover - CR3 LA",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "69c96448-03d1-467f-bed2-5a668fcdcd08",
+      "jobCode": "SR-JOB-0027",
+      "name": "Planyo import — cart 5679811",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "d406cf57-70bf-4151-84d3-75f03b3c77e8",
+      "jobCode": "SR-JOB-0028",
+      "name": "Planyo import — cart 5683271",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-22T00:00:00.000Z"
+    },
+    {
+      "id": "436b4c86-8c1c-44ee-9f2f-940ee1964998",
+      "jobCode": "SR-JOB-0029",
+      "name": "Puma Nitro",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "id": "c00a0231-1c2c-4848-a537-911ba8304793",
+      "jobCode": "SR-JOB-0030",
+      "name": "EW Camp Rock 3 LA",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-16T00:00:00.000Z"
+    },
+    {
+      "id": "8ce92f93-332f-494d-8b62-2ff8e76e1ad4",
+      "jobCode": "SR-JOB-0031",
+      "name": "MF",
+      "startDate": "2026-07-15T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "1964dbc1-6e5e-48dc-a4ee-951aa5e3ce1d",
+      "jobCode": "SR-JOB-0032",
+      "name": "Pet Spot",
+      "startDate": "2026-07-15T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "019c5183-4c6e-4b2a-a049-73358b47a3a2",
+      "jobCode": "SR-JOB-0033",
+      "name": "BSB",
+      "startDate": "2026-07-16T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "837f2d9b-544e-4bac-a867-a291fae78c92",
+      "jobCode": "SR-JOB-0034",
+      "name": "David Yurman",
+      "startDate": "2026-07-16T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "c8da12b9-2554-4b50-a464-9dc5768655ef",
+      "jobCode": "SR-JOB-0035",
+      "name": "DoorDash x Popeyes",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-18T00:00:00.000Z"
+    },
+    {
+      "id": "6d49d5f7-9039-499d-adf0-0527d9581682",
+      "jobCode": "SR-JOB-0036",
+      "name": "Cowboy",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-19T00:00:00.000Z"
+    },
+    {
+      "id": "0753f209-ce11-4567-a96e-1587b64302fa",
+      "jobCode": "SR-JOB-0037",
+      "name": "GumTree",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "62c8f453-cd89-4fd1-b451-fd4bb5230981",
+      "jobCode": "SR-JOB-0038",
+      "name": "Short Film",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "9e0363cd-16cd-4b8c-87d0-23395f6feaba",
+      "jobCode": "SR-JOB-0039",
+      "name": "Cowboy x DK",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-19T00:00:00.000Z"
+    },
+    {
+      "id": "438d6612-3248-437a-b68b-8cfd92918d2c",
+      "jobCode": "SR-JOB-0040",
+      "name": "Syndetic",
+      "startDate": "2026-07-18T00:00:00.000Z",
+      "endDate": "2026-08-08T00:00:00.000Z"
+    },
+    {
+      "id": "87250d3c-79ae-4f72-8044-a25c64891dde",
+      "jobCode": "SR-JOB-0041",
+      "name": "Planyo import — cart 5645170",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "564c76da-fc6e-47be-895c-f615052e4e8f",
+      "jobCode": "SR-JOB-0042",
+      "name": "Planyo import — cart 5681084",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-22T00:00:00.000Z"
+    },
+    {
+      "id": "d0516201-08c8-442b-ab04-7f95bd27c463",
+      "jobCode": "SR-JOB-0043",
+      "name": "Planyo import — cart 5668088",
+      "startDate": "2026-07-21T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "ed205a90-4a59-4e37-a90c-a50b8e81ba0f",
+      "jobCode": "SR-JOB-0044",
+      "name": "Planyo import — cart 5648285",
+      "startDate": "2026-07-22T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "251c9abc-250b-488f-b213-0fe89587bf3a",
+      "jobCode": "SR-JOB-0045",
+      "name": "Planyo import — cart 5689629",
+      "startDate": "2026-07-29T00:00:00.000Z",
+      "endDate": "2026-07-29T00:00:00.000Z"
+    },
+    {
+      "id": "ac2eb411-4562-4ccd-b035-bc5e7c1b2ad7",
+      "jobCode": "SR-JOB-0046",
+      "name": "Elevate",
+      "startDate": "2026-08-03T00:00:00.000Z",
+      "endDate": "2026-08-07T00:00:00.000Z"
+    },
+    {
+      "id": "3bc1e40f-4373-43ac-bc2e-8741b3645e74",
+      "jobCode": "SR-JOB-0047",
+      "name": "Spent Bullets",
+      "startDate": "2026-08-04T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "4eace98a-243b-40ca-bf04-0c3034a9dbde",
+      "jobCode": "SR-JOB-0048",
+      "name": "Planyo import — cart 5684567",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-16T00:00:00.000Z"
+    },
+    {
+      "id": "ce82167b-8394-458d-826b-7925c2dc0e34",
+      "jobCode": "SR-JOB-0049",
+      "name": "Shared Crossing Feature/ Hospital Recreation",
+      "startDate": "2026-08-12T00:00:00.000Z",
+      "endDate": "2026-08-13T00:00:00.000Z"
+    },
+    {
+      "id": "000d57a4-16fb-460c-b5d5-612287f4c121",
+      "jobCode": "SR-JOB-0050",
+      "name": "Planyo import — cart 5680079",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "b655d6c9-6a88-426d-b2bc-b6b2466d7dcc",
+      "jobCode": "SR-JOB-0051",
+      "name": "Extended Stay",
+      "startDate": "2026-08-26T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "f7fd39da-825b-48d3-ab60-ae3135dc0b40",
+      "jobCode": "SR-JOB-0052",
+      "name": "Desigual x DL #2603",
+      "startDate": "2026-08-30T00:00:00.000Z",
+      "endDate": "2026-09-02T00:00:00.000Z"
+    },
+    {
+      "id": "642086c9-c6a1-4ac5-8ece-75e636d83bfc",
+      "jobCode": "SR-JOB-0054",
+      "name": "ANNUAL AGREEMENT",
+      "startDate": "2026-01-01T00:00:00.000Z",
+      "endDate": "2026-12-31T00:00:00.000Z"
+    },
+    {
+      "id": "bf36c235-d252-4c42-b8ad-9233c15a9c62",
+      "jobCode": "SR-JOB-0055",
+      "name": "Planyo import — cart 5681969",
+      "startDate": "2026-07-16T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "dc3a29f9-de02-4144-9e49-a1f4346ba35a",
+      "jobCode": "SR-JOB-0056",
+      "name": "WC x KOI",
+      "startDate": "2026-07-18T00:00:00.000Z",
+      "endDate": "2026-07-18T00:00:00.000Z"
+    },
+    {
+      "id": "1dd39ec3-d059-493e-8e7f-63adb869d0e8",
+      "jobCode": "SR-JOB-0057",
+      "name": "Beach Chairs",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "91cbdaab-388c-4056-9477-9cb0fda79019",
+      "jobCode": "SR-JOB-0058",
+      "name": "joy oalkodum #2536-26",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "9db8e280-7a04-4471-a0f9-df3b2601dd8b",
+      "jobCode": "SR-JOB-0059",
+      "name": "Wounds",
+      "startDate": "2026-07-14T00:00:00.000Z",
+      "endDate": "2026-07-15T00:00:00.000Z"
+    },
+    {
+      "id": "aeb93819-27d0-4fa0-bbb7-46765745271e",
+      "jobCode": "SR-JOB-0060",
+      "name": "Google / 31653",
+      "startDate": "2026-07-22T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "10d575a0-024c-4674-b4c3-e4c189884e7b",
+      "jobCode": "SR-JOB-0061",
+      "name": "Intuit Library July 2026",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-25T00:00:00.000Z"
+    },
+    {
+      "id": "8237ac39-3dab-4946-8613-148d3a6878e4",
+      "jobCode": "SR-JOB-0062",
+      "name": "PIK #2651",
+      "startDate": "2026-07-25T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "08a730d3-5362-4ec4-ab60-c7a5d751b5aa",
+      "jobCode": "SR-JOB-0064",
+      "name": "Planyo import — cart 5692858",
+      "startDate": "2026-07-22T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "47d166ed-b5c8-4449-b15f-a3aef52d6e83",
+      "jobCode": "SR-JOB-0065",
+      "name": "P_EACC",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "46145185-0ed8-47f2-a318-02491310cf50",
+      "jobCode": "SR-JOB-0066",
+      "name": "SDCC 2026",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "b82cd1d1-d645-480c-84ce-aaf9aa274cfd",
+      "jobCode": "SR-JOB-0067",
+      "name": "NItehearts",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-17T00:00:00.000Z"
+    },
+    {
+      "id": "e08a4e8c-e622-4079-a3f0-926cd289d673",
+      "jobCode": "SR-JOB-0068",
+      "name": "Number 3",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "26095406-54f4-4f5b-9655-ee8898abb08e",
+      "jobCode": "SR-JOB-0069",
+      "name": "SharkNinja",
+      "startDate": "2026-07-28T00:00:00.000Z",
+      "endDate": "2026-07-31T00:00:00.000Z"
+    },
+    {
+      "id": "fff9fb4f-2cf7-4b26-8679-3155000a4bcf",
+      "jobCode": "SR-JOB-0070",
+      "name": "Marriott Stills",
+      "startDate": "2026-07-24T00:00:00.000Z",
+      "endDate": "2026-07-29T00:00:00.000Z"
+    },
+    {
+      "id": "e7a041a1-620d-4155-9237-30fe05c5e2bc",
+      "jobCode": "SR-JOB-0071",
+      "name": "REX Switch 2",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "36cf9776-3641-4cfa-8059-254ad680c162",
+      "jobCode": "SR-JOB-0072",
+      "name": "LZO",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "c1a87d8d-044b-4558-a0ef-8d351f5f4877",
+      "jobCode": "SR-JOB-0073",
+      "name": "Okeefe",
+      "startDate": "2026-07-22T00:00:00.000Z",
+      "endDate": "2026-07-31T00:00:00.000Z"
+    },
+    {
+      "id": "42b7e6e4-9946-4ded-9a26-13d57455d17f",
+      "jobCode": "SR-JOB-0074",
+      "name": "Avec - Cold Email",
+      "startDate": "2026-07-20T00:00:00.000Z",
+      "endDate": "2026-07-24T00:00:00.000Z"
+    },
+    {
+      "id": "3b6c69e0-1376-4355-adbd-b46987199521",
+      "jobCode": "SR-JOB-0075",
+      "name": "Godstar",
+      "startDate": "2026-07-17T00:00:00.000Z",
+      "endDate": "2026-07-20T00:00:00.000Z"
+    },
+    {
+      "id": "2f0ed9f5-3c47-40b4-9363-738640b9dabf",
+      "jobCode": "SR-JOB-0076",
+      "name": "Cloud",
+      "startDate": "2026-07-19T00:00:00.000Z",
+      "endDate": "2026-07-21T00:00:00.000Z"
+    },
+    {
+      "id": "5c5317c7-db53-41a0-9235-2c85f22f81c8",
+      "jobCode": "SR-JOB-0077",
+      "name": "QUOTE",
+      "startDate": "2026-07-23T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "9d9d9829-c470-468e-982b-e759f183f3cc",
+      "jobCode": "SR-JOB-0078",
+      "name": "OK",
+      "startDate": "2026-07-21T00:00:00.000Z",
+      "endDate": "2026-07-23T00:00:00.000Z"
+    },
+    {
+      "id": "b305f5ae-04e4-48a7-aab5-241935712524",
+      "jobCode": "SR-JOB-0079",
+      "name": "Humana",
+      "startDate": "2026-08-01T00:00:00.000Z",
+      "endDate": "2026-08-05T00:00:00.000Z"
+    },
+    {
+      "id": "a08a5b3a-0942-4df2-a771-7bc44672e9bf",
+      "jobCode": "SR-JOB-0080",
+      "name": "Planyo import — cart 5701930",
+      "startDate": "2026-08-09T00:00:00.000Z",
+      "endDate": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "id": "72f4757f-c5e7-4d3d-9e09-b83474608970",
+      "jobCode": "SR-JOB-0081",
+      "name": "Planyo import — cart 5702218",
+      "startDate": "2026-07-26T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "871e92d0-2e40-4564-a9fb-1ea246284c21",
+      "jobCode": "SR-JOB-0082",
+      "name": "Lady Hawks",
+      "startDate": "2026-07-24T00:00:00.000Z",
+      "endDate": "2026-08-03T00:00:00.000Z"
+    },
+    {
+      "id": "02580b97-30b4-44ac-ac2b-55d772f1c0c6",
+      "jobCode": "SR-JOB-0083",
+      "name": "Planyo import — cart 5706912",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "ddad84ea-4238-4350-b43c-462f37ea3d6c",
+      "jobCode": "SR-JOB-0084",
+      "name": "MiR",
+      "startDate": "2026-07-31T00:00:00.000Z",
+      "endDate": "2026-08-03T00:00:00.000Z"
+    },
+    {
+      "id": "ae38a1aa-b79e-4d22-846f-7994c3126327",
+      "jobCode": "SR-JOB-0085",
+      "name": "LADT7_Secret_Agent",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "1572accb-d5b7-4f87-ba0f-7d8fcbbe1607",
+      "jobCode": "SR-JOB-0086",
+      "name": "Boehringer #37678",
+      "startDate": "2026-08-06T00:00:00.000Z",
+      "endDate": "2026-08-06T00:00:00.000Z"
+    },
+    {
+      "id": "ee20ea38-c6ff-460f-aeb1-28b351f8c339",
+      "jobCode": "SR-JOB-0087",
+      "name": "Trauma",
+      "startDate": "2026-08-12T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "49f312ba-0980-44d0-afad-16cbe6089f93",
+      "jobCode": "SR-JOB-0088",
+      "name": "Heritage",
+      "startDate": "2026-07-30T00:00:00.000Z",
+      "endDate": "2026-08-03T00:00:00.000Z"
+    },
+    {
+      "id": "b1bd825c-6321-4424-a4e1-fe15afb3ff4f",
+      "jobCode": "SR-JOB-0089",
+      "name": "Planyo import — cart 5709177",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "66800c33-d5ac-4efc-b9d1-66973879f436",
+      "jobCode": "SR-JOB-0090",
+      "name": "RB Activation",
+      "startDate": "2026-07-31T00:00:00.000Z",
+      "endDate": "2026-08-04T00:00:00.000Z"
+    },
+    {
+      "id": "86448ca3-28c8-4383-88a0-468eddff9df3",
+      "jobCode": "SR-JOB-0091",
+      "name": "Tiptoe",
+      "startDate": "2026-08-14T00:00:00.000Z",
+      "endDate": "2026-08-17T00:00:00.000Z"
+    },
+    {
+      "id": "a9a5d361-c752-4d0a-bfbe-1fa23bd85d29",
+      "jobCode": "SR-JOB-0092",
+      "name": "Planyo import — cart 5714899",
+      "startDate": "2026-08-06T00:00:00.000Z",
+      "endDate": "2026-08-09T00:00:00.000Z"
+    },
+    {
+      "id": "059702f5-bdf9-4f4c-882b-6292b3e9d810",
+      "jobCode": "SR-JOB-0093",
+      "name": "JOB# 2613",
+      "startDate": "2026-08-05T00:00:00.000Z",
+      "endDate": "2026-08-07T00:00:00.000Z"
+    },
+    {
+      "id": "ddbcddf8-fae7-4dc5-ad47-f6a859f61709",
+      "jobCode": "SR-JOB-0094",
+      "name": "Shared Crissong Project",
+      "startDate": "2026-08-05T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "0cbfffe4-c58e-4c16-bda4-3f547f970c3d",
+      "jobCode": "SR-JOB-0095",
+      "name": "FIL & CC",
+      "startDate": "2026-07-30T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "1882b50a-7312-4e81-848f-67e5fe4892ed",
+      "jobCode": "SR-JOB-0096",
+      "name": "Instructions for Jack",
+      "startDate": "2026-08-06T00:00:00.000Z",
+      "endDate": "2026-08-11T00:00:00.000Z"
+    },
+    {
+      "id": "181ff10d-c7de-46a7-9921-3bca8adf1b1e",
+      "jobCode": "SR-JOB-0097",
+      "name": "abrazame",
+      "startDate": "2026-08-04T00:00:00.000Z",
+      "endDate": "2026-08-10T00:00:00.000Z"
+    },
+    {
+      "id": "745d59a9-ecd6-4d67-8328-6a0ac1e742b2",
+      "jobCode": "SR-JOB-0099",
+      "name": "WNBA ITP Ep 2",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-12T00:00:00.000Z"
+    },
+    {
+      "id": "bb627731-456c-4a49-be47-5802a8accb50",
+      "jobCode": "SR-JOB-0102",
+      "name": "Black Torch",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-12T00:00:00.000Z"
+    },
+    {
+      "id": "e38d25a7-2e84-4ee8-9680-3db399df0d25",
+      "jobCode": "SR-JOB-0103",
+      "name": "Music Therapy S1",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "a29beda5-4342-4ab1-b91c-d350415a48a1",
+      "jobCode": "SR-JOB-0105",
+      "name": "Progressives Campaign Shoot",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "id": "2b89c3b7-dfc4-47cf-9188-87cd0ca520c9",
+      "jobCode": "SR-JOB-0106",
+      "name": "Marshall #62005",
+      "startDate": "2026-08-13T00:00:00.000Z",
+      "endDate": "2026-08-15T00:00:00.000Z"
+    },
+    {
+      "id": "d56c6bd1-e4b3-4b83-bf71-468c3c64b108",
+      "jobCode": "SR-JOB-0107",
+      "name": "Streets",
+      "startDate": "2026-08-11T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "015703f2-be6c-40d4-83e0-2a5f2b83d7ca",
+      "jobCode": "SR-JOB-0110",
+      "name": "The Home Depot x Google #260006",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "73e87af7-e3e8-48f1-9380-1eb1c06c028b",
+      "jobCode": "SR-JOB-0112",
+      "name": "No: 1616 HLT",
+      "startDate": "2026-07-29T00:00:00.000Z",
+      "endDate": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "id": "f64b599d-83f7-4748-a348-fea49d0f6f87",
+      "jobCode": "SR-JOB-0113",
+      "name": "AP",
+      "startDate": "2026-07-15T00:00:00.000Z",
+      "endDate": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "59c9068c-9b7d-4be0-9e2d-90312da7ead6",
+      "jobCode": "SR-JOB-0114",
+      "name": "Training Video",
+      "startDate": "2026-09-09T00:00:00.000Z",
+      "endDate": "2026-09-12T00:00:00.000Z"
+    },
+    {
+      "id": "9a121cde-c4f8-4025-9218-07e2b92da023",
+      "jobCode": "SR-JOB-0115",
+      "name": "AG - Cargo",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-13T00:00:00.000Z"
+    },
+    {
+      "id": "a0845158-913f-43bf-88fd-4f6e526e2e07",
+      "jobCode": "SR-JOB-0116",
+      "name": "Subway",
+      "startDate": "2026-08-15T00:00:00.000Z",
+      "endDate": "2026-08-16T00:00:00.000Z"
+    },
+    {
+      "id": "d9238c67-2590-4f3b-8cda-f5deef12c2ea",
+      "jobCode": "SR-JOB-0117",
+      "name": "KPDH Multi Retailer",
+      "startDate": "2026-07-29T00:00:00.000Z",
+      "endDate": "2026-08-06T00:00:00.000Z"
+    },
+    {
+      "id": "94f3cdcc-e33c-49e6-8c89-7f634b6dd1cb",
+      "jobCode": "SR-JOB-0118",
+      "name": "Theater kids",
+      "startDate": "2026-07-31T00:00:00.000Z",
+      "endDate": "2026-08-11T00:00:00.000Z"
+    },
+    {
+      "id": "2d2ae2ec-1b12-4eae-9985-d71d62a4348b",
+      "jobCode": "SR-JOB-0119",
+      "name": "Peleton",
+      "startDate": "2026-08-03T00:00:00.000Z",
+      "endDate": "2026-08-10T00:00:00.000Z"
+    },
+    {
+      "id": "b9fef49e-84a9-4b32-800d-4b5c7fb41c98",
+      "jobCode": "SR-JOB-0120",
+      "name": "Fire on Fire",
+      "startDate": "2026-08-06T00:00:00.000Z",
+      "endDate": "2026-08-10T00:00:00.000Z"
+    },
+    {
+      "id": "8c4db6a2-4ef6-48e5-81cb-33ab6dc2ff14",
+      "jobCode": "SR-JOB-0121",
+      "name": "Shein x Fall/Winter",
+      "startDate": "2026-08-10T00:00:00.000Z",
+      "endDate": "2026-08-13T00:00:00.000Z"
+    },
+    {
+      "id": "974a67e5-38cd-4788-9f6a-60af61606c52",
+      "jobCode": "SR-JOB-0122",
+      "name": "Foul Play S2",
+      "startDate": "2026-07-28T00:00:00.000Z",
+      "endDate": "2026-08-22T00:00:00.000Z"
+    },
+    {
+      "id": "bd6830df-c5e9-4283-bbc8-fdd2cbb79183",
+      "jobCode": "SR-JOB-0123",
+      "name": "Who's this Asshole? Season 5",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "9922967b-8622-422a-9a92-3a799ada5549",
+      "jobCode": "SR-JOB-0124",
+      "name": "2608_4 - Ventura Ranch",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "ed746ebb-d1ca-4129-80b3-7391fe48c5cd",
+      "jobCode": "SR-JOB-0125",
+      "name": "DWTS S35",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "5f73745f-b3d9-487f-96dc-013fc11a2522",
+      "jobCode": "SR-JOB-0126",
+      "name": "ROD #LUN39",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "f71e12b3-eaec-4835-a659-57e5c4423b14",
+      "jobCode": "SR-JOB-0127",
+      "name": "The Welcoming",
+      "startDate": "2026-08-14T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "3c6a845d-d137-452c-bbac-3e6dc6e803e3",
+      "jobCode": "SR-JOB-0128",
+      "name": "L26038 HDH",
+      "startDate": "2026-08-12T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "b499228c-388f-4449-b154-b9070b68ee74",
+      "jobCode": "SR-JOB-0129",
+      "name": "THD x Google #260006",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "9751185e-33db-4227-a2d3-021546bff2a7",
+      "jobCode": "SR-JOB-0130",
+      "name": "RB-FN02",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "953d76fb-f00a-4762-bf33-6e1600095f59",
+      "jobCode": "SR-JOB-0131",
+      "name": "Morango Rebelz",
+      "startDate": "2026-08-13T00:00:00.000Z",
+      "endDate": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "563d84b4-122e-471a-82f7-9b9a07bb7dac",
+      "jobCode": "SR-JOB-0132",
+      "name": "Music Therapy",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "cc7914f7-868a-4db5-aba3-2dde883164b9",
+      "jobCode": "SR-JOB-0133",
+      "name": "RMHF",
+      "startDate": "2026-08-14T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "9574c13d-4f1a-424b-8244-e310b1f021be",
+      "jobCode": "SR-JOB-0134",
+      "name": "The Phone Movie",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "f8a6f3f8-ef08-4ef3-ac6e-f36cb3b5e308",
+      "jobCode": "SR-JOB-0135",
+      "name": "MC2026-63 - RM x Hydro",
+      "startDate": "2026-08-14T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "79f4e05d-7c47-4bb2-a8db-41ef38c78726",
+      "jobCode": "SR-JOB-0136",
+      "name": "Jordan Galaxy 2",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "3776b422-8c7d-4158-8eb8-6fb2ded83edf",
+      "jobCode": "SR-JOB-0137",
+      "name": "Planyo import — cart 5745742",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "49dedfcb-bdff-4450-8952-5c25bcc953ad",
+      "jobCode": "SR-JOB-0138",
+      "name": "Nevo",
+      "startDate": "2026-08-16T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "c503eb18-46e9-4e52-99c7-292b6261fa4d",
+      "jobCode": "SR-JOB-0139",
+      "name": "Homegirls Before Husbands",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-29T00:00:00.000Z"
+    },
+    {
+      "id": "925aa32d-9bc1-4523-a8ec-88a73b69e8e9",
+      "jobCode": "SR-JOB-0140",
+      "name": "VRBO",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "261d2a83-95f1-4d2d-8c43-c3e5ecb6d8f8",
+      "jobCode": "SR-JOB-0141",
+      "name": "Pretty Gay S5",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "43b5354a-129d-469d-9ded-fe008f1b2176",
+      "jobCode": "SR-JOB-0142",
+      "name": "Jonah Maxwell",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "186025ce-fb5a-4cc7-8c79-ff8a43457a0e",
+      "jobCode": "SR-JOB-0143",
+      "name": "Planyo import — cart 5747916",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "128c3375-ef78-4c99-90f1-bf87df8fb626",
+      "jobCode": "SR-JOB-0144",
+      "name": "Short",
+      "startDate": "2026-09-20T00:00:00.000Z",
+      "endDate": "2026-09-20T00:00:00.000Z"
+    },
+    {
+      "id": "030024a0-542c-420a-9765-7a17046a5fc8",
+      "jobCode": "SR-JOB-0145",
+      "name": "Planyo import — cart 5748242",
+      "startDate": "2026-08-14T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "5c75aea4-9dff-4ce8-a92a-6672ac59e56f",
+      "jobCode": "SR-JOB-0146",
+      "name": "Phone Heads",
+      "startDate": "2026-09-08T00:00:00.000Z",
+      "endDate": "2026-09-11T00:00:00.000Z"
+    },
+    {
+      "id": "ea1d7d84-0d09-42e0-a995-c928d20c6c2a",
+      "jobCode": "SR-JOB-0147",
+      "name": "1453 TB DC Festival",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "7a93821a-dd66-4c53-85f2-3048c22f3583",
+      "jobCode": "SR-JOB-0148",
+      "name": "CUBS",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "1993211f-970e-4e68-8521-fef7d7287ba9",
+      "jobCode": "SR-JOB-0149",
+      "name": "The Mushroom Man",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "c5731f72-b3dc-4771-9b91-d28362ed17d5",
+      "jobCode": "SR-JOB-0150",
+      "name": "Planyo import — cart 5750020",
+      "startDate": "2026-09-11T00:00:00.000Z",
+      "endDate": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "f829c10e-5c03-4298-92e6-a84d36802980",
+      "jobCode": "SR-JOB-0151",
+      "name": "Nike SP27 Street Vision #2289",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "f74932d1-8787-4491-ae00-e5ae2eee362b",
+      "jobCode": "SR-JOB-0152",
+      "name": "Shah",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "7fc525b3-a9bf-46d1-97b1-cd288ccaa909",
+      "jobCode": "SR-JOB-0153",
+      "name": "Planyo import — cart 5750218",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "fc95d181-6926-4022-b88d-80b340e96f64",
+      "jobCode": "SR-JOB-0154",
+      "name": "aldae",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "89cb3a1d-9c54-47d1-9232-6a8cd8348a84",
+      "jobCode": "SR-JOB-0155",
+      "name": "Manatee #573",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "79fa6d2f-c2ca-48ba-ba91-84a1af933e8a",
+      "jobCode": "SR-JOB-0156",
+      "name": "ADP",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "7195dc8a-7d42-4267-a869-0b914ed97734",
+      "jobCode": "SR-JOB-0157",
+      "name": "Planyo import — cart 5755065",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "c55f7915-5fee-4d3f-af36-b95e4a71ce55",
+      "jobCode": "SR-JOB-0158",
+      "name": "Riftbound Set 5",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "8e342012-7f92-4474-9543-f1df613e7e03",
+      "jobCode": "SR-JOB-0159",
+      "name": "Off Road / Generators",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "9a6ef7f2-6da3-4dd1-b6fa-5b974fc150c8",
+      "jobCode": "SR-JOB-0160",
+      "name": "Thoom",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "b9338741-28ce-4ca4-bc24-08208bd80526",
+      "jobCode": "SR-JOB-0161",
+      "name": "Planyo import — cart 5755681",
+      "startDate": "2026-08-17T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "8a83471b-bfb8-443e-9948-640b4facfc61",
+      "jobCode": "SR-JOB-0162",
+      "name": "NCK #SC260818",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "6d26ed0d-9ddc-4631-989d-9d0ee634d768",
+      "jobCode": "SR-JOB-0163",
+      "name": "2625 BDB x Stitch Fix",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "144c327c-114b-406b-bfd3-93e9c05cd3e4",
+      "jobCode": "SR-JOB-0164",
+      "name": "Indy Car DC",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "615cbdfb-8112-4401-9a0b-b5dacc2aaf93",
+      "jobCode": "SR-JOB-0165",
+      "name": "DCC4",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-23T00:00:00.000Z"
+    },
+    {
+      "id": "89e0be1b-f965-4daa-b25d-21ec9ed1ce8e",
+      "jobCode": "SR-JOB-0166",
+      "name": "Ocrevus",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "1cf130e7-455e-4fef-96cd-b724ebd1fc1c",
+      "jobCode": "SR-JOB-0167",
+      "name": "Leave Me Behind",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "cddbe088-ec27-4ffa-9dac-13fa11d9c6a9",
+      "jobCode": "SR-JOB-0168",
+      "name": "Tech job",
+      "startDate": "2026-08-18T00:00:00.000Z",
+      "endDate": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "d0b9da7d-030e-41fe-9823-66d86d53b1fa",
+      "jobCode": "SR-JOB-0171",
+      "name": "DCPR",
+      "startDate": "2026-08-19T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "03b9c471-a936-4c55-b3f9-745981e58ee3",
+      "jobCode": "SR-JOB-0172",
+      "name": "Etsy #2626",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "ba83c105-42a0-4133-bf5e-92b503804485",
+      "jobCode": "SR-JOB-0173",
+      "name": "Planyo import — cart 5759010",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-23T00:00:00.000Z"
+    },
+    {
+      "id": "edcc113b-33b3-48bc-a74e-957e7760c0e9",
+      "jobCode": "SR-JOB-0174",
+      "name": "Planyo import — cart 5746092",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "d8905760-7764-43c7-9b02-f80b372495f2",
+      "jobCode": "SR-JOB-0175",
+      "name": "Planyo import — cart 5759157",
+      "startDate": "2026-08-26T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "0141c76a-9dfe-4f37-8b7e-849ed2bf72e8",
+      "jobCode": "SR-JOB-0176",
+      "name": "HDZ",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "11c05d7a-94d3-47df-b4a9-372df7cfaf82",
+      "jobCode": "SR-JOB-0177",
+      "name": "adi x RAB",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-21T00:00:00.000Z"
+    },
+    {
+      "id": "d76bf7ec-c2ce-4fd6-a156-9d03a322d78a",
+      "jobCode": "SR-JOB-0178",
+      "name": "Phone Heads",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "cc2d65b8-5f46-45ea-8904-500c1fcf3516",
+      "jobCode": "SR-JOB-0179",
+      "name": "Kit Kat",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "14a29830-db36-496a-9859-7f8599e943e9",
+      "jobCode": "SR-JOB-0180",
+      "name": "Ramp",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "440d72ad-50d2-4674-a4bc-55f1f1a8f1ca",
+      "jobCode": "SR-JOB-0181",
+      "name": "Access Denied",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "1da99150-d328-47a2-b2b1-955a8c94da54",
+      "jobCode": "SR-JOB-0182",
+      "name": "Dragonforce",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "30a3bc75-b2a6-429f-b19e-72dd514b6590",
+      "jobCode": "SR-JOB-0183",
+      "name": "People NW",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "763dfa35-c82f-4870-8940-91baf0d209dd",
+      "jobCode": "SR-JOB-0185",
+      "name": "Planyo import — cart 5760723",
+      "startDate": "2026-08-23T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "44fad926-e0ff-4ba8-b89e-8d1fcbcd59b0",
+      "jobCode": "SR-JOB-0186",
+      "name": "Insurgente Film",
+      "startDate": "2026-08-23T00:00:00.000Z",
+      "endDate": "2026-10-04T00:00:00.000Z"
+    },
+    {
+      "id": "6d604a5b-a6d2-40ff-a51e-585a5e0b1439",
+      "jobCode": "SR-JOB-0187",
+      "name": "Performance",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "c2a0aadd-e11f-470c-9d71-162561370955",
+      "jobCode": "SR-JOB-0188",
+      "name": "We Buy Junk Cars!",
+      "startDate": "2026-08-20T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "a7834d11-64a5-4a54-b7a9-28bb8625994d",
+      "jobCode": "SR-JOB-0189",
+      "name": "Planyo import — cart 5760977",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "2ad98ec2-6846-43a3-8181-92d32f201fcf",
+      "jobCode": "SR-JOB-0190",
+      "name": "Dear William",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-10-15T00:00:00.000Z"
+    },
+    {
+      "id": "5b1fc3fc-6c92-4fa9-9a49-7b036cadd444",
+      "jobCode": "SR-JOB-0191",
+      "name": "Planyo import — cart 5761001",
+      "startDate": "2026-09-15T00:00:00.000Z",
+      "endDate": "2026-11-06T00:00:00.000Z"
+    },
+    {
+      "id": "dc8e55ab-5670-454d-9a79-df1867dd1636",
+      "jobCode": "SR-JOB-0192",
+      "name": "Vogue Scandinavia",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "0b4f46b6-09b3-4997-b091-55e4286e5137",
+      "jobCode": "SR-JOB-0193",
+      "name": "DE / Anime Expo",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "c8f38b96-c76e-4c77-9108-21b175d97a28",
+      "jobCode": "SR-JOB-0194",
+      "name": "Sepia #OAS0826",
+      "startDate": "2026-08-23T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "0e5c2dcd-26de-4332-9e33-2995e7e94e0a",
+      "jobCode": "SR-JOB-0195",
+      "name": "Sepia",
+      "startDate": "2026-08-23T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "5c770ff5-5d34-44f6-b0ce-5b51615c6e2b",
+      "jobCode": "SR-JOB-0196",
+      "name": "PO #4055",
+      "startDate": "2026-08-23T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "04b94aac-7de9-4741-a8dc-eba7a43a4292",
+      "jobCode": "SR-JOB-0197",
+      "name": "HPS 3 929",
+      "startDate": "2026-08-21T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "5650701c-de0f-4b43-89ce-274104947978",
+      "jobCode": "SR-JOB-0198",
+      "name": "Hey MR",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "a89c7929-cfc8-40d6-aa19-e4666b963731",
+      "jobCode": "SR-JOB-0200",
+      "name": "Barbie Limitless",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "b485c464-4d9d-4906-83c3-612f4d8ba7c2",
+      "jobCode": "SR-JOB-0201",
+      "name": "Planyo import — cart 5762779",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "960417ed-068c-4275-848b-65f54019c10f",
+      "jobCode": "SR-JOB-0202",
+      "name": "Stars / Jeep  #26-031",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "46e79887-18ee-47ca-a573-4d93f7aaea62",
+      "jobCode": "SR-JOB-0206",
+      "name": "Planyo import — cart 5766977",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-30T00:00:00.000Z"
+    },
+    {
+      "id": "8f00aa37-9c0d-41aa-b961-0d544b977f27",
+      "jobCode": "SR-JOB-0207",
+      "name": "Shift Music Video",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "db71e263-79e7-4a9c-8bc0-eaa92d1a69d4",
+      "jobCode": "SR-JOB-0208",
+      "name": "NE August & September #2633",
+      "startDate": "2026-08-26T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "596eef06-34a8-4da2-a873-fbdf2c82b8d1",
+      "jobCode": "SR-JOB-0209",
+      "name": "Planyo import — cart 5767309",
+      "startDate": "2026-08-24T00:00:00.000Z",
+      "endDate": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "fea379f3-baf6-49bd-ba4a-fb412b5757dc",
+      "jobCode": "SR-JOB-0210",
+      "name": "Van Cooked Meals",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "endDate": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "id": "f0088bff-240b-45a6-a042-f48b7a923a13",
+      "jobCode": "SR-JOB-0211",
+      "name": "Grow Good",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "736702e8-ca23-4a01-b673-0c94fd5ab3a2",
+      "jobCode": "SR-JOB-0212",
+      "name": "Working Theory",
+      "startDate": "2026-10-13T00:00:00.000Z",
+      "endDate": "2026-10-15T00:00:00.000Z"
+    },
+    {
+      "id": "bd06adb4-0ee2-43f3-bb5e-06e2c19da612",
+      "jobCode": "SR-JOB-0213",
+      "name": "TMLT",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "4638ea49-2093-4df2-a06c-7231fca328e1",
+      "jobCode": "SR-JOB-0214",
+      "name": "AG Doll Salon",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-26T00:00:00.000Z"
+    },
+    {
+      "id": "515a5671-4589-45c6-b70c-fc40137b04c9",
+      "jobCode": "SR-JOB-0215",
+      "name": "Fox Sports Week 3",
+      "startDate": "2026-08-25T00:00:00.000Z",
+      "endDate": "2026-08-27T00:00:00.000Z"
+    },
+    {
+      "id": "b27d589c-13e1-4009-93b6-767ec456356f",
+      "jobCode": "SR-JOB-0220",
+      "name": "BK LIVE",
+      "startDate": "2026-08-27T00:00:00.000Z",
+      "endDate": "2026-08-29T00:00:00.000Z"
+    },
+    {
+      "id": "c2fde58f-23c8-495c-9057-794c967000a0",
+      "jobCode": "SR-JOB-0221",
+      "name": "Toast",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "c6b75761-390f-4f56-9db1-ca828ce01bfa",
+      "jobCode": "SR-JOB-0222",
+      "name": "GV Gallery “ Face ID”",
+      "startDate": "2026-08-27T00:00:00.000Z",
+      "endDate": "2026-08-29T00:00:00.000Z"
+    },
+    {
+      "id": "a7719a8c-1ae8-4ee4-a9bd-0a76c6b8a047",
+      "jobCode": "SR-JOB-0226",
+      "name": "Club Solaire by Veuve Clicquot",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "8e7aa9b0-a450-48af-bc0c-e84deac48c56",
+      "jobCode": "SR-JOB-0227",
+      "name": "Connections DCA",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "3c322d8e-0d42-4be3-b6f1-34e083377fd0",
+      "jobCode": "SR-JOB-0228",
+      "name": "Versailles",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-02T00:00:00.000Z"
+    },
+    {
+      "id": "236b778c-5da1-4a3f-8fe2-8d7108d0bd12",
+      "jobCode": "SR-JOB-0229",
+      "name": "AG Jeans",
+      "startDate": "2026-08-26T00:00:00.000Z",
+      "endDate": "2026-08-29T00:00:00.000Z"
+    },
+    {
+      "id": "a9339dc2-1108-4d20-a413-c0684eeef7b4",
+      "jobCode": "SR-JOB-0230",
+      "name": "Planyo import — cart 5770571",
+      "startDate": "2026-08-26T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "e509fbe4-fe70-4962-8348-eaa0807b3d9c",
+      "jobCode": "SR-JOB-0231",
+      "name": "Planyo import — cart 5770613",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "96c68d62-a889-48ba-bc93-f3d9aaadcb44",
+      "jobCode": "SR-JOB-0232",
+      "name": "2606_GOV CAMPAIGN",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "1e6af6b8-e5ba-48fd-8fcd-3ca66e80b996",
+      "jobCode": "SR-JOB-0233",
+      "name": "Reformation",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "endDate": "2026-09-02T00:00:00.000Z"
+    },
+    {
+      "id": "df550f58-ba7b-4edd-bffe-35c2c7ac726f",
+      "jobCode": "SR-JOB-0234",
+      "name": "HS x Adidas 2 #CLO2607",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-28T00:00:00.000Z"
+    },
+    {
+      "id": "31279fd1-b1bf-418d-8c88-1ea3b31466ab",
+      "jobCode": "SR-JOB-0236",
+      "name": "Goggles",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "c03db1c8-ef1a-4f04-abca-e351f89d3d52",
+      "jobCode": "SR-JOB-0237",
+      "name": "Planyo import — cart 5771998",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "1312580a-26d6-4ca2-a1bf-48a4cd7d5a3f",
+      "jobCode": "SR-JOB-0238",
+      "name": "Street",
+      "startDate": "2026-08-27T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "a153f9ce-fac7-4aaf-90eb-81ce0f56f8f3",
+      "jobCode": "SR-JOB-0239",
+      "name": "Jordan",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "endDate": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "id": "5b26ca22-ffd4-4f72-badf-cbfef6aae626",
+      "jobCode": "SR-JOB-0240",
+      "name": "Dominos #26-3074",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "fa6e089c-fd74-442f-b8d4-f4805cbc96b2",
+      "jobCode": "SR-JOB-0241",
+      "name": "894 TR Casting",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "6a3eedcd-81d2-4884-83fe-1d80e4f86b96",
+      "jobCode": "SR-JOB-0242",
+      "name": "LISA #83026",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "346c6c4d-a2fa-4ab6-a802-2992cd437431",
+      "jobCode": "SR-JOB-0243",
+      "name": "Sumo",
+      "startDate": "2026-09-20T00:00:00.000Z",
+      "endDate": "2026-09-24T00:00:00.000Z"
+    },
+    {
+      "id": "00ba4093-f062-46d3-8a4a-f1d86570ccee",
+      "jobCode": "SR-JOB-0244",
+      "name": "SNS",
+      "startDate": "2026-08-28T00:00:00.000Z",
+      "endDate": "2026-08-31T00:00:00.000Z"
+    },
+    {
+      "id": "2698f69c-f9d9-4f79-948b-3ffaf2e9802d",
+      "jobCode": "SR-JOB-0245",
+      "name": "Planyo import — cart 5772252",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "endDate": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "id": "5fac7618-c0bc-4806-983a-6d287b0b6966",
+      "jobCode": "SR-JOB-0246",
+      "name": "Planyo import — cart 5772289",
+      "startDate": "2026-09-03T00:00:00.000Z",
+      "endDate": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "id": "9e823098-4dc1-4c21-a053-cf14c06aff17",
+      "jobCode": "SR-JOB-0247",
+      "name": "Planyo import — cart 5772318",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "id": "92b26356-c11a-483b-b71b-160c0c740b85",
+      "jobCode": "SR-JOB-0251",
+      "name": "Microsoft x Cabo",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "f7d71a87-3c45-4bfd-a1c2-f73ba9e199e0",
+      "jobCode": "SR-JOB-0252",
+      "name": "You Always",
+      "startDate": "2026-09-21T00:00:00.000Z",
+      "endDate": "2026-09-30T00:00:00.000Z"
+    },
+    {
+      "id": "c74b5433-cf23-4dc3-ae82-d6f842e7a1f5",
+      "jobCode": "SR-JOB-0253",
+      "name": "Meta Holiday",
+      "startDate": "2026-09-28T00:00:00.000Z",
+      "endDate": "2026-10-03T00:00:00.000Z"
+    },
+    {
+      "id": "46a9d768-72ac-4295-b710-01d76bfc1c41",
+      "jobCode": "SR-JOB-0254",
+      "name": "Moving of Supplies",
+      "startDate": "2026-08-29T00:00:00.000Z",
+      "endDate": "2026-08-29T00:00:00.000Z"
+    },
+    {
+      "id": "a1fb2512-c1fc-48cc-9545-b7703b1b7fcd",
+      "jobCode": "SR-JOB-0255",
+      "name": "Vintage TV",
+      "startDate": "2026-08-31T00:00:00.000Z",
+      "endDate": "2026-09-02T00:00:00.000Z"
+    },
+    {
+      "id": "e731a4b5-b5b2-4424-b37c-d59474edc9b0",
+      "jobCode": "SR-JOB-0257",
+      "name": "PO 4074",
+      "startDate": "2026-08-30T00:00:00.000Z",
+      "endDate": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "31862120-361c-4dd9-94c6-d07eb5266064",
+      "jobCode": "SR-JOB-0266",
+      "name": "Coven Academy PROMO",
+      "startDate": "2026-09-02T00:00:00.000Z",
+      "endDate": "2026-09-09T00:00:00.000Z"
+    }
+  ]
+}

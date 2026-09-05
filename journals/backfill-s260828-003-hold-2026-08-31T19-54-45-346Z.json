@@ -1,0 +1,31 @@
+{
+  "ranAt": "2026-08-31T19:54:45.346Z",
+  "orderNumber": "S260828-003",
+  "orderId": "57b2de7a-06d3-4fbc-8936-90da963089e4",
+  "result": {
+    "created": 1,
+    "reused": 0,
+    "skippedNoDates": 0,
+    "skippedNotUnitTracked": 24,
+    "error": null
+  },
+  "booking": {
+    "id": "7e732547-f689-4674-b157-ecc030482d72",
+    "bookingNumber": "SR-Q-1788206084591",
+    "status": "REQUEST",
+    "source": "AGENT_DIRECT",
+    "jobId": "6c6cb6b5-294c-48e2-920d-2f29e8c8fdca",
+    "startDate": "2026-09-04T00:00:00.000Z",
+    "endDate": "2026-09-09T00:00:00.000Z",
+    "personId": "5c2146a3-fb30-4caf-8f55-2139ddf33d11",
+    "items": [
+      {
+        "id": "78d8263d-e2a2-4492-905d-5f7e018003c2",
+        "categoryId": "c564d46e-12f7-4a04-a3f1-e87ca57ce37b",
+        "status": "REQUESTED",
+        "holdRank": 2,
+        "quantity": 1
+      }
+    ]
+  }
+}

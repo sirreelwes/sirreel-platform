@@ -1,0 +1,58 @@
+{
+  "ranAt": "2026-09-02T15:53:40.374Z",
+  "before": {
+    "hqBooking": {
+      "id": "9a5a0ac6-17fc-4a1a-8de6-54cd16ec2420",
+      "startDate": "2026-09-04T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z"
+    },
+    "hqItem": {
+      "id": "6d8b24d6-ca76-4017-a7bc-1670bebc6efc",
+      "status": "REQUESTED",
+      "holdRank": 2
+    },
+    "planyoItem": {
+      "id": "1dc7f23f-75d7-468b-994c-8c4821b06ab7",
+      "status": "ASSIGNED",
+      "holdRank": 1
+    },
+    "assignment": {
+      "id": "e0c32394-3d6e-4d92-acfe-c7985f80f523",
+      "bookingItemId": "1dc7f23f-75d7-468b-994c-8c4821b06ab7",
+      "assetId": "seed-pop-01",
+      "startDate": "2026-09-03T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z",
+      "status": "ASSIGNED"
+    }
+  },
+  "after": {
+    "hqBooking": {
+      "startDate": "2026-09-03T00:00:00.000Z",
+      "endDate": "2026-09-04T00:00:00.000Z"
+    },
+    "hqItem": {
+      "status": "ASSIGNED",
+      "holdRank": 1,
+      "assignments": [
+        {
+          "id": "e0c32394-3d6e-4d92-acfe-c7985f80f523",
+          "status": "ASSIGNED",
+          "asset": {
+            "unitName": "Pop 1"
+          }
+        }
+      ]
+    },
+    "planyoItem": {
+      "status": "UNFULFILLED",
+      "holdRank": 1,
+      "assignments": []
+    },
+    "released": {
+      "ok": true,
+      "alreadyReleased": false,
+      "bookingItemId": "1dc7f23f-75d7-468b-994c-8c4821b06ab7",
+      "swappedAssignmentCount": 0
+    }
+  }
+}

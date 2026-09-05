@@ -217,7 +217,7 @@ fallback was replaced by Job-as-root + JobResolverModal.)
   naive age cut buries real upcoming rentals — do not "simplify" this
   to `createdAt < 30d`.
 - 48 archived on 2026-08-29 (Planyo-era, last touched 07-19); reversible
-  by captured id in `tmp/archive-dormant-jobs-*.json` + AuditLog action
+  by captured id in `journals/archive-dormant-jobs-*.json` + AuditLog action
   `job.archive_dormant`. Archived jobs stay reachable via the toolbar's
   Archived filter.
 - List cap raised 200 -> 300 as a BACKSTOP only. It was silently
@@ -242,7 +242,7 @@ fallback was replaced by Job-as-root + JobResolverModal.)
   'overdue' carry a one-click "✓ returned" (POST
   /api/jobs/[id]/mark-returned). 2026-08-28 purge stamped all 54
   phantom overdues (returns weren't handled in HQ; journal in
-  tmp/purge-not-returned-*.json, AuditLog action
+  journals/purge-not-returned-*.json, AuditLog action
   job.backfill_returned).
 - Reservations Out/Back strip: one-day rentals render ONCE (Going out,
   "back same day" chip); reservation cards carry

@@ -1,0 +1,22 @@
+{
+  "takenAt": "2026-09-01T18:21:18.122Z",
+  "note": "JobBoardOverride rows removed at Wes's request 2026-09-01; re-create with these values to restore",
+  "cleared": [
+    {
+      "id": "9680d7a7-7f59-4f76-a136-356a2bc1c48d",
+      "jobId": "7b7fc1e9-f92e-46c8-bbda-6ff107e25a7b",
+      "phase": "OUT",
+      "movedBy": "wes@sirreel.com",
+      "movedAt": "2026-08-20T16:25:33.007Z",
+      "jobCode": "SR-JOB-0053"
+    },
+    {
+      "id": "9e3577bc-372e-4e91-8cac-45704bbe18be",
+      "jobId": "79ff5a3f-f5e2-45c5-975e-1d3b940e286f",
+      "phase": "OUT",
+      "movedBy": "oliver@sirreel.com",
+      "movedAt": "2026-09-01T17:37:07.110Z",
+      "jobCode": "SR-JOB-0268"
+    }
+  ]
+}

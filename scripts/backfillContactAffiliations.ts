@@ -45,7 +45,7 @@
  *   - Skips any (person, company) pair that already has one, so
  *     re-running is idempotent.
  *   - --write appends every created id to
- *     tmp/affiliation-backfill-<stamp>.json so the run is reversible
+ *     journals/affiliation-backfill-<stamp>.json so the run is reversible
  *     BY CAPTURED ID (SHIPLOG "Hard Rules").
  *
  * Run:
@@ -241,8 +241,8 @@ async function main() {
     }
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/affiliation-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/affiliation-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ createdAffiliationIds: createdIds }, null, 2))
   console.log(`\nCreated ${createdIds.length} affiliations (${failed} failed).`)
   console.log(`Reversal list: ${path} — delete BY THESE IDS ONLY if this needs undoing.`)

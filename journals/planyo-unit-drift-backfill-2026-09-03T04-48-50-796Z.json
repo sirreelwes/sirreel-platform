@@ -1,0 +1,434 @@
+{
+  "movedAssignmentIds": [
+    "3e7808ef-c7e6-4163-bc70-0bb20cc5213e",
+    "13082afe-48c6-4335-b763-4654f5839e0b",
+    "9f71b4ea-e3e7-4e20-839c-e5bdef098339",
+    "920b0526-faa5-4006-87fc-14baa8cb5ad2",
+    "11f302d9-ce1d-4632-9de1-bd7fb8584e66",
+    "c31da9f4-35b6-4107-b184-c0e61da41534",
+    "55fc005a-a853-4946-b6e2-a379d88b86d5",
+    "75431502-e02b-4a9f-96ff-dd39cf5b290d",
+    "9478366b-84b1-45ff-98f5-d370622ce919",
+    "ef87b441-f941-4254-802d-57ab3b0835c5",
+    "eb0cd8da-b8f4-47fe-a7d2-4d2ae1e89dbd",
+    "2427610f-3fdb-478c-aeee-9c8f7664dc3d",
+    "cbe4e1a5-f912-4f18-a064-961d101ea892",
+    "970f5f84-e5e6-4449-be30-a9dc8dd5555b",
+    "bfd02dfb-1112-433c-8b80-6597e97af4b2",
+    "f41bb30d-b0a3-4ee3-a541-f6b4fd62e545",
+    "3f0c055d-674b-4d5b-8cfc-4cf015f0337d",
+    "e11edd97-ef8d-444c-b41c-74fb7290725a",
+    "1f08293c-ef43-4b33-aaeb-eba04d1774b3",
+    "df9fbe1c-1c73-4519-8224-8a45ec1fff0e",
+    "ca7b9f3c-6db6-4870-ae55-be1715532037",
+    "df9fbe1c-1c73-4519-8224-8a45ec1fff0e"
+  ],
+  "moves": [
+    {
+      "assignmentId": "3e7808ef-c7e6-4163-bc70-0bb20cc5213e",
+      "bookingNumber": "SR-PB-2026-7704",
+      "jobName": "God of Wrath & Ruin",
+      "planyoReservationId": "20188834",
+      "before": {
+        "assetId": "seed-cargo-35",
+        "unitName": "Cargo 35",
+        "startDate": "2026-08-31",
+        "endDate": "2026-09-25"
+      },
+      "after": {
+        "assetId": "seed-cargo-44",
+        "unitName": "Cargo 44",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-25"
+      }
+    },
+    {
+      "assignmentId": "13082afe-48c6-4335-b763-4654f5839e0b",
+      "bookingNumber": "SR-2026-0142",
+      "jobName": "Nike SP27 Street Vision #2289",
+      "planyoReservationId": "mirror:3305efcc-fccf-42fd-9c81-6bbae39312d0",
+      "before": {
+        "assetId": "seed-cargo-43",
+        "unitName": "Cargo 43",
+        "startDate": "2026-08-20",
+        "endDate": "2026-08-24"
+      },
+      "after": {
+        "assetId": "seed-cargo-43",
+        "unitName": "Cargo 43",
+        "startDate": "2026-08-19",
+        "endDate": "2026-08-24"
+      }
+    },
+    {
+      "assignmentId": "9f71b4ea-e3e7-4e20-839c-e5bdef098339",
+      "bookingNumber": "SR-2026-0144",
+      "jobName": "Planyo import — cart 5750218",
+      "planyoReservationId": "mirror:c4195540-5357-44d4-9a74-3bae27ada3af",
+      "before": {
+        "assetId": "seed-cube-25",
+        "unitName": "Cube 25",
+        "startDate": "2026-08-18",
+        "endDate": "2026-08-21"
+      },
+      "after": {
+        "assetId": "seed-cube-25",
+        "unitName": "Cube 25",
+        "startDate": "2026-08-18",
+        "endDate": "2026-08-24"
+      }
+    },
+    {
+      "assignmentId": "920b0526-faa5-4006-87fc-14baa8cb5ad2",
+      "bookingNumber": "SR-2026-0151",
+      "jobName": "Thoom",
+      "planyoReservationId": "mirror:843408bb-6023-4250-8b47-4c1a40e2e123",
+      "before": {
+        "assetId": "seed-cube-26",
+        "unitName": "Cube 26",
+        "startDate": "2026-08-18",
+        "endDate": "2026-08-19"
+      },
+      "after": {
+        "assetId": "seed-cube-26",
+        "unitName": "Cube 26",
+        "startDate": "2026-08-18",
+        "endDate": "2026-08-20"
+      }
+    },
+    {
+      "assignmentId": "11f302d9-ce1d-4632-9de1-bd7fb8584e66",
+      "bookingNumber": "SR-2026-0163",
+      "jobName": "Etsy #2626",
+      "planyoReservationId": "mirror:c595d928-8ccd-4c8a-9b8a-bb7eb9da1b8c",
+      "before": {
+        "assetId": "seed-cargo-33",
+        "unitName": "Cargo 33",
+        "startDate": "2026-08-20",
+        "endDate": "2026-08-24"
+      },
+      "after": {
+        "assetId": "seed-cargo-33",
+        "unitName": "Cargo 33",
+        "startDate": "2026-08-20",
+        "endDate": "2026-08-22"
+      }
+    },
+    {
+      "assignmentId": "c31da9f4-35b6-4107-b184-c0e61da41534",
+      "bookingNumber": "SR-2026-0146",
+      "jobName": "Manatee #573",
+      "planyoReservationId": "mirror:84e6e9f3-8f0d-4afd-98cd-2ad4fb473c8c",
+      "before": {
+        "assetId": "seed-cube-28",
+        "unitName": "Cube 28",
+        "startDate": "2026-08-17",
+        "endDate": "2026-08-24"
+      },
+      "after": {
+        "assetId": "seed-cube-28",
+        "unitName": "Cube 28",
+        "startDate": "2026-08-17",
+        "endDate": "2026-08-26"
+      }
+    },
+    {
+      "assignmentId": "55fc005a-a853-4946-b6e2-a379d88b86d5",
+      "bookingNumber": "SR-PB-2026-4697",
+      "jobName": "LADT7_Secret_Agent",
+      "planyoReservationId": "mirror:00fe9f6a-e13d-47a2-a5c0-0f9fad82e444",
+      "before": {
+        "assetId": "seed-cargo-45",
+        "unitName": "Cargo 45",
+        "startDate": "2026-08-10",
+        "endDate": "2026-08-27"
+      },
+      "after": {
+        "assetId": "seed-cargo-45",
+        "unitName": "Cargo 45",
+        "startDate": "2026-08-10",
+        "endDate": "2026-08-22"
+      }
+    },
+    {
+      "assignmentId": "75431502-e02b-4a9f-96ff-dd39cf5b290d",
+      "bookingNumber": "SR-2026-0170",
+      "jobName": "Kit Kat",
+      "planyoReservationId": "mirror:a2e7e0b4-c297-48d8-aace-ffb7eac7ca8a",
+      "before": {
+        "assetId": "seed-cube-26",
+        "unitName": "Cube 26",
+        "startDate": "2026-08-24",
+        "endDate": "2026-08-26"
+      },
+      "after": {
+        "assetId": "seed-cube-26",
+        "unitName": "Cube 26",
+        "startDate": "2026-08-24",
+        "endDate": "2026-08-25"
+      }
+    },
+    {
+      "assignmentId": "9478366b-84b1-45ff-98f5-d370622ce919",
+      "bookingNumber": "SR-2026-0191",
+      "jobName": "Stars / Jeep  #26-031",
+      "planyoReservationId": "mirror:98d14449-2b09-4200-a81c-a5c6ebc26354",
+      "before": {
+        "assetId": "seed-cube-12",
+        "unitName": "Cube 12",
+        "startDate": "2026-08-24",
+        "endDate": "2026-08-25"
+      },
+      "after": {
+        "assetId": "seed-cube-12",
+        "unitName": "Cube 12",
+        "startDate": "2026-08-24",
+        "endDate": "2026-08-26"
+      }
+    },
+    {
+      "assignmentId": "ef87b441-f941-4254-802d-57ab3b0835c5",
+      "bookingNumber": "SR-PB-2026-4130",
+      "jobName": "Versailles",
+      "planyoReservationId": "mirror:9dc79cd2-784f-4a9f-bd3b-dbef0825a63b",
+      "before": {
+        "assetId": "seed-cube-30",
+        "unitName": "Cube 30",
+        "startDate": "2026-08-31",
+        "endDate": "2026-09-03"
+      },
+      "after": {
+        "assetId": "seed-cube-30",
+        "unitName": "Cube 30",
+        "startDate": "2026-08-31",
+        "endDate": "2026-09-02"
+      }
+    },
+    {
+      "assignmentId": "eb0cd8da-b8f4-47fe-a7d2-4d2ae1e89dbd",
+      "bookingNumber": "SR-PB-2026-9673",
+      "jobName": "NE August & September",
+      "planyoReservationId": "mirror:d1fa458b-71bb-440b-9d3f-251611469e86",
+      "before": {
+        "assetId": "seed-cargo-44",
+        "unitName": "Cargo 44",
+        "startDate": "2026-08-26",
+        "endDate": "2026-08-27"
+      },
+      "after": {
+        "assetId": "seed-cargo-44",
+        "unitName": "Cargo 44",
+        "startDate": "2026-08-26",
+        "endDate": "2026-08-28"
+      }
+    },
+    {
+      "assignmentId": "2427610f-3fdb-478c-aeee-9c8f7664dc3d",
+      "bookingNumber": "SR-PB-2026-4668",
+      "jobName": "Connections DCA",
+      "planyoReservationId": "mirror:4c849318-9aea-4058-b0d1-2ba8c93f35f3",
+      "before": {
+        "assetId": "seed-cube-15",
+        "unitName": "Cube 15",
+        "startDate": "2026-08-28",
+        "endDate": "2026-09-01"
+      },
+      "after": {
+        "assetId": "seed-cube-15",
+        "unitName": "Cube 15",
+        "startDate": "2026-08-28",
+        "endDate": "2026-08-31"
+      }
+    },
+    {
+      "assignmentId": "cbe4e1a5-f912-4f18-a064-961d101ea892",
+      "bookingNumber": "SR-PB-2026-6761",
+      "jobName": "Jordan",
+      "planyoReservationId": "mirror:9857e1c7-c3a5-42c9-9659-fbd0a8aa5cf1",
+      "before": {
+        "assetId": "92948011-19c3-4ad7-b041-f9b001150f5f",
+        "unitName": "Video Van",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-04"
+      },
+      "after": {
+        "assetId": "92948011-19c3-4ad7-b041-f9b001150f5f",
+        "unitName": "Video Van",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-03"
+      }
+    },
+    {
+      "assignmentId": "970f5f84-e5e6-4449-be30-a9dc8dd5555b",
+      "bookingNumber": "SR-PB-2026-8587",
+      "jobName": "Dominos #26-3074",
+      "planyoReservationId": "mirror:5baa6cfb-d66a-4b05-9a58-b14eec1f5f60",
+      "before": {
+        "assetId": "seed-cube-33",
+        "unitName": "Cube 33",
+        "startDate": "2026-08-31",
+        "endDate": "2026-08-31"
+      },
+      "after": {
+        "assetId": "seed-cube-33",
+        "unitName": "Cube 33",
+        "startDate": "2026-08-28",
+        "endDate": "2026-08-28"
+      }
+    },
+    {
+      "assignmentId": "bfd02dfb-1112-433c-8b80-6597e97af4b2",
+      "bookingNumber": "SR-PB-2026-2949",
+      "jobName": "SNS",
+      "planyoReservationId": "mirror:91cacdc2-b3ab-427c-b68e-d8439d719799",
+      "before": {
+        "assetId": "seed-cargo-45",
+        "unitName": "Cargo 45",
+        "startDate": "2026-08-28",
+        "endDate": "2026-08-30"
+      },
+      "after": {
+        "assetId": "seed-cargo-45",
+        "unitName": "Cargo 45",
+        "startDate": "2026-08-28",
+        "endDate": "2026-08-29"
+      }
+    },
+    {
+      "assignmentId": "f41bb30d-b0a3-4ee3-a541-f6b4fd62e545",
+      "bookingNumber": "SR-PB-2026-9741",
+      "jobName": "BK LIVE",
+      "planyoReservationId": "mirror:7f3a4b84-2b05-4c0a-b944-4a708160100b",
+      "before": {
+        "assetId": "seed-cube-31",
+        "unitName": "Cube 31",
+        "startDate": "2026-08-27",
+        "endDate": "2026-08-29"
+      },
+      "after": {
+        "assetId": "seed-cube-31",
+        "unitName": "Cube 31",
+        "startDate": "2026-08-27",
+        "endDate": "2026-08-31"
+      }
+    },
+    {
+      "assignmentId": "3f0c055d-674b-4d5b-8cfc-4cf015f0337d",
+      "bookingNumber": "SR-2026-0167",
+      "jobName": "HDZ",
+      "planyoReservationId": "mirror:f393c4a6-f80b-4616-9547-ebaeae44bd4f",
+      "before": {
+        "assetId": "seed-cargo-44",
+        "unitName": "Cargo 44",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-31"
+      },
+      "after": {
+        "assetId": "seed-cargo-44",
+        "unitName": "Cargo 44",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-30"
+      }
+    },
+    {
+      "assignmentId": "e11edd97-ef8d-444c-b41c-74fb7290725a",
+      "bookingNumber": "SR-2026-0167",
+      "jobName": "HDZ",
+      "planyoReservationId": "mirror:e8c4c0a3-cb16-4218-9404-f537553fba66",
+      "before": {
+        "assetId": "seed-pass-8",
+        "unitName": "Pass 8",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-31"
+      },
+      "after": {
+        "assetId": "seed-pass-8",
+        "unitName": "Pass 8",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-30"
+      }
+    },
+    {
+      "assignmentId": "1f08293c-ef43-4b33-aaeb-eba04d1774b3",
+      "bookingNumber": "SR-2026-0167",
+      "jobName": "HDZ",
+      "planyoReservationId": "mirror:8c6e2549-d4b3-4e10-8794-3bfb84483b11",
+      "before": {
+        "assetId": "seed-pass-9",
+        "unitName": "Pass 9",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-31"
+      },
+      "after": {
+        "assetId": "seed-pass-9",
+        "unitName": "Pass 9",
+        "startDate": "2026-08-30",
+        "endDate": "2026-08-30"
+      }
+    },
+    {
+      "assignmentId": "df9fbe1c-1c73-4519-8224-8a45ec1fff0e",
+      "bookingNumber": "SR-PB-2026-4668",
+      "jobName": "Connections DCA",
+      "planyoReservationId": "mirror:9cb2a733-8b00-4c75-bc01-079c16dc096b",
+      "before": {
+        "assetId": "seed-cube-5",
+        "unitName": "Cube 5",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-06"
+      },
+      "after": {
+        "assetId": "seed-cube-5",
+        "unitName": "Cube 5",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-05"
+      }
+    },
+    {
+      "assignmentId": "ca7b9f3c-6db6-4870-ae55-be1715532037",
+      "bookingNumber": "SR-PB-2026-1678",
+      "jobName": "Shift Music Video",
+      "planyoReservationId": "mirror:d0661bd1-1b38-436b-aeb6-5253bfec2a08",
+      "before": {
+        "assetId": "seed-cargo-20",
+        "unitName": "Cargo 20",
+        "startDate": "2026-09-03",
+        "endDate": "2026-09-05"
+      },
+      "after": {
+        "assetId": "seed-cargo-20",
+        "unitName": "Cargo 20",
+        "startDate": "2026-09-03",
+        "endDate": "2026-09-04"
+      }
+    },
+    {
+      "assignmentId": "df9fbe1c-1c73-4519-8224-8a45ec1fff0e",
+      "bookingNumber": "SR-PB-2026-4668",
+      "jobName": "Connections DCA",
+      "planyoReservationId": "20177636",
+      "before": {
+        "assetId": "seed-cube-5",
+        "unitName": "Cube 5",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-05"
+      },
+      "after": {
+        "assetId": "seed-cube-15",
+        "unitName": "Cube 15",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-05"
+      }
+    }
+  ],
+  "notApplied": [
+    "res 19782949 cart 5660571: NOT_APPLIED Cube 18 is already held 2026-08-23→2026-08-27 by SR-PB-2026-4697",
+    "res 20091444 cart 5749962: NOT_APPLIED Cargo 41 is already held 2026-08-24→2026-08-28 by SR-2026-0166",
+    "res 20107344 cart 5755065: NOT_APPLIED Sprinter 4 is already held 2026-08-21→2026-08-21 by SR-2026-0172",
+    "res 20114318 cart 5757237: NOT_APPLIED Cargo 37 is already held 2026-08-31→2026-09-04 by SR-2026-0205",
+    "res 20120672 cart 5759010: NOT_APPLIED Sprinter 4 is already held 2026-08-21→2026-08-23 by SR-2026-0172",
+    "res 20149068 cart 5767240: NOT_APPLIED Cargo 43 is already held 2026-08-26→2026-08-27 by SR-2026-0203",
+    "res 20161511 cart 5770434: NOT_APPLIED Cube 25 is already held 2026-09-04→2026-09-05 by SR-2026-0127",
+    "res 20162394 cart 5770631: NOT_APPLIED Cube 15 is already held 2026-08-28→2026-08-31 by SR-PB-2026-4668"
+  ]
+}

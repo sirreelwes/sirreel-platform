@@ -217,8 +217,8 @@ async function main() {
     return
   }
 
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/role-ai-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/role-ai-backfill-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(path, JSON.stringify({ previousRole: 'OTHER', changes: applied }, null, 2))
   console.log(`\nReversal record: ${path} — every row was OTHER before this run.`)
 }

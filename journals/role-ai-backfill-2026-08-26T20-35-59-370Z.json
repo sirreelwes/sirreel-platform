@@ -1,0 +1,278 @@
+{
+  "previousRole": "OTHER",
+  "changes": [
+    {
+      "id": "43d89b56-6bdb-49cd-91c2-1493ee21ac9e",
+      "email": "jninness@im.agency",
+      "to": "PRODUCTION_MANAGER",
+      "via": "cached-extraction",
+      "evidence": "Head of Production"
+    },
+    {
+      "id": "c9bd2d06-dfa0-4330-a08d-b00b71cf46da",
+      "email": "gabriellette@gmail.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Associate Producer"
+    },
+    {
+      "id": "50bd29fe-d730-4561-9ec0-6e5ec1ecbe0d",
+      "email": "brittany@lavventuraevents.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Owner & Event Producer"
+    },
+    {
+      "id": "1bc7d3d5-0d66-40fe-88d5-9347fadbfb3e",
+      "email": "vic@stainedstudios.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer & Post Producer"
+    },
+    {
+      "id": "91d216d5-bef9-4492-9d91-c41db47c7561",
+      "email": "hollywoodproductiongroupla@gmail.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "bf60cbe2-3da3-4156-9690-cf269deeb627",
+      "email": "sirreelwes@me.com",
+      "to": "OWNER",
+      "via": "cached-extraction",
+      "evidence": "Founder / CEO"
+    },
+    {
+      "id": "1a2da7f5-e8aa-4c70-a4ee-ca60a36dd617",
+      "email": "jhana.art@gmail.com",
+      "to": "ART_DIRECTOR",
+      "via": "cached-extraction",
+      "evidence": "Creative Producer | Set Designer"
+    },
+    {
+      "id": "67a74468-e5d5-49f2-85fe-b5cccfe3d717",
+      "email": "meganforduh@gmail.com",
+      "to": "ART_COORDINATOR",
+      "via": "cached-extraction",
+      "evidence": "Art Coordinator"
+    },
+    {
+      "id": "43614e70-737a-4b96-8ab1-5d5e2023b8ef",
+      "email": "benstolte@gmail.com",
+      "to": "LOCATION_MANAGER",
+      "via": "cached-extraction",
+      "evidence": "Location Scout | Manager"
+    },
+    {
+      "id": "512deee1-d7bd-41cc-b2be-29322a6baad4",
+      "email": "dott@rpa.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Senior Producer"
+    },
+    {
+      "id": "8f7e00d0-6c5d-4305-8402-99c87f92f8fb",
+      "email": "tezaleski@gmail.com",
+      "to": "ART_DIRECTOR",
+      "via": "cached-extraction",
+      "evidence": "Production Designer"
+    },
+    {
+      "id": "ea063440-69a7-4f03-9267-88deb587d086",
+      "email": "epuksto@gmail.com",
+      "to": "ART_DIRECTOR",
+      "via": "cached-extraction",
+      "evidence": "Production Design"
+    },
+    {
+      "id": "9dcbdc61-3bdb-435e-b043-bd1e965c2dae",
+      "email": "concierge@expensify.com",
+      "to": "OWNER",
+      "via": "cached-extraction",
+      "evidence": "Founder and CEO"
+    },
+    {
+      "id": "66f0d7ba-627f-4c22-b8d3-9e9031c65ae5",
+      "email": "chloestanden@dorothystpictures.com",
+      "to": "PRODUCTION_COORDINATOR",
+      "via": "cached-extraction",
+      "evidence": "Production Coordinator"
+    },
+    {
+      "id": "3bee0590-ea77-4fcb-97c6-8f479b57ee38",
+      "email": "andresgproducer@gmail.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "d56f50c2-cc37-4955-9bc5-38cecf64f168",
+      "email": "shane@forcedperspective.tv",
+      "to": "LINE_PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Line Producer"
+    },
+    {
+      "id": "18108d85-00ee-4858-9149-ce0ad8677552",
+      "email": "mckenna@kontentpartners.com",
+      "to": "PRODUCTION_MANAGER",
+      "via": "cached-extraction",
+      "evidence": "HEAD OF PRODUCTION"
+    },
+    {
+      "id": "8a7d7b07-e732-4ec9-940b-a311a73fbe4d",
+      "email": "mariejach@gmail.com",
+      "to": "ART_DIRECTOR",
+      "via": "cached-extraction",
+      "evidence": "Set Designer"
+    },
+    {
+      "id": "ea7d8223-a11d-435d-8968-b15c20f23e5e",
+      "email": "jonathan@kontentpartners.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "488f339d-b7f3-439b-8514-3c34e1d23073",
+      "email": "anne@crewprotection.com",
+      "to": "OWNER",
+      "via": "cached-extraction",
+      "evidence": "CEO, Client Relations"
+    },
+    {
+      "id": "b32d6bc1-2a21-4560-bbf4-5c851e84d7d2",
+      "email": "production@leproducers.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "ce75ad42-90b0-4ab1-aebe-9b5e5211a26b",
+      "email": "tihhjmovie@gmail.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "0bccf4db-bb6e-467b-ae0f-d4997c9ebb28",
+      "email": "jewely@getporkchop.com",
+      "to": "PRODUCTION_SUPERVISOR",
+      "via": "cached-extraction",
+      "evidence": "Production Supervisor / LP - PM"
+    },
+    {
+      "id": "3ef32be1-240e-41fc-b4a0-188d6d206084",
+      "email": "hello@luciatran.com",
+      "to": "ART_DIRECTOR",
+      "via": "cached-extraction",
+      "evidence": "Production Designer / local 800"
+    },
+    {
+      "id": "66f37d34-cc2d-4247-a419-f3d281c56fd7",
+      "email": "candace.l.pruitt@gmail.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Producer"
+    },
+    {
+      "id": "9d5409c7-19f8-465c-80cd-63747b1b885a",
+      "email": "assistant@jbellprods.com",
+      "to": "PRODUCER",
+      "via": "cached-extraction",
+      "evidence": "Executive Producer"
+    },
+    {
+      "id": "793934e5-c1f2-4c07-b9a1-e86443b58609",
+      "email": "ymg020@gmail.com",
+      "to": "ART_DIRECTOR",
+      "via": "ai:0.95",
+      "evidence": "AD"
+    },
+    {
+      "id": "a79257bf-80ac-4aeb-8b19-cb9e69112450",
+      "email": "abby.joy.gonz@gmail.com",
+      "to": "PRODUCTION_COORDINATOR",
+      "via": "ai:0.95",
+      "evidence": "Abby Gonzalez, PC"
+    },
+    {
+      "id": "c21eef1e-fb5e-4ea7-9c0a-8c58f116cae8",
+      "email": "brawlersfinance@gmail.com",
+      "to": "PRODUCTION_ACCOUNTANT",
+      "via": "ai:0.95",
+      "evidence": "*Financial Controller*"
+    },
+    {
+      "id": "ae8e9396-4a29-4a22-8825-741f238aae88",
+      "email": "accounting@northofnow.com",
+      "to": "PRODUCTION_ACCOUNTANT",
+      "via": "ai:0.95",
+      "evidence": "Jennifer Persaud\nAccounting Department"
+    },
+    {
+      "id": "8e8b29bc-0357-44b2-bf04-ffe2b9ea1c6a",
+      "email": "drlouisjones@louisjonestv.com",
+      "to": "OWNER",
+      "via": "ai:0.95",
+      "evidence": "Owner, Louis Jones Studios"
+    },
+    {
+      "id": "3e231370-4b33-4520-834d-33897b110a6e",
+      "email": "zachariah.ziegler@gmail.com",
+      "to": "PRODUCTION_ASSISTANT",
+      "via": "ai:0.95",
+      "evidence": "Lead PA TCM Film Festival"
+    },
+    {
+      "id": "a3aa6465-4865-41fc-ab16-f00f8bfba945",
+      "email": "jimb.tcmff@gmail.com",
+      "to": "PRODUCTION_ASSISTANT",
+      "via": "ai:0.95",
+      "evidence": "Office PA"
+    },
+    {
+      "id": "048ef957-aee4-4066-ad0b-072d2b875998",
+      "email": "timgoldberg@gmail.com",
+      "to": "LOCATION_MANAGER",
+      "via": "ai:0.95",
+      "evidence": "Locations Department\n213.926.9676"
+    },
+    {
+      "id": "c38523b6-8bfb-4152-b46d-fde792bb4b97",
+      "email": "danielle.wright@echobend.com",
+      "to": "PRODUCER",
+      "via": "ai:0.95",
+      "evidence": "Senior Producer | Echobend"
+    },
+    {
+      "id": "d506298a-441c-4a40-a6d6-db407f31162e",
+      "email": "isaiahjgoltara@gmail.com",
+      "to": "PRODUCTION_COORDINATOR",
+      "via": "ai:0.99",
+      "evidence": "Production Coordinator // HIMS"
+    },
+    {
+      "id": "0e1a7123-b1f5-4f70-8036-1aaa61121fc2",
+      "email": "launastaehle@me.com",
+      "to": "ART_DIRECTOR",
+      "via": "ai:0.95",
+      "evidence": "Launa Staehle, PMG\nProperty Master"
+    },
+    {
+      "id": "16570bc5-88eb-42d8-88e6-4cce434f3352",
+      "email": "kristileacctg@gmail.com",
+      "to": "PRODUCTION_ACCOUNTANT",
+      "via": "ai:0.95",
+      "evidence": "1st Asst Acct (Central time zone)"
+    },
+    {
+      "id": "df5f496a-f043-4cdf-a29c-bbe2eb48ee6e",
+      "email": "craigjohnson0@gmail.com",
+      "to": "PRODUCTION_SUPERVISOR",
+      "via": "ai:0.95",
+      "evidence": "Craig Johnson | Production Supervisor"
+    }
+  ]
+}

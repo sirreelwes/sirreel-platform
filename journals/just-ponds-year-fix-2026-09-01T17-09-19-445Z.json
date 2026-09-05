@@ -1,0 +1,46 @@
+{
+  "takenAt": "2026-09-01T17:09:19.442Z",
+  "job": {
+    "id": "605ee786-b88e-4845-a04d-db3ee2681bd9",
+    "jobCode": "SR-JOB-0262",
+    "name": "JUST PONDS"
+  },
+  "bookings": [
+    {
+      "id": "b46a3959-01a0-4747-b8ab-40faecdb5142",
+      "bookingNumber": "SR-Q-1788206126570",
+      "startDate": "2024-09-17T00:00:00.000Z",
+      "endDate": "2024-10-07T00:00:00.000Z"
+    }
+  ],
+  "order": {
+    "id": "e5e3ae25-7d00-4a45-877e-bc73fffde234",
+    "orderNumber": "S260831-005",
+    "startDate": "2024-09-17T00:00:00.000Z",
+    "endDate": "2024-10-07T00:00:00.000Z"
+  },
+  "lineItems": [
+    {
+      "id": "b0127a70-5d63-4cd5-8a87-448b7533f727",
+      "description": "SuperCube Truck",
+      "pickupDate": "2024-09-17T00:00:00.000Z",
+      "returnDate": "2024-10-07T00:00:00.000Z",
+      "billableDays": 15
+    },
+    {
+      "id": "fa6577d6-9447-4edd-b6cc-2c55976e92fb",
+      "description": "8' Truck Shelf",
+      "pickupDate": "2024-09-17T00:00:00.000Z",
+      "returnDate": "2024-10-07T00:00:00.000Z",
+      "billableDays": 9
+    },
+    {
+      "id": "52d6a0ae-9e26-4b5a-a970-e8d387a953f5",
+      "description": "4' Truck Shelf",
+      "pickupDate": "2024-09-17T00:00:00.000Z",
+      "returnDate": "2024-10-07T00:00:00.000Z",
+      "billableDays": 9
+    }
+  ],
+  "note": "values BEFORE the 2024→2026 year repair"
+}

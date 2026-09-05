@@ -1,0 +1,31 @@
+{
+  "at": "2026-09-04T18:03:39.271Z",
+  "before": {
+    "order": {
+      "id": "99edb641-f7a5-42a1-8fca-b63ba898b408",
+      "orderNumber": "S260902-008",
+      "status": "BOOKED",
+      "jobId": "cc5c1c8e-d96f-463f-a789-998ca8866473",
+      "bookingId": null,
+      "startDate": "2026-09-04T00:00:00.000Z",
+      "endDate": "2026-09-05T00:00:00.000Z"
+    },
+    "booking": {
+      "id": "2d51a373-9b29-4f1d-a022-e35b9276690c",
+      "bookingNumber": "SR-2026-0301",
+      "status": "REQUEST",
+      "jobId": "cc5c1c8e-d96f-463f-a789-998ca8866473",
+      "startDate": "2026-09-04T00:00:00.000Z",
+      "endDate": "2026-09-05T00:00:00.000Z"
+    }
+  },
+  "after": {
+    "orderNumber": "S260902-008",
+    "bookingId": "2d51a373-9b29-4f1d-a022-e35b9276690c",
+    "booking": {
+      "bookingNumber": "SR-2026-0301",
+      "status": "REQUEST"
+    }
+  },
+  "auditLogId": "dd89a0bf-09ca-43d0-a0e8-df8187f0bac2"
+}

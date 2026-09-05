@@ -1,0 +1,705 @@
+{
+  "write": true,
+  "at": "2026-08-29T03:05:20.908Z",
+  "departmentFixes": [
+    {
+      "id": "5b2effbc-827c-4a8d-aaec-a552e6001f74",
+      "code": "COM-HEADSET-DRIVE-THRU",
+      "descr": "Headset, \"Drive-Thru\"",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "e812cd84-ade9-42fc-8a70-5329e6016c48",
+      "code": "COM-MICROPHONE-XLR",
+      "descr": "Microphone, XLR",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "9fd46179-5baa-474e-acfa-6c2092ffc7aa",
+      "code": "COM-K12-ANCHOR-SPEAKER",
+      "descr": "K12 Anchor Speaker",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "9b7e028b-c71a-480e-b13a-8c631dc216f9",
+      "code": "COM-HAND-MICS",
+      "descr": "Hand Mics",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "1872f6f4-9a4d-4dad-b509-d8c0148c7856",
+      "code": "EFX-ROSCOE-FLUID-BOTTLE",
+      "descr": "Roscoe Fluid, Bottle",
+      "category": "Effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "a610516f-5359-4297-b5d3-7b13d6a00073",
+      "code": "EFX-ROSCOE-V-HAZER-WATER-BASED",
+      "descr": "Roscoe V-Hazer (Water Based)",
+      "category": "Effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "8f73402c-7a0f-407b-b55d-dbe5c25a0d7c",
+      "code": "EFX-ROSCOE-FOGGER-1900",
+      "descr": "Roscoe Fogger 1900",
+      "category": "Effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "9828b6f1-d872-4eac-b240-d9bb091ed7cd",
+      "code": "EFX-DF50-HAZER",
+      "descr": "DF50 Hazer",
+      "category": "Effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "6c825e8d-8528-4e54-986f-cb13d66ff156",
+      "code": "EFX-FAN-RE-FAN-W-STAND",
+      "descr": "Fan, \"RE Fan\" w/stand",
+      "category": "Effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "28ccc0d7-ef46-410f-a75f-a2d811d6389a",
+      "code": "LAD-LADDER-STEP",
+      "descr": "Ladder, Step",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "84c52e20-f993-4577-8b0d-35a769109a09",
+      "code": "LAD-LADDER-7",
+      "descr": "Ladder, 7'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "1c80dfbb-0ce7-43a8-8723-7412c323da33",
+      "code": "LAD-LADDER-8",
+      "descr": "Ladder, 8'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "aeb18d70-4fdc-46d3-9f24-877edf5e6c00",
+      "code": "LAD-LADDER-10",
+      "descr": "Ladder, 10'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "622b1723-1045-4ee0-84c4-595af4f14d68",
+      "code": "LAD-LADDER-12",
+      "descr": "Ladder, 12'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "9acd220a-5604-4ae8-98ce-ed71df6b0786",
+      "code": "EXP-HANGER-COMBO",
+      "descr": "Hanger, Combo",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "d66d2f98-ec4c-4f2e-9978-02c283d6868c",
+      "code": "EXP-HANGER-PANTS",
+      "descr": "Hanger, Pants",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "27dcef43-0caf-4bf4-81d7-82a8e7544f2f",
+      "code": "EXP-HANGER-SHIRTS",
+      "descr": "Hanger, Shirts",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "1eb0a6a6-6868-4939-bd3c-ae4df5d2e32e",
+      "code": "EXP-TRASH-LINERS-2X-ROLL-BOX",
+      "descr": "Trash Liners, 2x Roll Box",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "d69f95cb-a845-429e-803a-20481dc25a4e",
+      "code": "EXP-LAYOUT-BOARD-NEW",
+      "descr": "Layout Board, New",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "3a4e3920-3175-4a73-9114-209beb6c611c",
+      "code": "EXP-LAYOUT-BOARD-USED",
+      "descr": "Layout Board, Used",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "79f1a85d-97ac-4bbf-a6d5-c7e31fa7505b",
+      "code": "EXP-TRASH-LINERS-ROLL",
+      "descr": "Trash Liners, Roll",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "ec246322-5cd3-4981-9539-9f466f74ef3a",
+      "code": "EXP-RAM-BOARD-ROLL",
+      "descr": "Ram Board, Roll",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "7bb0dc83-ba45-41bf-8a20-838fa8b2bc6b",
+      "code": "EXP-CAUTION-TAPE-ROLL",
+      "descr": "Caution Tape, Roll",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "c9c725da-31da-45ba-a3a1-659c5bbad835",
+      "code": "EXP-BOOTIES-PAIR",
+      "descr": "Booties (pair)",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "56aad6cd-9f17-421a-ae45-a448e4d55e39",
+      "code": "EXP-PAPER-TAPE-2-LAYOUT-ROLL",
+      "descr": "Paper Tape, 2\" Layout (roll)",
+      "category": "Expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "7f638ba1-04c6-4119-aa7d-8b80ba174058",
+      "code": "COM-MOBILE-INTERNET-MIFI",
+      "descr": "Mobile Internet MiFi",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "0ffcd317-9507-4405-9c2e-ebb115d700a7",
+      "code": "DOLLYH",
+      "descr": "Dolly- Furniture (4W)- HD (19\" x 32\"), 1000lbs",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "59cdfa17-f6f5-442e-a956-ce6ec8a0d3de",
+      "code": "LAD-LADDER-6",
+      "descr": "Ladder, 6'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "8cd19311-c97b-4795-987e-457b15752526",
+      "code": "LAD-LADDER-14",
+      "descr": "Ladder, 14'",
+      "category": "Ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "81a1f3c4-9e6c-4563-9a24-cce2eafe6c84",
+      "code": "104413",
+      "descr": "2' X 4' STEELDECK",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "b80fb3fb-c6c4-42b0-9b07-bfb6203f3c6c",
+      "code": "104519",
+      "descr": "300W BETWEENIE HEAD - TYPE 3131",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "91427226-e5b6-4192-a38a-662e0aa9bea5",
+      "code": "18\" X 24\"  WOOD CUCOLORIS",
+      "descr": "18\" X 24\"  WOOD CUCOLORIS",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "65a4776c-9a82-48d9-a70e-a9eb7a4b7e1f",
+      "code": "104515",
+      "descr": "STIRRUP HANGER 3' TO 6'",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "7832498e-e7f7-4a17-8169-a0a48b44de11",
+      "code": "4' X 4' BEADBOARD SILVER / WHITE",
+      "descr": "4' X 4' BEADBOARD SILVER / WHITE",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "5adbd87c-7bb6-4bd2-b1f0-1b3acb00364f",
+      "code": "STEEL DECK NUT & BOLT",
+      "descr": "STEELDECK NUT & BOLT",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "b94b7160-fba2-4b0b-a465-8b3d0bbb1525",
+      "code": "104512",
+      "descr": "STIRRUP HANGER 5' TO 10'",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "06a53f3b-7424-4b6a-8103-de49836a7eec",
+      "code": "ANTON BAUER  BATTERY",
+      "descr": "ANTON BAUER  BATTERY",
+      "category": "Production Supplies",
+      "from": "EXPENDABLES",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "7527c9c4-b987-453a-b7bc-0afc45993bc1",
+      "code": "150W GLOBE (ESP)",
+      "descr": "150W GLOBE (ESP)",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "09792760-5c5c-45b6-a210-f661ace75dd3",
+      "code": "1\"SQUARE CORNER",
+      "descr": "1\"SQUARE CORNER",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "5b54c6fc-3424-467f-84ab-6235d8b6bfa0",
+      "code": "1\" SQUARE EAR",
+      "descr": "1\" SQUARE EAR",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "c289b78b-a1b0-4f66-b51e-fd11a061334f",
+      "code": "300W GLOBE (FKW)",
+      "descr": "300W GLOBE (FKW)",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "24849ff3-d167-452f-9ced-fa001f060753",
+      "code": "STEEL DECK LEGS 1ft",
+      "descr": "STEELDECK LEGS 1ft",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "0ad23175-1e50-4d3d-a745-619f72caea75",
+      "code": "STEEL DECK LEGS 4ft",
+      "descr": "STEELDECK LEGS 4ft",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "0b05327e-1fa9-446f-aabf-6a6d59d7490a",
+      "code": "STEEL DECK LEGS 2ft",
+      "descr": "STEELDECK LEGS 2ft",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "a242532a-7094-454b-b783-99a11de0cb8b",
+      "code": "STEEL DECK LEGS 9inch",
+      "descr": "STEELDECK LEGS 9inch",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "51abf108-b3cb-4ca0-9287-f5d6185274cd",
+      "code": "STEEL DECK LEGS 18inch",
+      "descr": "STEELDECK LEGS 18inch",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "e27c1a4d-d9be-4c04-986c-99d03ccc959d",
+      "code": "1\" SQUARE COUPLER",
+      "descr": "1\" SQUARE COUPLER",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "7aabd8b4-8188-4b51-9887-099897d4fe15",
+      "code": "4' X 4' BEADBOARD GOLD / WHITE",
+      "descr": "4' X 4' BEADBOARD GOLD / WHITE",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "36a506b5-6ffa-472e-8cd6-26e347881210",
+      "code": "STEEL DECK LEGS 3ft",
+      "descr": "STEELDECK LEGS 3ft",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "188334cb-920b-43c0-8bb8-46df7dd88c05",
+      "code": "104411",
+      "descr": "4' x 8' STEELDECK",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "2fba5bed-25e7-43be-8196-4d2b9e371f87",
+      "code": "104414",
+      "descr": "2' X 6' STEELDECK",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "9d6895f6-b18d-473f-8d6b-3c469c6f891f",
+      "code": "1 1/4\" SPEEDRAIL CORNER",
+      "descr": "1 1/4\" SPEEDRAIL CORNER",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "2ead7827-703c-4355-b4f9-eac660822d5f",
+      "code": "10' DOLLY TRACK SECTION (STEEL)",
+      "descr": "10' DOLLY TRACK SECTION (STEEL)",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "f979a29a-5b0c-430a-ae13-147af6247789",
+      "code": "18\" X 24\"  CELLO CUCOLORIS",
+      "descr": "18\" X 24\"  CELLO CUCOLORIS",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "9e87e624-6e6d-4775-ab76-fef77d6b6fc2",
+      "code": "POW-GENERATOR-2000W",
+      "descr": "Generator, 2000W",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "ecf29c9d-0f4a-4498-9d3c-8f6a543e2f70",
+      "code": "POW-GENERATOR-3000W",
+      "descr": "Generator, 3000W",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "0fa9cac9-0136-4586-95b0-f537f054d00d",
+      "code": "POW-GENERATOR-6500W",
+      "descr": "Generator, 6500W",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "679393f2-f436-4ff2-b0a6-2f1e4aae3521",
+      "code": "POW-GENERATOR-7000W",
+      "descr": "Generator, 7000W",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "56ba8fc3-3b97-477a-82a9-a992848a91e8",
+      "code": "POW-GAS-CAN-5-GAL",
+      "descr": "Gas Can, 5-gal",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "35d912ed-6a54-440f-9724-33c6342e0dce",
+      "code": "POW-EXT-CORD-25",
+      "descr": "Ext. Cord, 25'",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "83436de2-3c20-4ef6-aa62-90ea903dbfa3",
+      "code": "POW-EXT-CORD-50",
+      "descr": "Ext. Cord, 50'",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "e4b8ba98-8576-49da-8af3-9ebe8f9881a6",
+      "code": "POW-EXT-CORD-100",
+      "descr": "Ext. Cord, 100'",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "894f261d-dbcd-4205-b4fb-9457ae5e1f55",
+      "code": "POW-POWER-STRIP",
+      "descr": "Power Strip",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "87691e8f-3f02-4a26-91a1-6c9e8d2f6004",
+      "code": "POW-POWER-INVERTER-250W",
+      "descr": "Power Inverter 250w",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "30f19c87-296a-4e4d-b94f-eaf050e04e53",
+      "code": "POW-WORK-LIGHT-W-STAND",
+      "descr": "Work Light w/stand",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "dd8bbd10-3568-4781-8e30-70e669374eb2",
+      "code": "POW-BATTERY-PWR-WORKLIGHT",
+      "descr": "Battery Pwr Worklight",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "08e0bc63-d12e-4286-9745-1bb42bc1b307",
+      "code": "POW-CLAMP-LIGHT",
+      "descr": "Clamp Light",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "17c04ca4-4a0b-479f-be8f-0d901f20842a",
+      "code": "POW-FLASHLIGHT-MAG",
+      "descr": "Flashlight, \"Mag\"",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "278af72b-0a18-4dbe-b4d4-a67db5a30e08",
+      "code": "POW-CABLE-CROSSOVER",
+      "descr": "Cable Crossover",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "3ee3ade4-ceb4-412b-91ca-91cbb602d42f",
+      "code": "200W GLOBE (FEV)",
+      "descr": "200W GLOBE (FEV)",
+      "category": "Lighting/Electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "e9dcd5fe-f2f5-42eb-ad53-40d12ecd6ed5",
+      "code": "SOLOCT",
+      "descr": "SOLO Line- CoffeeTable",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "a8b27e7a-c9d3-4113-85ac-42ea1a490136",
+      "code": "SOLOFL",
+      "descr": "SOLO Line- FloorLamp",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "63d45a48-84cf-42cc-a45b-c367c0a02dc6",
+      "code": "SOLOR",
+      "descr": "SOLO Line- Rug",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "0b03d08a-79d1-4665-8311-eeb531776d30",
+      "code": "SOLOTL",
+      "descr": "SOLO Line- TableLamp (Each)",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "bbf8473a-12bf-4513-84e0-efdd4b07e1b6",
+      "code": "STAMD1SC",
+      "descr": "Standard 1 Line -Single Chair",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "245dec79-6e85-414f-9147-bbe706ad50d3",
+      "code": "STAND1CT",
+      "descr": "Standard 1 Line -Coffee Table",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "5b5b8fba-954e-4d2f-8a18-fa699e1cf69d",
+      "code": "STAND1ET",
+      "descr": "Standard 1 Line -End Table (Each)",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "f2bd6c94-883c-4b92-8b7f-b52f3aca2ef8",
+      "code": "STAND2CT",
+      "descr": "Standard 2 Line -Coffee Table",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "e6806e8d-edab-4c3d-b7e6-26f4e6a76f4a",
+      "code": "STAND2ET",
+      "descr": "Standard 2 Line -End Table",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "11b67c76-7eab-44af-9281-0839a68d947d",
+      "code": "STAND2TL",
+      "descr": "Standard 2 Line -Table Lamp",
+      "category": "Client/VIP",
+      "from": "GE",
+      "to": "PRO_SUPPLIES"
+    },
+    {
+      "id": "5a7a291a-b8cc-4571-9c73-ee712b9ff1ba",
+      "code": "COM-BULLHORN",
+      "descr": "Bullhorn",
+      "category": "Communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "af32d2e3-7c68-4e96-b391-8a5ddbdcb05a",
+      "code": "104415",
+      "descr": "2' X 8' STEELDECK",
+      "category": "Grip Equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    }
+  ],
+  "categoryFixes": [
+    {
+      "id": "63f0e166-21e8-4f85-a55d-f1b04fc59eff",
+      "code": "Headset w/ Boom Mic",
+      "descr": "Headset w/ Boom Mic",
+      "fromCategoryId": "a1b1703d-d35a-41ff-a50f-3ae7df3469c2",
+      "fromCategory": "Production Supplies",
+      "toCategoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "toCategory": "Communications",
+      "department": "COMMUNICATIONS"
+    },
+    {
+      "id": "bd86f468-c756-408d-96fb-f97594f01fb8",
+      "code": "104402",
+      "descr": "Internet - Verizon Mifi",
+      "fromCategoryId": "a1b1703d-d35a-41ff-a50f-3ae7df3469c2",
+      "fromCategory": "Production Supplies",
+      "toCategoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "toCategory": "Communications",
+      "department": "COMMUNICATIONS"
+    },
+    {
+      "id": "a29dca8b-445d-4220-8ed1-7e4287b44217",
+      "code": "Wireless Internet, Mifi Hotspot (AT&T)",
+      "descr": "Wireless Internet, Mifi Hotspot (AT&T)",
+      "fromCategoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "fromCategory": "Lighting/Electric",
+      "toCategoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "toCategory": "Communications",
+      "department": "COMMUNICATIONS"
+    },
+    {
+      "id": "b17ee45b-12aa-4c22-bb13-ec717c96dc67",
+      "code": "Wireless Internet, MiFi Hotspot (Verizon)",
+      "descr": "Wireless Internet, MiFi Hotspot (Verizon)",
+      "fromCategoryId": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "fromCategory": "Lighting/Electric",
+      "toCategoryId": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "toCategory": "Communications",
+      "department": "COMMUNICATIONS"
+    }
+  ],
+  "skipped": []
+}

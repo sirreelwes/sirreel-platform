@@ -65,8 +65,8 @@ async function main() {
     where: { OR: [{ rentalworksCustomerId: { not: null } }, { totalSpend: { gt: 0 } }] },
     select: { id: true, name: true, totalSpend: true, totalBookings: true, lastRentalAt: true },
   })
-  mkdirSync('tmp', { recursive: true })
-  const path = `tmp/spend-rollup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  mkdirSync('journals', { recursive: true })
+  const path = `journals/spend-rollup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   writeFileSync(
     path,
     JSON.stringify(

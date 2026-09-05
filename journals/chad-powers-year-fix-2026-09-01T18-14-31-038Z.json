@@ -1,0 +1,48 @@
+{
+  "takenAt": "2026-09-01T18:14:31.038Z",
+  "job": {
+    "id": "79ff5a3f-f5e2-45c5-975e-1d3b940e286f",
+    "jobCode": "SR-JOB-0268"
+  },
+  "bookings": [
+    {
+      "id": "9a5a0ac6-17fc-4a1a-8de6-54cd16ec2420",
+      "bookingNumber": "SR-Q-1788228319359",
+      "startDate": "2025-09-04T00:00:00.000Z",
+      "endDate": "2025-09-04T00:00:00.000Z"
+    }
+  ],
+  "lineItems": [
+    {
+      "id": "44fc1778-6632-4033-9ac4-c19636c0dd21",
+      "description": "PopVan",
+      "pickupDate": "2025-09-04T00:00:00.000Z",
+      "returnDate": "2025-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "766c94c0-958c-4a8e-b159-df54cdbe92d3",
+      "description": "Cooler, 68 qt",
+      "pickupDate": "2025-09-04T00:00:00.000Z",
+      "returnDate": "2025-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "e35fea01-eade-461e-8525-a5a296b4f15e",
+      "description": "Motorola CP200 Battery",
+      "pickupDate": "2025-09-04T00:00:00.000Z",
+      "returnDate": "2025-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "3485ea7c-640b-4992-987d-38c6d273ed1a",
+      "description": "Motorola CP200  UHF Radio (Digital)",
+      "pickupDate": "2025-09-04T00:00:00.000Z",
+      "returnDate": "2025-09-04T00:00:00.000Z"
+    },
+    {
+      "id": "04657c07-4903-4713-b0d0-53db35e2d862",
+      "description": "Motorola CP200 6-Bank Charger",
+      "pickupDate": "2025-09-04T00:00:00.000Z",
+      "returnDate": "2025-09-04T00:00:00.000Z"
+    }
+  ],
+  "note": "values BEFORE the 2025→2026 repair"
+}

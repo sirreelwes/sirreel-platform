@@ -281,7 +281,7 @@ async function main() {
     console.log(`  ATTACHED ${t.company} <- ${f.filename}`)
   }
 
-  const out = path.join(process.cwd(), `tmp/annual-ra-originals-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+  const out = path.join(process.cwd(), `journals/annual-ra-originals-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
   fs.writeFileSync(out, JSON.stringify(journal, null, 2))
   console.log(`\nAttached ${journal.length} executed originals.`)
   console.log(`Journal (each row keeps the replaced key, so it is reversible): ${out}\n`)

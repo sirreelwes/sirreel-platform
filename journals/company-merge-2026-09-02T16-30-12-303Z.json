@@ -1,0 +1,143 @@
+{
+  "ranAt": "2026-09-02T16:30:14.615Z",
+  "mode": "dry-run",
+  "keeperId": "d6abb877-5a02-4688-8d4c-ac32b0358fc9",
+  "keeperBefore": {
+    "id": "d6abb877-5a02-4688-8d4c-ac32b0358fc9",
+    "name": "Cine Dept., LLC",
+    "website": null,
+    "industry": "OTHER",
+    "tier": "STANDARD",
+    "totalSpend": "5695",
+    "totalBookings": 4,
+    "mostCommonProductionTypeProfileId": null,
+    "defaultAgentId": null,
+    "insuranceCarrier": null,
+    "insurancePolicyNum": null,
+    "insuranceContact": null,
+    "coiOnFile": true,
+    "coiExpiry": "2026-10-12T00:00:00.000Z",
+    "coiDocumentUrl": null,
+    "rentalworksCustomerId": "A00013IC",
+    "lastRentalAt": "2026-07-23T00:00:00.000Z",
+    "spendRolledUpAt": "2026-09-02T11:03:20.479Z",
+    "billingEmail": null,
+    "billingAddress": null,
+    "notes": null,
+    "discountTendency": "NONE",
+    "typicalDiscountPct": null,
+    "discountNotes": null,
+    "annualAgreementUrl": null,
+    "annualAgreementEffectiveDate": null,
+    "annualAgreementExpiresAt": null,
+    "annualAgreementSignedBy": null,
+    "annualAgreementApprovedBy": null,
+    "annualAgreementApprovedAt": null,
+    "annualCoiUrl": null,
+    "annualCoiEffectiveDate": null,
+    "annualCoiExpiresAt": null,
+    "annualCoiCoverageGL": null,
+    "annualCoiCoverageAuto": null,
+    "annualCoiApprovedBy": null,
+    "annualCoiApprovedAt": null,
+    "negotiatedTermsUrl": null,
+    "negotiatedTermsSummary": null,
+    "negotiatedTermsNegotiatedAt": null,
+    "negotiatedTermsApprovedBy": null,
+    "negotiatedTermsApprovedAt": null,
+    "negotiatedTermsActiveAsOf": null,
+    "negotiatedTermsReviewDueDate": null,
+    "createdAt": "2026-04-18T16:06:46.300Z",
+    "updatedAt": "2026-09-02T11:03:34.755Z"
+  },
+  "duplicates": [
+    {
+      "id": "407b83de-58ef-4646-9c6b-750561d2207a",
+      "name": "CineDept",
+      "website": null,
+      "industry": "OTHER",
+      "tier": "NEW",
+      "totalSpend": "0",
+      "totalBookings": 0,
+      "mostCommonProductionTypeProfileId": null,
+      "defaultAgentId": null,
+      "insuranceCarrier": null,
+      "insurancePolicyNum": null,
+      "insuranceContact": null,
+      "coiOnFile": false,
+      "coiExpiry": null,
+      "coiDocumentUrl": null,
+      "rentalworksCustomerId": null,
+      "lastRentalAt": null,
+      "spendRolledUpAt": null,
+      "billingEmail": null,
+      "billingAddress": null,
+      "notes": "planyo-import-origin: cart 5695245 (2026-07-19)",
+      "discountTendency": "NONE",
+      "typicalDiscountPct": null,
+      "discountNotes": null,
+      "annualAgreementUrl": null,
+      "annualAgreementEffectiveDate": null,
+      "annualAgreementExpiresAt": null,
+      "annualAgreementSignedBy": null,
+      "annualAgreementApprovedBy": null,
+      "annualAgreementApprovedAt": null,
+      "annualCoiUrl": null,
+      "annualCoiEffectiveDate": null,
+      "annualCoiExpiresAt": null,
+      "annualCoiCoverageGL": null,
+      "annualCoiCoverageAuto": null,
+      "annualCoiApprovedBy": null,
+      "annualCoiApprovedAt": null,
+      "negotiatedTermsUrl": null,
+      "negotiatedTermsSummary": null,
+      "negotiatedTermsNegotiatedAt": null,
+      "negotiatedTermsApprovedBy": null,
+      "negotiatedTermsApprovedAt": null,
+      "negotiatedTermsActiveAsOf": null,
+      "negotiatedTermsReviewDueDate": null,
+      "createdAt": "2026-07-19T13:02:16.263Z",
+      "updatedAt": "2026-07-19T13:02:16.263Z"
+    }
+  ],
+  "moves": {
+    "Affiliation": [
+      "eaecbf50-4c0f-451b-a83f-80e78ae13d1a",
+      "6434cd43-1deb-4b57-9aac-66bb244240b6"
+    ],
+    "Booking": [
+      "031595c9-3407-4113-8d04-c31423423de4"
+    ],
+    "Job": [
+      "e7a041a1-620d-4155-9237-30fe05c5e2bc"
+    ],
+    "InquiryCapture": [
+      "0fa9fbc1-d9a8-46de-a80e-8df5373397ab",
+      "5a870de0-6c8c-4107-a4ea-b51b53fc8b64"
+    ]
+  },
+  "affiliationsDeleted": [
+    {
+      "id": "9dbfa2dc-023b-43ca-a69b-6d86d3fd9cbf",
+      "personId": "5117e63a-1a3f-447b-bf31-5be2cbe1e490",
+      "companyId": "407b83de-58ef-4646-9c6b-750561d2207a",
+      "productionName": null,
+      "roleOnShow": null,
+      "startDate": null,
+      "endDate": null,
+      "isCurrent": true,
+      "totalSpend": "0",
+      "totalBookings": 0,
+      "notes": null,
+      "createdAt": "2026-07-19T13:02:16.401Z",
+      "person": {
+        "firstName": "Chris",
+        "lastName": "Avery",
+        "email": "chris@cinedept.com"
+      }
+    }
+  ],
+  "backfill": {
+    "notes": "Merged 1 duplicate company records on 2026-09-02: CineDept (407b83de-58ef-4646-9c6b-750561d2207a)."
+  }
+}

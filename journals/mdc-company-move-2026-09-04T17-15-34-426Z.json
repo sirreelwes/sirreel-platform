@@ -1,0 +1,33 @@
+{
+  "before": {
+    "job": {
+      "id": "3102e3db-1ffb-409b-81c0-2a75990b0565",
+      "jobCode": "SR-JOB-0267",
+      "companyId": "9594ebe5-89bd-4801-a331-0aca1d151f08",
+      "companyName": "Michael Kagan (company TBC)"
+    },
+    "orders": [
+      {
+        "id": "589dea17-1ff5-4606-ba20-c8fadf3f6a70",
+        "orderNumber": "S260831-008",
+        "companyId": "9594ebe5-89bd-4801-a331-0aca1d151f08"
+      }
+    ],
+    "agreements": [
+      {
+        "id": "cd0db4cc-9bd8-47b6-8520-92387dc98c7d",
+        "orderId": "589dea17-1ff5-4606-ba20-c8fadf3f6a70",
+        "status": "PORTAL_GENERATED",
+        "documentType": "BASELINE",
+        "documentToSignUrl": "https://bcq1ijd3eb7xz1ch.private.blob.vercel-storage.com/agreement-baseline/589dea17-1ff5-4606-ba20-c8fadf3f6a70/baseline-1788217617089.pdf"
+      }
+    ]
+  },
+  "after": {
+    "companyId": "09f5a3ba-1b06-45ca-9e24-11096078d93d",
+    "companyName": "MDC Movie LLC"
+  },
+  "staleBaselineIds": [
+    "cd0db4cc-9bd8-47b6-8520-92387dc98c7d"
+  ]
+}

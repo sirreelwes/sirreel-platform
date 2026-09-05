@@ -22,7 +22,7 @@
  *   npx tsx scripts/create-annual-agreement-companies.ts          # dry run
  *   npx tsx scripts/create-annual-agreement-companies.ts --write
  *
- * Reverse: tmp/annual-agreement-companies-<ts>.json holds every created id.
+ * Reverse: journals/annual-agreement-companies-<ts>.json holds every created id.
  * Deletion is BY CAPTURED ID only.
  */
 import fs from 'fs'
@@ -145,7 +145,7 @@ async function main() {
 
   const out = path.join(
     process.cwd(),
-    `tmp/annual-agreement-companies-${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+    `journals/annual-agreement-companies-${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
   )
   fs.mkdirSync(path.dirname(out), { recursive: true })
   fs.writeFileSync(out, JSON.stringify(created, null, 2))

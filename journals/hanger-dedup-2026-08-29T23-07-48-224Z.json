@@ -1,0 +1,85 @@
+{
+  "ranAt": "2026-08-29T23:07:46.904Z",
+  "write": true,
+  "retire": [
+    {
+      "product": "Combo hanger, each",
+      "retire": {
+        "id": "e438e7a8-7aff-4b5b-b2e5-85cc98a0f23d",
+        "code": "HANGERC-RW",
+        "description": "Combo Hanger 17\" Clear, Each"
+      },
+      "into": "EXP-HANGER-COMBO",
+      "wasDepartment": "EXPENDABLES",
+      "wasActive": true,
+      "wasDaily": "1.5",
+      "wasWeekly": "4.5",
+      "liveRefs": null
+    },
+    {
+      "product": "Combo hanger, each",
+      "retire": {
+        "id": "4703e117-202d-4e57-ac21-bdfdd650f807",
+        "code": "HANGERC",
+        "description": "Wardrobe Hanger 17\" Clear,Combo - Each"
+      },
+      "into": "EXP-HANGER-COMBO",
+      "wasDepartment": "COMMUNICATIONS",
+      "wasActive": true,
+      "wasDaily": "1",
+      "wasWeekly": "3",
+      "liveRefs": null
+    },
+    {
+      "product": "Pant hanger, each",
+      "retire": {
+        "id": "2ade9d97-d45e-4f83-9bc8-a1767eb4616f",
+        "code": "Wardrobe Hanger 17\" Clear, Pant w/ Clip - Each",
+        "description": "Wardrobe Hanger 17\" Clear, Pant w/ Clip - Each"
+      },
+      "into": "EXP-HANGER-PANTS",
+      "wasDepartment": "PRO_SUPPLIES",
+      "wasActive": true,
+      "wasDaily": "0.5",
+      "wasWeekly": "1.5",
+      "liveRefs": null
+    },
+    {
+      "product": "Shirt / dress hanger, each",
+      "retire": {
+        "id": "dddb5dd5-925a-448c-b56c-f867c7cba9cb",
+        "code": "Wardrobe Hanger 17\" Clear, Shirt/Dress - Each",
+        "description": "Wardrobe Hanger 17\" Clear, Shirt/Dress - Each"
+      },
+      "into": "EXP-HANGER-SHIRTS",
+      "wasDepartment": "PRO_SUPPLIES",
+      "wasActive": true,
+      "wasDaily": "0.5",
+      "wasWeekly": "1.5",
+      "liveRefs": null
+    }
+  ],
+  "boxes": [
+    {
+      "code": "COMBOBOX",
+      "description": "Combo Hanger 17\" Clear, Box of 100",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP",
+      "daily": "150"
+    },
+    {
+      "code": "HANGERPB",
+      "description": "Pant Hanger 17\" Clear, Box of 100",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP",
+      "daily": "85"
+    },
+    {
+      "code": "HANGERSB",
+      "description": "Shirt/ Dress Hanger 17\" Clear, Box of 100",
+      "from": "EXPENDABLES",
+      "to": "WARDROBE_MAKEUP",
+      "daily": "85"
+    }
+  ]
+}

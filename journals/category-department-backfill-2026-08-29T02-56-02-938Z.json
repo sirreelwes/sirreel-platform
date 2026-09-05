@@ -1,0 +1,293 @@
+{
+  "write": true,
+  "at": "2026-08-29T02:56:00.158Z",
+  "categoryUpdates": [
+    {
+      "id": "94e352cf-b4a9-4ea0-825c-eeb25872e1b5",
+      "slug": "grip-equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "8910b1ec-906d-49f8-9f24-5fdb809f83a8",
+      "slug": "communications",
+      "from": "PRO_SUPPLIES",
+      "to": "COMMUNICATIONS"
+    },
+    {
+      "id": "70ac1145-89e3-4c6e-89c8-3044b93a740c",
+      "slug": "effects",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "d1af2442-2765-4f6e-a5d8-a8896502fa5a",
+      "slug": "ladders",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "82cba607-92a4-412e-bd96-6be3ebde914f",
+      "slug": "expendables",
+      "from": "PRO_SUPPLIES",
+      "to": "EXPENDABLES"
+    },
+    {
+      "id": "4375ba58-1dd8-4637-8f57-18b85267aca3",
+      "slug": "lighting-electric",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "91cc1d08-5fd6-44a3-9432-9620f077f338",
+      "slug": "electrical-equipment",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    },
+    {
+      "id": "ded40a01-c4a5-4b61-85af-b341d096236c",
+      "slug": "lights-power",
+      "from": "PRO_SUPPLIES",
+      "to": "GE"
+    }
+  ],
+  "createdCategories": [
+    {
+      "id": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles"
+    },
+    {
+      "id": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages"
+    }
+  ],
+  "assignedItems": [
+    {
+      "itemId": "416d9bd6-5c14-468f-9dc5-9cfae943cfbf",
+      "code": "CAT_DLUX",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "5081e6ce-3826-469d-b434-6c0fb489857a",
+      "code": "CAT_CAMERA_CUBE",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "b9411dc0-8700-439a-a7f2-621f2ea35622",
+      "code": "CAT_CARGO_VAN_NO_LIFTGATE",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "3d2f7041-23fd-44e7-9a9a-c2d9c9897dfd",
+      "code": "CAT_DLUX_NORCAL",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "10c2108c-c3ff-4e23-b317-a1989b130368",
+      "code": "CAT_CARGO_VAN_LIFTGATE",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "d5674020-8f13-44f2-820c-95fbf0a2e183",
+      "code": "CAT_PASSENGER_VAN",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "2b71352a-1a0c-4e58-ae92-c4542b716fe7",
+      "code": "CAT_POPVAN",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "205ccb16-ca3b-471e-9579-64eb3c89501c",
+      "code": "CAT_PROSCOUT_VTR",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "4dae2009-7da5-4e5f-8805-98e6f96c9779",
+      "code": "CAT_SCISSOR_LIFT",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "9e990153-429f-4687-9e3a-493f1def398d",
+      "code": "CAT_CUBE_TRUCK",
+      "toCategoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "slug": "vehicles",
+      "publicVisibleWas": true
+    },
+    {
+      "itemId": "69344007-1638-49e6-86a9-aa7f636c5c4e",
+      "code": "LANKERSHIM_GREEN_ROOM_1",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "41dd883f-180d-4fa7-9f05-28345ca6fcfe",
+      "code": "LANKERSHIM_GREEN_ROOM_2",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "8bb3cb7e-9a6b-429b-b3d9-6b37f2e0c5ee",
+      "code": "LANKERSHIM_CONFERENCE",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "bde95f0d-a663-4d6b-85cc-c86cc60dbcee",
+      "code": "LANKERSHIM_CORNER_OFFICE",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "2a6061d2-f5eb-4d35-8b76-2f2faba7187d",
+      "code": "LANKERSHIM_CENTER_OFFICE",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "cba5b9c6-ceb9-481b-9be3-3bb260ffce6b",
+      "code": "LANKERSHIM_CEO_OFFICE",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "4c3c0742-c1a3-4f63-9786-51ed32378d57",
+      "code": "LANKERSHIM_NORTH_PARKING",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "402b436f-7f2d-4ff0-be8b-e3d87ea1c631",
+      "code": "LANKERSHIM_EAST_PARKING",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "94e3a594-971b-41bf-9e4a-bf1fbf56fc57",
+      "code": "LANKERSHIM_LED_WALL_USAGE",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "b461c1b0-1478-4cbd-b285-2f72dadd9bf8",
+      "code": "LANKERSHIM_HOSPITAL_SET",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "5354e17c-1c00-4841-a9fa-4c5334847d6f",
+      "code": "LANKERSHIM_POLICE_JAIL",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "39d44c27-34aa-4e81-a751-1e33d250e1d9",
+      "code": "LANKERSHIM_MORGUE_SET",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "aafd81f6-7ffc-49cc-af01-86281300a4cb",
+      "code": "LANKERSHIM_LED_VOLUME",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "8d432526-d301-4890-9584-914bfafc242d",
+      "code": "LANKERSHIM_BLACK_BOX",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": false
+    },
+    {
+      "itemId": "784565ac-2a91-4860-a1a5-fd30f6764f84",
+      "code": "CAT_STUDIOS",
+      "toCategoryId": "5cd15211-d0cb-4247-a304-fbe29b3502f7",
+      "slug": "stages",
+      "publicVisibleWas": true
+    }
+  ],
+  "mismatches": [
+    {
+      "category": "Lighting/Electric",
+      "item_department": "PRO_SUPPLIES",
+      "n": 21
+    },
+    {
+      "category": "Grip Equipment",
+      "item_department": "PRO_SUPPLIES",
+      "n": 21
+    },
+    {
+      "category": "Expendables",
+      "item_department": "PRO_SUPPLIES",
+      "n": 11
+    },
+    {
+      "category": "Client/VIP",
+      "item_department": "GE",
+      "n": 10
+    },
+    {
+      "category": "Ladders",
+      "item_department": "PRO_SUPPLIES",
+      "n": 7
+    },
+    {
+      "category": "Communications",
+      "item_department": "PRO_SUPPLIES",
+      "n": 6
+    },
+    {
+      "category": "Effects",
+      "item_department": "PRO_SUPPLIES",
+      "n": 5
+    },
+    {
+      "category": "Production Supplies",
+      "item_department": "COMMUNICATIONS",
+      "n": 2
+    },
+    {
+      "category": "Lighting/Electric",
+      "item_department": "COMMUNICATIONS",
+      "n": 2
+    },
+    {
+      "category": "Production Supplies",
+      "item_department": "EXPENDABLES",
+      "n": 1
+    }
+  ]
+}
