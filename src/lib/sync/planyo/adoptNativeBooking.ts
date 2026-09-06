@@ -30,6 +30,19 @@
  * merges two real reservations into one — much worse than the duplicate it
  * was trying to avoid. Anything less than an exact match imports as before
  * and surfaces on the job page for a human.
+ *
+ * SECOND RUNG — THE CONTACT (2026-09-06). The company rung has a hole:
+ * the cart's Company_Name is free-typed in Planyo, and a typo there
+ * ("Sublot Ent" for Subplot Entertainment, "Premiere TV" for PREMIERETV)
+ * makes the company NEW — at which point the rung above returns null by
+ * construction and the importer mints a second company, a second job,
+ * and a second hold for the same truck. That is exactly what happened
+ * to Forgotten Island Press Junket on 2026-09-06 and Coven Academy Promo
+ * before it. The customer EMAIL is not free-typed the same way, and the
+ * cart importer already resolved it to an existing Person. So when the
+ * company is unknown but the person is known, the same exact test runs
+ * against that person's native bookings: identical dates, identical
+ * category set. Same human, same days, same gear is the same rental.
  */
 
 import type { PrismaClient } from '@prisma/client'
@@ -56,12 +69,16 @@ export async function findAdoptableNativeBooking(
   prisma: PrismaClient,
   plan: CartImportPlan,
 ): Promise<AdoptionCandidate | null> {
-  // Only an EXISTING company can match. A cart whose company would be
-  // created cannot have a native twin by definition.
+  // An EXISTING company anchors the first rung; an EXISTING person the
+  // second. A cart where both would be created has nothing in HQ to be a
+  // twin of.
   const resolved = plan.resolvedCompany
   const companyId =
     resolved && typeof resolved === 'object' && 'id' in resolved ? (resolved.id as string) : null
-  if (!companyId) return null
+  const person = plan.resolvedPerson
+  const personId =
+    person && typeof person === 'object' && 'id' in person ? (person.id as string) : null
+  if (!companyId && !personId) return null
 
   const wantCategories = [...new Set(plan.bookingItemDrafts.map((d) => d.categoryId))].sort()
   if (wantCategories.length === 0) return null
@@ -69,9 +86,12 @@ export async function findAdoptableNativeBooking(
   const start = laDateToDbDate(plan.bookingDraft.startLA)
   const end = laDateToDbDate(plan.bookingDraft.endLA)
 
+  const anchor = companyId ? { companyId } : { personId: personId! }
+  const anchorWord = companyId ? 'same company' : 'same contact, company name did not match'
+
   const natives = await prisma.booking.findMany({
     where: {
-      companyId,
+      ...anchor,
       planyoCartId: null, // native by definition
       status: { in: [...LIVE_STATUSES] },
       startDate: start,
@@ -93,7 +113,7 @@ export async function findAdoptableNativeBooking(
     return {
       bookingId: n.id,
       bookingNumber: n.bookingNumber,
-      reason: `same company, ${plan.bookingDraft.startLA}→${plan.bookingDraft.endLA}, ${has.length} matching categor${has.length === 1 ? 'y' : 'ies'}`,
+      reason: `${anchorWord}, ${plan.bookingDraft.startLA}→${plan.bookingDraft.endLA}, ${has.length} matching categor${has.length === 1 ? 'y' : 'ies'}`,
     }
   }
   return null
