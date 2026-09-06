@@ -33,7 +33,9 @@ import {
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const COI_INBOX = 'hello@sirreel.com'
+// Where brokers are told to send the certificate. Wes 2026-09-06: rentals@,
+// not hello@ — nobody chases COIs out of the general inbox.
+const COI_INBOX = 'rentals@sirreel.com'
 
 const INK = '#1a1a1a'
 const MUTED = '#6b7280'
