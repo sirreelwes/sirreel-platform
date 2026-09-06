@@ -20,6 +20,9 @@
  *   - lcdw-unapplied (DERIVED) — the client's damage-waiver answer and
  *     the order's money disagree: elected but no fee line, or declined
  *     with the fee still on. Clears when the line matches the answer.
+ *   - partner-coi-missing (DERIVED) — a vehicle partner signed the
+ *     Partner Vehicle Agreement 7+ days ago and HQ holds no COI (or it
+ *     expired). Clears when receipt is stamped on the Portals tab.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -67,6 +70,7 @@ import { rwTokenProvider } from '@/lib/actionItems/providers/rwToken'
 import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassigned'
 import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkReportChanges'
 import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied'
+import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCoiMissing'
 
 const PROVIDERS: ActionItemProvider[] = [
   // The yard changed a booked order at the dock and the agent hasn't
@@ -81,6 +85,9 @@ const PROVIDERS: ActionItemProvider[] = [
   quoteAgingProvider,
   inquiryUntouchedProvider,
   rwTokenProvider,
+  // A partner signed a week+ ago and we hold no certificate of insurance
+  // (or it expired). The welcome email deliberately does not ask.
+  partnerCoiMissingProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

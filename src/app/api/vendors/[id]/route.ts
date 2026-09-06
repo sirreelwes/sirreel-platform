@@ -77,6 +77,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const deliveryTerms = nullableTrim(body.deliveryTerms)
   if (deliveryTerms !== undefined) data.deliveryTerms = deliveryTerms
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive
+  for (const k of ['coiReceivedAt', 'coiExpiresAt'] as const) {
+    if (!(k in body)) continue
+    const raw = body[k]
+    if (raw === null || raw === '') { data[k] = null; continue }
+    const d = typeof raw === 'string' ? new Date(raw) : null
+    if (!d || Number.isNaN(d.getTime())) return NextResponse.json({ error: `${k} must be a date` }, { status: 400 })
+    data[k] = d
+  }
   if ('partnerSharePercent' in body) {
     // SirReel's share of the vehicle rental rate (the deal). Empty clears it.
     const raw = body.partnerSharePercent

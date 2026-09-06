@@ -59,7 +59,8 @@ export function buildPartnerWelcome(a: {
   needs.push(a.unitCount === 0
     ? 'Send us your vehicle list. Reply to this email with every vehicle you want SirReel to be able to book, with a daily and weekly rate for each (monthly too if you have one). We add them and they show up on your page.'
     : `Send us your vehicle list. Right now we have ${a.unitCount} of your vehicle${a.unitCount === 1 ? '' : 's'} on the page. Reply to this email with the rest, with a daily and weekly rate for each (monthly too if you have one). We add them and they show up on your page.`)
-  needs.push('A certificate of insurance for your vehicles, naming SirReel Production Vehicles, Inc. as additional insured. Attach it to your reply.')
+  // No COI ask here — Wes 2026-09-06: "I don't want it to hold up this week's
+  // rental." The partner-coi-missing action item follows up after signing.
   needs.push('Check your contact details and lot address on the page. Your lot is the point of origin for every booking, so driver hours and mileage count from there.')
   needs.push('When we book a vehicle with a driver, name the driver on that booking page. You enter each driver’s email once, they fill in their own profile and license, and after that you just pick from the list. Each driver gets their own page with the location and call time, so nobody has to relay it by text.')
   const booking = 'We quote one of your vehicles to a production. You get an email saying we have pitched it for those dates, which holds nothing. If the production accepts, you get a “please hold” email and confirm on the booking page. When the production books, you get an “it’s a go” email with your rate for the booking. Location and call time land on the booking page as the production sets them. After the vehicle comes back, you invoice SirReel for your share, referencing our booking number, and we pay within 30 days. You never invoice the production.'

@@ -2,7 +2,7 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, FileText, Loader2, Percent, Send, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Trash2, Upload, X } from 'lucide-react'
 
 export interface RateProposalRow {
   unitId: string
@@ -13,13 +13,15 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, coi }: {
   vendorId: string
   hasLogo: boolean
   /** Last time HQ emailed the account link, and to whom. */
   invited: { at: string; to: string } | null
   /** SirReel's share of the vehicle rental rate — the deal. Null = not set. */
   sharePercent: number | null
+  /** Their certificate of insurance: when HQ received it and when it lapses. */
+  coi: { receivedAt: string | null; expiresAt: string | null }
   agreement: { title: string; signedAt: string | null; signerName: string | null; uploadedAt: string } | null
   proposals: RateProposalRow[]
   contact: { name: string | null; email: string | null; phone: string | null; lotAddress: string | null }
@@ -34,6 +36,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [ag, setAg] = useState(agreement)
   const [inv, setInv] = useState(invited)
   const [share, setShare] = useState<number | null>(sharePercent)
+  const [coiState, setCoiState] = useState(coi)
+  const [coiExpiry, setCoiExpiry] = useState(coi.expiresAt ? coi.expiresAt.slice(0, 10) : '')
   const [shareDraft, setShareDraft] = useState(sharePercent == null ? '' : String(sharePercent))
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
   const money = (n: number | null) => (n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
@@ -53,6 +57,14 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}/agreement`, { method: 'POST', body: fd })
     if (r.ok) { setAg({ title: agTitle, signedAt: null, signerName: null, uploadedAt: new Date().toISOString() }); setAgFile(null); setMsg('Agreement filed — it is now on their account page to sign.') }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Upload failed')
+    setBusy(null)
+  }
+  async function saveCoi(received: boolean) {
+    setBusy('coi'); setMsg(null)
+    const body = received ? { coiReceivedAt: new Date().toISOString(), coiExpiresAt: coiExpiry || null } : { coiReceivedAt: null, coiExpiresAt: null }
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (r.ok) { setCoiState(received ? { receivedAt: new Date().toISOString(), expiresAt: coiExpiry ? new Date(coiExpiry).toISOString() : null } : { receivedAt: null, expiresAt: null }); setMsg(received ? 'COI marked received.' : 'COI cleared.') }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
   async function saveShare() {
@@ -138,6 +150,24 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
           <button onClick={saveShare} disabled={busy === 'share' || shareDraft.trim() === (share == null ? '' : String(share))} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">
             {busy === 'share' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
           </button>
+        </div>
+      </div>
+
+      {/* Insurance certificate — deliberately NOT asked for in the welcome
+          email (Wes 2026-09-06); the action item chases it after signing. */}
+      <div className="border border-lt-hairline rounded-lg p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><ShieldCheck className="w-4 h-4 text-lt-fg3" /> Insurance certificate</div>
+        <div className="text-xs text-lt-fg2 mt-1">
+          {coiState.receivedAt
+            ? <>On file since {new Date(coiState.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{coiState.expiresAt ? <> · expires <span className={new Date(coiState.expiresAt) < new Date() ? 'text-chip-bad-fg' : 'text-lt-fg'}>{new Date(coiState.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></> : ' · no expiry recorded'}.</>
+            : <span className="text-lt-fg3">None on file. Not asked for in the welcome; an action item asks a week after they sign. Mark it here when it arrives.</span>}
+        </div>
+        <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <input type="date" value={coiExpiry} onChange={(e) => setCoiExpiry(e.target.value)} className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg" title="Expiry date on the certificate" />
+          <button onClick={() => saveCoi(true)} disabled={busy === 'coi'} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">
+            {busy === 'coi' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {coiState.receivedAt ? 'Update' : 'Mark received'}
+          </button>
+          {coiState.receivedAt && <button onClick={() => saveCoi(false)} disabled={busy === 'coi'} className="text-[11px] text-lt-fg3 underline">clear</button>}
         </div>
       </div>
 

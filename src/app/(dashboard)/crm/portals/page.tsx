@@ -204,7 +204,7 @@ export default async function CompanyPortalsPage() {
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
-      partnerSharePercent: true,
+      partnerSharePercent: true, coiReceivedAt: true, coiExpiresAt: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
       agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
       subcontractedVehicles: {
@@ -363,6 +363,7 @@ export default async function CompanyPortalsPage() {
                       contact={{ name: va.contactName, email: va.email, phone: va.phone, lotAddress: va.lotAddress }}
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
+                      coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                     />
                   </div>
                   </details>

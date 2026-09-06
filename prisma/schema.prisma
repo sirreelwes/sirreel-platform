@@ -4507,6 +4507,14 @@ model Vendor {
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
   partnerSharePercent Decimal? @map("partner_share_percent") @db.Decimal(5, 2)
+  /// The partner's certificate of insurance (agreement clause 4: their
+  /// owner's auto liability + physical damage, SirReel additional insured).
+  /// Wes 2026-09-06: not demanded up front — "I don't want it to hold up
+  /// this week's rental" — so the welcome email no longer asks; the
+  /// partner-coi-missing action item follows up a week after signature and
+  /// clears when HQ stamps receipt here. Expiry re-raises it.
+  coiReceivedAt DateTime? @map("coi_received_at")
+  coiExpiresAt  DateTime? @map("coi_expires_at")
 
   /// The partner's mark on their account page — same treatment as
   /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).
