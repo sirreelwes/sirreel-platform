@@ -157,8 +157,14 @@ export function buildFinalInvoiceEmail(input: {
 
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f4f2;">
   <div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-    <div style="background:${SLATE};padding:24px 28px;border-bottom:3px solid ${GOLD};">
-      <img src="${LOGO_URL_WHITE}" alt="SirReel Studio Services" style="height:28px;width:auto;display:block;border:0;" />
+    <div style="background:${SLATE};padding:36px 24px 28px;text-align:center;">
+      ${/* Wordmark top centre at 200px over the accent rule — the
+           welcome-family header (Wes 2026-09-06). Inline in a centred
+           block because Gmail ignores auto margins on a display:block
+           image. JS comment so it never reaches the inbox. */ ''}<img src="${LOGO_URL_WHITE}" alt="SirReel Studio Services" width="200" style="display:inline-block;max-width:200px;width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:18px auto 0;">
+        <tr><td style="width:48px;height:2px;background-color:${GOLD};line-height:2px;font-size:0;">&nbsp;</td></tr>
+      </table>
     </div>
     <div style="background:#ffffff;padding:28px;">
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">Hi ${escapeHtml(first)},</p>
