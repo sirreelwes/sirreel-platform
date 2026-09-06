@@ -141,7 +141,11 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
     senderName,
     sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
   })
-  const skip = new Set([to, args.sender.email.toLowerCase()])
+  // Only the recipient is deduped out of the CC list. The sender stays
+  // when the channel names them: this mail leaves through Resend, not
+  // their mailbox, so the CC is the only copy they ever see (Wes
+  // 2026-09-06: "send the portal invite to David at King Kong and CC wes@").
+  const skip = new Set([to])
   const cc = (await channelRecipients('sub-rental-conduit-cc')).filter((e) => e && !skip.has(e.toLowerCase()))
   const res = await sendAgreementEmail({
     to: [to],
