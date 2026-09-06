@@ -10,47 +10,24 @@ import {
 
 /**
  * Public-site footer — Cinelease-structure shell (2026-07-06):
- * wordmark, two link columns mirroring the nav, contact block, and a
- * copyright line. No news/social sections. Coming-soon nav items render
- * as muted non-links, consistent with the header.
+ * wordmark, a short Explore column (top-level nav rows only), a Get
+ * Started column, contact block, and a copyright line. No news/social
+ * sections.
  */
 export function PublicSiteFooter() {
   const year = 2026 // static: Date.now() is unavailable in this runtime; bump on rollover.
 
-  // Footer mirrors the nav's top-level entries. Plain-link entries link
-  // through; dropdown entries surface as a label with their live leaf
-  // items indented beneath (coming-soon and sensitive-request leaves are
-  // omitted here — the footer is a clean sitemap, not the full menu).
+  // Footer lists the nav's TOP-LEVEL entries only — six short rows. The
+  // nested leaves (nine under Forms alone) stay in the header menu; printing
+  // the whole tree here made a twenty-row trail beside two near-empty
+  // columns (Wes 2026-09-06). Dropdown entries link to their footerHref.
   const footerEntry = (entry: (typeof PUBLIC_NAV)[number]) => {
-    if (!entry.groups) {
-      return (
-        <Link key={entry.label} href={entry.href!} className="text-[#a8a294] hover:text-white transition-colors">
-          {entry.label}
-        </Link>
-      )
-    }
-    const leaves = entry.groups
-      .flatMap((g) => g.items)
-      .filter((it) => it.href && (it.mode === 'order' || it.mode === 'download' || it.mode === 'link'))
+    const href = entry.href ?? entry.footerHref
+    if (!href) return null
     return (
-      <div key={entry.label}>
-        <div className="text-[#8b857a]">{entry.label}</div>
-        {leaves.length > 0 && (
-          <div className="mt-1.5 flex flex-col gap-1.5 pl-3">
-            {leaves.map((it) =>
-              it.external ? (
-                <a key={it.label} href={it.href} target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
-                  {it.label}
-                </a>
-              ) : (
-                <Link key={it.label} href={it.href!} className="text-[#a8a294] hover:text-white transition-colors">
-                  {it.label}
-                </Link>
-              ),
-            )}
-          </div>
-        )}
-      </div>
+      <Link key={entry.label} href={href} className="text-[#a8a294] hover:text-white transition-colors">
+        {entry.label}
+      </Link>
     )
   }
 

@@ -58,6 +58,10 @@ export interface NavEntry {
   href?: string
   /** Dropdown groups when set (no href). */
   groups?: NavGroup[]
+  /** Where the FOOTER sends a dropdown entry. The footer lists top-level
+   *  rows only (Wes 2026-09-06: the full tree made a twenty-row trail), so
+   *  each group needs one landing page. */
+  footerHref?: string
 }
 
 export const PUBLIC_NAV: NavEntry[] = [
@@ -65,6 +69,7 @@ export const PUBLIC_NAV: NavEntry[] = [
 
   {
     label: 'Studios',
+    footerHref: '/stages',
     groups: [
       {
         items: [
@@ -80,6 +85,7 @@ export const PUBLIC_NAV: NavEntry[] = [
 
   {
     label: 'Equipment',
+    footerHref: ORDER_FORM_HREF,
     groups: [
       {
         heading: 'Order online →',
@@ -106,6 +112,7 @@ export const PUBLIC_NAV: NavEntry[] = [
 
   {
     label: 'Forms',
+    footerHref: '/rental-agreement',
     groups: [
       {
         heading: 'Downloads',
