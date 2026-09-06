@@ -19,8 +19,8 @@
  *   - warm body copy
  *   - quote snippet block (when present): gold left-border, big amber
  *     CTA button to the portal job URL
- *   - gold-rule-framed `T S X - T H E  S I R R E E L  E X P E R I E N C E`
- *     tagline above the footer
+ *   - a single gold rule above the footer (the letter-spaced tagline it
+ *     framed was retired 2026-09-06 — Wes)
  *   - sign-off: `<agent name>` + `& Team SirReel` (no displayTitle)
  *
  * PLACEHOLDER COPY — NEEDS WES REVIEW BEFORE FIRST REAL SEND
@@ -243,7 +243,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
   // box is seeded from the same function, so what a rep is handed to edit and
   // what a client receives cannot drift.
   const quoteDefault = defaultEmailBody({ kind: 'quote' })
-  const welcomeOpener = `${escapeHtml(PRE_JOB_OPENING_LINE)} <strong>The SirReel Experience</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
+  const welcomeOpener = `${escapeHtml(PRE_JOB_OPENING_LINE)} Working with SirReel means everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = toParas(quoteDefault)
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
   // Custom-message mode: the rep's own prose REPLACES the templated opener —
@@ -435,20 +435,6 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
   // The logo now spans the full header width on every mode, which is what the
   // Quick Reply email already did.
 
-  // Tagline — identical small-caps treatment as the thank-you
-  // template; same widths and offsets so the two emails feel like
-  // they live in the same envelope system.
-  const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
-  const smCap = (c: string) => `<span style="font-size:10px;">${c}</span>`
-  const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
-  const brandTagline = [
-    bigCap('T'), smCap('H'), smCap('E'),
-    wordGap,
-    bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'),
-    wordGap,
-    bigCap('E'), smCap('X'), smCap('P'), smCap('E'), smCap('R'), smCap('I'), smCap('E'), smCap('N'), smCap('C'), smCap('E'),
-  ].join('')
-
   const html = `<!doctype html>
 <html>
 <head>
@@ -525,23 +511,6 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding: 8px 32px 6px;">
-              <p style="
-                font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif;
-                font-weight: 300;
-                letter-spacing: 0.32em;
-                color: ${ACCENT};
-                margin: 0;
-                line-height: 1.4;
-              ">${brandTagline}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 32px 0;">
-              <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
-            </td>
-          </tr>
-          <tr>
             <td style="padding: 12px 32px 18px;">
               <p style="font-size: 11px; color: ${MUTED}; margin: 0; line-height: 1.4;">
                 ${withQuote
@@ -570,7 +539,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
         ? repBody
         : withQuote
           ? quoteDefault
-          : `${PRE_JOB_OPENING_LINE} The SirReel Experience is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
+          : `${PRE_JOB_OPENING_LINE} Working with SirReel means everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
@@ -646,7 +615,6 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
     `& Team SirReel`,
     ...(input.agentPhone ? [input.agentPhone] : []),
     '',
-    `The SirReel Experience`,
     `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,
   )
 

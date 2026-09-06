@@ -485,21 +485,8 @@ export default function ClientPortal() {
             style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
           />
           <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
-          {/* Tagline — this is a SirReel line, not the retired TSX
-              sub-brand, so it stays. Gold for contrast against the dark
-              hero; larger than the welcome line below for hierarchy. */}
-          <div
-            className="mt-3 italic"
-            style={{
-              fontFamily: PORTAL_SERIF,
-              color: PORTAL.gold,
-              fontSize: 15,
-              letterSpacing: '0.5px',
-              fontWeight: 400,
-            }}
-          >
-            The SirReel Experience
-          </div>
+          {/* The "SirReel Experience" tagline that sat here was retired
+              2026-09-06 (Wes) — the logo and rule carry the hero alone. */}
           <h1
             className="mt-5 text-white text-[24px] font-light italic leading-tight"
             style={{ fontFamily: PORTAL_SERIF }}

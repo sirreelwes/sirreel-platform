@@ -5,7 +5,8 @@
  * transactional "your access is ready" tone.
  *
  * Brand framing:
- *   - "The SirReel Experience" — the overall service philosophy.
+ *   - The "SirReel Experience" tagline was retired 2026-09-06 (Wes) —
+ *     it is just SirReel now.
  *   - The TSX sub-brand was retired 2026-08-29 (Wes: "stop branding
  *     that"). The portal is simply the client's SirReel portal.
  *
@@ -127,7 +128,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <!-- Preheader (hidden in body, shown in inbox preview) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    Your online portal to The SirReel Experience.
+    Your SirReel project portal is ready.
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">

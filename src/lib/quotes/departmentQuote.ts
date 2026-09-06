@@ -262,17 +262,6 @@ export async function composeDepartmentQuote(
     })
     .join('')
 
-  const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
-  const smCap = (c: string) => `<span style="font-size:10px;">${c}</span>`
-  const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
-  const dashGap = `<span style="font-size:11px;color:rgba(212,165,71,0.6);margin:0 6px;">&ndash;</span>`
-  const tsxTagline = [
-    bigCap('T'), bigCap('S'), bigCap('X'), dashGap,
-    bigCap('T'), smCap('H'), smCap('E'), wordGap,
-    bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'), wordGap,
-    bigCap('E'), smCap('X'), smCap('P'), smCap('E'), smCap('R'), smCap('I'), smCap('E'), smCap('N'), smCap('C'), smCap('E'),
-  ].join('')
-
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${escapeHtml(subject)}</title></head>
@@ -331,12 +320,9 @@ export async function composeDepartmentQuote(
           </p>
         </td></tr>
 
-        <tr><td align="center" style="padding:26px 32px 8px;">
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
-            <td style="border-top:1px solid rgba(212,165,71,0.35);padding-top:12px;">
-              <span style="color:${ACCENT};letter-spacing:3px;font-family:Georgia,'Times New Roman',serif;">${tsxTagline}</span>
-            </td>
-          </tr></table>
+        <tr><td style="padding:26px 32px 8px;">
+          <!-- The tagline that sat on this rule was retired 2026-09-06 (Wes). -->
+          <div style="height:1px;line-height:1px;font-size:0;background-color:rgba(212,165,71,0.35);">&nbsp;</div>
         </td></tr>
         <tr><td align="center" style="padding:4px 32px 26px;">
           <p style="font-size:12px;color:${MUTED};margin:0;">8500 Lankershim Blvd, Sun Valley CA 91352 &middot; (888) 477-7335</p>
@@ -368,7 +354,7 @@ export async function composeDepartmentQuote(
     'Quote only — not a reservation. Rates are subject to availability and confirmation, and exclude applicable taxes.',
     '', `— ${args.agentName}`, '& Team SirReel',
     ...(args.agentPhone ? [args.agentPhone] : []),
-    '', 'The SirReel Experience',
+    '',
     '8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335',
   )
 

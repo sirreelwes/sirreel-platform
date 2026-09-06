@@ -127,24 +127,6 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     ? `Order ${escapeHtml(input.orderNumber)} · Wrapped ${escapeHtml(wrap)}`
     : `Order ${escapeHtml(input.orderNumber)}`
 
-  // Tagline — "T H E  S I R R E E L  E X P E R I E N C E" with letters
-  // that are lowercase in the natural casing rendered as smaller
-  // capitals (mimics small-caps without relying on
-  // `font-variant-caps`, which Gmail and Outlook don't honor
-  // reliably). Big letters mirror the natural uppercases in
-  // The + SirReel + Experience. The leading "TSX –" was dropped
-  // 2026-08-29 (Wes) along with the rest of the sub-brand.
-  const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
-  const smCap  = (c: string) => `<span style="font-size:10px;">${c}</span>`
-  const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
-  const brandTagline = [
-    bigCap('T'), smCap('H'), smCap('E'),
-    wordGap,
-    bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'),
-    wordGap,
-    bigCap('E'), smCap('X'), smCap('P'), smCap('E'), smCap('R'), smCap('I'), smCap('E'), smCap('N'), smCap('C'), smCap('E'),
-  ].join('')
-
   const html = `<!doctype html>
 <html>
 <head>
@@ -230,30 +212,10 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
           </tr>
           <tr>
             <td style="padding: 18px 32px 0;">
-              <!-- Upper gold rule — frames the tagline together
-                   with the lower rule below. -->
-              <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
-            </td>
-          </tr>
-          <tr>
-            <td align="center" style="padding: 8px 32px 6px;">
-              <!-- Tagline. Modern thin sans, widely letter-
-                   spaced, all-caps with small-caps for letters that
-                   are lowercase in natural casing. -->
-              <p style="
-                font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif;
-                font-weight: 300;
-                letter-spacing: 0.32em;
-                color: ${ACCENT};
-                margin: 0;
-                line-height: 1.4;
-              ">${brandTagline}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 32px 0;">
-              <!-- Gold separator under the tagline. div used instead
-                   of <hr> for consistent rendering across clients. -->
+              <!-- Gold separator above the footer. The "SirReel
+                   Experience" tagline it used to frame was retired
+                   2026-09-06 (Wes). div used instead of <hr> for
+                   consistent rendering across clients. -->
               <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
             </td>
           </tr>
@@ -297,7 +259,6 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     '',
     `— ${textSignOff}${textPhone}`,
     '',
-    'The SirReel Experience',
     '---',
     `${orderLine}`,
     `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,
