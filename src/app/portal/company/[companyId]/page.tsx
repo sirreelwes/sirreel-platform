@@ -141,6 +141,19 @@ function JobTile({ tile, companyId }: { tile: CompanyJobTile; companyId: string 
   )
 }
 
+/**
+ * Wes 2026-09-05: "widen the tiles when there are fewer than four." The
+ * four-up grid was sized for Radical's eight deals; an account with one
+ * deal was getting a quarter-width column and a five-line stack. Full
+ * class strings on purpose — Tailwind only keeps what it can read.
+ */
+function rateGridClass(count: number): string {
+  if (count <= 1) return 'grid-cols-1 max-w-md'
+  if (count === 2) return 'grid-cols-1 sm:grid-cols-2 max-w-2xl'
+  if (count === 3) return 'grid-cols-1 sm:grid-cols-3 max-w-3xl'
+  return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl'
+}
+
 export default async function CompanyPortalPage({
   params,
 }: {
@@ -308,7 +321,7 @@ export default async function CompanyPortalPage({
                 across on a desk, one column on a phone — two-across with a
                 thumbnail wrapped every name onto three lines. */}
             {terms.negotiatedRates.length > 0 && (
-              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 max-w-4xl mx-auto ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
+              <div className={`grid gap-2 mx-auto ${rateGridClass(terms.negotiatedRates.length)} ${terms.discounts.length > 0 ? 'mt-3' : ''}`}>
                 {terms.negotiatedRates.map((r) => (
                   <a
                     key={r.id}
