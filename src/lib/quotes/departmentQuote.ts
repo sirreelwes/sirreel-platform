@@ -269,8 +269,14 @@ export async function composeDepartmentQuote(
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#f3f4f6;">
     <tr><td align="center" style="padding:24px 12px;">
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-        <tr><td style="background-color:${HEADER_BG};padding:20px 32px;">
-          <img src="https://hq.sirreel.com/sirreel-logo-white.png" alt="SirReel" style="height:28px;width:auto;display:block;" />
+        <tr><td align="center" style="background-color:${HEADER_BG};padding:36px 24px 28px;text-align:center;">
+          ${/* Wordmark top centre at 200px over the accent rule — the
+               welcome-family header (Wes 2026-09-06), inline in a centred
+               cell because Gmail ignores auto margins on a display:block
+               image. JS comment so it never reaches the inbox. */ ''}<img src="https://hq.sirreel.com/sirreel-logo-white.png" alt="SirReel Studio Services" width="200" style="display:inline-block;max-width:200px;width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:18px auto 0;">
+            <tr><td style="width:48px;height:2px;background-color:${ACCENT};line-height:2px;font-size:0;">&nbsp;</td></tr>
+          </table>
         </td></tr>
         <tr><td style="padding:28px 32px 4px;">
           <p style="font-size:17px;color:${TEXT};margin:0 0 12px;line-height:1.5;">Hi ${escapeHtml(greetName)},</p>
