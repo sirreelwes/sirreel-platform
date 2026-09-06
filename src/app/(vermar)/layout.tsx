@@ -14,9 +14,17 @@ import { notFound } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth-admin'
 import { isVerMarOperator } from '@/lib/hq-white-label/operator'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { UtliizIcon } from '@/components/hq-white-label/UtliizMark'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: `${HQ_PRODUCT.maker} · ${HQ_PRODUCT.name} operations`, robots: { index: false, follow: false } }
+export const metadata: Metadata = {
+  title: `${HQ_PRODUCT.maker} · ${HQ_PRODUCT.name} operations`,
+  robots: { index: false, follow: false },
+  icons: {
+    icon: [{ url: '/utliiz-icon.svg', type: 'image/svg+xml' }, { url: '/utliiz-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/utliiz-icon-512.png', type: 'image/png', sizes: '512x512' }],
+    apple: '/utliiz-apple-touch-icon.png',
+  },
+}
 
 export default async function VerMarLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser()
@@ -25,7 +33,8 @@ export default async function VerMarLayout({ children }: { children: React.React
     <div className="min-h-screen bg-[#f5f6f8] text-[#111827] antialiased" style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }}>
       <header className="bg-[#111827] text-white">
         <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-center gap-3">
+            <UtliizIcon size={24} />
             <span className="text-[16px] font-black tracking-tight">{HQ_PRODUCT.maker}</span>
             <span className="text-[11px] font-semibold uppercase tracking-[1.6px] text-white/60">{HQ_PRODUCT.name} operations</span>
           </div>

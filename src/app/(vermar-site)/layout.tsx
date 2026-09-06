@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: `${HQ_PRODUCT.name} — ${HQ_PRODUCT.tagline}`,
   description: 'Fleet operations for rental companies: one calendar for every unit, your own bookings and clients, and the bookings your partners place, all in one place.',
   robots: { index: true, follow: true },
+  icons: {
+    icon: [{ url: '/utliiz-icon.svg', type: 'image/svg+xml' }, { url: '/utliiz-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/utliiz-icon-512.png', type: 'image/png', sizes: '512x512' }],
+    apple: '/utliiz-apple-touch-icon.png',
+  },
 }
 
 export default function UtliizSiteLayout({ children }: { children: React.ReactNode }) {
