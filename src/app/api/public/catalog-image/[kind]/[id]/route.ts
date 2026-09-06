@@ -33,7 +33,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
-import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
+import { PUBLIC_VEHICLE_VISIBLE_WHERE, SUB_LISTED_WHERE } from '@/lib/site/vehicleCatalog'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 
 export const dynamic = 'force-dynamic'
@@ -115,13 +115,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   if (kind === 'sub-vehicle-photo') {
     // One gallery photo on a PUBLICLY LISTED subcontracted unit. Gated on the
-    // parent's listing flags, so an unlisted partner unit's gallery is denied
-    // here and remains reachable only through its own /unit/[token] proxy.
+    // same predicate the catalog lists by (listing flags + the partner's
+    // signed agreement), so an unlisted or unsigned partner unit's gallery is
+    // denied here and remains reachable only through its own /unit/[token] proxy.
     const photo = await prisma.subcontractedVehiclePhoto.findFirst({
-      where: {
-        id,
-        vehicle: { isActive: true, publiclyListed: true, publicSlug: { not: null } },
-      },
+      where: { id, vehicle: SUB_LISTED_WHERE },
       select: { url: true },
     })
     if (!photo) return NextResponse.json({ error: 'not found' }, { status: 404 })

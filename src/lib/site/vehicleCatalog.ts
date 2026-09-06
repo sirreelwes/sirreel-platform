@@ -62,6 +62,9 @@ export interface PublicVehicle {
   /** Gallery photos, primary first then sortOrder asc. [] → legacy photoUrl only. */
   photos: PublicVehiclePhoto[]
   specs: PublicVehicleSpec
+  /** True for a partner-supplied unit — decides which SECTION it renders in,
+   *  and nothing else: the card carries no vendor and never will. */
+  partner: boolean
 }
 
 const SELECT: Prisma.VehicleCategorySelect = {
@@ -127,6 +130,7 @@ function shape(r: Row): PublicVehicle {
   }))
   const hasImage = photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
   return {
+    partner: false,
     id: r.id,
     name: r.name,
     slug: r.slug,
@@ -168,14 +172,38 @@ function shape(r: Row): PublicVehicle {
  * Listing is opt-in per unit (`publiclyListed`) and needs a slug and a photo —
  * an entry that renders as a placeholder is worse than no entry.
  */
-const SUB_LISTED_WHERE: Prisma.SubcontractedVehicleWhereInput = {
+/**
+ * The partner's SIGNATURE is the switch (Wes 2026-09-06: "the section should
+ * be added as soon as David approves in the portal which we send to him").
+ * A unit can be fully staged — listed, slug, photos — and it stays off the
+ * site until the partner has signed the live Partner Vehicle Agreement. The
+ * moment they sign, the next render shows it. Shared with the photo proxy so
+ * an unsigned partner's gallery is not reachable by id either.
+ */
+export const PARTNER_APPROVED_VENDOR_WHERE: Prisma.VendorWhereInput = {
+  isActive: true,
+  agreements: { some: { deletedAt: null, signedAt: { not: null } } },
+}
+
+export const SUB_LISTED_WHERE: Prisma.SubcontractedVehicleWhereInput = {
   // A unit the partner keeps for themselves in their HQ workspace is not ours to list.
   offeredToSirReel: true,
   isActive: true,
   publiclyListed: true,
   publicSlug: { not: null },
   photos: { some: {} },
+  vendor: PARTNER_APPROVED_VENDOR_WHERE,
 }
+
+/**
+ * Where partner units sit on /vehicles. They render side by side in ONE
+ * section regardless of which partner owns them — the client sees a SirReel
+ * category, never a vendor. Owned categories keep the main grid.
+ */
+export const PARTNER_SECTION = {
+  title: 'Motorhomes & Location Trailers',
+  blurb: 'Talent motorhomes, star wagons and location trailers for when the cast needs a real room on set. Rates and availability on quote; pick one to see the gallery and specs.',
+} as const
 
 type SubRow = {
   id: string
@@ -196,6 +224,7 @@ function shapeSub(v: SubRow): PublicVehicle {
     isPrimary: i === 0,
   }))
   return {
+    partner: true,
     id: v.id,
     name: v.name,
     slug: v.publicSlug!,
