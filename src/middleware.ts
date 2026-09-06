@@ -41,6 +41,27 @@ const ORDERS_HOST = 'orders.sirreel.com'
 // right now, not hypothetically after some future DNS change.
 const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 
+// VerMar Design — HQ, the white-label product (Wes 2026-09-05: "drop a
+// basic website for hq at vermardesign.com"). Registered 2026-08-31 at
+// Cloudflare; INERT until the domain is attached to this Vercel project
+// and its DNS points here. Root is the product site; the partners'
+// workspaces (/hq/[token]) and their API are served on it too, so a
+// workspace link can move off hq.sirreel.com once NEXT_PUBLIC_APP_URL /
+// link minting says so. The operator control plane (/vermar/*) is NOT
+// served here yet: it needs a Google login, and NextAuth's callback is
+// bound to the hq host — it stays on hq.sirreel.com until that's wired.
+const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com']
+const VERMAR_ALLOWED_PREFIXES = [
+  '/vermar-site',           // the site itself (root-rewrite target + direct hits)
+  '/hq/',                   // partner workspaces — token-gated, no login
+  '/api/public/vendor-hq/', // their API
+  '/robots.txt',
+  '/favicon',
+  '/icon-',
+  '/apple-touch-icon',
+  '/_next/',
+]
+
 // Public marketing surface allow-list — Home + the public catalog +
 // the order form + assets. Everything else (staff/portal/admin) 404s.
 const PUBLIC_SITE_ALLOWED_PREFIXES = [
@@ -301,6 +322,27 @@ export function middleware(req: NextRequest): NextResponse {
     const allowed = PUBLIC_SITE_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
     if (allowed) return tagged(NextResponse.next(), host, 'public:allow')
     return branded404(req, host, 'public:block-404')
+  }
+
+  // ── vermardesign.com (HQ by VerMar Design) ────────────────────
+  if (VERMAR_HOSTS.includes(host)) {
+    if (host === 'www.vermardesign.com') {
+      const url = req.nextUrl.clone()
+      url.host = 'vermardesign.com'
+      url.protocol = 'https:'
+      url.port = ''
+      return tagged(NextResponse.redirect(url, 308), host, 'vermar:www-to-apex')
+    }
+    if (pathname === '/' || pathname === '') {
+      const url = req.nextUrl.clone()
+      url.pathname = '/vermar-site'
+      return tagged(NextResponse.rewrite(url), host, 'vermar:root-rewrite')
+    }
+    const allowed = VERMAR_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
+    if (allowed) return tagged(NextResponse.next(), host, 'vermar:allow')
+    // Nothing of SirReel's is reachable on VerMar's domain. Plain 404 —
+    // there is no VerMar-branded 404 page yet.
+    return tagged(new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } }), host, 'vermar:block-404')
   }
 
   // ── orders.sirreel.com (public supply-order form) ─────────────

@@ -26,6 +26,15 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const isPublicSite = PUBLIC_SITE_HOSTS.includes(host)
 
+  // vermardesign.com — HQ by VerMar Design's product site. Crawl the site;
+  // never the partners' workspaces, whose URLs are credentials.
+  if (host === 'vermardesign.com' || host === 'www.vermardesign.com') {
+    return {
+      rules: [{ userAgent: '*', allow: '/', disallow: ['/hq/', '/api/'] }],
+      host: 'https://vermardesign.com',
+    }
+  }
+
   if (!isPublicSite) {
     // Staff dashboard / client portal — nothing here is for search engines.
     return { rules: [{ userAgent: '*', disallow: '/' }] }
