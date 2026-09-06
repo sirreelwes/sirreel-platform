@@ -1,0 +1,63 @@
+{
+ "at": "2026-09-06T01:34:44.752Z",
+ "keeper": "6b835f3d-88ac-4f99-8164-7e7d74ada732",
+ "dup": {
+  "id": "33f14083-a0d3-4d0f-9372-9e0c837bee03",
+  "jobCode": "SR-JOB-0269",
+  "assistantAuthCode": "51374",
+  "name": "God of Wrath & Ruin",
+  "companyId": "d271ef71-8261-48c1-b3c6-79b0939b9153",
+  "productionType": "OTHER",
+  "productionTypeProfileId": null,
+  "status": "ACTIVE",
+  "agentId": "bafd3cfe-f007-4ab0-ae27-9e114710f436",
+  "planyoCartId": "5777284",
+  "estimatedValue": null,
+  "notes": "Created from Planyo import — cart 5777284",
+  "tags": [],
+  "returnedAt": null,
+  "returnedById": null,
+  "archivedAt": null,
+  "rwNotApplicable": null,
+  "reportToAddress": null,
+  "reportToAccessNotes": null,
+  "reportToContactName": null,
+  "reportToContactPhone": null,
+  "reportToTime": null,
+  "pickupSameAsDelivery": true,
+  "pickupAddress": null,
+  "pickupAccessNotes": null,
+  "pickupTime": null,
+  "reportToUpdatedAt": null,
+  "afterHoursReleasedAt": null,
+  "afterHoursReleasedById": null,
+  "afterHoursSentAt": null,
+  "afterHoursSentTo": null,
+  "afterHoursNote": null,
+  "driverRequestSentAt": null,
+  "driverRequestSentTo": null,
+  "createdAt": "2026-09-01T13:02:09.594Z",
+  "updatedAt": "2026-09-06T01:10:18.086Z"
+ },
+ "booking": {
+  "id": "908c3629-e1ee-4800-91bb-f88e218f0c38",
+  "jobId": "33f14083-a0d3-4d0f-9372-9e0c837bee03",
+  "status": "CONFIRMED",
+  "planyoCartId": "5777284"
+ },
+ "order": {
+  "id": "901265fa-f4ad-4390-a3aa-a11551851233",
+  "jobId": "6b835f3d-88ac-4f99-8164-7e7d74ada732",
+  "bookingId": null
+ },
+ "contactsOnDup": [
+  {
+   "id": "46a298f5-b998-4866-ac9a-d12d0f316095",
+   "jobId": "33f14083-a0d3-4d0f-9372-9e0c837bee03",
+   "personId": "bc1eb3cb-ba15-4e22-b0c5-65a9f1b85eeb",
+   "role": "OTHER",
+   "isPrimary": true,
+   "createdAt": "2026-09-01T13:02:09.594Z"
+  }
+ ]
+}

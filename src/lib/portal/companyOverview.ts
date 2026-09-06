@@ -27,6 +27,7 @@
 
 import type { InvoiceStatus, JobRole, JobStatus, OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { loadRwPortalInvoices } from '@/lib/portal/rwPortalInvoices'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
@@ -485,6 +486,7 @@ export async function buildCompanyOverview(
           },
         },
         bookings: { select: { startDate: true, endDate: true, status: true, jobName: true } },
+        rwOrders: { select: { rwOrderNumber: true } },
         orders: {
           select: {
             id: true,
@@ -510,6 +512,14 @@ export async function buildCompanyOverview(
   // than per tile.
   const annualCovers = terms.annualCurrent
 
+  // RentalWorks invoices, via the RW orders staff linked to each job. One
+  // query for the whole account; see rwPortalInvoices.ts.
+  const rwByOrder = await loadRwPortalInvoices(
+    jobs.flatMap((j) => j.rwOrders.map((o) => o.rwOrderNumber)),
+  )
+  const rwInvoicesOf = (job: { rwOrders: { rwOrderNumber: string }[] }) =>
+    job.rwOrders.flatMap((o) => rwByOrder.get(o.rwOrderNumber) ?? [])
+
   const tiles: CompanyJobTile[] = jobs.map((job) => {
     const range = deriveJobDateRange(job.orders, job.bookings)
     const orderStatuses = job.orders.map((o) => o.status)
@@ -527,6 +537,12 @@ export async function buildCompanyOverview(
         invoiced += toNum(inv.total)
         balance += toNum(inv.balanceDue)
       }
+    }
+
+    for (const inv of rwInvoicesOf(job)) {
+      anyInvoice = true
+      invoiced += inv.total
+      balance += inv.remaining
     }
 
     const signed =
@@ -590,6 +606,16 @@ export async function buildCompanyOverview(
       for (const inv of order.invoices) {
         if (!CLIENT_VISIBLE_INVOICE_STATUSES.includes(inv.status)) continue
         if (inv.paidAt && inv.paidAt.getTime() >= yearStart.getTime()) invoicedYtd += toNum(inv.total)
+      }
+    }
+  }
+
+  for (const job of jobs) {
+    for (const inv of rwInvoicesOf(job)) {
+      // RW carries no paid-at; an invoice dated this year and settled is the
+      // closest honest reading of "paid this year".
+      if (inv.paid && inv.invoiceDate && inv.invoiceDate.getTime() >= yearStart.getTime()) {
+        invoicedYtd += inv.total
       }
     }
   }

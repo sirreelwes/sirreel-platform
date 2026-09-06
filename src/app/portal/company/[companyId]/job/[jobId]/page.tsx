@@ -140,7 +140,7 @@ export default async function CompanyPortalJobPage({
                     </div>
                     {inv.hasPdf && (
                       <a
-                        href={`/api/portal/company/${params.companyId}/invoice/${inv.id}/pdf`}
+                        href={inv.pdfHref ?? `/api/portal/company/${params.companyId}/invoice/${inv.id}/pdf`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-700 hover:text-black border border-zinc-300 rounded-lg px-2.5 py-1.5"

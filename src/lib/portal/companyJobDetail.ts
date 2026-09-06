@@ -19,6 +19,7 @@
 
 import type { InvoiceStatus, JobRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { loadRwPortalInvoices } from '@/lib/portal/rwPortalInvoices'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
@@ -44,6 +45,10 @@ export interface PortalInvoiceRow {
   paidAt: Date | null
   orderNumber: string
   hasPdf: boolean
+  /** Where the PDF comes from — HQ-native invoices use the default route. */
+  pdfHref?: string
+  /** RENTALWORKS invoices arrive through a staff-linked RW order. */
+  source: 'HQ' | 'RW'
 }
 
 export interface PortalAgreementRow {
@@ -116,6 +121,7 @@ export async function buildCompanyJobDetail(
         },
       },
       bookings: { select: { startDate: true, endDate: true, status: true, jobName: true } },
+      rwOrders: { select: { rwOrderNumber: true } },
       orders: {
         select: {
           id: true,
@@ -194,6 +200,7 @@ export async function buildCompanyJobDetail(
         // A pre-invoice renders live rather than from a stored blob, so
         // it is always readable even with no PDF on the row.
         hasPdf: isPre || inv.pdfBlobKey != null,
+        source: 'HQ',
       })
     }
 
@@ -227,6 +234,34 @@ export async function buildCompanyJobDetail(
 
   // Newest paperwork first — an executive opening a wrapped show wants
   // the final invoice, not the deposit from three months ago.
+  // RentalWorks invoices on the RW orders staff linked to this job. Same
+  // row shape, different PDF route; see rwPortalInvoices.ts for the why.
+  const rwByOrder = await loadRwPortalInvoices(job.rwOrders.map((o) => o.rwOrderNumber))
+  for (const [rwOrderNumber, rows] of rwByOrder) {
+    for (const inv of rows) {
+      invoiced += inv.total
+      paid += inv.received
+      balance += inv.remaining
+      invoices.push({
+        id: inv.rwInvoiceId,
+        invoiceNumber: inv.invoiceNumber,
+        type: 'RENTAL',
+        status: inv.paid ? 'PAID' : inv.received > 0.005 ? 'PARTIAL' : 'SENT',
+        isPreInvoice: false,
+        total: inv.total,
+        amountPaid: inv.received,
+        balanceDue: inv.remaining,
+        dueDate: inv.dueDate,
+        sentAt: inv.invoiceDate,
+        paidAt: null,
+        orderNumber: rwOrderNumber,
+        hasPdf: true,
+        pdfHref: `/api/portal/company/${companyId}/rw-invoice/${inv.rwInvoiceId}/pdf`,
+        source: 'RW',
+      })
+    }
+  }
+
   invoices.sort((a, b) => {
     const at = (a.sentAt ?? a.dueDate)?.getTime() ?? 0
     const bt = (b.sentAt ?? b.dueDate)?.getTime() ?? 0

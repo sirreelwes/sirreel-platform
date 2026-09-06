@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { createElement } from 'react'
-import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
-import { prisma } from '@/lib/prisma'
-import { RwInvoiceDocument, type RwInvoiceDetail } from '@/lib/rentalworks/RwInvoiceDocument'
-import { readRwToken } from '@/lib/rentalworks/credential'
+import { loadRwInvoiceDetail, renderRwInvoicePdf, RW_INVOICE_ID_RE } from '@/lib/rentalworks/rwInvoicePdf'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const RW_BASE = 'https://sirreel.rentalworks.cloud'
 
 /**
  * GET /api/rentalworks/invoices/[rwInvoiceId]/pdf — HQ-rendered duplicate
@@ -26,76 +21,16 @@ export async function GET(_req: NextRequest, { params }: { params: { rwInvoiceId
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const id = params.rwInvoiceId
-  if (!/^[A-Za-z0-9]{4,20}$/.test(id)) {
+  if (!RW_INVOICE_ID_RE.test(id)) {
     return NextResponse.json({ error: 'bad invoice id' }, { status: 400 })
   }
 
-  // Reads the stored credential like everything else, but deliberately does
-  // NOT go through rwFetch — the second and last sanctioned exception.
-  //
-  // RW answers 401/403 on the per-record invoice GET for a session bearer
-  // that list/browse endpoints accept (measured 2026-08-19, same token, same
-  // minutes). rwFetch would read that as a dead credential, stamp
-  // lastVerifyStatus='EXPIRED' and turn the /collections meter red on a
-  // token that is working perfectly. A meter that cries wolf is worse than
-  // no meter. The documented degrade-to-mirror below is preserved exactly.
-  const token = await readRwToken()
-  if (!token) return NextResponse.json({ error: 'RentalWorks not configured' }, { status: 500 })
+  // Live-then-mirror + the document itself live in rwInvoicePdf.ts, shared
+  // with the account portal's copy so the two can never drift.
+  const inv = await loadRwInvoiceDetail(id)
+  if (!inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
-  let inv: RwInvoiceDetail | null = null
-  try {
-    const r = await fetch(`${RW_BASE}/api/v1/invoice/${id}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    if (r.ok) inv = (await r.json()) as RwInvoiceDetail
-    else {
-      // 2026-08-19: this used to short-circuit on 401/403 with "rotate the
-      // token" — while the SAME token was returning 200 on the health probe
-      // and the nightly browse minutes apart. RW rejects the per-record
-      // invoice GET for a session bearer that list/browse endpoints accept;
-      // the token is fine and rotating it fixes nothing. Whatever RW's
-      // reason, the mirror row below has every field this PDF renders, so
-      // any live-fetch failure degrades to the mirror instead of erroring.
-      // Logged so the endpoint question stays visible in the function logs.
-      console.error(`[rw-invoice-pdf] live fetch ${id} → HTTP ${r.status}; serving from mirror`)
-    }
-  } catch {
-    /* fall through to mirror */
-  }
-
-  // RW unreachable → degrade to the mirror row (fewer fields, still a
-  // usable summary; the footer timestamp reflects when it was rendered).
-  if (!inv) {
-    const m = await prisma.rwInvoice.findUnique({ where: { rwInvoiceId: id } })
-    if (!m) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
-    inv = {
-      InvoiceNumber: m.invoiceNumber ?? undefined,
-      Status: m.status ?? undefined,
-      InvoiceDate: m.invoiceDate?.toISOString(),
-      InvoiceDueDate: m.dueDate?.toISOString(),
-      Customer: m.customerName ?? undefined,
-      PurchaseOrderNumber: m.poNumber ?? undefined,
-      Deal: m.dealName ?? undefined,
-      OrderNumber: m.orderNumber ?? undefined,
-      OrderDescription: m.orderDescription ?? undefined,
-      InvoiceDescription: m.invoiceDescription ?? undefined,
-      BillingStartDate: m.billingStartDate?.toISOString(),
-      BillingEndDate: m.billingEndDate?.toISOString(),
-      Agent: m.agent ?? undefined,
-      InvoiceSubTotal: Number(m.invoiceTotal),
-      InvoiceTax: 0,
-      InvoiceTotal: Number(m.invoiceTotal),
-      ReceivedTotal: Number(m.receivedTotal),
-      RemainingTotal: Number(m.remainingTotal),
-    }
-  }
-
-  const renderedAt = new Date().toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-  })
-  const element = createElement(RwInvoiceDocument, { inv, renderedAt }) as unknown as React.ReactElement<DocumentProps>
-  const pdf = await renderToBuffer(element)
-
+  const pdf = await renderRwInvoicePdf(inv)
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       'Content-Type': 'application/pdf',
