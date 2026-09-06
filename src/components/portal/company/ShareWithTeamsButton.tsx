@@ -32,9 +32,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export function ShareWithTeamsButton({
   companyId,
   companyName,
+  preview = false,
 }: {
   companyId: string
   companyName: string
+  /** HQ's "see what they see" — the button is shown but inert. */
+  preview?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null)
@@ -104,8 +107,10 @@ export function ShareWithTeamsButton({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white"
+        onClick={() => !preview && setOpen(true)}
+        disabled={preview}
+        title={preview ? 'Disabled in preview' : undefined}
+        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ backgroundColor: PORTAL.dark }}
       >
         <Send className="w-3.5 h-3.5" /> Send to your teams

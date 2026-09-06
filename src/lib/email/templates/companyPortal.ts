@@ -45,6 +45,30 @@ export interface CompanyPortalInviteInput {
   repEmail: string | null
   /** Rendered only when the account actually has one. */
   annualAgreementTitle?: string | null
+  /**
+   * An annual master OFFERED in the portal, not yet signed. Wes 2026-09-06:
+   * the invite is how the executive learns it is waiting for them.
+   */
+  pendingAnnual?: { title: string; signUrl: string } | null
+  /**
+   * Everyone ELSE with access to this account, by name. Empty means the
+   * recipient is the only one — and the mail says so, because "no password"
+   * on its own reads as "anyone with the link" (Wes 2026-09-06: "even though
+   * there is no password, only Ding Ding can currently access").
+   */
+  otherPeople?: { name: string; title: string | null }[]
+  /**
+   * Set when a COLLEAGUE added them from inside the portal rather than a
+   * rep. The mail then opens with who did it — the recipient knows that
+   * person, and it answers "why am I getting this" in the first line.
+   */
+  addedByName?: string | null
+}
+
+function joinNames(people: { name: string; title: string | null }[]): string {
+  const bits = people.map((p) => (p.title ? `${p.name} (${p.title})` : p.name))
+  if (bits.length <= 1) return bits.join('')
+  return `${bits.slice(0, -1).join(', ')} and ${bits[bits.length - 1]}`
 }
 
 export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
@@ -53,19 +77,32 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
   text: string
 } {
   const subject = `Your ${i.companyName} account portal at SirReel`
+  const others = i.otherPeople ?? []
+
+  const opener = i.addedByName
+    ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
+    : `You now have account-level access to SirReel for <strong>${esc(i.companyName)}</strong> — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
+
+  const accessLine =
+    others.length === 0
+      ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. If you'd like colleagues to see it too, add them under <strong>People with access</strong> in your portal and they'll get an email like this one.`
+      : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${esc(joinNames(others))}. To add colleagues, use <strong>People with access</strong> in your portal and they'll get an email like this one.`
 
   const body = [
     p(`${esc(i.firstName)},`),
-    p(
-      `You now have account-level access to SirReel for <strong>${esc(i.companyName)}</strong> — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`,
-    ),
-    i.annualAgreementTitle
+    p(opener),
+    i.pendingAnnual
       ? calloutBox(
-          `Your annual agreement, <strong>${esc(i.annualAgreementTitle)}</strong>, runs every show your company books. Each job is confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show.`,
+          `Your <strong>${esc(i.pendingAnnual.title)}</strong> is ready for your signature in the portal. Once signed, it runs every show your company books; each job is then confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show. You'll choose the damage-waiver (LCDW) election for the account as part of signing. <a href="${esc(i.pendingAnnual.signUrl)}" style="color:#0c0c0d;font-weight:700;">Sign the annual agreement</a>`,
         )
-      : '',
+      : i.annualAgreementTitle
+        ? calloutBox(
+            `Your annual agreement, <strong>${esc(i.annualAgreementTitle)}</strong>, runs every show your company books. Each job is confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show.`,
+          )
+        : '',
+    p(accessLine),
     p(
-      `Sign in with this email address; there's no password. You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
+      `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
     ),
   ].join('')
 
@@ -83,11 +120,22 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
   const text = renderEmailText([
     `${i.firstName},`,
     '',
-    `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
+    i.addedByName
+      ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
+      : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
     '',
     `Open your account portal: ${i.portalUrl}`,
     '',
-    `Sign in with this email address; there's no password.`,
+    ...(i.pendingAnnual
+      ? [
+          `Your ${i.pendingAnnual.title} is ready for your signature in the portal. Once signed, it runs every show your company books; each job is then confirmed with a one-page addendum that logs it under the annual. You'll choose the damage-waiver (LCDW) election as part of signing.`,
+          `Sign it here: ${i.pendingAnnual.signUrl}`,
+          '',
+        ]
+      : []),
+    others.length === 0
+      ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. To add colleagues, use "People with access" in your portal.`
+      : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${joinNames(others)}. To add colleagues, use "People with access" in your portal.`,
     i.repEmail ? `\nQuestions? ${i.repName} — ${i.repEmail}` : '',
   ])
 

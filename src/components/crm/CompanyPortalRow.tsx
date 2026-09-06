@@ -15,7 +15,7 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronRight, FileCheck2, ShieldCheck, Users } from 'lucide-react'
+import { ChevronRight, Eye, FileCheck2, ShieldCheck, Users } from 'lucide-react'
 
 export type ChipTone = 'good' | 'bad' | 'neutral'
 
@@ -49,6 +49,10 @@ export function CompanyPortalRow({
 
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl">
+      {/* The header is a toggle BUTTON plus one sibling link — "See what
+          they see" (Wes 2026-09-06) must not nest inside the button, so the
+          row is a flex of the two. */}
+      <div className="flex items-stretch">
       <button
         type="button"
         onClick={() => {
@@ -56,7 +60,7 @@ export function CompanyPortalRow({
           setEverOpened(true)
         }}
         aria-expanded={open}
-        className="w-full text-left px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2"
+        className="min-w-0 flex-1 text-left px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2"
       >
         {/* The arrow is the affordance — a bordered button, not a bare
             glyph, so it reads as "press me" (Wes 2026-09-04). */}
@@ -107,6 +111,14 @@ export function CompanyPortalRow({
           </span>
         </div>
       </button>
+      <Link
+        href={`/crm/portals/preview/company/${companyId}`}
+        className="shrink-0 inline-flex items-center gap-1.5 self-center mr-3 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-lt-hairline bg-lt-inner text-lt-fg hover:text-black hover:border-lt-fg3"
+        title="Open their account portal exactly as they see it — nothing is stamped"
+      >
+        <Eye className="w-3.5 h-3.5" /> See what they see
+      </Link>
+      </div>
 
       {open && (
         <div className="px-3 pb-3 space-y-3 border-t border-lt-hairline pt-3">

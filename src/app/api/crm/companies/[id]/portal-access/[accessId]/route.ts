@@ -21,6 +21,8 @@ import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderCompanyPortalInvite } from '@/lib/email/templates/companyPortal'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
+import { findPendingAnnual } from '@/lib/portal/companyAnnual'
+import { listOtherAccessHolders } from '@/lib/portal/grantCompanyAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,15 +75,27 @@ export async function PATCH(
         { status: 400 },
       )
     }
-    const annual = await findCompanyAnnualCoverage(access.company.id)
+    const [annual, pending, others] = await Promise.all([
+      findCompanyAnnualCoverage(access.company.id),
+      findPendingAnnual(access.company.id),
+      listOtherAccessHolders(access.company.id, access.id),
+    ])
     const rep = access.company.defaultAgent
+    const base = portalBase(req)
     const { subject, html, text } = renderCompanyPortalInvite({
       firstName: access.person.firstName,
       companyName: access.company.name,
-      portalUrl: `${portalBase(req)}/portal/company/${access.company.id}`,
+      portalUrl: `${base}/portal/company/${access.company.id}`,
       repName: rep?.name || user.name || 'Your SirReel rep',
       repEmail: rep?.email || user.email || null,
       annualAgreementTitle: annual ? annual.title || annual.originalFilename : null,
+      // A signed annual outranks a pending one — the pending offer is
+      // hidden on the portal too once coverage is live.
+      pendingAnnual:
+        !annual && pending
+          ? { title: pending.title, signUrl: `${base}/portal/company/${access.company.id}/sign/annual` }
+          : null,
+      otherPeople: others,
     })
     const result = await sendAgreementEmail({
       to: [access.person.email],

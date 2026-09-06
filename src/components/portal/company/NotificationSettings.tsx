@@ -58,9 +58,12 @@ const CADENCES: { value: Cadence; label: string; hint: string }[] = [
 export function NotificationSettings({
   companyId,
   initial,
+  preview = false,
 }: {
   companyId: string
   initial: NotificationPrefs
+  /** HQ's "see what they see" — controls render, nothing saves. */
+  preview?: boolean
 }) {
   const [prefs, setPrefs] = useState<NotificationPrefs>(initial)
   const [saving, setSaving] = useState(false)
@@ -68,6 +71,7 @@ export function NotificationSettings({
   const [error, setError] = useState<string | null>(null)
 
   async function save(patch: Partial<NotificationPrefs>) {
+    if (preview) return
     const before = prefs
     setPrefs({ ...prefs, ...patch })
     setSaving(true)
@@ -125,6 +129,7 @@ export function NotificationSettings({
               type="checkbox"
               className="mt-0.5 w-4 h-4 accent-zinc-900 shrink-0"
               checked={prefs[ev.key]}
+              disabled={preview}
               onChange={(e) => save({ [ev.key]: e.target.checked } as Partial<NotificationPrefs>)}
             />
             <span className="min-w-0">
@@ -144,6 +149,7 @@ export function NotificationSettings({
             <button
               key={c.value}
               type="button"
+              disabled={preview}
               onClick={() => save({ cadence: c.value })}
               className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
                 prefs.cadence === c.value

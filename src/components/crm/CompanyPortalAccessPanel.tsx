@@ -19,7 +19,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, FileSignature, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
+import Link from 'next/link'
+import { Check, Eye, FileSignature, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
 
 const ROLES: { value: string; label: string }[] = [
   { value: 'EXECUTIVE', label: 'Executive' },
@@ -37,6 +38,8 @@ interface AccessRow {
   invitedAt: string | null
   lastAccessedAt: string | null
   accessCount: number
+  /** Set when a colleague added them from inside the portal. */
+  addedFromPortalBy?: string | null
   person: { id: string; firstName: string; lastName: string; email: string }
 }
 
@@ -417,10 +420,19 @@ export function CompanyPortalAccessPanel({
                   {r.lastAccessedAt
                     ? `last opened ${fmt(r.lastAccessedAt)} (${r.accessCount}×)`
                     : 'never opened'}
+                  {r.addedFromPortalBy ? ` · added by ${r.addedFromPortalBy} from their portal` : ''}
                 </div>
               </div>
+              <div className="flex items-center gap-2 sm:shrink-0">
+                <Link
+                  href={`/crm/portals/preview/company/${companyId}?as=${r.id}`}
+                  className="inline-flex items-center gap-1 text-xs font-semibold border border-lt-hairline rounded-lg px-2.5 py-1.5 text-lt-fg hover:text-black"
+                  title={`See the portal as ${r.person.firstName} sees it`}
+                >
+                  <Eye className="w-3.5 h-3.5" /> View as
+                </Link>
               {canEdit && (
-                <div className="flex items-center gap-2 sm:shrink-0">
+                <>
                   <button
                     onClick={() => sendInvite(r.id)}
                     disabled={busy}
@@ -437,8 +449,9 @@ export function CompanyPortalAccessPanel({
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
-                </div>
+                </>
               )}
+              </div>
             </div>
           ))}
         </div>

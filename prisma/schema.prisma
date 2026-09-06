@@ -8775,6 +8775,13 @@ model CompanyPortalAccess {
   grantedById String?  @map("granted_by_id")
   grantedBy   User?    @relation("CompanyPortalGrantor", fields: [grantedById], references: [id])
   grantedAt   DateTime @default(now()) @map("granted_at")
+  /// Set when a CLIENT added this person from inside their own portal
+  /// (2026-09-06, Wes: "if she wants to add people she can do so in her
+  /// portal"). The id of the CompanyPortalAccess that did the adding —
+  /// so "who let this person in" is answerable on the staff panel, and a
+  /// client-made grant is distinguishable from one a rep issued. Null on
+  /// every rep-issued grant.
+  grantedByAccessId String? @map("granted_by_access_id")
 
   revokedAt   DateTime? @map("revoked_at")
   revokedById String?   @map("revoked_by_id")

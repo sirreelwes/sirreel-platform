@@ -45,6 +45,7 @@ export type NotificationChannelKey =
   | 'eod-collections'
   | 'eod-unassigned-units'
   | 'portal-opens'
+  | 'portal-people'
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
   | 'driver-checkouts'
@@ -85,6 +86,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     label: 'Portal first opens',
     description:
       'One email the FIRST time a client opens a portal we sent them — a job paperwork portal, or an executive\'s company portal. Never repeats for the same person and portal (Wes 2026-09-05: "send the first open alert to hq"). Defaults to the hq@ feed.',
+    defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'portal-people',
+    label: 'Client-added portal access',
+    description:
+      'One email when a client adds a colleague to their own company portal from inside it (Wes 2026-09-06: "if she wants to add people she can do so in her portal"). Says who added whom, so the desk knows a new name is looking at the account before that person ever writes in. Defaults to the hq@ feed.',
     defaults: () => [hqNotifyInbox()],
   },
   {
