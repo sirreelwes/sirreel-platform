@@ -247,9 +247,15 @@ export async function GET(req: NextRequest) {
             items: {
               select: {
                 status: true,
+                // Gear summary for the rail tile (Wes 2026-09-06: "more
+                // info on the actual tile") — what is on the job, by
+                // category, and which units are already on it.
+                quantity: true,
+                category: { select: { name: true } },
                 assignments: {
                   select: {
                     status: true,
+                    asset: { select: { unitName: true } },
                     _count: { select: { driverAssignments: true } },
                   },
                 },
@@ -467,7 +473,9 @@ export async function GET(req: NextRequest) {
       // every row because rowState is a client-side derivation.
       type ItemRow = {
         status: string
-        assignments: { status: string; _count: { driverAssignments: number } }[]
+        quantity: number
+        category: { name: string } | null
+        assignments: { status: string; asset: { unitName: string } | null; _count: { driverAssignments: number } }[]
       }
       const liveItems = liveBookings.flatMap(
         (b) => ((b as { items?: ItemRow[] }).items || []).filter(
@@ -477,6 +485,25 @@ export async function GET(req: NextRequest) {
       const activeAssignments = liveItems.flatMap((it) =>
         it.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
       )
+
+      // What's on the job, in words — "2× Cargo Van (38, 41) · 1× ProScout".
+      // Grouped by category across every live booking; the unit names are
+      // the ACTIVE assignments, so a category with none listed is a hold
+      // nobody has put a truck on yet. Order preserved by first sight so
+      // the tile reads the same way each load.
+      const gearByCat = new Map<string, { label: string; qty: number; units: string[] }>()
+      for (const it of liveItems) {
+        const label = it.category?.name ?? 'Item'
+        const g = gearByCat.get(label) ?? { label, qty: 0, units: [] }
+        g.qty += it.quantity || 1
+        for (const a of it.assignments) {
+          if ((a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT') && a.asset?.unitName) {
+            g.units.push(a.asset.unitName)
+          }
+        }
+        gearByCat.set(label, g)
+      }
+      const gear = [...gearByCat.values()]
       // Client said yes, nobody has booked it yet (Wes 2026-09-01: an
       // approved order "should go somewhere more prominent"). APPROVED
       // is the one status where the ball is entirely in OUR court and
@@ -564,6 +591,7 @@ export async function GET(req: NextRequest) {
         paperwork,
         billing,
         readiness,
+        gear,
         approvedUnbooked,
         redlinePending,
         cadence,

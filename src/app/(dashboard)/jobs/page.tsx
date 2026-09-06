@@ -54,7 +54,7 @@ export default function JobsLandingPage() {
   const { refresh: refreshJobs } = useJobsList()
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
+    <div className="max-w-5xl mx-auto space-y-4">
       {/* The page title lives in the JobsToolbar (the full-width bar the
           layout renders above the split — Wes 2026-08-28); this header is
           just the landing-panel-specific controls. */}
@@ -87,11 +87,14 @@ export default function JobsLandingPage() {
           still leads with it; lg:order-* swaps the visual sides.
           onChange also refreshes the jobs list — a conversion should
           appear in the left rail without a reload. */}
-      <div className="grid gap-4 lg:grid-cols-2 items-start">
-        <div className="lg:order-2">
+      {/* 2xl, not lg: the rail is HALF the viewport on a laptop now (Wes
+          2026-09-06), so this panel only has room for two columns on a
+          wide monitor. */}
+      <div className="grid gap-4 2xl:grid-cols-2 items-start">
+        <div className="2xl:order-2">
           <NewInboundColumn onChange={() => { refreshAll(); refreshJobs(); }} />
         </div>
-        <div className="lg:order-1 space-y-4">
+        <div className="2xl:order-1 space-y-4">
           <QuotesOutPanel scope={scope} refreshKey={refreshKey} />
           <div className="bg-white border border-zinc-200 rounded-xl p-4">
             <SalesReservationsWidget />

@@ -95,6 +95,9 @@ export interface JobRow {
   /** Five-check "can this job go out" rollup — src/lib/jobs/readiness.ts.
    *  Rendered ONLY on outbound rows (readinessApplies); shipped on all. */
   readiness?: import('./readiness').JobReadiness
+  /** What's on the job, by category, across its live bookings — with the
+   *  unit names already assigned. Empty for order-only legacy jobs. */
+  gear?: { label: string; qty: number; units: string[] }[]
   /** Live orders the client APPROVED that nobody has booked yet. The
    *  cadence rollup folds APPROVED into 'booked', so without this the
    *  board cannot tell "locked in" from "one click away". */
@@ -365,6 +368,30 @@ export function fmtDateTime(d: string | null) {
   const dt = new Date(d)
   if (isNaN(dt.getTime())) return '—'
   return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+/** "2h ago" / "3d ago" / "Aug 12" — the tile's touched-when line. */
+export function fmtRelative(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const ms = Date.now() - d.getTime()
+  const mins = Math.floor(ms / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** "2× Cargo Van (38, 41) · 1× ProScout" — the gear line, or null. */
+export function gearSummary(j: JobRow): string | null {
+  if (!j.gear || j.gear.length === 0) return null
+  return j.gear
+    .map((g) => `${g.qty}× ${g.label}${g.units.length ? ` (${g.units.join(', ')})` : ''}`)
+    .join(' · ')
 }
 
 export function fmtMoney(n: number | null | undefined) {
