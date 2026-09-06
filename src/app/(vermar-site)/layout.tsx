@@ -4,18 +4,24 @@
  * shell wraps it, and no gate: this is the front door.
  *
  * LOOK (Wes 2026-09-06: "something completely different to SirReel.com,
- * use that turquoise color as a base that we used for pdf invoices"):
- * SirReel is black + gold, Archivo + Hanken, cream. Utliiz is the
- * invoice turquoise (#0F7A93 and its family from src/lib/pdf/brand.ts)
- * on white and a pale aqua ground, deep teal-black type, Sora for
- * display and Manrope for body. Nothing here should read as SirReel.
+ * use that turquoise color as a base", then "match the font to the word
+ * mark and incorporate more of those colors into site"): DM Sans
+ * throughout, the mark's Utah red (#CC0000) on every action, the mark's
+ * ink (#0f2a30) on the type, and the invoice turquoise family
+ * (#0F7A93 / #8FC2CE / #E4F1F4 / #F1F8F9) for fills, the calendar and the
+ * ground. SirReel is black + gold, Archivo + Hanken, cream — nothing here
+ * should read as that.
  */
 import type { Metadata } from 'next'
-import { Sora, Manrope } from 'next/font/google'
+import { DM_Sans } from 'next/font/google'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
 
-const display = Sora({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-utliiz-display', display: 'swap' })
-const body = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-utliiz-body', display: 'swap' })
+// One family, the wordmark's: DM Sans (Wes 2026-09-06: "match the font to
+// the word mark"). 900 carries the headlines exactly as the mark does;
+// 400–700 carry the body. Both variables point at it so nothing else has
+// to change to follow.
+const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '700', '900'], variable: '--font-utliiz-display', display: 'swap' })
+const dmSansBody = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '700'], variable: '--font-utliiz-body', display: 'swap' })
 
 export const metadata: Metadata = {
   title: `${HQ_PRODUCT.name} — ${HQ_PRODUCT.tagline}`,
@@ -30,7 +36,7 @@ export const metadata: Metadata = {
 export default function UtliizSiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={`${display.variable} ${body.variable} min-h-screen bg-[#F1F8F9] text-[#0f2a30] antialiased`}
+      className={`${dmSans.variable} ${dmSansBody.variable} min-h-screen bg-[#F1F8F9] text-[#0f2a30] antialiased`}
       style={{ fontFamily: 'var(--font-utliiz-body), system-ui, sans-serif' }}
     >
       {children}
