@@ -23,8 +23,8 @@ const DISPLAY: React.CSSProperties = { fontFamily: 'var(--font-utliiz-display), 
 function Wordmark() {
   return (
     <span className="inline-flex items-center gap-3">
-      <UtliizIcon size={34} />
-      <UtliizWordmark height={30} />
+      <UtliizIcon size={38} />
+      <UtliizWordmark height={40} />
       <span className="hidden sm:inline text-[11px] font-semibold uppercase tracking-[2px] text-[#0F7A93]/70 self-end pb-1">by {HQ_PRODUCT.maker}</span>
     </span>
   )
