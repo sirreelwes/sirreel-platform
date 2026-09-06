@@ -21,6 +21,9 @@
  * appends a signature page. Edit the words here, never in the renderer.
  *
  * Where the client agreement (contractClauses.ts) sets a number we mirror it
+ * Wes 2026-09-06: indemnity is MUTUAL (clause 11, "protect both"), and
+ * marketing permission is the partner's to revoke at any time (clause 10).
+ *
  * so the two documents do not contradict each other: 24-hour cancellation,
  * one day's rate on a late cancel, 30 days' notice on insurance changes,
  * California law, and — Wes 2026-09-05 — SirReel never supplies drivers, for
@@ -34,7 +37,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-06'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-06b'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -105,31 +108,36 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   },
   {
     ref: '10',
-    title: 'Indemnity',
-    body: 'You will defend and indemnify SirReel, its officers, employees, agents and clients against claims, damages, fines and costs, including reasonable attorneys’ fees, arising from the title, registration or mechanical condition of a Vehicle, from your breach of this Agreement, or from the acts or omissions of drivers and personnel you supply. SirReel will defend and indemnify you against claims arising from the use or operation of a Vehicle during a booking, except to the extent caused by a matter you indemnify above, and SirReel may satisfy this through the production’s indemnity and insurance under the SirReel Rental Agreement. Neither party is liable to the other for lost profits or consequential damages except for the loss-of-use amount in Section 5 and the indemnities in this Section.',
+    title: 'Marketing Your Vehicles',
+    body: 'You choose which of your Vehicles SirReel may offer to its clients. For each Vehicle you approve, you permit SirReel to describe and picture it to productions, on sirreel.com and in SirReel quotes, presented as a vehicle SirReel supplies, without naming you. That permission is yours to withdraw for any Vehicle at any time, from your partner page or by email, with no notice period and no reason required. SirReel stops offering the withdrawn Vehicle when the withdrawal is received and removes it from sirreel.com promptly; bookings already confirmed for it are unaffected unless you and SirReel agree otherwise. SirReel does not use your name, logo or trademarks in any client-facing material without your written permission.',
   },
   {
     ref: '11',
-    title: 'Independent Parties',
-    body: 'You and SirReel are independent contractors. Nothing in this Agreement makes either party the agent, partner, joint venturer or employer of the other, and neither may bind the other. You are not exclusive to SirReel and may rent your Vehicles to others when they are not booked, subject to Section 9.',
+    title: 'Mutual Indemnity',
+    body: 'Each party protects the other. You will defend and indemnify SirReel, its officers, employees, agents and clients against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the title, registration or mechanical condition of a Vehicle, from your breach of this Agreement, or from the acts or omissions of drivers and personnel you supply. SirReel will defend and indemnify you, your officers, employees and agents against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the use or operation of a Vehicle during a booking, from SirReel’s breach of this Agreement, or from the acts or omissions of SirReel’s personnel and clients, and SirReel may satisfy this through the production’s indemnity and insurance under the SirReel Rental Agreement. Where a claim arises from both parties’ conduct, each bears its proportionate share. Neither party is liable to the other for lost profits or consequential damages except for the loss-of-use amount in Section 5 and the indemnities in this Section.',
   },
   {
     ref: '12',
-    title: 'Term and Termination',
-    body: 'This Agreement begins on the date you sign it and runs for one year, then renews automatically for successive one-year terms. Either party may end it for any reason on 30 days’ written notice; bookings already confirmed for dates after the notice period continue under this Agreement unless both parties agree otherwise. SirReel may suspend bookings immediately if your insurance lapses, a Vehicle is found unsafe or unregistered, or you breach Section 9. Sections 4, 5, 9 and 10 survive termination for any booking that occurred while this Agreement was in effect.',
+    title: 'Independent Parties',
+    body: 'You and SirReel are independent contractors. Nothing in this Agreement makes either party the agent, partner, joint venturer or employer of the other, and neither may bind the other. You are not exclusive to SirReel and may rent your Vehicles to others when they are not booked, subject to Sections 9 and 10.',
   },
   {
     ref: '13',
+    title: 'Term and Termination',
+    body: 'This Agreement begins on the date you sign it and runs for one year, then renews automatically for successive one-year terms. Either party may end it for any reason on 30 days’ written notice; bookings already confirmed for dates after the notice period continue under this Agreement unless both parties agree otherwise. SirReel may suspend bookings immediately if your insurance lapses, a Vehicle is found unsafe or unregistered, or you breach Section 9. Sections 4, 5, 9 and 11 survive termination for any booking that occurred while this Agreement was in effect.',
+  },
+  {
+    ref: '14',
     title: 'Notices and Records',
     body: 'Your SirReel partner page is the record of Vehicles, rates, bookings, driver assignments and hours under this Agreement, and notices posted there or sent to the email addresses each party keeps on file are effective when sent. Either party may update its contact information on the partner page or by email.',
   },
   {
-    ref: '14',
+    ref: '15',
     title: 'Governing Law and Disputes',
     body: 'This Agreement is governed by the laws of the State of California. Any dispute the parties cannot resolve between themselves will be brought in the state or federal courts located in Los Angeles County, California, and the prevailing party recovers its reasonable attorneys’ fees and costs.',
   },
   {
-    ref: '15',
+    ref: '16',
     title: 'Entire Agreement',
     body: 'This Agreement, together with the Vehicle listings, rates and booking records on your partner page, is the entire agreement between the parties about your Vehicles and replaces any earlier understanding. It may be changed only in a writing signed or electronically accepted by both parties. If any part is unenforceable the rest remains in effect. Electronic signatures and copies are as effective as originals.',
   },

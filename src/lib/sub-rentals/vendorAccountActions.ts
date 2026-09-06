@@ -138,6 +138,33 @@ export async function resolveRateProposal(unitId: string, decision: 'accept' | '
   })
 }
 
+// ── Marketing permission ───────────────────────────────────────────────
+
+/**
+ * The partner decides whether SirReel may offer a unit to clients (agreement
+ * clause 10: revocable at any time). Withdrawing flips publiclyListed off,
+ * which drops the unit from sirreel.com on the next render and from the
+ * catalog photo proxy; re-allowing turns the flag back on, but the unit only
+ * reaches the site if HQ has given it a slug and photos and the agreement is
+ * signed — the partner's word is permission, not publication.
+ */
+export async function setUnitMarketing(vendorId: string, unitId: string, allowed: boolean): Promise<void> {
+  const unit = await prisma.subcontractedVehicle.findFirst({ where: { id: unitId, vendorId }, select: { id: true, name: true, publiclyListed: true, vendor: { select: { name: true } } } })
+  if (!unit) throw Object.assign(new Error('unit not found'), { status: 404 })
+  if (unit.publiclyListed === allowed) return
+  await prisma.subcontractedVehicle.update({ where: { id: unit.id }, data: { publiclyListed: allowed } })
+  await prisma.auditLog.create({
+    data: { action: allowed ? 'sub_vehicle.marketing_allowed' : 'sub_vehicle.marketing_withdrawn', entityType: 'SubcontractedVehicle', entityId: unit.id, newValues: { publiclyListed: allowed, via: 'partner-page' } },
+  }).catch(() => {})
+  await tellHq(
+    allowed ? `${unit.vendor.name} allows ${unit.name} to be marketed` : `${unit.vendor.name} withdrew ${unit.name} from marketing`,
+    allowed
+      ? `${unit.vendor.name} re-allowed SirReel to offer their ${unit.name} to clients. It returns to sirreel.com only if it has a slug and photos.`
+      : `${unit.vendor.name} withdrew permission to market their ${unit.name}. It is off sirreel.com now; do not quote it to clients.`,
+    '/crm/portals#vendor',
+  )
+}
+
 // ── Partner agreement ──────────────────────────────────────────────────
 
 /** Staff: file the document to be signed. Supersedes any live one. */

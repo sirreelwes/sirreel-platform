@@ -15,6 +15,7 @@
 import type { VendorAccountJob, VendorAccountView as View, UnitAlert } from '@/lib/sub-rentals/vendorAccount'
 import { fmtRange } from '@/lib/sub-rentals/conduit'
 import { VendorContactForm } from '@/components/site/VendorContactForm'
+import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
 
 const STATUS: Record<string, { label: string; tone: string; bg: string }> = {
@@ -182,9 +183,10 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{u.name}{u.vehicleType ? <span style={{ fontWeight: 400, color: '#6b6560' }}> · {u.vehicleType}</span> : null}</div>
                 <div style={{ fontSize: 12, color: '#6b6560', marginTop: 2 }}>
-                  {u.listed ? 'Listed to productions' : 'Quoted on request'}{!u.active ? ' · inactive' : ''}
+                  {u.listed ? 'Offered to productions' : 'Not offered'}{!u.active ? ' · inactive' : ''}
                 </div>
                 <UnitRateForm token={token} unitId={u.id} preview={preview} current={{ daily: u.daily, weekly: u.weekly, monthly: u.monthly }} proposed={u.proposed} />
+                <UnitMarketingToggle token={token} unitId={u.id} preview={preview} initial={u.listed} />
               </div>
               <div style={{ textAlign: 'right', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
                 <div><strong>{money(u.daily)}</strong> <span style={{ color: '#8a8272' }}>/day</span>{u.net.daily != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.daily)}</span>}</div>
