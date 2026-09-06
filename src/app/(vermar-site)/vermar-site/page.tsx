@@ -11,7 +11,7 @@
  * appear on this domain.
  */
 import { CalendarDays, ClipboardList, FileSignature, Truck, UserRound, Users } from 'lucide-react'
-import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { HQ_ADD_ONS, HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
 import { RequestForm } from '@/components/hq-white-label/RequestForm'
 import { UtliizIcon, UtliizWordmark } from '@/components/hq-white-label/UtliizMark'
 
@@ -108,13 +108,13 @@ export default function UtliizSitePage() {
 
       <section className="max-w-[1080px] mx-auto px-5 sm:px-8 py-16 sm:py-20">
         <h2 className="text-[30px] sm:text-[40px] font-extrabold tracking-[-0.02em]" style={DISPLAY}>Plans</h2>
-        <p className="mt-3 text-[17px] text-[#0f2a30]/70 max-w-[60ch]">Every trial starts on Starter, free for {HQ_PRODUCT.trialDays} days, no card. Nobody is charged without saying yes first.</p>
+        <p className="mt-3 text-[17px] text-[#0f2a30]/70 max-w-[60ch]">Plans start at ${HQ_PLANS[0].monthlyUsd}/month. Every trial starts on Starter, free for {HQ_PRODUCT.trialDays} days, no card. Nobody is charged without saying yes first.</p>
         <div className="mt-10 grid sm:grid-cols-2 gap-5 max-w-[860px]">
           {HQ_PLANS.map((p, i) => (
             <div key={p.key} className={`rounded-[22px] p-7 ${i === 1 ? 'bg-[#0B5C70] text-white' : 'bg-white border border-[#8FC2CE]/50'}`}>
               <div className="flex items-baseline justify-between gap-3">
                 <div className="text-[24px] font-extrabold" style={DISPLAY}>{p.name}</div>
-                <div className={`text-[13px] font-bold ${i === 1 ? 'text-[#8FC2CE]' : 'text-[#0F7A93]'}`}>{p.monthlyUsd == null ? 'Pricing soon' : `$${p.monthlyUsd}/mo`}</div>
+                <div className={`text-[13px] font-bold ${i === 1 ? 'text-[#8FC2CE]' : 'text-[#0F7A93]'}`}>{p.monthlyUsd == null ? 'Pricing soon' : <><span className="text-[22px]" style={DISPLAY}>${p.monthlyUsd}</span>/mo</>}</div>
               </div>
               <p className={`mt-1 text-[15px] ${i === 1 ? 'text-white/80' : 'text-[#0f2a30]/70'}`}>{p.blurb}</p>
               <ul className="mt-5 space-y-2.5 text-[15px]">
@@ -125,6 +125,20 @@ export default function UtliizSitePage() {
             </div>
           ))}
         </div>
+        {HQ_ADD_ONS.length > 0 && (
+          <div className="mt-6 max-w-[860px] grid sm:grid-cols-2 gap-5">
+            {HQ_ADD_ONS.map((a) => (
+              <div key={a.key} className="rounded-[22px] border border-dashed border-[#8FC2CE] p-6">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="text-[18px] font-extrabold" style={DISPLAY}>{a.name} <span className="text-[12px] font-bold uppercase tracking-[1.6px] text-[#0F7A93]">add-on</span></div>
+                  <div className="text-[13px] font-bold text-[#0F7A93]">${a.perBlockUsd}/mo per {a.blockSize} {a.blockNoun}</div>
+                </div>
+                <p className="mt-1 text-[14.5px] text-[#0f2a30]/70">{a.blurb}</p>
+                <p className="mt-2 text-[13px] text-[#0f2a30]/60">Never more than ${a.capUsd}/mo, however many {a.blockNoun} you keep.</p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section id="request" className="bg-white border-t border-[#8FC2CE]/40">

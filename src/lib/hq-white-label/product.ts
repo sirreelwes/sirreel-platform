@@ -69,17 +69,45 @@ export interface HqPlan {
   includes: string[]
 }
 
+/**
+ * Add-ons priced by use, on top of a plan. Wes 2026-09-06: "CRM adds
+ * $10/mo per 500 contacts with a cap at $49/mo additional."
+ */
+export interface HqAddOn {
+  key: string
+  name: string
+  blurb: string
+  /** Per-block price and block size, and the monthly ceiling. */
+  perBlockUsd: number
+  blockSize: number
+  blockNoun: string
+  capUsd: number
+}
+
+export const HQ_ADD_ONS: HqAddOn[] = [
+  {
+    key: 'CRM',
+    name: 'CRM',
+    blurb: 'Every production and contact you\'ve ever worked with, who booked what, and follow-ups that don\'t fall through.',
+    perBlockUsd: 10,
+    blockSize: 500,
+    blockNoun: 'contacts',
+    capUsd: 49,
+  },
+]
+
 export const HQ_PLANS: HqPlan[] = [
   {
     key: 'STARTER',
     name: 'Starter',
-    monthlyUsd: null,
-    blurb: 'One calendar for your whole fleet, your own bookings, your clients.',
+    // Wes 2026-09-06: "plans should start at $49/mo. That is just the basics."
+    monthlyUsd: 49,
+    blurb: 'One calendar for your whole fleet, your own bookings, your drivers.',
     includes: [
       'Fleet & rates',
       'Calendar across every unit',
       'Holds and bookings for your own productions',
-      'Client list',
+      'Drivers: their own page, call times, hours and meters',
       'Bookings from your partners flow in automatically',
     ],
   },
