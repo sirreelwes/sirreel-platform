@@ -154,16 +154,21 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
                       <div className="text-[12px] text-[#8b857a]">
                         Left lot {e.startTime}{e.onSetTime ? ` · on set ${e.onSetTime}` : ''}{e.leftSetTime ? ` · left set ${e.leftSetTime}` : ''}{e.endTime ? ` · wrap ${e.endTime}` : ' · not wrapped yet'}{e.notes ? ` · ${e.notes}` : ''}
                       </div>
+                      {(e.miles != null || e.generatorHours != null || e.suppliesNote) && (
+                        <div className="text-[12px] text-[#5a554c]">
+                          {e.miles != null ? `${e.miles} mi (${e.odometerOut}→${e.odometerIn})` : ''}{e.miles != null && e.generatorHours != null ? ' · ' : ''}{e.generatorHours != null ? `generator ${e.generatorHours} h` : ''}{e.suppliesNote ? `${e.miles != null || e.generatorHours != null ? ' · ' : ''}supplies: ${e.suppliesNote}` : ''}
+                        </div>
+                      )}
                     </dt>
                     <dd className={DD}>{e.hours === null ? <span className="text-[#a37f2c]">open</span> : `${e.hours} h`}</dd>
                   </div>
                 ))}
                 <div className={`${ROW} border-t border-[#efe9dd] bg-[#faf7f0]`}>
                   <dt className={DT}>Total</dt>
-                  <dd className={DD}>{v.hours.total} h</dd>
+                  <dd className={DD}>{v.hours.total} h{v.hours.usage.miles > 0 ? ` · ${v.hours.usage.miles} mi` : ''}{v.hours.usage.generatorHours > 0 ? ` · gen ${v.hours.usage.generatorHours} h` : ''}</dd>
                 </div>
               </dl>
-              <p className="mt-2 text-[12px] text-[#8b857a]">Portal to portal (wrap minus left lot), as logged by {v.driverName ?? 'the driver'} on their page. Query anything here with SirReel before invoicing.</p>
+              <p className="mt-2 text-[12px] text-[#8b857a]">Portal to portal (wrap minus left lot), with the meters, as logged by {v.driverName ?? 'the driver'} on their page. Mileage, generator and supplies bill from these numbers — query anything here with SirReel before invoicing.</p>
             </div>
           )}
 

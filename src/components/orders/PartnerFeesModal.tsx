@@ -61,6 +61,7 @@ export default function PartnerFeesModal({
   const [fees, setFees] = useState<Fee[]>([])
   const [days, setDays] = useState(1)
   const [estimates, setEstimates] = useState<Record<string, string>>({})
+  const [reported, setReported] = useState<{ days: number; hours: number; miles: number; generatorHours: number; daysWithSupplies: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -104,7 +105,19 @@ export default function PartnerFeesModal({
       setFees(j.fees ?? [])
       setDays(j.days ?? 1)
       setVehicleName(j.vehicleName ?? '')
-      setEstimates({})
+      setReported(j.reported ?? null)
+      // The driver's daily report fills the metered estimates: miles for a
+      // per-mile fee, generator hours for a per-hour one. The rep can still
+      // overtype — but after the job these are the actuals, not a guess.
+      const pre: Record<string, string> = {}
+      if (j.reported) {
+        for (const f of (j.fees ?? []) as Fee[]) {
+          if (!f.metered) continue
+          if (f.unit === 'PER_MILE' && j.reported.miles > 0) pre[f.id] = String(j.reported.miles)
+          if (f.unit === 'PER_HOUR' && /gen/i.test(f.label) && j.reported.generatorHours > 0) pre[f.id] = String(j.reported.generatorHours)
+        }
+      }
+      setEstimates(pre)
     } catch {
       setError('Could not load fees.')
     }
@@ -254,10 +267,21 @@ export default function PartnerFeesModal({
                 </div>
               )}
 
+              {reported && (
+                <div className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+                  <span className="font-semibold">Reported by the driver:</span>{' '}
+                  {reported.hours} hrs over {reported.days} {reported.days === 1 ? 'day' : 'days'}
+                  {reported.miles > 0 ? `, ${reported.miles} mi` : ''}
+                  {reported.generatorHours > 0 ? `, ${reported.generatorHours} generator hrs` : ''}
+                  {reported.daysWithSupplies > 0 ? `, supplies on ${reported.daysWithSupplies} ${reported.daysWithSupplies === 1 ? 'day' : 'days'}` : ''}.
+                  {' '}The metered estimates below are prefilled from it.
+                </div>
+              )}
+
               {meteredFees.length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-1">
-                    Billed as used — your estimate
+                    Billed as used — {reported ? 'from the driver’s report' : 'your estimate'}
                   </div>
                   <p className="text-xs text-gray-500 mb-2">
                     The quote shows these as an estimate and says actual usage will be invoiced.

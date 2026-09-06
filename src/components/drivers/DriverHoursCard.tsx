@@ -23,6 +23,13 @@ export interface HoursEntry {
   endTime: string | null
   hours: number | null
   notes: string | null
+  odometerOut?: number | null
+  odometerIn?: number | null
+  miles?: number | null
+  generatorHoursOut?: number | null
+  generatorHoursIn?: number | null
+  generatorHours?: number | null
+  suppliesNote?: string | null
 }
 
 const fmtDay = (ymd: string) =>
@@ -48,6 +55,8 @@ export function DriverHoursCard({
   prompt,
   onChange,
   readOnly = false,
+  meters = false,
+  lastMeters,
 }: {
   endpoint: string
   entries: HoursEntry[]
@@ -56,12 +65,22 @@ export function DriverHoursCard({
   prompt: boolean
   onChange: (next: { entries: HoursEntry[]; total: number; open?: number }) => void
   readOnly?: boolean
+  /**
+   * Show the meters (odometer, generator hours, supplies). On for a
+   * partner's driver: the partner bills mileage, generator and supplies
+   * on top of the shift, and the driver is the only one who has the
+   * numbers (Wes 2026-09-06).
+   */
+  meters?: boolean
+  /** The unit's meters as the driver last saw them — prefilled for "out". */
+  lastMeters?: { odometer: number | null; generatorHours: number | null }
 }) {
   const openDay = entries.find((e) => e.hours === null)
   const [open, setOpen] = useState((prompt && entries.length === 0) || !!openDay)
   const [workDate, setWorkDate] = useState(openDay?.workDate ?? defaultDate)
   const [stamps, setStamps] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState('')
+  const [meter, setMeter] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
@@ -71,7 +90,13 @@ export function DriverHoursCard({
     const e = entries.find((x) => x.workDate === workDate)
     setStamps(e ? { leftLot: e.startTime, onSet: e.onSetTime ?? '', leftSet: e.leftSetTime ?? '', wrap: e.endTime ?? '' } : {})
     setNotes(e?.notes ?? '')
-  }, [workDate, entries])
+    const str = (v: number | null | undefined) => (v == null ? '' : String(v))
+    setMeter(
+      e
+        ? { odometerOut: str(e.odometerOut), odometerIn: str(e.odometerIn), generatorHoursOut: str(e.generatorHoursOut), generatorHoursIn: str(e.generatorHoursIn), suppliesNote: e.suppliesNote ?? '' }
+        : { odometerOut: str(lastMeters?.odometer), odometerIn: '', generatorHoursOut: str(lastMeters?.generatorHours), generatorHoursIn: '', suppliesNote: '' },
+    )
+  }, [workDate, entries, lastMeters])
 
   async function save() {
     if (readOnly) return
@@ -80,7 +105,7 @@ export function DriverHoursCard({
       const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ workDate, leftLot: stamps.leftLot ?? '', onSet: stamps.onSet ?? '', leftSet: stamps.leftSet ?? '', wrap: stamps.wrap ?? '', notes }),
+        body: JSON.stringify({ workDate, leftLot: stamps.leftLot ?? '', onSet: stamps.onSet ?? '', leftSet: stamps.leftSet ?? '', wrap: stamps.wrap ?? '', notes, ...(meters ? meter : {}) }),
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save that.')
@@ -148,6 +173,11 @@ export function DriverHoursCard({
               </div>
               <div className="text-[12px] text-zinc-400">
                 Lot {e.startTime}{e.onSetTime ? ` → set ${e.onSetTime}` : ''}{e.leftSetTime ? ` → left ${e.leftSetTime}` : ''}{e.endTime ? ` → wrap ${e.endTime}` : ' → wrap —'}{e.notes ? ` · ${e.notes}` : ''}
+                {meters && (e.miles != null || e.generatorHours != null || e.suppliesNote) && (
+                  <span className="block text-zinc-500">
+                    {e.miles != null ? `${e.miles} mi` : ''}{e.miles != null && e.generatorHours != null ? ' · ' : ''}{e.generatorHours != null ? `gen ${e.generatorHours} h` : ''}{e.suppliesNote ? `${e.miles != null || e.generatorHours != null ? ' · ' : ''}supplies: ${e.suppliesNote}` : ''}
+                  </span>
+                )}
               </div>
             </li>
           ))}
@@ -185,6 +215,36 @@ export function DriverHoursCard({
           <div>
             <label className={label}>Note <span className="normal-case tracking-normal font-normal text-zinc-600">— optional</span></label>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. waited 40 min at the gate" className={field} />
+          </div>
+          {meters && (
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-400">Meters</div>
+              <p className="mt-1 text-[12px] text-zinc-500">Odometer and generator hours as you leave the lot and when you wrap. They set the mileage and generator charges — nobody else has these numbers.</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className={label}>Odometer out</label>
+                  <input inputMode="numeric" value={meter.odometerOut ?? ''} onChange={(e) => setMeter((m) => ({ ...m, odometerOut: e.target.value }))} placeholder="miles" className={field} />
+                </div>
+                <div>
+                  <label className={label}>Odometer in</label>
+                  <input inputMode="numeric" value={meter.odometerIn ?? ''} onChange={(e) => setMeter((m) => ({ ...m, odometerIn: e.target.value }))} placeholder="at wrap" className={field} />
+                </div>
+                <div>
+                  <label className={label}>Generator hrs out</label>
+                  <input inputMode="decimal" value={meter.generatorHoursOut ?? ''} onChange={(e) => setMeter((m) => ({ ...m, generatorHoursOut: e.target.value }))} placeholder="hour meter" className={field} />
+                </div>
+                <div>
+                  <label className={label}>Generator hrs in</label>
+                  <input inputMode="decimal" value={meter.generatorHoursIn ?? ''} onChange={(e) => setMeter((m) => ({ ...m, generatorHoursIn: e.target.value }))} placeholder="at wrap" className={field} />
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Supplies used</label>
+                  <input value={meter.suppliesNote ?? ''} onChange={(e) => setMeter((m) => ({ ...m, suppliesNote: e.target.value }))} placeholder="e.g. water, paper goods, propane" className={field} />
+                </div>
+              </div>
+            </div>
+          )}
+          <div>
           </div>
           <div className="flex items-center gap-3">
             <button

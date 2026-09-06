@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarDays, ClipboardList, Home, Settings, Truck, Users } from 'lucide-react'
+import { CalendarDays, ClipboardList, Home, IdCard, Settings, Truck, Users } from 'lucide-react'
 
 const ITEMS = [
   { seg: '', label: 'Today', Icon: Home },
   { seg: 'calendar', label: 'Calendar', Icon: CalendarDays },
   { seg: 'bookings', label: 'Bookings', Icon: ClipboardList },
   { seg: 'fleet', label: 'Fleet', Icon: Truck },
+  { seg: 'drivers', label: 'Drivers', Icon: IdCard },
   { seg: 'clients', label: 'Clients', Icon: Users },
   { seg: 'settings', label: 'Settings', Icon: Settings },
 ]

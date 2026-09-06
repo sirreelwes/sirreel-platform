@@ -38,6 +38,18 @@ export const HQ_PRODUCT = {
   defaultAccent: '#0F7A93',
   /** Where a partner writes when something is wrong. */
   supportEmail: 'hq@vermardesign.com',
+  /**
+   * The product's own origin — driver pages and other NEW links are minted
+   * here (utliiz.com went live 2026-09-06). Workspace links still mint on
+   * NEXT_PUBLIC_APP_URL until Wes says to move them.
+   */
+  origin: 'https://utliiz.com',
+  /**
+   * What driver mail is sent from. Resend has to have utliiz.com verified
+   * for this to leave; until then UTLIIZ_SEND_FROM is unset and mail goes
+   * out from SirReel's notifications@ with the partner's name in the body.
+   */
+  sendFrom: process.env.UTLIIZ_SEND_FROM || null,
 } as const
 
 export type HqPlanKey = 'STARTER' | 'PRO'

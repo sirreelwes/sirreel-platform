@@ -19,6 +19,7 @@ export interface BookingFormValues {
   location: string
   callTime: string
   driverName: string
+  vendorDriverId: string
   notes: string
 }
 
@@ -35,6 +36,7 @@ export function BookingForm({
   token,
   units,
   clients,
+  drivers,
   bookingId,
   initial,
 }: {
@@ -42,6 +44,8 @@ export function BookingForm({
   token: string
   units: Opt[]
   clients: Opt[]
+  /** The partner's roster. Picking one emails them their page. */
+  drivers: Opt[]
   bookingId?: string
   initial?: Partial<BookingFormValues>
 }) {
@@ -57,6 +61,7 @@ export function BookingForm({
     location: initial?.location ?? '',
     callTime: initial?.callTime ?? '',
     driverName: initial?.driverName ?? '',
+    vendorDriverId: initial?.vendorDriverId ?? '',
     notes: initial?.notes ?? '',
   })
   const [busy, setBusy] = useState(false)
@@ -77,7 +82,7 @@ export function BookingForm({
   async function submit(allowOverlap = false) {
     setBusy(true)
     setError(null)
-    const body = { ...v, clientId: v.clientId || null, allowOverlap }
+    const body = { ...v, clientId: v.clientId || null, vendorDriverId: v.vendorDriverId || null, allowOverlap }
     const r = bookingId
       ? await hqFetch(`/api/public/vendor-hq/${token}/bookings/${bookingId}`, 'PATCH', body)
       : await hqFetch<{ id: string }>(`/api/public/vendor-hq/${token}/bookings`, 'POST', body)
@@ -172,7 +177,13 @@ export function BookingForm({
         </div>
         <div>
           <label className={LABEL}>Driver</label>
-          <input className={INPUT} value={v.driverName} onChange={set('driverName')} placeholder="who's taking it" />
+          <select className={INPUT} value={v.vendorDriverId} onChange={set('vendorDriverId')}>
+            <option value="">— not yet —</option>
+            {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <p className="mt-1 text-[12px] text-[#6b7280]">
+            Picking one emails them their own page for this job. <a href={`${base}/drivers`} className="font-semibold text-[var(--hq-accent)]">Add a driver</a>
+          </p>
         </div>
         <div className="sm:col-span-2">
           <label className={LABEL}>Location</label>

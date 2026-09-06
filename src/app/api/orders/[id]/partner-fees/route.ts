@@ -23,6 +23,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
 import { partnerFeeSchedule, buildFeeLines, type FeeEstimates } from '@/lib/sub-rentals/orderFees'
+import { sumHours } from '@/lib/drivers/hoursEntry'
+import { usageOfRows } from '@/lib/drivers/hoursStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,7 +123,22 @@ export async function GET(req: NextRequest, { params }: Params) {
   const schedule = await partnerFeeSchedule(vehicleId)
   if (!schedule) return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
 
-  return NextResponse.json({ ...schedule, days: orderDays(order) })
+  // What the partner's driver has REPORTED for this unit on this job (Wes
+  // 2026-09-06: the driver enters the partner-fee data in his daily
+  // report). Hours and days from the stamps, miles and generator hours
+  // from the meters. The modal prefills the metered estimates from it, so
+  // after the job the "estimate" is the actual.
+  const reportedRows = order.jobId
+    ? await prisma.driverHoursEntry.findMany({
+        where: { subRental: { jobId: order.jobId, subcontractedVehicleId: vehicleId } },
+        select: { hours: true, odometerOut: true, odometerIn: true, generatorHoursOut: true, generatorHoursIn: true, suppliesNote: true },
+      })
+    : []
+  const reported = reportedRows.length
+    ? { days: reportedRows.length, hours: sumHours(reportedRows), ...usageOfRows(reportedRows) }
+    : null
+
+  return NextResponse.json({ ...schedule, days: orderDays(order), reported })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {

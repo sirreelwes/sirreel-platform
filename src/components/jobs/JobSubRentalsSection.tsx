@@ -60,6 +60,8 @@ export interface JobSubRental {
   ackStale?: boolean
   hoursTotal?: number
   hoursDays?: number
+  /** Metered usage from the driver's daily report — feeds the partner-fee lines. */
+  usage?: { miles: number; generatorHours: number; daysWithSupplies: number }
   vendorConfirmedAt?: string | null
   vendorDeclinedAt?: string | null
   vendorDeclineNote?: string | null
@@ -387,7 +389,10 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                       </>
                     )}
                     {(s.hoursDays ?? 0) > 0 && (
-                      <> · <span className="text-zinc-800">{s.hoursTotal} hrs</span> portal-to-portal over {s.hoursDays} {s.hoursDays === 1 ? 'day' : 'days'}</>
+                      <> · <span className="text-zinc-800">{s.hoursTotal} hrs</span> portal-to-portal over {s.hoursDays} {s.hoursDays === 1 ? 'day' : 'days'}
+                        {s.usage && (s.usage.miles > 0 || s.usage.generatorHours > 0 || s.usage.daysWithSupplies > 0) && (
+                          <> · <span className="text-zinc-800">{[s.usage.miles > 0 ? `${s.usage.miles} mi` : null, s.usage.generatorHours > 0 ? `${s.usage.generatorHours} gen hrs` : null, s.usage.daysWithSupplies > 0 ? `supplies ${s.usage.daysWithSupplies} ${s.usage.daysWithSupplies === 1 ? 'day' : 'days'}` : null].filter(Boolean).join(', ')}</span> reported by the driver</>
+                        )}</>
                     )}
                   </>
                 ) : COMMITTED.includes(s.status) ? (

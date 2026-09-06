@@ -27,6 +27,7 @@ import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { driverUnitPageUrl } from '@/lib/sub-rentals/conduit'
 import { isAckStale, sumHours } from '@/lib/drivers/hoursEntry'
+import { usageOfRows } from '@/lib/drivers/hoursStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +73,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       vendorConfirmedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
-      driverHours: { select: { hours: true, workDate: true } },
+      driverHours: { select: { hours: true, workDate: true, odometerOut: true, odometerIn: true, generatorHoursOut: true, generatorHoursIn: true, suppliesNote: true } },
       vendorDriver: {
         select: {
           id: true, profileCompletedAt: true, licenseFrontUrl: true, licenseBackUrl: true,
@@ -112,6 +113,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       ackStale: isAckStale(r.driverAckedAt, r.logisticsUpdatedAt),
       hoursTotal: sumHours(r.driverHours),
       hoursDays: r.driverHours.length,
+      usage: usageOfRows(r.driverHours),
       driverHours: undefined,
       vendorDriver: r.vendorDriver
         ? {

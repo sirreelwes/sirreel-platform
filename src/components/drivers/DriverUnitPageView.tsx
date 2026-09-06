@@ -260,6 +260,12 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
           defaultDate={today}
           prompt={data.hoursPromptOpen && !data.closed}
           onChange={(h) => setData((d) => (d ? { ...d, hours: h } : d))}
+          meters
+          lastMeters={(() => {
+            // Yesterday's "in" is today's "out" — save the driver retyping it.
+            const last = [...data.hours.entries].reverse().find((e) => e.odometerIn != null || e.generatorHoursIn != null)
+            return { odometer: last?.odometerIn ?? null, generatorHours: last?.generatorHoursIn ?? null }
+          })()}
         />
 
         {!data.closed && (

@@ -4765,6 +4765,17 @@ model DriverHoursEntry {
   endTime      String?  @map("end_time") @db.VarChar(5)
   /// Unused since portal-to-portal (kept, default 0, never dropped).
   breakMinutes Int      @default(0) @map("break_minutes")
+
+  /// Metered usage for the partner's fee schedule (Wes 2026-09-06: "the
+  /// driver will need to enter the data for the partner fees in his daily
+  /// job reporting"). Odometer at left-lot and at wrap; generator hour
+  /// meter at left-lot and at wrap; supplies in the driver's words. Miles
+  /// and generator hours are DERIVED (in − out) at read time, never stored.
+  odometerOut       Int?     @map("odometer_out")
+  odometerIn        Int?     @map("odometer_in")
+  generatorHoursOut Decimal? @map("generator_hours_out") @db.Decimal(8, 1)
+  generatorHoursIn  Decimal? @map("generator_hours_in") @db.Decimal(8, 1)
+  suppliesNote      String?  @map("supplies_note") @db.Text
   /// wrap − left lot, once wrap is in. Null while the day is open.
   hours        Decimal? @db.Decimal(5, 2)
   notes        String?  @db.Text
@@ -4772,11 +4783,16 @@ model DriverHoursEntry {
   submittedAt DateTime @default(now()) @map("submitted_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  /// Third anchor: a partner's OWN booking in their Utliiz workspace.
+  workspaceBookingId String? @map("workspace_booking_id")
+
   subRental        SubRental?        @relation(fields: [subRentalId], references: [id])
   driverAssignment DriverAssignment? @relation(fields: [driverAssignmentId], references: [id])
+  workspaceBooking VendorWorkspaceBooking? @relation(fields: [workspaceBookingId], references: [id], onDelete: Cascade)
 
   @@unique([subRentalId, workDate])
   @@unique([driverAssignmentId, workDate])
+  @@unique([workspaceBookingId, workDate])
   @@map("sr_driver_hours")
 }
 
@@ -4833,6 +4849,7 @@ model VendorDriver {
   vendor          Vendor                 @relation(fields: [vendorId], references: [id])
   trainedVehicles SubcontractedVehicle[] @relation("VendorDriverTrainedVehicles")
   subRentals      SubRental[]
+  workspaceBookings VendorWorkspaceBooking[]
 
   /// One roster row per address per partner — re-adding refreshes the invite.
   @@unique([vendorId, email])
@@ -9136,11 +9153,41 @@ model VendorWorkspaceBooking {
   dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
   location   String?  @db.Text
   callTime   String?  @map("call_time") @db.VarChar(120)
+  /// Free-text driver, kept for bookings made before the roster was wired.
+  /// A roster driver (vendorDriverId) wins whenever set.
   driverName String?  @map("driver_name")
   notes      String?  @db.Text
 
+  // ── The driver conduit (Wes 2026-09-06: "driver communication is a pain
+  // point… can Utliiz send emails to the drivers for check in / out") ──
+  // Same shape as the SirReel sub-rental conduit: name a roster driver →
+  // they get their own page (driverToken), the call time / location
+  // changes reach them, they say "I have it", then check out and check in
+  // from the page. Every stamp is a fact the office can see on Today.
+  vendorDriverId      String?   @map("vendor_driver_id")
+  driverToken         String?   @unique @map("driver_token")
+  driverTokenMintedAt DateTime? @map("driver_token_minted_at")
+  driverNotifiedAt    DateTime? @map("driver_notified_at")
+  logisticsUpdatedAt  DateTime? @map("logistics_updated_at")
+  reminderSentAt      DateTime? @map("reminder_sent_at")
+  driverAckedAt       DateTime? @map("driver_acked_at")
+  driverAckNote       String?   @map("driver_ack_note") @db.Text
+  /// Check-out: the driver pressed "Rolling" with the meters.
+  rollingAt         DateTime? @map("rolling_at")
+  checkOutOdometer  Int?      @map("check_out_odometer")
+  checkOutGenerator Decimal?  @map("check_out_generator") @db.Decimal(8, 1)
+  checkOutNotes     String?   @map("check_out_notes") @db.Text
+  /// Check-in: "Back on the lot" with the meters.
+  backAt           DateTime? @map("back_at")
+  checkInOdometer  Int?      @map("check_in_odometer")
+  checkInGenerator Decimal?  @map("check_in_generator") @db.Decimal(8, 1)
+  checkInNotes     String?   @map("check_in_notes") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendorDriver VendorDriver?      @relation(fields: [vendorDriverId], references: [id], onDelete: SetNull)
+  driverHours  DriverHoursEntry[]
 
   @@index([workspaceId, startDate])
   @@index([vehicleId, startDate])

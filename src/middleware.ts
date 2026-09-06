@@ -57,6 +57,8 @@ const VERMAR_ALLOWED_PREFIXES = [
   '/vermar-site',           // the site itself (root-rewrite target + direct hits)
   '/hq/',                   // partner workspaces — token-gated, no login
   '/api/public/vendor-hq/', // their API
+  '/drive/booking/',        // a partner's driver's page for one booking
+  '/api/public/utliiz-drive/',
   '/robots.txt',
   '/favicon',
   '/icon-',

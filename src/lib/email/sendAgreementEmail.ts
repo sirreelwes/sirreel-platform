@@ -67,6 +67,12 @@ export interface EmailPayload {
    * filtering rules) show this instead. Improves deliverability. */
   text?: string
   attachments?: { filename: string; content: Buffer }[]
+  /**
+   * Sender override for white-label mail (Utliiz drivers hear from the
+   * partner's brand, not SirReel). Must be a verified sending identity —
+   * unset falls back to SEND_FROM.
+   */
+  from?: string
   /** Logging tag — surfaces in console error lines so it's obvious which touchpoint failed. */
   label?: string
   /**
@@ -105,7 +111,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
   const resend = new Resend(process.env.RESEND_API_KEY)
   try {
     const result = await resend.emails.send({
-      from: SEND_FROM,
+      from: payload.from || SEND_FROM,
       to: payload.to,
       cc: payload.cc,
       replyTo: effectiveReplyTo(payload.replyTo),

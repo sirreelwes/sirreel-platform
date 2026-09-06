@@ -13,6 +13,7 @@
 import type { SubRentalStatus, VendorWorkspaceBookingStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
+import { driverPageUrl } from './driverFlow'
 import { addDays, daysOfMonth, overlaps, todayPacific, ymd } from './dates'
 import type { HqWorkspace } from './workspace'
 
@@ -38,8 +39,10 @@ export interface HqBooking {
   dailyRate: number | null
   /** Where this row is worked: the edit page (direct) or the partner's page (via SirReel). */
   href: string | null
-  /** Something still owed on a partner booking (confirm / driver / call time). */
+  /** Something still owed (confirm / driver / call time / driver hasn't confirmed). */
   needs: string[]
+  /** Direct bookings only: where the driver is in their day. */
+  driver: { id: string | null; acked: boolean; ackStale: boolean; rolling: boolean; back: boolean; pageUrl: string | null } | null
 }
 
 export interface HqUnit {
@@ -131,6 +134,7 @@ export async function loadBookings(
       select: {
         id: true, vehicleId: true, title: true, startDate: true, endDate: true, status: true,
         dailyRate: true, location: true, callTime: true, driverName: true, notes: true, clientId: true,
+        vendorDriverId: true, driverToken: true, driverAckedAt: true, logisticsUpdatedAt: true, rollingAt: true, backAt: true,
         vehicle: { select: { name: true } },
         client: { select: { name: true } },
       },
@@ -156,6 +160,12 @@ export async function loadBookings(
 
   const out: HqBooking[] = []
   for (const b of direct) {
+    const needs: string[] = []
+    const live = b.status === 'HOLD' || b.status === 'CONFIRMED' || b.status === 'OUT'
+    if (live && !b.vendorDriverId && !b.driverName) needs.push('Name a driver')
+    if (live && b.vendorDriverId && !b.driverAckedAt) needs.push('Driver hasn’t confirmed')
+    if (live && b.vendorDriverId && b.driverAckedAt && b.logisticsUpdatedAt && b.logisticsUpdatedAt > b.driverAckedAt) needs.push('Driver hasn’t seen the change')
+    if (live && !b.callTime) needs.push('Set a call time')
     out.push({
       id: b.id,
       source: 'direct',
@@ -174,7 +184,10 @@ export async function loadBookings(
       notes: b.notes,
       dailyRate: num(b.dailyRate),
       href: `/hq/${ws.accessToken}/bookings/${b.id}`,
-      needs: [],
+      needs,
+      driver: b.vendorDriverId
+        ? { id: b.vendorDriverId, acked: !!b.driverAckedAt, ackStale: !!(b.driverAckedAt && b.logisticsUpdatedAt && b.logisticsUpdatedAt > b.driverAckedAt), rolling: !!b.rollingAt, back: !!b.backAt, pageUrl: b.driverToken ? driverPageUrl(b.driverToken) : null }
+        : null,
     })
   }
   for (const r of partner) {
@@ -203,6 +216,7 @@ export async function loadBookings(
       dailyRate: null,
       href: r.vendorToken ? vendorPageUrl(r.vendorToken) : null,
       needs,
+      driver: null,
     })
   }
   out.sort((a, b) => (a.startDate ?? '9999').localeCompare(b.startDate ?? '9999') || a.vehicleName.localeCompare(b.vehicleName))

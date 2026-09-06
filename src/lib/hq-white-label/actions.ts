@@ -11,6 +11,7 @@ import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { fromYmd, isYmd, overlaps, ymd } from './dates'
 import { HQ_PRODUCT } from './product'
+import { assignBookingDriver, notifyBookingLogistics } from './driverFlow'
 
 export interface WsRef {
   id: string
@@ -113,6 +114,8 @@ export interface BookingInput {
   callTime?: unknown
   driverName?: unknown
   notes?: unknown
+  /** A roster driver (VendorDriver id) — assigning one emails them their page. */
+  vendorDriverId?: unknown
   /** The partner saw the conflict and wants the booking anyway. */
   allowOverlap?: unknown
 }
@@ -163,11 +166,13 @@ export async function createBooking(ws: WsRef, input: BookingInput): Promise<{ i
     },
     select: { id: true },
   })
+  const driverId = clean(input.vendorDriverId, 64)
+  if (driverId) await assignBookingDriver(ws, row.id, driverId)
   return { id: row.id }
 }
 
 export async function updateBooking(ws: WsRef, id: string, input: BookingInput): Promise<{ ok: true } | { conflicts: Conflict[] }> {
-  const existing = await prisma.vendorWorkspaceBooking.findFirst({ where: { id, workspaceId: ws.id }, select: { id: true, vehicleId: true, startDate: true, endDate: true, status: true } })
+  const existing = await prisma.vendorWorkspaceBooking.findFirst({ where: { id, workspaceId: ws.id }, select: { id: true, vehicleId: true, startDate: true, endDate: true, status: true, callTime: true, location: true, vendorDriverId: true } })
   if (!existing) throw new HqError('Booking not found.', 404)
   const data: Record<string, unknown> = {}
   if (input.vehicleId !== undefined) {
@@ -211,6 +216,20 @@ export async function updateBooking(ws: WsRef, id: string, input: BookingInput):
     if (conflicts.length) return { conflicts }
   }
   await prisma.vendorWorkspaceBooking.update({ where: { id: existing.id }, data })
+
+  // The driver conduit. A new driver gets their page; a driver already on
+  // it hears about the things that change their day.
+  if (input.vendorDriverId !== undefined) {
+    await assignBookingDriver(ws, existing.id, clean(input.vendorDriverId, 64))
+  }
+  const driverStays = input.vendorDriverId === undefined ? !!existing.vendorDriverId : clean(input.vendorDriverId, 64) === existing.vendorDriverId && !!existing.vendorDriverId
+  if (driverStays) {
+    const changed: string[] = []
+    if (data.callTime !== undefined && data.callTime !== existing.callTime) changed.push('call time')
+    if (data.location !== undefined && data.location !== existing.location) changed.push('location')
+    if ((data.startDate !== undefined && start !== ymd(existing.startDate)) || (data.endDate !== undefined && end !== ymd(existing.endDate))) changed.push('dates')
+    if (changed.length) await notifyBookingLogistics(existing.id, changed)
+  }
   return { ok: true }
 }
 
