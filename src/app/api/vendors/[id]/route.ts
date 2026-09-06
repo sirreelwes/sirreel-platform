@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const coiPatch: { coiReceivedAt?: Date | null; coiExpiresAt?: Date | null } = {}
   for (const k of ['coiReceivedAt', 'coiExpiresAt'] as const) {
     if (!(k in body)) continue
-    const raw = body[k]
+    const raw = (body as Record<string, unknown>)[k]
     if (raw === null || raw === '') { coiPatch[k] = null; continue }
     const d = typeof raw === 'string' ? new Date(raw) : null
     if (!d || Number.isNaN(d.getTime())) return NextResponse.json({ error: `${k} must be a date` }, { status: 400 })
