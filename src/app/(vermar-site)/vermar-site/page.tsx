@@ -86,7 +86,7 @@ export default function VerMarSitePage() {
         <div className="mt-6 grid sm:grid-cols-2 gap-5 max-w-[820px]">
           <div className="rounded-2xl border border-white/15 p-6">
             <div className="text-[16px] font-bold">Already a SirReel partner?</div>
-            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Open your partner page and press &ldquo;See what HQ can do for you&rdquo; at the bottom. Your units and bookings are on your calendar from the first minute.</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Open your partner page and press &ldquo;See what Utliiz can do for you&rdquo; at the bottom. Your units and bookings are on your calendar from the first minute.</p>
           </div>
           <div className="rounded-2xl border border-white/15 p-6">
             <div className="text-[16px] font-bold">Everyone else</div>

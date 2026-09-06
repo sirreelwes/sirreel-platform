@@ -28,10 +28,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
 
   // vermardesign.com — HQ by VerMar Design's product site. Crawl the site;
   // never the partners' workspaces, whose URLs are credentials.
-  if (host === 'vermardesign.com' || host === 'www.vermardesign.com') {
+  if (host === 'vermardesign.com' || host === 'www.vermardesign.com' || host === 'utliiz.com' || host === 'www.utliiz.com') {
     return {
       rules: [{ userAgent: '*', allow: '/', disallow: ['/hq/', '/api/'] }],
-      host: 'https://vermardesign.com',
+      host: host.startsWith('www.') ? `https://${host.slice(4)}` : `https://${host}`,
     }
   }
 

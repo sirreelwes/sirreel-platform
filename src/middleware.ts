@@ -50,7 +50,9 @@ const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 // link minting says so. The operator control plane (/vermar/*) is NOT
 // served here yet: it needs a Google login, and NextAuth's callback is
 // bound to the hq host — it stays on hq.sirreel.com until that's wired.
-const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com']
+// utliiz.com is the product's own domain (Wes 2026-09-06); vermardesign.com
+// is the maker's. Both serve the same site until VerMar has a site of its own.
+const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com', 'utliiz.com', 'www.utliiz.com']
 const VERMAR_ALLOWED_PREFIXES = [
   '/vermar-site',           // the site itself (root-rewrite target + direct hits)
   '/hq/',                   // partner workspaces — token-gated, no login
@@ -326,9 +328,9 @@ export function middleware(req: NextRequest): NextResponse {
 
   // ── vermardesign.com (HQ by VerMar Design) ────────────────────
   if (VERMAR_HOSTS.includes(host)) {
-    if (host === 'www.vermardesign.com') {
+    if (host.startsWith('www.')) {
       const url = req.nextUrl.clone()
-      url.host = 'vermardesign.com'
+      url.host = host.slice(4)
       url.protocol = 'https:'
       url.port = ''
       return tagged(NextResponse.redirect(url, 308), host, 'vermar:www-to-apex')

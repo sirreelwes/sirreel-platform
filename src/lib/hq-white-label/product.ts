@@ -1,5 +1,5 @@
 /**
- * HQ by VerMar Design — the white-label product a SirReel partner can run
+ * Utliiz by VerMar Design — the white-label product a SirReel partner can run
  * their own fleet on.
  *
  * Wes 2026-09-05: "start creating the white label HQ for vendors who use
@@ -15,8 +15,15 @@
  */
 
 export const HQ_PRODUCT = {
-  /** What the product is called. Deliberately just "HQ". */
-  name: 'HQ',
+  /**
+   * What the product is called. Wes 2026-09-06: "Utliiz" — coined from
+   * utilization, the number every fleet owner watches; six letters, link-
+   * shared, ownable (utliiz.com was free; "HQ", "360", "Gear", "EQ" and
+   * "Utiliz" all collide with live software). Route paths (/hq/[token])
+   * keep their old name on purpose — a rename there would kill every
+   * link already handed out.
+   */
+  name: 'Utliiz',
   /** Who the subscription is paid to. */
   maker: 'VerMar Design',
   tagline: 'Run your fleet from one place.',

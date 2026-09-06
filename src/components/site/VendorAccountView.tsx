@@ -188,14 +188,14 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           {v.hq.workspace ? (
             <>
               <div style={{ fontSize: 13, color: '#6b6560' }}>
-                Your own HQ is running{v.hq.workspace.status === 'TRIAL' && v.hq.workspace.trialDaysLeft != null ? ` · ${v.hq.workspace.trialDaysLeft > 0 ? `${v.hq.workspace.trialDaysLeft} day${v.hq.workspace.trialDaysLeft === 1 ? '' : 's'} left on your trial` : 'trial ended'}` : ''}.
+                Your own Utliiz is running{v.hq.workspace.status === 'TRIAL' && v.hq.workspace.trialDaysLeft != null ? ` · ${v.hq.workspace.trialDaysLeft > 0 ? `${v.hq.workspace.trialDaysLeft} day${v.hq.workspace.trialDaysLeft === 1 ? '' : 's'} left on your trial` : 'trial ended'}` : ''}.
               </div>
-              <a href={preview ? '#' : v.hq.workspace.url} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>Open your HQ →</a>
+              <a href={preview ? '#' : v.hq.workspace.url} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>Open your Utliiz →</a>
             </>
           ) : (
             <>
               <div style={{ fontSize: 13, color: '#6b6560' }}>Run your whole fleet — not just what you rent us — from one place.</div>
-              <a href={preview || !v.hq.landingPath ? '#' : v.hq.landingPath} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>See what HQ can do for you →</a>
+              <a href={preview || !v.hq.landingPath ? '#' : v.hq.landingPath} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#111', textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}>See what Utliiz can do for you →</a>
             </>
           )}
         </div>
