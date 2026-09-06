@@ -24,10 +24,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import {
-  composeCardAuthEmail,
-  resolveCardAuthBookingId,
-} from '@/lib/email/preview/composeCardAuthEmail'
+import { composeCardAuthEmail } from '@/lib/email/preview/composeCardAuthEmail'
+import { ensureJobPaperworkBooking } from '@/lib/paperwork/ensurePaperworkBooking'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
@@ -59,10 +57,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Re-parsed server-side; the modal's own check is a convenience.
   const manualCc = parseCcList(body?.ccAdd)
 
-  const bookingId = await resolveCardAuthBookingId(params.id)
-  if (!bookingId) {
-    return bad(409, 'No reservation on this job yet — add one before requesting a card.')
-  }
+  // A job is enough (Wes 2026-09-05: "a CCA should go out no matter
+  // what — it is start paperwork"). No live booking → make one off the
+  // job's order rather than refuse.
+  const ensured = await ensureJobPaperworkBooking(params.id)
+  if (!ensured.ok) return bad(409, ensured.error)
+  const bookingId = ensured.bookingId
 
   // Reuse the job's PaperworkRequest if one exists; otherwise mint.
   // `sentTo` starts empty and is filled in below only on a real send, so a
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     customMessage,
     overrideContactId,
     portalLink,
+    bookingId,
   })
   if (!composition.ok) return bad(composition.status, composition.error)
 

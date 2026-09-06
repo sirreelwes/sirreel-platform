@@ -42,9 +42,10 @@ export interface CardAuthEmailCompositionOk {
    *  render — anchoring an EmailDelivery to that would be a bogus FK. */
   orderId: string | null
   portalUrlIsTokenized: boolean
-  /** Booking the PaperworkRequest hangs off. The send route re-resolves
-   *  it the same way; carried here so the preview can prove one exists. */
-  bookingId: string
+  /** Booking the PaperworkRequest hangs off. The send route creates one
+   *  when the job has none (ensureJobPaperworkBooking) and passes it in;
+   *  a preview only looks, so this is null until the send. */
+  bookingId: string | null
   /** Already on file — the caller shows "this client has a card" rather
    *  than pretending the ask is still open. */
   cardAlreadyOnFile: boolean
@@ -67,12 +68,16 @@ export interface ComposeCardAuthEmailArgs {
   /** "Write my own email" — replaces the templated ask and its closer. The
    *  security paragraph, the secure button and the sign-off stay. */
   customMessage?: string | null
+  /** The booking the send route already ensured. Omit for a preview: the
+   *  composer then resolves read-only and tolerates none. */
+  bookingId?: string | null
 }
 
 /**
  * The booking a card authorization hangs off: the job's most recent
- * booking that hasn't been cancelled or archived. PaperworkRequest is
- * booking-scoped, so without one there is nothing to authorize against.
+ * booking that hasn't been cancelled or archived. Read-only — the send
+ * path uses ensureJobPaperworkBooking, which creates one when this
+ * returns null.
  *
  * Exported because the send route must resolve the SAME booking the
  * preview showed — see the header note about the two surfaces agreeing.
@@ -115,14 +120,11 @@ export async function composeCardAuthEmail(
   })
   if (!job) return { ok: false, status: 404, error: 'job not found' }
 
-  const bookingId = await resolveCardAuthBookingId(args.jobId)
-  if (!bookingId) {
-    return {
-      ok: false,
-      status: 409,
-      error: 'No reservation on this job yet — add one before requesting a card.',
-    }
-  }
+  // A job is enough to ask for a card (Wes 2026-09-05) — the send route
+  // creates the booking when there is none, so a missing one is no
+  // longer a reason to refuse. The preview simply has no card-on-file
+  // check to run yet.
+  const bookingId = args.bookingId ?? (await resolveCardAuthBookingId(args.jobId))
 
   const candidates = rankRecipients({ jobContacts: job.jobContacts }, null)
   if (candidates.length === 0) {
@@ -144,10 +146,12 @@ export async function composeCardAuthEmail(
 
   // Already-authorized check. The tile hides the button once a card is on
   // file, but the modal can be open across a client's portal submission.
-  const existingCard = await prisma.paperworkRequest.findFirst({
-    where: { bookingId, ccCardLast4: { not: null } },
-    select: { id: true },
-  })
+  const existingCard = bookingId
+    ? await prisma.paperworkRequest.findFirst({
+        where: { bookingId, ccCardLast4: { not: null } },
+        select: { id: true },
+      })
+    : null
 
   const { subject, html, text } = buildCardAuthRequestEmail({
     firstName: to.name.split(' ')[0] || null,

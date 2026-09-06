@@ -1728,20 +1728,13 @@ const driverTone = (d: any): string => {
                   </div>
                 )}
               </>
-            ) : !stripScored ? (
-              <>
-                {/* Pre-score: no reservation exists, so the send route
-                    would 409 anyway — say what unlocks it instead. */}
-                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-600">
-                  <span className="w-2 h-2 rounded-full bg-zinc-300" />
-                  Not yet
-                </div>
-                <div className="mt-1.5 text-[12px] text-zinc-600">Needs a reservation first</div>
-              </>
             ) : (
               <>
                 {/* Status first — same grammar as the other four tiles;
-                    the rose dot is the "act here", the action sits below. */}
+                    the rose dot is the "act here", the action sits below.
+                    No "needs a reservation first" state any more: a job
+                    is enough to ask for a card (Wes 2026-09-05), and the
+                    send route creates the booking it hangs off. */}
                 <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-rose-700">
                   <span className="w-2 h-2 rounded-full bg-rose-500" />
                   Missing

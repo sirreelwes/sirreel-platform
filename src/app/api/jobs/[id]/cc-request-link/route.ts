@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { adoptJobPaperworkRequest } from '@/lib/paperwork/livePaperworkBooking'
+import { ensureJobPaperworkBooking } from '@/lib/paperwork/ensurePaperworkBooking'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +15,9 @@ export const dynamic = 'force-dynamic'
  *
  * The card auth lives on paperwork_requests, which is booking-scoped, so
  * we resolve the job's most recent active booking and reuse its
- * PaperworkRequest (minting one if none exists yet). 409 when the job has
- * no booking to hang the request on — nothing to authorize against yet.
+ * PaperworkRequest (minting one if none exists yet). A job with no
+ * booking gets one created off its order (Wes 2026-09-05: a CCA is start
+ * paperwork and goes out as soon as the job exists).
  */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
@@ -28,22 +30,15 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     select: {
       id: true,
       jobContacts: { include: { person: true }, orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }] },
-      bookings: {
-        where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      },
     },
   })
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-  const booking = job.bookings[0]
-  if (!booking) {
-    return NextResponse.json(
-      { error: 'No booking on this job yet — add a reservation before requesting a card.' },
-      { status: 409 },
-    )
-  }
+  // A job is enough to ask for a card (Wes 2026-09-05) — create the
+  // booking the link hangs off when the job has none.
+  const ensured = await ensureJobPaperworkBooking(job.id)
+  if (!ensured.ok) return NextResponse.json({ error: ensured.error }, { status: 409 })
+  const booking = { id: ensured.bookingId }
 
   // Reuse the JOB's PaperworkRequest if present; otherwise mint one.
   // Job-scoped so a rebook (cancel the hold, create the reservation)

@@ -33,6 +33,7 @@ import { prisma } from '@/lib/prisma'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
+import { createAgentDirectBooking } from '@/lib/paperwork/ensurePaperworkBooking'
 
 export interface HoldOnQuoteResult {
   created: number
@@ -234,20 +235,16 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
           select: { id: true },
         }).then((p) => (p ? { personId: p.id } : null)))
       if (!person) return { ...out, error: 'no contact on the job or company to attach a booking to' }
-      const created = await prisma.booking.create({
-        data: {
-          bookingNumber: `SR-Q-${Date.now()}`,
-          companyId: order.companyId,
-          personId: person.personId,
-          agentId: order.agentId,
-          jobId: order.jobId,
-          jobName: order.job?.name ?? 'Quote hold',
-          startDate: envelopeStart,
-          endDate: envelopeEnd,
-          source: 'AGENT_DIRECT',
-          status: 'REQUEST',
-        },
-        select: { id: true },
+      // Same creator the paperwork path uses (ensurePaperworkBooking):
+      // one booking per order whichever side asks for it first.
+      const created = await createAgentDirectBooking({
+        jobId: order.jobId,
+        companyId: order.companyId,
+        personId: person.personId,
+        agentId: order.agentId,
+        jobName: order.job?.name ?? 'Quote hold',
+        startDate: envelopeStart,
+        endDate: envelopeEnd,
       })
       bookingId = created.id
       await prisma.order.update({ where: { id: order.id }, data: { bookingId } })
