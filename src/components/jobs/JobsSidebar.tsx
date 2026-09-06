@@ -430,7 +430,11 @@ function JobTile({
               <User size={11} aria-hidden className="text-zinc-400 flex-shrink-0" />
               <span className="truncate">
                 {contactName}
-                {contact?.role && <span className="text-zinc-400"> · {ROLE_WORD[contact.role] ?? contact.role}</span>}
+                {/* OTHER carries no information — "Luis · Contact" says
+                    less than "Luis". Only a real role gets the word. */}
+                {contact?.role && contact.role !== 'OTHER' && (
+                  <span className="text-zinc-400"> · {ROLE_WORD[contact.role] ?? contact.role}</span>
+                )}
               </span>
             </span>
           )}
