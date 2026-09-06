@@ -29,7 +29,7 @@ export function PublicAssistantWidget() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Chat with SirReel"
-          className="fixed bottom-5 right-5 z-[70] flex items-center gap-2 bg-[#4DB1C6] hover:bg-[#4DB1C6] text-[#0c0c0d] font-extrabold text-[13px] uppercase tracking-wide rounded-full pl-4 pr-5 py-3 shadow-2xl transition-colors"
+          className="fixed bottom-5 right-5 z-[70] flex items-center gap-2 bg-[#FFD23F] hover:bg-[#FFDC66] text-[#0c0c0d] font-extrabold text-[13px] uppercase tracking-wide rounded-full pl-4 pr-5 py-3 shadow-2xl transition-colors"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
           <span className="text-[17px] leading-none"><MessageSquare size={16} aria-hidden /></span>
