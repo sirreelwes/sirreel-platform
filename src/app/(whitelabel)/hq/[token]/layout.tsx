@@ -10,16 +10,18 @@
  * footer. The token in the URL is the login, the same contract as every
  * other partner-facing page here.
  *
- * Signed-in SirReel staff who open a partner's link get a ribbon and do
- * NOT bump the partner's open counter — the product is ours to support.
+ * A signed-in VerMar operator who opens a partner's link gets a support
+ * ribbon and does NOT bump the partner's open counter. SirReel staff get
+ * no such thing: the product is VerMar's to support, not SirReel's (Wes
+ * 2026-09-05), and a SirReel login holding the link is just a visitor.
  */
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { loadWorkspaceByToken } from '@/lib/hq-white-label/workspace'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { isVerMarOperator } from '@/lib/hq-white-label/operator'
 import { HqNav } from '@/components/hq-white-label/HqNav'
 
 export const dynamic = 'force-dynamic'
@@ -29,26 +31,23 @@ export async function generateMetadata({ params }: { params: { token: string } }
   return { title: ws ? `${ws.brandName} · ${HQ_PRODUCT.name}` : HQ_PRODUCT.name, robots: { index: false, follow: false } }
 }
 
-async function viewerIsStaff(): Promise<boolean> {
+async function viewerIsVerMar(): Promise<boolean> {
   const session = await getServerSession(authOptions).catch(() => null)
-  const email = session?.user?.email
-  if (!email) return false
-  const u = await prisma.user.findUnique({ where: { email }, select: { id: true } })
-  return !!u
+  return isVerMarOperator(session?.user?.email)
 }
 
 export default async function HqLayout({ children, params }: { children: React.ReactNode; params: { token: string } }) {
-  const staff = await viewerIsStaff()
-  const ws = await loadWorkspaceByToken(params.token, { stamp: !staff })
+  const support = await viewerIsVerMar()
+  const ws = await loadWorkspaceByToken(params.token, { stamp: !support })
   if (!ws) notFound()
   const base = `/hq/${params.token}`
   const trialEnds = ws.trialEndsAt ? new Date(ws.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : null
 
   return (
     <div className="min-h-screen bg-[#f5f6f8] text-[#111827] antialiased" style={{ ['--hq-accent' as string]: ws.accentColor, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }}>
-      {staff && (
+      {support && (
         <div className="bg-[#111827] text-white text-[12px] px-4 py-1.5 text-center">
-          SirReel staff view of <strong>{ws.vendorName}</strong>&rsquo;s workspace — this open isn&rsquo;t counted, and everything you change here is real.
+          {HQ_PRODUCT.maker} support view of <strong>{ws.vendorName}</strong>&rsquo;s workspace — this open isn&rsquo;t counted, and everything you change here is real.
         </div>
       )}
       <header className="bg-white border-b border-[#e3e6ea]">

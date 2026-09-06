@@ -16,9 +16,8 @@
 import { randomBytes } from 'crypto'
 import type { VendorWorkspacePlan, VendorWorkspaceStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { HQ_PRODUCT, trialDaysLeft } from './product'
+import { HQ_PRODUCT, trialDaysLeft, vermarOpsEmails } from './product'
 
 export function hqPath(token: string): string {
   return `/hq/${token}`
@@ -140,8 +139,9 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${base}-${randomBytes(3).toString('hex')}`
 }
 
-async function tellHq(subject: string, line: string, href: string): Promise<void> {
-  const to = await channelRecipients('vendor-portal')
+/** Tell VerMar — the product's owner, not SirReel's HQ inbox. */
+async function tellVerMar(subject: string, line: string, href: string): Promise<void> {
+  const to = vermarOpsEmails()
   if (to.length === 0) return
   const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
   await sendAgreementEmail({
@@ -149,7 +149,7 @@ async function tellHq(subject: string, line: string, href: string): Promise<void
     subject,
     html: `<p>${line}</p><p><a href="${base}${href}">${base}${href}</a></p>`,
     text: `${line}\n\n${base}${href}`,
-    label: 'vendor-hq',
+    label: 'vermar-hq',
   }).catch(() => null)
 }
 
@@ -236,10 +236,10 @@ export async function startWorkspaceTrial(vendorId: string, input: StartTrialInp
   }
 
   if (fresh) {
-    await tellHq(
+    await tellVerMar(
       `${vendor.name} started an HQ trial`,
-      `${requestedByName || vendor.contactName || 'Someone'} at ${vendor.name}${requestedByEmail ? ` (${requestedByEmail})` : ''} started a ${HQ_PRODUCT.trialDays}-day ${HQ_PRODUCT.name} trial from their partner page.${note ? ` They wrote: “${note}”` : ''} Trial ends ${trialEndsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`,
-      '/crm/portals#vendor',
+      `${requestedByName || vendor.contactName || 'Someone'} at ${vendor.name}${requestedByEmail ? ` (${requestedByEmail})` : ''} started a ${HQ_PRODUCT.trialDays}-day ${HQ_PRODUCT.name} trial.${note ? ` They wrote: “${note}”` : ''} Trial ends ${trialEndsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`,
+      '/vermar/workspaces',
     )
   }
   return ws

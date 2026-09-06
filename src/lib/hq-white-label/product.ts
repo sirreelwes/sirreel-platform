@@ -113,3 +113,15 @@ export function trialDaysLeft(trialEndsAt: Date | string | null): number | null 
   const end = typeof trialEndsAt === 'string' ? new Date(trialEndsAt) : trialEndsAt
   return Math.ceil((end.getTime() - Date.now()) / 86_400_000)
 }
+
+/**
+ * Where VerMar Design hears about its own customers — a trial started, a
+ * partner writing in. NOT a SirReel notification channel: the partners'
+ * subscriptions are VerMar's business (Wes 2026-09-05). VERMAR_OPS_EMAILS
+ * replaces the default, which is Wes until VerMar has its own inbox.
+ */
+export function vermarOpsEmails(): string[] {
+  const raw = process.env.VERMAR_OPS_EMAILS
+  const list = raw ? raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : []
+  return list.length ? list : ['wes@sirreel.com']
+}
