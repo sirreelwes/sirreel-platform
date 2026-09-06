@@ -13,9 +13,10 @@
  *                                  on phone inboxes.
  *
  * Visual treatment matches the thank-you template (`thankYouTemplate.ts`):
- *   - slate header (#0f172a) with the SirReel logo, full width (the
- *     hand-script "Welcome!" badge that sat right of it was removed
- *     2026-08-26 — see the note at the header markup)
+ *   - slate header (#0f172a) with the SirReel wordmark top centre at
+ *     200px over a short accent rule — the same header as portalInvite /
+ *     bookingWelcome (the hand-script "Welcome!" badge that sat right of
+ *     it was removed 2026-08-26 — see the note at the header markup)
  *   - warm body copy
  *   - quote snippet block (when present): gold left-border, big amber
  *     CTA button to the portal job URL
@@ -448,34 +449,34 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
       <td align="center" style="padding: 24px 12px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
-            <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
-              ${/* Logo, centred (Wes, 2026-08-29). It was left-aligned
-                   because a hand-script "Welcome!" badge used to sit to its
-                   right and the pair read as a unit; the badge went in
-                   August (see the note above), which left the mark alone
-                   and hanging off one edge of a full-width bar.
+            <td align="center" style="background-color: ${HEADER_BG}; padding: 36px 24px 28px; text-align: center;">
+              ${/* Logo, top centre (Wes, 2026-08-29; restated 2026-09-06
+                   after it drifted). This is the portalInvite / bookingWelcome
+                   header treatment, copied verbatim so every welcome-family
+                   email opens the same way: the wordmark at 200px, INLINE
+                   inside a td that carries both align="center" (Outlook's
+                   Word engine) and text-align: center (everyone else).
 
-                   thankYouTemplate keeps ITS logo left for the same reason
-                   this one used to be — that header still carries a badge
-                   on the right.
+                   The previous version set the image display: block with
+                   margin: 0 auto and 28px tall — Gmail ignores auto margins
+                   on a block image, so the mark sat small and flush left
+                   there while looking centred in Apple Mail. Inline + a
+                   centred cell is the combination that holds everywhere.
 
-                   Centring an image in email takes both halves: the
-                   align="center" ATTRIBUTE for Outlook's Word engine, which
-                   ignores CSS text-align on a block-level image, and
-                   margin: 0 auto for everyone else. Dropping either one
-                   leaves it left-aligned in some client.
+                   thankYouTemplate keeps ITS logo left — that header still
+                   carries a badge on the right.
 
                    A JS comment, not an HTML one — an HTML comment rides
                    into the client's inbox, and this one carried the very
-                   "Welcome!" string the badge test forbids. */ ''}<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                   "Welcome!" string the badge test forbids. */ ''}<img
+                src="https://hq.sirreel.com/sirreel-logo-white.png"
+                alt="SirReel Studio Services"
+                width="200"
+                style="display: inline-block; max-width: 200px; width: 200px; height: auto; border: 0; outline: none; text-decoration: none;"
+              />
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 18px auto 0;">
                 <tr>
-                  <td valign="middle" align="center" style="width: 100%; text-align: center;">
-                    <img
-                      src="https://hq.sirreel.com/sirreel-logo-white.png"
-                      alt="SirReel"
-                      style="height: 28px; width: auto; display: block; margin: 0 auto;"
-                    />
-                  </td>
+                  <td style="width: 48px; height: 2px; background-color: ${ACCENT}; line-height: 2px; font-size: 0;">&nbsp;</td>
                 </tr>
               </table>
             </td>
