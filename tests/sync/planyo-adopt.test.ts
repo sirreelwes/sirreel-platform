@@ -83,6 +83,29 @@ async function main() {
     await findAdoptableNativeBooking(stub([native('N', ['cat-cargo'])]).prisma,
       plan({ resolvedCompany: null })), null)
 
+  // ── The contact rung (2026-09-06, Forgotten Island Press Junket) ──
+  // A mistyped Company_Name makes the company NEW, but the customer email
+  // resolved to an existing Person. Same exact test, anchored on them.
+  s = stub([native('SR-2026-0310', ['cat-cargo'])])
+  r = await findAdoptableNativeBooking(s.prisma, plan({
+    resolvedCompany: { create: { name: 'Sublot Ent' } },
+    resolvedPerson: { id: 'person-luis', name: 'Luis Salgado' },
+  }))
+  eq('adopts on the contact when the company is a typo', r?.bookingNumber, 'SR-2026-0310')
+  eq('contact rung queries the person, not a company', s.calls[0].where.personId, 'person-luis')
+  eq('contact rung sends no companyId', 'companyId' in s.calls[0].where, false)
+  eq('contact rung says so in the reason', r?.reason.includes('same contact'), true)
+
+  eq('refuses when both company and person would be created',
+    await findAdoptableNativeBooking(stub([native('N', ['cat-cargo'])]).prisma,
+      plan({ resolvedCompany: { create: { name: 'New Co' } }, resolvedPerson: { create: { email: 'x@y.z' } } })), null)
+
+  // A known company still anchors first — the person is the fallback.
+  s = stub([native('N', ['cat-cargo'])])
+  await findAdoptableNativeBooking(s.prisma, plan({ resolvedPerson: { id: 'person-1', name: 'P' } }))
+  eq('company rung wins when both are known', s.calls[0].where.companyId, 'co-1')
+  eq('company rung ignores the person', 'personId' in s.calls[0].where, false)
+
   eq('refuses a cart with no equipment',
     await findAdoptableNativeBooking(stub([native('N', ['cat-cargo'])]).prisma,
       plan({ bookingItemDrafts: [] })), null)
