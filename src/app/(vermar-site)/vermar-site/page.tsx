@@ -122,23 +122,18 @@ export default function UtliizSitePage() {
                   <li key={f} className="flex gap-2.5"><span className={`mt-[3px] inline-block w-4 h-4 rounded-full shrink-0 ${i === 1 ? 'bg-[#CC0000]' : 'bg-[#0F7A93]'}`} />{f}</li>
                 ))}
               </ul>
+              {p.key === 'PRO' && HQ_ADD_ONS.map((a) => (
+                <div key={a.key} className="mt-6 rounded-2xl border border-dashed border-[#8FC2CE]/60 p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="text-[15px] font-black" style={DISPLAY}>{a.name} add-on</div>
+                    <div className="text-[13px] font-bold text-[#8FC2CE]">caps at ${a.capUsd}/mo</div>
+                  </div>
+                  <p className="mt-1 text-[13.5px] text-white/75">${a.perBlockUsd}/mo per {a.blockSize} {a.blockNoun}. {a.blurb}</p>
+                </div>
+              ))}
             </div>
           ))}
         </div>
-        {HQ_ADD_ONS.length > 0 && (
-          <div className="mt-6 max-w-[860px] grid sm:grid-cols-2 gap-5">
-            {HQ_ADD_ONS.map((a) => (
-              <div key={a.key} className="rounded-[22px] border border-dashed border-[#8FC2CE] p-6">
-                <div className="flex items-baseline justify-between gap-3">
-                  <div className="text-[18px] font-black" style={DISPLAY}>{a.name} <span className="text-[12px] font-bold uppercase tracking-[1.6px] text-[#CC0000]">add-on</span></div>
-                  <div className="text-[13px] font-bold text-[#CC0000]">${a.perBlockUsd}/mo per {a.blockSize} {a.blockNoun}</div>
-                </div>
-                <p className="mt-1 text-[14.5px] text-[#0f2a30]/70">{a.blurb}</p>
-                <p className="mt-2 text-[13px] text-[#0f2a30]/60">Never more than ${a.capUsd}/mo, however many {a.blockNoun} you keep.</p>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
 
       <section id="request" className="bg-white border-t border-[#8FC2CE]/40">

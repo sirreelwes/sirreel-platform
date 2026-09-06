@@ -106,7 +106,7 @@ export const HQ_PLANS: HqPlan[] = [
     includes: [
       'Fleet & rates',
       'Calendar across every unit',
-      'Holds and bookings for your own productions',
+      'Holds and bookings for the jobs you book direct',
       'Drivers: their own page, call times, hours and meters',
       'Bookings from your partners flow in automatically',
     ],
