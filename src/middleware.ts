@@ -59,6 +59,8 @@ const VERMAR_ALLOWED_PREFIXES = [
   '/api/public/vendor-hq/', // their API
   '/drive/booking/',        // a partner's driver's page for one booking
   '/api/public/utliiz-drive/',
+  '/drive/profile/',        // a driver's own profile (name, phone, licence) — shared with the SirReel conduit, vendor-voiced
+  '/api/drive/profile/',
   '/robots.txt',
   '/favicon',
   '/icon-',

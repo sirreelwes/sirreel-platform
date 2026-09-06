@@ -12,7 +12,7 @@ export default async function ClientsPage({ params }: { params: { token: string 
   const clients = await loadClients(ws)
   return (
     <div className={PAGE}>
-      <PageHead title="Clients" sub="The productions and companies that book you directly. SirReel's bookings come in on their own." action={{ href: `${base}/clients/new`, label: '+ Add client' }} />
+      <PageHead title="Clients" sub="The productions and companies that book you directly. Bookings from your rental partners come in on their own." action={{ href: `${base}/clients/new`, label: '+ Add client' }} />
       {clients.length === 0 ? (
         <Empty>No clients yet. <Link href={`${base}/clients/new`} className="font-semibold text-[var(--hq-accent)]">Add the first one</Link>.</Empty>
       ) : (

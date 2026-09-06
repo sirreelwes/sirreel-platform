@@ -14,7 +14,7 @@ export default async function FleetPage({ params }: { params: { token: string } 
   const units = await loadUnits(ws, { includeInactive: true })
   return (
     <div className={PAGE}>
-      <PageHead title="Fleet" sub="Every unit you run. Units you offer to SirReel carry the rates on file with them; the rest are priced however you like." action={{ href: `${base}/fleet/new`, label: '+ Add unit' }} />
+      <PageHead title="Fleet" sub="Every unit you run. Units you share with a rental partner carry the rates agreed with them; the rest are priced however you like." action={{ href: `${base}/fleet/new`, label: '+ Add unit' }} />
       {units.length === 0 ? (
         <Empty>No units yet. <Link href={`${base}/fleet/new`} className="font-semibold text-[var(--hq-accent)]">Add the first one</Link>.</Empty>
       ) : (
@@ -24,7 +24,7 @@ export default async function FleetPage({ params }: { params: { token: string } 
               <div className="min-w-0 flex-1">
                 <div className="text-[15px] font-semibold text-[#111827]">{u.name}{u.vehicleType ? <span className="font-normal text-[#6b7280]"> · {u.vehicleType}</span> : null}</div>
                 <div className={MUTED}>
-                  {u.offeredToPartner ? 'Offered to SirReel' : 'Yours alone'}{!u.active ? ' · retired' : ''}{u.rateNotes ? ` · ${u.rateNotes}` : ''}
+                  {u.offeredToPartner ? 'Shared with partners' : 'Yours alone'}{!u.active ? ' · retired' : ''}{u.rateNotes ? ` · ${u.rateNotes}` : ''}
                 </div>
               </div>
               <div className="text-right text-[13px] text-[#111827] leading-[1.6]">

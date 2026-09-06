@@ -3,6 +3,12 @@
  * and a request form (no mailto — Wes 2026-09-06). Copy comes from
  * product.ts so this, the partner landing and the workspace never
  * disagree about the product.
+ *
+ * NEVER name SirReel here. Wes 2026-09-06: "we cannot reference SirReel as
+ * a partner of Utliiz. To everyone but myself they should look like
+ * distinct entities with no ties except SirReel uses them." SirReel is a
+ * customer of Utliiz, and that is the only sentence about it that may ever
+ * appear on this domain.
  */
 import { CalendarDays, ClipboardList, FileSignature, Truck, UserRound, Users } from 'lucide-react'
 import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
@@ -39,7 +45,7 @@ export default function UtliizSitePage() {
           </h1>
           <p className="mt-6 text-[17px] sm:text-[19px] leading-relaxed text-[#0f2a30]/75 max-w-[54ch]">
             Every unit you own on one calendar. Your own customers booked beside the jobs your partners send you. Your brand on all of it.
-            Built by the studio that runs a working production fleet on it every day.
+            Proven every day on a working production fleet in Los Angeles.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a href="#request" className="rounded-full bg-[#0F7A93] hover:bg-[#0B5C70] px-6 py-3.5 text-[16px] font-bold text-white no-underline transition-colors">Start a free {HQ_PRODUCT.trialDays}-day trial</a>
@@ -127,8 +133,8 @@ export default function UtliizSitePage() {
               Tell us who you are and roughly what you run. We set every workspace up by hand so it starts with your fleet already in it, then email you the link.
             </p>
             <div className="mt-6 rounded-[22px] bg-[#F1F8F9] p-5 text-[14.5px] text-[#0f2a30]/75">
-              <div className="font-bold text-[#0B5C70]">Already a SirReel partner?</div>
-              Open your partner page and press &ldquo;See what {HQ_PRODUCT.name} can do for you&rdquo; at the bottom. Your units and bookings are on your calendar from the first minute.
+              <div className="font-bold text-[#0B5C70]">Rent units to other companies?</div>
+              When a rental partner of yours runs {HQ_PRODUCT.name} too, their bookings of your units land on your calendar automatically, driver and call time included. Say who they are and we&rsquo;ll connect you.
             </div>
           </div>
           <div className="rounded-[28px] bg-white border border-[#8FC2CE]/50 p-6 sm:p-8 shadow-[0_20px_60px_rgba(15,122,147,0.10)]">

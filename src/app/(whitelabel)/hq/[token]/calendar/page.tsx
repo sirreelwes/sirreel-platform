@@ -77,7 +77,7 @@ export default async function CalendarPage({ params, searchParams }: { params: {
                       const b = bar.booking
                       const label = `${b.title}${b.clientName ? ` · ${b.clientName}` : ''}`
                       const el = (
-                        <div className={`m-[3px] h-[36px] rounded-md border px-2 flex items-center overflow-hidden whitespace-nowrap text-[12px] font-semibold ${BAR[b.status]} ${bar.conflict ? 'ring-2 ring-[#dc2626]' : ''}`} title={`${label} · ${b.startDate} – ${b.endDate}${b.source === 'partner' ? ' · from SirReel' : ''}${bar.conflict ? ' · DOUBLE-BOOKED' : ''}`}>
+                        <div className={`m-[3px] h-[36px] rounded-md border px-2 flex items-center overflow-hidden whitespace-nowrap text-[12px] font-semibold ${BAR[b.status]} ${bar.conflict ? 'ring-2 ring-[#dc2626]' : ''}`} title={`${label} · ${b.startDate} – ${b.endDate}${b.source === 'partner' ? ' · partner booking' : ''}${bar.conflict ? ' · DOUBLE-BOOKED' : ''}`}>
                           <span className="truncate">{label}</span>
                         </div>
                       )

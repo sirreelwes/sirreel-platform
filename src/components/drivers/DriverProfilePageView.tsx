@@ -96,7 +96,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500">Driver profile</div>
           <h1 className="mt-1 text-3xl font-bold leading-tight">{data.vendorName}</h1>
           <p className="mt-1 text-[15px] text-zinc-300">
-            {data.vendorName} listed you as one of their drivers for jobs booked through SirReel. Fill in the four things below and you&rsquo;re set.
+            {data.vendorName} listed you as one of their drivers. Fill in the four things below and you&rsquo;re set.
           </p>
         </header>
 
@@ -126,7 +126,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
 
         <Section title="4 · Units you’re trained to drive" done={trained.size > 0}>
           {data.vehicles.length === 0 ? (
-            <p className="text-[14px] text-zinc-400">{data.vendorName} hasn&rsquo;t listed any units with SirReel yet — nothing to tick.</p>
+            <p className="text-[14px] text-zinc-400">{data.vendorName} hasn&rsquo;t listed any units yet — nothing to tick.</p>
           ) : (
             <ul className="space-y-2">
               {data.vehicles.map((v) => (
@@ -149,7 +149,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
         {saved && <p className="mt-3 text-center text-[13px] text-emerald-300">Saved.</p>}
         {!licenceDone && <p className="mt-3 text-center text-[12px] text-zinc-500">Licence photos save on their own the moment you take them.</p>}
 
-        <p className="mt-6 text-center text-[12px] text-zinc-500">Questions? SirReel: (888) 477-7335 · This link is personal to you.</p>
+        <p className="mt-6 text-center text-[12px] text-zinc-500">Questions? Ask {data.vendorName}. This link is personal to you.</p>
       </div>
     </main>
   )

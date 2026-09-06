@@ -39,7 +39,7 @@ export function statusLabel(status: HqBookingStatus): string {
 
 export function SourceChip({ source }: { source: 'direct' | 'partner' }) {
   if (source === 'direct') return null
-  return <span className="inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold bg-[#f5f6f8] text-[#4b5563] border border-[#e3e6ea]">from SirReel</span>
+  return <span className="inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold bg-[#f5f6f8] text-[#4b5563] border border-[#e3e6ea]">partner booking</span>
 }
 
 export function NeedsChip({ text }: { text: string }) {

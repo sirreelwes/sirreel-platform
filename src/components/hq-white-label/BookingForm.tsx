@@ -201,7 +201,7 @@ export function BookingForm({
           <ul className="mt-1.5 space-y-0.5">
             {conflicts.map((c, i) => (
               <li key={i}>
-                {c.title} · {fmt(c.startDate)}{c.startDate !== c.endDate ? ` – ${fmt(c.endDate)}` : ''}{c.source === 'partner' ? ' (from SirReel)' : ''}
+                {c.title} · {fmt(c.startDate)}{c.startDate !== c.endDate ? ` – ${fmt(c.endDate)}` : ''}{c.source === 'partner' ? ' (partner booking)' : ''}
               </li>
             ))}
           </ul>

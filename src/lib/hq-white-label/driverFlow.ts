@@ -14,7 +14,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { listHours, type HoursView } from '@/lib/drivers/hoursStore'
-import { driverDisplayName, profilePageUrl } from '@/lib/sub-rentals/vendorDrivers'
+import { driverDisplayName, profilePagePath } from '@/lib/sub-rentals/vendorDrivers'
 import { HQ_PRODUCT } from './product'
 import { ymd, todayPacific, addDays } from './dates'
 import { buildDriverAssignment, buildDriverInvite, buildDriverReminder, buildDriverUpdate, type DriverMailArgs } from './driverEmails'
@@ -98,7 +98,7 @@ export async function addWorkspaceDriver(ws: { id: string; vendorId: string; bra
     ? await prisma.vendorDriver.update({ where: { id: existing.id }, data: { isActive: true, firstName: existing.firstName ?? parts[0] ?? null, lastName: existing.lastName ?? (parts.slice(1).join(' ') || null), profileToken: token, profileTokenMintedAt: existing.profileToken ? undefined : new Date(), invitedAt: new Date() }, select: { id: true, firstName: true, lastName: true, email: true } })
     : await prisma.vendorDriver.create({ data: { vendorId: ws.vendorId, email, firstName: parts[0] ?? null, lastName: parts.slice(1).join(' ') || null, profileToken: token, profileTokenMintedAt: new Date(), invitedAt: new Date() }, select: { id: true, firstName: true, lastName: true, email: true } })
   const wsRow = await prisma.vendorWorkspace.findUnique({ where: { id: ws.id }, select: { accentColor: true } })
-  const mail = buildDriverInvite({ brandName: ws.brandName, accent: wsRow?.accentColor || HQ_PRODUCT.defaultAccent, driverName: row.firstName ? driverDisplayName(row) : null, profileUrl: profilePageUrl(token) })
+  const mail = buildDriverInvite({ brandName: ws.brandName, accent: wsRow?.accentColor || HQ_PRODUCT.defaultAccent, driverName: row.firstName ? driverDisplayName(row) : null, profileUrl: `${HQ_PRODUCT.origin}${profilePagePath(token)}` })
   const res = await sendAgreementEmail({ to: [email], from: driverSenderFor(ws.brandName), subject: mail.subject, html: mail.html, text: mail.text, label: 'utliiz-driver/invite' }).catch(() => ({ ok: false as const, reason: 'send threw' }))
   return { id: row.id, invited: res.ok, existed: !!existing }
 }

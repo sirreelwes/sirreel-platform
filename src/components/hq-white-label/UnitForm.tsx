@@ -53,7 +53,7 @@ export function UnitForm({ base, token, unitId, initial, ratesLocked }: { base: 
             <input inputMode="decimal" className={INPUT} value={v.weekly} onChange={set('weekly')} placeholder="week" disabled={ratesLocked} />
             <input inputMode="decimal" className={INPUT} value={v.monthly} onChange={set('monthly')} placeholder="month" disabled={ratesLocked} />
           </div>
-          {ratesLocked && <p className={`${MUTED} mt-1.5`}>This unit is offered to SirReel, so its rates are on file with them — propose a change from your SirReel partner page.</p>}
+          {ratesLocked && <p className={`${MUTED} mt-1.5`}>This unit is shared with a rental partner, so its rates are agreed with them — propose a change on that partner's page.</p>}
         </div>
         <div className="sm:col-span-2">
           <label className={LABEL}>Rate notes</label>
@@ -67,8 +67,8 @@ export function UnitForm({ base, token, unitId, initial, ratesLocked }: { base: 
           <label className="flex items-start gap-2.5 text-[14px] text-[#111827]">
             <input type="checkbox" className="mt-1" checked={v.offeredToPartner} onChange={set('offeredToPartner')} />
             <span>
-              <span className="font-semibold">Offer this unit to SirReel for sublease</span>
-              <span className={`block ${MUTED}`}>SirReel can quote it to productions at the rates on file. Turning this on tells them; turning it off takes it off their roster.</span>
+              <span className="font-semibold">Share this unit with your rental partners</span>
+              <span className={`block ${MUTED}`}>Partners who rent from you can book it for their productions at the rates agreed with them. Turning this on tells them; turning it off takes it off their roster.</span>
             </span>
           </label>
           {unitId && (

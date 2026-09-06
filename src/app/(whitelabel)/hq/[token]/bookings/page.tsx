@@ -33,7 +33,7 @@ export default async function BookingsPage({ params }: { params: { token: string
   const past = all.filter((b) => !live.includes(b)).sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
   return (
     <div className={PAGE}>
-      <PageHead title="Bookings" sub="Your own bookings, and the ones that come in from SirReel. Bookings from SirReel open on their page — that's where the call time, driver and confirmation are exchanged." action={{ href: `${base}/bookings/new`, label: '+ New booking' }} />
+      <PageHead title="Bookings" sub="Your own bookings, and the ones your rental partners send you. A partner booking opens on the partner's page — that's where the call time, driver and confirmation are exchanged." action={{ href: `${base}/bookings/new`, label: '+ New booking' }} />
       <h2 className={`${H2} mb-2`}>Current & upcoming · {live.length}</h2>
       {live.length === 0 ? <Empty>Nothing on the books. <Link href={`${base}/bookings/new`} className="font-semibold text-[var(--hq-accent)]">Create a booking</Link>.</Empty> : <div className={`${CARD} divide-y divide-[#eef0f3] overflow-hidden`}>{live.map((b) => <Row key={b.id} b={b} />)}</div>}
       {past.length > 0 && (

@@ -2,6 +2,7 @@
 import { requireWorkspace } from '@/lib/hq-white-label/page'
 import { HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
 import { SettingsForm } from '@/components/hq-white-label/SettingsForm'
+import { LogoForm } from '@/components/hq-white-label/LogoForm'
 import { CARD, H2, MUTED, PAGE, PageHead } from '@/components/hq-white-label/ui'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,8 @@ export default async function SettingsPage({ params }: { params: { token: string
       <PageHead title="Settings" />
       <h2 className={`${H2} mb-2`}>Your brand</h2>
       <SettingsForm token={params.token} initial={{ brandName: ws.brandName, accentColor: ws.accentColor }} />
-      <p className={`${MUTED} mt-2`}>Your logo is the one on file with SirReel — change it from your SirReel partner page and it follows you here.</p>
+      <h2 className={`${H2} mt-8 mb-2`}>Your logo</h2>
+      <LogoForm token={params.token} hasLogo={ws.hasLogo} />
 
       <h2 className={`${H2} mt-8 mb-2`}>Subscription</h2>
       <div className={`${CARD} p-5`}>

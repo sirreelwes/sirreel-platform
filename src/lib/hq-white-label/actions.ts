@@ -95,7 +95,7 @@ export async function findConflicts(
   }
   for (const p of partner) {
     const s = ymd(p.startDate)!, e = ymd(p.endDate)!
-    if (overlaps(s, e, start, end)) out.push({ source: 'partner', title: p.job?.name ?? p.order?.job?.name ?? 'SirReel booking', startDate: s, endDate: e })
+    if (overlaps(s, e, start, end)) out.push({ source: 'partner', title: p.job?.name ?? p.order?.job?.name ?? 'Partner booking', startDate: s, endDate: e })
   }
   return out
 }
@@ -348,13 +348,13 @@ export async function updateUnit(ws: WsRef, unitId: string, input: UnitInput): P
   const wantsRates = input.daily !== undefined || input.weekly !== undefined || input.monthly !== undefined
   const nowOffered = input.offeredToPartner === undefined ? u.offeredToSirReel : input.offeredToPartner === true
   if (wantsRates) {
-    if (u.offeredToSirReel) throw new HqError('This unit is offered to SirReel, so its rates are changed by proposal on your SirReel partner page.')
+    if (u.offeredToSirReel) throw new HqError('This unit is shared with a rental partner, so its rates are agreed with them — propose a change on that partner\'s page.')
     if (input.daily !== undefined) data.listDailyRate = money(input.daily)
     if (input.weekly !== undefined) data.listWeeklyRate = money(input.weekly)
     if (input.monthly !== undefined) data.listMonthlyRate = money(input.monthly)
   }
   if (input.offeredToPartner !== undefined && nowOffered !== u.offeredToSirReel) {
-    if (!nowOffered && u.subRentals.length) throw new HqError('SirReel has a live booking on this unit — finish that before withdrawing it.')
+    if (!nowOffered && u.subRentals.length) throw new HqError('A partner has a live booking on this unit — finish that before withdrawing it.')
     data.offeredToSirReel = nowOffered
   }
   if (!Object.keys(data).length) return

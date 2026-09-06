@@ -39,7 +39,7 @@ export default async function HqLandingPage({ params }: { params: { token: strin
           <div className="text-[11px] font-bold uppercase tracking-[2.5px] opacity-80">{HQ_PRODUCT.name} · by {HQ_PRODUCT.maker}</div>
           <h1 className="mt-3 text-[30px] sm:text-[40px] font-black leading-[1.05] tracking-tight">See what {HQ_PRODUCT.name} can do for you.</h1>
           <p className="mt-4 text-[16px] sm:text-[18px] leading-relaxed opacity-90 max-w-[56ch]">
-            The system SirReel runs its own fleet on, simplified and made yours — every unit you own on one calendar, your own productions booked
+            The fleet system SirReel uses, for your own fleet — every unit you own on one calendar, your own productions booked
             beside the ones that come through partners, and nothing of anyone else&rsquo;s branding on it.
           </p>
           {ws ? (
@@ -102,7 +102,7 @@ export default async function HqLandingPage({ params }: { params: { token: strin
         )}
 
         <p className="mt-10 text-[12px] text-[#8a8272]">
-          {HQ_PRODUCT.name} is built and billed by {HQ_PRODUCT.maker}, the studio behind SirReel&rsquo;s own operations platform. Your workspace is yours: SirReel sees only the units you offer them and the bookings they place, exactly as today.
+          {HQ_PRODUCT.name} is built and billed by {HQ_PRODUCT.maker}, a separate company; SirReel is one of its customers. Your workspace is yours: SirReel sees only the units you offer them and the bookings they place, exactly as today.
         </p>
       </div>
     </div>
