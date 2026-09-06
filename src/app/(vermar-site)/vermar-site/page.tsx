@@ -25,7 +25,6 @@ function Wordmark() {
     <span className="inline-flex items-center gap-3">
       <UtliizIcon size={38} />
       <UtliizWordmark height={40} />
-      <span className="hidden sm:inline text-[11px] font-semibold uppercase tracking-[2px] text-[#0F7A93]/70 self-end pb-1">by {HQ_PRODUCT.maker}</span>
     </span>
   )
 }
@@ -155,7 +154,7 @@ export default function UtliizSitePage() {
       </section>
 
       <footer className="max-w-[1080px] mx-auto px-5 sm:px-8 py-10 text-[13px] text-[#0f2a30]/60 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-3"><UtliizWordmark height={18} ink="#4b6b72" /> © 2026 {HQ_PRODUCT.maker}.</span>
+        <span className="inline-flex items-center gap-3"><UtliizWordmark height={18} ink="#4b6b72" /> <span className="text-[12px]">© 2026 · a {HQ_PRODUCT.maker} product</span></span>
         <a href="#request" className="font-bold text-[#CC0000] no-underline">Request a workspace →</a>
       </footer>
     </div>

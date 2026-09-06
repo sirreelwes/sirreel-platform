@@ -36,7 +36,7 @@ export default async function HqLandingPage({ params }: { params: { token: strin
         <a href={back} className="text-[13px] font-semibold text-[#6b6560] no-underline hover:text-[#111]">← Your partner page</a>
 
         <section className="mt-6 rounded-[18px] text-white px-7 py-9 sm:px-10 sm:py-12" style={{ background: accent }}>
-          <div className="text-[11px] font-bold uppercase tracking-[2.5px] opacity-80">{HQ_PRODUCT.name} · by {HQ_PRODUCT.maker}</div>
+          <div className="text-[11px] font-bold uppercase tracking-[2.5px] opacity-80">{HQ_PRODUCT.name}</div>
           <h1 className="mt-3 text-[30px] sm:text-[40px] font-black leading-[1.05] tracking-tight">See what {HQ_PRODUCT.name} can do for you.</h1>
           <p className="mt-4 text-[16px] sm:text-[18px] leading-relaxed opacity-90 max-w-[56ch]">
             The fleet system SirReel uses, for your own fleet — every unit you own on one calendar, your own productions booked

@@ -102,7 +102,7 @@ export default async function HqLayout({ children, params }: { children: React.R
         <>
           {ws.trialExpired && (
             <div className="bg-[#fff7e0] border-b border-[#f0dfa0] text-[#5a4300] text-[13px] px-4 py-2 text-center">
-              Your free trial ended {trialEnds}. Everything still works — {HQ_PRODUCT.maker} will be in touch about a subscription, or write to <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a>.
+              Your free trial ended {trialEnds}. Everything still works — we&rsquo;ll be in touch about a subscription, or write to <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a>.
             </div>
           )}
           <main>{children}</main>

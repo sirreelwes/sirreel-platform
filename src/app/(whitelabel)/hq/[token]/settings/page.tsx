@@ -33,7 +33,7 @@ export default async function SettingsPage({ params }: { params: { token: string
           {plan.monthlyUsd == null
             ? `Pricing is announced before your trial ends. `
             : `$${plan.monthlyUsd}/month. `}
-          Billing is by {HQ_PRODUCT.maker} — questions to <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a>.
+          Billing questions: <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a>.
         </p>
       </div>
 
