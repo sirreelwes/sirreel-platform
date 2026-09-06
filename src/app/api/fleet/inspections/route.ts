@@ -30,6 +30,7 @@ import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/clien
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
 import { normalizePosition } from '@/lib/fleet/photoPositions'
+import { cardGateForJob, cardGateMessage } from '@/lib/payments/cardGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,10 +80,25 @@ export async function POST(req: NextRequest) {
 
   const assignment = await prisma.bookingAssignment.findUnique({
     where: { id: body.bookingAssignmentId },
-    select: { id: true, assetId: true },
+    select: {
+      id: true,
+      assetId: true,
+      bookingItem: { select: { booking: { select: { jobId: true } } } },
+    },
   })
   if (!assignment) {
     return NextResponse.json({ error: 'booking assignment not found' }, { status: 404 })
+  }
+
+  // No card, no keys. Only where HQ sent the card link and it was never
+  // completed — the agent keys in a signed authorization to clear it.
+  // See src/lib/payments/cardGate.ts (Wes 2026-09-06).
+  const gateJobId = assignment.bookingItem.booking.jobId
+  if (gateJobId) {
+    const gate = await cardGateForJob(gateJobId)
+    if (gate.blocked) {
+      return NextResponse.json({ error: cardGateMessage(gate), code: 'CARD_REQUIRED' }, { status: 409 })
+    }
   }
 
   const existing = await prisma.inspection.findFirst({

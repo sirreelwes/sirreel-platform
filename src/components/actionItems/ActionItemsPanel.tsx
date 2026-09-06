@@ -54,6 +54,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'hold-unassigned': { label: 'Assign units', hint: 'Quotes went out with a category on hold and no truck picked yet' },
   'payment-info': { label: 'Payment info requests', hint: 'A client asked for billing details' },
   'coi-missing': { label: 'COI', hint: 'Certificates missing, rejected, or waiting on review' },
+  'card-required': { label: 'Card not on file', hint: 'The card link went out and nothing came back — key in a signed authorization or the yard cannot release the vehicle' },
   'quote-aging': { label: 'Quotes gone quiet', hint: 'Sent, no reply — follow up' },
   'inquiry-untouched': { label: 'Inquiries waiting', hint: 'Past the first-response SLA' },
   'check-report-changes': { label: 'Order changed at the dock', hint: 'The yard changed a booked order and the agent has not acknowledged it' },

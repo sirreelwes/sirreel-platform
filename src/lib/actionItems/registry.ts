@@ -23,6 +23,10 @@
  *   - partner-coi-missing (DERIVED) — a vehicle partner signed the
  *     Partner Vehicle Agreement 7+ days ago and HQ holds no COI (or it
  *     expired). Clears when receipt is stamped on the Portals tab.
+ *   - card-required (DERIVED) — HQ sent the card link for an upcoming
+ *     booking and no card arrived in either store. The yard's check-out
+ *     refuses the same rows (lib/payments/cardGate.ts); this is the
+ *     agent hearing about it first.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -71,11 +75,15 @@ import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassign
 import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkReportChanges'
 import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied'
 import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCoiMissing'
+import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
 
 const PROVIDERS: ActionItemProvider[] = [
   // The yard changed a booked order at the dock and the agent hasn't
   // seen it yet — the money moved without them.
   checkReportChangesProvider,
+  // HQ sent the card link, nothing came back, and the yard will refuse
+  // to release the vehicle until the agent keys a signed authorization.
+  cardRequiredProvider,
   // The client answered the waiver question and the quote's money
   // doesn't match the answer — usually the auto-apply could not run.
   lcdwUnappliedProvider,

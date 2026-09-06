@@ -341,6 +341,9 @@ interface JobDetail {
      *  staff gave the card. */
     authorizationRef: string | null;
     label: string | null;
+    /** No-card branch only: when the card link first went out. Once set,
+     *  the yard refuses check-out until a card is on file. */
+    requestSentAt?: string | null;
     /** Failed portal attempts at this card step, and the latest one. */
     troubleCount: number;
     lastTroubleAt: string | null;
@@ -1755,6 +1758,15 @@ const driverTone = (d: any): string => {
                     {ccBusy ? 'copying…' : 'copy link'}
                   </button>
                 </div>
+                {/* The link is out. From here the yard will not release the
+                    job without a card — say so where the agent is looking,
+                    not at the gate on pickup morning (Wes 2026-09-06). */}
+                {job.cardAuth.requestSentAt && (
+                  <div className="mt-1.5 text-[11px] text-rose-700 font-semibold">
+                    Link sent {new Date(job.cardAuth.requestSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {' '}· the yard can&apos;t check this job out until a card is on file
+                  </div>
+                )}
                 {/* The client HAS tried. Sending them the link again is the
                     wrong move — call them, or key in a signed authorization. */}
                 {job.cardAuth.troubleCount > 0 && (

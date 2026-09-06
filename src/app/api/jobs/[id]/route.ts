@@ -332,6 +332,7 @@ export async function GET(
           select: {
             id: true,
             bookingId: true,
+            sentAt: true,
             ccCardNumberEncrypted: true,
             ccCardLast4: true,
             ccCardType: true,
@@ -416,6 +417,11 @@ export async function GET(
             expired: false,
             authorizationRef: null,
             label: null,
+            // The link went out and nothing came back. From here the yard
+            // refuses to release the job until a card is on file — see
+            // src/lib/payments/cardGate.ts. `paperwork` is sentAt desc, so
+            // the LAST row is the first send.
+            requestSentAt: paperwork.length ? paperwork[paperwork.length - 1].sentAt.toISOString() : null,
             troubleCount,
             lastTroubleAt: lastTrouble?.createdAt?.toISOString() ?? null,
             lastTroubleDetail: lastTrouble ? lastTrouble.detail ?? lastTrouble.kind : null,

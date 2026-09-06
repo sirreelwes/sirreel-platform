@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { completeSelfCheckout, SelfCheckoutError } from '@/lib/drivers/selfCheckout'
+import { cardGateForJob } from '@/lib/payments/cardGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!blind) {
     return NextResponse.json(
       { error: 'This pickup is staffed — SirReel will check the vehicle out with you at the yard.' },
+      { status: 409 },
+    )
+  }
+
+  // No card, no keys — same rule the yard applies. An unattended pickup
+  // is the one place a missing card would otherwise slip out unnoticed.
+  // See src/lib/payments/cardGate.ts (Wes 2026-09-06).
+  const gate = await cardGateForJob(jobId!)
+  if (gate.blocked) {
+    return NextResponse.json(
+      { error: `This vehicle can't be released yet — SirReel is waiting on the production's card authorization. Please call us.`, code: 'CARD_REQUIRED' },
       { status: 409 },
     )
   }

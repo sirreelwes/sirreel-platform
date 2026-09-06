@@ -319,6 +319,12 @@ export default function StartingAJobGuidePage() {
                 actually handles payment, not just the production contact. It turns on once the job has a quote
                 or a reservation on it.
               </p>
+              <Note tone="warn" label="Client won't use the portal? You key it in">
+                Once the card link has gone out, the yard cannot check the job out until a card is on file.
+                If the client sends a paper authorization instead, or just will not do it online, key it into the
+                company wallet yourself (<strong>Already have a signed authorization? Key it in</strong> on the
+                card tile). It lands on the Action Items list until you do.
+              </Note>
             </Step>
             <Step n={4} title="Already signed on paper? Upload signed agreement">
               <p>
