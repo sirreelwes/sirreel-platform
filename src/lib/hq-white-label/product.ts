@@ -26,7 +26,8 @@ export const HQ_PRODUCT = {
   name: 'Utliiz',
   /** Who the subscription is paid to. */
   maker: 'VerMar Design',
-  tagline: 'Run your fleet from one place.',
+  /** Wes 2026-09-06: the tagline is "Utliiz more…" — ellipsis included. */
+  tagline: 'Utliiz more…',
   /** Free trial length, in days, from the moment a partner starts it. */
   trialDays: 30,
   /**
