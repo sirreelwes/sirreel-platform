@@ -145,7 +145,7 @@ export function AgreementStartForm({
           you&rsquo;re ready.
         </p>
         <div className="flex flex-col gap-3 items-center">
-          <a href={done.portalUrl} style={{ background: '#D4A547', color: '#1a1a1a' }} className="inline-block font-semibold text-[15px] px-7 py-3 rounded-lg no-underline">
+          <a href={done.portalUrl} style={{ background: '#4DB1C6', color: '#1a1a1a' }} className="inline-block font-semibold text-[15px] px-7 py-3 rounded-lg no-underline">
             Sign your rental agreement →
           </a>
           <a href={done.orderFormUrl} className="inline-block font-semibold text-[13px] px-6 py-2.5 rounded-lg border border-[#1a1a1a] text-[#1a1a1a] no-underline">
@@ -252,7 +252,7 @@ export function AgreementStartForm({
       {/* Honeypot — hidden from humans; bots fill it. */}
       <input type="text" value={website} onChange={(e) => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, width: 0, opacity: 0 }} placeholder="website" />
       {err && <p className="text-[12.5px] text-rose-600 m-0">{err}</p>}
-      <button type="submit" disabled={busy} style={{ background: '#D4A547', color: '#1a1a1a' }} className="w-full font-semibold text-[15px] px-6 py-3 rounded-lg border-0 cursor-pointer disabled:opacity-50">
+      <button type="submit" disabled={busy} style={{ background: '#4DB1C6', color: '#1a1a1a' }} className="w-full font-semibold text-[15px] px-6 py-3 rounded-lg border-0 cursor-pointer disabled:opacity-50">
         {busy ? 'Setting up…' : 'Create my job & open the paperwork →'}
       </button>
     </form>

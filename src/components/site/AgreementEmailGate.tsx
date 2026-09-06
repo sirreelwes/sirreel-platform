@@ -44,7 +44,7 @@ export function AgreementEmailGate() {
 
   return (
     <div className="bg-white/[0.06] border border-white/15 rounded-xl p-4 w-full max-w-[340px]">
-      <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+      <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#0F7A93]" style={{ fontFamily: 'Archivo, sans-serif' }}>
         Ready to fill this out?
       </div>
       <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#cfc9bd]">
@@ -68,7 +68,7 @@ export function AgreementEmailGate() {
           <button
             type="submit"
             disabled={busy}
-            className="flex-none bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold text-[13px] px-4 py-2 rounded-lg disabled:opacity-50"
+            className="flex-none bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold text-[13px] px-4 py-2 rounded-lg disabled:opacity-50"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             {busy ? '…' : 'Send'}
@@ -89,7 +89,7 @@ export function AgreementEmailGate() {
           href={`/contact?prefill=${encodeURIComponent(
             "I'd like a quote for an upcoming production.",
           )}`}
-          className="font-semibold text-[#c39a3f] hover:text-[#d4ab50] underline"
+          className="font-semibold text-[#0F7A93] hover:text-[#0C657A] underline"
         >
           Start a quote &rarr;
         </Link>

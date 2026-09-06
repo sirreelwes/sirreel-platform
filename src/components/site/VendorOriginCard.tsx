@@ -43,14 +43,14 @@ export default function VendorOriginCard({
 
   const effective = savedOverride || savedLot
   const eyebrow = 'text-[12px] font-semibold tracking-[0.16em] uppercase text-[#8b857a]'
-  const field = 'w-full border border-[#e4dfd4] rounded-lg px-3 py-2.5 text-[16px] bg-white focus:outline-none focus:border-[#c39a3f]'
+  const field = 'w-full border border-[#e4dfd4] rounded-lg px-3 py-2.5 text-[16px] bg-white focus:outline-none focus:border-[#0F7A93]'
   const label = 'block text-[12px] font-semibold tracking-[0.1em] uppercase text-[#8b857a] mb-1.5'
 
   return (
     <div className="mt-6 rounded-[14px] border border-[#e4dfd4] bg-white p-5">
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <div className={eyebrow} style={{ fontFamily: 'Archivo, sans-serif' }}>Leaving from</div>
-        {!editing && !readOnly && <button onClick={() => setEditing(true)} className="min-h-[40px] px-2 -mr-2 text-[13px] font-semibold text-[#a37f2c] hover:text-[#8a6a22]">Change</button>}
+        {!editing && !readOnly && <button onClick={() => setEditing(true)} className="min-h-[40px] px-2 -mr-2 text-[13px] font-semibold text-[#0C657A] hover:text-[#8a6a22]">Change</button>}
       </div>
       {error && <div className="mb-3 text-[13px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>}
       {note && <div className="mb-3 text-[13px] text-[#2f7d5d] bg-[#eef6f1] border border-[#cfe5d8] rounded px-3 py-2">{note}</div>}

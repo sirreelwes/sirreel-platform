@@ -81,7 +81,7 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
           {/* Price */}
           <div className="mt-5 flex items-baseline gap-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
             {priceOnQuote ? (
-              <span className="text-[#a37f2c] font-extrabold text-[20px]">PRICE ON QUOTE</span>
+              <span className="text-[#0C657A] font-extrabold text-[20px]">PRICE ON QUOTE</span>
             ) : (
               <>
                 <span className="text-[#0c0c0d] font-black text-[30px]">{fmtMoney(v.dailyRate!)}</span>
@@ -145,7 +145,7 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
               <ul className="rounded-[14px] border border-[#e4dfd4] bg-white px-5 py-4 space-y-2">
                 {v.features.map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-[15px] text-[#3a362f] leading-relaxed">
-                    <span aria-hidden className="mt-[9px] w-1.5 h-1.5 rounded-full bg-[#c39a3f] shrink-0" />
+                    <span aria-hidden className="mt-[9px] w-1.5 h-1.5 rounded-full bg-[#4DB1C6] shrink-0" />
                     {f}
                   </li>
                 ))}

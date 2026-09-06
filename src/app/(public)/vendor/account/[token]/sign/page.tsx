@@ -51,7 +51,7 @@ export default function VendorSignPage() {
       <div style={{ background: '#0c0c0d', color: '#fff' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <a href={`/vendor/account/${token}`} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, textDecoration: 'none' }}>← Your account</a>
-          <span style={{ fontSize: 10, letterSpacing: '2.5px', textTransform: 'uppercase', color: '#c39a3f', fontWeight: 700 }}>Partner agreement</span>
+          <span style={{ fontSize: 10, letterSpacing: '2.5px', textTransform: 'uppercase', color: '#4DB1C6', fontWeight: 700 }}>Partner agreement</span>
         </div>
       </div>
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 20px 48px', display: 'grid', gap: 16 }}>

@@ -8,7 +8,7 @@
  * document, so the brand lives in one file.
  *
  * Brand follows the public site — near-black chrome (#0c0c0d), gold
- * accent (#c39a3f), cream page (#f6f4ef). Note the site's Archivo is NOT
+ * accent (#0F7A93), cream page (#f6f4ef). Note the site's Archivo is NOT
  * used: email clients don't reliably load webfonts, so the stack falls
  * back to system sans and we match on color + layout instead of typeface.
  *
@@ -25,7 +25,7 @@
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 
 const INK = '#0c0c0d'
-const GOLD = '#c39a3f'
+const GOLD = '#0F7A93'
 const CREAM = '#f6f4ef'
 const BODY_TEXT = '#3d392f'
 const MUTED = '#8a8272'

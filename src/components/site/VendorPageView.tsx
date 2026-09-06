@@ -21,13 +21,13 @@ const STATUS_COPY: Record<string, { label: string; blurb: string; tone: string }
     label: 'Estimate submitted',
     blurb:
       'We have quoted this unit to a production for the dates below. Nothing is booked yet — this is advance notice so the dates are on your radar. We will confirm here as soon as we hear back.',
-    tone: '#a37f2c',
+    tone: '#0C657A',
   },
   REQUESTED: {
     label: 'Hold requested',
     blurb:
       'The production has accepted — please hold this unit for the dates below and confirm with the button further down. We will follow up with the PO. Name your driver whenever you are ready; the location and call time appear here as the production sets them.',
-    tone: '#a37f2c',
+    tone: '#0C657A',
   },
   CONFIRMED: { label: 'Confirmed', blurb: 'This booking is confirmed. Location, call time and driver details are exchanged on this page.', tone: '#2f7d5d' },
   PICKED_UP: { label: 'Picked up', blurb: 'The unit is with us.', tone: '#2f7d5d' },
@@ -160,7 +160,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
                         </div>
                       )}
                     </dt>
-                    <dd className={DD}>{e.hours === null ? <span className="text-[#a37f2c]">open</span> : `${e.hours} h`}</dd>
+                    <dd className={DD}>{e.hours === null ? <span className="text-[#0C657A]">open</span> : `${e.hours} h`}</dd>
                   </div>
                 ))}
                 <div className={`${ROW} border-t border-[#efe9dd] bg-[#faf7f0]`}>
@@ -187,7 +187,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
               <ul className="rounded-[14px] border border-[#e4dfd4] bg-white px-5 py-4 space-y-2">
                 {v.specs.map((sp) => (
                   <li key={sp} className="flex items-start gap-2.5 text-[14px] text-[#3a362f] leading-relaxed">
-                    <span aria-hidden className="mt-[8px] w-1.5 h-1.5 rounded-full bg-[#c39a3f] shrink-0" />
+                    <span aria-hidden className="mt-[8px] w-1.5 h-1.5 rounded-full bg-[#4DB1C6] shrink-0" />
                     {sp}
                   </li>
                 ))}

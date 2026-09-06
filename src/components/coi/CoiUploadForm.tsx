@@ -63,7 +63,7 @@ export function CoiUploadForm({ token }: { token: string }) {
   if (state.kind === 'done') {
     return (
       <div className="flex flex-col gap-3">
-        <div className="rounded-xl border border-[#c39a3f] bg-[#fbf6ea]/60 p-5 text-center">
+        <div className="rounded-xl border border-[#0F7A93] bg-[#fbf6ea]/60 p-5 text-center">
           <div className="text-[15px] font-bold text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Got it — thank you!
           </div>

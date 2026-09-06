@@ -31,7 +31,7 @@ export default function HelpPage() {
         <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
           <div className="grid gap-10 lg:grid-cols-[1fr_1.15fr] lg:items-center">
             <div>
-              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Help
               </div>
               <h1 className="font-black tracking-tight leading-[0.95] text-[38px] sm:text-[52px] md:text-[60px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -40,7 +40,7 @@ export default function HelpPage() {
               <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
                 Locked out after hours, lost a vehicle access code, or need directions? Our
                 assistant is here 24/7 — right here, no waiting. For anything urgent, call{' '}
-                <a href={PUBLIC_CONTACT.phoneHref} className="text-[#c39a3f] hover:text-[#d4a547] font-semibold whitespace-nowrap">
+                <a href={PUBLIC_CONTACT.phoneHref} className="text-[#4DB1C6] hover:text-[#6FC3D4] font-semibold whitespace-nowrap">
                   {PUBLIC_CONTACT.phone}
                 </a>
                 .
@@ -61,7 +61,7 @@ export default function HelpPage() {
       {/* Gear setup guides */}
       <section className="bg-white text-[#1b1a17] border-b border-[#e2ddd0]">
         <div className="max-w-[1200px] mx-auto px-5 py-12 sm:py-14">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#0F7A93] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Setup guides
           </div>
           <h2 className="font-black tracking-tight text-[26px] sm:text-[34px] leading-tight max-w-[22ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -73,14 +73,14 @@ export default function HelpPage() {
               <Link
                 key={g.slug}
                 href={`/help/${g.slug}`}
-                className="group rounded-2xl border border-[#e2ddd0] bg-[#f6f4ef] p-5 transition-colors hover:border-[#c39a3f] hover:bg-[#c39a3f]/[0.06]"
+                className="group rounded-2xl border border-[#e2ddd0] bg-[#f6f4ef] p-5 transition-colors hover:border-[#0F7A93] hover:bg-[#4DB1C6]/[0.06]"
               >
-                <div className="text-[10px] font-bold uppercase tracking-wider text-[#c39a3f]">{g.eyebrow}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0F7A93]">{g.eyebrow}</div>
                 <h3 className="mt-1 text-[18px] font-black" style={{ fontFamily: 'Archivo, sans-serif' }}>
                   {g.title}
                 </h3>
                 <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f]">{g.summary}</p>
-                <span className="mt-3 inline-block text-[13px] font-bold text-[#1b1a17] group-hover:text-[#c39a3f] transition-colors" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                <span className="mt-3 inline-block text-[13px] font-bold text-[#1b1a17] group-hover:text-[#0C657A] transition-colors" style={{ fontFamily: 'Archivo, sans-serif' }}>
                   Read the guide →
                 </span>
               </Link>
@@ -92,7 +92,7 @@ export default function HelpPage() {
       {/* How-to videos */}
       <section className="bg-[#f6f4ef] text-[#1b1a17]">
         <div className="max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#0F7A93] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
             How-to videos
           </div>
           <h2 className="font-black tracking-tight text-[26px] sm:text-[34px] leading-tight max-w-[20ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -126,7 +126,7 @@ export default function HelpPage() {
                   <div className="p-4">
                     <div className="flex items-center gap-2">
                       {v.category && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#c39a3f]">{v.category}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#0F7A93]">{v.category}</span>
                       )}
                       {v.durationLabel && <span className="text-[11px] text-[#8a8272]">· {v.durationLabel}</span>}
                     </div>
@@ -152,7 +152,7 @@ export default function HelpPage() {
           </div>
           <a
             href={PUBLIC_CONTACT.phoneHref}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             Call {PUBLIC_CONTACT.phone}

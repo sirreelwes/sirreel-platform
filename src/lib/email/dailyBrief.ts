@@ -26,7 +26,7 @@ const INK = '#0c0c0d'
 const BODY = '#3d392f'
 const MUTED = '#8a8272'
 const HAIRLINE = '#e2ddd0'
-const GOLD = '#c39a3f'
+const GOLD = '#0F7A93'
 const DANGER = '#a13d33'
 const OK = '#2f6f4f'
 

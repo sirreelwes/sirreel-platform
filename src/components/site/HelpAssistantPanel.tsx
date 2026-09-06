@@ -24,7 +24,7 @@ export function HelpAssistantPanel() {
             <div className="text-[11px] text-[#8b857a]">Here 24/7 · after-hours help &amp; access codes</div>
           </div>
         </div>
-        <a href="tel:+18884777335" className="hidden sm:inline text-[12px] font-bold text-[#c39a3f] hover:text-[#d4a547]">
+        <a href="tel:+18884777335" className="hidden sm:inline text-[12px] font-bold text-[#4DB1C6] hover:text-[#6FC3D4]">
           (888) 477-7335
         </a>
       </div>
@@ -36,7 +36,7 @@ export function HelpAssistantPanel() {
               {m.content}
             </div>
           ) : (
-            <div key={i} className="ml-auto max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-[#c39a3f] px-3.5 py-2.5 text-[13.5px] font-medium leading-relaxed text-[#0c0c0d]">
+            <div key={i} className="ml-auto max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-[#4DB1C6] px-3.5 py-2.5 text-[13.5px] font-medium leading-relaxed text-[#0c0c0d]">
               {m.content}
             </div>
           ),
@@ -61,13 +61,13 @@ export function HelpAssistantPanel() {
             }}
             rows={1}
             placeholder="Type a message…"
-            className="max-h-28 flex-1 resize-none rounded-xl border border-[#2e2e30] bg-[#141414] px-3.5 py-2.5 text-[13.5px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#c39a3f]"
+            className="max-h-28 flex-1 resize-none rounded-xl border border-[#2e2e30] bg-[#141414] px-3.5 py-2.5 text-[13.5px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#4DB1C6]"
           />
           <button
             onClick={() => void send()}
             disabled={busy || !draft.trim()}
             aria-label="Send"
-            className="rounded-xl bg-[#c39a3f] px-4 py-2.5 text-[13.5px] font-extrabold text-[#0c0c0d] hover:bg-[#d4a547] disabled:opacity-40"
+            className="rounded-xl bg-[#4DB1C6] px-4 py-2.5 text-[13.5px] font-extrabold text-[#0c0c0d] hover:bg-[#4DB1C6] disabled:opacity-40"
           >
            
           </button>

@@ -70,7 +70,7 @@ export function RentalAgreementBody() {
           {CANONICAL_CLAUSES.map((cc) => (
             <div key={cc.ref} id={`clause-${cc.ref}`} className="scroll-mt-6 bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5">
               <div className="flex items-baseline gap-2.5">
-                <span className="text-[13px] font-black text-[#c39a3f] tabular-nums" style={{ fontFamily: 'Archivo, sans-serif' }}>{cc.ref}.</span>
+                <span className="text-[13px] font-black text-[#0F7A93] tabular-nums" style={{ fontFamily: 'Archivo, sans-serif' }}>{cc.ref}.</span>
                 <h3 className="text-[14px] font-bold" style={{ fontFamily: 'Archivo, sans-serif' }}>{cc.title}</h3>
               </div>
               <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f] whitespace-pre-line">{cc.body}</p>

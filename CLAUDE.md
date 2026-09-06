@@ -108,7 +108,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   dark background (`bg-zinc-800` / `bg-zinc-900`, no alpha) — see
   `src/components/yard/YardBoard.tsx`. `bg-zinc-900/40` is not that; over
   cream it is a washed mid-grey.
-- Accent: `bg-amber-600 hover:bg-amber-500` for primary CTAs
+- Accent: `bg-amber-600 hover:bg-amber-500` for primary CTAs — and `amber-*` IS
+  the Utliiz turquoise (#0F7A93) since 2026-09-06, remapped in tailwind.config.ts;
+  gold is gone everywhere (Wes). Inline hexes: `#0F7A93` on light, `#4DB1C6` on
+  black, `#0C657A` for dark text. Never reintroduce `#c39a3f` / `#D4A547`.
 - Yard/warehouse surfaces are read standing at a terminal — keep item
   names ~16px and detail ~13px, not the desktop 14/12.
 - Reference existing components in `src/components/orders/` for styling

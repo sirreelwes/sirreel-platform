@@ -29,7 +29,7 @@ export function PublicAssistantWidget() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Chat with SirReel"
-          className="fixed bottom-5 right-5 z-[70] flex items-center gap-2 bg-[#c39a3f] hover:bg-[#d4a547] text-[#0c0c0d] font-extrabold text-[13px] uppercase tracking-wide rounded-full pl-4 pr-5 py-3 shadow-2xl transition-colors"
+          className="fixed bottom-5 right-5 z-[70] flex items-center gap-2 bg-[#4DB1C6] hover:bg-[#4DB1C6] text-[#0c0c0d] font-extrabold text-[13px] uppercase tracking-wide rounded-full pl-4 pr-5 py-3 shadow-2xl transition-colors"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
           <span className="text-[17px] leading-none"><MessageSquare size={16} aria-hidden /></span>
@@ -63,7 +63,7 @@ export function PublicAssistantWidget() {
                   {m.content}
                 </div>
               ) : (
-                <div key={i} className="max-w-[85%] ml-auto bg-[#c39a3f] rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[13.5px] text-[#0c0c0d] font-medium leading-relaxed whitespace-pre-wrap">
+                <div key={i} className="max-w-[85%] ml-auto bg-[#4DB1C6] rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[13.5px] text-[#0c0c0d] font-medium leading-relaxed whitespace-pre-wrap">
                   {m.content}
                 </div>
               ),
@@ -88,13 +88,13 @@ export function PublicAssistantWidget() {
                 }}
                 rows={1}
                 placeholder="Type a message…"
-                className="flex-1 resize-none bg-[#141414] border border-[#2e2e30] rounded-xl px-3 py-2.5 text-[13.5px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#c39a3f] max-h-28"
+                className="flex-1 resize-none bg-[#141414] border border-[#2e2e30] rounded-xl px-3 py-2.5 text-[13.5px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#4DB1C6] max-h-28"
               />
               <button
                 onClick={() => void send()}
                 disabled={busy || !draft.trim()}
                 aria-label="Send"
-                className="bg-[#c39a3f] hover:bg-[#d4a547] disabled:opacity-40 text-[#0c0c0d] font-extrabold rounded-xl px-3.5 py-2.5 text-[13.5px]"
+                className="bg-[#4DB1C6] hover:bg-[#4DB1C6] disabled:opacity-40 text-[#0c0c0d] font-extrabold rounded-xl px-3.5 py-2.5 text-[13.5px]"
               >
                
               </button>

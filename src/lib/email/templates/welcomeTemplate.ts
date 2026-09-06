@@ -39,11 +39,11 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-const ACCENT = '#D4A547'
+const ACCENT = '#0F7A93'
 const HEADER_BG = '#0f172a'
 const TEXT = '#1f2937'
 const MUTED = '#6b7280'
-const CTA_BG = '#D97706' // amber-600, matches portal page buttons
+const CTA_BG = '#0F7A93' // the brand accent (Utliiz turquoise) — was amber-600
 
 export type TsxWelcomeMode = 'welcome-only' | 'welcome-with-quote' | 'availability'
 

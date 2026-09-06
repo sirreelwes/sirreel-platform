@@ -138,16 +138,16 @@ export default function VendorDriverCard({
   }
 
   const eyebrow = 'text-[12px] font-semibold tracking-[0.16em] uppercase text-[#8b857a]'
-  const field = 'w-full border border-[#e4dfd4] rounded-lg px-3 py-2.5 text-[16px] bg-white focus:outline-none focus:border-[#c39a3f]'
+  const field = 'w-full border border-[#e4dfd4] rounded-lg px-3 py-2.5 text-[16px] bg-white focus:outline-none focus:border-[#0F7A93]'
   const label = 'block text-[12px] font-semibold tracking-[0.1em] uppercase text-[#8b857a] mb-1.5'
   const primary = 'inline-flex min-h-[44px] items-center rounded-full bg-amber-600 hover:bg-amber-500 text-white px-5 text-[14px] font-bold disabled:opacity-50'
-  const quiet = 'min-h-[40px] px-2 text-[13px] font-semibold text-[#a37f2c] hover:text-[#8a6a22] disabled:opacity-50'
+  const quiet = 'min-h-[40px] px-2 text-[13px] font-semibold text-[#0C657A] hover:text-[#8a6a22] disabled:opacity-50'
 
   const profileChip = (d: RosterDriverRow) =>
     d.profileCompletedAt
       ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#eef6f1] text-[#2f7d5d]">Profile complete</span>
       : d.profileViewedAt
-        ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fbf3e2] text-[#a37f2c]">Started profile</span>
+        ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fbf3e2] text-[#0C657A]">Started profile</span>
         : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f1ede4] text-[#5a554c]">Link sent</span>
 
   return (
@@ -176,7 +176,7 @@ export default function VendorDriverCard({
             <li>
               {st.driverAck
                 ? st.driverAck.stale
-                  ? <span className="text-[#a37f2c]">Confirmed an earlier version of the location/call time — waiting on them to re-confirm.</span>
+                  ? <span className="text-[#0C657A]">Confirmed an earlier version of the location/call time — waiting on them to re-confirm.</span>
                   : <span className="text-[#2f7d5d]">Confirmed the location and call time {fmt(st.driverAck.at)}.</span>
                 : <span>Has not yet confirmed the location and call time.</span>}
             </li>
@@ -275,7 +275,7 @@ export default function VendorDriverCard({
             {roster.map((d) => (
               <li key={d.id} className="py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-[#0c0c0d]">{d.name}{assigned?.id === d.id && <span className="ml-2 text-[11px] font-semibold text-[#a37f2c]">on this job</span>}</div>
+                  <div className="text-[14px] font-semibold text-[#0c0c0d]">{d.name}{assigned?.id === d.id && <span className="ml-2 text-[11px] font-semibold text-[#0C657A]">on this job</span>}</div>
                   <div className="text-[12px] text-[#8b857a] truncate">
                     {d.email}
                     {d.trainedVehicles.length > 0 && <> · trained on {d.trainedVehicles.map((v) => v.name).join(', ')}</>}
@@ -290,7 +290,7 @@ export default function VendorDriverCard({
                         <a href={`/api/public/vendor/${token}/drivers/${d.id}/license/back`} target="_blank" rel="noreferrer" className="underline">back</a>
                       </span>
                     ) : (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fbf3e2] text-[#a37f2c]">Licence missing</span>
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fbf3e2] text-[#0C657A]">Licence missing</span>
                     )}
                   </div>
                 </div>

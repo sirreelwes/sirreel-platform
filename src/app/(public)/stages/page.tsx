@@ -33,7 +33,7 @@ export default function StagesPage() {
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />
         <div className="relative max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Stages
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -61,7 +61,7 @@ export default function StagesPage() {
                 <StagePlaceholder />
               )}
               <div className="p-4 flex flex-col gap-1.5 flex-1">
-                <div className="text-[10.5px] font-semibold tracking-[0.16em] uppercase text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                <div className="text-[10.5px] font-semibold tracking-[0.16em] uppercase text-[#0F7A93]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                   {s.eyebrow}
                 </div>
                 <div className="font-extrabold text-[18px] leading-tight tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -69,7 +69,7 @@ export default function StagesPage() {
                 </div>
                 <div className="text-[13.5px] text-[#8b857a] leading-snug">{s.blurb}</div>
                 <div className="mt-auto pt-2">
-                  <span className="text-[13px] font-bold text-[#c39a3f] group-hover:translate-x-0.5 inline-block transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  <span className="text-[13px] font-bold text-[#0F7A93] group-hover:translate-x-0.5 inline-block transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
                     {s.href ? 'Browse sets →' : 'View stage →'}
                   </span>
                 </div>
@@ -85,7 +85,7 @@ export default function StagesPage() {
         <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-20">
           <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
             <div>
-              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Check Availability
               </div>
               <h2 className="font-black tracking-tight text-[30px] sm:text-[42px] leading-[1.05] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>

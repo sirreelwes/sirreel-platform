@@ -87,7 +87,7 @@ const C = {
   muted: '#555555',
   faint: '#888888',
   rule: '#cccccc',
-  signatureGold: '#8a6a1a',
+  signatureGold: '#0C657A',
 }
 
 const styles = StyleSheet.create({

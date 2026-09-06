@@ -86,7 +86,7 @@ export function ClientDetailsForm({ token, ask }: Props) {
             onChange={(e) => setCompany(e.target.value)}
             placeholder="e.g. Ridgeline Pictures, LLC"
             autoFocus
-            className="mt-1.5 block w-full rounded-lg border border-[#d8d2c6] bg-white px-3 py-2.5 text-[15px] text-[#0c0c0d] focus:border-[#c39a3f] focus:outline-none focus:ring-1 focus:ring-[#c39a3f]"
+            className="mt-1.5 block w-full rounded-lg border border-[#d8d2c6] bg-white px-3 py-2.5 text-[15px] text-[#0c0c0d] focus:border-[#0F7A93] focus:outline-none focus:ring-1 focus:ring-[#0F7A93]"
           />
           <span className="mt-1 block text-[12px] text-[#8a8375]">
             Whoever the rental is billed to.
@@ -105,7 +105,7 @@ export function ClientDetailsForm({ token, ask }: Props) {
             onChange={(e) => setProject(e.target.value)}
             placeholder="e.g. Foul Play S2"
             autoFocus={!wantCompany}
-            className="mt-1.5 block w-full rounded-lg border border-[#d8d2c6] bg-white px-3 py-2.5 text-[15px] text-[#0c0c0d] focus:border-[#c39a3f] focus:outline-none focus:ring-1 focus:ring-[#c39a3f]"
+            className="mt-1.5 block w-full rounded-lg border border-[#d8d2c6] bg-white px-3 py-2.5 text-[15px] text-[#0c0c0d] focus:border-[#0F7A93] focus:outline-none focus:ring-1 focus:ring-[#0F7A93]"
           />
           <span className="mt-1 block text-[12px] text-[#8a8375]">
             The show or spot this is for — a working title is fine.

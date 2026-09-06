@@ -100,7 +100,7 @@ export default function VendorHoldCard({
               <label className="block text-[12px] font-semibold tracking-[0.1em] uppercase text-[#8b857a] mb-1.5">Tell us why, or what would work</label>
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3}
                 placeholder="e.g. Already committed the 11th — free from the 12th"
-                className="w-full border border-[#e4dfd4] rounded-lg px-3 py-2 text-[15px] bg-white focus:outline-none focus:border-[#c39a3f]" />
+                className="w-full border border-[#e4dfd4] rounded-lg px-3 py-2 text-[15px] bg-white focus:outline-none focus:border-[#0F7A93]" />
               <div className="mt-3 flex items-center gap-4">
                 <button onClick={() => post('decline')} disabled={busy || readOnly}
                   className="inline-flex items-center rounded-full bg-[#3a362f] hover:bg-[#0c0c0d] text-white px-5 py-2.5 text-[14px] font-bold disabled:opacity-50"

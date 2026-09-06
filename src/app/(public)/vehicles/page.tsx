@@ -69,14 +69,14 @@ function VehicleCard({ v }: { v: PublicVehicle }) {
         <div className="mt-auto pt-2 flex items-center justify-between">
           <div className="font-semibold text-[13px] text-[#8b857a]" style={{ fontFamily: 'Archivo, sans-serif' }}>
             {priceOnQuote ? (
-              <span className="text-[#a37f2c] font-extrabold">PRICE ON QUOTE</span>
+              <span className="text-[#0C657A] font-extrabold">PRICE ON QUOTE</span>
             ) : (
               <>
                 <b className="text-[#0c0c0d] font-extrabold text-[15px]">{fmtMoney(v.dailyRate!)}</b> /day
               </>
             )}
           </div>
-          <span className="text-[13px] font-bold text-[#c39a3f] group-hover:translate-x-0.5 transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <span className="text-[13px] font-bold text-[#0F7A93] group-hover:translate-x-0.5 transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
             View →
           </span>
         </div>
@@ -104,7 +104,7 @@ export default async function VehiclesIndexPage() {
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />
         <div className="relative max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             The Fleet
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -126,7 +126,7 @@ export default async function VehiclesIndexPage() {
             {fleet.length > 0 && <Grid items={fleet} />}
             {partners.length > 0 && (
               <div className={fleet.length > 0 ? 'mt-14 pt-10 border-t border-[#e4dfd4]' : ''} data-section="partner-vehicles">
-                <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#0F7A93] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
                   Also from SirReel
                 </div>
                 <h2 className="font-black tracking-tight text-[28px] sm:text-[36px] leading-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>

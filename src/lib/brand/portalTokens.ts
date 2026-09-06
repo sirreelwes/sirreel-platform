@@ -20,7 +20,7 @@ export const PORTAL = {
   /** Slightly lighter for hovered dark surfaces (close button bg, etc.). */
   darkHover: '#1a1a1a',
   /** Accent — small caps kickers, CTA buttons, gold accent rules. */
-  gold: '#D4A547',
+  gold: '#0F7A93',
   /** Muted gold for interactive hover states. */
   goldHover: '#b88f30',
   /** Body text on light backgrounds (matches the portalInvite body

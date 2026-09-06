@@ -51,7 +51,7 @@ export function StageContractEmailGate() {
   return (
     <div className="bg-white/[0.06] border border-white/15 rounded-xl p-4 w-full max-w-[340px]">
       <div
-        className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#c39a3f]"
+        className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#0F7A93]"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
         Ready to sign?
@@ -88,7 +88,7 @@ export function StageContractEmailGate() {
           <button
             type="submit"
             disabled={busy}
-            className="flex-none bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold text-[13px] px-4 py-2 rounded-lg disabled:opacity-50"
+            className="flex-none bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold text-[13px] px-4 py-2 rounded-lg disabled:opacity-50"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             {busy ? '…' : 'Send'}
@@ -105,7 +105,7 @@ export function StageContractEmailGate() {
         Haven&rsquo;t booked a stage yet?{' '}
         <Link
           href={`/contact?prefill=${encodeURIComponent("I'd like to book a stage or standing set.")}`}
-          className="font-semibold text-[#c39a3f] hover:text-[#d4ab50] underline"
+          className="font-semibold text-[#0F7A93] hover:text-[#0C657A] underline"
         >
           Tell us about your production &rarr;
         </Link>

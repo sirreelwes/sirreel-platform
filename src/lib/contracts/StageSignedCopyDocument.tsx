@@ -74,8 +74,8 @@ const C = {
   faint: '#888888',
   rule: '#d9d7d2',
   dark: '#0a0a0a',
-  gold: '#D4A547',
-  goldInk: '#8a6a1a',
+  gold: '#0F7A93',
+  goldInk: '#0C657A',
   panel: '#f8f7f4',
 }
 

@@ -18,7 +18,7 @@ export interface GalleryPhoto {
 function TruckPlaceholder() {
   return (
     <div className="w-full h-[280px] sm:h-[400px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-      <svg width={90} height={90} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+      <svg width={90} height={90} viewBox="0 0 24 24" fill="none" stroke="#4DB1C6" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
         <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
       </svg>
     </div>
@@ -68,7 +68,7 @@ export default function VehicleGallery({
                 aria-label={`Show photo of ${alt}`}
                 aria-pressed={isActive}
                 className={`shrink-0 rounded-[10px] overflow-hidden border-2 transition-colors ${
-                  isActive ? 'border-[#c39a3f]' : 'border-[#e4dfd4] hover:border-[#c9c2b4]'
+                  isActive ? 'border-[#0F7A93]' : 'border-[#e4dfd4] hover:border-[#c9c2b4]'
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}

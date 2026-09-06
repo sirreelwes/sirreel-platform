@@ -120,7 +120,7 @@ export function composeAskJobNameEmail(input: {
     `<div style="font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1c1917">` +
     (greeting ? `<p>${escapeHtml(greeting)}</p>` : '') +
     paragraphs +
-    `<p><a href="${url}" style="color:#b45309;font-weight:700">${cta}</a> — takes a few seconds, or just reply to this email and we'll add it.</p>` +
+    `<p><a href="${url}" style="color:#0F7A93;font-weight:700">${cta}</a> — takes a few seconds, or just reply to this email and we'll add it.</p>` +
     `<p>Thanks,<br>${escapeHtml(ctx.agentName)}<br>${CLIENT_SIGNOFF}</p></div>`
 
   return { subject, html, text }

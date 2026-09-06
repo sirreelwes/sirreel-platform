@@ -239,7 +239,7 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
         ? `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#8a8272;margin:22px 0 8px;">What we received</div>${detailTable(sub.details)}`
         : '',
     ].join(''),
-    footNote: `Need to change something or add to this? Call us at <a href="${PUBLIC_CONTACT.phoneHref}" style="color:#c39a3f;text-decoration:none;font-weight:600;">${PUBLIC_CONTACT.phone}</a> — we answer 24/7. Nothing is confirmed until an agent has been in touch.`,
+    footNote: `Need to change something or add to this? Call us at <a href="${PUBLIC_CONTACT.phoneHref}" style="color:#0F7A93;text-decoration:none;font-weight:600;">${PUBLIC_CONTACT.phone}</a> — we answer 24/7. Nothing is confirmed until an agent has been in touch.`,
   })
 
   const text = renderEmailText([

@@ -299,7 +299,7 @@ export function StudioContractCard({
           </label>
 
           {hasHospital && (
-            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: '#D4A547', backgroundColor: 'rgba(212,165,71,0.06)' }}>
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: '#0F7A93', backgroundColor: 'rgba(212,165,71,0.06)' }}>
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8a6a1f' }}>
                   Required for the Hospital Set · Signed separately

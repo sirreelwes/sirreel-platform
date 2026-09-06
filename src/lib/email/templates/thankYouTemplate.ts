@@ -11,7 +11,7 @@
  * sending real thank-yous.
  *
  * Brand: dark header on `bg-[#0f172a]` (slate-950) matching the
- * SirReel logo, gold accent `#D4A547`, warm body copy. The candid
+ * SirReel logo, accent `#0F7A93`, warm body copy. The candid
  * photo (when present) gets a generous slot below the salutation
  * so it carries the moment. Hosted Blob URL only — Gmail blocks
  * `data:` URIs.
@@ -26,7 +26,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-const ACCENT = '#D4A547'
+const ACCENT = '#0F7A93'
 const HEADER_BG = '#0f172a'
 const TEXT = '#1f2937'
 const MUTED = '#6b7280'

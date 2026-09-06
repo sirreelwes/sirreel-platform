@@ -37,7 +37,7 @@ export default function PublicNotFound() {
     <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
       <SWatermark />
       <div className="relative max-w-[1200px] mx-auto px-5 py-16 sm:py-24">
-        <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3" style={ARCHIVO}>
+        <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3" style={ARCHIVO}>
           404
         </div>
         <h1
@@ -56,10 +56,10 @@ export default function PublicNotFound() {
             <Link
               key={d.href}
               href={d.href}
-              className="group rounded-2xl border border-white/15 bg-white/[0.04] p-5 transition-colors hover:border-[#c39a3f] hover:bg-[#c39a3f]/[0.08]"
+              className="group rounded-2xl border border-white/15 bg-white/[0.04] p-5 transition-colors hover:border-[#4DB1C6] hover:bg-[#4DB1C6]/[0.08]"
             >
               <div
-                className="text-[16px] font-black group-hover:text-[#c39a3f] transition-colors"
+                className="text-[16px] font-black group-hover:text-[#0C657A] transition-colors"
                 style={ARCHIVO}
               >
                 {d.label}
@@ -81,7 +81,7 @@ export default function PublicNotFound() {
           </div>
           <a
             href={PUBLIC_CONTACT.phoneHref}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
             style={ARCHIVO}
           >
             Call {PUBLIC_CONTACT.phone}

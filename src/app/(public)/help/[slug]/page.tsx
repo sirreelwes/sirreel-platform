@@ -46,12 +46,12 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
         <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
           <Link
             href="/help"
-            className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#8a8272] hover:text-[#c39a3f] transition-colors"
+            className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#8a8272] hover:text-[#6FC3D4] transition-colors"
             style={ARCHIVO}
           >
             ← Help
           </Link>
-          <div className="mt-4 text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f]" style={ARCHIVO}>
+          <div className="mt-4 text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6]" style={ARCHIVO}>
             {guide.eyebrow}
           </div>
           <h1
@@ -67,14 +67,14 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
               href={guide.pdfHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] transition-colors"
               style={ARCHIVO}
             >
               Download the one-page PDF
             </a>
             <a
               href={PUBLIC_CONTACT.phoneHref}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/20 hover:border-[#c39a3f] px-5 py-2.5 text-[14px] font-bold transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 hover:border-[#4DB1C6] px-5 py-2.5 text-[14px] font-bold transition-colors"
               style={ARCHIVO}
             >
               Call {PUBLIC_CONTACT.phone}
@@ -83,7 +83,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
 
           {/* What's in the case */}
           <div className="mt-9 rounded-2xl border border-white/12 bg-white/[0.03] px-5 py-4">
-            <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-[#c39a3f] mb-2.5" style={ARCHIVO}>
+            <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-[#0F7A93] mb-2.5" style={ARCHIVO}>
               In the case
             </div>
             <ul className="flex flex-wrap gap-x-6 gap-y-1.5 text-[13.5px]">
@@ -130,10 +130,10 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
 
           {/* Optional add-on */}
           {guide.addOn && (
-            <div className="mt-10 rounded-2xl border-2 border-dashed border-[#c39a3f]/55 bg-[#c39a3f]/[0.07] px-6 py-6">
+            <div className="mt-10 rounded-2xl border-2 border-dashed border-[#4DB1C6]/55 bg-[#4DB1C6]/[0.07] px-6 py-6">
               <div className="flex flex-wrap items-baseline gap-3">
                 <span
-                  className="rounded bg-[#c39a3f] text-[#0c0c0d] text-[10px] font-black tracking-[0.14em] uppercase px-2 py-1"
+                  className="rounded bg-[#4DB1C6] text-[#0c0c0d] text-[10px] font-black tracking-[0.14em] uppercase px-2 py-1"
                   style={ARCHIVO}
                 >
                   Optional
@@ -164,7 +164,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
             {guide.aim && (
               <div>
-                <div className="text-[12px] font-bold tracking-[0.2em] uppercase text-[#c39a3f]" style={ARCHIVO}>
+                <div className="text-[12px] font-bold tracking-[0.2em] uppercase text-[#0F7A93]" style={ARCHIVO}>
                   {guide.aim.title}
                 </div>
                 <p className="mt-2 text-[14px] leading-relaxed text-[#3d392f] max-w-[34ch]">{guide.aim.body}</p>
@@ -222,7 +222,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
           <div className="rounded-2xl bg-[#0c0c0d] text-white p-6 relative overflow-hidden self-start">
             <SWatermark size={200} className="-right-8 -bottom-10 rotate-[-8deg]" />
             <div className="relative">
-              <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-[#c39a3f]" style={ARCHIVO}>
+              <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-[#4DB1C6]" style={ARCHIVO}>
                 Before you send it back
               </div>
               <ul className="mt-4 space-y-2.5">
@@ -252,7 +252,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
             </div>
             <p className="text-[13.5px] text-[#cfc9bd] mt-1 max-w-[52ch]">
               Our 24/7 line is the fastest way to reach someone — or ask the assistant on the{' '}
-              <Link href="/help" className="text-[#c39a3f] hover:text-[#d4a547] font-semibold">
+              <Link href="/help" className="text-[#4DB1C6] hover:text-[#6FC3D4] font-semibold">
                 help page
               </Link>
               .
@@ -260,7 +260,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
           </div>
           <a
             href={PUBLIC_CONTACT.phoneHref}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold px-5 py-2.5 text-[14px] whitespace-nowrap transition-colors"
             style={ARCHIVO}
           >
             Call {PUBLIC_CONTACT.phone}

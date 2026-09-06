@@ -68,7 +68,7 @@ export function ContactForm({ defaultMessage = '' }: { defaultMessage?: string }
   }
 
   const inputCls =
-    'w-full bg-white/5 border border-white/15 rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#6d685e] outline-none focus:border-[#c39a3f] transition-colors'
+    'w-full bg-white/5 border border-white/15 rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#6d685e] outline-none focus:border-[#4DB1C6] transition-colors'
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3.5">
@@ -113,7 +113,7 @@ export function ContactForm({ defaultMessage = '' }: { defaultMessage?: string }
       <button
         type="submit"
         disabled={!valid || status === 'sending'}
-        className="self-start inline-flex items-center rounded-full border-[1.5px] border-[#c39a3f] text-[#c39a3f] hover:bg-[#c39a3f] hover:text-[#0c0c0d] px-7 py-3 text-[13px] font-bold uppercase tracking-[0.08em] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#c39a3f]"
+        className="self-start inline-flex items-center rounded-full border-[1.5px] border-[#0F7A93] text-[#0F7A93] hover:bg-[#4DB1C6] hover:text-[#0c0c0d] px-7 py-3 text-[13px] font-bold uppercase tracking-[0.08em] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#0C657A]"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
         {status === 'sending' ? 'Sending…' : 'Send Message'}

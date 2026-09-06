@@ -27,7 +27,7 @@ function DownloadButton({ compact = false }: { compact?: boolean }) {
   return (
     <a
       href={PDF_HREF}
-      className={`inline-flex items-center gap-2 rounded-lg bg-[#c39a3f] hover:bg-[#d4ab50] text-[#0c0c0d] font-bold transition-colors ${
+      className={`inline-flex items-center gap-2 rounded-lg bg-[#4DB1C6] hover:bg-[#6FC3D4] text-[#0c0c0d] font-bold transition-colors ${
         compact ? 'px-3 py-1.5 text-[12px]' : 'px-5 py-2.5 text-[14px]'
       }`}
       style={{ fontFamily: 'Archivo, sans-serif' }}
@@ -50,7 +50,7 @@ export default function RentalAgreementPage() {
         <SWatermark />
         <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16 md:flex md:items-start md:justify-between md:gap-10">
           <div>
-            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
               Forms
             </div>
             <h1 className="font-black tracking-tight leading-[0.95] text-[38px] sm:text-[52px] md:text-[60px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -87,7 +87,7 @@ export default function RentalAgreementPage() {
                   <li key={t.id}>
                     <a
                       href={`#${t.id}`}
-                      className="block pl-3 py-1 text-[12px] leading-snug text-[#6d6759] hover:text-[#1b1a17] hover:border-l-2 hover:border-[#c39a3f] hover:-ml-[1px] transition-colors"
+                      className="block pl-3 py-1 text-[12px] leading-snug text-[#6d6759] hover:text-[#1b1a17] hover:border-l-2 hover:border-[#0F7A93] hover:-ml-[1px] transition-colors"
                     >
                       {t.label}
                     </a>

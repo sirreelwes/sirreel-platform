@@ -34,7 +34,7 @@ const SUPPLY_URL = SUPPLY_ORDER_URL
 
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
-const GOLD = '#D4A547'
+const GOLD = '#0F7A93'
 const DARK = '#0a0a0a'
 const LINK_GRAY = '#9a9a9a'
 

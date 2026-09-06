@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
   const html = `
     <p>${greeting}</p>
     <p>Click the link below to sign in to your SirReel portal. This link expires in 30 minutes.</p>
-    <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#d97706;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Sign in</a></p>
+    <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0F7A93;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Sign in</a></p>
     <p style="color:#666;font-size:12px;">If you didn't request this, you can ignore this email — nothing happens until the link is opened.</p>
     <p style="color:#666;font-size:12px;">Or paste this URL: ${link}</p>
   `.trim()

@@ -5,6 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ── Brand accent (Wes 2026-09-06): "convert all the gold, site wide —
+        //    emails, etc — to turquoise, everywhere in the entire build."
+        //    The accent is the Utliiz turquoise (HQ_PRODUCT.defaultAccent,
+        //    #0F7A93 = amber-600). `amber-*` is REMAPPED to this scale so
+        //    the 200+ files that say amber for the brand accent all switch
+        //    at once; the light steps (300/400) are what sits on black —
+        //    "where the turquoise is on black we may need to lighten it".
+        //    Status yellows live in chip-warn / cadence-returning and are
+        //    NOT amber, so warnings stay warm.
+        amber: {
+          50: '#EDF7F9', 100: '#D5ECF1', 200: '#ACDAE4', 300: '#7BC6D6', 400: '#4DB1C6',
+          500: '#2596AE', 600: '#0F7A93', 700: '#0C657A', 800: '#0A5162', 900: '#083F4C', 950: '#052A33',
+        },
         sirreel: {
           bg: '#f5f5f5',
           surface: '#ffffff',

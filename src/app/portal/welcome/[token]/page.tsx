@@ -20,7 +20,7 @@ import { WELCOME_CTA_LABEL } from '@/lib/sales/welcomeEmail'
 export const dynamic = 'force-dynamic'
 
 const DARK = '#0a0a0a'
-const GOLD = '#D4A547'
+const GOLD = '#0F7A93'
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -96,7 +96,7 @@ export default async function WelcomeLandingPage({ params }: { params: { token: 
       <form method="POST" action={`/api/portal/welcome/${encodeURIComponent(token)}/start`} className="mt-7">
         <button
           type="submit"
-          style={{ background: GOLD, color: '#1a1a1a' }}
+          style={{ background: GOLD, color: '#ffffff' }}
           className="inline-block font-semibold text-[15px] px-8 py-3.5 rounded-lg border-0 cursor-pointer hover:opacity-90"
         >
           {used ? 'Open your portal →' : `${WELCOME_CTA_LABEL} →`}

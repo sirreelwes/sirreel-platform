@@ -17,7 +17,7 @@
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
-export const GOLD = '#D4A547'
+export const GOLD = '#0F7A93'
 export const SLATE = '#0f172a'
 
 // Verbatim per ruling — do not edit without Wes.

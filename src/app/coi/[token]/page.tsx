@@ -59,7 +59,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="bg-[#0c0c0d] text-white px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center gap-2.5">
           <span className="font-bold text-[16px]">SirReel</span>
-          <span className="text-[#c39a3f] text-[11px] font-semibold tracking-[0.22em] uppercase">Studio Services</span>
+          <span className="text-[#4DB1C6] text-[11px] font-semibold tracking-[0.22em] uppercase">Studio Services</span>
         </div>
       </header>
       <main className="flex-1 px-6 py-10">

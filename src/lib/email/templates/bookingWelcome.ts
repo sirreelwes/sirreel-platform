@@ -22,7 +22,7 @@ const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 // #fafaf8 ground, so this is a generated companion to s-logo-white.png.
 const ABSOLUTE_S_MARK_URL = 'https://hq.sirreel.com/s-logo-black.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
-const GOLD = '#D4A547'
+const GOLD = '#0F7A93'
 const DARK = '#0a0a0a'
 const LINK_GRAY = '#9a9a9a'
 

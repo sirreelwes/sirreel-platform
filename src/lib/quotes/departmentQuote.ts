@@ -36,11 +36,11 @@ import {
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
-const ACCENT = '#D4A547'
+const ACCENT = '#0F7A93'
 const HEADER_BG = '#0f172a'
 const TEXT = '#1f2937'
 const MUTED = '#6b7280'
-const CTA_BG = '#D97706'
+const CTA_BG = '#0F7A93' // the brand accent (Utliiz turquoise) — was amber-600
 
 /** What each department's quote is called in front of a client. */
 export const DEPARTMENT_QUOTE_TITLE: Record<string, string> = {

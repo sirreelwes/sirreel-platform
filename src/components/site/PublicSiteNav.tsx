@@ -145,7 +145,7 @@ export function PublicSiteNav({
           href={entry.href!}
           aria-current={active ? 'page' : undefined}
           className={`text-[13px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${
-            active ? 'text-[#c39a3f]' : 'text-[#cfc9bd] hover:text-white'
+            active ? 'text-[#4DB1C6]' : 'text-[#cfc9bd] hover:text-white'
           }`}
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
@@ -186,7 +186,7 @@ export function PublicSiteNav({
             {entry.groups.map((g, gi) => (
               <div key={g.heading ?? gi} className={gi > 0 ? 'mt-1 pt-1 border-t border-white/10' : ''}>
                 {g.heading && (
-                  <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#4DB1C6]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                     {g.heading}
                   </div>
                 )}
@@ -232,7 +232,7 @@ export function PublicSiteNav({
             {entry.groups.map((g, gi) => (
               <div key={g.heading ?? gi} className="mb-1">
                 {g.heading && (
-                  <div className="px-1 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  <div className="px-1 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#4DB1C6]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                     {g.heading}
                   </div>
                 )}
@@ -248,7 +248,7 @@ export function PublicSiteNav({
   const orderBtn = (extra = '') => (
     <Link
       href={PUBLIC_ORDER_CTA.href}
-      className={`inline-flex items-center rounded-full border-[1.5px] border-[#c39a3f] text-[#c39a3f] hover:bg-[#c39a3f] hover:text-[#0c0c0d] px-5 py-2 text-[12.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${extra}`}
+      className={`inline-flex items-center rounded-full border-[1.5px] border-[#4DB1C6] text-[#4DB1C6] hover:bg-[#4DB1C6] hover:text-[#0c0c0d] px-5 py-2 text-[12.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${extra}`}
       style={{ fontFamily: 'Archivo, sans-serif' }}
     >
       {PUBLIC_ORDER_CTA.label} →
@@ -305,7 +305,7 @@ export function PublicSiteNav({
           <div className="justify-self-end">
             <Link
               href={PUBLIC_ORDER_CTA.href}
-              className="inline-flex items-center rounded-full border-[1.5px] border-[#c39a3f] text-[#c39a3f] px-3.5 py-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap"
+              className="inline-flex items-center rounded-full border-[1.5px] border-[#4DB1C6] text-[#4DB1C6] px-3.5 py-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap"
               style={{ fontFamily: 'Archivo, sans-serif' }}
             >
               {PUBLIC_ORDER_CTA.label} →

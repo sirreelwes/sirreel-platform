@@ -253,7 +253,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             style={{ maxWidth: 178, height: 'auto' }}
           />
           <div
-            className="text-[#c39a3f] text-[11px] tracking-[0.2em] uppercase"
+            className="text-[#4DB1C6] text-[11px] tracking-[0.2em] uppercase"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             Always on the job.
@@ -302,7 +302,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           const rowStyle = { height: '20vh', minHeight: 132 } as React.CSSProperties
           const accent = !isLast && (
             <div
-              className="absolute inset-x-0 -bottom-px h-[3px] bg-[#c39a3f]/45 pointer-events-none"
+              className="absolute inset-x-0 -bottom-px h-[3px] bg-[#4DB1C6]/45 pointer-events-none"
               style={{ transform: 'skewY(-1.2deg)' }}
             />
           )

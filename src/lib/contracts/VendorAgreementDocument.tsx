@@ -34,7 +34,7 @@ export interface VendorAgreementDocumentProps {
   generatedAt?: Date
 }
 
-const C = { ink: '#111111', muted: '#555555', faint: '#888888', rule: '#cccccc', gold: '#8a6a1a' }
+const C = { ink: '#111111', muted: '#555555', faint: '#888888', rule: '#cccccc', gold: '#0C657A' }
 
 const styles = StyleSheet.create({
   page: { paddingTop: 40, paddingBottom: 56, paddingHorizontal: 44, fontFamily: 'Helvetica', fontSize: 10, lineHeight: 1.45, color: C.ink },

@@ -63,7 +63,7 @@ export function PaymentInfoRequestForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@production.com"
-          className="mt-2 w-full bg-[#0c0c0d] border border-[#2e2e30] rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#c39a3f]"
+          className="mt-2 w-full bg-[#0c0c0d] border border-[#2e2e30] rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#5c574d] outline-none focus:border-[#4DB1C6]"
         />
       </label>
       {/* Honeypot — hidden from humans */}
@@ -81,7 +81,7 @@ export function PaymentInfoRequestForm() {
       <button
         type="submit"
         disabled={busy}
-        className="mt-5 w-full bg-[#c39a3f] hover:bg-[#d4a547] text-[#0c0c0d] font-extrabold text-[14px] tracking-wide uppercase rounded-lg px-5 py-3.5 transition-colors disabled:opacity-60"
+        className="mt-5 w-full bg-[#4DB1C6] hover:bg-[#4DB1C6] text-[#0c0c0d] font-extrabold text-[14px] tracking-wide uppercase rounded-lg px-5 py-3.5 transition-colors disabled:opacity-60"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
         {busy ? 'Sending…' : 'Send my payment info'}

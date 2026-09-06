@@ -88,7 +88,7 @@ export function PublicSiteFooter() {
 
           {/* Column 1 — nav items */}
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
               Explore
             </div>
             <nav className="flex flex-col gap-2.5 text-[13.5px]" aria-label="Footer">
@@ -98,7 +98,7 @@ export function PublicSiteFooter() {
 
           {/* Column 2 — actions */}
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
               Get Started
             </div>
             <nav className="flex flex-col gap-2.5 text-[13.5px]" aria-label="Footer actions">

@@ -206,7 +206,7 @@ export function relayWrapper(args: {
   const ref = args.target.jobCode ? ` · ${args.target.jobCode}` : ''
   const subject = args.originalSubject || `Job details — ${args.target.vehicleName}`
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-  <div style="background:#f3f4f6;border-left:3px solid #D4A547;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#4b5563;">
+  <div style="background:#f3f4f6;border-left:3px solid #0F7A93;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#4b5563;">
     Production message for <strong>${args.target.driverName}</strong> — ${args.target.vehicleName}${ref}.<br/>
     Reply to this email and your answer goes back to the production through SirReel.
   </div>

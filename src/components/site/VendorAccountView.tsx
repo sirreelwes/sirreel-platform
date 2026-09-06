@@ -111,7 +111,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
       <div style={{ background: '#0c0c0d', color: '#fff' }}>
         <div style={{ maxWidth: 880, margin: '0 auto', padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13 }}><strong>{v.vendorName}</strong><span style={{ color: 'rgba(255,255,255,0.55)' }}> · partner account</span></div>
-          <div style={{ fontSize: 10, letterSpacing: '2.5px', textTransform: 'uppercase', color: '#c39a3f', fontWeight: 700 }}>SirReel Studio Services</div>
+          <div style={{ fontSize: 10, letterSpacing: '2.5px', textTransform: 'uppercase', color: '#4DB1C6', fontWeight: 700 }}>SirReel Studio Services</div>
         </div>
       </div>
 
@@ -138,7 +138,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 <div style={{ fontSize: 13, color: '#8a6d1f', marginTop: 4 }}>Waiting for your signature.</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                   <a href={agreementHref} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#111', border: '1px solid #d6d1c4', borderRadius: 8, padding: '7px 12px', textDecoration: 'none' }}>Read</a>
-                  <a href={signHref} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: '#c39a3f', borderRadius: 8, padding: '7px 12px', textDecoration: 'none', opacity: preview ? 0.5 : 1, pointerEvents: preview ? 'none' : 'auto' }}>Sign the agreement →</a>
+                  <a href={signHref} aria-disabled={preview} style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: '#0F7A93', borderRadius: 8, padding: '7px 12px', textDecoration: 'none', opacity: preview ? 0.5 : 1, pointerEvents: preview ? 'none' : 'auto' }}>Sign the agreement →</a>
                 </div>
               </div>
             )}
@@ -164,7 +164,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 <div style={{ fontSize: 11, color: '#8a8272', textTransform: 'uppercase', letterSpacing: '1px' }}>to you</div>
               </div>
               <div style={{ textAlign: 'center', padding: '10px 16px', borderRadius: 10, background: '#f6f4ef' }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#c39a3f' }}>{v.sharePercent}%</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0F7A93' }}>{v.sharePercent}%</div>
                 <div style={{ fontSize: 11, color: '#8a8272', textTransform: 'uppercase', letterSpacing: '1px' }}>to SirReel</div>
               </div>
             </div>

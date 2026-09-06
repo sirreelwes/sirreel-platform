@@ -128,7 +128,7 @@ const jobDates = (j: OpenJob) => {
   return 'dates TBD'
 }
 
-const GOLD = '#D4A547'
+const GOLD = '#0F7A93'
 export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 

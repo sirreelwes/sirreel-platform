@@ -47,7 +47,7 @@ export default async function StandingSetsPage() {
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />
         <div className="relative max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Standing Sets
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -85,7 +85,7 @@ export default async function StandingSetsPage() {
                     <div className="text-[13.5px] text-[#8b857a] leading-snug">{shortDesc(s.description)}</div>
                   )}
                   <div className="mt-auto pt-2">
-                    <span className="text-[13px] font-bold text-[#c39a3f] group-hover:translate-x-0.5 inline-block transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                    <span className="text-[13px] font-bold text-[#0F7A93] group-hover:translate-x-0.5 inline-block transition-transform" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       View set →
                     </span>
                   </div>
@@ -102,7 +102,7 @@ export default async function StandingSetsPage() {
         <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-20">
           <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
             <div>
-              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Check Availability
               </div>
               <h2 className="font-black tracking-tight text-[30px] sm:text-[42px] leading-[1.05] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>

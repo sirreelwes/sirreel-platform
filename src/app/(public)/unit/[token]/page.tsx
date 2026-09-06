@@ -56,7 +56,7 @@ export default async function PublicUnitPage({ params }: { params: { token: stri
         <div>
           {unit.vehicleType && (
             <div
-              className="text-[12px] font-semibold tracking-[0.16em] uppercase text-[#a37f2c] mb-2"
+              className="text-[12px] font-semibold tracking-[0.16em] uppercase text-[#0C657A] mb-2"
               style={{ fontFamily: 'Archivo, sans-serif' }}
             >
               {unit.vehicleType}
@@ -105,7 +105,7 @@ export default async function PublicUnitPage({ params }: { params: { token: stri
                     key={s}
                     className="flex items-start gap-2.5 text-[15px] text-[#3a362f] leading-relaxed"
                   >
-                    <span aria-hidden className="mt-[9px] w-1.5 h-1.5 rounded-full bg-[#c39a3f] shrink-0" />
+                    <span aria-hidden className="mt-[9px] w-1.5 h-1.5 rounded-full bg-[#4DB1C6] shrink-0" />
                     {s}
                   </li>
                 ))}

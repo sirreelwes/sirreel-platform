@@ -27,7 +27,7 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
       <Link
         href="/stages"
-        className="inline-flex items-center gap-2 rounded-full border border-[#e4dfd4] bg-white px-4 py-2 text-[13px] font-bold text-[#0c0c0d] shadow-sm hover:border-[#c39a3f] hover:bg-[#faf7f0] transition-colors"
+        className="inline-flex items-center gap-2 rounded-full border border-[#e4dfd4] bg-white px-4 py-2 text-[13px] font-bold text-[#0c0c0d] shadow-sm hover:border-[#0F7A93] hover:bg-[#faf7f0] transition-colors"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
         <span aria-hidden className="text-[15px] leading-none">←</span>
@@ -43,7 +43,7 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
         />
 
         <div>
-          <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#0F7A93]" style={{ fontFamily: 'Archivo, sans-serif' }}>
             {s.eyebrow}
           </div>
           <h1 className="mt-2 font-black tracking-tight leading-[0.98] text-[36px] sm:text-[46px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -86,7 +86,7 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
 
       {/* Facility-wide amenities */}
       <section className="mt-12 border-t border-[#e4dfd4] pt-8">
-        <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f] mb-5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+        <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#0F7A93] mb-5" style={{ fontFamily: 'Archivo, sans-serif' }}>
           On-site &amp; included
         </div>
         <div className="grid gap-8 sm:grid-cols-3">
@@ -98,7 +98,7 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
               <ul className="space-y-1.5">
                 {g.items.map((item) => (
                   <li key={item} className="flex gap-2 text-[14px] text-[#3a362f] leading-snug">
-                    <span aria-hidden className="text-[#c39a3f] mt-px">•</span>
+                    <span aria-hidden className="text-[#0F7A93] mt-px">•</span>
                     <span>{item}</span>
                   </li>
                 ))}

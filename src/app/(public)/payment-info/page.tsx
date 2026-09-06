@@ -26,7 +26,7 @@ export default function PaymentInfoPage() {
       <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
           <div>
-            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#4DB1C6] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
               Payment Info &amp; ACH
             </div>
             <h1 className="font-black tracking-tight text-[32px] sm:text-[46px] leading-[1.05] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
