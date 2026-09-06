@@ -1,22 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 180" width="520" height="180">
   <title>utliiz</title>
   <g fill="none" stroke="#0B5C70" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
-    <!-- u -->
     <path d="M40 66 V108 A36 36 0 0 0 112 108 V66"/>
     <path d="M112 66 V150"/>
-    <!-- t -->
     <path d="M170 28 V116 A34 34 0 0 0 204 150 H212"/>
     <path d="M146 66 H206"/>
-    <!-- l -->
     <path d="M250 28 V150"/>
-    <!-- z -->
     <path d="M404 66 H480 L404 150 H480"/>
   </g>
-  <!-- ii: the utilization gauge — two bars stepping up, dots stepping with them -->
-  <g fill="#0F7A93">
-    <rect x="292" y="96" width="24" height="66" rx="12"/>
-    <circle cx="304" cy="66" r="12"/>
-    <rect x="344" y="62" width="24" height="100" rx="12"/>
-    <circle cx="356" cy="32" r="12"/>
-  </g>
+  <g fill="#0F7A93"><rect x="292" y="54" width="24" height="108" rx="12"/><circle cx="304" cy="24" r="12"/><rect x="344" y="54" width="24" height="108" rx="12"/><circle cx="356" cy="24" r="12"/></g>
 </svg>
