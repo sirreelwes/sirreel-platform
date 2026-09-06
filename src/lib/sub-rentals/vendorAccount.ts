@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma'
 import { unitNameOf } from '@/lib/sub-rentals/conduit'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
 import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
+import { effectiveSharePercent, partnerNet } from '@/lib/sub-rentals/partnerShare'
 
 export function vendorAccountPath(token: string): string {
   return `/vendor/account/${token}`
@@ -103,6 +104,8 @@ export interface VendorAccountFleetUnit {
   monthly: number | null
   /** A pending proposal from the partner, awaiting HQ. */
   proposed: { daily: number | null; weekly: number | null; monthly: number | null; at: string; note: string | null } | null
+  /** What the partner receives per period under the deal (list less SirReel's share). */
+  net: { daily: number | null; weekly: number | null; monthly: number | null }
 }
 
 export interface VendorAccountAgreement {
@@ -125,6 +128,8 @@ export interface VendorAccountView {
   rosterCount: number
   fleet: VendorAccountFleetUnit[]
   agreement: VendorAccountAgreement | null
+  /** The deal: SirReel's share of the vehicle rental rate. Null until HQ sets it. */
+  sharePercent: number | null
   current: VendorAccountJob[]
   past: VendorAccountJob[]
   /**
@@ -155,7 +160,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -170,7 +175,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor, null)
@@ -185,6 +190,7 @@ async function buildVendorAccount(vendor: {
   lotAddress: string | null
   logoUrl: string | null
   logoSvg: string | null
+  partnerSharePercent: unknown
 }, portalToken: string | null): Promise<VendorAccountView> {
   const [rows, rosterCount, fleetRows, agreementRow, hqWorkspace] = await Promise.all([
     prisma.subRental.findMany({
@@ -222,7 +228,7 @@ async function buildVendorAccount(vendor: {
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       select: {
         id: true, name: true, vehicleType: true, publiclyListed: true, isActive: true,
-        listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true,
+        listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true, discountPercent: true,
         proposedDailyRate: true, proposedWeeklyRate: true, proposedMonthlyRate: true, rateProposedAt: true, rateProposalNote: true,
       },
     }),
@@ -234,6 +240,7 @@ async function buildVendorAccount(vendor: {
     workspaceLinkForVendor(vendor.id),
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))
+  const sharePercent = num(vendor.partnerSharePercent)
 
   const byJob = new Map<string, VendorAccountJob>()
   for (const r of rows) {
@@ -303,7 +310,12 @@ async function buildVendorAccount(vendor: {
       proposed: u.rateProposedAt
         ? { daily: num(u.proposedDailyRate), weekly: num(u.proposedWeeklyRate), monthly: num(u.proposedMonthlyRate), at: u.rateProposedAt.toISOString(), note: u.rateProposalNote }
         : null,
+      net: (() => {
+        const pct = effectiveSharePercent(u, vendor)
+        return { daily: partnerNet(u.listDailyRate, pct), weekly: partnerNet(u.listWeeklyRate, pct), monthly: partnerNet(u.listMonthlyRate, pct) }
+      })(),
     })),
+    sharePercent,
     agreement: agreementRow
       ? { id: agreementRow.id, title: agreementRow.title, signedAt: agreementRow.signedAt?.toISOString() ?? null, signerName: agreementRow.signerName, expiryDate: agreementRow.expiryDate?.toISOString() ?? null }
       : null,

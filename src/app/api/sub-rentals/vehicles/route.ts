@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     // Units a partner keeps for themselves in their HQ workspace
     // (offeredToSirReel false) never reach the roster.
     where: { offeredToSirReel: true, ...(includeInactive ? {} : { isActive: true }) },
-    include: { vendor: { select: { id: true, name: true, contactName: true, phone: true, email: true } } },
+    include: { vendor: { select: { id: true, name: true, contactName: true, phone: true, email: true, partnerSharePercent: true } } },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })
   return NextResponse.json({ vehicles })

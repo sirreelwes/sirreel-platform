@@ -26,6 +26,7 @@
  */
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
@@ -115,6 +116,9 @@ export async function sendHoldRequest(args: {
   if (args.flip) {
     await prisma.subRental.update({ where: { id: s.id }, data: { status: 'REQUESTED' } })
   }
+  // Billing: the client said yes, so the partner's money is now real — write
+  // it onto the row (null fields only) and tell the partner the number.
+  const cost = await stampVendorCost(s.id).catch(() => null)
 
   const outcome: HoldRequestOutcome = {
     subRentalId: s.id,
@@ -144,6 +148,7 @@ export async function sendHoldRequest(args: {
       reference: args.jobCode,
       vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(token)}`,
       agentName: args.agentName ?? 'Team SirReel',
+      rate: cost,
     })
     // rentals@ is CC'd for the same reason the estimate CCs it: a hold commits
     // a partner's unit and the desk must see that it went out.

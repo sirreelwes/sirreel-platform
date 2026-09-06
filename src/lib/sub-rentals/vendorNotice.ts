@@ -45,6 +45,31 @@ export interface VendorNoticeArgs {
   reference: string | null
   vendorUrl: string
   agentName: string
+  /** The money on this booking under the deal, when it is set: what the
+   *  production pays per day (their list), what the partner receives, and
+   *  SirReel's share. Omitted on the estimate (nothing is committed) and on
+   *  a cancellation. */
+  rate?: { listDaily: number | null; vendorDaily: number | null; vendorTotal: number | null; sharePercent: number } | null
+}
+
+const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+
+/** "Your rate: $1,276 / day (80% of $1,595 list) · $1,276 for the booking" */
+function rateLine(a: VendorNoticeArgs): string | null {
+  const r = a.rate
+  if (!r || r.vendorDaily == null) return null
+  const keep = Math.round((100 - r.sharePercent) * 100) / 100
+  const basis = r.listDaily != null ? ` (${keep}% of ${usd(r.listDaily)} list)` : ` (${keep}% of list)`
+  const total = r.vendorTotal != null ? ` · ${usd(r.vendorTotal)} for the booking` : ''
+  return `Your rate: ${usd(r.vendorDaily)} / day${basis}${total}`
+}
+function rateHtml(a: VendorNoticeArgs): string {
+  const l = rateLine(a)
+  return l ? `<p style="font-size:13px;color:${TEXT};margin:6px 0 0;"><strong>${escapeHtml(l)}</strong></p>` : ''
+}
+function rateText(a: VendorNoticeArgs): string[] {
+  const l = rateLine(a)
+  return l ? [l] : []
 }
 
 export function buildVendorEstimateNotice(a: VendorNoticeArgs): {
@@ -80,6 +105,7 @@ export function buildVendorEstimateNotice(a: VendorNoticeArgs): {
             <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Dates quoted</p>
             <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${rateHtml(a)}
           </div>
         </td></tr>
         <tr><td align="center" style="padding:26px 32px 4px;">
@@ -115,6 +141,7 @@ export function buildVendorEstimateNotice(a: VendorNoticeArgs): {
     '',
     `Dates quoted: ${range}`,
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...rateText(a),
     '',
     `View this booking: ${a.vendorUrl}`,
     '',
@@ -184,6 +211,7 @@ export function buildVendorHoldRequest(a: VendorHoldRequestArgs): {
             <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
             ${qtyLine}
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${rateHtml(a)}
           </div>
         </td></tr>
         <tr><td align="center" style="padding:26px 32px 4px;">
@@ -218,6 +246,7 @@ export function buildVendorHoldRequest(a: VendorHoldRequestArgs): {
     `Dates to hold: ${range}`,
     ...(a.quantity && a.quantity > 1 ? [`Units: ${a.quantity}`] : []),
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...rateText(a),
     '',
     `Reply to confirm the hold, and we'll follow up with the PO. Driver, call time and`,
     `location are exchanged on your booking page — you can name your driver there now.`,
@@ -293,6 +322,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
             <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
             ${qtyLine}
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${rateHtml(a)}
           </div>
         </td></tr>
         <tr><td align="center" style="padding:26px 32px 4px;">
@@ -327,6 +357,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
     `Booked: ${range}`,
     ...(a.quantity && a.quantity > 1 ? [`Units: ${a.quantity}`] : []),
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...rateText(a),
     '',
     nextHtml.replace(/<[^>]+>/g, ''),
     `Call time and the location land on that page as the production sets them, and your driver gets them on their phone.`,
@@ -388,6 +419,7 @@ export function buildVendorCancelledNotice(a: VendorCancelledNoticeArgs): {
             <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Released</p>
             <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${rateHtml(a)}
           </div>
         </td></tr>
         <tr><td style="padding:22px 32px 4px;">
@@ -412,6 +444,7 @@ export function buildVendorCancelledNotice(a: VendorCancelledNoticeArgs): {
     '',
     `Released: ${range}`,
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...rateText(a),
     '',
     `Sorry for the churn. If a cancellation fee applies under our agreement, we'll settle it with you directly.`,
     '',

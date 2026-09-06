@@ -144,6 +144,32 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           </section>
         </div>
 
+        {/* The deal — plain words, the same numbers the agreement carries */}
+        <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ ...H2, margin: '0 0 6px' }}>Your deal with SirReel</div>
+            {v.sharePercent == null ? (
+              <div style={{ fontSize: 14, color: '#6b6560' }}>SirReel hasn&apos;t set the split yet. It will show here, and on every booking, once it is.</div>
+            ) : (
+              <div style={{ fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>
+                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the vehicle rental rate and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
+              </div>
+            )}
+          </div>
+          {v.sharePercent != null && (
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ textAlign: 'center', padding: '10px 16px', borderRadius: 10, background: '#f6f4ef' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#111' }}>{Math.round((100 - v.sharePercent) * 100) / 100}%</div>
+                <div style={{ fontSize: 11, color: '#8a8272', textTransform: 'uppercase', letterSpacing: '1px' }}>to you</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '10px 16px', borderRadius: 10, background: '#f6f4ef' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#c39a3f' }}>{v.sharePercent}%</div>
+                <div style={{ fontSize: 11, color: '#8a8272', textTransform: 'uppercase', letterSpacing: '1px' }}>to SirReel</div>
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* Fleet */}
         <h2 style={H2}>Your units with SirReel · {v.fleet.length}</h2>
         <p style={{ fontSize: 13, color: '#6b6560', margin: '0 0 10px', maxWidth: 640 }}>
@@ -161,9 +187,9 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 <UnitRateForm token={token} unitId={u.id} preview={preview} current={{ daily: u.daily, weekly: u.weekly, monthly: u.monthly }} proposed={u.proposed} />
               </div>
               <div style={{ textAlign: 'right', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
-                <div><strong>{money(u.daily)}</strong> <span style={{ color: '#8a8272' }}>/day</span></div>
-                <div><strong>{money(u.weekly)}</strong> <span style={{ color: '#8a8272' }}>/week</span></div>
-                {u.monthly != null && <div><strong>{money(u.monthly)}</strong> <span style={{ color: '#8a8272' }}>/month</span></div>}
+                <div><strong>{money(u.daily)}</strong> <span style={{ color: '#8a8272' }}>/day</span>{u.net.daily != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.daily)}</span>}</div>
+                <div><strong>{money(u.weekly)}</strong> <span style={{ color: '#8a8272' }}>/week</span>{u.net.weekly != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.weekly)}</span>}</div>
+                {u.monthly != null && <div><strong>{money(u.monthly)}</strong> <span style={{ color: '#8a8272' }}>/month</span>{u.net.monthly != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.monthly)}</span>}</div>}
               </div>
             </div>
           ))}

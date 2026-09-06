@@ -2,7 +2,7 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, FileText, Loader2, Send, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, FileText, Loader2, Percent, Send, Trash2, Upload, X } from 'lucide-react'
 
 export interface RateProposalRow {
   unitId: string
@@ -13,11 +13,13 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent }: {
   vendorId: string
   hasLogo: boolean
   /** Last time HQ emailed the account link, and to whom. */
   invited: { at: string; to: string } | null
+  /** SirReel's share of the vehicle rental rate — the deal. Null = not set. */
+  sharePercent: number | null
   agreement: { title: string; signedAt: string | null; signerName: string | null; uploadedAt: string } | null
   proposals: RateProposalRow[]
   contact: { name: string | null; email: string | null; phone: string | null; lotAddress: string | null }
@@ -31,6 +33,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [agFile, setAgFile] = useState<File | null>(null)
   const [ag, setAg] = useState(agreement)
   const [inv, setInv] = useState(invited)
+  const [share, setShare] = useState<number | null>(sharePercent)
+  const [shareDraft, setShareDraft] = useState(sharePercent == null ? '' : String(sharePercent))
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
   const money = (n: number | null) => (n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
 
@@ -49,6 +53,16 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}/agreement`, { method: 'POST', body: fd })
     if (r.ok) { setAg({ title: agTitle, signedAt: null, signerName: null, uploadedAt: new Date().toISOString() }); setAgFile(null); setMsg('Agreement filed — it is now on their account page to sign.') }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Upload failed')
+    setBusy(null)
+  }
+  async function saveShare() {
+    const raw = shareDraft.trim()
+    const n = raw === '' ? null : Number(raw)
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) { setMsg('Share must be 0–100.'); return }
+    setBusy('share'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerSharePercent: n }) })
+    if (r.ok) { setShare(n); setMsg(n == null ? 'Deal cleared.' : `Deal saved — SirReel keeps ${n}% of the vehicle rental rate. New bookings and the agreement use it; re-file the agreement so the PDF says so.`) }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
   async function sendInvite() {
@@ -107,6 +121,23 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
             <span className="text-lt-fg3">{contact.lotAddress ? `Lot: ${contact.lotAddress}` : 'no lot address'}</span>
           </div>
           <div className="text-[11px] text-lt-fg3 mt-1">They can update this from their page; you&apos;re emailed when they do.</div>
+        </div>
+      </div>
+
+      {/* The deal */}
+      <div className={`border rounded-lg p-3 ${share == null ? 'border-chip-bad-fg/40' : 'border-lt-hairline'}`}>
+        <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Percent className="w-4 h-4 text-lt-fg3" /> The deal</div>
+        <div className="text-xs text-lt-fg2 mt-1">
+          {share == null
+            ? <span className="text-chip-bad-fg">Not set. Until it is, their units quote with no cost to us on the books and their page shows no split.</span>
+            : <>SirReel keeps <span className="text-lt-fg font-semibold">{share}%</span> of the vehicle rental rate; they receive {Math.round((100 - share) * 100) / 100}%. Their listed rate is what the production pays. A unit can override this on its roster page.</>}
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <input value={shareDraft} onChange={(e) => setShareDraft(e.target.value)} inputMode="decimal" placeholder="20" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg w-20 text-right" />
+          <span className="text-xs text-lt-fg2">% to SirReel</span>
+          <button onClick={saveShare} disabled={busy === 'share' || shareDraft.trim() === (share == null ? '' : String(share))} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">
+            {busy === 'share' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+          </button>
         </div>
       </div>
 

@@ -30,6 +30,7 @@ import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorBookedNotice, buildVendorCancelledNotice } from '@/lib/sub-rentals/vendorNotice'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
 
 export interface LifecycleNoticeOutcome {
   subRentalId: string
@@ -76,10 +77,12 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
     if (!to) o.warning = `${s.vendor.name} has no email on file — nobody told them ${vehicleName} is a go.`
     else if (!start || !end || !s.vendorToken) o.warning = `${vehicleName} has no dates or no partner page, so ${s.vendor.name} could not be told it's a go.`
     else {
+      const cost = await stampVendorCost(s.id).catch(() => null)
       const notice = buildVendorBookedNotice({
         vendorName: s.vendor.name, vehicleName, startDate: start, endDate: end, quantity: s.quantity,
         reference: ctx.jobCode, vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(s.vendorToken)}`,
         agentName: ctx.agentName ?? 'Team SirReel', holdConfirmed: !!s.vendorConfirmedAt, driverNamed: !!s.driverName,
+        rate: cost,
       })
       const res = await sendAgreementEmail({
         to: [to], cc: await withTeamCc([], to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,

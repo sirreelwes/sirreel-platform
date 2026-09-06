@@ -27,7 +27,7 @@ interface VehicleRow {
   listWeeklyRate: string | null
   listMonthlyRate: string | null
   discountPercent: string | null
-  vendor: { id: string; name: string }
+  vendor: { id: string; name: string; partnerSharePercent: string | null }
 }
 
 interface VendorOpt { id: string; name: string }
@@ -260,13 +260,14 @@ export default function SubcontractedVehiclesPage() {
                 <th className="px-3 py-2">Owner</th>
                 <th className="px-3 py-2 text-right">List / day</th>
                 <th className="px-3 py-2 text-right">List / week</th>
-                <th className="px-3 py-2 text-right">Discount</th>
+                <th className="px-3 py-2 text-right">To SirReel</th>
                 <th className="px-3 py-2 text-right">Our cost / day</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows.map((row) => {
-                const net = netCost(row.listDailyRate, row.discountPercent)
+                const pct = row.discountPercent ?? row.vendor.partnerSharePercent
+                const net = netCost(row.listDailyRate, pct)
                 return (
                   <tr
                     key={row.id}
@@ -286,7 +287,7 @@ export default function SubcontractedVehiclesPage() {
                     <td className="px-3 py-2 text-right font-mono text-gray-700">{fmtMoney(row.listDailyRate)}</td>
                     <td className="px-3 py-2 text-right font-mono text-gray-700">{fmtMoney(row.listWeeklyRate)}</td>
                     <td className="px-3 py-2 text-right font-mono text-gray-700">
-                      {row.discountPercent == null ? '—' : `${Number(row.discountPercent)}%`}
+                      {pct == null ? '—' : `${Number(pct)}%`}{row.discountPercent == null && pct != null ? <span className="ml-1 text-[10px] text-gray-400 font-sans">deal</span> : null}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">
                       {net == null ? '—' : fmtMoney(net)}

@@ -7,6 +7,7 @@ import {
   VENDOR_AGREEMENT_SIRREEL,
   VENDOR_AGREEMENT_OPENING,
   VENDOR_AGREEMENT_CLAUSES,
+  vendorAgreementTerms,
 } from './vendorAgreementClauses'
 
 /**
@@ -24,6 +25,8 @@ export interface VendorAgreementPartyForRender {
   address: string | null
   contactName: string | null
   email: string | null
+  /** SirReel's share of the vehicle rental rate — the deal. */
+  sharePercent: number | null
 }
 
 export interface VendorAgreementDocumentProps {
@@ -47,6 +50,11 @@ const styles = StyleSheet.create({
   partyName: { fontFamily: 'Helvetica-Bold', fontSize: 10.5, marginBottom: 2 },
   partyLine: { fontSize: 9.5, color: C.ink },
   partyBlank: { fontSize: 9.5, color: C.faint },
+  terms: { borderWidth: 1, borderColor: '#dddddd', backgroundColor: '#f9f7f0', borderRadius: 4, padding: 10, marginBottom: 14 },
+  termsTitle: { fontFamily: 'Helvetica-Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, color: C.muted, marginBottom: 6 },
+  termsRow: { flexDirection: 'row', marginBottom: 2 },
+  termsLabel: { width: '46%', fontSize: 9.5, color: C.muted },
+  termsValue: { flex: 1, fontSize: 10, fontFamily: 'Helvetica-Bold' },
   opening: { fontSize: 10, marginBottom: 14, lineHeight: 1.5 },
   clause: { marginBottom: 10 },
   clauseHeader: { flexDirection: 'row', marginBottom: 3 },
@@ -100,6 +108,16 @@ export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreemen
             {partner.contactName ? <Text style={styles.partyLine}>{partner.contactName}</Text> : null}
             {partner.email ? <Text style={styles.partyLine}>{partner.email}</Text> : null}
           </View>
+        </View>
+
+        <View style={styles.terms}>
+          <Text style={styles.termsTitle}>Terms</Text>
+          {vendorAgreementTerms(partner.sharePercent).map((r) => (
+            <View key={r.label} style={styles.termsRow}>
+              <Text style={styles.termsLabel}>{r.label}</Text>
+              <Text style={styles.termsValue}>{r.value}</Text>
+            </View>
+          ))}
         </View>
 
         <Text style={styles.opening}>{VENDOR_AGREEMENT_OPENING}</Text>

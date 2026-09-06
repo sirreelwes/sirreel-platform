@@ -25,7 +25,7 @@ type Params = { params: { id: string } }
 const VENDOR_SELECT = {
   select: {
     id: true, name: true, contactName: true, email: true, phone: true,
-    website: true, address: true, notes: true,
+    website: true, address: true, notes: true, partnerSharePercent: true,
   },
 } as const
 

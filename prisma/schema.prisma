@@ -4500,6 +4500,13 @@ model Vendor {
   /// yet opened" instead of the misleading "link minted".
   portalInvitedAt DateTime? @map("portal_invited_at")
   portalInvitedTo String?   @map("portal_invited_to")
+  /// THE DEAL (Wes 2026-09-06, King Kong: "20% of vehicle rental rate goes
+  /// to SirReel"). SirReel's share of the vehicle rental rate, in percent.
+  /// The partner's listed rate is what the production pays; the partner
+  /// receives list × (1 − share/100). SubcontractedVehicle.discountPercent
+  /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
+  /// Read through partnerShare.ts, never raw.
+  partnerSharePercent Decimal? @map("partner_share_percent") @db.Decimal(5, 2)
 
   /// The partner's mark on their account page — same treatment as
   /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).

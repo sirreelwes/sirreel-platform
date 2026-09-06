@@ -34,7 +34,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-05b'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-06'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -43,6 +43,16 @@ export const VENDOR_AGREEMENT_SIRREEL = {
   signerName: 'Wes Bailey',
   signerTitle: 'CEO',
 } as const
+
+/** Rendered in the Terms box when the vendor's deal is set. */
+export function vendorAgreementTerms(sharePercent: number | null): { label: string; value: string }[] {
+  if (sharePercent == null) return [{ label: 'SirReel’s share of the vehicle rental rate', value: 'As recorded on your partner page' }]
+  const keep = Math.round((100 - sharePercent) * 100) / 100
+  return [
+    { label: 'SirReel’s share of the vehicle rental rate', value: `${sharePercent}%` },
+    { label: 'Partner receives', value: `${keep}% of the listed rate, paid within 30 days of the Vehicle’s return` },
+  ]
+}
 
 export const VENDOR_AGREEMENT_OPENING =
   'This Partner Vehicle Agreement (the "Agreement") is between SirReel Production Vehicles, Inc. ("SirReel", "we", "us") and the partner named below ("Partner", "you"). SirReel rents production vehicles to film, television and commercial productions under its standard rental agreement (the "SirReel Rental Agreement"). You own or control vehicles you are willing to make available to SirReel for those productions. This Agreement sets the terms under which SirReel rents your vehicles and places them with its clients, so that each vehicle is covered the same way a SirReel-owned vehicle would be.'
@@ -86,7 +96,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '8',
     title: 'Rates and Payment',
-    body: 'SirReel pays you the rate listed for the Vehicle on your partner page at the time the booking is confirmed, less the partner discount recorded for that Vehicle in SirReel’s system, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
+    body: 'Your listed rate for a Vehicle is the rate the production pays. SirReel keeps the share of the vehicle rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Vehicle on your partner page at the time the booking is confirmed, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
   },
   {
     ref: '9',

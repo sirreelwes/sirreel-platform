@@ -26,11 +26,14 @@ export function buildPartnerWelcome(a: {
   unitCount: number
   agreementWaiting: boolean
   senderName: string
+  /** SirReel's share of the vehicle rental rate, when the deal is set. */
+  sharePercent: number | null
 }): { subject: string; html: string; text: string } {
   const first = (a.contactName ?? '').split(/\s+/)[0] || 'Hi'
   const greet = a.contactName ? `${esc(first)} —` : 'Hi —'
   const subject = `Your ${a.vendorName} account with SirReel`
   const asks: string[] = []
+  const deal = a.sharePercent == null ? null : `Our deal, as agreed: your listed rate is what the production pays, SirReel keeps ${a.sharePercent}% of the vehicle rental rate, and you receive ${Math.round((100 - a.sharePercent) * 100) / 100}%. Your page shows what that comes to for each unit.`
   if (a.agreementWaiting) asks.push('<strong>Read and sign the Partner Vehicle Agreement.</strong> It is the rental agreement between us, and it is what puts your vehicles under our client contract and insurance while they are on a SirReel job.')
   asks.push(`<strong>Check your vehicle list and rates.</strong> ${a.unitCount === 0 ? 'Add every vehicle you want SirReel to be able to book, with your daily, weekly and monthly rates.' : `We have ${a.unitCount} of your vehicles listed — add the rest, and correct any rate that is off.`} Rate changes come to us to accept and never touch a booking already confirmed.`)
   asks.push('<strong>Add your drivers.</strong> Enter each driver’s email and they fill in their own profile and license. When we book one of your vehicles with a driver, you assign them from that list and they get their own page with the location and call time.')
@@ -41,6 +44,7 @@ export function buildPartnerWelcome(a: {
     preheader: 'Your vehicles, rates, drivers, agreement and every SirReel job in one place',
     bodyHtml: [
       p(`${greet} SirReel now runs its partner vehicles through one page per partner. Yours is below. Every job we put a ${esc(a.vendorName)} vehicle on shows up there with the dates, the driver, and anything still missing, and it is where your rates, your drivers and our agreement live.`),
+      ...(deal ? [calloutBox(esc(deal))] : []),
       p('A few things to do the first time you open it:'),
       `<ol style="margin:0 0 14px;padding-left:20px;font-size:15px;line-height:1.55;color:#1f1d1a;">${asks.map((x) => `<li style="margin:0 0 8px;">${x}</li>`).join('')}</ol>`,
       calloutBox('Keep this link. It does not expire, and it is the same page every time — bookmark it rather than waiting for the next email.'),
@@ -53,6 +57,7 @@ export function buildPartnerWelcome(a: {
     `${a.contactName ? `${first} —` : 'Hi —'} SirReel now runs its partner vehicles through one page per partner. Yours:`,
     a.accountUrl,
     '',
+    ...(deal ? [deal, ''] : []),
     'The first time you open it:',
     ...asks.map((x, i) => `${i + 1}. ${x.replace(/<[^>]+>/g, '')}`),
     '',
@@ -68,7 +73,7 @@ export function buildPartnerWelcome(a: {
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
   const v = await prisma.vendor.findUnique({
     where: { id: args.vendorId },
-    select: { id: true, name: true, contactName: true, isActive: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
+    select: { id: true, name: true, contactName: true, isActive: true, partnerSharePercent: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
   })
   if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
   const to = args.to.trim().toLowerCase()
@@ -83,6 +88,7 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
     unitCount: v._count.subcontractedVehicles,
     agreementWaiting: v.agreements.length > 0 && !v.agreements[0].signedAt,
     senderName,
+    sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
   })
   const skip = new Set([to, args.sender.email.toLowerCase()])
   const cc = (await channelRecipients('sub-rental-conduit-cc')).filter((e) => e && !skip.has(e.toLowerCase()))

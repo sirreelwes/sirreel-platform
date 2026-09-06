@@ -51,6 +51,7 @@ interface Vehicle {
     website: string | null
     address: string | null
     notes: string | null
+    partnerSharePercent: string | null
   }
 }
 
@@ -260,7 +261,7 @@ export default function SubcontractedVehiclePage() {
               <div className="text-sm text-gray-500">
                 Our discount:{' '}
                 <span className="font-mono font-semibold text-gray-900">
-                  {vehicle.discountPercent == null ? 'not set' : `${Number(vehicle.discountPercent)}%`}
+                  {vehicle.discountPercent != null ? `${Number(vehicle.discountPercent)}%` : vehicle.vendor.partnerSharePercent != null ? `${Number(vehicle.vendor.partnerSharePercent)}% (the ${vehicle.vendor.name} deal)` : 'not set'}
                 </span>
               </div>
             )}
@@ -278,8 +279,8 @@ export default function SubcontractedVehiclePage() {
               {TERMS.map(({ key, label: term }) => {
                 const listVal = editing && d ? d[key] : vehicle[key]
                 const net = editing
-                  ? netCost(listVal || null, (d?.discountPercent ?? '').trim() || null)
-                  : netCost(vehicle[key], vehicle.discountPercent)
+                  ? netCost(listVal || null, (d?.discountPercent ?? '').trim() || vehicle.vendor.partnerSharePercent)
+                  : netCost(vehicle[key], vehicle.discountPercent ?? vehicle.vendor.partnerSharePercent)
                 return (
                   <tr key={key}>
                     <td className="px-4 py-2.5 font-medium text-gray-900">{term}</td>
@@ -358,7 +359,7 @@ export default function SubcontractedVehiclePage() {
           vehicleId={vehicle.id}
           vendorId={vehicle.vendor.id}
           vendorName={vehicle.vendor.name}
-          discountPercent={vehicle.discountPercent}
+          discountPercent={vehicle.discountPercent ?? vehicle.vendor.partnerSharePercent}
         />
       </div>
 

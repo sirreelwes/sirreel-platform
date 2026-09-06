@@ -77,6 +77,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const deliveryTerms = nullableTrim(body.deliveryTerms)
   if (deliveryTerms !== undefined) data.deliveryTerms = deliveryTerms
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive
+  if ('partnerSharePercent' in body) {
+    // SirReel's share of the vehicle rental rate (the deal). Empty clears it.
+    const raw = body.partnerSharePercent
+    const n = raw === null || raw === '' ? null : Number(raw)
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) {
+      return NextResponse.json({ error: 'partnerSharePercent must be 0–100' }, { status: 400 })
+    }
+    data.partnerSharePercent = n === null ? null : Math.round(n * 100) / 100
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })

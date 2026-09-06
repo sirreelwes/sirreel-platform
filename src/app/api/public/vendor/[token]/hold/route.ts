@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notifyVendorWord } from '@/lib/sub-rentals/conduit'
+import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         vendorDeclineNote: null,
       },
     })
+    await stampVendorCost(sub.id).catch(() => null)
     if (!already) {
       await prisma.auditLog.create({
         data: {

@@ -16,12 +16,12 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const g = await requireSubRentalStaff(); if ('error' in g) return g.error
   const vendor = await prisma.vendor.findUnique({
     where: { id: params.id },
-    select: { id: true, name: true, address: true, lotAddress: true, contactName: true, email: true },
+    select: { id: true, name: true, address: true, lotAddress: true, contactName: true, email: true, partnerSharePercent: true },
   })
   if (!vendor) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
   try {
     const bytes = await generateVendorAgreementPdf({
-      partner: { name: vendor.name, address: vendor.address ?? vendor.lotAddress, contactName: vendor.contactName, email: vendor.email },
+      partner: { name: vendor.name, address: vendor.address ?? vendor.lotAddress, contactName: vendor.contactName, email: vendor.email, sharePercent: vendor.partnerSharePercent == null ? null : Number(vendor.partnerSharePercent) },
     })
     const title = `SirReel ${VENDOR_AGREEMENT_TITLE}`
     const created = await uploadVendorAgreement({
