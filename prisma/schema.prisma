@@ -4610,6 +4610,12 @@ model SubRental {
   /// phone. Without it a failed send is indistinguishable from a delivered
   /// one and the vendor silently never hears.
   vendorHoldRequestedAt DateTime? @map("vendor_hold_requested_at")
+  /// The "this job is a go" note — stamped only on a send that really
+  /// left, when the ORDER is booked (Wes 2026-09-06: estimate → please
+  /// hold when the client says hold → it's a go when the client books).
+  vendorBookedNotifiedAt DateTime? @map("vendor_booked_notified_at")
+  /// The "this job is off" note when the order is cancelled. Same rule.
+  vendorCancelNotifiedAt DateTime? @map("vendor_cancel_notified_at")
 
   // ── Driver relay ─────────────────────────────────────────────────────────
   // The vendor names a driver on their page; HQ then mints a relay address so

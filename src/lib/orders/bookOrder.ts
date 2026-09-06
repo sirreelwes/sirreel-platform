@@ -46,6 +46,7 @@ import { prisma } from '@/lib/prisma'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
+import { notifySubRentalsBooked } from '@/lib/sub-rentals/lifecycleNotices'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -320,6 +321,17 @@ export async function bookOrder(args: {
     console.error('[bookOrder] LOADED_READY rollup failed:', err)
     // Non-fatal — order is BOOKED. Rollup can be retried by any
     // subsequent lane-terminal trigger.
+  }
+
+  // ── Phase 4: tell the sub-rental partners it's a go (post-tx) ───
+  // Wes 2026-09-06: estimate → "please hold" when the client says hold →
+  // "it's a go" when the client books. Best-effort and idempotent (stamped
+  // per sub-rental); a partner we couldn't reach is logged, never fatal.
+  try {
+    const outcomes = await notifySubRentalsBooked(orderId)
+    for (const o of outcomes) if (o.warning) console.warn('[bookOrder] partner not told:', o.warning)
+  } catch (err) {
+    console.error('[bookOrder] sub-rental booked notices failed:', err)
   }
 
   return {

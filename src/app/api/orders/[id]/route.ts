@@ -11,6 +11,7 @@ import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
 import { transitionCadenceState, rebaselineCadenceForOrder } from "@/lib/cadence/scheduler";
 import { projectCadenceFromOrderStatus } from "@/lib/orders/cadenceProjection";
+import { notifySubRentalsBooked, notifySubRentalsCancelled } from '@/lib/sub-rentals/lifecycleNotices';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -372,6 +373,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
         await projectCadenceFromOrderStatus(id, status as OrderStatus);
       } catch (err) {
         console.error('[orders/PUT] cadence projection failed:', err);
+      }
+    }
+
+    // Sub-rental partners hear about the two transitions that change
+    // their world (Wes 2026-09-06): BOOKED → "it's a go" (the bookOrder
+    // service does this itself; this covers a manual flip on the detail
+    // page), CANCELLED → "released", inside our 24-hour client window.
+    // Both are stamped per sub-rental, so a bounce never double-sends.
+    if (status === 'BOOKED' && priorStatus !== null && priorStatus !== 'BOOKED') {
+      try {
+        for (const o of await notifySubRentalsBooked(id)) if (o.warning) console.warn('[orders/PUT] partner not told:', o.warning);
+      } catch (err) {
+        console.error('[orders/PUT] sub-rental booked notices failed:', err);
+      }
+    }
+    if (status === 'CANCELLED' && priorStatus !== null && priorStatus !== 'CANCELLED') {
+      try {
+        for (const o of await notifySubRentalsCancelled(id)) if (o.warning) console.warn('[orders/PUT] partner not told:', o.warning);
+      } catch (err) {
+        console.error('[orders/PUT] sub-rental cancel notices failed:', err);
       }
     }
 
