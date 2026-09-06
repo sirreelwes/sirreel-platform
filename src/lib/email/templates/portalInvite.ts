@@ -75,10 +75,10 @@ export function buildPortalInviteEmail(input: PortalInviteEmailInput): PortalInv
   const portalLink = input.portalLink // already URL-encoded by caller
   const days = input.expirationDays ?? 7
 
-  const subject = `Welcome to The SirReel Experience · ${input.projectName || 'your project portal'}`
+  const subject = `Welcome to SirReel · ${input.projectName || 'your project portal'}`
 
   const text = [
-    `Welcome to The SirReel Experience.`,
+    `Welcome to SirReel.`,
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
@@ -114,7 +114,7 @@ export function buildPortalInviteEmail(input: PortalInviteEmailInput): PortalInv
      inversion bug this prevents. -->
 <meta name="color-scheme" content="light" />
 <meta name="supported-color-schemes" content="light" />
-<title>Welcome to The SirReel Experience</title>
+<title>Welcome to SirReel</title>
 <style type="text/css">
   :root { color-scheme: light; supported-color-schemes: light; }
 </style>
@@ -154,7 +154,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
               <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
-                Welcome to<br />The SirReel Experience.
+                Welcome to SirReel.
               </h1>
             </td>
           </tr>

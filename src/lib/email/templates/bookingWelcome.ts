@@ -160,7 +160,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     : `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
   const text = [
-    ...(quick ? [] : [`Welcome to The SirReel Experience.`, ``]),
+    ...(quick ? [] : [`Welcome to SirReel.`, ``]),
     `Hi ${input.firstName || 'there'},`,
     ``,
     ...(introText ? [introText] : []),
@@ -238,7 +238,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
               <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
-                ${quick ? 'Thanks for reaching out.' : 'Welcome to The SirReel Experience.'}
+                ${quick ? 'Thanks for reaching out.' : 'Welcome to SirReel.'}
               </h1>
             </td>
           </tr>

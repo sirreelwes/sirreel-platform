@@ -225,7 +225,7 @@ export function buildWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail
     ? `Re: ${av!.jobName} — availability${av!.dateRange ? ` for ${av!.dateRange}` : ''}`
     : withQuote
       ? `Your SirReel quote for ${q!.jobName}`
-      : `Welcome to The SirReel Experience`
+      : `Welcome to SirReel`
 
   // [[PLACEHOLDER]] body copy — Wes review.
   const greeting = `Hi ${safeFirst},`
