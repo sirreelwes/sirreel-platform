@@ -3,11 +3,13 @@
 import { NextResponse } from 'next/server'
 import { requireVerMarOperator } from '@/lib/hq-white-label/operatorGate'
 import { listWorkspacesForOperator } from '@/lib/hq-white-label/operator'
+import { listLeads } from '@/lib/hq-white-label/leads'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const gate = await requireVerMarOperator()
   if (gate instanceof NextResponse) return gate
-  return NextResponse.json({ ...(await listWorkspacesForOperator()), operator: gate.user.email })
+  const [list, leads] = await Promise.all([listWorkspacesForOperator(), listLeads()])
+  return NextResponse.json({ ...list, leads, operator: gate.user.email })
 }

@@ -9146,3 +9146,32 @@ model VendorWorkspaceBooking {
   @@index([vehicleId, startDate])
   @@map("sr_vendor_workspace_bookings")
 }
+
+/// A request from utliiz.com's "start a trial" / "talk to us" form — a
+/// company that is NOT (yet) a SirReel partner, so there is no Vendor to
+/// hang a workspace off. VerMar works the list from /vermar/workspaces
+/// and provisions by hand (Wes 2026-09-06: replace the mailto buttons with
+/// a request form).
+model UtliizLead {
+  id      String @id @default(uuid())
+  name    String
+  company String
+  email   String
+  phone   String? @db.VarChar(30)
+  /// Bucket, not a number: "1-5", "6-15", "16-40", "40+".
+  fleetSize String? @map("fleet_size") @db.VarChar(20)
+  /// What they run, in their words ("12 star wagons, 3 honeywagons").
+  fleetKind String? @map("fleet_kind") @db.Text
+  note      String? @db.Text
+  /// Where the form was: "site" (utliiz.com) — partner-landing requests
+  /// go through the Vendor path instead and never land here.
+  source    String? @db.VarChar(40)
+  ipAddress String? @map("ip_address")
+
+  contactedAt DateTime? @map("contacted_at")
+  contactedBy String?   @map("contacted_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("sr_utliiz_leads")
+}

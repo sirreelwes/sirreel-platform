@@ -31,11 +31,11 @@ export const HQ_PRODUCT = {
   /** Free trial length, in days, from the moment a partner starts it. */
   trialDays: 30,
   /**
-   * The neutral accent a workspace wears until the partner picks their own.
-   * NOT SirReel's gold — the point of a white label is that nothing in it
-   * is ours.
+   * The accent a workspace wears until the partner picks their own — the
+   * Utliiz turquoise (Wes 2026-09-06: the invoice-PDF teal, src/lib/pdf/
+   * brand.ts `accent`). NOT SirReel's gold: nothing in a white label is ours.
    */
-  defaultAccent: '#1f3a5f',
+  defaultAccent: '#0F7A93',
   /** Where a partner writes when something is wrong. */
   supportEmail: 'hq@vermardesign.com',
 } as const

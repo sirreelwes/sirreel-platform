@@ -45,7 +45,8 @@ interface Row {
   createdAt: string
 }
 interface VendorWithout { id: string; name: string; contactName: string | null; email: string | null; unitCount: number }
-interface Payload { workspaces: Row[]; vendorsWithout: VendorWithout[]; operator: string }
+interface Lead { id: string; name: string; company: string; email: string; phone: string | null; fleetSize: string | null; fleetKind: string | null; note: string | null; contactedAt: string | null; contactedBy: string | null; createdAt: string }
+interface Payload { workspaces: Row[]; vendorsWithout: VendorWithout[]; leads: Lead[]; operator: string }
 
 const STATUS_LABEL: Record<Status, string> = { INTERESTED: 'Interested', TRIAL: 'Trial', ACTIVE: 'Active', PAST_DUE: 'Past due', CANCELLED: 'Cancelled' }
 const STATUS_CHIP: Record<Status, string> = {
@@ -200,6 +201,13 @@ export default function AdminHqWorkspacesPage() {
     say('ok', 'New link issued — the old one is dead. Copy it from the field and send it to them.')
     await load()
   }
+  const contacted = async (l: Lead, value: boolean) => {
+    setBusy(l.id)
+    const r = await call(`/api/vermar/leads/${l.id}`, 'PATCH', { contacted: value })
+    setBusy(null)
+    if (!r.ok) return say('err', r.error!)
+    await load()
+  }
   const provision = async (v: VendorWithout) => {
     if (!window.confirm(`Start a 30-day Utliiz trial for ${v.name}? ${v.email ? `Their contact (${v.email}) is emailed the link.` : 'They have no email on file, so nobody is emailed — copy the link from the card and send it yourself.'}`)) return
     setBusy(v.id)
@@ -228,6 +236,28 @@ export default function AdminHqWorkspacesPage() {
 
       {data && (
         <>
+          {data.leads.length > 0 && (
+            <>
+              <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">Requests from utliiz.com · {data.leads.filter((l) => !l.contactedAt).length} open</h2>
+              <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8">
+                {data.leads.map((l) => (
+                  <div key={l.id} className={`px-4 py-3 flex flex-wrap items-start gap-3 ${l.contactedAt ? 'opacity-60' : ''}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-lt-fg">{l.company} <span className="font-normal text-lt-fg2">· {l.name}</span></div>
+                      <div className="text-xs text-lt-fg2">
+                        <a href={`mailto:${l.email}`} className="underline">{l.email}</a>{l.phone ? ` · ${l.phone}` : ''}{l.fleetSize ? ` · ${l.fleetSize} units` : ''}{l.fleetKind ? ` · ${l.fleetKind}` : ''} · {fmt(l.createdAt)}
+                      </div>
+                      {l.note && <div className="text-xs text-lt-fg2 mt-1 italic">“{l.note}”</div>}
+                      {l.contactedAt && <div className="text-[11px] text-lt-fg3 mt-1">Contacted {fmt(l.contactedAt)}{l.contactedBy ? ` by ${l.contactedBy}` : ''}</div>}
+                    </div>
+                    <button type="button" className={BTN} disabled={busy === l.id} onClick={() => contacted(l, !l.contactedAt)}>
+                      {l.contactedAt ? 'Reopen' : 'Mark contacted'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">Workspaces · {data.workspaces.length}</h2>
           {data.workspaces.length === 0 ? (
             <div className="bg-lt-card border border-lt-hairline rounded-xl px-5 py-8 text-center text-sm text-lt-fg2">No partner has started one yet.</div>
