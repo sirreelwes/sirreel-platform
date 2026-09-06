@@ -45,9 +45,11 @@ export const HQ_PRODUCT = {
    */
   origin: 'https://utliiz.com',
   /**
-   * What driver mail is sent from. Resend has to have utliiz.com verified
-   * for this to leave; until then UTLIIZ_SEND_FROM is unset and mail goes
-   * out from SirReel's notifications@ with the partner's name in the body.
+   * The ADDRESS driver mail is sent from (e.g. drivers@utliiz.com); the
+   * display name is the partner's, composed per send — see
+   * driverSenderFor(). Resend has to have utliiz.com verified for this to
+   * leave; until then UTLIIZ_SEND_FROM is unset and mail goes out from
+   * SirReel's notifications@ with the partner's name in the body.
    */
   sendFrom: process.env.UTLIIZ_SEND_FROM || null,
 } as const

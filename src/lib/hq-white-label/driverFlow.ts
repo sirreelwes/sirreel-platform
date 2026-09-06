@@ -58,12 +58,27 @@ function mailArgs(b: BookingRow): DriverMailArgs | null {
   }
 }
 
+/**
+ * The From line a driver sees: the PARTNER's name, our address. Wes
+ * 2026-09-06 asked whether driver mail needs to be per driver — no: each
+ * driver gets their own message to their own address; this is only who it
+ * comes from. UTLIIZ_SEND_FROM is a bare address; a value with a display
+ * name already in it is used as-is.
+ */
+export function driverSenderFor(brandName: string): string | undefined {
+  const raw = HQ_PRODUCT.sendFrom
+  if (!raw) return undefined
+  if (raw.includes('<')) return raw
+  const name = `${brandName} via ${HQ_PRODUCT.name}`.replace(/["<>]/g, '')
+  return `${name} <${raw.trim()}>`
+}
+
 async function mailDriver(b: BookingRow, m: { subject: string; html: string; text: string }, label: string): Promise<boolean> {
   const to = b.vendorDriver?.email
   if (!to) return false
   const res = await sendAgreementEmail({
     to: [to],
-    from: HQ_PRODUCT.sendFrom ?? undefined,
+    from: driverSenderFor(b.workspace.brandName),
     replyTo: b.workspace.vendor.email ?? undefined,
     subject: m.subject, html: m.html, text: m.text, label,
   }).catch(() => ({ ok: false as const, reason: 'send threw' }))
@@ -84,7 +99,7 @@ export async function addWorkspaceDriver(ws: { id: string; vendorId: string; bra
     : await prisma.vendorDriver.create({ data: { vendorId: ws.vendorId, email, firstName: parts[0] ?? null, lastName: parts.slice(1).join(' ') || null, profileToken: token, profileTokenMintedAt: new Date(), invitedAt: new Date() }, select: { id: true, firstName: true, lastName: true, email: true } })
   const wsRow = await prisma.vendorWorkspace.findUnique({ where: { id: ws.id }, select: { accentColor: true } })
   const mail = buildDriverInvite({ brandName: ws.brandName, accent: wsRow?.accentColor || HQ_PRODUCT.defaultAccent, driverName: row.firstName ? driverDisplayName(row) : null, profileUrl: profilePageUrl(token) })
-  const res = await sendAgreementEmail({ to: [email], from: HQ_PRODUCT.sendFrom ?? undefined, subject: mail.subject, html: mail.html, text: mail.text, label: 'utliiz-driver/invite' }).catch(() => ({ ok: false as const, reason: 'send threw' }))
+  const res = await sendAgreementEmail({ to: [email], from: driverSenderFor(ws.brandName), subject: mail.subject, html: mail.html, text: mail.text, label: 'utliiz-driver/invite' }).catch(() => ({ ok: false as const, reason: 'send threw' }))
   return { id: row.id, invited: res.ok, existed: !!existing }
 }
 
