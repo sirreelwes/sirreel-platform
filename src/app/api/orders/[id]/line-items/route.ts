@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { LineItemDepartment, RateType } from "@prisma/client";
+import { Prisma, type LineItemDepartment, type RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
-import { computeLineTotal } from "@/lib/orders/billing";
+import { computeLineTotal, weeklyRateApplies, weeklyRateCap, computeBillableDays } from "@/lib/orders/billing";
 import { computeDays, isClaimEligible, sanitizeClaimedDays } from "@/lib/orders/days";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
@@ -12,7 +12,7 @@ import { syncOrderKitPieces } from "@/lib/orders/kitSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
-import { resolveLineRate, resolveFeeLineRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
+import { resolveLineRate, resolveFeeLineRate, resolveRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
@@ -389,11 +389,57 @@ export async function POST(req: NextRequest, { params }: Params) {
         effectiveQuantity = Math.floor(effectiveQuantity);
       }
     } else {
+      // Negotiated weekly rate (Wes 2026-09-05): when the account has a
+      // weekly deal on this item and the rental runs past the department's
+      // billing week, the line goes on the WEEKLY rate — the paper then
+      // says "$580/wk (weekly rate)" instead of a derived per-day figure
+      // that reads as their day rate. Only when the caller left the rate
+      // type to us and is asking for the deal price (list or company
+      // daily); an explicit rate type or a hand-typed override is theirs.
+      let clientRate = rate;
+      // Rental days INCLUSIVE of both ends (Sep 1 → Sep 11 is 11 days),
+      // matching estimateRentalDays and RW's billable-period count —
+      // calendarDays() measures the gap and would call it 10.
+      const calDays = Math.max(1, Math.round((returnResolved.getTime() - pickupResolved.getTime()) / 86400000) + 1);
+      if (body.rateType === undefined && (inventoryItemId || assetCategoryId)
+        && weeklyRateApplies(resolvedDepartment, calDays)) {
+        // The weekly must be the COMPANY's negotiated week, read off their
+        // rate card directly — resolveRate merges in the catalog weekly for
+        // a company row that only set a daily, and list weeklies are not a
+        // deal anyone struck.
+        const catalogId = inventoryItemId || (assetCategoryId ? await catalogIdForAssetCategory(assetCategoryId) : null);
+        const card = catalogId
+          ? await prisma.companyRate.findUnique({
+              where: { companyId_inventoryItemId: { companyId: orderForGate.companyId, inventoryItemId: catalogId } },
+              select: { dailyRate: true, weeklyRate: true },
+            })
+          : null;
+        const weekly = card?.weeklyRate && card.weeklyRate.greaterThan(0) ? card.weeklyRate : null;
+        if (weekly) {
+          const deal = await resolveRate({
+            inventoryItemId: inventoryItemId || null,
+            assetCategoryId: assetCategoryId || null,
+            companyId: orderForGate.companyId,
+          });
+          const asked = new Prisma.Decimal(String(rate ?? 0));
+          if (deal.dailyRate == null || asked.equals(deal.dailyRate) || asked.equals(weekly)) {
+            effectiveRateType = 'WEEKLY';
+            clientRate = weekly.toString();
+            // A weekly rate buys a billing week of `cap` days; unless the
+            // rep set billableDays by hand, bill the capped count rather
+            // than every calendar day (RW: 11 days → 9 billable periods).
+            const cap = weeklyRateCap(resolvedDepartment);
+            if (cap && (billableDays == null || Number(billableDays) <= 0)) {
+              days = computeBillableDays(calDays, cap);
+            }
+          }
+        }
+      }
       rateResolution = await resolveLineRate({
         inventoryItemId: inventoryItemId || null,
         assetCategoryId: assetCategoryId || null,
-        rateType: rateType as RateType,
-        clientRate: rate,
+        rateType: effectiveRateType,
+        clientRate,
         isPackageMember: !!(packageInstanceId && !isPackageHeader),
         companyId: orderForGate.companyId,
       });

@@ -190,7 +190,31 @@ export function computeLineTotal(item: BillingInput): number {
   // however the rep arrived at it (cap suggestion accepted, manual override,
   // or zero for negotiated freebies).
 
+  // A WEEKLY rate on a cap-per-week department is the price of one billing
+  // week — `cap` billable days — so it bills at rate/cap per billable day
+  // (Wes 2026-09-05: a client past 5 consecutive days is on the weekly
+  // rate, and the paper must SAY weekly rather than print a derived
+  // per-day number that reads as their day rate).
+  if (rules.model === 'CAP_PER_WEEK' && item.rateType === 'WEEKLY') {
+    return item.quantity * (rate / rules.cap) * item.billableDays
+  }
   return item.quantity * rate * item.billableDays * multiplier
+}
+
+/**
+ * Does a WEEKLY rate mean anything for this department? Only the
+ * cap-per-week departments bill a "week" as `cap` days; for them the
+ * weekly rate applies once a rental runs longer than one billing week.
+ */
+export function weeklyRateCap(department: LineItemDepartment): number | null {
+  const rules = BILLING_RULES[department]
+  return rules.model === 'CAP_PER_WEEK' && rules.cap < 7 ? rules.cap : null
+}
+
+/** True when a rental of `days` calendar days is past the department's billing week. */
+export function weeklyRateApplies(department: LineItemDepartment, days: number): boolean {
+  const cap = weeklyRateCap(department)
+  return cap != null && days > cap
 }
 
 const fmtMoney = (n: number) =>
@@ -223,7 +247,13 @@ export function billingBreakdown(item: BillingInput): string {
       const label = item.rateType === 'WEEKLY' ? 'weekly' : 'monthly'
       return `${item.quantity} × ${fmtMoney(rate)} × ${Math.round(pct * 100)}% (${label}) / day · total on dates`
     }
+    if (rules.model === 'CAP_PER_WEEK' && item.rateType === 'WEEKLY') {
+      return `${item.quantity} × ${fmtMoney(rate)} / wk (weekly rate · ${rules.cap}-day week) · total on dates`
+    }
     return `${item.quantity} × ${fmtMoney(rate)} / day · total on dates`
+  }
+  if (rules.model === 'CAP_PER_WEEK' && item.rateType === 'WEEKLY') {
+    return `${item.quantity} × ${fmtMoney(rate)} / wk (weekly rate · ${rules.cap}-day week) × ${item.billableDays} days = ${fmtMoney(total)}`
   }
 
   if (rules.model === 'PERCENT_DISCOUNT' && (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY')) {

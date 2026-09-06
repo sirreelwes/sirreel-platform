@@ -349,6 +349,15 @@ export default async function CompanyPortalPage({
                         regularly ${r.listDailyRate.toLocaleString('en-US', { maximumFractionDigits: 0 })}/day
                       </div>
                     )}
+                    {/* Wes 2026-09-05: "as long as the client rents longer than
+                        5 consecutive days in one booking, the weekly rate
+                        applies" — say so, so the day rate never looks like
+                        the whole deal and the weekly never looks optional. */}
+                    {r.weeklyRate != null && r.weeklyCap != null && (
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        weekly rate on rentals over {r.weeklyCap} consecutive days
+                      </div>
+                    )}
                     </div>
                   </a>
                 ))}

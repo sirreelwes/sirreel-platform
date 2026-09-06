@@ -27,6 +27,7 @@
 
 import type { InvoiceStatus, JobRole, JobStatus, OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { weeklyRateCap } from '@/lib/orders/billing'
 import { loadRwPortalInvoices } from '@/lib/portal/rwPortalInvoices'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
@@ -90,6 +91,9 @@ export interface CompanyNegotiatedRateLine {
   label: string
   dailyRate: number
   weeklyRate: number | null
+  /** Billing week (days) the weekly rate buys, for departments that have
+   *  one — vehicles 5, supplies 3. Null: weekly is not a concept here. */
+  weeklyCap: number | null
   department: string
   /**
    * Catalog list price at read time — "regularly $400" under the deal.
@@ -401,6 +405,7 @@ export async function buildCompanyTerms(companyId: string): Promise<CompanyTerms
         label: r.inventoryItem.description || r.inventoryItem.code,
         dailyRate: Number(r.dailyRate),
         weeklyRate: r.weeklyRate != null && Number(r.weeklyRate) > 0 ? Number(r.weeklyRate) : null,
+        weeklyCap: weeklyRateCap(r.inventoryItem.department),
         department: r.inventoryItem.department,
         listDailyRate:
           r.inventoryItem.dailyRate != null && Number(r.inventoryItem.dailyRate) > 0

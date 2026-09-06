@@ -1,4 +1,5 @@
 import React from 'react'
+import { weeklyRateCap } from '@/lib/orders/billing'
 import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
@@ -285,7 +286,7 @@ function clientItemCode(code: string | null | undefined): string {
 }
 
 function rateUnit(rateType: QuoteLineItem['rateType']): string {
-  if (rateType === 'WEEKLY') return '/wk'
+  if (rateType === 'WEEKLY') return '/wk (weekly rate)'
   if (rateType === 'DAILY') return '/day'
   return ''
 }
@@ -305,6 +306,11 @@ function computeLineTotal(item: QuoteLineItem): number {
   // instead; the Send Quote validator ensures we never emit a firm
   // total off this state.
   if (item.billableDays == null) return 0
+  // A weekly rate on a cap-per-week department (vehicles: 5-day week) is
+  // the price of one billing week, so it bills at rate/cap per billable
+  // day — mirrors computeLineTotal in src/lib/orders/billing.ts.
+  const cap = item.rateType === 'WEEKLY' ? weeklyRateCap(item.department) : null
+  if (cap) return item.quantity * item.billableDays * (item.rate / cap)
   return item.quantity * item.billableDays * item.rate
 }
 
