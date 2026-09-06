@@ -15,8 +15,9 @@
  * warning.
  *
  * Staleness is "the order moved after the PDF was cut" — measured
- * against the order row AND its line items AND its discounts, because
- * editing a line does not necessarily touch Order.updatedAt.
+ * against the order row AND its line items AND its discounts AND the
+ * job row (its name is on the page), because editing a line or renaming
+ * the job does not touch Order.updatedAt.
  *
  * ── Two different kinds of stale ────────────────────────────────────
  * CONTENT staleness is the one above: the order changed, so the stored
@@ -41,6 +42,12 @@ export type QuotePdfFreshnessInput = {
   updatedAt: Date | string
   lineItems?: { updatedAt: Date | string }[]
   discounts?: { updatedAt: Date | string }[]
+  /** The job the quote is for. Its NAME is printed on the PDF, and a
+   *  rename touches Job.updatedAt, not the order — so without this a
+   *  renamed job keeps sending the old title. On 2026-09-06 the quote for
+   *  SR-JOB-0235 re-cut at 9:42pm as "Music Video (TBD)"; the job became
+   *  "X Zzirit" at 10:22pm and nothing considered the PDF stale. */
+  job?: { updatedAt: Date | string } | null
 }
 
 const ms = (d: Date | string): number =>
@@ -65,6 +72,7 @@ export type QuotePdfStaleReason = 'content' | 'format'
 export function orderContentTouchedAt(input: QuotePdfFreshnessInput): number {
   return Math.max(
     ms(input.updatedAt),
+    input.job ? ms(input.job.updatedAt) : 0,
     ...(input.lineItems ?? []).map((l) => ms(l.updatedAt)),
     ...(input.discounts ?? []).map((d) => ms(d.updatedAt)),
   )

@@ -60,6 +60,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
           id: true,
           jobCode: true,
           name: true,
+          updatedAt: true,
           // Client-supplied report-to / pickup logistics (written from
           // /portal/job/[slug] "Deliveries", never by staff). Until this
           // select existed the production could fill in the address and
@@ -182,6 +183,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     updatedAt: order.updatedAt,
     lineItems: order.lineItems,
     discounts: discountStamps,
+    job: order.job,
   });
 
   return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale });

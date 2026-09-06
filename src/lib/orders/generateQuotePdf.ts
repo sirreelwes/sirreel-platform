@@ -224,6 +224,7 @@ export async function ensureFreshQuotePdf(
       updatedAt: true,
       lineItems: { select: { updatedAt: true } },
       discounts: { select: { updatedAt: true } },
+      job: { select: { updatedAt: true } },
     },
   })
   if (!order?.quotePdfKey) return { regenerated: false }

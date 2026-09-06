@@ -155,6 +155,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       agent: { select: { email: true } },
       job: {
         select: {
+          updatedAt: true,
           jobContacts: {
             select: {
               role: true,
