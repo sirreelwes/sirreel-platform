@@ -114,9 +114,16 @@ export function JobsSidebar() {
 
   return (
     <aside
-      className={`${
-        selected ? 'hidden md:flex' : 'flex'
-      } w-full md:w-1/2 2xl:w-[50rem] flex-shrink-0 bg-white text-zinc-700 flex-col border-r border-zinc-200`}
+      className={`${selected ? 'hidden md:flex' : 'flex'} w-full ${
+        // Half the viewport on the landing (Wes 2026-09-06); narrower the
+        // moment a job is OPEN, so the detail — whose paperwork strip is
+        // six tiles across — gets the room back without a click. The
+        // tiles wrap rather than truncate at this width, and the ‹
+        // collapse above still takes the rail to a sliver. selectedId,
+        // not `selected`: ?panel=incoming renders the landing on desktop
+        // and wants the full rail.
+        selectedId ? 'md:w-[24rem] xl:w-[27rem]' : 'md:w-1/2 2xl:w-[50rem]'
+      } flex-shrink-0 bg-white text-zinc-700 flex-col border-r border-zinc-200 transition-[width] duration-200`}
     >
       {/* Slim strip: just the count and the collapse affordance — every
           control moved up into JobsToolbar. */}
