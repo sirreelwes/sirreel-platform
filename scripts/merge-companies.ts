@@ -48,6 +48,9 @@
  *               ← CMS Picture Inc. (2593fcbb), Crazy Maple Studios
  *                 (65f8e1ee), Crazy Maple Studio (cce4d6d5)
  *   2026-08-29  same keeper ← ReelShort (5f48e301)
+ *   2026-09-05  same keeper ← CMS Productions (b7d1332c), Reel Short LLC
+ *               (b8ad4100) — re-created after the first merge (Wes: "they
+ *               are all one company")
  */
 
 import { Prisma } from '@prisma/client'
