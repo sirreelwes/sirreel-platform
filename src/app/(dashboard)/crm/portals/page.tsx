@@ -203,6 +203,7 @@ export default async function CompanyPortalsPage() {
       id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true,
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
+      portalInvitedAt: true, portalInvitedTo: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
       agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
       subcontractedVehicles: {
@@ -335,7 +336,7 @@ export default async function CompanyPortalsPage() {
                     <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
                       {va.portalToken ? (
                         <span className={`px-2 py-1 rounded ${va.portalViewedAt ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
-                          {va.portalViewedAt ? `opened ${fmtStamp(va.portalViewedAt)} (${va.portalViewCount}×)` : `link minted ${fmtStamp(va.portalTokenMintedAt)} · never opened`}
+                          {va.portalViewedAt ? `opened ${fmtStamp(va.portalViewedAt)} (${va.portalViewCount}×)` : va.portalInvitedAt ? `invited ${fmtStamp(va.portalInvitedAt)} · not yet opened` : `link minted ${fmtStamp(va.portalTokenMintedAt)} · never sent`}
                         </span>
                       ) : (
                         <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">no account link yet</span>
@@ -358,6 +359,7 @@ export default async function CompanyPortalsPage() {
                         at: u.rateProposedAt!.toISOString(), note: u.rateProposalNote,
                       }))}
                       contact={{ name: va.contactName, email: va.email, phone: va.phone, lotAddress: va.lotAddress }}
+                      invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                     />
                   </div>
                   </details>

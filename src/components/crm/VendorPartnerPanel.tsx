@@ -2,7 +2,7 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, FileText, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, FileText, Loader2, Send, Trash2, Upload, X } from 'lucide-react'
 
 export interface RateProposalRow {
   unitId: string
@@ -13,9 +13,11 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited }: {
   vendorId: string
   hasLogo: boolean
+  /** Last time HQ emailed the account link, and to whom. */
+  invited: { at: string; to: string } | null
   agreement: { title: string; signedAt: string | null; signerName: string | null; uploadedAt: string } | null
   proposals: RateProposalRow[]
   contact: { name: string | null; email: string | null; phone: string | null; lotAddress: string | null }
@@ -28,6 +30,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [agTitle, setAgTitle] = useState(agreement?.title ?? 'SirReel Partner Agreement')
   const [agFile, setAgFile] = useState<File | null>(null)
   const [ag, setAg] = useState(agreement)
+  const [inv, setInv] = useState(invited)
+  const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
   const money = (n: number | null) => (n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
 
   async function uploadLogo(f: File) {
@@ -45,6 +49,15 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}/agreement`, { method: 'POST', body: fd })
     if (r.ok) { setAg({ title: agTitle, signedAt: null, signerName: null, uploadedAt: new Date().toISOString() }); setAgFile(null); setMsg('Agreement filed — it is now on their account page to sign.') }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Upload failed')
+    setBusy(null)
+  }
+  async function sendInvite() {
+    if (!invTo.trim()) return
+    if (inv && !window.confirm(`Send the account link again, to ${invTo.trim()}?`)) return
+    setBusy('invite'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}/invite`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: invTo.trim() }) })
+    if (r.ok) { const j = await r.json(); setInv({ at: new Date().toISOString(), to: j.to }); setMsg(`Account link emailed to ${j.to}.`) }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
   async function fileStandard() {
@@ -94,6 +107,20 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
             <span className="text-lt-fg3">{contact.lotAddress ? `Lot: ${contact.lotAddress}` : 'no lot address'}</span>
           </div>
           <div className="text-[11px] text-lt-fg3 mt-1">They can update this from their page; you&apos;re emailed when they do.</div>
+        </div>
+      </div>
+
+      {/* Invite */}
+      <div className="border border-lt-hairline rounded-lg p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Send className="w-4 h-4 text-lt-fg3" /> Account link</div>
+        <div className="text-xs text-lt-fg2 mt-1">
+          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, vehicles &amp; rates, drivers, lot address).</span>}
+        </div>
+        <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <input value={invTo} onChange={(e) => setInvTo(e.target.value)} placeholder="partner@example.com" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg sm:w-64" />
+          <button onClick={sendInvite} disabled={!invTo.trim() || busy === 'invite'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
+            {busy === 'invite' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} {inv ? 'Send again' : 'Email the account link'}
+          </button>
         </div>
       </div>
 

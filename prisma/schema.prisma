@@ -4495,6 +4495,11 @@ model Vendor {
   portalTokenMintedAt DateTime? @map("portal_token_minted_at")
   portalViewedAt      DateTime? @map("portal_viewed_at")
   portalViewCount     Int       @default(0) @map("portal_view_count")
+  /// When (and to whom) HQ last emailed the account link. Minting alone is
+  /// not an invite — the Portals tab reads this to say "invited Sep 6 · not
+  /// yet opened" instead of the misleading "link minted".
+  portalInvitedAt DateTime? @map("portal_invited_at")
+  portalInvitedTo String?   @map("portal_invited_to")
 
   /// The partner's mark on their account page — same treatment as
   /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).
