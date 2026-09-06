@@ -160,7 +160,7 @@ export default function UtliizSitePage() {
       </section>
 
       <footer className="max-w-[1080px] mx-auto px-5 sm:px-8 py-10 text-[13px] text-[#0f2a30]/60 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-3"><UtliizWordmark height={18} ink="#4b6b72" accent="#8FC2CE" /> © 2026 {HQ_PRODUCT.maker}.</span>
+        <span className="inline-flex items-center gap-3"><UtliizWordmark height={18} ink="#4b6b72" /> © 2026 {HQ_PRODUCT.maker}.</span>
         <a href="#request" className="font-bold text-[#0F7A93] no-underline">Request a workspace →</a>
       </footer>
     </div>
