@@ -24,6 +24,8 @@ import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
+import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 
 export const dynamic = 'force-dynamic'
 
@@ -228,6 +230,19 @@ export async function GET(req: NextRequest) {
             coverageVerified: true,
           },
         },
+        // Job-level agreement coverage — the job attached as an addendum to
+        // an on-file (usually annual) master. The detail page has always
+        // read this as "On file"; until 2026-09-06 the list read only the
+        // per-order signatures, so an annual account's every job showed
+        // "Missing: Agreement" on the tile and "On file" one click later.
+        agreementAddenda: {
+          where: { deletedAt: null },
+          select: {
+            companyAgreement: {
+              select: { contractType: true, isAnnual: true, expiryDate: true },
+            },
+          },
+        },
         _count: { select: { orders: true } },
         // Board placement inputs — booking envelope dates (fallback when
         // the Job itself is date-less) and the delivery signal. Items /
@@ -286,6 +301,37 @@ export async function GET(req: NextRequest) {
     // has to ask both stores or it calls a job a blocker with a live card on
     // the account. One query for the page; see lib/payments/jobCardOnFile.ts.
     const walletCardCompanies = await companiesWithWalletCards(jobs.map((j) => j.companyId))
+
+    // Annual COIs carry forward (Wes 2026-09-02) — the detail route resolves
+    // this per job through lib/coi/companyCoi.resolveJobCoi; the list needs
+    // the same answer for 250 jobs in one query. Same three rules: APPROVED
+    // only, must cover the JOB'S dates (full coverage first, else one that
+    // at least covers the start), no expiry date = no carry-forward. Only
+    // consulted for jobs with no certificate of their own.
+    const companyIdsNeedingCoi = [
+      ...new Set(
+        jobs.filter((j) => j.coiChecks.length === 0 && j.companyId).map((j) => j.companyId as string),
+      ),
+    ]
+    const companyCois = companyIdsNeedingCoi.length
+      ? await prisma.coiCheck.findMany({
+          where: {
+            companyId: { in: companyIdsNeedingCoi },
+            deletedAt: null,
+            humanDecision: 'APPROVED',
+            policyExpiryDate: { not: null },
+          },
+          orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
+          select: { companyId: true, humanDecision: true, policyExpiryDate: true, coverageVerified: true },
+        })
+      : []
+    const companyCoisByCompany = new Map<string, typeof companyCois>()
+    for (const c of companyCois) {
+      if (!c.companyId) continue
+      const arr = companyCoisByCompany.get(c.companyId) ?? []
+      arr.push(c)
+      companyCoisByCompany.set(c.companyId, arr)
+    }
 
     // Kanban manual placements (side table, presentation-only). One
     // query for the whole page of jobs. PREJOB/OUT only — RETURNED is
@@ -374,14 +420,43 @@ export async function GET(req: NextRequest) {
             signedAgreements?: { contractType: ContractType; status: AgreementStatus; coveredByAgreementId: string | null }[]
           }).signedAgreements || [],
       )
-      const rentalAgreement = rollupAgreementState(allAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT'), liveOrders.length)
+      // An addendum to an on-file master covers the job outright — the
+      // annual account signed once for the year (lib/orders/annualCoverage).
+      // Same rule as the detail page's resolveCoverage: an annual master
+      // past its expiry reads as unsigned again, not as covered.
+      const now = new Date()
+      const coveredBy = (type: ContractType) =>
+        j.agreementAddenda.some(
+          (a) =>
+            a.companyAgreement.contractType === type &&
+            !(a.companyAgreement.isAnnual && a.companyAgreement.expiryDate && a.companyAgreement.expiryDate < now),
+        )
+      const rentalAgreement = coveredBy('RENTAL_AGREEMENT')
+        ? { state: 'SIGNED' as const, count: Math.max(1, liveOrders.length) }
+        : rollupAgreementState(allAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT'), liveOrders.length)
       const stageAgreementsExist = allAgreements.some((a) => a.contractType === 'STAGE_CONTRACT')
-      const stageAgreement = stageAgreementsExist
-        ? rollupAgreementState(allAgreements.filter((a) => a.contractType === 'STAGE_CONTRACT'), liveOrders.length)
-        : null
-      const coi = j.coiChecks[0]
-        ? rollupCoiState(j.coiChecks[0])
-        : { state: 'NONE' as const }
+      const stageAgreement = coveredBy('STAGE_CONTRACT')
+        ? { state: 'SIGNED' as const, count: Math.max(1, liveOrders.length) }
+        : stageAgreementsExist
+          ? rollupAgreementState(allAgreements.filter((a) => a.contractType === 'STAGE_CONTRACT'), liveOrders.length)
+          : null
+      let coi: { state: CoiRollupState; expiresAt?: string | null } = { state: 'NONE' }
+      if (j.coiChecks[0]) {
+        coi = rollupCoiState(j.coiChecks[0])
+      } else if (j.companyId && companyCoisByCompany.has(j.companyId)) {
+        // Newest-expiry first (the query's order), so the first cert that
+        // covers the whole window is the one that governs; failing that,
+        // the first that covers the start — the same fallback the detail
+        // route makes, with the gap named there.
+        const range = deriveJobDateRange(j.orders, j.bookings)
+        const start = range.start ?? new Date()
+        const end = range.end ?? start
+        const certs = companyCoisByCompany.get(j.companyId)!
+        const covering =
+          certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= end) ??
+          certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= start)
+        if (covering) coi = rollupCoiState(covering)
+      }
 
       const paperwork = {
         rental: rentalAgreement,
@@ -542,9 +617,10 @@ export async function GET(req: NextRequest) {
       const allBookingsCancelled =
         j.bookings.length > 0 && liveBookings.length === 0
 
-      const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, ...rest } = j
+      const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, agreementAddenda: _ignoreAddenda, ...rest } = j
       void _ignoreCoi
       void _ignoreBookings
+      void _ignoreAddenda
       // Newest of: the job row, and every order on it. Sending a quote
       // touches the ORDER, so a job-only timestamp would leave a
       // just-quoted job sitting wherever it was created.
@@ -755,21 +831,8 @@ function rollupAgreementState(
   return { state: 'SENT', count: rows.length }
 }
 
-export type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
-
-function rollupCoiState(coi: {
-  humanDecision: ReviewDecision
-  policyExpiryDate: Date | null
-  coverageVerified: boolean
-}): { state: CoiRollupState; expiresAt: string | null } {
-  const expiresAt = coi.policyExpiryDate ? coi.policyExpiryDate.toISOString() : null
-  const expired = coi.policyExpiryDate ? coi.policyExpiryDate.getTime() < Date.now() : false
-  if (expired) return { state: 'EXPIRED', expiresAt }
-  if (coi.humanDecision === 'REJECTED') return { state: 'ISSUE', expiresAt }
-  if (coi.humanDecision === 'APPROVED' && coi.coverageVerified) return { state: 'VERIFIED', expiresAt }
-  // PENDING / COUNTERED / APPROVED-without-coverage all read as "in flight".
-  return { state: 'PENDING', expiresAt }
-}
+// COI state lives in src/lib/coi/coiState.ts — shared with the job detail
+// page so the tile and the strip cannot disagree (2026-09-06).
 
 // Phase 7 — billing rollup. Inputs are the stored, reconciled Invoice
 // columns; this function does NOT consult Payment rows. The columns it

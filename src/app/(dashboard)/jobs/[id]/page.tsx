@@ -60,6 +60,7 @@ import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
+import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, Check, User } from 'lucide-react'
 
 /**
@@ -1170,16 +1171,28 @@ const driverTone = (d: any): string => {
   // Workers' Comp certificates on file (payload is optional — an older
   // cached response or a job with no bookings simply has none).
   const wcCerts = job.wcCerts ?? [];
-  const coiStatus: 'Verified' | 'Pending' | 'Expired' | 'Missing' = (() => {
+  // SAME rule as the /jobs list (lib/coi/coiState) — this used to call the
+  // AI's coverage read "Verified" on its own, while the tile waited for the
+  // human APPROVED, so a certificate pending review was green here and
+  // "Missing" on the rail (SR-JOB-0311, 2026-09-06). The human decision is
+  // the verdict; the AI read is "Pending review" until somebody signs off.
+  const coiStatus: 'Verified' | 'Pending' | 'Expired' | 'Rejected' | 'Missing' = (() => {
     const checks = job.coiChecks ?? [];
     if (checks.length === 0) return 'Missing';
     const latest = checks[0];
-    if (latest.coverageVerified) {
-      if (latest.policyExpiryDate && new Date(latest.policyExpiryDate) < new Date()) return 'Expired';
-      return 'Verified';
-    }
-    return 'Pending';
+    const { state } = rollupCoiState({
+      humanDecision: latest.humanDecision,
+      policyExpiryDate: latest.policyExpiryDate,
+      coverageVerified: !!latest.coverageVerified,
+    });
+    return state === 'VERIFIED' ? 'Verified' : state === 'EXPIRED' ? 'Expired' : state === 'ISSUE' ? 'Rejected' : 'Pending';
   })();
+  // Why it is pending, in one line — an AI pass awaiting a person is a very
+  // different chase from a certificate nobody has looked at.
+  const coiPendingWhy =
+    coiStatus === 'Pending' && job.coiChecks?.[0]?.coverageVerified
+      ? 'Coverage reads OK — awaiting HQ approval'
+      : 'Awaiting review';
 
   const primaryContact = job.jobContacts.find((c) => c.isPrimary) ?? job.jobContacts[0] ?? null;
   const extraContacts = Math.max(0, job.jobContacts.length - 1);
@@ -1207,7 +1220,7 @@ const driverTone = (d: any): string => {
     (i.assignments ?? []).filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
   );
   const readiness = computeReadiness({
-    coi: coiStatus === 'Verified' ? 'VERIFIED' : coiStatus === 'Expired' ? 'EXPIRED' : coiStatus === 'Pending' ? 'PENDING' : 'NONE',
+    coi: coiStatus === 'Verified' ? 'VERIFIED' : coiStatus === 'Expired' ? 'EXPIRED' : coiStatus === 'Rejected' ? 'ISSUE' : coiStatus === 'Pending' ? 'PENDING' : 'NONE',
     rental: agreementStatus === 'signed' ? 'SIGNED' : agreementStatus === 'pending' ? 'SENT' : 'NONE',
     stage: null,
     cardOnFile: !!cardOnFile,
@@ -1657,12 +1670,12 @@ const driverTone = (d: any): string => {
             ) : (
               <>
                 <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
-                  coiStatus === 'Verified' ? 'text-emerald-700' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-700' : 'text-amber-700'
+                  coiStatus === 'Verified' ? 'text-emerald-700' : coiStatus === 'Missing' || coiStatus === 'Expired' || coiStatus === 'Rejected' ? 'text-rose-700' : 'text-amber-700'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-500' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-500' : coiStatus === 'Missing' || coiStatus === 'Expired' || coiStatus === 'Rejected' ? 'bg-rose-500' : 'bg-amber-500'}`} />
                   {coiStatus}
                 </div>
-                <div className="mt-1.5 text-[12px] text-zinc-700">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-700">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : coiStatus === 'Rejected' ? 'We turned it down — the client owes a corrected one' : coiStatus === 'Expired' ? 'Policy has lapsed' : coiPendingWhy}</div>
               </>
             )}
           </a>
