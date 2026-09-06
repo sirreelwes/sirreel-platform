@@ -33,9 +33,17 @@
 import { prisma } from '@/lib/prisma'
 import { SuppressionReason } from '@prisma/client'
 
-/** Lowercase + trim. The only accepted form of an address in this table. */
+/**
+ * Bare lowercase address. The only accepted form in this table.
+ *
+ * Strips a display name too: Resend's bounce events carry the recipient
+ * as "Oliver Carlson <oliver@sirreel.com>", and a row stored under that
+ * whole string (2026-09-04) can never match the plain address every
+ * read-side lookup uses — a suppression that suppresses nothing.
+ */
 export function normalizeSuppressionEmail(email: string): string {
-  return email.trim().toLowerCase()
+  const m = email.match(/<([^<>]+)>\s*$/)
+  return (m ? m[1] : email).trim().toLowerCase()
 }
 
 /**

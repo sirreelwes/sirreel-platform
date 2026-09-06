@@ -20,6 +20,12 @@
  *   email.bounced            → BOUNCED  (statusDetail = bounce reason)
  *   email.complained         → COMPLAINED
  *
+ * A bounce / complaint is PER RECIPIENT: `data.to` is the address that
+ * bounced, which may be a CC. Only a bounce of the row's To changes its
+ * status; a CC bounce is appended to statusDetail. Suppression happens
+ * on permanent bounces and complaints only. See src/lib/email/bounceEvent.ts
+ * for the weekend that taught us this.
+ *
  * Match: emailDelivery.resendMessageId === data.email_id. If no row
  * exists for that id (e.g. portal magic-link sends that don't write
  * a row), no-op and ack 200 — the webhook isn't a place to surface
@@ -35,6 +41,7 @@ import { Webhook } from 'svix'
 import { prisma } from '@/lib/prisma'
 import type { EmailDeliveryStatus } from '@prisma/client'
 import { suppressEmail } from '@/lib/outreach/suppression'
+import { classifyBounceEvent } from '@/lib/email/bounceEvent'
 
 export const dynamic = 'force-dynamic'
 // Resend sometimes batches; keep a generous body limit.
@@ -121,59 +128,95 @@ export async function POST(req: NextRequest) {
     statusDetail = [b.type, b.subType, b.message].filter(Boolean).join(' · ') || null
   }
 
-  // Match by unique resendMessageId. updateMany so a no-match (row
-  // doesn't exist for sends that weren't recorded) just no-ops at
-  // count=0 instead of throwing.
-  const result = await prisma.emailDelivery.updateMany({
+  // Match by unique resendMessageId. A no-match (sends that never wrote
+  // a row) is a no-op ack, not an error to hand back to Resend.
+  const delivery = await prisma.emailDelivery.findUnique({
     where: { resendMessageId: emailId },
-    data: {
-      status,
-      statusDetail,
-      statusAt: new Date(),
-    },
+    select: { id: true, status: true, statusDetail: true, toAddress: true, ccAddresses: true },
   })
 
+  const isFailure = status === 'BOUNCED' || status === 'COMPLAINED'
+  const verdict = isFailure
+    ? classifyBounceEvent({
+        eventType,
+        eventTo: event.data?.to,
+        bounceType: event.data?.bounce?.type ?? null,
+        delivery,
+      })
+    : null
+
+  let matched = 0
+  let applied: 'status' | 'cc-note' | 'none' = 'none'
+  if (delivery) {
+    if (verdict && !verdict.affectsDelivery) {
+      // A CC copy bounced. The To's delivery stands; leave a trace on the
+      // row so "why did HQ say bounced" has an answer next time.
+      const note = `CC copy to ${verdict.bouncedAddress} ${status === 'COMPLAINED' ? 'complained' : 'bounced'}${
+        statusDetail ? ` (${statusDetail})` : ''
+      }`
+      const prior = delivery.statusDetail?.trim()
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { statusDetail: prior && !prior.startsWith('CC copy') ? `${prior} · ${note}` : note },
+      })
+      applied = 'cc-note'
+    } else {
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { status, statusDetail, statusAt: new Date() },
+      })
+      applied = 'status'
+    }
+    matched = 1
+  }
+
   // ── Auto-suppression (Phase 2) ────────────────────────────────────
-  // A hard bounce means the address does not exist; a complaint means
-  // they told their provider we are spam. Continuing to mail either is
-  // the fastest way to wreck a sending domain's reputation — and until
-  // now these arrived, updated a status column, and were never acted on.
+  // A PERMANENT bounce means the address does not exist; a complaint
+  // means they told their provider we are spam. Continuing to mail
+  // either is the fastest way to wreck a sending domain's reputation.
   //
-  // Suppression is keyed on the ADDRESS, so it works even when we have
-  // no EmailDelivery row and no Person for the recipient. Best-effort:
-  // the webhook must still ack, or Resend retries forever and we lose
-  // the status update we already made.
+  // A TRANSIENT bounce is none of that — a full mailbox, a greylist, an
+  // out-of-office auto-reply SES could not parse — and used to land on
+  // the list too (Oliver, 2026-09-04). It is logged and left alone.
+  //
+  // Suppression is keyed on the bare ADDRESS, so it works even when we
+  // have no EmailDelivery row and no Person for the recipient.
+  // Best-effort: the webhook must still ack, or Resend retries forever.
   let suppressedEmail: string | null = null
-  if (status === 'BOUNCED' || status === 'COMPLAINED') {
+  if (verdict?.shouldSuppress && verdict.bouncedAddress) {
     try {
-      const to = event.data?.to
-      const address = Array.isArray(to) ? to[0] : to
-      if (address && typeof address === 'string') {
-        const person = await prisma.person.findUnique({
-          where: { email: address.trim().toLowerCase() },
-          select: { id: true },
-        })
-        await suppressEmail({
-          email: address,
-          reason: status === 'BOUNCED' ? 'BOUNCED' : 'COMPLAINED',
-          detail: statusDetail ?? eventType,
-          source: 'resend-webhook',
-          personId: person?.id ?? null,
-        })
-        suppressedEmail = address.trim().toLowerCase()
-        console.log(`[webhooks/resend] suppressed ${suppressedEmail} (${status})`)
-      }
+      const address = verdict.bouncedAddress
+      const person = await prisma.person.findUnique({
+        where: { email: address },
+        select: { id: true },
+      })
+      await suppressEmail({
+        email: address,
+        reason: status === 'BOUNCED' ? 'BOUNCED' : 'COMPLAINED',
+        detail: statusDetail ?? eventType,
+        source: 'resend-webhook',
+        personId: person?.id ?? null,
+      })
+      suppressedEmail = address
+      console.log(`[webhooks/resend] suppressed ${suppressedEmail} (${status})`)
     } catch (err) {
       console.error('[webhooks/resend] suppression failed (status update unaffected):', err)
     }
+  } else if (verdict && verdict.bouncedAddress && !verdict.isPermanent) {
+    console.log(
+      `[webhooks/resend] transient ${status} for ${verdict.bouncedAddress} (${verdict.role}) — not suppressed`,
+    )
   }
 
   return NextResponse.json({
     ok: true,
     eventType,
     emailId,
-    matched: result.count,
+    matched,
+    applied,
     status,
+    bounced: verdict?.bouncedAddress ?? null,
+    role: verdict?.role ?? null,
     suppressed: suppressedEmail,
   })
 }
