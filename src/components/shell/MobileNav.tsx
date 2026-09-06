@@ -92,7 +92,7 @@ export function MobileNav({
         </Link>
 
         {canCreateJob && (
-          <NewJobLauncher buttonClassName="ml-auto flex-shrink-0 bg-[#c9a24b] hover:bg-[#d8b263] text-[#1a1a1a] text-[12px] font-bold px-3 min-h-[38px] rounded-lg" />
+          <NewJobLauncher buttonClassName="ml-auto flex-shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-[12px] font-bold px-3 min-h-[38px] rounded-lg" />
         )}
       </header>
 
@@ -113,7 +113,7 @@ export function MobileNav({
               <img src="/s-logo-white.png" alt="" aria-hidden="true" className="w-8 h-8 flex-shrink-0 object-contain" />
               <div className="leading-tight flex-1 min-w-0">
                 <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
-                <div className="text-[8px] font-semibold text-[#c9a24b]/80 tracking-[0.22em] uppercase">SirReel HQ</div>
+                <div className="text-[8px] font-semibold text-amber-300 tracking-[0.22em] uppercase">SirReel HQ</div>
               </div>
               <button
                 onClick={() => setOpen(false)}

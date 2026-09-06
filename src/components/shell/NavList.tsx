@@ -59,7 +59,7 @@ export function NavList({
         <div key={si} className={si === 0 ? 'mt-1' : 'mt-4'}>
           {/* Static section divider — NOT a toggle. */}
           <div className="flex items-center justify-between px-3 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a24b]/75">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">
               {section.label}
             </span>
             {section.label === 'Admin' && role === UserRole.ADMIN && <AdminHealthDot />}
@@ -76,7 +76,7 @@ export function NavList({
                   touch ? 'py-2.5 min-h-[44px] text-[14px]' : 'py-2 text-[13px]'
                 } ${
                   isActive
-                    ? 'bg-[#c9a24b] text-[#1a1a1a] font-semibold shadow-sm'
+                    ? 'bg-amber-400 text-[#1a1a1a] font-semibold shadow-sm'
                     : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'
                 }`}
               >
@@ -88,7 +88,7 @@ export function NavList({
                   size={touch ? 18 : 16}
                   strokeWidth={2.1}
                   className={`flex-shrink-0 ${
-                    isActive ? 'text-[#1a1a1a]' : 'text-slate-400 group-hover:text-[#c9a24b] transition-colors'
+                    isActive ? 'text-[#1a1a1a]' : 'text-slate-400 group-hover:text-amber-400 transition-colors'
                   }`}
                 />
                 <span className="truncate">{item.label}</span>
@@ -96,7 +96,7 @@ export function NavList({
                     engine. Only the 'action-items' entry carries it. */}
                 {item.id === 'action-items' && actionItemCount > 0 && (
                   <span className={`ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                    isActive ? 'bg-[#1a1a1a] text-[#c9a24b]' : 'bg-red-500 text-white'
+                    isActive ? 'bg-[#1a1a1a] text-amber-400' : 'bg-red-500 text-white'
                   }`}>
                     {actionItemCount > 99 ? '99+' : actionItemCount}
                   </span>

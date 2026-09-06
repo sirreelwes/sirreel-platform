@@ -152,7 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <img src="/s-logo-white.png" alt="" aria-hidden="true" className="w-9 h-9 flex-shrink-0 object-contain" />
             <div className="leading-tight">
               <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
-              <div className="text-[8px] font-semibold text-[#c9a24b]/80 tracking-[0.22em] uppercase">SirReel HQ</div>
+              <div className="text-[8px] font-semibold text-amber-300 tracking-[0.22em] uppercase">SirReel HQ</div>
             </div>
           </Link>
         </div>

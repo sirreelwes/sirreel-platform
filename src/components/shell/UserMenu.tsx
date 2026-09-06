@@ -67,13 +67,13 @@ export function UserMenu({
         {user.image ? (
           <img src={user.image} alt={user.name || ''} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
         ) : (
-          <div className="w-7 h-7 rounded-full bg-[#c9a24b] flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] flex-shrink-0">
             {initials}
           </div>
         )}
         <div className="text-left flex-1 min-w-0">
           <div className="text-[12px] font-semibold text-white truncate">{user.name}</div>
-          <div className="text-[10px] text-[#c9a24b]/80 truncate">{ROLE_LABELS[role] || role}</div>
+          <div className="text-[10px] text-amber-300 truncate">{ROLE_LABELS[role] || role}</div>
         </div>
         <span className="text-[9px] text-slate-400">▼</span>
       </button>
