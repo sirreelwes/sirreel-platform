@@ -153,6 +153,11 @@ export async function GET(
                 signerName: true,
                 signedDocumentUrl: true,
                 updatedAt: true,
+                // Sibling coverage (lib/orders/agreementCoverage): a signature
+                // on another order of this job papers this one. The /jobs
+                // list has read it since 8/29; the page never did, so a
+                // covered job read "On file" on the tile and "Pending" here.
+                coveredByAgreementId: true,
                 // A redline already recorded against this agreement. The
                 // row's action has to know: offering "Client sent a
                 // redline" on an agreement that HAS one reads as a second

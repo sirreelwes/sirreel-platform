@@ -1047,13 +1047,19 @@ export default function JobDetailPage() {
   type CoverageState = 'signed' | 'pending' | 'expired' | 'none';
   const resolveCoverage = (
     addendum?: JobAgreementAddendum,
-    agreement?: { status: string },
+    agreement?: { status: string; coveredByAgreementId?: string | null },
   ): { state: CoverageState; source: 'onFile' | 'portal' | null } => {
     if (addendum) {
       return { state: isAnnualExpired(addendum) ? 'expired' : 'signed', source: 'onFile' };
     }
     if (agreement && isSignedAgreementStatus(agreement.status)) {
       return { state: 'signed', source: 'portal' };
+    }
+    // Covered by a signature on a sibling order of this job — the agreement
+    // papers the JOB (lib/orders/agreementCoverage). Same rule the /jobs
+    // list applies in rollupAgreementState, so the two can't disagree.
+    if (agreement?.coveredByAgreementId) {
+      return { state: 'signed', source: 'onFile' };
     }
     if (agreement) return { state: 'pending', source: 'portal' };
     return { state: 'none', source: null };
