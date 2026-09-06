@@ -32,7 +32,7 @@ export function buildPartnerWelcome(a: {
   const subject = `Your ${a.vendorName} account with SirReel`
   const asks: string[] = []
   if (a.agreementWaiting) asks.push('<strong>Read and sign the Partner Vehicle Agreement.</strong> It is the rental agreement between us, and it is what puts your vehicles under our client contract and insurance while they are on a SirReel job.')
-  asks.push(`<strong>Check your vehicle list and rates.</strong> ${a.unitCount === 0 ? 'Add every vehicle you want SirReel to be able to book, with your daily, weekly and monthly rates.' : `We have ${a.unitCount} of your vehicle${a.unitCount === 1 ? '' : 's'} listed — add the rest, and correct any rate that is off.`} Rate changes come to us to accept and never touch a booking already confirmed.`)
+  asks.push(`<strong>Check your vehicle list and rates.</strong> ${a.unitCount === 0 ? 'Add every vehicle you want SirReel to be able to book, with your daily, weekly and monthly rates.' : `We have ${a.unitCount} of your vehicles listed — add the rest, and correct any rate that is off.`} Rate changes come to us to accept and never touch a booking already confirmed.`)
   asks.push('<strong>Add your drivers.</strong> Enter each driver’s email and they fill in their own profile and license. When we book one of your vehicles with a driver, you assign them from that list and they get their own page with the location and call time.')
   asks.push('<strong>Confirm your contact details and lot address.</strong> Your lot is the point of origin for every booking, so mileage and driver hours count from there.')
   const html = renderEmailShell({
