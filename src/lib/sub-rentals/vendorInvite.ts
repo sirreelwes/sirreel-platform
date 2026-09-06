@@ -12,6 +12,11 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/templates/shell'
 import { ensureVendorPortalToken, vendorAccountUrl } from './vendorAccount'
+import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+
+/** Partner mail wears the Utliiz turquoise, not SirReel gold — a foreshadow
+ *  of the workspace the partner page points them to. */
+const PARTNER_ACCENT = HQ_PRODUCT.defaultAccent
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -58,7 +63,7 @@ export function buildPartnerWelcome(a: {
   needs.push('When we book a vehicle with a driver, name the driver on that booking page. You enter each driver’s email once, they fill in their own profile and license, and after that you just pick from the list. Each driver gets their own page with the location and call time, so nobody has to relay it by text.')
   const booking = 'We quote one of your vehicles to a production. You get an email saying we have pitched it for those dates, which holds nothing. If the production accepts, you get a “please hold” email and confirm on the booking page. When the production books, you get an “it’s a go” email with your rate for the booking. Location and call time land on the booking page as the production sets them. After the vehicle comes back, you invoice SirReel for your share, referencing our booking number, and we pay within 30 days. You never invoice the production.'
 
-  const h3 = (t: string) => `<p style="margin:18px 0 6px;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#8a8272;">${t}</p>`
+  const h3 = (t: string) => `<p style="margin:18px 0 6px;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${PARTNER_ACCENT};">${t}</p>`
   const ul = (items: string[]) => `<ul style="margin:0 0 6px;padding-left:20px;font-size:15px;line-height:1.55;color:#1f1d1a;">${items.map((x) => `<li style="margin:0 0 8px;">${esc(x)}</li>`).join('')}</ul>`
   const ol = (items: string[]) => `<ol style="margin:0 0 6px;padding-left:20px;font-size:15px;line-height:1.55;color:#1f1d1a;">${items.map((x) => `<li style="margin:0 0 8px;">${esc(x).replace(/(https?:\/\/\S+)/, '<a href="$1" style="color:#111;">$1</a>')}</li>`).join('')}</ol>`
 
@@ -70,7 +75,7 @@ export function buildPartnerWelcome(a: {
       p(`${greet}`),
       p(`We have moved our partner vehicles onto one page per partner, and ${esc(a.vendorName)}’s is ready. Everything about your vehicles on SirReel jobs now runs through it: your vehicle list and rates, our agreement, your drivers, and every booking.`),
       p(`Your account page: <a href="${esc(a.accountUrl)}" style="color:#111;">${esc(a.accountUrl)}</a>`),
-      calloutBox('That link is your login. There is no password. It does not expire, so bookmark it — and do not forward it outside your company, because anyone with it can act for you on it.'),
+      calloutBox('That link is your login. There is no password. It does not expire, so bookmark it — and do not forward it outside your company, because anyone with it can act for you on it.', PARTNER_ACCENT),
       ...(deal ? [h3('Our deal'), p(esc(deal))] : []),
       h3('What the page gives you'),
       ul(gives),
@@ -82,6 +87,7 @@ export function buildPartnerWelcome(a: {
     ].join('\n'),
     cta: { label: 'Open your account', href: a.accountUrl },
     footNote: FOOT_PARTNER,
+    accent: PARTNER_ACCENT,
   })
   const text = renderEmailText([
     greetText,

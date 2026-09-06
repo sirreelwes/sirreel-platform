@@ -44,6 +44,10 @@ export interface EmailShellOptions {
   cta?: { label: string; href: string }
   /** Small print under the card, above the footer. */
   footNote?: string
+  /** Accent for the eyebrow, CTA and footer links. Defaults to SirReel gold;
+   *  partner-facing mail passes the Utliiz turquoise (Wes 2026-09-06:
+   *  "the turquoise that foreshadows Utliiz"). */
+  accent?: string
 }
 
 function esc(s: string): string {
@@ -75,17 +79,20 @@ export function detailTable(rows: Array<{ label: string; value: string }>): stri
 }
 
 /** Gold-edged callout — reference numbers, "what happens next". */
-export function calloutBox(html: string): string {
+export function calloutBox(html: string, accent: string = GOLD): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
       <tr>
-        <td style="border-left:3px solid ${GOLD};background:#faf7f2;padding:14px 16px;font-family:${FONT};font-size:14px;line-height:1.55;color:${BODY_TEXT};">${html}</td>
+        <td style="border-left:3px solid ${accent};background:#faf7f2;padding:14px 16px;font-family:${FONT};font-size:14px;line-height:1.55;color:${BODY_TEXT};">${html}</td>
       </tr>
     </table>`
 }
 
 export function renderEmailShell(o: EmailShellOptions): string {
   const preheader = o.preheader ?? o.heading
+  const accent = o.accent ?? GOLD
+  // Dark ink reads on gold; on a saturated accent the label goes white.
+  const ctaInk = o.accent && o.accent !== GOLD ? '#ffffff' : INK
   const logo = `${PUBLIC_SITE_URL}/sirreel-logo-white.png`
   // The S mark, balancing the footer opposite the address. Same host as
   // the header wordmark, so if one loads both do.
@@ -95,8 +102,8 @@ export function renderEmailShell(o: EmailShellOptions): string {
     ? `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px;">
         <tr>
-          <td style="background:${GOLD};border-radius:6px;">
-            <a href="${esc(o.cta.href)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:700;color:${INK};text-decoration:none;">${esc(o.cta.label)}</a>
+          <td style="background:${accent};border-radius:6px;">
+            <a href="${esc(o.cta.href)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:700;color:${ctaInk};text-decoration:none;">${esc(o.cta.label)}</a>
           </td>
         </tr>
       </table>`
@@ -136,7 +143,7 @@ export function renderEmailShell(o: EmailShellOptions): string {
             <td style="background:#ffffff;padding:30px 28px 26px;border-left:1px solid ${HAIRLINE};border-right:1px solid ${HAIRLINE};">
               ${
                 o.eyebrow
-                  ? `<div style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${GOLD};margin:0 0 8px;">${esc(o.eyebrow)}</div>`
+                  ? `<div style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${accent};margin:0 0 8px;">${esc(o.eyebrow)}</div>`
                   : ''
               }
               <h1 style="margin:0 0 16px;font-family:${FONT};font-size:24px;line-height:1.25;font-weight:800;color:${INK};">${esc(o.heading)}</h1>
@@ -170,9 +177,9 @@ export function renderEmailShell(o: EmailShellOptions): string {
                     <div style="font-family:${FONT};font-size:13px;font-weight:700;color:#ffffff;margin:0 0 5px;">${esc(PUBLIC_CONTACT.entity)}</div>
                     <div style="font-family:${FONT};font-size:12.5px;line-height:1.6;color:#a8a294;">
                       ${esc(PUBLIC_CONTACT.address)}<br>
-                      <a href="${PUBLIC_CONTACT.phoneHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.phone)}</a>
+                      <a href="${PUBLIC_CONTACT.phoneHref}" style="color:${accent};text-decoration:none;">${esc(PUBLIC_CONTACT.phone)}</a>
                       &nbsp;·&nbsp;
-                      <a href="${PUBLIC_CONTACT.emailHref}" style="color:${GOLD};text-decoration:none;">${esc(PUBLIC_CONTACT.email)}</a>
+                      <a href="${PUBLIC_CONTACT.emailHref}" style="color:${accent};text-decoration:none;">${esc(PUBLIC_CONTACT.email)}</a>
                     </div>
                   </td>
                   <td width="52" style="width:52px;vertical-align:middle;text-align:right;padding-left:16px;">
