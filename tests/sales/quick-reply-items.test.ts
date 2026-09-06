@@ -12,7 +12,9 @@
  *     vanished by then anyway;
  *   · "Write my own email" has to mean the rep's words are the WHOLE email —
  *     the templated hold read-back and the production-company ask stapled
- *     underneath a hand-written note read like two people wrote it.
+ *     underneath a hand-written note read like two people wrote it. Since
+ *     2026-09-02 that includes the greeting: the composer opens blank, so
+ *     the template adds no "Hi <First>," over a rep-written body either.
  *
  * Pure rendering — no DB reads. The env preamble is only here because
  * quickReply.ts pulls in the prisma-backed availability engine at import.
@@ -116,7 +118,13 @@ async function main() {
   lacks('no templated production-company ask', own.html, 'One quick thing for our files')
   has('the button survives', own.html, 'Add gear or vehicles &rarr;')
   has('the lead-in survives', own.html, 'Need more gear or vehicles lined up?')
-  has('the greeting survives', own.html, 'Hi Maggie,')
+  // Wes 2026-09-02: the composer opens blank and promises no greeting, so a
+  // rep-written body is the WHOLE email — the template must not staple its
+  // own "Hi Maggie," above the rep's words (that is how "Hi Kacie," followed
+  // by "Hi again, Kacie!" happened). The blank-box fallback above still
+  // carries the templated greeting.
+  lacks('no templated greeting over the rep\'s words', own.html, 'Hi Maggie,')
+  has('the fallback still greets', bare.html, 'Hi Maggie,')
   has('the sign-off survives', own.html, 'Wes Bailey')
   lacks('plain text is stripped too', own.text, 'while you decide')
   has('plain text keeps the link', own.text, 'Add gear or vehicles: https://orders.sirreel.com')
