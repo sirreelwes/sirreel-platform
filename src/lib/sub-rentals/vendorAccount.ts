@@ -81,7 +81,6 @@ export interface VendorAccountJob {
   jobId: string | null
   jobCode: string | null
   jobName: string
-  companyName: string | null
   /** Earliest start / latest end across this job's units. */
   startDate: string | null
   endDate: string | null
@@ -206,11 +205,11 @@ async function buildVendorAccount(vendor: {
         callTime: true,
         vendorToken: true,
         subcontractedVehicle: { select: { name: true } },
-        job: { select: { id: true, jobCode: true, name: true, company: { select: { name: true } } } },
+        job: { select: { id: true, jobCode: true, name: true } },
         order: {
           select: {
             orderNumber: true,
-            job: { select: { id: true, jobCode: true, name: true, company: { select: { name: true } } } },
+            job: { select: { id: true, jobCode: true, name: true } },
           },
         },
       },
@@ -246,7 +245,6 @@ async function buildVendorAccount(vendor: {
         jobId: job?.id ?? null,
         jobCode: job?.jobCode ?? null,
         jobName: job?.name || job?.jobCode || (r.order?.orderNumber ? `Order ${r.order.orderNumber}` : 'Booking'),
-        companyName: job?.company?.name ?? null,
         startDate: null,
         endDate: null,
         units: [],

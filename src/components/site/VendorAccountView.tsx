@@ -45,7 +45,7 @@ function JobCard({ job, preview, unitHref }: { job: VendorAccountJob; preview: b
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#111', letterSpacing: '-0.01em' }}>{job.jobName}</div>
           <div style={{ fontSize: 13, color: '#6b6560', marginTop: 2 }}>
-            {job.companyName ? `${job.companyName} · ` : ''}{job.jobCode ? `SirReel ref ${job.jobCode} · ` : ''}{fmtRange(job.startDate, job.endDate)}
+            {/* The production's name never reaches a partner — same rule as the per-booking vendor page (Wes 2026-09-05). SirReel ref + dates are the handle. */}{job.jobCode ? `SirReel ref ${job.jobCode} · ` : ''}{fmtRange(job.startDate, job.endDate)}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
