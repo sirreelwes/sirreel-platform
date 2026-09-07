@@ -320,8 +320,22 @@ export async function buildDailyBrief(
     (r) => r.end !== null && r.end < today && READY_ENOUGH.has(r.status) && r.status !== 'CLOSED',
   )
 
-  // Clients waiting on a rep — their own section below.
-  const clientCreated = await listClientCreatedUnquoted({ now })
+  // Clients waiting on a rep — their own section below, MORNING ONLY
+  // (Wes 2026-09-07, Labor Day). The evening edition asks "what rolls
+  // tomorrow and what is not ready for it"; a client waiting on a quote
+  // is not a movement, and the answer to it is a phone call in business
+  // hours. So it leads the email that lands as the day starts, and stays
+  // out of the one that lands as it ends.
+  //
+  // In the evening the exclusion set is empty, so any of these that the
+  // stale-draft filter can see are counted there instead. Note that filter
+  // reads gather()'s deriveOrderWindow, which never consults the order
+  // header — so a self-serve job with no lines and no hold (the common
+  // shape) has no window there and is absent from the evening brief
+  // altogether. That is the intent of "morning only", not an oversight:
+  // the client's own typed dates are recovered in clientCreatedJobs.ts,
+  // which is what the morning section reads.
+  const clientCreated = edition === 'morning' ? await listClientCreatedUnquoted({ now }) : []
   const clientCreatedOrderIds = new Set(clientCreated.map((j) => j.orderId))
 
   // Unsent quotes whose dates are already in play. One line, not a section.
@@ -368,7 +382,7 @@ export async function buildDailyBrief(
 
   const bodyHtml = `
     <p style="margin:0 0 4px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY};">${headline}</p>
-    ${clientCreatedSection(clientCreated, now)}
+    ${edition === 'morning' ? clientCreatedSection(clientCreated, now) : ''}
     ${section('Going out', `${goingOut.length} on ${shortDay(focusDay)}`, goingOut)}
     ${section('Coming back', `${comingBack.length} on ${shortDay(focusDay)}`, comingBack)}
     ${section('Later this week', `${ahead.length} in the next 7 days`, ahead, true, 'none')}

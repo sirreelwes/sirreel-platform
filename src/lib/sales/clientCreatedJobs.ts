@@ -30,6 +30,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 
 const SIGNED_STATUSES = ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED', 'SIGNED_OFFLINE'] as const
 
@@ -43,7 +44,11 @@ export interface ClientCreatedJob {
   jobCode: string
   jobName: string
   companyName: string | null
-  /** ISO calendar days, from the order's own window. */
+  /**
+   * ISO calendar days — the real derived window once anything exists to
+   * derive from, else the dates the client typed on the form. See
+   * `windowFor` below for why this one caller may read the order header.
+   */
   start: string | null
   end: string | null
   /** They have already signed the rental agreement. */
@@ -104,6 +109,10 @@ export async function listClientCreatedUnquoted(
       startDate: true,
       endDate: true,
       createdAt: true,
+      // deriveOrderWindow's real sources. Empty on a job nobody has
+      // quoted, which is exactly the case this module is about.
+      lineItems: { select: { pickupDate: true, returnDate: true } },
+      booking: { select: { startDate: true, endDate: true, status: true } },
       job: {
         select: {
           id: true,
@@ -111,6 +120,7 @@ export async function listClientCreatedUnquoted(
           name: true,
           company: { select: { name: true } },
           agent: { select: { name: true, email: true } },
+          bookings: { select: { startDate: true, endDate: true, status: true } },
         },
       },
       _count: { select: { lineItems: true } },
@@ -124,13 +134,48 @@ export async function listClientCreatedUnquoted(
 
   const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
+  /**
+   * THE ONE PLACE THAT MAY READ `Order.startDate` — and only as a last
+   * resort. `deriveOrderWindow` deliberately never consults the order
+   * header (see the note above it in jobs/dateRange.ts): the header is a
+   * stale second copy of what the line items already carry, and letting it
+   * win is how an order's header said Sep 5–8 while its lines said Sep 4–9.
+   *
+   * That rationale does not reach this case. A job the client set up has NO
+   * line items and NO hold — nothing has been quoted yet, which is the
+   * whole definition of the list — so the header cannot have drifted from
+   * anything, and it is the only record of the days the client actually
+   * asked for. Dropping to "no dates given" would hide the single fact that
+   * makes one of these urgent: Chaotic Neutral's rental was five days out.
+   *
+   * Derived first, header only to fill a total blank, so the moment a rep
+   * adds a line the real window takes over and the header can never
+   * override it.
+   */
+  const windowFor = (o: {
+    startDate: Date | null
+    endDate: Date | null
+    lineItems: { pickupDate: Date | null; returnDate: Date | null }[]
+    booking: { startDate: Date | null; endDate: Date | null; status: string } | null
+    job: { bookings: { startDate: Date | null; endDate: Date | null; status: string }[] } | null
+  }): { start: string | null; end: string | null } => {
+    const derived = deriveOrderWindow(o)
+    return {
+      start: iso(derived.start) ?? iso(o.startDate),
+      end: iso(derived.end) ?? iso(o.endDate),
+    }
+  }
+
+  const todayIso = iso(new Date(now.getTime() - 86_400_000))!
+
   return orders
-    .filter((o) => {
+    .map((o) => ({ o, w: windowFor(o as Parameters<typeof windowFor>[0]) }))
+    .filter(({ o, w }) => {
       if (opts.includeStale) return true
-      if (o.startDate) return o.startDate.getTime() >= now.getTime() - 86_400_000
+      if (w.start) return w.start >= todayIso
       return o.createdAt.getTime() >= now.getTime() - CLIENT_CREATED_STALE_DAYS * 86_400_000
     })
-    .map((o) => {
+    .map(({ o, w }) => {
       const job = o.job!
       return {
         orderId: o.id,
@@ -139,8 +184,8 @@ export async function listClientCreatedUnquoted(
         jobCode: job.jobCode,
         jobName: job.name,
         companyName: job.company?.name ?? null,
-        start: iso(o.startDate),
-        end: iso(o.endDate),
+        start: w.start,
+        end: w.end,
         agreementSigned: o.signedAgreements.length > 0,
         lineCount: o._count.lineItems,
         agentName: job.agent?.name || job.agent?.email || null,
