@@ -397,12 +397,13 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
   text: string
 } {
   const range = a.startDate === a.endDate ? fmt(a.startDate) : `${fmt(a.startDate)} — ${fmt(a.endDate)}`
-  const subject = `We're on for ${range} — ${a.vehicleName}`
+  const subject = `${a.vehicleName} for ${range} — confirmed`
   const who = a.contactFirstName || a.vendorName
   const units = a.quantity && a.quantity > 1 ? `${a.quantity} × ${a.vehicleName}` : `the ${a.vehicleName}`
+  const confirmed = `The production booked, so ${units} ${a.quantity && a.quantity > 1 ? 'are' : 'is'} confirmed for ${range}. Drop-off and pickup details are on the booking page and will update there if anything changes.`
   const ask = a.driverNamed
-    ? `You've already given us a delivery contact — thanks. If that changes, update it on the booking page.`
-    : `One quick thing: on the booking page, give us a name and a mobile for whoever's doing the drop-off and pickup, so we can text or call them if the address or the timing shifts on the day. No page, no login for them — just a number.`
+    ? `Thanks for the delivery contact. If that changes, update it on the booking page.`
+    : `Could you add a name and mobile on the booking page for whoever is handling the delivery and pickup? We'll only use it if the address or timing changes that day.`
 
   const html = `<!doctype html>
 <html>
@@ -418,7 +419,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
         <tr><td style="padding:28px 32px 4px;">
           <p style="font-size:17px;color:${TEXT};margin:0 0 12px;line-height:1.5;">Hey ${escapeHtml(who)},</p>
           <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">
-            Good news &mdash; the production booked, so we're on for ${escapeHtml(units)}. Dates below. Drop-off and pickup details are on your booking page, and they'll update there if anything moves.
+            ${escapeHtml(confirmed)}
           </p>
           <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">${escapeHtml(ask)}</p>
         </td></tr>
@@ -435,7 +436,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
         </td></tr>
         <tr><td style="padding:22px 32px 0;">
           <p style="font-size:13px;color:${MUTED};margin:0;line-height:1.6;">
-            If the production cancels inside 24 hours you'll hear from us right away &mdash; otherwise this is firm. Questions, just reply here rather than reaching out to the production.
+            If the production cancels inside 24 hours I'll let you know right away; otherwise treat this as firm. Any questions, reply here.
           </p>
         </td></tr>
         <tr><td style="padding:22px 32px 4px;">
@@ -456,7 +457,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
   const text = [
     `Hey ${who},`,
     '',
-    `Good news — the production booked, so we're on for ${units}. Dates below. Drop-off and pickup details are on your booking page, and they'll update there if anything moves.`,
+    confirmed,
     '',
     ask,
     '',
@@ -466,7 +467,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
     '',
     `Booking page: ${a.vendorUrl}`,
     '',
-    `If the production cancels inside 24 hours you'll hear from us right away — otherwise this is firm. Questions, just reply here rather than reaching out to the production.`,
+    `If the production cancels inside 24 hours I'll let you know right away; otherwise treat this as firm. Any questions, reply here.`,
     '',
     'Thanks,',
     a.agentName,
