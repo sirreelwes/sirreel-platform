@@ -303,6 +303,13 @@ export default async function CompanyPortalsPage() {
                         <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.signIns} sign-in{c.signIns === 1 ? '' : 's'}</span>
                         <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.jobs} job{c.jobs === 1 ? '' : 's'}</span>
                         {c.companies > 0 && <span className="px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">{c.companies} company portal{c.companies === 1 ? '' : 's'}</span>}
+                        <Link
+                          href={`/crm/portals/preview/person/${c.id}`}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:border-lt-fg3"
+                          title="Open the portal exactly as this person sees it — nothing is stamped"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> See what they see
+                        </Link>
                       </div>
                     </div>
                   ))}

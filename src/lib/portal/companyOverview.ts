@@ -187,15 +187,15 @@ export interface CompanyOverview {
 }
 
 /** Orders that no longer count as live work. */
-const DEAD_ORDER_STATUSES: OrderStatus[] = ['CANCELLED']
+export const DEAD_ORDER_STATUSES: OrderStatus[] = ['CANCELLED']
 const CLOSED_ORDER_STATUSES: OrderStatus[] = ['CLOSED', 'INVOICED', 'RETURNED', 'LD_CHECK']
 const ON_JOB_STATUSES: OrderStatus[] = ['ON_JOB', 'LOADED_READY']
 const BOOKED_STATUSES: OrderStatus[] = ['APPROVED', 'BOOKED']
 
 /** Invoices a client is allowed to see and that count toward money shown. */
-const CLIENT_VISIBLE_INVOICE_STATUSES: InvoiceStatus[] = ['SENT', 'PARTIAL', 'PAID']
+export const CLIENT_VISIBLE_INVOICE_STATUSES: InvoiceStatus[] = ['SENT', 'PARTIAL', 'PAID']
 
-const SIGNED_AGREEMENT_STATUSES = [
+export const SIGNED_AGREEMENT_STATUSES = [
   'SIGNED_BASELINE',
   'SIGNED_NEGOTIATED',
   'SIGNED_OFFLINE',
@@ -218,7 +218,7 @@ function isoDay(d: Date | null): string | null {
  * everything (that is the whole point of the off-ramps), then the live
  * orders speak, then the dates, and only then do we fall back to quoted.
  */
-function deriveState(
+export function deriveState(
   jobStatus: JobStatus,
   orderStatuses: OrderStatus[],
   range: { start: Date | null; end: Date | null },
