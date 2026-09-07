@@ -425,8 +425,9 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
         </td></tr>
         <tr><td style="padding:14px 32px 0;">
           <div style="border-left:3px solid ${ACCENT};padding-left:14px;">
-            <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Booked</p>
-            <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
+            <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Delivering</p>
+            <p style="font-size:22px;font-weight:800;color:${TEXT};margin:0;line-height:1.25;">${a.quantity && a.quantity > 1 ? `${a.quantity} &times; ` : ''}${escapeHtml(a.vehicleName)}</p>
+            <p style="font-size:17px;font-weight:700;color:${TEXT};margin:8px 0 0;">${escapeHtml(range)}</p>
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
             ${rateHtml(a)}
           </div>
@@ -461,7 +462,8 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
     '',
     ask,
     '',
-    `Booked: ${range}`,
+    `DELIVERING: ${a.quantity && a.quantity > 1 ? `${a.quantity} × ` : ''}${a.vehicleName}`,
+    `Dates: ${range}`,
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
     ...rateText(a),
     '',
