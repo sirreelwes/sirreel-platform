@@ -47,18 +47,44 @@ function staffInvoiceHref(companyId: string, inv: { id: string; pdfHref?: string
   return `/api/invoices/${inv.id}/pdf`
 }
 
+/**
+ * Where the links go. The company portal fills these from
+ * companyPortalLinks(); the PERSON portal (/portal/account/job/[jobId])
+ * passes its own so the same body serves a coordinator who has no company
+ * grant — the PDFs then go through the person-scoped routes.
+ */
+export interface JobViewLinks {
+  home?: string
+  homeLabel?: string
+  invoicePdf?: (inv: { id: string; pdfHref?: string }) => string
+  signedAgreementPdf?: (agreementId: string) => string
+}
+
 export function CompanyPortalJobView({
   companyId,
   companyName,
   job,
   preview = false,
+  links,
 }: {
   companyId: string
   companyName: string
   job: CompanyJobDetail
   preview?: boolean
+  links?: JobViewLinks
 }) {
-  const L = companyPortalLinks(companyId, preview)
+  const base = companyPortalLinks(companyId, preview)
+  const L = {
+    home: links?.home ?? base.home,
+    homeLabel: links?.homeLabel ?? companyName,
+    invoicePdf:
+      links?.invoicePdf ??
+      ((inv: { id: string; pdfHref?: string }) =>
+        inv.pdfHref ?? `/api/portal/company/${companyId}/invoice/${inv.id}/pdf`),
+    signedAgreementPdf:
+      links?.signedAgreementPdf ??
+      ((id: string) => `/api/portal/company/${companyId}/agreement/${id}/pdf?kind=signed`),
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
@@ -68,7 +94,7 @@ export function CompanyPortalJobView({
             href={L.home}
             className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/60 hover:text-white"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> {companyName}
+            <ArrowLeft className="w-3.5 h-3.5" /> {L.homeLabel}
           </Link>
           <div className="mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
           <div
@@ -150,9 +176,7 @@ export function CompanyPortalJobView({
                     {inv.hasPdf && (
                       <a
                         href={
-                          preview
-                            ? staffInvoiceHref(companyId, inv)
-                            : inv.pdfHref ?? `/api/portal/company/${companyId}/invoice/${inv.id}/pdf`
+                          preview ? staffInvoiceHref(companyId, inv) : L.invoicePdf(inv)
                         }
                         target="_blank"
                         rel="noreferrer"
@@ -216,7 +240,7 @@ export function CompanyPortalJobView({
                       </span>
                     ) : (
                       <a
-                        href={`/api/portal/company/${companyId}/agreement/${a.id}/pdf?kind=signed`}
+                        href={L.signedAgreementPdf(a.id)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-700 hover:text-black border border-zinc-300 rounded-lg px-2.5 py-1.5 shrink-0"

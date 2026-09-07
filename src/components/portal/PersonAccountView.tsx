@@ -77,12 +77,12 @@ export function PersonAccountView({
   const { person, current, history, companies, supplyRequests, totals } = account
   const fullName = `${person.firstName} ${person.lastName}`.trim()
 
-  // The link exists only where the person really holds a live show link;
-  // the preview keeps that truth and just points it at the staff twin.
+  // Every show on a company opens into its own page — invoices, paperwork,
+  // who was on it — gated on the person being attached (personJobAccess.ts).
+  // The order rows below keep the magic link into the live show portal.
   const showHref = (t: PersonJobTile): string | null => {
-    if (!t.portalHref) return null
-    if (!preview) return t.portalHref
-    return t.companyId ? `/crm/portals/preview/company/${t.companyId}/job/${t.id}` : null
+    if (!t.companyId) return null
+    return preview ? `/crm/portals/preview/person/${person.id}/job/${t.id}` : `/portal/account/job/${t.id}`
   }
 
   return (
@@ -317,9 +317,7 @@ function ShowCard({ tile, href, preview }: { tile: PersonJobTile; href: string |
             Open this show <ArrowUpRight className="w-4 h-4" />
           </Link>
         ) : (
-          <span className="text-xs text-zinc-400">
-            {wrapped ? 'Ask your rep for a copy of the paperwork on this show.' : 'Your show link arrives with the quote.'}
-          </span>
+          <span className="text-xs text-zinc-400">Ask your rep for the paperwork on this show.</span>
         )}
         {!wrapped && !preview && <RequestAddOnButton jobId={tile.id} jobName={tile.name} />}
       </div>
