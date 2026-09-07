@@ -19,6 +19,7 @@ import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 import { KeyRound } from 'lucide-react'
 import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
 import { DriverSelfCheckoutCard, type SelfCheckoutView } from '@/components/drivers/DriverSelfCheckoutCard'
+import { DriverSelfReturnCard, type SelfReturnView } from '@/components/drivers/DriverSelfReturnCard'
 
 type Side = 'front' | 'back'
 
@@ -60,6 +61,7 @@ interface DriveData {
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
   checkout: SelfCheckoutView
+  returnStep: SelfReturnView
   handoff?: { holdsIt: boolean; returned: boolean; receivedFrom: { name: string; at: string } | null; gaveTo: { name: string; at: string } | null } | null
   bookingAssignmentId: string
 }
@@ -301,6 +303,20 @@ export default function DriverJobPage({ params }: { params: { token: string } })
               {data.instructions.dropoff || 'Return to the yard; instructions to follow from your production contact.'}
             </p>
           </Section>
+        )}
+
+        {/* The driver's own RETURN — blind drop-offs only, and only once
+            they hold the vehicle. Sits right under the drop-off
+            instructions because it is what they do after following them
+            (Wes 2026-09-07). */}
+        {(data.returnStep.enabled || data.returnStep.done || data.returnStep.reason === 'vehicle-returned') && (
+          <DriverSelfReturnCard
+            token={token}
+            bookingAssignmentId={data.bookingAssignmentId}
+            unitName={data.vehicle.unitName}
+            state={data.returnStep}
+            onDone={load}
+          />
         )}
 
         {/* Real access codes — a named driver gets these directly

@@ -141,8 +141,11 @@ export async function POST(req: NextRequest) {
             inspectedBy: auth.userId,
             inspectionDate: new Date(),
             overallCondition: body.overallCondition as VehicleCondition,
-            mileageAtInspection: mileage,
-            fuelLevel: body.fuelLevel || null,
+            // A DRIVER may have filed this inspection on a blind return
+            // (selfReturn.ts) with their own odometer and fuel readings.
+            // The yard's numbers win when typed; a blank keeps the driver's.
+            mileageAtInspection: mileage ?? undefined,
+            fuelLevel: body.fuelLevel || undefined,
             // Damage captured before the truck was received still counts.
             newDamageFound: newDamageFound || undefined,
             notes: body.notes?.trim() || undefined,
@@ -187,8 +190,9 @@ export async function POST(req: NextRequest) {
         where: { id: checkoutRecord.id },
         data: {
           returnTime: new Date(),
-          mileageIn: mileage,
-          fuelIn: body.fuelLevel || null,
+          // Same rule as the inspection: blanks keep the driver's readings.
+          mileageIn: mileage ?? undefined,
+          fuelIn: body.fuelLevel || undefined,
           returnInspectionId: inspection.id,
           returnedTo: auth.userId,
           newDamageOnReturn: newDamageFound,

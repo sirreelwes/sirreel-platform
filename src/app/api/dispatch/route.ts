@@ -157,6 +157,8 @@ export interface FleetCard {
   // board (BOOKED/LOADED_READY/ON_JOB → RETURNED/etc).
   blindPickup: boolean
   blindReturn: boolean
+  /** A driver filed their own return on a blind drop (selfReturn.ts) and the yard has not checked it in yet. */
+  driverReturned: { at: string; driverName: string; unitName: string } | null
   /** Reservation cards only: the booking has an HQ Order attached —
    *  the vehicle is moving with billable equipment on it, so a return
    *  is a check-in, not just parking a truck (Wes 2026-08-28). Cards
@@ -193,6 +195,8 @@ export interface WarehouseCard {
   priority: BookingPriority | null
   blindPickup: boolean
   blindReturn: boolean
+  /** A driver filed their own return on a blind drop (selfReturn.ts) and the yard has not checked it in yet. */
+  driverReturned: { at: string; driverName: string; unitName: string } | null
   reportTo: CardReportTo | null
 }
 
@@ -378,6 +382,43 @@ export async function GET(req: NextRequest) {
     }
   })
 
+  // ── Driver self returns awaiting the yard ────────────────────
+  // A blind-return truck the driver has already dropped and photographed
+  // (CheckoutRecord.driverReturnedAt set, returnTime still null). The
+  // inbound banner flips from "needs check-in" to "driver returned — needs
+  // walk-around" so the yard knows it is sitting in the lot with evidence
+  // on file. Keyed by job: cards are per order line and the record is per
+  // vehicle.
+  const jobIdsOnBoard = [...new Set(resolved.map((r) => r.line.order.job?.id).filter((id): id is string => !!id))]
+  const driverReturnedByJob = new Map<string, { at: string; driverName: string; unitName: string }>()
+  if (jobIdsOnBoard.length) {
+    const recs = await prisma.checkoutRecord.findMany({
+      where: {
+        driverReturnedAt: { not: null },
+        returnTime: null,
+        bookingAssignment: { bookingItem: { booking: { jobId: { in: jobIdsOnBoard } } } },
+      },
+      orderBy: { driverReturnedAt: 'desc' },
+      select: {
+        driverReturnedAt: true,
+        driver: { select: { firstName: true, lastName: true } },
+        bookingAssignment: {
+          select: { asset: { select: { unitName: true } }, bookingItem: { select: { booking: { select: { jobId: true } } } } },
+        },
+      },
+    })
+    for (const rec of recs) {
+      const jobId = rec.bookingAssignment.bookingItem.booking.jobId
+      if (!jobId || driverReturnedByJob.has(jobId)) continue
+      driverReturnedByJob.set(jobId, {
+        at: rec.driverReturnedAt!.toISOString(),
+        driverName: `${rec.driver?.firstName ?? ''} ${rec.driver?.lastName ?? ''}`.trim() || 'Driver',
+        unitName: rec.bookingAssignment.asset.unitName,
+      })
+    }
+  }
+  const driverReturnedFor = (jobId: string | null) => (jobId ? driverReturnedByJob.get(jobId) ?? null : null)
+
   // ── Build cards ──────────────────────────────────────────────
   function toFleetCard(r: ResolvedLine): FleetCard {
     const o = r.line.order as typeof r.line.order & { blindPickup?: boolean; blindReturn?: boolean }
@@ -400,6 +441,7 @@ export async function GET(req: NextRequest) {
       priority: r.priority,
       blindPickup: !!o.blindPickup,
       blindReturn: !!o.blindReturn,
+      driverReturned: driverReturnedFor(r.line.order.job?.id ?? null),
       reportTo: cardReportTo(r.line.order.job),
     }
   }
@@ -443,6 +485,7 @@ export async function GET(req: NextRequest) {
       priority: g.rows[0].priority,
       blindPickup: !!ho.blindPickup,
       blindReturn: !!ho.blindReturn,
+      driverReturned: driverReturnedFor(head.order.job?.id ?? null),
       reportTo: cardReportTo(head.order.job),
     }
   }
@@ -536,6 +579,7 @@ export async function GET(req: NextRequest) {
       // has none to read.
       blindPickup: false,
       blindReturn: false,
+      driverReturned: null,
       attachedOrderId: b.orders[0]?.id ?? b.job?.orders[0]?.id ?? null,
       attachedOrderNumber: b.orders[0]?.orderNumber ?? b.job?.orders[0]?.orderNumber ?? null,
       reportTo: cardReportTo(b.job),

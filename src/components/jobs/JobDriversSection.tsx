@@ -53,6 +53,9 @@ interface Vehicle {
   currentDriverId?: string | null
   /** The unit has been checked back in. */
   unitReturned?: boolean
+  /** The driver filed their own return on a blind drop; the yard has not received it yet. */
+  driverReturnedAt?: string | null
+  driverReturnMileage?: number | null
 }
 /** A held category with no unit picked yet — nothing to attach a driver to. */
 interface PendingHold {
@@ -355,6 +358,13 @@ export function JobDriversSection({
                             {' · '}
                             {new Date(d.pickedUpAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             {d.pickupMileage != null && ` · ${d.pickupMileage.toLocaleString('en-US')} mi`}
+                          </div>
+                        )}
+                        {current && v.driverReturnedAt && !v.unitReturned && (
+                          <div className="text-[11px] text-amber-800 truncate">
+                            Returned by the driver · {new Date(v.driverReturnedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {v.driverReturnMileage != null && ` · ${v.driverReturnMileage.toLocaleString('en-US')} mi`}
+                            {' · yard check-in pending'}
                           </div>
                         )}
                         {next && (

@@ -1127,7 +1127,7 @@ const driverTone = (d: any): string => {
 }
 
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[]; currentDriverId: string | null; unitReturned: boolean }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -1140,6 +1140,9 @@ const driverTone = (d: any): string => {
               drivers: (a as any).driverAssignments ?? [],
               currentDriverId: (a as any).checkoutRecords?.[0]?.driverId ?? null,
               unitReturned: !!(a as any).checkoutRecords?.[0]?.returnTime,
+              // A driver self return on a blind drop (selfReturn.ts): filed, not yet received.
+              driverReturnedAt: (a as any).checkoutRecords?.[0]?.driverReturnedAt ?? null,
+              driverReturnMileage: (a as any).checkoutRecords?.[0]?.mileageIn ?? null,
             })
           }
         }
@@ -2582,6 +2585,8 @@ const driverTone = (d: any): string => {
           drivers: a.drivers,
           currentDriverId: a.currentDriverId,
           unitReturned: a.unitReturned,
+          driverReturnedAt: a.driverReturnedAt,
+          driverReturnMileage: a.driverReturnMileage,
         }))}
         pendingHolds={pendingHolds}
         onChanged={load}

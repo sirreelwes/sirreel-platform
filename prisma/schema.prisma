@@ -1298,6 +1298,15 @@ model CheckoutRecord {
   licenseVerified   Boolean @default(false) @map("license_verified")
   newDamageOnReturn Boolean @default(false) @map("new_damage_on_return")
 
+  /// The driver dropped the vehicle on an UNATTENDED (blind) return and
+  /// filed their own return photos + readings from their driver page
+  /// (Wes 2026-09-07). `driverReturnedAt` is when they did; `returnTime`
+  /// stays NULL until the yard's own walk-around closes the record, so
+  /// "returned" still means "received by SirReel". The driver's RETURN
+  /// inspection is the one the yard adopts, not a second one.
+  selfReturn       Boolean   @default(false) @map("self_return")
+  driverReturnedAt DateTime? @map("driver_returned_at")
+
   notes String? @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")

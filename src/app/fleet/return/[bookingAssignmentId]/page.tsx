@@ -150,7 +150,17 @@ export default async function FleetReturnPage({ params }: Params) {
     </header>
   )
 
-  if (returnRow) {
+  // "Already checked in" means RECEIVED — the assignment is RETURNED. A
+  // RETURN inspection on its own may be the DRIVER's, filed from their
+  // page on a blind drop-off (selfReturn.ts): the truck is in the lot
+  // with photos and readings on file, and the yard still walks it around.
+  // The API adopts that inspection; this screen must not lock them out.
+  const driverReturn =
+    returnRow && assignment.status !== 'RETURNED' && returnRow.inspectedByDriver && !returnRow.inspectedByUser
+      ? returnRow
+      : null
+
+  if (returnRow && assignment.status === 'RETURNED') {
     return (
       <Shell>
         {header}
@@ -159,7 +169,10 @@ export default async function FleetReturnPage({ params }: Params) {
           <p className="text-white font-semibold">Already checked in</p>
           <p className="text-zinc-400 text-sm mt-1">
             {returnRow.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by{' '}
-            {returnRow.inspectedByUser?.name || 'fleet'}
+            {returnRow.inspectedByUser?.name ??
+              (returnRow.inspectedByDriver
+                ? `${returnRow.inspectedByDriver.firstName} ${returnRow.inspectedByDriver.lastName}`.trim() + ' (driver)'
+                : 'fleet')}
           </p>
           <p className="text-zinc-500 text-xs mt-2">
             Condition {returnRow.overallCondition.toLowerCase()}
@@ -215,6 +228,34 @@ export default async function FleetReturnPage({ params }: Params) {
   return (
     <Shell>
       {header}
+      {driverReturn && (
+        <div className="mb-4 rounded-xl border border-amber-700 bg-amber-950/30 p-4">
+          <div className="text-amber-400 text-[11px] font-bold uppercase tracking-[0.15em]">Returned by the driver</div>
+          <p className="text-white text-sm mt-1">
+            {`${driverReturn.inspectedByDriver!.firstName} ${driverReturn.inspectedByDriver!.lastName}`.trim()} dropped it{' '}
+            {driverReturn.inspectionDate.toLocaleString('en-US', {
+              timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            })}
+            {driverReturn.mileageAtInspection != null ? ` · ${driverReturn.mileageAtInspection.toLocaleString()} mi` : ''}
+            {driverReturn.fuelLevel ? ` · fuel ${driverReturn.fuelLevel}` : ''}
+            {` · ${driverReturn.photos.length} photos`}
+          </p>
+          {driverReturn.notes && <p className="text-zinc-400 text-xs mt-1 whitespace-pre-wrap">{driverReturn.notes}</p>}
+          <p className="text-zinc-400 text-xs mt-2">
+            Nobody from SirReel received it. Walk it around now — the driver&rsquo;s photos are on the
+            condition report beside the check-out shots, and your readings below replace theirs only where you type them.
+          </p>
+          <a
+            href={`/api/fleet/inspections/report/${assignment.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300"
+          >
+            <FileText size={12} aria-hidden />
+            Driver&rsquo;s photos (out vs back)
+          </a>
+        </div>
+      )}
       <InspectionReturnForm bookingAssignmentId={assignment.id} checkout={checkout} />
     </Shell>
   )

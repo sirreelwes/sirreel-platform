@@ -49,6 +49,7 @@ export type NotificationChannelKey =
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
   | 'driver-checkouts'
+  | 'driver-returns'
 
 export interface NotificationChannelDef {
   key: NotificationChannelKey
@@ -60,6 +61,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'driver-returns',
+    label: 'Driver self returns',
+    description:
+      'A driver on an UNATTENDED (blind) return dropped the vehicle and filed their own return photos, mileage and fuel from their driver page — nobody from SirReel received it. One email per drop with the readings, the miles driven, the photo count, whether the driver reported new damage, and a link to the side-by-side report. The yard still does its own walk-around; this is the heads-up that the truck is back and what to compare against. Defaults to the hq@ feed plus Wes (Wes 2026-09-07).',
+    defaults: () => [hqNotifyInbox(), 'wes@sirreel.com'],
+  },
   {
     key: 'driver-checkouts',
     label: 'Driver self check-outs',

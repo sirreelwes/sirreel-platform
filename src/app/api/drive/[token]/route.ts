@@ -5,6 +5,7 @@ import { listHours } from '@/lib/drivers/hoursStore'
 import { hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import { todayPacific } from '@/lib/sub-rentals/driverUnitView'
 import { selfCheckoutState } from '@/lib/drivers/selfCheckout'
+import { selfReturnState } from '@/lib/drivers/selfReturn'
 
 export const dynamic = 'force-dynamic'
 
@@ -209,6 +210,43 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     })
   })()
 
+  // The driver's own RETURN (blind drop-off) — the mirror of the check-out
+  // above. Open only to the driver of record on an unattended return; what
+  // they filed, if anything, comes off the open checkout record.
+  const returnStep = await (async () => {
+    const rec = await prisma.checkoutRecord.findFirst({
+      where: { bookingAssignmentId: asg.id },
+      orderBy: { checkoutTime: 'desc' },
+      select: {
+        driverId: true, mileageOut: true, mileageIn: true, fuelIn: true,
+        driverReturnedAt: true, returnTime: true, returnInspectionId: true,
+      },
+    })
+    const done = rec?.driverReturnedAt
+      ? {
+          at: rec.driverReturnedAt.toISOString(),
+          mileage: rec.mileageIn,
+          fuelLevel: rec.fuelIn,
+          photoCount: rec.returnInspectionId
+            ? await prisma.inspectionPhoto.count({ where: { inspectionId: rec.returnInspectionId } })
+            : 0,
+          milesDriven:
+            rec.mileageIn != null && rec.mileageOut != null && rec.mileageIn >= rec.mileageOut
+              ? rec.mileageIn - rec.mileageOut
+              : null,
+          receivedByYard: !!rec.returnTime || asg.status === 'RETURNED',
+        }
+      : null
+    return selfReturnState({
+      driverAssignment: { status: da.status, pickedUpAt: da.pickedUpAt },
+      bookingAssignment: { status: asg.status },
+      isBlindReturn,
+      holdsIt: !rec?.driverId || rec.driverId === da.driver.id,
+      mileageOut: rec?.mileageOut ?? null,
+      done,
+    })
+  })()
+
   // Handoffs. A production can name a second driver after the first has
   // the keys (Cube 29, 2026-09-07); both check-outs stay on record and the
   // open checkout record says who appears to hold the unit now. Each
@@ -220,7 +258,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       prisma.checkoutRecord.findFirst({
         where: { bookingAssignmentId: asg.id },
         orderBy: { checkoutTime: 'desc' },
-        select: { driverId: true, returnTime: true },
+        select: { driverId: true, returnTime: true, driverReturnedAt: true },
       }),
       prisma.driverAssignment.findMany({
         where: { bookingAssignmentId: asg.id, id: { not: da.id }, pickedUpAt: { not: null } },
@@ -233,7 +271,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     const mine = da.pickedUpAt.getTime()
     const before = others.filter((o) => o.pickedUpAt!.getTime() < mine)
     const after = others.filter((o) => o.pickedUpAt!.getTime() > mine)
-    const returned = !!rec?.returnTime
+    const returned = !!rec?.returnTime || !!rec?.driverReturnedAt
     const holdsIt = !returned && (rec?.driverId ? rec.driverId === da.driver.id : after.length === 0)
     const last = before[before.length - 1]
     return {
@@ -299,6 +337,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     },
     loadList,
     checkout: selfCheckout,
+    returnStep,
     handoff,
     // The photo stager keys blobs under the assignment; the page needs
     // the id only to hand it back to that route.

@@ -240,7 +240,7 @@ export async function GET(
                     checkoutRecords: {
                       orderBy: { checkoutTime: 'desc' },
                       take: 1,
-                      select: { driverId: true, returnTime: true },
+                      select: { driverId: true, returnTime: true, selfReturn: true, driverReturnedAt: true, mileageIn: true },
                     },
                     driverAssignments: {
                       where: { status: { not: 'CANCELLED' } },

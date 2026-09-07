@@ -67,6 +67,7 @@ interface FleetCard {
   // light marker on outbound for prep awareness.
   blindPickup: boolean
   blindReturn: boolean
+  driverReturned: { at: string; driverName: string; unitName: string } | null
   reportTo: CardReportTo | null
 }
 
@@ -86,6 +87,7 @@ interface WarehouseCard {
   priority: Priority | null
   blindPickup: boolean
   blindReturn: boolean
+  driverReturned: { at: string; driverName: string; unitName: string } | null
   reportTo: CardReportTo | null
 }
 
@@ -497,6 +499,29 @@ function LoadStat({ label, n, color }: { label: string; n: number; color: 'zinc'
 function isInboundBlindReturn(c: { status: ListStatus; blindReturn: boolean }) {
   return c.status === 'ON_JOB' && c.blindReturn
 }
+/** The inbound banner. Red "needs check-in" until the driver has filed
+ *  their own return (blind drop, photos + readings on file); then amber
+ *  "driver returned — needs walk-around", because the truck is in the lot
+ *  with evidence to compare against and the yard still has to receive it. */
+function BlindReturnBanner({ driverReturned }: { driverReturned: { at: string; driverName: string; unitName: string } | null }) {
+  if (driverReturned) {
+    const when = new Date(driverReturned.at).toLocaleString('en-US', {
+      timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: '2-digit',
+    })
+    return (
+      <div className="bg-chip-warn-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
+        {driverReturned.driverName} returned {driverReturned.unitName} {when} — needs walk-around
+      </div>
+    )
+  }
+  return (
+    <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+      <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
+      Blind return — needs check-in
+    </div>
+  )
+}
 // Outbound blind-pickup: lighter heads-up so the warehouse / fleet
 // can stage the unit knowing nobody's coming for a face-to-face.
 function isOutboundBlindPickup(c: { status: ListStatus; blindPickup: boolean }) {
@@ -580,12 +605,7 @@ function FleetCardView({ c, overdue, lane = 'out' }: { c: FleetCard; overdue?: b
         </div>
         <ReportToLine r={c.reportTo} lane={lane} />
       </div>
-      {blindReturn && (
-        <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-          <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
-          Blind return — needs check-in
-        </div>
-      )}
+      {blindReturn && <BlindReturnBanner driverReturned={c.driverReturned} />}
     </Link>
   )
 }
@@ -642,12 +662,7 @@ function WarehouseCardView({ c, overdue, lane = 'out' }: { c: WarehouseCard; ove
         </div>
         <ReportToLine r={c.reportTo} lane={lane} />
       </div>
-      {blindReturn && (
-        <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-          <span aria-hidden="true"><AlertTriangle size={16} aria-hidden /></span>
-          Blind return — needs check-in
-        </div>
-      )}
+      {blindReturn && <BlindReturnBanner driverReturned={c.driverReturned} />}
     </Link>
   )
 }
