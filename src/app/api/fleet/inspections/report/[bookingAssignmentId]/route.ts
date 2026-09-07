@@ -7,10 +7,12 @@
  * anyone adds a photo or re-triages a damage row. Same call the send
  * path would make, so what Wes reviews here IS what a client would get.
  *
- * Photos are private blobs; their bytes are pulled server-side and
- * inlined as data URIs. That is the only way the PDF can be self-
- * contained — the /api/fleet/photos proxy needs an HQ session, which a
- * client will never have.
+ * Photos are private blobs; their bytes are pulled server-side, turned
+ * upright and downscaled (lib/fleet/reportPhoto — the phone's EXIF
+ * rotation is not something PDFKit honours, and the originals weigh
+ * 3–5 MB each), then embedded. That is the only way the PDF can be
+ * self-contained — the /api/fleet/photos proxy needs an HQ session,
+ * which a client will never have.
  *
  * Internal and session-gated. Nothing here sends anything: see
  * inspectionReportSendingEnabled in lib/fleet/inspectionReport.
@@ -24,6 +26,7 @@ import { requireYardAccess } from '@/lib/yard/requireYardAccess'
 import { buildInspectionReport } from '@/lib/fleet/inspectionReport'
 import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
 import { ConditionReportDocument, type PhotoData } from '@/lib/fleet/ConditionReportDocument'
+import { preparePhotoForReport, mapWithLimit } from '@/lib/fleet/reportPhoto'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -34,6 +37,9 @@ type Params = { params: Promise<{ bookingAssignmentId: string }> }
 // one pathological assignment from timing the route out; anything past
 // it renders as "unavailable" rather than failing the whole document.
 const MAX_PHOTOS = 40
+// Decoding a phone JPEG needs ~50 MB of working memory. Four at a time
+// keeps a full walk-around comfortably inside the function's budget.
+const PREPARE_CONCURRENCY = 4
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const auth = await requireYardAccess()
@@ -59,21 +65,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const rows = wanted.length
     ? await prisma.inspectionPhoto.findMany({
         where: { id: { in: wanted.map((p) => p.id) } },
-        select: { id: true, fileUrl: true, contentType: true },
+        select: { id: true, fileUrl: true },
       })
     : []
 
-  // Fetched in parallel; a photo that can't be read is simply absent
-  // from the map and prints as "unavailable". One unreachable blob must
-  // not cost the whole report.
+  // A photo that can't be read or decoded is simply absent from the
+  // map and prints as "could not be printed". One bad blob must not
+  // cost the whole report.
   const photoData: PhotoData = {}
-  await Promise.all(
-    rows.map(async (r) => {
-      const buf = await readPrivateBlobBuffer(r.fileUrl)
-      if (!buf) return
-      photoData[r.id] = `data:${r.contentType || 'image/jpeg'};base64,${buf.toString('base64')}`
-    }),
-  )
+  await mapWithLimit(rows, PREPARE_CONCURRENCY, async (r) => {
+    const buf = await readPrivateBlobBuffer(r.fileUrl)
+    if (!buf) return
+    const prepared = await preparePhotoForReport(buf)
+    if (prepared) photoData[r.id] = prepared.data
+  })
 
   const buffer = await renderToBuffer(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

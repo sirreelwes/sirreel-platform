@@ -48,6 +48,12 @@ export const PDF_BRAND = {
 
   /** Discounts / warnings. Unchanged — it must NOT read as the accent. */
   amber: '#b45309',
+  /** Pale warm fill behind a row that IS the warning — new damage on a
+   *  condition report. Tinted so the eye lands on it before the text. */
+  warnFill: '#FDF4E7',
+  /** Neutral fill behind a photo, so a portrait shot letterboxed in a
+   *  landscape frame reads as framed rather than floating. */
+  photoWell: '#F0F0EE',
 } as const
 
 export type PdfBrand = typeof PDF_BRAND
