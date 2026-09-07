@@ -20,7 +20,7 @@ import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/Ema
 import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
-import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence } from "@/lib/orders/driverEstimate";
+import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence, clock12 } from "@/lib/orders/driverEstimate";
 import { driverPayBreakdown } from "@/lib/orders/driverRate";
 import { isPartnerFulfilled, PARTNER_DAILY_NOTE } from "@/lib/orders/partnerDaily";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
@@ -2195,19 +2195,23 @@ export default function OrderDetailPage() {
             real: roll (left lot), call (on set), leave set, done (fuelled
             and cleaned). Prints under the line on the quote. */}
         {isDriverLine(li) && (
-          <div className="mt-2 grid grid-cols-4 gap-1">
-            {([['roll', 'Roll'], ['callTime', 'Call'], ['leaveSet', 'Leave set'], ['done', 'Done']] as const).map(([k, label]) => (
-              <label key={k} className="block">
-                <span className="block text-[9px] font-semibold uppercase tracking-wider text-lt-fg3">{label}</span>
-                <input
-                  type="time"
-                  value={editEst[k]}
-                  onChange={(e) => setEditEst((v) => ({ ...v, [k]: e.target.value }))}
-                  className="w-full px-1.5 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
-                  aria-label={`Estimated ${label.toLowerCase()} time`}
-                />
-              </label>
-            ))}
+          <div className="mt-2 min-w-[260px]">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-lt-fg3 mb-1">Estimated day</div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              {([['roll', 'Roll', 'left the lot'], ['callTime', 'Call', 'on set'], ['leaveSet', 'Leave set', 'wrapped on set'], ['done', 'Done', 'fuelled & cleaned']] as const).map(([k, label, hint]) => (
+                <label key={k} className="block">
+                  <span className="block text-[10px] font-semibold text-lt-fg2 whitespace-nowrap">{label}</span>
+                  <input
+                    type="time"
+                    value={editEst[k]}
+                    onChange={(e) => setEditEst((v) => ({ ...v, [k]: e.target.value }))}
+                    className="w-full min-w-[104px] px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+                    aria-label={`Estimated ${label.toLowerCase()} — ${hint}`}
+                    title={hint}
+                  />
+                </label>
+              ))}
+            </div>
           </div>
         )}
         {/* What that day costs by the standard ladder ($50/hr, 1.5x after 8,
@@ -2269,8 +2273,31 @@ export default function OrderDetailPage() {
       <td className="px-4 py-3 text-lt-fg">
         {li.description}
         {(() => {
+          // Hours are the point of a driver line — say them plainly on the
+          // row, with the full estimate underneath (Wes 2026-09-07:
+          // "I need to see the hours on these driver lines").
           const v = li.driverEstimate ? viewDriverEstimate(li.driverEstimate, li.description) : null;
-          return v ? <div className="mt-0.5 text-[11px] text-lt-fg3 leading-snug max-w-[52ch]">{driverEstimateSentence(v)}</div> : null;
+          if (!v) return isDriverLine(li) ? (
+            <div className="mt-0.5 text-[11px] text-lt-fg3">No estimated day yet — Edit to add roll, call, leave set and done.</div>
+          ) : null;
+          return (
+            <div className="mt-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                <span className="rounded bg-lt-inner px-1.5 py-0.5 font-semibold text-lt-fg">
+                  {v.hours !== null ? `${v.hours} hrs` : 'day open'}
+                </span>
+                <span className="font-mono text-lt-fg2">
+                  {clock12(v.roll)} → {v.done ? clock12(v.done) : '…'}
+                </span>
+                {v.pay && (
+                  <span className="text-lt-fg2">
+                    {v.pay.paidHours} paid ≈ ${v.pay.total.toLocaleString('en-US')}
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 text-[11px] text-lt-fg3 leading-snug max-w-[52ch]">{driverEstimateSentence(v)}</div>
+            </div>
+          );
         })()}
       </td>
     )}
