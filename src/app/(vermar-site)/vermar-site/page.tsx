@@ -6,12 +6,16 @@
  * the workspace never disagree about the product. The route stays at
  * /vermar-site — an internal rewrite target, never linked.
  *
- * No form here yet — the way in today is a SirReel partner page (the
- * "See what HQ can do for you" link) or an email to VerMar. A direct
- * sign-up for companies that aren't SirReel partners is the next step.
+ * The way in: a SirReel partner page (the "See what Utliiz can do for
+ * you" link), or the contact form at the bottom (#contact) for everyone
+ * else — a person at VerMar sets the workspace up by hand. The form
+ * exists because there is no mailbox on utliiz.com yet (Wes 2026-09-07);
+ * supportLink() flips every "write to us" back to mailto the day there
+ * is one. A self-serve sign-up is the step after that.
  */
 import { CalendarDays, ClipboardList, FileSignature, Truck, UserRound, Users } from 'lucide-react'
-import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT, supportLink } from '@/lib/hq-white-label/product'
+import { SiteContactForm } from '@/components/hq-white-label/SiteContactForm'
 
 export const dynamic = 'force-static'
 
@@ -19,7 +23,9 @@ const ICONS = [CalendarDays, ClipboardList, Truck, Users, UserRound, FileSignatu
 const ACCENT = '#f5b544'
 
 export default function VerMarSitePage() {
-  const mail = `mailto:${HQ_PRODUCT.supportEmail}?subject=${encodeURIComponent(`${HQ_PRODUCT.name} for my fleet`)}`
+  // Every call to action lands on the form until there is a mailbox.
+  const writeTo = supportLink()
+  const talk = HQ_PRODUCT.supportEmail ? writeTo.href : '#contact'
   return (
     <div>
       <header className="max-w-[1040px] mx-auto px-5 sm:px-8 py-6 flex items-center justify-between gap-4">
@@ -27,7 +33,7 @@ export default function VerMarSitePage() {
           <span className="text-[20px] font-black tracking-tight">{HQ_PRODUCT.name}</span>
           <span className="text-[11px] font-semibold uppercase tracking-[2px] text-white/55">by {HQ_PRODUCT.maker}</span>
         </div>
-        <a href={mail} className="rounded-lg px-4 py-2 text-[14px] font-bold text-[#0f1523] no-underline" style={{ background: ACCENT }}>Talk to us</a>
+        <a href={talk} className="rounded-lg px-4 py-2 text-[14px] font-bold text-[#0f1523] no-underline" style={{ background: ACCENT }}>Talk to us</a>
       </header>
 
       <section className="max-w-[1040px] mx-auto px-5 sm:px-8 pt-10 pb-16 sm:pt-20 sm:pb-24">
@@ -38,7 +44,7 @@ export default function VerMarSitePage() {
           partners. Your brand on all of it. Built by the studio that runs a working Los Angeles fleet on the same system every day.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <a href={mail} className="rounded-lg px-5 py-3 text-[15px] font-bold text-[#0f1523] no-underline" style={{ background: ACCENT }}>Start a free {HQ_PRODUCT.trialDays}-day trial</a>
+          <a href={talk} className="rounded-lg px-5 py-3 text-[15px] font-bold text-[#0f1523] no-underline" style={{ background: ACCENT }}>Start a free {HQ_PRODUCT.trialDays}-day trial</a>
           <a href="#what" className="rounded-lg px-5 py-3 text-[15px] font-bold text-white border border-white/25 no-underline hover:bg-white/5">What it does</a>
         </div>
       </section>
@@ -92,15 +98,23 @@ export default function VerMarSitePage() {
           </div>
           <div className="rounded-2xl border border-white/15 p-6">
             <div className="text-[16px] font-bold">Everyone else</div>
-            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Write to us with your company name and roughly how many units you run, and we&rsquo;ll set your workspace up by hand.</p>
-            <a href={mail} className="inline-block mt-4 text-[14px] font-bold no-underline" style={{ color: ACCENT }}>{HQ_PRODUCT.supportEmail} →</a>
+            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Tell us your company name and roughly how many units you run, and we&rsquo;ll set your workspace up by hand.</p>
+            <a href={talk} className="inline-block mt-4 text-[14px] font-bold no-underline" style={{ color: ACCENT }}>{HQ_PRODUCT.supportEmail ? `${HQ_PRODUCT.supportEmail} →` : 'Talk to us ↓'}</a>
           </div>
+        </div>
+      </section>
+
+      <section id="contact" className="max-w-[1040px] mx-auto px-5 sm:px-8 pb-16 sm:pb-24 scroll-mt-6">
+        <h2 className="text-[28px] sm:text-[36px] font-black tracking-tight">Talk to us</h2>
+        <p className="mt-2 text-[16px] text-white/70 max-w-[60ch]">Questions, a walkthrough, or a trial for a fleet that isn&rsquo;t a SirReel partner yet. A person at {HQ_PRODUCT.maker} reads it and replies.</p>
+        <div className="mt-8 max-w-[820px]">
+          <SiteContactForm accent={ACCENT} />
         </div>
       </section>
 
       <footer className="max-w-[1040px] mx-auto px-5 sm:px-8 py-10 text-[12px] text-white/50 flex flex-wrap items-center justify-between gap-3 border-t border-white/10">
         <span>© 2026 {HQ_PRODUCT.maker}. {HQ_PRODUCT.name} is a {HQ_PRODUCT.maker} product.</span>
-        <a href={mail} className="hover:text-white">{HQ_PRODUCT.supportEmail}</a>
+        <a href={talk} className="hover:text-white">{HQ_PRODUCT.supportEmail ?? 'Talk to us'}</a>
       </footer>
     </div>
   )

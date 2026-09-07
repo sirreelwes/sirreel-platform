@@ -47,13 +47,28 @@ export const HQ_PRODUCT = {
    */
   defaultAccent: '#1f3a5f',
   /**
-   * Where a partner writes when something is wrong. On the product's own
-   * domain. NOTE (2026-09-07): the mailbox/forward for this address has to
-   * exist at the mail host for utliiz.com — the address is what the site
-   * shows, it does not make the inbox.
+   * Where a partner writes when something is wrong. NULL until a mailbox
+   * exists — Wes 2026-09-07: "No email setup yet at host." While it is
+   * null every surface points at the site's contact form instead (see
+   * supportLink), which delivers to VerMar's ops inbox without a mailbox
+   * on utliiz.com. Set this to the real address the day the mail host is
+   * configured and every "write to us" flips back to mailto on its own.
    */
-  supportEmail: 'hello@utliiz.com',
+  supportEmail: null as string | null,
+  /** The site's contact form — the way in while there is no mailbox. */
+  contactUrl: 'https://utliiz.com/#contact',
 } as const
+
+/**
+ * The one place a person is told where to write. A mailto when a mailbox
+ * exists; the site's contact form until then. `label` is what to print,
+ * `href` what to link — the form's label drops the scheme so it reads as
+ * an address, not a URL, in plain-text email.
+ */
+export function supportLink(): { href: string; label: string } {
+  if (HQ_PRODUCT.supportEmail) return { href: `mailto:${HQ_PRODUCT.supportEmail}`, label: HQ_PRODUCT.supportEmail }
+  return { href: HQ_PRODUCT.contactUrl, label: HQ_PRODUCT.contactUrl.replace(/^https?:\/\//, '') }
+}
 
 export type HqPlanKey = 'STARTER' | 'PRO'
 

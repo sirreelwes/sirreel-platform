@@ -17,7 +17,7 @@ import { randomBytes } from 'crypto'
 import type { VendorWorkspacePlan, VendorWorkspaceStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { HQ_PRODUCT, trialDaysLeft, vermarOpsEmails } from './product'
+import { HQ_PRODUCT, supportLink, trialDaysLeft, vermarOpsEmails } from './product'
 
 export function hqPath(token: string): string {
   return `/hq/${token}`
@@ -228,9 +228,9 @@ export async function startWorkspaceTrial(vendorId: string, input: StartTrialInp
         `<p>${fresh ? `Your ${HQ_PRODUCT.name} workspace is set up. Your free trial runs ${HQ_PRODUCT.trialDays} days.` : `Here is the link to your ${HQ_PRODUCT.name} workspace again.`}</p>`,
         `<p><a href="${url}" style="display:inline-block;padding:10px 16px;background:${ws.accentColor};color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Open ${ws.brandName} ${HQ_PRODUCT.name}</a></p>`,
         `<p style="color:#666;font-size:13px">This link is your login — anyone holding it can open your workspace, so share it only with your own team. Bookmark it.</p>`,
-        `<p style="color:#666;font-size:13px">${HQ_PRODUCT.name} is made by ${HQ_PRODUCT.maker}. Questions: ${HQ_PRODUCT.supportEmail}</p>`,
+        `<p style="color:#666;font-size:13px">${HQ_PRODUCT.name} is made by ${HQ_PRODUCT.maker}. Questions: <a href="${supportLink().href}">${supportLink().label}</a></p>`,
       ].join(''),
-      text: `Hi ${who},\n\n${fresh ? `Your ${HQ_PRODUCT.name} workspace is set up. Your free trial runs ${HQ_PRODUCT.trialDays} days.` : `Here is the link to your ${HQ_PRODUCT.name} workspace again.`}\n\n${url}\n\nThis link is your login — share it only with your own team.\n\n${HQ_PRODUCT.name} is made by ${HQ_PRODUCT.maker}. Questions: ${HQ_PRODUCT.supportEmail}`,
+      text: `Hi ${who},\n\n${fresh ? `Your ${HQ_PRODUCT.name} workspace is set up. Your free trial runs ${HQ_PRODUCT.trialDays} days.` : `Here is the link to your ${HQ_PRODUCT.name} workspace again.`}\n\n${url}\n\nThis link is your login — share it only with your own team.\n\n${HQ_PRODUCT.name} is made by ${HQ_PRODUCT.maker}. Questions: ${supportLink().label}`,
       label: 'vendor-hq',
     }).catch(() => null)
   }

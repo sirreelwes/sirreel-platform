@@ -20,7 +20,7 @@ import { notFound } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { loadWorkspaceByToken } from '@/lib/hq-white-label/workspace'
-import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { HQ_PRODUCT, supportLink } from '@/lib/hq-white-label/product'
 import { isVerMarOperator } from '@/lib/hq-white-label/operator'
 import { HqNav } from '@/components/hq-white-label/HqNav'
 
@@ -41,6 +41,7 @@ export default async function HqLayout({ children, params }: { children: React.R
   const ws = await loadWorkspaceByToken(params.token, { stamp: !support })
   if (!ws) notFound()
   const base = `/hq/${params.token}`
+  const writeTo = supportLink()
   const trialEnds = ws.trialEndsAt ? new Date(ws.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : null
 
   return (
@@ -87,14 +88,14 @@ export default async function HqLayout({ children, params }: { children: React.R
           <h1 className="text-[24px] font-bold tracking-tight">This workspace is closed</h1>
           <p className="mt-2 text-[15px] text-[#4b5563]">
             {ws.status === 'PAST_DUE' ? 'The subscription is past due.' : 'The subscription has ended.'} Your bookings, fleet and clients are kept safe. Write to{' '}
-            <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a> to pick up where you left off.
+            <a href={writeTo.href} className="font-semibold underline">{writeTo.label}</a> to pick up where you left off.
           </p>
         </main>
       ) : (
         <>
           {ws.trialExpired && (
             <div className="bg-[#fff7e0] border-b border-[#f0dfa0] text-[#5a4300] text-[13px] px-4 py-2 text-center">
-              Your free trial ended {trialEnds}. Everything still works — {HQ_PRODUCT.maker} will be in touch about a subscription, or write to <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="font-semibold underline">{HQ_PRODUCT.supportEmail}</a>.
+              Your free trial ended {trialEnds}. Everything still works — {HQ_PRODUCT.maker} will be in touch about a subscription, or write to <a href={writeTo.href} className="font-semibold underline">{writeTo.label}</a>.
             </div>
           )}
           <main>{children}</main>
@@ -105,7 +106,7 @@ export default async function HqLayout({ children, params }: { children: React.R
         <span>
           <strong className="text-[#4b5563]">{HQ_PRODUCT.name}</strong> by {HQ_PRODUCT.maker} · {HQ_PRODUCT.tagline}
         </span>
-        <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="hover:text-[#111827]">{HQ_PRODUCT.supportEmail}</a>
+        <a href={writeTo.href} className="hover:text-[#111827]">{writeTo.label}</a>
       </footer>
     </div>
   )
