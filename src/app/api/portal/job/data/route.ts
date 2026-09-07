@@ -120,6 +120,7 @@ export async function GET(req: NextRequest) {
         booking: { select: { startDate: true, endDate: true, status: true } },
         status: true,
         cadenceState: true,
+        quoteSentAt: true,
         portalSlug: true,
         portalSunsetAt: true,
         createdAt: true,
@@ -507,6 +508,13 @@ export async function GET(req: NextRequest) {
       status: order.status,
       cadenceState: order.cadenceState,
       total: order.total.toString(),
+      // Nothing has been priced or sent on this order yet. True for a job
+      // the CLIENT set up themselves on the public agreement page: they
+      // hold a portal and may have signed, but no rep has confirmed the
+      // vehicles or the dates. The portal says so out loud rather than
+      // letting a progress bar reading "Quote" imply a booking
+      // (Wes 2026-09-07).
+      awaitingConfirmation: order.status === 'DRAFT' && order.quoteSentAt == null,
       // Blind handoff — only emit the instructions text when the
       // matching toggle is true. Defense-in-depth so a sales-side
       // toggle-off doesn't accidentally leak the prior text to the

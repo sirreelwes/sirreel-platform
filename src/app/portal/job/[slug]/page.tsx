@@ -74,6 +74,8 @@ interface PortalData {
     status: string;
     cadenceState: string;
     total: string;
+    /** Nothing priced or sent yet — a rep still has to confirm. */
+    awaitingConfirmation?: boolean;
     // Blind handoff — server only emits the instructions when the
     // matching toggle is true (defense-in-depth in the API). Page
     // renders the sections conditionally on both the toggle AND the
@@ -657,6 +659,54 @@ export default function JobPortalPage() {
             </a>
           )}
         </section>
+
+        {/* Not booked yet.
+            A client who sets their own job up on the public agreement page
+            gets a real portal and can sign the agreement immediately —
+            which is genuinely useful, and we want them doing it. What they
+            must not conclude is that the trucks are held. Before this,
+            nothing on the page said otherwise and the progress bar read
+            "Quote" (Wes 2026-09-07). Encouraging, not discouraging: the
+            paperwork they have done is real and counts. */}
+        {data.order.awaitingConfirmation && (
+          <section
+            className="rounded-2xl border p-6 shadow-sm"
+            style={{ borderColor: '#E8D7A8', backgroundColor: '#FDF8EC' }}
+          >
+            <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: '#8a6a1f' }}>
+              Not booked yet
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 mt-1">
+              {data.agent ? `${data.agent.name.split(' ')[0]} is confirming your dates` : 'We’re confirming your dates'}
+            </h2>
+            <p className="text-sm text-gray-700 mt-2 leading-relaxed">
+              Your job is set up and the paperwork you complete here counts — signing the rental
+              agreement, adding your certificate of insurance and naming your drivers all carry
+              straight through, and getting them out of the way now is genuinely the fastest way to
+              be ready on day one. Thank you for doing it.
+            </p>
+            <p className="text-sm text-gray-700 mt-3 leading-relaxed">
+              What is <strong>not</strong> locked in yet is the vehicles and the dates. Nothing is
+              reserved until{' '}
+              {data.agent ? data.agent.name : 'your SirReel rep'} confirms availability and sends
+              your quote. This page updates the moment that happens, and you will see the equipment
+              and pricing appear right here.
+            </p>
+            <p className="text-xs text-gray-600 mt-3">
+              Need these dates held sooner, or something changed?{' '}
+              {data.agent?.phone ? (
+                <a href={`tel:${data.agent.phone}`} className="font-semibold" style={{ color: '#8a6a1f' }}>
+                  Call {data.agent.name.split(' ')[0]} at {data.agent.phone}
+                </a>
+              ) : (
+                <a href="tel:8884777335" className="font-semibold" style={{ color: '#8a6a1f' }}>
+                  Call us at (888) 477-7335
+                </a>
+              )}
+              {' '}— we answer 24/7.
+            </p>
+          </section>
+        )}
 
         {/* ── Schedule ────────────────────────────────────────────────────── */}
         <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
@@ -1338,6 +1388,12 @@ export default function JobPortalPage() {
                   null), so the "Issued 24-48 hours" copy still applies
                   in that case via the surrounding context — keeping the
                   PaperworkRow as a fallback for the no-invoice state. */}
+              {/* "Issued" is the fallback when the pay panel finds no
+                  invoice at all, which reads as though one exists. On a job
+                  the client set up themselves — nothing priced, nothing
+                  confirmed — that flatly contradicts the "not booked yet"
+                  notice above it, so say what is actually true instead
+                  (Wes 2026-09-07). */}
               <PaperworkRow
                 label={invoiceRowState.hasPreInvoice ? 'Pre-invoice' : 'Invoice'}
                 status={
@@ -1345,9 +1401,17 @@ export default function JobPortalPage() {
                     ? 'Needs your review'
                     : invoiceRowState.hasPreInvoice
                       ? 'Approved'
-                      : 'Issued'
+                      : data.order.awaitingConfirmation
+                        ? 'Not yet'
+                        : 'Issued'
                 }
-                statusKind={invoiceRowState.awaitingReview ? 'pending' : 'success'}
+                statusKind={
+                  invoiceRowState.awaitingReview
+                    ? 'pending'
+                    : !invoiceRowState.hasPreInvoice && data.order.awaitingConfirmation
+                      ? 'pending'
+                      : 'success'
+                }
               >
                 <PortalPayPanel onStatus={setInvoiceRowState} />
               </PaperworkRow>
@@ -1382,7 +1446,11 @@ export default function JobPortalPage() {
             <span className="text-xs text-gray-400">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
           </div>
           {data.lineItems.length === 0 ? (
-            <div className="text-xs text-gray-500">Your equipment list will appear here once it&rsquo;s finalized.</div>
+            <div className="text-xs text-gray-500">
+              {data.order.awaitingConfirmation
+                ? 'Nothing here yet — your equipment and pricing appear once your rep has confirmed availability.'
+                : 'Your equipment list will appear here once it\u2019s finalized.'}
+            </div>
           ) : (
             <div className="divide-y divide-gray-100">
               {data.lineItems.map((li) => (

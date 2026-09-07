@@ -28,7 +28,7 @@
  * widening the capture gate for an alias that never sends buys nothing.
  */
 
-import { channelRecipients } from '@/lib/email/notificationChannels'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import {
   renderEmailShell,
@@ -132,6 +132,14 @@ export interface PublicSubmission {
     phone?: string | null
     role?: string | null
   }
+  /**
+   * The agent this landed on, when the flow resolved one. Added to the
+   * internal To line beside the shared inbox: a self-serve job that names
+   * an owner in HQ but only emails hq@ is how SR-JOB-0315 sat unclaimed
+   * with a signed agreement (Wes 2026-09-07). Dedupes against the channel,
+   * so configuring the channel to include them changes nothing.
+   */
+  assignedAgent?: { name?: string | null; email?: string | null } | null
   /** Short one-line description for the subject (job/company/space). */
   subjectHint?: string | null
   /** Label/value rows shown in BOTH emails. Keep client-safe. */
@@ -184,6 +192,13 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
     ...(sub.contact.role?.trim() ? [{ label: 'Role', value: sub.contact.role.trim() }] : []),
   ]
 
+  // The named owner goes on the To line, not just in the body. hq@ is a
+  // distribution group nobody works out of, so "assigned to Jose" that
+  // only ever reaches hq@ assigns nothing.
+  const agentEmail = looksLikeEmail(sub.assignedAgent?.email) ? sub.assignedAgent!.email!.trim() : null
+  const agentName = sub.assignedAgent?.name?.trim() || agentEmail
+  const to = dedupeEmails([...(await channelRecipients('hq-documents')), ...(agentEmail ? [agentEmail] : [])])
+
   const html = renderEmailShell({
     eyebrow: 'New submission',
     heading: copy.internal,
@@ -191,7 +206,11 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
     bodyHtml: [
       detailTable(contactRows),
       allRows.length ? detailTable(allRows) : '',
-      calloutBox('Open it in HQ to assign an owner and reply. Replying to this email goes straight to the client.'),
+      calloutBox(
+        agentName
+          ? `<strong style="color:#0c0c0d;">${escapeHtml(agentName)}</strong> is the assigned rep on this and is on this email. Open it in HQ to confirm availability and get a quote out. Replying to this email goes straight to the client.`
+          : 'Open it in HQ to assign an owner and reply. Replying to this email goes straight to the client.',
+      ),
     ].join(''),
     cta: { label: sub.inquiryId ? 'Open in HQ' : 'Open the inquiry queue', href: link },
   })
@@ -202,12 +221,13 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
     ...rowsToText(contactRows),
     '',
     ...rowsToText(allRows),
+    ...(agentName ? ['', `Assigned rep: ${agentName} (on this email)`] : []),
     '',
     `Open in HQ: ${link}`,
   ])
 
   const res = await sendAgreementEmail({
-    to: await channelRecipients('hq-documents'),
+    to,
     subject,
     html,
     text,
@@ -265,4 +285,8 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
     label: `public-ack:${sub.kind}:${sub.inquiryId?.slice(0, 8) ?? 'no-inquiry'}`,
   })
   if (!res.ok) console.error(`[notify:${sub.kind}] client ack failed:`, res.reason)
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }

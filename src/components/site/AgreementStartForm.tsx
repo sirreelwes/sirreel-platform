@@ -140,9 +140,17 @@ export function AgreementStartForm({
     return (
       <div className="text-center py-2">
         <h2 className="text-[18px] font-serif text-[#1a1a1a] m-0">You&rsquo;re set up.</h2>
-        <p className="mt-2 mb-6 text-[13.5px] text-[#555]">
+        <p className="mt-2 text-[13.5px] text-[#555]">
           Your job portal is ready — sign the rental agreement, then build your order whenever
           you&rsquo;re ready.
+        </p>
+        {/* Set the expectation here, at the moment they think they have
+            booked something. Encouraging: the paperwork genuinely counts
+            and we want it done (Wes 2026-09-07). */}
+        <p className="mt-3 mb-6 text-[12.5px] leading-relaxed text-[#555]">
+          Getting this paperwork in now is the fastest way to be ready on day one, and it all
+          carries through. Your dates aren&rsquo;t reserved yet — a SirReel rep confirms
+          availability and sends your quote, and your portal updates as soon as they do.
         </p>
         <div className="flex flex-col gap-3 items-center">
           <a href={done.portalUrl} style={{ background: '#4DB1C6', color: '#1a1a1a' }} className="inline-block font-semibold text-[15px] px-7 py-3 rounded-lg no-underline">

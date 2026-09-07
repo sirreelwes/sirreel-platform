@@ -58,6 +58,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'driver-hours-untrued': { label: 'Driver hours to bill', hint: 'Hours are logged and the order still bills the estimate' },
   'quote-aging': { label: 'Quotes gone quiet', hint: 'Sent, no reply — follow up' },
   'inquiry-untouched': { label: 'Inquiries waiting', hint: 'Past the first-response SLA' },
+  'client-created-unquoted': { label: 'Client set up their own job', hint: 'They started the paperwork on the public site — confirm availability and get a quote out' },
   'check-report-changes': { label: 'Order changed at the dock', hint: 'The yard changed a booked order and the agent has not acknowledged it' },
   'lcdw-unapplied': { label: 'Damage waiver mismatch', hint: 'The client’s waiver answer and the quote’s money disagree' },
   'partner-coi-missing': { label: 'Partner COI', hint: 'A vehicle partner signed and we hold no certificate' },

@@ -68,7 +68,8 @@ export default async function AgreementStartPage({ params }: { params: { token: 
       <h1 className="text-[22px] font-serif text-[#1a1a1a] m-0">Tell us about the job.</h1>
       <p className="mt-2 mb-6 text-[13.5px] leading-relaxed text-[#555]">
         One short form — then your rental agreement is ready to sign and you can start building
-        your order.
+        your order. A rep confirms your dates and pricing after that; this gets the paperwork out
+        of the way first.
       </p>
       <AgreementStartForm
         token={token}

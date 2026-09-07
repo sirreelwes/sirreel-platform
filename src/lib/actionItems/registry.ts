@@ -80,8 +80,14 @@ import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied
 import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCoiMissing'
 import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
 import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
+import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 
 const PROVIDERS: ActionItemProvider[] = [
+  // A client set up their own job on the public agreement page and may
+  // already have signed. Nothing else fires on these: the inquiry is
+  // born CONVERTED (so every SLA surface skips it) and quote-aging
+  // counts from a quote that was never sent (Wes 2026-09-07).
+  clientCreatedUnquotedProvider,
   // The yard changed a booked order at the dock and the agent hasn't
   // seen it yet — the money moved without them.
   checkReportChangesProvider,

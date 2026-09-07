@@ -592,6 +592,12 @@ export async function startNewSubmit(
     // every self-serve job to whoever held the oldest admin account and
     // could never pick a salesperson at all.
     const agent = await resolveDefaultSalesAgent()
+    // Named on the internal notification's To line, so the person HQ says
+    // owns this actually hears about it (Wes 2026-09-07).
+    const agentUser = await prisma.user.findUnique({
+      where: { id: agent.id },
+      select: { name: true, email: true },
+    })
 
     // Job-as-root: startWelcomeInvite REFUSES an invite with no resolved
     // Job, so this path has been dead since that refactor (Jul 2026) —
@@ -702,6 +708,7 @@ export async function startNewSubmit(
       inquiryId: inquiry.id,
       notifyClient: false,
       contact: { name: `${firstName} ${lastName}`.trim(), email: entry.email },
+      assignedAgent: agentUser,
       subjectHint: [companyName, jobName].filter(Boolean).join(' · ') || null,
       details: [
         { label: 'Job', value: jobName },
@@ -721,10 +728,17 @@ export async function startNewSubmit(
             ? 'Attested they represent an EXISTING client — self-declared, not verified. Worth a look.'
             : 'New company record',
         },
-        // The assignee is whichever ADMIN was created first, not a real
-        // sales assignment — so "assigned" here should not be read as
-        // "somebody owns this".
-        { label: 'Assignment', value: 'Auto-assigned to fallback admin — needs a real owner' },
+        // How the rep was chosen matters: 'configured' is a real routing
+        // decision, the fallbacks are not. The note used to read "fallback
+        // admin" unconditionally, which was already untrue once
+        // resolveDefaultSalesAgent gained a configured setting.
+        {
+          label: 'Assignment',
+          value:
+            agent.via === 'configured'
+              ? `${agentUser?.name || agentUser?.email || 'Configured rep'} — the configured default for self-serve jobs`
+              : `${agentUser?.name || agentUser?.email || 'Unknown'} — auto-picked (${agent.via}); no default rep is configured, so confirm the owner`,
+        },
       ],
     })
 
