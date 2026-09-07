@@ -1,24 +1,42 @@
 /**
- * HQ by VerMar Design — the white-label product a SirReel partner can run
- * their own fleet on.
+ * Utliiz by VerMar Design — the white-label product a SirReel partner can
+ * run their own fleet on.
  *
  * Wes 2026-09-05: "start creating the white label HQ for vendors who use
  * our portal. Eventually we will add a link at the bottom that says 'See
  * what HQ can do for you' and we will have a simplified version of
  * SirReel's HQ that they can subscribe to — paying VerMar Design."
  *
+ * Wes 2026-09-07: the product is named Utliiz and lives at utliiz.com.
+ * "HQ" is deliberately NOT the product's name any more — HQ Rental
+ * Software (CAAG B.V.) sells rental software under that word, and a
+ * brand in the same lane is the one thing that could draw a letter.
+ * "hq." survives only as the PLACE: the subdomain a partner's workspace
+ * will sit on under their own domain (hq.theirname.com), the way
+ * hq.sirreel.com is where SirReel's office lives. In copy, say the
+ * product's name; where "HQ" must appear, it is lowercase-descriptive
+ * ("your hq"), never a wordmark.
+ *
  * Everything the product SAYS about itself lives here — its name, who
- * makes it, the trial length, the plans and the pitch — so the landing
- * page, the workspace shell and the emails can't drift apart. SirReel is
- * never named inside the product: a partner's HQ is theirs, and SirReel
- * is simply the client whose bookings flow in.
+ * makes it, where it lives, the trial length, the plans and the pitch —
+ * so the landing page, the workspace shell and the emails can't drift
+ * apart. SirReel is never named inside the product: a partner's
+ * workspace is theirs, and SirReel is simply the client whose bookings
+ * flow in.
  */
 
 export const HQ_PRODUCT = {
-  /** What the product is called. Deliberately just "HQ". */
-  name: 'HQ',
+  /** What the product is called. */
+  name: 'Utliiz',
   /** Who the subscription is paid to. */
   maker: 'VerMar Design',
+  /**
+   * The product's own domain — the public site and, once
+   * NEXT_PUBLIC_APP_URL says so, the partners' workspaces. Canonical apex;
+   * www and the old vermardesign.com hosts 308 here (middleware).
+   */
+  siteHost: 'utliiz.com',
+  siteOrigin: 'https://utliiz.com',
   tagline: 'Run your fleet from one place.',
   /** Free trial length, in days, from the moment a partner starts it. */
   trialDays: 30,
@@ -28,8 +46,13 @@ export const HQ_PRODUCT = {
    * is ours.
    */
   defaultAccent: '#1f3a5f',
-  /** Where a partner writes when something is wrong. */
-  supportEmail: 'hq@vermardesign.com',
+  /**
+   * Where a partner writes when something is wrong. On the product's own
+   * domain. NOTE (2026-09-07): the mailbox/forward for this address has to
+   * exist at the mail host for utliiz.com — the address is what the site
+   * shows, it does not make the inbox.
+   */
+  supportEmail: 'hello@utliiz.com',
 } as const
 
 export type HqPlanKey = 'STARTER' | 'PRO'

@@ -1,9 +1,9 @@
 /**
- * VerMar Design's PUBLIC site for HQ — what vermardesign.com serves. Its
- * own route group so neither SirReel's marketing shell nor the staff
- * shell wraps it, and no gate: this is the front door. The middleware
- * rewrites the vermardesign.com root here; on hq.sirreel.com it is also
- * reachable at /vermar-site, unlinked.
+ * The product's PUBLIC site — what utliiz.com serves. Its own route
+ * group so neither SirReel's marketing shell nor the staff shell wraps
+ * it, and no gate: this is the front door. The middleware rewrites the
+ * utliiz.com root here; on hq.sirreel.com it is also reachable at
+ * /vermar-site, unlinked.
  */
 import type { Metadata } from 'next'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'

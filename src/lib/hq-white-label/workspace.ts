@@ -237,7 +237,7 @@ export async function startWorkspaceTrial(vendorId: string, input: StartTrialInp
 
   if (fresh) {
     await tellVerMar(
-      `${vendor.name} started an HQ trial`,
+      `${vendor.name} started a ${HQ_PRODUCT.name} trial`,
       `${requestedByName || vendor.contactName || 'Someone'} at ${vendor.name}${requestedByEmail ? ` (${requestedByEmail})` : ''} started a ${HQ_PRODUCT.trialDays}-day ${HQ_PRODUCT.name} trial.${note ? ` They wrote: “${note}”` : ''} Trial ends ${trialEndsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`,
       '/vermar/workspaces',
     )

@@ -1,8 +1,10 @@
 /**
- * vermardesign.com — the basic site for HQ (Wes 2026-09-05: "drop a basic
- * website for hq at vermardesign.com"). One page: what it is, what it
- * does, the plans, how to get in. Copy comes from product.ts so this,
- * the partner landing and the workspace never disagree about the product.
+ * utliiz.com — the product's public site (Wes 2026-09-05: "drop a basic
+ * website for hq at vermardesign.com"; 2026-09-07: "we are using
+ * Utliiz.com now"). One page: what it is, what it does, the plans, how
+ * to get in. Copy comes from product.ts so this, the partner landing and
+ * the workspace never disagree about the product. The route stays at
+ * /vermar-site — an internal rewrite target, never linked.
  *
  * No form here yet — the way in today is a SirReel partner page (the
  * "See what HQ can do for you" link) or an email to VerMar. A direct
@@ -86,7 +88,7 @@ export default function VerMarSitePage() {
         <div className="mt-6 grid sm:grid-cols-2 gap-5 max-w-[820px]">
           <div className="rounded-2xl border border-white/15 p-6">
             <div className="text-[16px] font-bold">Already a SirReel partner?</div>
-            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Open your partner page and press &ldquo;See what HQ can do for you&rdquo; at the bottom. Your units and bookings are on your calendar from the first minute.</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-white/70">Open your partner page and press &ldquo;See what {HQ_PRODUCT.name} can do for you&rdquo; at the bottom. Your units and bookings are on your calendar from the first minute.</p>
           </div>
           <div className="rounded-2xl border border-white/15 p-6">
             <div className="text-[16px] font-bold">Everyone else</div>

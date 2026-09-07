@@ -41,17 +41,27 @@ const ORDERS_HOST = 'orders.sirreel.com'
 // right now, not hypothetically after some future DNS change.
 const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 
-// VerMar Design — HQ, the white-label product (Wes 2026-09-05: "drop a
-// basic website for hq at vermardesign.com"). Registered 2026-08-31 at
-// Cloudflare; INERT until the domain is attached to this Vercel project
-// and its DNS points here. Root is the product site; the partners'
-// workspaces (/hq/[token]) and their API are served on it too, so a
-// workspace link can move off hq.sirreel.com once NEXT_PUBLIC_APP_URL /
-// link minting says so. The operator control plane (/vermar/*) is NOT
-// served here yet: it needs a Google login, and NextAuth's callback is
-// bound to the hq host — it stays on hq.sirreel.com until that's wired.
-const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com']
-const VERMAR_ALLOWED_PREFIXES = [
+// Utliiz — the white-label product by VerMar Design (Wes 2026-09-05:
+// "drop a basic website for hq at vermardesign.com"; 2026-09-07: "we are
+// using Utliiz.com now — get site working"). Canonical host is the apex;
+// www 308s to it. Root is the product site; the partners' workspaces
+// (/hq/[token]) and their API are served on it too, so a workspace link
+// can move off hq.sirreel.com once NEXT_PUBLIC_APP_URL / link minting
+// says so. The operator control plane (/vermar/*) is NOT served here:
+// it needs a Google login, and NextAuth's callback is bound to the hq
+// host — it stays on hq.sirreel.com until that's wired.
+//
+// Before 2026-09-07 this branch fell through to `pass:unknown-host`, so
+// a browser on the product domain got SirReel's staff login — "the
+// public site isn't active". The host has to be listed here AND attached
+// to the Vercel project with DNS pointing at it; code alone is half.
+const PRODUCT_HOST = 'utliiz.com'
+const PRODUCT_HOSTS = [PRODUCT_HOST, `www.${PRODUCT_HOST}`]
+// The maker's own domain, where the product site first lived (never went
+// live — no DNS). If it is ever pointed here it 308s to the product
+// host, path preserved, rather than serving a second copy of the site.
+const VERMAR_LEGACY_HOSTS = ['vermardesign.com', 'www.vermardesign.com']
+const PRODUCT_ALLOWED_PREFIXES = [
   '/vermar-site',           // the site itself (root-rewrite target + direct hits)
   '/hq/',                   // partner workspaces — token-gated, no login
   '/api/public/vendor-hq/', // their API
@@ -324,25 +334,27 @@ export function middleware(req: NextRequest): NextResponse {
     return branded404(req, host, 'public:block-404')
   }
 
-  // ── vermardesign.com (HQ by VerMar Design) ────────────────────
-  if (VERMAR_HOSTS.includes(host)) {
-    if (host === 'www.vermardesign.com') {
+  // ── utliiz.com (the white-label product) ──────────────────────
+  if (PRODUCT_HOSTS.includes(host) || VERMAR_LEGACY_HOSTS.includes(host)) {
+    if (host !== PRODUCT_HOST) {
+      // www → apex, and the maker's old domain → the product's, both
+      // permanently and with the path kept.
       const url = req.nextUrl.clone()
-      url.host = 'vermardesign.com'
+      url.host = PRODUCT_HOST
       url.protocol = 'https:'
       url.port = ''
-      return tagged(NextResponse.redirect(url, 308), host, 'vermar:www-to-apex')
+      return tagged(NextResponse.redirect(url, 308), host, 'product:to-canonical')
     }
     if (pathname === '/' || pathname === '') {
       const url = req.nextUrl.clone()
       url.pathname = '/vermar-site'
-      return tagged(NextResponse.rewrite(url), host, 'vermar:root-rewrite')
+      return tagged(NextResponse.rewrite(url), host, 'product:root-rewrite')
     }
-    const allowed = VERMAR_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
-    if (allowed) return tagged(NextResponse.next(), host, 'vermar:allow')
-    // Nothing of SirReel's is reachable on VerMar's domain. Plain 404 —
-    // there is no VerMar-branded 404 page yet.
-    return tagged(new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } }), host, 'vermar:block-404')
+    const allowed = PRODUCT_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
+    if (allowed) return tagged(NextResponse.next(), host, 'product:allow')
+    // Nothing of SirReel's is reachable on the product's domain. Plain
+    // 404 — there is no product-branded 404 page yet.
+    return tagged(new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } }), host, 'product:block-404')
   }
 
   // ── orders.sirreel.com (public supply-order form) ─────────────

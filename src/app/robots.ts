@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 import { PUBLIC_SITE_HOSTS, PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
+import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
 
 /**
  * robots.txt, per host.
@@ -26,12 +27,12 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const isPublicSite = PUBLIC_SITE_HOSTS.includes(host)
 
-  // vermardesign.com — HQ by VerMar Design's product site. Crawl the site;
-  // never the partners' workspaces, whose URLs are credentials.
-  if (host === 'vermardesign.com' || host === 'www.vermardesign.com') {
+  // utliiz.com — the white-label product's site. Crawl the site; never
+  // the partners' workspaces, whose URLs are credentials.
+  if (host === HQ_PRODUCT.siteHost || host === `www.${HQ_PRODUCT.siteHost}`) {
     return {
       rules: [{ userAgent: '*', allow: '/', disallow: ['/hq/', '/api/'] }],
-      host: 'https://vermardesign.com',
+      host: HQ_PRODUCT.siteOrigin,
     }
   }
 
