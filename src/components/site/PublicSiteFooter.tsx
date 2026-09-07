@@ -93,6 +93,11 @@ export function PublicSiteFooter() {
           {/* Quiet S-mark sign-off beside the copyright line. */}
           <Image src="/s-logo-white.png" alt="" aria-hidden width={1118} height={1065} className="h-3.5 w-auto opacity-40" />
           <span>© {year} {PUBLIC_CONTACT.entity}. All rights reserved.</span>
+          {/* Carriers verify the SMS number against a linked policy — keep these two visible. */}
+          <span className="ml-auto flex items-center gap-3">
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+            <Link href="/sms-terms" className="hover:text-white transition-colors">Text message terms</Link>
+          </span>
         </div>
       </div>
     </footer>

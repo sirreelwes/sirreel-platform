@@ -73,6 +73,8 @@ const VERMAR_ALLOWED_PREFIXES = [
 const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/home',
   '/contact',
+  '/privacy',          // privacy policy — required by carriers for SMS (Twilio toll-free verification, 2026-09-07)
+  '/sms-terms',        // SMS terms: consent, frequency, STOP/HELP, "message and data rates may apply"
   '/help',             // public help hub — after-hours assistant + how-to videos
   '/vehicles',
   '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
