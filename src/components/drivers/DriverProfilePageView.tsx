@@ -34,6 +34,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
   const [phone, setPhone] = useState('')
+  const [okToText, setOkToText] = useState(true)
   const [trained, setTrained] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -56,7 +57,7 @@ export function DriverProfilePageView({ token }: { token: string }) {
     try {
       const res = await fetch(`/api/drive/profile/${token}`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ firstName: first, lastName: last, phone, trainedVehicleIds: [...trained] }),
+        body: JSON.stringify({ firstName: first, lastName: last, phone, smsConsent: okToText, trainedVehicleIds: [...trained] }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || !j.ok) throw new Error(j.error || 'Could not save that.')
@@ -112,6 +113,10 @@ export function DriverProfilePageView({ token }: { token: string }) {
             <div><label className={label}>First name</label><input value={first} onChange={(e) => setFirst(e.target.value)} className={field} autoComplete="given-name" /></div>
             <div><label className={label}>Last name</label><input value={last} onChange={(e) => setLast(e.target.value)} className={field} autoComplete="family-name" /></div>
             <div className="col-span-2"><label className={label}>Mobile</label><input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={field} autoComplete="tel" placeholder="(818) 555-0100" /></div>
+            <label className="col-span-2 flex items-start gap-2.5 text-[13px] leading-relaxed text-zinc-300 cursor-pointer">
+              <input type="checkbox" checked={okToText} onChange={(e) => setOkToText(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#4DB1C6]" />
+              <span>OK to text this number about jobs I&rsquo;m driving &mdash; call time, location, day-of changes. Msg &amp; data rates may apply; reply STOP to opt out.</span>
+            </label>
             <div className="col-span-2"><label className={label}>Email</label><input value={data.email} readOnly className={`${field} text-zinc-400`} /></div>
           </div>
         </Section>

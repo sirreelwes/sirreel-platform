@@ -41,6 +41,7 @@ export default function VendorDeliveryContactCard({
   const [name, setName] = useState(initialName ?? '')
   const [phone, setPhone] = useState(initialPhone ?? '')
   const [email, setEmail] = useState(initialEmail ?? '')
+  const [okToText, setOkToText] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -59,7 +60,7 @@ export default function VendorDeliveryContactCard({
       const r = await fetch(`/api/public/vendor/${token}/driver`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deliveryContact: true, driverName: name, driverPhone: phone, driverEmail: email }),
+        body: JSON.stringify({ deliveryContact: true, driverName: name, driverPhone: phone, driverEmail: email, smsConsent: okToText }),
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j.ok === false) throw new Error(j.error ?? 'That didn’t go through.')
@@ -87,6 +88,13 @@ export default function VendorDeliveryContactCard({
         <label className={label}>Email <span className="normal-case tracking-normal font-normal">(optional)</span></label>
         <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Only if you'd like them copied" inputMode="email" autoComplete="email" />
       </div>
+      <label className="sm:col-span-2 flex items-start gap-2.5 text-[13px] leading-relaxed text-[#3d392f] cursor-pointer">
+        <input type="checkbox" checked={okToText} onChange={(e) => setOkToText(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#0F7A93]" />
+        <span>
+          OK to text this number about the booking &mdash; day-of changes to the drop-off or pickup. Message and data
+          rates may apply; reply STOP to opt out. <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a>.
+        </span>
+      </label>
       <div className="sm:col-span-2 flex items-center gap-3 pt-1">
         <button type="button" onClick={save} disabled={busy || !name.trim() || !phone.trim()} className={primary}>
           {busy ? 'Saving…' : saved ? 'Update contact' : 'Save contact'}

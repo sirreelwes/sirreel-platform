@@ -117,6 +117,7 @@ export function PortalDeliveriesSection() {
   const [time, setTime] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [contactSmsConsent, setContactSmsConsent] = useState(false)
   const [pickupSame, setPickupSame] = useState(true)
   const [pickupAddress, setPickupAddress] = useState('')
   const [pickupAccessNotes, setPickupAccessNotes] = useState('')
@@ -172,6 +173,7 @@ export function PortalDeliveriesSection() {
           time,
           contactName,
           contactPhone,
+          contactSmsConsent,
           pickupSameAsDelivery: pickupSame,
           pickupAddress,
           pickupAccessNotes,
@@ -286,6 +288,17 @@ export function PortalDeliveriesSection() {
               onChange={(e) => { setContactPhone(e.target.value); touch() }} />
           </div>
         </div>
+        {/* SMS consent, on the same form as the number (carrier requirement).
+            Day-of changes to call time or address reach this person by text. */}
+        <label className="flex items-start gap-2.5 text-[12px] leading-relaxed text-gray-700 cursor-pointer">
+          <input type="checkbox" checked={contactSmsConsent}
+            onChange={(e) => { setContactSmsConsent(e.target.checked); touch() }}
+            className="mt-0.5 w-4 h-4 accent-[#0F7A93]" />
+          <span>
+            OK to text this number about day-of changes to the delivery, call time or pickup. Message and data rates may
+            apply; reply STOP to opt out. <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a>.
+          </span>
+        </label>
       </div>
 
       {/* ── Pickup ────────────────────────────────────────────────────────── */}

@@ -20,6 +20,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { recordConsent } from '@/lib/sms/threads'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { loadDeliveries, parseReportTo } from '@/lib/portal/deliveries'
@@ -74,6 +75,14 @@ export async function POST(req: NextRequest) {
   })
 
   const now = new Date()
+  // The client ticked "OK to text this number" beside the on-site contact's
+  // mobile, on the same form — the opt-in the carrier campaign describes
+  // (Wes 2026-09-07). Recorded before the save so it is never lost to a
+  // notify failure below.
+  if (body.contactSmsConsent === true && typeof body.contactPhone === 'string' && body.contactPhone.trim()) {
+    await recordConsent(body.contactPhone, 'portal').catch(() => false)
+  }
+
   await prisma.job.update({
     where: { id: ctx.jobId },
     data: { ...parsed.data, reportToUpdatedAt: now },

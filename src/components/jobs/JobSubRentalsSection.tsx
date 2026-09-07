@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { TextButton } from '@/components/sms/TextButton'
 import Link from 'next/link'
 
 export interface JobSubRental {
@@ -355,6 +356,12 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                   <>
                     {s.receiveMethod === 'DELIVERY' ? 'Delivery contact' : 'Driver'} <span className="text-zinc-800">{s.driverName}</span>
                     {s.driverPhone && ` · ${s.driverPhone}`}
+                    {s.driverPhone && (
+                      <>
+                        {' '}
+                        <TextButton jobId={jobId} phone={s.driverPhone} name={s.driverName} subRentalId={s.id} />
+                      </>
+                    )}
                     {s.relayAddress && (
                       <>
                         {' · '}

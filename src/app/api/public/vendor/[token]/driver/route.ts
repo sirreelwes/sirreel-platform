@@ -14,6 +14,7 @@ import { prisma } from '@/lib/prisma'
 import { assignDriver } from '@/lib/sub-rentals/driverRelay'
 import { notifyDriverAssigned } from '@/lib/sub-rentals/conduit'
 import { assignRosterDriver } from '@/lib/sub-rentals/vendorDrivers'
+import { recordConsent } from '@/lib/sms/threads'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,12 +49,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       where: { id: sub.id },
       data: { driverName: name, driverPhone: phone.slice(0, 30), driverEmail: emailRaw || null, driverAssignedAt: new Date() },
     })
+    // The partner ticked "OK to text this number" on the same form as the
+    // number — the affirmative opt-in the carrier campaign describes.
+    const smsConsent = body.smsConsent === true
+    if (smsConsent) await recordConsent(phone, 'partner-page').catch(() => false)
     await prisma.auditLog.create({
       data: {
         action: 'sub_rental.delivery_contact_set',
         entityType: 'SubRental',
         entityId: sub.id,
-        newValues: { driverName: name, driverPhone: phone, driverEmail: emailRaw || null, via: 'vendor-page' },
+        newValues: { driverName: name, driverPhone: phone, driverEmail: emailRaw || null, smsConsent, via: 'vendor-page' },
       },
     })
     return NextResponse.json({ ok: true, driverName: name, driverPhone: phone, driverEmail: emailRaw || null })

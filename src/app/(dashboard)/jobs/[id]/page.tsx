@@ -44,6 +44,7 @@ import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompa
 import EnterRedlineModal from '@/components/orders/EnterRedlineModal';
 import { isRedlineAwaitingAction } from '@/lib/jobs/redlineAlert';
 import { isPlaceholderJobName } from '@/lib/jobs/displayName';
+import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
@@ -3066,6 +3067,11 @@ const driverTone = (d: any): string => {
                       >
                         {jc.person.phone}
                       </a>
+                    )}
+                    {/* Last-minute changes go by text (Wes 2026-09-07). The
+                        composer shows consent state before anyone types. */}
+                    {jc.person.phone && (
+                      <TextButton jobId={job.id} phone={jc.person.phone} name={`${jc.person.firstName} ${jc.person.lastName}`.trim()} />
                     )}
                   </div>
                   </div>

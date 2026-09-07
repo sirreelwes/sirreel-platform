@@ -219,3 +219,30 @@ export async function sendTracked(args: {
   await log('failed', { errorText: r.error ?? null })
   return { ok: false, status: 'failed', error: r.error }
 }
+
+/**
+ * Affirmative consent captured on a form we control — the portal's on-site
+ * contact, a partner's delivery contact or driver profile, a staff entry.
+ * Clears an earlier STOP: the person just asked, on a form that names the
+ * number, which is the strongest opt-in there is. `via` is stored for the
+ * audit trail the carrier campaign describes.
+ */
+export async function recordConsent(phoneRaw: string, via: 'portal' | 'partner-page' | 'driver-profile' | 'staff' | 'form'): Promise<boolean> {
+  const thread = await getOrCreateThread(phoneRaw)
+  if (!thread) return false
+  await prisma.smsThread.update({ where: { id: thread.id }, data: { optedOutAt: null, optedInAt: new Date(), optedInVia: via } })
+  return true
+}
+
+export type ConsentState = 'opted-in' | 'opted-out' | 'none' | 'bad-number'
+
+/** What the job page shows beside a Text button. */
+export async function consentState(phoneRaw: string): Promise<{ state: ConsentState; via: string | null; at: Date | null }> {
+  const phone = toE164(phoneRaw)
+  if (!phone) return { state: 'bad-number', via: null, at: null }
+  const t = await prisma.smsThread.findUnique({ where: { phone }, select: { optedOutAt: true, optedInAt: true, optedInVia: true } })
+  if (!t) return { state: 'none', via: null, at: null }
+  if (t.optedOutAt) return { state: 'opted-out', via: null, at: t.optedOutAt }
+  if (t.optedInAt) return { state: 'opted-in', via: t.optedInVia, at: t.optedInAt }
+  return { state: 'none', via: null, at: null }
+}
