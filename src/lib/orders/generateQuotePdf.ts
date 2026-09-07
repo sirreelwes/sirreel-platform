@@ -110,6 +110,11 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
         code: li.inventoryItem?.code ?? null,
         isPartnerVehicle: li.subRentals.length > 0,
       })),
+    // A driver line is the "Driver (covers N hrs)" fee that rides under a
+    // vehicle, or any LABOR line that names a driver.
+    hasDriver: order.lineItems.some(
+      (li) => li.type !== 'DISCOUNT' && /\bdrivers?\b/i.test(li.description) && (li.type === 'LABOR' || li.parentLineItemId != null || li.department === 'VEHICLES'),
+    ),
   })
 
   const contactFullName = order.jobContact

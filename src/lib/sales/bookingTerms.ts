@@ -116,6 +116,7 @@ export type BookingTermKey =
   | 'lcdw'
   | 'cancellation'
   | 'card-fees'
+  | 'drivers'
 
 export interface BookingTerm {
   key: BookingTermKey
@@ -140,6 +141,11 @@ export interface BookingVehicleLine {
 export interface BookingTermsInput {
   /** The order's VEHICLES-department lines. Empty for a gear-only order. */
   vehicles: BookingVehicleLine[]
+  /** True when the quote carries a driver line (a "Driver (covers N hrs)"
+   *  fee under a vehicle). Wes 2026-09-07: the client must read that the
+   *  driver is the partner company's employee, not SirReel's, and that the
+   *  driver charge is an estimate settled on actual hours. */
+  hasDriver?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -303,6 +309,19 @@ export function buildBookingTerms(input: BookingTermsInput): BookingTerm[] {
 
     const lcdw = lcdwTerm(vehicles)
     if (lcdw) terms.push(lcdw)
+  }
+
+  // Drivers — only when one is quoted. Wes 2026-09-07: "Drivers are not
+  // employees of SirReel — but of the partner company. Compensation is
+  // usage based and estimate isn't a final invoice number."
+  if (input.hasDriver) {
+    terms.push({
+      key: 'drivers',
+      title: 'Drivers',
+      body:
+        'Drivers are provided by and are employees or contractors of the partner company that supplies them, not SirReel. ' +
+        'Driver charges are usage-based: the amount on this quote is an estimate for the hours listed, and the invoice reflects the hours actually worked, portal to portal, including any overtime.',
+    })
   }
 
   terms.push({
