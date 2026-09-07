@@ -2976,6 +2976,30 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
           Flagged driver{d.flagReason ? ` — ${d.flagReason}` : ''}
         </div>
       )}
+      {/* Every driver who has picked this unit up on this rental, in
+          order — a production can name a second driver after the first
+          has the keys (Cube 29, 2026-09-07). Nobody drops off the record;
+          the one who appears to have it now is marked. Only rendered when
+          there is history to show — one driver is the header above. */}
+      {Array.isArray(checkout.drivers) && checkout.drivers.length > 1 && (
+        <div className="mt-2 pt-2 border-t border-violet-200/70">
+          <div className="text-[9.5px] font-bold uppercase tracking-wider text-gray-500 mb-1">Drivers on this unit</div>
+          <ul className="space-y-1">
+            {checkout.drivers.map((h: any, i: number) => (
+              <li key={`${h.id}-${i}`} className="flex items-center gap-2 text-[11px]">
+                <span className={`min-w-0 truncate ${h.current ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{h.name}</span>
+                {h.phone && <a href={`tel:${String(h.phone).replace(/[^\d+]/g, '')}`} className="font-mono text-gray-500 hover:underline flex-shrink-0">{h.phone}</a>}
+                <span className="text-gray-500 flex-shrink-0">
+                  · picked up {fmt(h.pickedUpAt)}{h.pickupMileage != null && ` · ${Number(h.pickupMileage).toLocaleString()} mi`}
+                </span>
+                <span className={`ml-auto flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${h.current ? 'bg-violet-600 text-white' : 'bg-white/70 text-gray-500 border border-gray-200'}`}>
+                  {h.current ? 'Appears to have it' : returned ? 'Drove it' : 'Handed off'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

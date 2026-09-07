@@ -146,6 +146,7 @@ export async function GET(req: NextRequest) {
         checkedOutBy: true,
         selfCheckout: true,
         returnedTo: true,
+        driverId: true,
         driver: {
           select: {
             firstName: true,
@@ -160,7 +161,32 @@ export async function GET(req: NextRequest) {
         },
       },
     })
+    // Everyone who has driven this unit on this rental, in pickup order.
+    // Wes 2026-09-07: keep every driver on record, and say who APPEARS to
+    // have the vehicle now. "Appears" is honest — the record's driverId is
+    // the latest self check-out or staff handover, not a GPS ping.
+    const pickups = rec
+      ? await prisma.driverAssignment.findMany({
+          where: { bookingAssignmentId: assignmentId, pickedUpAt: { not: null } },
+          orderBy: { pickedUpAt: 'asc' },
+          select: {
+            pickedUpAt: true,
+            pickupMileage: true,
+            driver: { select: { id: true, firstName: true, lastName: true, phone: true, type: true } },
+          },
+        })
+      : []
     if (rec) {
+      const currentId = rec.driverId ?? pickups[pickups.length - 1]?.driver.id ?? null
+      const drivers = pickups.map((pu) => ({
+        id: pu.driver.id,
+        name: `${pu.driver.firstName} ${pu.driver.lastName}`.trim(),
+        phone: pu.driver.phone,
+        type: pu.driver.type,
+        pickedUpAt: pu.pickedUpAt,
+        pickupMileage: pu.pickupMileage,
+        current: !rec.returnTime && pu.driver.id === currentId,
+      }))
       checkout = {
         checkoutTime: rec.checkoutTime,
         mileageOut: rec.mileageOut,
@@ -171,6 +197,7 @@ export async function GET(req: NextRequest) {
         checkedOutBy: rec.checkedOutBy,
         selfCheckout: rec.selfCheckout,
         returnedTo: rec.returnedTo,
+        drivers,
         driver: rec.driver
           ? {
               name: `${rec.driver.firstName} ${rec.driver.lastName}`.trim(),
