@@ -47,6 +47,7 @@ import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { notifySubRentalsBooked } from '@/lib/sub-rentals/lifecycleNotices'
+import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -309,6 +310,36 @@ export async function bookOrder(args: {
     // separately; we don't want to roll back a successful book.
   }
 
+  // ── Phase 2b: the truck may already be gone (post-tx) ───────────
+  // A blind pickup can leave before anyone clicks "Book it" (Forgotten
+  // Island, 2026-09-07). If a vehicle on this order's booking is
+  // CHECKED_OUT, BOOKED is already stale — go straight on to ON_JOB.
+  let wentOnJob: string[] = []
+  try {
+    const booked = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { jobId: true, bookingId: true },
+    })
+    if (booked?.jobId) {
+      const out = await prisma.bookingAssignment.findFirst({
+        where: { status: 'CHECKED_OUT', bookingItem: { booking: { jobId: booked.jobId } } },
+        select: { id: true, bookingItem: { select: { bookingId: true } } },
+      })
+      if (out) {
+        wentOnJob = await advanceOrdersToOnJob(prisma, {
+          jobId: booked.jobId,
+          bookingId: out.bookingItem.bookingId,
+          bookingAssignmentId: out.id,
+          userId,
+          source: 'book-after-vehicle-out',
+        })
+        await projectOnJob(wentOnJob)
+      }
+    }
+  } catch (err) {
+    console.error('[bookOrder] vehicle-out check failed:', err)
+  }
+
   // ── Phase 3: LOADED_READY rollup (post-tx) ─────────────────────
   // For all-trivial-lane orders (STAGE-only, or orders with zero
   // warehouse + zero fleet lines), this fires the auto-advance at
@@ -316,7 +347,7 @@ export async function bookOrder(args: {
   // it's a no-op — those lanes haven't terminated yet. Always safe
   // to call; idempotent.
   try {
-    await recomputeAndMaybeAdvanceLoadReady(orderId)
+    if (!wentOnJob.includes(orderId)) await recomputeAndMaybeAdvanceLoadReady(orderId)
   } catch (err) {
     console.error('[bookOrder] LOADED_READY rollup failed:', err)
     // Non-fatal — order is BOOKED. Rollup can be retried by any

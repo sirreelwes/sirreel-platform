@@ -507,6 +507,10 @@ export async function GET(
       job.orders.filter((o) => o.status !== 'CANCELLED'),
       today,
       tomorrow,
+      // Checked-out vehicles count as out even when the order lags.
+      job.bookings.flatMap((b) =>
+        b.items.flatMap((it) => it.assignments.map((a) => ({ status: a.status, endDate: a.endDate }))),
+      ),
     )
 
     const coverage = job.companyId ? await findCompanyAnnualCoverage(job.companyId) : null

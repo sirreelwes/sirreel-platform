@@ -22,6 +22,20 @@
  */
 import type { JobStatus, OrderStatus } from '@prisma/client'
 
+/**
+ * A vehicle on the job, as the scheduler knows it. CHECKED_OUT is the
+ * one status that means "physically gone" — the driver's self check-out
+ * writes it (a staff walk-around leaves ASSIGNED because the driver may
+ * not have turned up yet). Fed into the rollup beside the orders so a
+ * truck that left reads "On rental" even when nobody advanced the order
+ * — Forgotten Island, 2026-09-07: driver checked out overnight, job
+ * still said "Booked · Ready to go out" at breakfast.
+ */
+export interface VehicleOnJob {
+  status: string
+  endDate: Date | null
+}
+
 export type CadenceState =
   | 'new'
   | 'quoted'
@@ -113,6 +127,11 @@ export function cadenceForOrder(
     if (end && end === today) return 'returning-today'
     if (end && end === tomorrow) return 'returning-tmw'
     if (start && end && start <= today && today <= end) return 'on-rental'
+    // ON_JOB means the gear is in the client's hands. Dates don't get a
+    // vote: past the end it is still out (rowState reads overdue off
+    // Job.returnedAt), before the start it left early. This used to
+    // fall through to 'booked' once the window had passed.
+    if (o.status === 'ON_JOB') return 'on-rental'
     if (start && start === today) return 'picking-today'
     if (start && start === tomorrow) return 'picking-tmw'
     return 'booked'
@@ -126,12 +145,27 @@ export function cadenceForOrder(
 }
 
 /**
+ * A checked-out vehicle is an "out" event in its own right. Only the
+ * return edge reads the date — a truck that left is on rental whether
+ * its window has opened, is open, or closed.
+ */
+export function cadenceForVehicle(v: VehicleOnJob, today: string, tomorrow: string): CadenceState | null {
+  if (v.status !== 'CHECKED_OUT') return null
+  const end = v.endDate ? v.endDate.toISOString().slice(0, 10) : null
+  if (end && end === today) return 'returning-today'
+  if (end && end === tomorrow) return 'returning-tmw'
+  return 'on-rental'
+}
+
+/**
  * Roll a job's live (non-cancelled) orders up to one operational state.
  *
  * Order of resolution:
  *   1. HOLD / LOST / WRAPPED — the human off-ramps win outright.
  *   2. The orders — every one maps to a cadence event, most-urgent wins.
- *      A return event with other orders still out is flagged `partial`.
+ *      Checked-out vehicles add their own out/return events, so the
+ *      rollup follows the truck when the order lags behind it. A return
+ *      event with other orders still out is flagged `partial`.
  *   3. No orders worth reading (all DRAFT / QUOTE_SENT, or none at all)
  *      — fall back to the commercial state. A legacy hand-set ACTIVE
  *      with nothing live still reads 'booked' so Planyo-era imports and
@@ -142,13 +176,15 @@ export function rollupCadence(
   liveOrders: { status: OrderStatus; startDate: Date | null; endDate: Date | null }[],
   today: string,
   tomorrow: string,
+  vehicles: VehicleOnJob[] = [],
 ): CadenceRollup {
   const offRamp = OFF_RAMP[jobStatus]
   if (offRamp) return { state: offRamp, partial: false }
 
-  const events = liveOrders
-    .map((o) => cadenceForOrder(o, today, tomorrow))
-    .filter((e): e is CadenceState => e !== null)
+  const events = [
+    ...liveOrders.map((o) => cadenceForOrder(o, today, tomorrow)),
+    ...vehicles.map((v) => cadenceForVehicle(v, today, tomorrow)),
+  ].filter((e): e is CadenceState => e !== null)
 
   if (events.length === 0) {
     if (jobStatus === 'NEW') return { state: 'new', partial: false }

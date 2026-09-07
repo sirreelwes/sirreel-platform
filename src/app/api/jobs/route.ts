@@ -270,6 +270,9 @@ export async function GET(req: NextRequest) {
                 assignments: {
                   select: {
                     status: true,
+                    // The return edge of a checked-out truck — the
+                    // cadence rollup reads it (src/lib/jobs/cadence.ts).
+                    endDate: true,
                     asset: { select: { unitName: true } },
                     _count: { select: { driverAssignments: true } },
                   },
@@ -484,7 +487,13 @@ export async function GET(req: NextRequest) {
       // answer. HOLD / LOST / WRAPPED (the human off-ramps) win outright;
       // every other job derives from its orders' status + start/end vs
       // today/tomorrow. See src/lib/jobs/cadence.ts.
-      const cadence = rollupCadence(j.status, liveOrders, today, tomorrow)
+      // Trucks that have physically left join the rollup beside the
+      // orders — a blind-pickup self check-out marks the assignment
+      // CHECKED_OUT hours before anyone touches the order.
+      const vehiclesOnJob = j.bookings.flatMap((b) =>
+        b.items.flatMap((it) => it.assignments.map((a) => ({ status: a.status, endDate: a.endDate }))),
+      )
+      const cadence = rollupCadence(j.status, liveOrders, today, tomorrow, vehiclesOnJob)
 
       // L&D marker — booking-side or invoice-side count > 0 on any order.
       const hasLD = liveOrders.some(

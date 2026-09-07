@@ -35,6 +35,7 @@ import { REQUIRED_POSITIONS, DAMAGE_POSITION, normalizePosition, type PhotoPosit
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfCheckoutEmail } from '@/lib/email/templates/driverSelfCheckout'
+import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 
 const byId = new Map(REQUIRED_POSITIONS.map((p) => [p.id, p]))
 const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => byId.get(id)!).filter(Boolean)
@@ -164,7 +165,7 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
           bookingItem: {
             select: {
               booking: {
-                select: { jobId: true, jobName: true, company: { select: { name: true } } },
+                select: { id: true, jobId: true, jobName: true, company: { select: { name: true } } },
               },
             },
           },
@@ -331,6 +332,16 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
     if (asg.status === 'ASSIGNED') {
       await tx.bookingAssignment.update({ where: { id: asg.id }, data: { status: 'CHECKED_OUT' } })
     }
+    // ...and the order it carries is out with it. BOOKED / LOADED_READY
+    // → ON_JOB; an un-booked (APPROVED) order is left for "Book it",
+    // which lands on ON_JOB itself once the truck is gone.
+    const ordersOnJob = await advanceOrdersToOnJob(tx, {
+      jobId: asg.bookingItem.booking.jobId,
+      bookingId: asg.bookingItem.booking.id,
+      bookingAssignmentId: asg.id,
+      userId: null,
+      source: 'driver-self-checkout',
+    })
 
     await tx.auditLog.create({
       data: {
@@ -353,8 +364,9 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
       },
     })
 
-    return { inspectionId: inspection.id, checkoutRecordId: checkout.id, adoptedStaffInspection: !!existing }
+    return { inspectionId: inspection.id, checkoutRecordId: checkout.id, adoptedStaffInspection: !!existing, ordersOnJob }
   })
+  await projectOnJob(result.ordersOnJob)
 
   // ── Tell HQ. Fire-and-forget: the truck has left either way.
   let emailSent = false
@@ -396,7 +408,8 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
     console.error('[selfCheckout] HQ notification failed', e)
   }
 
-  return { ...result, photosAttached: present.length, photosMissing, pickedUpAt: now, emailSent }
+  const { ordersOnJob: _projected, ...rest } = result
+  return { ...rest, photosAttached: present.length, photosMissing, pickedUpAt: now, emailSent }
 }
 
 export { DAMAGE_POSITION }
