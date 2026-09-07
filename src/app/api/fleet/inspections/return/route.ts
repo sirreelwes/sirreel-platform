@@ -61,16 +61,20 @@ export async function POST(req: NextRequest) {
   if (!body?.bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId required' }, { status: 400 })
   }
-  if (!body.overallCondition || !VALID_CONDITIONS.has(body.overallCondition)) {
-    return NextResponse.json(
-      { error: 'overallCondition required (EXCELLENT/GOOD/FAIR/POOR/DAMAGED)' },
-      { status: 400 },
-    )
+  if (body.overallCondition != null && !VALID_CONDITIONS.has(body.overallCondition)) {
+    return NextResponse.json({ error: 'overallCondition must be one of EXCELLENT/GOOD/FAIR/POOR/DAMAGED' }, { status: 400 })
   }
   if (body.fuelLevel != null && body.fuelLevel !== '' && !VALID_FUEL.has(body.fuelLevel)) {
     return NextResponse.json({ error: 'fuelLevel must be one of full, 3/4, 1/2, 1/4, empty' }, { status: 400 })
   }
   const damages = (body.damages ?? []).filter((d) => d.location?.trim())
+  // The forms stopped asking for a subjective condition on 2026-09-07
+  // (Wes: "don't ask subjective condition of vehicles in forms"). The
+  // column is a required enum, so it is DERIVED from the facts the form
+  // does collect: damage logged → DAMAGED, otherwise GOOD — the same rule
+  // the driver's self check-out has always used. An explicit value is
+  // still accepted for older clients and scripts.
+  const overallCondition = (body.overallCondition ?? (damages.length ? 'DAMAGED' : 'GOOD')) as VehicleCondition
   for (const d of damages) {
     if (!VALID_DAMAGE_TYPES.has(d.damageType ?? '')) {
       return NextResponse.json({ error: `invalid damageType on "${d.location}"` }, { status: 400 })
@@ -140,7 +144,7 @@ export async function POST(req: NextRequest) {
           data: {
             inspectedBy: auth.userId,
             inspectionDate: new Date(),
-            overallCondition: body.overallCondition as VehicleCondition,
+            overallCondition,
             mileageAtInspection: mileage,
             fuelLevel: body.fuelLevel || null,
             // Damage captured before the truck was received still counts.
@@ -156,7 +160,7 @@ export async function POST(req: NextRequest) {
             type: 'RETURN',
             inspectedBy: auth.userId,
             inspectionDate: new Date(),
-            overallCondition: body.overallCondition as VehicleCondition,
+            overallCondition,
             mileageAtInspection: mileage,
             fuelLevel: body.fuelLevel || null,
             newDamageFound,

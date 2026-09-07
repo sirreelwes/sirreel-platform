@@ -9,12 +9,16 @@
  * on purpose: no desktop chrome on a phone in the yard, and the route
  * is not in the tsx/orders middleware allow-lists so it only resolves
  * on the hq host.
+ *
+ * Chrome comes from the shared yard kit (components/fleet/yard-ui) so
+ * this, /fleet/pickup and /fleet/return read as one arc.
  */
 
-import { Lock, CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, ArrowRight, SearchX } from 'lucide-react'
 import { getFleetInspectionUser } from '@/lib/fleet/requireFleetInspectionAccess'
 import { prisma } from '@/lib/prisma'
 import { InspectionCheckoutForm } from '@/components/fleet/InspectionCheckoutForm'
+import { YardHeader, YardNotice, YardOutcome, YardShell, fmtYardWhen, yardBtnPrimary } from '@/components/fleet/yard-ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,16 +30,10 @@ export default async function FleetInspectionPage({ params }: Params) {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
-        <div className="max-w-sm text-center">
-          <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
-          <h1 className="text-white text-lg font-semibold mb-2">Fleet access required</h1>
-          <p className="text-zinc-400 text-sm">
-            Pre-rental inspections are limited to fleet ops (admin, manager, dispatcher, fleet tech).
-            Sign in at <a className="text-amber-500 underline" href="/login">hq.sirreel.com/login</a> with a fleet account.
-          </p>
-        </div>
-      </main>
+      <YardNotice title="Fleet access required">
+        Pre-rental inspections are limited to fleet staff (admin, manager, dispatcher, fleet tech). Sign in at{' '}
+        <a className="text-amber-400 underline" href="/login">hq.sirreel.com/login</a> with a fleet account.
+      </YardNotice>
     )
   }
 
@@ -44,7 +42,6 @@ export default async function FleetInspectionPage({ params }: Params) {
     select: {
       id: true,
       startDate: true,
-      endDate: true,
       asset: {
         select: {
           unitName: true,
@@ -79,55 +76,52 @@ export default async function FleetInspectionPage({ params }: Params) {
 
   if (!assignment) {
     return (
-      <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
-        <p className="text-zinc-400 text-sm">Booking assignment not found.</p>
-      </main>
+      <YardNotice icon={SearchX} title="Booking assignment not found">
+        The link may be stale. Open the unit from <a className="text-amber-400 underline" href="/yard">today&rsquo;s board</a>.
+      </YardNotice>
     )
   }
 
   const booking = assignment.bookingItem.booking
   const existing = assignment.inspections[0] ?? null
+  const pickupHref = `/fleet/pickup/${assignment.id}`
 
   return (
-    <main className="min-h-screen bg-zinc-900 px-4 py-6">
-      <div className="max-w-md mx-auto">
-        <header className="mb-5">
-          <div className="text-amber-500 text-xs font-semibold uppercase tracking-wide mb-1">Pre-rental inspection</div>
-          <h1 className="text-white text-xl font-bold">
-            Unit {assignment.asset.unitName}
-            <span className="text-zinc-400 font-normal"> · {assignment.asset.category.name}</span>
-          </h1>
-          <p className="text-zinc-400 text-sm mt-1">
-            {booking.jobName} — {booking.company?.name ?? '—'} ({booking.bookingNumber})
-          </p>
-          <p className="text-zinc-500 text-xs mt-0.5">
-            {[assignment.asset.make, assignment.asset.model].filter(Boolean).join(' ')}
-            {assignment.asset.licensePlate ? ` · ${assignment.asset.licensePlate}` : ''}
-            {' · out '}{assignment.startDate.toISOString().slice(0, 10)}
-          </p>
-        </header>
+    <YardShell padBottom={!existing}>
+      <YardHeader
+        step="inspection"
+        eyebrow="Pre-rental inspection"
+        vehicle={assignment.asset}
+        booking={{ jobName: booking.jobName, company: booking.company?.name, bookingNumber: booking.bookingNumber }}
+        dateLabel="Out"
+        date={assignment.startDate}
+      />
 
-        {existing ? (
-          <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-            <CheckCircle2 size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
-            <p className="text-white font-semibold">Inspection already completed</p>
-            <p className="text-zinc-400 text-sm mt-1">
-              {existing.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by {existing.inspectedByUser?.name || (existing.inspectedByDriver ? `${existing.inspectedByDriver.firstName} ${existing.inspectedByDriver.lastName}`.trim() + ' (driver, self check-out)' : 'fleet')}
-            </p>
-            {/* The walkaround's actual next step: the driver turns up and the
-                keys move. Without this the handover screen has no entry point
-                and a rep would have to be handed the URL. */}
-            <a
-              href={`/fleet/pickup/${assignment.id}`}
-              className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
-            >
-              Hand over to driver →
+      {existing ? (
+        <YardOutcome
+          icon={CheckCircle2}
+          title="Inspection already completed"
+          actions={
+            // The walkaround's actual next step: the driver turns up and the
+            // keys move. Without this the handover screen has no entry point
+            // and a rep would have to be handed the URL.
+            <a href={pickupHref} className={yardBtnPrimary}>
+              Hand over to driver
+              <ArrowRight size={16} aria-hidden />
             </a>
-          </div>
-        ) : (
-          <InspectionCheckoutForm bookingAssignmentId={assignment.id} />
-        )}
-      </div>
-    </main>
+          }
+        >
+          <p>
+            {fmtYardWhen(existing.inspectionDate)} by{' '}
+            {existing.inspectedByUser?.name ||
+              (existing.inspectedByDriver
+                ? `${existing.inspectedByDriver.firstName} ${existing.inspectedByDriver.lastName}`.trim() + ' (driver, self check-out)'
+                : 'fleet')}
+          </p>
+        </YardOutcome>
+      ) : (
+        <InspectionCheckoutForm bookingAssignmentId={assignment.id} pickupHref={pickupHref} />
+      )}
+    </YardShell>
   )
 }

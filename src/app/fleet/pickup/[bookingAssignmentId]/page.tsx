@@ -7,7 +7,8 @@
  * SERVER component with the role gate here (not in the UI), mobile-first
  * single column, outside the (dashboard) group so there's no desktop
  * chrome on a phone at the gate, and absent from the tsx/orders
- * middleware allow-lists so it only resolves on the hq host.
+ * middleware allow-lists so it only resolves on the hq host. Chrome from
+ * the shared yard kit.
  *
  * This screen is where the licence gate is actually enforced in front of
  * a person. Its job is not merely to say no: every blocker it can raise
@@ -15,22 +16,15 @@
  * needs a path forward, not a locked door.
  */
 
-import { Lock, ClipboardList, Flag } from 'lucide-react'
+import { ClipboardList, Flag, ArrowRight, SearchX } from 'lucide-react'
 import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess'
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
+import { YardHeader, YardNotice, YardOutcome, YardShell, fmtYardWhen, yardBtnPrimary } from '@/components/fleet/yard-ui'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ bookingAssignmentId: string }> }
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="min-h-screen bg-zinc-900 px-4 py-6">
-      <div className="max-w-md mx-auto">{children}</div>
-    </main>
-  )
-}
 
 export default async function FleetPickupPage({ params }: Params) {
   const { bookingAssignmentId } = await params
@@ -38,16 +32,10 @@ export default async function FleetPickupPage({ params }: Params) {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-zinc-900 flex items-center justify-center p-6">
-        <div className="max-w-sm text-center">
-          <Lock size={32} aria-hidden className="mx-auto mb-3 text-zinc-500" />
-          <h1 className="text-white text-lg font-semibold mb-2">Fleet access required</h1>
-          <p className="text-zinc-400 text-sm">
-            Vehicle handover is limited to warehouse and fleet (admin, manager, fleet tech, warehouse).
-            Sign in at <a className="text-amber-500 underline" href="/login">hq.sirreel.com/login</a> with a fleet account.
-          </p>
-        </div>
-      </main>
+      <YardNotice title="Fleet access required">
+        Vehicle handover is limited to warehouse and fleet (admin, manager, fleet tech, warehouse). Sign in at{' '}
+        <a className="text-amber-400 underline" href="/login">hq.sirreel.com/login</a> with a fleet account.
+      </YardNotice>
     )
   }
 
@@ -81,28 +69,25 @@ export default async function FleetPickupPage({ params }: Params) {
   })
 
   if (!assignment) {
-    return <Shell><p className="text-zinc-400 text-sm">Booking assignment not found.</p></Shell>
+    return (
+      <YardNotice icon={SearchX} title="Booking assignment not found">
+        The link may be stale. Open the unit from <a className="text-amber-400 underline" href="/yard">today&rsquo;s board</a>.
+      </YardNotice>
+    )
   }
 
   const booking = assignment.bookingItem.booking
   const checkout = assignment.checkoutRecords[0] ?? null
 
   const header = (
-    <header className="mb-5">
-      <div className="text-amber-500 text-xs font-semibold uppercase tracking-wide mb-1">Vehicle handover</div>
-      <h1 className="text-white text-xl font-bold">
-        Unit {assignment.asset.unitName}
-        <span className="text-zinc-400 font-normal"> · {assignment.asset.category.name}</span>
-      </h1>
-      <p className="text-zinc-400 text-sm mt-1">
-        {booking.jobName} — {booking.company?.name ?? '—'} ({booking.bookingNumber})
-      </p>
-      <p className="text-zinc-500 text-xs mt-0.5">
-        {[assignment.asset.make, assignment.asset.model].filter(Boolean).join(' ')}
-        {assignment.asset.licensePlate ? ` · ${assignment.asset.licensePlate}` : ''}
-        {' · out '}{assignment.startDate.toISOString().slice(0, 10)}
-      </p>
-    </header>
+    <YardHeader
+      step="pickup"
+      eyebrow="Vehicle handover"
+      vehicle={assignment.asset}
+      booking={{ jobName: booking.jobName, company: booking.company?.name, bookingNumber: booking.bookingNumber }}
+      dateLabel="Out"
+      date={assignment.startDate}
+    />
   )
 
   // No checkout record means the pre-rental walkaround hasn't been done.
@@ -110,43 +95,41 @@ export default async function FleetPickupPage({ params }: Params) {
   // undocumented and billable to this renter, so send them there first.
   if (!checkout) {
     return (
-      <Shell>
+      <YardShell padBottom={false}>
         {header}
-        <div className="bg-zinc-800 border border-amber-700/60 rounded-xl p-5">
-          <ClipboardList size={26} aria-hidden className="mx-auto mb-2 text-zinc-400" />
-          <p className="text-white font-semibold">Inspection first</p>
-          <p className="text-zinc-400 text-sm mt-1">
-            This unit hasn&rsquo;t had its pre-rental walkaround yet. Do that before handing
-            the keys over — otherwise existing damage isn&rsquo;t on record.
+        <YardOutcome
+          icon={ClipboardList}
+          tone="warn"
+          title="Inspection first"
+          actions={
+            <a href={`/fleet/inspection/${assignment.id}`} className={yardBtnPrimary}>
+              Start inspection
+              <ArrowRight size={16} aria-hidden />
+            </a>
+          }
+        >
+          <p>
+            This unit hasn&rsquo;t had its pre-rental walk-around yet. Do that before handing the keys over —
+            otherwise existing damage isn&rsquo;t on record.
           </p>
-          <a
-            href={`/fleet/inspection/${assignment.id}`}
-            className="mt-3 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
-          >
-            Start inspection →
-          </a>
-        </div>
-      </Shell>
+        </YardOutcome>
+      </YardShell>
     )
   }
 
   if (checkout.returnTime) {
     return (
-      <Shell>
+      <YardShell padBottom={false}>
         {header}
-        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 text-center">
-          <Flag size={30} aria-hidden className="mx-auto mb-2 text-emerald-500" />
-          <p className="text-white font-semibold">Already returned</p>
-          <p className="text-zinc-400 text-sm mt-1">
-            This checkout closed on {checkout.returnTime.toISOString().slice(0, 16).replace('T', ' ')}.
-          </p>
-        </div>
-      </Shell>
+        <YardOutcome icon={Flag} title="Already returned">
+          <p>This checkout closed on {fmtYardWhen(checkout.returnTime)}.</p>
+        </YardOutcome>
+      </YardShell>
     )
   }
 
   return (
-    <Shell>
+    <YardShell>
       {header}
       <PickupDriverForm
         checkoutId={checkout.id}
@@ -160,6 +143,6 @@ export default async function FleetPickupPage({ params }: Params) {
             : null
         }
       />
-    </Shell>
+    </YardShell>
   )
 }

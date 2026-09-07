@@ -11,11 +11,17 @@
  * Every blocker is actionable in place — send/open the upload link, mark
  * a licence checked, add a driver who isn't in the system. A rep holding
  * a truck at the gate needs the fix, not just the refusal.
+ *
+ * 2026-09-07 restyle: on the yard kit. Logic untouched; the driver rows
+ * are 16px / 52px targets, the verdict is a card in the good/warn tones,
+ * and the hand-over button is pinned to the bottom of the phone.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, KeyRound, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, KeyRound, CheckCircle2, Search, UserPlus, ExternalLink, Copy, RefreshCw } from 'lucide-react'
 import { evaluateLicenseGate, type LicenseGateResult } from '@/lib/drivers/licenseGate'
+import { YardCard, YardOutcome, YardSectionTitle, yardBtnSecondary } from './yard-ui'
+import { StickyBar, YardAlert, YardNote, yardInput, yardSubmit } from './YardControls'
 
 interface DriverRow {
   id: string
@@ -45,6 +51,9 @@ function toGateInput(d: DriverRow) {
     licenseVerified: d.licenseVerified,
   }
 }
+
+const smallBtn =
+  'inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl px-3.5 text-[14px] font-semibold'
 
 export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
   const [drivers, setDrivers] = useState<DriverRow[] | null>(null)
@@ -155,65 +164,70 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
 
   if (done) {
     return (
-      <div className={`rounded-xl border p-5 text-center ${done.overridden ? 'border-amber-600 bg-amber-950/40' : 'border-emerald-700 bg-emerald-950/40'}`}>
-        <div className="mb-2 flex justify-center">
-          {done.overridden
-            ? <AlertTriangle size={30} aria-hidden className="text-amber-500" />
-            : <KeyRound size={30} aria-hidden className="text-emerald-500" />}
-        </div>
-        <p className="text-white font-semibold">Handed over to {done.name}</p>
-        <p className="mt-1 text-sm text-zinc-300">
+      <YardOutcome
+        icon={done.overridden ? AlertTriangle : KeyRound}
+        tone={done.overridden ? 'warn' : 'good'}
+        title={`Handed over to ${done.name}`}
+      >
+        <p>
           {done.overridden
             ? 'Recorded as a licence-gate override — the reason is on the checkout.'
             : 'Licence on file and checked at handover.'}
         </p>
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="text-zinc-400 text-[13px]">
           {done.jobRecorded
-            ? 'Added to the job\u2019s driver list — the office and the client can see who took it.'
-            : 'Handover recorded. The job\u2019s driver list did not update — mention it to the office.'}
+            ? 'Added to the job’s driver list — the office and the client can see who took it.'
+            : 'Handover recorded. The job’s driver list did not update — mention it to the office.'}
         </p>
-      </div>
+      </YardOutcome>
     )
   }
+
+  const verdictLabel = (g: LicenseGateResult) =>
+    g.ok ? 'OK' : g.code === 'EXPIRED' ? 'Expired' : g.code === 'NO_LICENSE' ? 'No licence' : 'Unchecked'
+  const verdictChip = (g: LicenseGateResult) =>
+    g.ok
+      ? 'bg-emerald-500/15 text-emerald-300'
+      : g.code === 'EXPIRED'
+        ? 'bg-rose-500/15 text-rose-300'
+        : 'bg-yellow-500/15 text-yellow-300'
 
   return (
     <div className="space-y-4">
       {assignedDriver && (
-        <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-4">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Currently assigned</div>
-          <div className="mt-0.5 text-white font-semibold">{assignedDriver.name}</div>
-          <div className="text-xs text-zinc-400">
+        <YardCard tone="info">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-amber-300">Currently assigned</div>
+          <div className="mt-1 text-white text-[16px] font-semibold">{assignedDriver.name}</div>
+          <div className="text-[13px] text-zinc-300">
             {assignedDriver.licenseVerifiedAtHandover
               ? 'Licence was checked at handover'
               : 'Handed over WITHOUT a checked licence'}
           </div>
-          <div className="mt-1.5 text-xs text-zinc-500">Selecting someone below replaces this.</div>
-        </div>
+          <div className="mt-1.5 text-[12px] text-zinc-500">Selecting someone below replaces this.</div>
+        </YardCard>
       )}
 
-      {error && (
-        <div className="rounded-xl border border-rose-800 bg-rose-950/50 px-4 py-3 text-sm text-rose-200">{error}</div>
-      )}
-
+      {error && <YardAlert tone="bad">{error}</YardAlert>}
       {matched && (
-        <div className="rounded-xl border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
-          {matched} already has a file here — selected it, licence and all.
-        </div>
+        <YardAlert tone="info">{matched} already has a file here — selected it, licence and all.</YardAlert>
       )}
 
       {/* Driver picker */}
-      <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-4">
-        <label className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Who is taking it?</label>
-        <input
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setSelectedId(null); setLink(null) }}
-          placeholder="Search drivers…"
-          className="mt-1.5 w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2.5 text-[15px] text-white placeholder:text-zinc-500"
-        />
+      <YardCard>
+        <YardSectionTitle>Who is taking it?</YardSectionTitle>
+        <div className="relative">
+          <Search size={16} aria-hidden className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setSelectedId(null); setLink(null) }}
+            placeholder="Search drivers…"
+            className={`${yardInput} pl-10`}
+          />
+        </div>
         {drivers === null ? (
-          <p className="mt-3 text-xs text-zinc-500">Loading drivers…</p>
+          <p className="mt-3 text-[13px] text-zinc-500">Loading drivers…</p>
         ) : (
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 -mx-1">
             {filtered.map((d) => {
               const g = evaluateLicenseGate(toGateInput(d))
               const active = d.id === selectedId
@@ -222,83 +236,82 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
                   key={d.id}
                   type="button"
                   onClick={() => { setSelectedId(d.id); setLink(null); setOverrideOpen(false) }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                    active ? 'bg-amber-600/20 ring-1 ring-amber-500' : 'hover:bg-zinc-700/60'
+                  aria-pressed={active}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 min-h-[52px] py-2 text-left transition-colors ${
+                    active ? 'bg-amber-600/20 ring-1 ring-amber-500' : 'active:bg-zinc-800'
                   }`}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-[15px] text-white">{d.name}</span>
-                    <span className="block truncate text-xs text-zinc-400">
+                    <span className="block truncate text-[16px] text-white font-medium">{d.name}</span>
+                    <span className="block truncate text-[13px] text-zinc-400">
                       {d.companyName || 'Guest driver'}{d.phone ? ` · ${d.phone}` : ''}
                     </span>
                   </span>
-                  <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    g.ok ? 'bg-emerald-500/15 text-emerald-300'
-                      : g.code === 'EXPIRED' ? 'bg-rose-500/15 text-rose-300'
-                      : 'bg-amber-500/15 text-amber-300'
-                  }`}>
-                    {g.ok ? 'OK' : g.code === 'EXPIRED' ? 'Expired' : g.code === 'NO_LICENSE' ? 'No licence' : 'Unchecked'}
+                  <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${verdictChip(g)}`}>
+                    {verdictLabel(g)}
                   </span>
                 </button>
               )
             })}
             {filtered.length === 0 && (
-              <p className="px-1 py-2 text-xs text-zinc-500">No match.</p>
+              <p className="px-3 py-3 text-[13px] text-zinc-500">No match.</p>
             )}
           </div>
         )}
 
         {!addOpen ? (
-          <button type="button" onClick={() => setAddOpen(true)}
-            className="mt-2 text-xs font-semibold text-amber-500 hover:text-amber-400">
-            + Driver isn&rsquo;t listed
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-2 min-h-[44px] inline-flex items-center gap-1.5 text-[14px] font-semibold text-amber-400 active:text-amber-300"
+          >
+            <UserPlus size={15} aria-hidden />
+            Driver isn&rsquo;t listed
           </button>
         ) : (
           <div className="mt-3 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
-              <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+            <div className="grid grid-cols-2 gap-2">
+              <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First" className={yardInput} />
+              <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last" className={yardInput} />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} type="email" placeholder="Email"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
-              <input value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="Phone"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+            <div className="grid grid-cols-2 gap-2">
+              <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} type="email" placeholder="Email" className={yardInput} />
+              <input value={addPhone} onChange={(e) => setAddPhone(e.target.value)} type="tel" placeholder="Phone" className={yardInput} />
             </div>
-            <button type="button" onClick={addDriver} disabled={busy === 'add' || !first.trim() || !last.trim()}
-              className="w-full rounded-lg bg-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40">
-              {busy === 'add' ? 'Adding…' : 'Add'}
+            <button
+              type="button"
+              onClick={addDriver}
+              disabled={busy === 'add' || !first.trim() || !last.trim()}
+              className={`${smallBtn} w-full bg-zinc-100 text-zinc-900 disabled:opacity-40`}
+            >
+              {busy === 'add' ? 'Adding…' : 'Add driver'}
             </button>
             {/* Email is how a returning driver lands back on their own file
                 instead of becoming a second, licence-less copy. */}
-            <p className="text-[11px] leading-snug text-zinc-500">
-              Ask for their email — if they&rsquo;ve driven for us before, it finds their
-              licence instead of starting a blank file.
-            </p>
+            <YardNote>
+              Ask for their email — if they&rsquo;ve driven for us before, it finds their licence instead of
+              starting a blank file.
+            </YardNote>
           </div>
         )}
-      </div>
+      </YardCard>
 
       {/* Verdict + the way out of it */}
       {selected && gate && (
-        <div className={`rounded-xl border p-4 ${
-          gate.ok ? 'border-emerald-700 bg-emerald-950/30' : 'border-amber-700 bg-amber-950/25'
-        }`}>
-          <div className="flex items-start gap-2.5">
-            <span className="leading-none">
+        <YardCard tone={gate.ok ? 'good' : 'warn'}>
+          <div className="flex items-start gap-3">
+            <span className="leading-none mt-0.5">
               {gate.ok
-                ? <CheckCircle2 size={18} aria-hidden className="text-emerald-500" />
-                : <AlertTriangle size={18} aria-hidden className="text-amber-500" />}
+                ? <CheckCircle2 size={22} aria-hidden className="text-emerald-400" />
+                : <AlertTriangle size={22} aria-hidden className="text-yellow-400" />}
             </span>
             <div className="min-w-0">
-              <div className="text-[15px] font-semibold text-white">
+              <div className="text-[16px] font-semibold text-white">
                 {gate.ok ? 'Cleared to hand over' : 'Blocked'}
               </div>
-              <p className="mt-0.5 text-sm text-zinc-300">{gate.message}</p>
+              <p className="mt-0.5 text-[14px] text-zinc-200 leading-snug">{gate.message}</p>
               {selected.licenseExpiry && (
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="mt-1 text-[13px] text-zinc-400">
                   {selected.licenseState || '—'} · expires{' '}
                   {new Date(selected.licenseExpiry).toLocaleDateString('en-US', {
                     month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
@@ -312,21 +325,31 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
             <div className="mt-3 space-y-2">
               {gate.code === 'NO_LICENSE' && (
                 <>
-                  <button type="button" onClick={sendLink} disabled={busy === 'link'}
-                    className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+                  <button
+                    type="button"
+                    onClick={sendLink}
+                    disabled={busy === 'link'}
+                    className={`${smallBtn} w-full bg-amber-600 text-white active:bg-amber-500 disabled:opacity-40`}
+                  >
                     {busy === 'link' ? 'Creating…' : 'Get upload link'}
                   </button>
                   {link && (
-                    <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
-                      <p className="text-xs text-zinc-400">Open this on the tablet and photograph their licence, or text it to them.</p>
-                      <p className="mt-1 break-all font-mono text-[11px] text-zinc-300">{link}</p>
-                      <div className="mt-2 flex gap-2">
-                        <a href={link} target="_blank" rel="noopener noreferrer"
-                          className="rounded-lg bg-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-900">Open here ↗</a>
-                        <button type="button" onClick={() => navigator.clipboard?.writeText(link)}
-                          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200">Copy</button>
-                        <button type="button" onClick={() => void load()}
-                          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200">Refresh</button>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
+                      <p className="text-[13px] text-zinc-400">Open this on the tablet and photograph their licence, or text it to them.</p>
+                      <p className="mt-1 break-all font-mono text-[12px] text-zinc-300">{link}</p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <a href={link} target="_blank" rel="noopener noreferrer" className={`${smallBtn} bg-zinc-100 text-zinc-900`}>
+                          <ExternalLink size={14} aria-hidden />
+                          Open
+                        </a>
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className={yardBtnSecondary}>
+                          <Copy size={14} aria-hidden />
+                          Copy
+                        </button>
+                        <button type="button" onClick={() => void load()} className={yardBtnSecondary}>
+                          <RefreshCw size={14} aria-hidden />
+                          Refresh
+                        </button>
                       </div>
                     </div>
                   )}
@@ -334,67 +357,97 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
               )}
               {gate.code === 'NOT_CHECKED' && (
                 <div className="flex flex-wrap gap-2">
-                  <a href={`/api/drivers/${selected.id}/license/front`} target="_blank" rel="noopener noreferrer"
-                    className="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-semibold text-zinc-200">View front ↗</a>
+                  <a href={`/api/drivers/${selected.id}/license/front`} target="_blank" rel="noopener noreferrer" className={yardBtnSecondary}>
+                    View front
+                    <ExternalLink size={13} aria-hidden />
+                  </a>
                   {selected.hasBack && (
-                    <a href={`/api/drivers/${selected.id}/license/back`} target="_blank" rel="noopener noreferrer"
-                      className="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-semibold text-zinc-200">View back ↗</a>
+                    <a href={`/api/drivers/${selected.id}/license/back`} target="_blank" rel="noopener noreferrer" className={yardBtnSecondary}>
+                      View back
+                      <ExternalLink size={13} aria-hidden />
+                    </a>
                   )}
-                  <button type="button" onClick={markChecked} disabled={busy === 'check'}
-                    className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+                  <button
+                    type="button"
+                    onClick={markChecked}
+                    disabled={busy === 'check'}
+                    className={`${smallBtn} flex-1 bg-amber-600 text-white active:bg-amber-500 disabled:opacity-40`}
+                  >
                     {busy === 'check' ? 'Saving…' : 'Looks good — mark checked'}
                   </button>
                 </div>
               )}
               {gate.code === 'EXPIRED' && (
-                <button type="button" onClick={sendLink} disabled={busy === 'link'}
-                  className="w-full rounded-lg border border-zinc-600 px-4 py-2.5 text-sm font-semibold text-zinc-200 disabled:opacity-40">
+                <button
+                  type="button"
+                  onClick={sendLink}
+                  disabled={busy === 'link'}
+                  className={`${yardBtnSecondary} w-full disabled:opacity-40`}
+                >
                   {busy === 'link' ? 'Creating…' : 'Get link for a current licence'}
                 </button>
               )}
             </div>
           )}
-        </div>
+        </YardCard>
+      )}
+
+      {/* Override path — opened from the sticky bar, lands in the flow. */}
+      {selected && gate && !gate.ok && overrideOpen && (
+        <YardCard tone="warn">
+          <p className="text-[13px] text-yellow-100/80 leading-snug">
+            This is recorded on the checkout with your name. The licence stays marked unverified — an override
+            doesn&rsquo;t make it good.
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            placeholder="Why is this going out anyway?"
+            className={`${yardInput} mt-2`}
+          />
+          <button
+            type="button"
+            onClick={() => handOver(reason.trim())}
+            disabled={reason.trim().length < 5 || busy === 'submit'}
+            className={`${smallBtn} mt-2 w-full bg-yellow-600 text-white active:bg-yellow-500 disabled:opacity-40`}
+          >
+            {busy === 'submit' ? 'Recording…' : 'Override and hand over'}
+          </button>
+        </YardCard>
       )}
 
       {/* Hand over */}
-      {selected && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => handOver()}
-            disabled={!gate?.ok || busy === 'submit'}
-            className="w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-[15px] font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            {busy === 'submit' ? 'Handing over…' : `Hand over to ${selected.name}`}
-          </button>
-
-          {!gate?.ok && (
-            !overrideOpen ? (
-              <button type="button" onClick={() => setOverrideOpen(true)}
-                className="w-full text-center text-xs text-zinc-500 underline hover:text-zinc-300">
+      {selected && gate && (
+        <StickyBar
+          status={
+            gate.ok ? (
+              <YardNote tone="good">Licence checked — ready to go.</YardNote>
+            ) : !overrideOpen ? (
+              <button
+                type="button"
+                onClick={() => setOverrideOpen(true)}
+                className="min-h-[36px] text-[13px] text-zinc-400 underline active:text-white"
+              >
                 Override and hand over anyway
               </button>
             ) : (
-              <div className="rounded-xl border border-amber-700 bg-amber-950/25 p-3">
-                <p className="text-xs text-zinc-300">
-                  This is recorded on the checkout with your name. The licence stays marked
-                  unverified — an override doesn&rsquo;t make it good.
-                </p>
-                <textarea
-                  value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-                  placeholder="Why is this going out anyway?"
-                  className="mt-2 w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500"
-                />
-                <button type="button" onClick={() => handOver(reason.trim())}
-                  disabled={reason.trim().length < 5 || busy === 'submit'}
-                  className="mt-2 w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
-                  {busy === 'submit' ? 'Recording…' : 'Override and hand over'}
-                </button>
-              </div>
+              <YardNote tone="warn">Override form is above — give a reason.</YardNote>
             )
-          )}
-        </div>
+          }
+        >
+          <button
+            type="button"
+            onClick={() => handOver()}
+            disabled={!gate.ok || busy === 'submit'}
+            className={yardSubmit}
+          >
+            <span className="inline-flex items-center gap-2">
+              <KeyRound size={18} aria-hidden />
+              {busy === 'submit' ? 'Handing over…' : `Hand over to ${selected.name}`}
+            </span>
+          </button>
+        </StickyBar>
       )}
     </div>
   )

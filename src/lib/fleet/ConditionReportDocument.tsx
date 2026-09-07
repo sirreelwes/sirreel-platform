@@ -364,7 +364,14 @@ function ConditionCard({ side, tag }: { side: ReportSide | null; tag: 'Out' | 'B
         <Text style={s.condTag}>{tag === 'Out' ? 'Out · check-out' : 'Back · check-in'}</Text>
         <Text style={s.condWhen}>{fmtWhen(side.at)}</Text>
       </View>
-      <Text style={s.condValue}>{titleCase(side.condition)}</Text>
+      {/* Facts, not a verdict. The forms stopped asking for a one-word
+          condition on 2026-09-07 (Wes) — the stored enum is derived from
+          the damage list, so the headline IS the damage list. */}
+      <Text style={s.condValue}>
+        {side.damage.length === 0
+          ? 'No damage logged'
+          : `${side.damage.length} damage item${side.damage.length === 1 ? '' : 's'}`}
+      </Text>
       <View style={s.condLine}>
         <Text style={s.condLabel}>Fuel</Text>
         <Text style={s.condData}>{fmtFuel(side.fuelLevel)}</Text>
