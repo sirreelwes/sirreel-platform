@@ -22,6 +22,51 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-07
+
+### Condition report: upright, whole, Pacific, and branded
+
+`7fbf3de` fleet: the condition report prints upright, whole, on the yard's clock
+
+The out-vs-back PDF (DamageID's renter document, rebuilt in HQ on
+2026-09-02) carried real photos for the first time on Unit 29 and looked
+like a draft: the front and rear printed on their side, every shot was
+centre-cropped to a 96 pt strip, time stamps read UTC, the check-out notes
+were collected and never printed, and there was no header, footer or page
+number. Wes: "let's make this checkout system look better."
+
+**Photos are prepared before they go into the document.** New
+`lib/fleet/reportPhoto.ts` (sharp, now a dependency): `.rotate()` bakes the
+phone's EXIF orientation into the pixels — PDFKit embeds raw JPEG and
+ignores the tag, and @react-pdf only swaps the layout box, which is exactly
+the sideways result — then downscales to 1400 px on the long edge. A
+walk-around no longer inlines fourteen 3–5 MB originals into a 50 MB PDF.
+Undecodable bytes (HEIC on prebuilt libvips, a truncated upload) print as
+"Photo on file — could not be printed" instead of failing the report; prep
+runs four at a time so a full set stays inside the function's memory. The
+web viewer still serves the original; the derivative is never stored.
+`npm run test:report-photo` guards rotation both ways, the downscale, and
+the null path.
+
+**The document is on the quote/invoice brand.** Logo band with the unit as
+the document number; vehicle / production / rental-period info card; Out
+and Back condition cards with miles driven between them and each side's
+notes; the damage table BEFORE the photos (verdict, then evidence), new-on-
+return rows tinted and first; the walk-around as 229×140 frames showing
+each photo whole (`contain`, never `cover` — the crop threw away the panel
+edges, where the dents are), captions in Pacific, four pairs to a page;
+section headers travel with their first row. A report with no check-in yet
+says "Not checked in yet" once per column rather than seven "no photo
+taken" frames that read as a tech who skipped the walk-around.
+
+**Found while doing it — the fixed footer.** With a `lineHeight` on the
+page style, @react-pdf 4.5 lays out a `bottom`-positioned `fixed` element
+and never draws it on any page (verified in isolation, every variant). The
+condition report anchors its footer from the top (`top: 756`). The quote
+and invoice documents use the same `bottom` + page-`lineHeight` combination
+and almost certainly ship with no footer / no page numbers today — not
+touched here; same one-line fix when someone confirms on a real render.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
