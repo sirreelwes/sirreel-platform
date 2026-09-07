@@ -41,7 +41,8 @@ export default function VendorDeliveryContactCard({
   const [name, setName] = useState(initialName ?? '')
   const [phone, setPhone] = useState(initialPhone ?? '')
   const [email, setEmail] = useState(initialEmail ?? '')
-  const [okToText, setOkToText] = useState(true)
+  // Unchecked by default — carriers reject pre-ticked SMS consent (Twilio 30925).
+  const [okToText, setOkToText] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -91,8 +92,11 @@ export default function VendorDeliveryContactCard({
       <label className="sm:col-span-2 flex items-start gap-2.5 text-[13px] leading-relaxed text-[#3d392f] cursor-pointer">
         <input type="checkbox" checked={okToText} onChange={(e) => setOkToText(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#0F7A93]" />
         <span>
-          OK to text this number about the booking &mdash; day-of changes to the drop-off or pickup. Message and data
-          rates may apply; reply STOP to opt out. <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a>.
+          OK for SirReel Studio Services to text this number about this booking &mdash; day-of changes to the drop-off or
+          pickup. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent
+          is not a condition of the booking.{' '}
+          <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a> &middot;{' '}
+          <a href="https://sirreel.com/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2">Privacy</a>.
         </span>
       </label>
       <div className="sm:col-span-2 flex items-center gap-3 pt-1">

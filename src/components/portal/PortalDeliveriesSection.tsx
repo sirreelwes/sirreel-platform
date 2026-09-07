@@ -295,8 +295,11 @@ export function PortalDeliveriesSection() {
             onChange={(e) => { setContactSmsConsent(e.target.checked); touch() }}
             className="mt-0.5 w-4 h-4 accent-[#0F7A93]" />
           <span>
-            OK to text this number about day-of changes to the delivery, call time or pickup. Message and data rates may
-            apply; reply STOP to opt out. <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a>.
+            OK for SirReel Studio Services to text this number about this booking &mdash; day-of changes to the delivery,
+            call time or pickup. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for
+            help. Consent is not a condition of renting.{' '}
+            <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" className="underline underline-offset-2">Terms</a> &middot;{' '}
+            <a href="https://sirreel.com/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2">Privacy</a>.
           </span>
         </label>
       </div>
