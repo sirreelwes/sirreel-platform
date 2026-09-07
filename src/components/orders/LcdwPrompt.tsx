@@ -113,6 +113,7 @@ export function LcdwPrompt({
   if (cov.eligible.length === 0 && cov.excluded.length === 0) return null
 
   const nothingCoverable = cov.allExcluded || cov.feeMissing
+  const loose = (cov as { unlinkedPartnerUnits?: { unitName: string; vendorName: string }[] }).unlinkedPartnerUnits ?? []
 
   return (
     <div
@@ -124,6 +125,17 @@ export function LcdwPrompt({
             : 'border-amber-300 bg-amber-50'
       }`}
     >
+      {/* A partner booking with no line link makes every line below look
+          like ours, and the waiver is not ours to give on someone else's
+          vehicle. Warn before anyone reads the offer (Wes 2026-09-07). */}
+      {loose.length > 0 && (
+        <div className="mb-2 rounded border border-rose-300 bg-rose-50 px-2.5 py-2 text-xs text-rose-800">
+          <span className="font-semibold">Check this offer.</span>{' '}
+          {loose.map((u) => `${u.vendorName}'s ${u.unitName}`).join(', ')}{' '}
+          {loose.length === 1 ? 'is a partner unit on this order that is not linked to a line' : 'are partner units on this order that are not linked to lines'} —
+          until that is fixed, a partner vehicle can read as ours and be offered a waiver we cannot give.
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold text-lt-fg">

@@ -31,6 +31,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
+import { bindSubRentalToOrderLine } from '@/lib/sub-rentals/bindToOrderLine'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 
 const TOKEN_BYTES = 32
@@ -90,6 +91,7 @@ export async function sendHoldRequest(args: {
       startDate: true,
       endDate: true,
       vendorToken: true,
+      orderId: true,
       subcontractedVehicle: { select: { name: true } },
       vendor: { select: { id: true, name: true, email: true, poEmail: true } },
     },
@@ -97,6 +99,7 @@ export async function sendHoldRequest(args: {
   if (!s) return null
 
   const vehicleName = s.subcontractedVehicle?.name ?? s.itemDescription
+  const outcomeWarnings: string[] = []
   const startDate = isoDate(s.startDate)
   const endDate = isoDate(s.endDate)
 
@@ -115,6 +118,21 @@ export async function sendHoldRequest(args: {
   // The durable half. Done before the send, and never rolled back by it.
   if (args.flip) {
     await prisma.subRental.update({ where: { id: s.id }, data: { status: 'REQUESTED' } })
+  }
+  // A row created from the VEHICLE hangs off the job only — no order, no
+  // line. This is the first moment both are known, so bind them here.
+  // The line link is not bookkeeping: every LCDW path reads it to decide
+  // whether a vehicle is ours to insure, and an unlinked partner unit gets
+  // a damage waiver offered on it (Wes 2026-09-07). Binding is
+  // exact-match-or-nothing; a doubtful case stays null and is reported.
+  if (args.orderId) {
+    if (!s.orderId) {
+      await prisma.subRental.update({ where: { id: s.id }, data: { orderId: args.orderId } }).catch(() => {})
+    }
+    const bind = await bindSubRentalToOrderLine(s.id).catch(() => ({ bound: false as const, reason: 'bind threw' }))
+    if (!bind.bound) {
+      outcomeWarnings.push(`${s.vendor.name}'s ${vehicleName} is not linked to a line on this order (${bind.reason}) — the damage-waiver offer and the driver true-up read that link.`)
+    }
   }
   // Billing: the client said yes, so the partner's money is now real — write
   // it onto the row (null fields only) and tell the partner the number.
@@ -172,6 +190,9 @@ export async function sendHoldRequest(args: {
     } else {
       outcome.warning = `${s.vendor.name} could not be asked to hold ${vehicleName}: ${res.reason}`
     }
+  }
+  if (outcomeWarnings.length) {
+    outcome.warning = [outcome.warning, ...outcomeWarnings].filter(Boolean).join(' ')
   }
 
   return outcome

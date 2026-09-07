@@ -18,6 +18,7 @@ import { getServerSession } from 'next-auth'
 import { describeLcdwCoverage } from '@/lib/pricing/lcdwEligibility'
 import { applyLcdwToOrder, loadLcdwCoverage, removeLcdwFromOrder } from '@/lib/orders/applyLcdw'
 
+import { unlinkedPartnerUnits } from '@/lib/sub-rentals/bindToOrderLine'
 export const dynamic = 'force-dynamic'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -39,6 +40,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     excluded: ctx.quote.excluded,
     allExcluded: ctx.quote.allExcluded,
     feeMissing: !ctx.fee,
+    // Partner bookings on this order that are not linked to a line. Every
+    // judgement above reads that link to tell a partner's vehicle from
+    // ours, so while one is loose the offer below may be wrong — say so
+    // rather than quietly waiving damage on a coach we do not own
+    // (Wes 2026-09-07).
+    unlinkedPartnerUnits: await unlinkedPartnerUnits(id),
   })
 }
 

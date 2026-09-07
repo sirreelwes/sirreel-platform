@@ -31,6 +31,7 @@ import { buildVendorBookedNotice, buildVendorCancelledNotice } from '@/lib/sub-r
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
+import { bindSubRentalToOrderLine } from '@/lib/sub-rentals/bindToOrderLine'
 
 export interface LifecycleNoticeOutcome {
   subRentalId: string
@@ -72,8 +73,13 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
   for (const s of subs) {
     const vehicleName = s.subcontractedVehicle?.name ?? s.itemDescription
     const o: LifecycleNoticeOutcome = { subRentalId: s.id, vendorName: s.vendor.name, vehicleName, notified: false, warning: null }
+    // Booking is the last moment to bind this row to the line it fulfils.
+    // The LCDW paths read that link to tell a partner unit from ours; an
+    // unlinked one gets a damage waiver offered on it (Wes 2026-09-07).
+    const bind = await bindSubRentalToOrderLine(s.id).catch(() => ({ bound: false as const, reason: 'bind threw' }))
     const to = s.vendor.poEmail ?? s.vendor.email
     const start = iso(s.startDate), end = iso(s.endDate)
+    if (!bind.bound) o.warning = `${vehicleName} is not linked to a line on this order (${bind.reason}) — check the damage-waiver offer before quoting it.`
     if (!to) o.warning = `${s.vendor.name} has no email on file — nobody told them ${vehicleName} is a go.`
     else if (!start || !end || !s.vendorToken) o.warning = `${vehicleName} has no dates or no partner page, so ${s.vendor.name} could not be told it's a go.`
     else {
