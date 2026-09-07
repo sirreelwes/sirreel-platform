@@ -144,6 +144,7 @@ export async function GET(req: NextRequest) {
         mileageIn: true,
         fuelIn: true,
         checkedOutBy: true,
+        selfCheckout: true,
         returnedTo: true,
         driver: {
           select: {
@@ -168,6 +169,7 @@ export async function GET(req: NextRequest) {
         mileageIn: rec.mileageIn,
         fuelIn: rec.fuelIn,
         checkedOutBy: rec.checkedOutBy,
+        selfCheckout: rec.selfCheckout,
         returnedTo: rec.returnedTo,
         driver: rec.driver
           ? {

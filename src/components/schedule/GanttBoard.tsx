@@ -2968,7 +2968,7 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
         {returned ? (
           <div><span className="text-gray-400">In:</span> {fmt(checkout.returnTime)}{checkout.mileageIn != null && ` · ${checkout.mileageIn.toLocaleString()} mi`}{checkout.fuelIn && ` · fuel ${checkout.fuelIn}`}{checkout.returnedTo && ` · to ${checkout.returnedTo}`}</div>
         ) : (
-          <div><span className="text-gray-400">By:</span> {checkout.checkedOutBy}</div>
+          <div><span className="text-gray-400">By:</span> {checkout.checkedOutBy || (checkout.selfCheckout ? 'the driver (self check-out)' : '—')}</div>
         )}
       </div>
       {d?.flagged && (

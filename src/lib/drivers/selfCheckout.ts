@@ -287,13 +287,30 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
     const openRecord = await tx.checkoutRecord.findFirst({
       where: { bookingAssignmentId: asg.id, returnTime: null },
       orderBy: { checkoutTime: 'desc' },
-      select: { id: true, driverId: true, mileageOut: true, fuelOut: true },
+      select: { id: true, driverId: true, mileageOut: true, fuelOut: true, driver: { select: { firstName: true, lastName: true } } },
     })
+    // A second driver checking out a truck that is already out is a
+    // HANDOFF, not a re-check: the production named a new driver after
+    // the first one had the keys (Forgotten Island, 2026-09-07 — Joel
+    // took Cube 29 Saturday night, Isaias was named an hour later and
+    // checked it out Sunday morning). The latest holder is the driver of
+    // record — the reservation card, the return screen and the after-
+    // hours assistant all read CheckoutRecord.driverId — and the earlier
+    // driver is kept in the notes and the audit row. The OUT mileage and
+    // fuel stay the first reading: that is when the truck left.
+    const handoffFrom = openRecord?.driverId && openRecord.driverId !== da.driver.id ? openRecord : null
+    if (handoffFrom) {
+      const prevName = `${handoffFrom.driver?.firstName ?? ''} ${handoffFrom.driver?.lastName ?? ''}`.trim() || 'the previous driver'
+      await tx.inspection.update({
+        where: { id: inspection.id },
+        data: { notes: `${notes}\nHanded off from ${prevName} to ${`${da.driver.firstName} ${da.driver.lastName}`.trim()} on ${now.toISOString()} (driver self check-out).` },
+      })
+    }
     const checkout = openRecord
       ? await tx.checkoutRecord.update({
           where: { id: openRecord.id },
           data: {
-            driverId: openRecord.driverId ?? da.driver.id,
+            driverId: da.driver.id,
             selfCheckout: true,
             licenseVerified: gate.ok,
             mileageOut: openRecord.mileageOut ?? mileage ?? undefined,
@@ -355,6 +372,7 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
           inspectionId: inspection.id,
           checkoutRecordId: checkout.id,
           adoptedStaffInspection: !!existing,
+          handedOffFromDriverId: handoffFrom?.driverId ?? null,
           mileage,
           fuelLevel: input.fuelLevel || null,
           photos: present.length,
