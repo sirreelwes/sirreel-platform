@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import SmsOptInForm from '@/components/site/SmsOptInForm'
 
 /**
  * Public /sms-terms — the SMS program terms carriers require.
@@ -70,6 +71,8 @@ export default function SmsTermsPage() {
             SirReel. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.
             Consent is not a condition of renting.
           </p>
+          {/* The form itself: number + consent checkbox together (carrier requirement). */}
+          <SmsOptInForm numberDisplay={SMS_NUMBER_DISPLAY} />
         </div>
 
         <h2 className={H2} style={{ fontFamily: 'Archivo, sans-serif' }}>How you opt in</h2>
