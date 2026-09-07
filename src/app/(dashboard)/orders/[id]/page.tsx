@@ -19,7 +19,8 @@ import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/Ema
 import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
-import { viewDriverEstimate, driverEstimateSentence } from "@/lib/orders/driverEstimate";
+import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence } from "@/lib/orders/driverEstimate";
+import { driverPayBreakdown } from "@/lib/orders/driverRate";
 import { isPartnerFulfilled, PARTNER_DAILY_NOTE } from "@/lib/orders/partnerDaily";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
@@ -2208,6 +2209,40 @@ export default function OrderDetailPage() {
             ))}
           </div>
         )}
+        {/* What that day costs by the standard ladder ($50/hr, 1.5x after 8,
+            2x after 12, less a half-hour lunch). Shown live so a rep sees a
+            14-hour day price out at $900 against a $550 day rate — and can
+            put it on the line in one click. Applying is deliberate: an
+            estimate never moves money on its own. */}
+        {isDriverLine(li) && (() => {
+          const est = parseDriverEstimate({ roll: editEst.roll || null, callTime: editEst.callTime || null, leaveSet: editEst.leaveSet || null, done: editEst.done || null });
+          if (!est.ok) return <div className="mt-1 text-[10px] text-rose-700">{est.error}</div>;
+          const v = est.value ? viewDriverEstimate(est.value, editDesc || li.description) : null;
+          if (!v?.pay) return null;
+          const current = (Number(editRate) || 0) * (Number(editDays) || li.billableDays || 1);
+          const short = v.pay.total - current;
+          return (
+            <div className="mt-1.5 rounded border border-lt-hairline bg-lt-inner px-2 py-1.5 text-[10px] leading-snug text-lt-fg2">
+              <span className="font-semibold text-lt-fg">
+                {v.pay.spanHours} hrs · {v.pay.paidHours} paid ≈ ${v.pay.total.toLocaleString('en-US')}
+              </span>{' '}
+              ({driverPayBreakdown(v.pay)}, ½-hr lunch)
+              {short > 0.5 && (
+                <>
+                  {' · '}
+                  <span className="text-amber-700 font-semibold">${short.toLocaleString('en-US')} over the line</span>{' '}
+                  <button
+                    type="button"
+                    onClick={() => { setEditRate(String(v.pay!.total)); setEditDays('1'); setEditRateType('FLAT'); }}
+                    className="underline underline-offset-2 font-semibold text-lt-fg hover:text-amber-700"
+                  >
+                    use as rate
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })()}
         {/* Department selector — manual override on top
             of the catalog-derived value. Server's PUT
             honors the explicit dept + runs the

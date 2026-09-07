@@ -12,14 +12,17 @@
  * Hours are wrap − roll, portal to portal, via the SAME arithmetic the
  * driver's actual hours use (computePortalHours), so the estimate on the
  * quote and the number on the invoice can never disagree about what a
- * "day" is. The covered hours come from the fee ("Driver (covers 10 hrs)").
+ * "day" is. The covered hours come from the fee ("Driver (covers 10 hrs)"),
+ * and the money comes from driverRate.ts — the same ladder the day rate is
+ * built from, so a 10.5-hour span prices to exactly the $550 day rate.
  *
  * Stored as OrderLineItem.driverEstimate JSON; rendered as a sentence under
- * the driver line on the quote and on the order page. It never changes the
- * line's total — the quote says what the estimate is, and the invoice bills
- * actual hours (Booking Details, "Drivers").
+ * the driver line on the quote and on the order page. It never CHANGES the
+ * line's total on its own — a rep applies it — so a quote can never move
+ * money without someone deciding to.
  */
 import { computePortalHours, normalizeClock } from '@/lib/drivers/hoursEntry'
+import { computeDriverPay, driverPayBreakdown, DRIVER_LUNCH_HOURS, type DriverPay } from '@/lib/orders/driverRate'
 
 export interface DriverEstimate {
   /** "HH:MM" 24h. Roll is required; the rest optional. */
@@ -36,6 +39,9 @@ export interface DriverEstimateView extends DriverEstimate {
   coveredHours: number | null
   /** hours − coveredHours, floored at 0. Null when either side is unknown. */
   beyondCovered: number | null
+  /** The ladder applied to the estimated span — $50/hr, 1.5× after 8, 2×
+   *  after 12, less the half-hour lunch. Null until `done` is set. */
+  pay: DriverPay | null
   overnight: boolean
 }
 
@@ -76,6 +82,7 @@ export function viewDriverEstimate(est: DriverEstimate | null, description?: str
     hours,
     coveredHours,
     beyondCovered: hours !== null && coveredHours !== null ? Math.max(0, Math.round((hours - coveredHours) * 4) / 4) : null,
+    pay: hours === null ? null : computeDriverPay(hours),
     overnight: r.overnight,
   }
 }
@@ -94,9 +101,11 @@ export function clock12(hhmm: string | null): string {
 const fmtHours = (h: number) => (Number.isInteger(h) ? `${h}` : h.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''))
 
 /**
- * The sentence under the driver line on the quote. States the estimated
- * day, the hours it adds up to, and how that compares to the covered
- * hours — never a dollar figure, because the invoice bills actuals.
+ * The sentence under the driver line on the quote: the estimated day, the
+ * hours it comes to, the ladder applied to them, and the money that falls
+ * out — always labelled an estimate, because the invoice bills actuals
+ * (Wes 2026-09-07 gave the ladder: $50/hr, 1.5× after 8, 2× after 12, less
+ * a half-hour lunch).
  */
 export function driverEstimateSentence(v: DriverEstimateView): string {
   const stamps = [
@@ -104,12 +113,16 @@ export function driverEstimateSentence(v: DriverEstimateView): string {
     v.callTime ? `call ${clock12(v.callTime)}` : null,
     v.leaveSet ? `leave set ${clock12(v.leaveSet)}` : null,
     v.done ? `done ${clock12(v.done)}${v.overnight ? ' (next day)' : ''}` : null,
-  ].filter(Boolean).join(' · ')
-  if (v.hours === null) return `Estimated day: ${stamps}. Hours are portal to portal; the invoice reflects the hours actually worked.`
-  const covered = v.coveredHours !== null
-    ? v.beyondCovered && v.beyondCovered > 0
-      ? ` — ${fmtHours(v.coveredHours)} covered by the day rate, about ${fmtHours(v.beyondCovered)} hrs beyond it billed at the partner's overtime rate`
-      : ` — within the ${fmtHours(v.coveredHours)} hrs the day rate covers`
-    : ''
-  return `Estimated day: ${stamps} ≈ ${fmtHours(v.hours)} hrs portal to portal${covered}. This is an estimate; the invoice reflects the hours actually worked.`
+  ].filter(Boolean).join(' \u00b7 ')
+  if (v.hours === null || !v.pay) {
+    return `Estimated day: ${stamps}. Driver time is billed portal to portal; the invoice reflects the hours actually worked.`
+  }
+  const p = v.pay
+  const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  return (
+    `Estimated day: ${stamps} \u2014 ${fmtHours(p.spanHours)} hrs portal to portal, ` +
+    `${fmtHours(p.paidHours)} paid after a ${DRIVER_LUNCH_HOURS === 0.5 ? '\u00bd' : String(DRIVER_LUNCH_HOURS)}-hour meal break: ` +
+    `${driverPayBreakdown(p)} \u2248 ${money(p.total)}. ` +
+    `This is an estimate \u2014 the invoice reflects the hours actually worked.`
+  )
 }

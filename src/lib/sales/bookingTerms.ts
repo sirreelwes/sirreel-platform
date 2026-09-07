@@ -73,6 +73,7 @@ import {
 } from '@/lib/contracts/fees'
 import { YARD_HOURS_ONE_LINE } from '@/lib/site/yardHours'
 import { quoteLcdw, type LcdwCandidate } from '@/lib/pricing/lcdwEligibility'
+import { DRIVER_RATE_TERMS } from '@/lib/orders/driverRate'
 
 /**
  * The numbers that live NOWHERE ELSE. Every one is client-facing money or a
@@ -320,7 +321,8 @@ export function buildBookingTerms(input: BookingTermsInput): BookingTerm[] {
       title: 'Drivers',
       body:
         'Drivers are provided by and are employees or contractors of the partner company that supplies them, not SirReel. ' +
-        'Driver charges are usage-based: the amount on this quote is an estimate for the hours listed, and the invoice reflects the hours actually worked, portal to portal, including any overtime.',
+        'Driver charges are usage-based: the amount on this quote is an estimate for the hours listed, and the invoice reflects the hours actually worked. ' +
+        DRIVER_RATE_TERMS,
     })
   }
 
