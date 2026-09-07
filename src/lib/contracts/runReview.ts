@@ -58,7 +58,7 @@ export type RunReviewResult =
 const THIRD_PARTY_AUTO_FLAG_REASON =
   'Auto-flagged: counter language contains third-party-only indemnity phrasing. Per playbook §1, third-party-only indemnity is a Non-Negotiable Hard Limit and is never accepted or offered as a fallback. Counter rewritten to broad indemnity Preferred language.'
 
-function baselineClauseText(): string {
+export function baselineClauseText(): string {
   return (
     CANONICAL_CLAUSES.map((c) => `[${c.ref}] ${c.title}\n${c.body}`).join('\n\n') +
     `\n\n[Fleet Agreement] ${FLEET_AGREEMENT.title}\n${FLEET_AGREEMENT.intro}\n${FLEET_AGREEMENT.fuelPolicy}` +

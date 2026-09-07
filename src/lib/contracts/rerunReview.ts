@@ -1,5 +1,6 @@
 import { get } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
+import { isOperatorEnteredReview, judgeEnteredRedline } from '@/lib/contracts/judgeEnteredRedline'
 import { runContractReviewAi } from '@/lib/contracts/runReview'
 import { type MarkupManifest } from '@/lib/contracts/annotationManifest'
 
@@ -32,6 +33,13 @@ export async function rerunContractReview(input: RerunInput): Promise<RerunResul
     include: { company: { select: { name: true } } },
   })
   if (!record) return { ok: false, error: 'Not found', status: 404 }
+  // An operator-entered redline has no PDF to re-run. Judge the typed
+  // clause text instead — same prompt, text-only input (2026-09-07).
+  if (isOperatorEnteredReview(record)) {
+    const j = await judgeEnteredRedline({ reviewId, byUserId: rerunById, secondRoundClauses })
+    if (!j.ok) return j
+    return { ok: true, review: j.review, annotationManifest: null }
+  }
   if (!record.fileKey) {
     return {
       ok: false,

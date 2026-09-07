@@ -225,7 +225,7 @@ export function ReviewResultPanel({
                   {change.description && (
                     <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Summary</div><div>{change.description}</div></div>
                   )}
-                  <ClauseChangeDiff original={change.original} proposed={change.proposed} operatorEntered={change.playbookSource === 'operator_entered'} />
+                  <ClauseChangeDiff original={change.original} proposed={change.proposed} operatorEntered={review?._meta?.source === 'OPERATOR_ENTERED'} />
                   <SourceAgreementPanel sa={change.sourceAgreement} />
                   <ClauseMarkupGroundTruth manifest={manifest} clauseRef={clauseRef} />
                   <div>

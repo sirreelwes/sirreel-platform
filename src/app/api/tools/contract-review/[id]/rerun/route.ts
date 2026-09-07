@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { rerunContractReview } from '@/lib/contracts/rerunReview'
 
 export const dynamic = 'force-dynamic'
+// The AI judgement of a typed redline runs here (judgeEnteredRedline) —
+// same budget as the PDF extract route.
+export const maxDuration = 300
 
 export async function POST(
   req: NextRequest,

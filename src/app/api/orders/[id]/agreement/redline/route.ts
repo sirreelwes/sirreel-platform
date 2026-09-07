@@ -3,8 +3,12 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
+import { judgeEnteredRedline } from '@/lib/contracts/judgeEnteredRedline'
 
 export const dynamic = 'force-dynamic'
+// The AI judgement of a typed redline runs here (judgeEnteredRedline) —
+// same budget as the PDF extract route.
+export const maxDuration = 300
 
 /**
  * POST /api/orders/[id]/agreement/redline
@@ -169,25 +173,30 @@ export async function POST(
   const enteredBy = sessionUser.name || sessionUser.email
   const aiResponse = {
     summary:
-      `Redline entered by ${enteredBy} and approved for this job. ` +
+      `Redline entered by ${enteredBy} — awaiting review. ` +
       `${amendments.length} clause${amendments.length === 1 ? '' : 's'} amended: ` +
       amendments.map((a) => a.ref).join(', ') + '.',
-    riskLevel: 'low',
-    autoApprovedCount: amendments.length,
-    needsReviewCount: 0,
+    // Placeholder until the AI judges the typed text (judgeEnteredRedline
+    // runs right after the row exists). Nothing is approved by entry.
+    riskLevel: 'medium',
+    autoApprovedCount: 0,
+    needsReviewCount: amendments.length,
     notAcceptableCount: 0,
-    recommendation: 'accept',
-    recommendationNote: sourceNote || 'Approved for this job only.',
+    recommendation: 'counter',
+    recommendationNote: sourceNote || 'Entered, not yet judged — the AI read follows, then your per-clause decisions.',
     comparisonPerformed: false,
     comparisonNote:
       'Operator-entered redline — the amended clause text was supplied directly, not extracted from a client PDF.',
     changes: amendments.map((a) => ({
       clause: a.ref,
-      type: 'auto_approved',
+      // Entered is not judged and not approved (Wes 2026-09-07: "I haven't
+      // accepted anything"). Every clause waits for the AI's read and the
+      // operator's decision, exactly like an uploaded redline.
+      type: 'needs_review',
       description: `Client redline to clause ${a.ref} — ${a.title}`,
       original: a.original,
       proposed: a.proposed,
-      reasoning: a.note || 'Entered from the redline the client sent back.',
+      reasoning: a.note || 'Entered from the redline the client sent back — not yet judged.',
       suggestedCounter: null,
       counterReasoning: null,
       playbookSource: 'operator_entered',
@@ -224,19 +233,16 @@ export async function POST(
         // Empty on purpose and meaningful: there were no PDF annotations
         // to extract, because there was no PDF.
         annotationManifest: { strikes: [], insertions: [], source: 'OPERATOR_ENTERED' },
-        humanDecision: 'APPROVED',
-        humanDecisionNote: sourceNote || 'Redline approved for this job.',
-        humanDecisionById: sessionUser.id,
-        humanDecisionAt: now,
+        // No human decision yet — entering the client's text records what
+        // they asked for, not that we agree. The desk decides per clause.
+        humanDecisionNote: sourceNote || null,
         changeDecisions: {
           create: amendments.map((a, i) => ({
             clauseRef: a.ref,
-            changeType: 'auto_approved',
+            changeType: 'needs_review',
             changeIndex: i,
-            decision: 'ACCEPT' as const,
+            decision: 'PENDING' as const,
             note: a.note,
-            decidedById: sessionUser.id,
-            decidedAt: now,
           })),
         },
       },
@@ -271,11 +277,21 @@ export async function POST(
     // Audit is best-effort — never fail the redline on a log write.
   })
 
+  // The AI's read of the typed text — the "why" behind every row. Awaited
+  // so the desk opens the review to verdicts, not placeholders; a failure
+  // leaves every clause 'needs_review' with the placeholder note, and the
+  // Re-run AI button retries.
+  const judged = await judgeEnteredRedline({ reviewId: review.id, byUserId: sessionUser.id }).catch((err) => ({
+    ok: false as const, status: 500, error: err instanceof Error ? err.message : 'judge failed',
+  }))
+  if (!judged.ok) console.warn('[redline] AI judgement failed (review stays unjudged):', judged.error)
+
   return NextResponse.json({
     ok: true,
     reviewId: review.id,
     agreementId: agreement.id,
     status: 'REDLINE_UPLOADED',
+    judged: judged.ok,
     clauses: amendments.map((a) => ({ ref: a.ref, title: a.title })),
   })
 }
