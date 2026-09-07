@@ -290,6 +290,10 @@ export interface VendorBookedNoticeArgs extends VendorNoticeArgs {
    *  always get this; their DRIVERS get the exact address only the day
    *  before (see conduit.driverFacingLogistics). */
   deliverTo?: { address: string | null; area: string | null }
+  /** The job's name ("X Zzirit") — a vendor can hold several jobs for us
+   *  at once and the code alone doesn't tell them apart (Wes 2026-09-07).
+   *  Never the production company. */
+  jobName?: string | null
 }
 
 export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
@@ -402,7 +406,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
   text: string
 } {
   const range = a.startDate === a.endDate ? fmt(a.startDate) : `${fmt(a.startDate)} — ${fmt(a.endDate)}`
-  const subject = `${a.vehicleName} for ${range} — confirmed`
+  const subject = `${a.jobName ? `${a.jobName}: ` : ''}${a.vehicleName} for ${range} — confirmed`
   const who = a.contactFirstName || a.vendorName
   const units = a.quantity && a.quantity > 1 ? `${a.quantity} × ${a.vehicleName}` : `the ${a.vehicleName}`
   const confirmed = `The production booked, so ${units} ${a.quantity && a.quantity > 1 ? 'are' : 'is'} confirmed for ${range}. Drop-off and pickup details are on the booking page and will update there if anything changes.`
@@ -434,7 +438,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
             <p style="font-size:22px;font-weight:800;color:${TEXT};margin:0;line-height:1.25;">${a.quantity && a.quantity > 1 ? `${a.quantity} &times; ` : ''}${escapeHtml(a.vehicleName)}</p>
             <p style="font-size:17px;font-weight:700;color:${TEXT};margin:8px 0 0;">${escapeHtml(range)}</p>
             ${a.deliverTo?.address ? `<p style="font-size:15px;color:${TEXT};margin:6px 0 0;"><span style="color:${MUTED};">To</span> ${escapeHtml(a.deliverTo.address)}</p>` : a.deliverTo?.area ? `<p style="font-size:15px;color:${TEXT};margin:6px 0 0;"><span style="color:${MUTED};">To</span> ${escapeHtml(a.deliverTo.area)} <span style="color:${MUTED};">&middot; exact address to follow</span></p>` : ''}
-            ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${a.jobName ? `<p style="font-size:15px;color:${TEXT};margin:6px 0 0;"><span style="color:${MUTED};">Job</span> ${escapeHtml(a.jobName)}${a.reference ? ` <span style="color:${MUTED};">&middot; ${escapeHtml(a.reference)}</span>` : ''}</p>` : a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
             ${rateHtml(a)}
           </div>
         </td></tr>
@@ -471,7 +475,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
     `DELIVERING: ${a.quantity && a.quantity > 1 ? `${a.quantity} × ` : ''}${a.vehicleName}`,
     `Dates: ${range}`,
     ...(a.deliverTo?.address ? [`To: ${a.deliverTo.address}`] : a.deliverTo?.area ? [`To: ${a.deliverTo.area} — exact address to follow`] : []),
-    ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...(a.jobName ? [`Job: ${a.jobName}${a.reference ? ` (${a.reference})` : ''}`] : a.reference ? [`SirReel reference: ${a.reference}`] : []),
     ...rateText(a),
     '',
     `Booking page: ${a.vendorUrl}`,

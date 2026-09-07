@@ -45,10 +45,10 @@ const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 async function orderContext(orderId: string) {
   const o = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, jobId: true, job: { select: { jobCode: true, reportToAddress: true, shootArea: true } }, agent: { select: { name: true, email: true } } },
+    select: { id: true, jobId: true, job: { select: { jobCode: true, name: true, reportToAddress: true, shootArea: true } }, agent: { select: { name: true, email: true } } },
   })
   if (!o) return null
-  return { orderId: o.id, jobId: o.jobId ?? null, jobCode: o.job?.jobCode ?? null, agentName: o.agent?.name ?? null, agentEmail: o.agent?.email ?? null, deliverTo: { address: o.job?.reportToAddress ?? null, area: o.job?.shootArea ?? null } }
+  return { orderId: o.id, jobId: o.jobId ?? null, jobCode: o.job?.jobCode ?? null, agentName: o.agent?.name ?? null, agentEmail: o.agent?.email ?? null, deliverTo: { address: o.job?.reportToAddress ?? null, area: o.job?.shootArea ?? null }, jobName: o.job?.name ?? null }
 }
 
 function scope(orderId: string, jobId: string | null) {
@@ -86,6 +86,7 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
         delivery: s.receiveMethod === 'DELIVERY',
         contactFirstName: (s.vendor.contactName ?? '').split(/\s+/)[0] || null,
         deliverTo: ctx.deliverTo,
+        jobName: ctx.jobName,
       })
       const res = await sendAgreementEmail({
         to: [to], cc: await withTeamCc([], to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
