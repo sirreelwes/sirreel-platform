@@ -9246,3 +9246,73 @@ model UtliizLead {
   @@index([createdAt])
   @@map("sr_utliiz_leads")
 }
+
+// ── Text messaging ─────────────────────────────────────────────────────
+//
+// One thread per phone number (E.164). SMS has no browser to hold history,
+// so the thread IS the conversation the after-hours assistant sees — the
+// last 24h of turns, capped. Consent lives here too: optedOutAt is the
+// carrier-grade STOP record, optedInAt/optedInVia the affirmative opt-in
+// the campaign registration describes. Built 2026-09-07 (Wes: "build the
+// thread store and webhook"); sending stays off until Twilio is configured.
+
+enum SmsDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model SmsThread {
+  id        String  @id @default(uuid())
+  /// E.164, unique — the thread key.
+  phone     String  @unique
+  /// Carrier-grade opt-out (STOP). Nothing automated may text this number
+  /// while set; a human-triggered text is refused too.
+  optedOutAt   DateTime? @map("opted_out_at")
+  /// Affirmative opt-in and where it came from: 'keyword' (START/YES),
+  /// 'portal', 'partner-page', 'staff', 'form'.
+  optedInAt    DateTime? @map("opted_in_at")
+  optedInVia   String?   @map("opted_in_via")
+  lastInboundAt  DateTime? @map("last_inbound_at")
+  lastOutboundAt DateTime? @map("last_outbound_at")
+  /// Best guess at who this is, refreshed on each inbound: a Person, a
+  /// partner driver / delivery contact (SubRental), or nothing.
+  personId    String? @map("person_id")
+  subRentalId String? @map("sub_rental_id")
+  /// Free-text label staff can set ("Luis — KK driver").
+  label String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  messages SmsMessage[]
+
+  @@index([lastInboundAt])
+  @@map("sr_sms_threads")
+}
+
+model SmsMessage {
+  id        String       @id @default(uuid())
+  threadId  String       @map("thread_id")
+  thread    SmsThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction SmsDirection
+  body      String       @db.Text
+  /// Twilio MessageSid (SM…). Inbound: from the webhook. Outbound: from the
+  /// send response — the status callback updates `status` by it.
+  twilioSid String? @unique @map("twilio_sid")
+  /// Twilio status (queued/sent/delivered/undelivered/failed/received) or
+  /// our own: 'skipped-unconfigured', 'skipped-opted-out', 'skipped-quiet'.
+  status    String?
+  errorText String? @map("error_text") @db.Text
+  /// What produced an outbound: 'assistant', 'keyword', 'staff', 'system'.
+  /// Inbound rows carry 'twilio'.
+  source    String
+  /// Anchors, when known.
+  jobId       String? @map("job_id")
+  subRentalId String? @map("sub_rental_id")
+  /// Staff user who pressed send, for 'staff' rows.
+  sentById String? @map("sent_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([threadId, createdAt])
+  @@index([jobId])
+  @@map("sr_sms_messages")
+}

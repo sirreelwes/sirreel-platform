@@ -101,7 +101,11 @@ export function toE164(raw: string): string | null {
 export async function sendSms(
   to: string,
   body: string,
-): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
+  opts: {
+    /** Twilio posts delivery status here (see /api/public/sms/status). */
+    statusCallback?: string
+  } = {},
+): Promise<{ ok: boolean; skipped?: boolean; error?: string; sid?: string }> {
   const resolved = resolveTwilioConfig()
   if (!resolved.config) {
     // A misconfiguration is reported; an absent configuration is skipped.
@@ -130,13 +134,15 @@ export async function sendSms(
         To: dest,
         From: toE164(from) ?? from.trim(),
         Body: body.slice(0, 1500),
+        ...(opts.statusCallback ? { StatusCallback: opts.statusCallback } : {}),
       }).toString(),
     })
     if (!res.ok) {
       const t = await res.text().catch(() => '')
       return { ok: false, error: `Twilio ${res.status} ${t.slice(0, 200)}` }
     }
-    return { ok: true }
+    const j = (await res.json().catch(() => ({}))) as { sid?: string }
+    return { ok: true, sid: typeof j.sid === 'string' ? j.sid : undefined }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'sms error' }
   }

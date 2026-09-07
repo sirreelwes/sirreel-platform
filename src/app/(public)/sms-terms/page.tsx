@@ -20,6 +20,15 @@ export const metadata: Metadata = {
 }
 
 const EFFECTIVE = 'September 7, 2026'
+
+/** The sending number, formatted for people. Falls back to a phrase until
+ *  TWILIO_FROM_NUMBER is set in the environment. */
+function smsNumberDisplay(): string {
+  const raw = (process.env.TWILIO_FROM_NUMBER || '').replace(/\D/g, '')
+  const d = raw.length === 11 && raw.startsWith('1') ? raw.slice(1) : raw
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : 'our SirReel text number'
+}
+const SMS_NUMBER_DISPLAY = smsNumberDisplay()
 const H2 = 'text-[20px] sm:text-[22px] font-black tracking-tight mt-10 mb-3'
 const P = 'text-[15px] leading-relaxed text-[#3d392f] mb-4'
 const LI = 'text-[15px] leading-relaxed text-[#3d392f]'
@@ -44,10 +53,29 @@ export default function SmsTermsPage() {
           page, and replies to questions you text us. We do not send marketing texts.
         </p>
 
+        {/* The public opt-in call to action carriers ask to see (Twilio A2P review,
+            2026-09-07: "provide a publicly reachable link to where the opt-in
+            call-to-action is displayed"). Anchored so the campaign form can link
+            straight to it. The number comes from the env so it can never drift
+            from the one that actually sends. */}
+        <div id="opt-in" className="mt-8 rounded-[14px] border border-[#e4dfd4] bg-white p-5 sm:p-6 scroll-mt-24">
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#0F7A93] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Get booking updates by text
+          </div>
+          <p className="text-[18px] sm:text-[20px] font-black tracking-tight leading-snug" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Text <span className="text-[#0F7A93]">START</span> to {SMS_NUMBER_DISPLAY}
+          </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-[#3d392f]">
+            You&rsquo;ll receive confirmations and day-of logistics for rentals you or your production has booked with
+            SirReel. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.
+            Consent is not a condition of renting.
+          </p>
+        </div>
+
         <h2 className={H2} style={{ fontFamily: 'Archivo, sans-serif' }}>How you opt in</h2>
         <ul className="list-disc pl-5 space-y-2 mb-4">
           <li className={LI}>By entering your mobile number and checking the box &ldquo;OK to text this number about my booking&rdquo; in the SirReel client portal, on a partner booking page, or on a SirReel form.</li>
-          <li className={LI}>By texting <strong>START</strong> to our number.</li>
+          <li className={LI}>By texting <strong>START</strong> to {SMS_NUMBER_DISPLAY}.</li>
           <li className={LI}>By asking a SirReel team member, in writing, to text you about your booking.</li>
         </ul>
         <p className={P}>Consent to receive text messages is not a condition of renting from SirReel.</p>
