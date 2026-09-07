@@ -208,7 +208,8 @@ export async function getVendorViewByToken(
       job: {
         select: {
           jobCode: true,
-          reportToAddress: true,
+          shootArea: true,
+      reportToAddress: true,
           reportToAccessNotes: true,
           reportToTime: true,
           reportToContactName: true,
