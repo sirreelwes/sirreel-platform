@@ -232,6 +232,16 @@ export async function GET(
                     // rides along so the job page can show a rep whether
                     // the vehicle can actually leave — booleans only, no
                     // licence numbers or image URLs on a list surface.
+                    // Who appears to have the unit now: the open checkout
+                    // record's driver (moves on a driver handoff). The
+                    // Drivers panel marks that driver and reads the rest
+                    // as handed off — every driver stays on the record
+                    // (Wes 2026-09-07).
+                    checkoutRecords: {
+                      orderBy: { checkoutTime: 'desc' },
+                      take: 1,
+                      select: { driverId: true, returnTime: true },
+                    },
                     driverAssignments: {
                       where: { status: { not: 'CANCELLED' } },
                       orderBy: { invitedAt: 'desc' },

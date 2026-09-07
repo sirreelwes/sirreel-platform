@@ -1127,7 +1127,7 @@ const driverTone = (d: any): string => {
 }
 
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[] }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[]; currentDriverId: string | null; unitReturned: boolean }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -1138,6 +1138,8 @@ const driverTone = (d: any): string => {
               startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
               bookingAssignmentId: a.id,
               drivers: (a as any).driverAssignments ?? [],
+              currentDriverId: (a as any).checkoutRecords?.[0]?.driverId ?? null,
+              unitReturned: !!(a as any).checkoutRecords?.[0]?.returnTime,
             })
           }
         }
@@ -2578,6 +2580,8 @@ const driverTone = (d: any): string => {
           startDate: a.startDate,
           endDate: a.endDate,
           drivers: a.drivers,
+          currentDriverId: a.currentDriverId,
+          unitReturned: a.unitReturned,
         }))}
         pendingHolds={pendingHolds}
         onChanged={load}

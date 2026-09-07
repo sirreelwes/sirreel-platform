@@ -49,6 +49,10 @@ interface Vehicle {
   startDate?: string | null
   endDate?: string | null
   drivers: DriverRow[]
+  /** Driver on the unit's open checkout record — who appears to have it. */
+  currentDriverId?: string | null
+  /** The unit has been checked back in. */
+  unitReturned?: boolean
 }
 /** A held category with no unit picked yet — nothing to attach a driver to. */
 interface PendingHold {
@@ -309,14 +313,27 @@ export function JobDriversSection({
                 {v.drivers.map((d) => {
                   const dr = d.driver
                   const hasImages = !!(dr.licenseFrontUrl || dr.licenseBackUrl)
-                  const tone = d.status === 'PICKED_UP' ? 'bg-violet-100 text-violet-700'
+                  // Handoff history. A production can name a second driver
+                  // after the first has the keys (Cube 29, 2026-09-07):
+                  // both stay on the record, the one on the open checkout
+                  // record appears to have the unit, the earlier ones read
+                  // as handed off — to whom, and when.
+                  const pickedUp = v.drivers
+                    .filter((x) => x.status === 'PICKED_UP' && x.pickedUpAt)
+                    .sort((a, b) => new Date(a.pickedUpAt!).getTime() - new Date(b.pickedUpAt!).getTime())
+                  const handoffs = pickedUp.length > 1
+                  const current = d.status === 'PICKED_UP' && !v.unitReturned
+                    && (v.currentDriverId ? dr.id === v.currentDriverId : pickedUp[pickedUp.length - 1]?.id === d.id)
+                  const next = handoffs ? pickedUp[pickedUp.findIndex((x) => x.id === d.id) + 1] ?? null : null
+                  const tone = d.status === 'PICKED_UP' ? (handoffs && !current ? 'bg-zinc-100 text-zinc-600' : 'bg-violet-100 text-violet-700')
                     : dr.licenseExpired ? 'bg-rose-100 text-rose-700'
                     : dr.licenseVerified ? 'bg-emerald-100 text-emerald-700'
                     : hasImages ? 'bg-amber-100 text-amber-700'
                     : 'bg-zinc-100 text-zinc-700'
                   // PICKED_UP outranks every licence verdict: the truck is
                   // gone, and "Checked" reads like it's still in the yard.
-                  const label = d.status === 'PICKED_UP' ? 'Picked up'
+                  const label = d.status === 'PICKED_UP'
+                    ? (handoffs ? (current ? 'Appears to have it' : v.unitReturned ? 'Drove it' : 'Handed off') : 'Picked up')
                     : dr.licenseExpired ? 'Licence expired'
                     : dr.licenseVerified ? 'Checked'
                     : hasImages ? 'Needs check'
@@ -338,6 +355,12 @@ export function JobDriversSection({
                             {' · '}
                             {new Date(d.pickedUpAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             {d.pickupMileage != null && ` · ${d.pickupMileage.toLocaleString('en-US')} mi`}
+                          </div>
+                        )}
+                        {next && (
+                          <div className="text-[11px] text-zinc-600 truncate">
+                            Handed off to {`${next.driver.firstName} ${next.driver.lastName}`.trim() || next.emailSentTo}
+                            {next.pickedUpAt && ` · ${new Date(next.pickedUpAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
                           </div>
                         )}
                       </div>
