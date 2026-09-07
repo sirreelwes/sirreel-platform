@@ -21,6 +21,7 @@ import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHou
 
 interface Logistics {
   leavingFrom: string | null
+  area: string | null
   address: string | null
   accessNotes: string | null
   arriveTime: string | null
@@ -210,9 +211,16 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
               {l.updatedAt && <p className="text-[12px] text-zinc-500">Last updated {fmtWhen(l.updatedAt)}</p>}
             </dl>
           ) : (
-            <p className="text-[14px] leading-relaxed text-zinc-300">
-              The production hasn&rsquo;t sent the location and call time yet. You&rsquo;ll get an email the moment they do — this page always shows the latest.
-            </p>
+            <div>
+              {l.area && (
+                <p className="text-[17px] font-semibold leading-snug text-white mb-2">
+                  {l.area} <span className="text-[13px] font-normal text-zinc-400">&middot; exact address to follow</span>
+                </p>
+              )}
+              <p className="text-[14px] leading-relaxed text-zinc-300">
+                The production hasn&rsquo;t sent the {l.area ? 'exact address' : 'location'} and call time yet. You&rsquo;ll get an email the moment they do — this page always shows the latest.
+              </p>
+            </div>
           )}
         </Section>
 

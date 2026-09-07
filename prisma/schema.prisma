@@ -5681,6 +5681,11 @@ model Job {
   // Distinct from Booking.deliveryAddress, which is Planyo-import data on a
   // single booking. When both exist the report-to is the newer, client-
   // asserted fact; nothing reconciles them automatically today.
+  /// Approximate area of the shoot ("Shadow Hills, Los Angeles"), shown to
+  /// partners and their drivers BEFORE the exact report-to address exists
+  /// (Wes 2026-09-07). Never a substitute for reportToAddress — the pages
+  /// say "exact address to follow" next to it. Staff-entered.
+  shootArea String? @map("shoot_area")
   reportToAddress      String? @map("report_to_address") @db.Text
   reportToAccessNotes  String? @map("report_to_access_notes") @db.Text
   reportToContactName  String? @map("report_to_contact_name")

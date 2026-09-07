@@ -103,6 +103,7 @@ const CONDUIT_SELECT = {
     select: {
       id: true,
       jobCode: true,
+      shootArea: true,
       reportToAddress: true,
       reportToAccessNotes: true,
       reportToTime: true,
@@ -175,6 +176,10 @@ export interface LogisticsView {
   /** Point of origin — where the unit leaves from (booking override, else the
    *  partner's lot). The partner's own fact; shown to the driver and HQ. */
   leavingFrom: string | null
+  /** Approximate area ("Shadow Hills, Los Angeles") the production gave
+   *  before the exact address — shown with "exact address to follow"
+   *  whenever `address` is empty (Wes 2026-09-07). */
+  area: string | null
   address: string | null
   accessNotes: string | null
   /** The production's general arrival window for deliveries ("6–7am"). */
@@ -198,6 +203,7 @@ export function logisticsFor(row: {
   originAddress?: string | null
   vendor?: { lotAddress: string | null } | null
   job: {
+    shootArea?: string | null
     reportToAddress: string | null
     reportToAccessNotes: string | null
     reportToTime: string | null
@@ -213,6 +219,7 @@ export function logisticsFor(row: {
   const same = j?.pickupSameAsDelivery ?? true
   const v: Omit<LogisticsView, 'hasAny'> = {
     leavingFrom: row.originAddress ?? row.vendor?.lotAddress ?? null,
+    area: j?.shootArea ?? null,
     address: j?.reportToAddress ?? null,
     accessNotes: j?.reportToAccessNotes ?? null,
     arriveTime: j?.reportToTime ?? null,

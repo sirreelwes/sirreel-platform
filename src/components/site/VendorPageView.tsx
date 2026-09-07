@@ -103,6 +103,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
               {l.hasAny ? (
                 <dl className="rounded-[14px] border border-[#e4dfd4] bg-white overflow-hidden">
                   {l.address && <div className={ROW_TEXT}><dt className={DT}>Report to</dt><dd className={`${DD_TEXT} font-semibold text-[#0c0c0d]`}>{l.address}</dd></div>}
+                  {!l.address && l.area && <div className={ROW_TEXT}><dt className={DT}>Area</dt><dd className={`${DD_TEXT} font-semibold text-[#0c0c0d]`}>{l.area} <span className="font-normal text-[#5a554c]">&middot; exact address to follow</span></dd></div>}
                   {l.accessNotes && <div className={`${ROW_TEXT} border-t border-[#efe9dd]`}><dt className={DT}>Gate / access</dt><dd className={DD_TEXT}>{l.accessNotes}</dd></div>}
                   {(l.callTime || l.arriveTime) && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Call time</dt><dd className={DD}>{l.callTime ?? l.arriveTime}</dd></div>}
                   {l.onSiteContactName && <div className={`${ROW} border-t border-[#efe9dd]`}><dt className={DT}>Ask for</dt><dd className={DD}>{l.onSiteContactName}</dd></div>}
@@ -117,8 +118,13 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
                 </dl>
               ) : (
                 <div className="rounded-[14px] border border-[#e4dfd4] bg-[#faf7f0] px-4 py-3.5">
+                  {l.area && (
+                    <p className="text-[15px] font-semibold text-[#0c0c0d] mb-1">
+                      {l.area} <span className="font-normal text-[13px] text-[#5a554c]">&middot; exact address to follow</span>
+                    </p>
+                  )}
                   <p className="text-[13px] text-[#5a554c] leading-relaxed">
-                    The production hasn&rsquo;t set the location and call time yet. It appears here — and goes to your driver — the moment they do.
+                    The production hasn&rsquo;t set the {l.area ? 'exact address' : 'location'} and call time yet. It appears here — and goes to your driver — the moment they do.
                   </p>
                 </div>
               )}
