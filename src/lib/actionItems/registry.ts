@@ -27,6 +27,9 @@
  *     booking and no card arrived in either store. The yard's check-out
  *     refuses the same rows (lib/payments/cardGate.ts); this is the
  *     agent hearing about it first.
+ *   - driver-hours-untrued (DERIVED) — a partner's driver logged their
+ *     hours and the order still bills the quoted estimate. Clears when
+ *     the desk applies them (lib/orders/driverTrueUp.ts).
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -76,6 +79,7 @@ import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkRep
 import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied'
 import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCoiMissing'
 import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
+import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
 
 const PROVIDERS: ActionItemProvider[] = [
   // The yard changed a booked order at the dock and the agent hasn't
@@ -84,6 +88,9 @@ const PROVIDERS: ActionItemProvider[] = [
   // HQ sent the card link, nothing came back, and the yard will refuse
   // to release the vehicle until the agent keys a signed authorization.
   cardRequiredProvider,
+  // A driver logged their hours and the order still bills the estimate —
+  // catch it before the invoice goes out.
+  driverHoursUntruedProvider,
   // The client answered the waiver question and the quote's money
   // doesn't match the answer — usually the auto-apply could not run.
   lcdwUnappliedProvider,

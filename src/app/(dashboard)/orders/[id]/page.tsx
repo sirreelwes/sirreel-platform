@@ -12,6 +12,7 @@ import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
+import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -3525,6 +3526,9 @@ export default function OrderDetailPage() {
         {canSeeMoney && (
           <div className="px-6 pb-4">
             <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+            {/* The driver's logged hours, priced by the same ladder the
+                quote used. Applying is what puts them on the invoice. */}
+            <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
           </div>
         )}
 

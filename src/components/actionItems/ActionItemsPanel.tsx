@@ -55,6 +55,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'payment-info': { label: 'Payment info requests', hint: 'A client asked for billing details' },
   'coi-missing': { label: 'COI', hint: 'Certificates missing, rejected, or waiting on review' },
   'card-required': { label: 'Card not on file', hint: 'The card link went out and nothing came back — key in a signed authorization or the yard cannot release the vehicle' },
+  'driver-hours-untrued': { label: 'Driver hours to bill', hint: 'Hours are logged and the order still bills the estimate' },
   'quote-aging': { label: 'Quotes gone quiet', hint: 'Sent, no reply — follow up' },
   'inquiry-untouched': { label: 'Inquiries waiting', hint: 'Past the first-response SLA' },
   'check-report-changes': { label: 'Order changed at the dock', hint: 'The yard changed a booked order and the agent has not acknowledged it' },
