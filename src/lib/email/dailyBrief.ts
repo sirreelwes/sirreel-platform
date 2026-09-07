@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { clientPaperworkIn } from '@/lib/orders/holdOnQuoteSend'
 import { renderEmailShell, renderEmailText } from '@/lib/email/templates/shell'
+import {
+  describeClientCreatedJob,
+  listClientCreatedUnquoted,
+  type ClientCreatedJob,
+} from '@/lib/sales/clientCreatedJobs'
 
 /**
  * The twice-daily operations brief (Wes 2026-09-02: "letting everyone know
@@ -94,7 +99,7 @@ export interface DailyBrief {
   subject: string
   html: string
   text: string
-  counts: { out: number; back: number; stillOut: number; blocked: number }
+  counts: { out: number; back: number; stillOut: number; blocked: number; clientsWaiting: number }
 }
 
 const READY_ENOUGH = new Set(['BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'])
@@ -212,6 +217,49 @@ function rowHtml(
     </tr>`
 }
 
+/**
+ * Clients who set their own job up on the public site and are waiting on a
+ * rep. Wes 2026-09-07, on a Sunday with the yard closed: "let's make sure
+ * the morning email includes a note on this."
+ *
+ * Its own section rather than a line in the draft count, because these are
+ * not ordinary unsent drafts — somebody outside the building is waiting,
+ * and one of them had already signed the rental agreement. The rows are
+ * excluded from the stale-draft tally below so a single job is never
+ * reported twice under two different stories.
+ */
+function clientCreatedSection(jobs: ClientCreatedJob[], now: Date): string {
+  const head = `
+    <div style="margin:26px 0 0;font-family:${FONT};">
+      <span style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${DANGER};">Clients waiting on us</span>
+      <span style="font-size:12px;color:${MUTED};margin-left:8px;">${jobs.length} set up their own job, nothing quoted</span>
+    </div>`
+  if (jobs.length === 0) {
+    return `${head}<div style="margin-top:8px;font-family:${FONT};font-size:14px;color:${MUTED};">Nothing.</div>`
+  }
+  const rows = jobs
+    .map(
+      (j) => `
+    <tr>
+      <td style="padding:11px 0;border-top:1px solid ${HAIRLINE};font-family:${FONT};">
+        <a href="${HQ}/jobs/${j.jobId}" style="font-size:15px;font-weight:600;color:${INK};text-decoration:none;">${esc(j.jobName)}</a>
+        ${j.companyName ? `<span style="font-size:14px;color:${MUTED};"> &middot; ${esc(j.companyName)}</span>` : ''}
+        <div style="margin-top:2px;font-size:13px;color:${MUTED};">
+          <a href="${HQ}/orders/${j.orderId}" style="color:${MUTED};text-decoration:underline;">${esc(j.orderNumber)}</a>
+          &middot; set up by the client
+          ${j.agentName ? `&middot; ${esc(j.agentName)}` : '&middot; nobody assigned'}
+        </div>
+        <div style="margin-top:3px;font-size:13px;color:${DANGER};">${esc(describeClientCreatedJob(j, now))}</div>
+      </td>
+    </tr>`,
+    )
+    .join('')
+  return `${head}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${rows}</table>
+    <div style="margin-top:8px;font-family:${FONT};font-size:13px;color:${MUTED};">
+      Their portal says it is not booked until a rep confirms availability and sends the quote.
+    </div>`
+}
+
 function section(
   title: string,
   note: string,
@@ -272,9 +320,21 @@ export async function buildDailyBrief(
     (r) => r.end !== null && r.end < today && READY_ENOUGH.has(r.status) && r.status !== 'CLOSED',
   )
 
+  // Clients waiting on a rep — their own section below.
+  const clientCreated = await listClientCreatedUnquoted({ now })
+  const clientCreatedOrderIds = new Set(clientCreated.map((j) => j.orderId))
+
   // Unsent quotes whose dates are already in play. One line, not a section.
+  // Self-serve jobs are pulled out: they ARE unsent drafts, but "check they
+  // should still be drafts" is the wrong instruction for one a client
+  // created and may have signed, and counting them here as well would
+  // report the same job twice.
   const staleDrafts = rows.filter(
-    (r) => r.status === 'DRAFT' && r.start !== null && r.start <= addDays(focusDay, 7),
+    (r) =>
+      r.status === 'DRAFT' &&
+      r.start !== null &&
+      r.start <= addDays(focusDay, 7) &&
+      !clientCreatedOrderIds.has(r.orderId),
   )
 
   // Only the rows that roll on the focus day get a paperwork lookup —
@@ -297,14 +357,18 @@ export async function buildDailyBrief(
       ? `Tomorrow &mdash; ${esc(dayLabel)}`
       : `Today &mdash; ${esc(dayLabel)}`
 
+  const waiting = clientCreated.length
+    ? ` ${clientCreated.length} client${clientCreated.length === 1 ? '' : 's'} waiting on a quote.`
+    : ''
   const headline =
-    goingOut.length === 0 && comingBack.length === 0
+    (goingOut.length === 0 && comingBack.length === 0
       ? 'Nothing scheduled to move.'
       : `${goingOut.length} going out, ${comingBack.length} coming back.` +
-        (blocked.length ? ` ${blocked.length} not ready.` : '')
+        (blocked.length ? ` ${blocked.length} not ready.` : '')) + waiting
 
   const bodyHtml = `
     <p style="margin:0 0 4px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY};">${headline}</p>
+    ${clientCreatedSection(clientCreated, now)}
     ${section('Going out', `${goingOut.length} on ${shortDay(focusDay)}`, goingOut)}
     ${section('Coming back', `${comingBack.length} on ${shortDay(focusDay)}`, comingBack)}
     ${section('Later this week', `${ahead.length} in the next 7 days`, ahead, true, 'none')}
@@ -331,6 +395,16 @@ export async function buildDailyBrief(
     '',
     headline,
     '',
+    ...(clientCreated.length
+      ? [
+          `CLIENTS WAITING ON US (${clientCreated.length}) — set up their own job, nothing quoted`,
+          ...clientCreated.map(
+            (j) =>
+              `  ${j.jobName}${j.companyName ? ` (${j.companyName})` : ''} — ${j.orderNumber}, ${describeClientCreatedJob(j, now)}\n    ${HQ}/jobs/${j.jobId}`,
+          ),
+          '',
+        ]
+      : []),
     ...textSection(`Going out (${goingOut.length})`, goingOut),
     ...textSection(`Coming back (${comingBack.length})`, comingBack),
     ...textSection(`Later this week (${ahead.length})`, ahead),
@@ -355,6 +429,7 @@ export async function buildDailyBrief(
       back: comingBack.length,
       stillOut: stillOut.length,
       blocked: blocked.length,
+      clientsWaiting: clientCreated.length,
     },
   }
 }
