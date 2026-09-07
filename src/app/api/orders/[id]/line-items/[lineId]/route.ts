@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { parseDriverEstimate } from "@/lib/orders/driverEstimate";
 import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
@@ -28,7 +30,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const {
       type, description, inventoryItemId, assetCategoryId,
-      startDate, endDate, rateType, rate, quantity, sortOrder, notes,
+      startDate, endDate, rateType, rate, quantity, sortOrder, notes, driverEstimate,
       days: manualDays, billableDays, rentalDays: legacyRentalDays,
       department, qualifier, pickupDate, returnDate,
     } = body;
@@ -81,6 +83,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (quantity !== undefined) data.quantity = quantity;
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
     if (notes !== undefined) data.notes = notes || null;
+    // The estimated driver day (roll / call / leave set / done). Validated
+    // with the same clock rules the driver's actual hours use; null clears.
+    if (driverEstimate !== undefined) {
+      const est = parseDriverEstimate(driverEstimate);
+      if (!est.ok) return NextResponse.json({ error: est.error }, { status: 400 });
+      data.driverEstimate = est.value ?? Prisma.DbNull;
+    }
     if (department !== undefined) data.department = department;
     if (qualifier !== undefined) data.qualifier = qualifier || null;
 

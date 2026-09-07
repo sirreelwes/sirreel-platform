@@ -115,7 +115,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
       lineItems: {
         include: {
           inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true, slug: true, trackingMode: true } },
-
+          // Existence only — a partner-fulfilled line bills straight daily,
+          // never the weekly cap (Wes 2026-09-07). Vendor, cost, PO stay out.
+          subRentals: { select: { id: true } },
         },
         orderBy: { sortOrder: "asc" },
       },

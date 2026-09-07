@@ -7,6 +7,7 @@ import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { isPartnerFulfilled } from "@/lib/orders/partnerDaily";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       select: {
         id: true, quantity: true, rate: true, rateType: true,
         department: true, billableDays: true, lineTotal: true, description: true,
+        parentLineItemId: true, subRentals: { select: { id: true } },
       },
     });
     // Kit pieces / ancillaries hanging off those lines follow their parent.
@@ -111,13 +113,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           select: {
             id: true, quantity: true, rate: true, rateType: true,
             department: true, billableDays: true, lineTotal: true, description: true,
+            parentLineItemId: true, subRentals: { select: { id: true } },
           },
         })
       : [];
 
     const byId = new Map([...deptLines, ...children].map((l) => [l.id, l]));
-    const targets = [...byId.values()].filter(
-      (l) => l.rateType !== "FLAT" && l.department !== "EXPENDABLES" && l.billableDays !== parsedDays,
+    // Partner specialty units and their fees bill straight daily — a
+    // department-wide "set all" never touches them (Wes 2026-09-07).
+    const all = [...byId.values()];
+    const targets = all.filter(
+      (l) => l.rateType !== "FLAT" && l.department !== "EXPENDABLES" && l.billableDays !== parsedDays && !isPartnerFulfilled(l, all),
     );
 
     if (targets.length === 0) {

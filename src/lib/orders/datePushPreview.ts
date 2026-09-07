@@ -50,6 +50,9 @@ export interface PreviewLineItem {
    *  no committed billable days yet. */
   billableDays: number | null
   lineTotal: number
+  /** Fulfilled by a partner's unit, or a fee under one — bills calendar
+   *  days, never the weekly cap (Wes 2026-09-07). */
+  partnerDaily?: boolean
 }
 
 export interface ProjectedLineItem extends PreviewLineItem {
@@ -82,7 +85,9 @@ function shiftDate(d: Date, deltaMs: number): Date {
   return new Date(d.getTime() + deltaMs)
 }
 
-function deriveBillableDays(department: LineItemDepartment, calDays: number): number {
+function deriveBillableDays(department: LineItemDepartment, calDays: number, partnerDaily = false): number {
+  // Partner specialty units bill straight daily — no cap to apply.
+  if (partnerDaily) return calDays
   const rules = BILLING_RULES[department]
   if (rules.model === 'PURCHASE') return 1 // EXPENDABLES: bill once, days unused
   if (rules.model === 'PERCENT_DISCOUNT') return calDays
@@ -131,7 +136,7 @@ export function computePushDatesPreview(args: {
       }
     }
     if (it.inheritsDates) {
-      const newBillable = deriveBillableDays(it.department, newCal)
+      const newBillable = deriveBillableDays(it.department, newCal, it.partnerDaily)
       const newLineTotal = computeLineTotal({
         quantity: it.quantity,
         rate: it.rate,
@@ -173,7 +178,7 @@ export function computePushDatesPreview(args: {
     const pickupDate = shiftDate(it.pickupDate, offsetMs)
     const returnDate = shiftDate(it.returnDate, offsetMs)
     const newCustomCal = calendarDays(pickupDate, returnDate)
-    const newBillable = deriveBillableDays(it.department, newCustomCal)
+    const newBillable = deriveBillableDays(it.department, newCustomCal, it.partnerDaily)
     const newLineTotal = computeLineTotal({
       quantity: it.quantity,
       rate: it.rate,

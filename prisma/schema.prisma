@@ -3946,6 +3946,13 @@ model OrderLineItem {
   // used to invent extra line items.
   qualifier       String?             @db.Text
   notes           String?             @db.Text
+  /// Driver line only — the ESTIMATED day the driver charge is priced on
+  /// (Wes 2026-09-07: "enter estimated details: Roll, Call Time, Leave
+  /// Set, Done after fuel and clean"). { roll, callTime, leaveSet, done }
+  /// as "HH:MM" 24h, plus breakMinutes. Hours = done − roll − break,
+  /// portal to portal, the same arithmetic the driver's actual hours use.
+  /// Prints on the quote under the driver line; the invoice bills actuals.
+  driverEstimate  Json?               @map("driver_estimate")
 
   /// This line was quoted from a REP'S ESTIMATE of usage, not a known
   /// quantity — partner mileage and generator hours, where nobody knows the

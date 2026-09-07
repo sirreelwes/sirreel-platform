@@ -19,6 +19,8 @@ import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/Ema
 import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
+import { viewDriverEstimate, driverEstimateSentence } from "@/lib/orders/driverEstimate";
+import { isPartnerFulfilled, PARTNER_DAILY_NOTE } from "@/lib/orders/partnerDaily";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
@@ -41,6 +43,10 @@ import {
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
 import { AlertTriangle } from 'lucide-react'
+
+/** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
+const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
+  /\bdrivers?\b/i.test(li.description ?? '') && (li.type === 'FEE' || li.type === 'LABOR' || !!li.parentLineItemId);
 
 type LineItem = {
   id: string;
@@ -74,6 +80,11 @@ type LineItem = {
   // Optional per-line override of the above; null on most lines.
   startDate: string | null;
   endDate: string | null;
+  /** Driver line only — the estimated day (roll / call / leave set / done)
+   *  the quote is priced on. See lib/orders/driverEstimate.ts. */
+  driverEstimate?: { roll: string; callTime: string | null; leaveSet: string | null; done: string | null } | null;
+  /** Non-empty when a partner's unit fulfils the line. Existence only. */
+  subRentals?: { id: string }[];
   notes: string | null;
   // Phase 1 lifecycle routing — set at book time.
   fulfillmentLane: 'FLEET' | 'WAREHOUSE' | 'STAGE' | null;
@@ -487,6 +498,8 @@ export default function OrderDetailPage() {
   const [liRateType, setLiRateType] = useState("DAILY");
   const [liRate, setLiRate] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  // The estimated driver day, edited inline on a driver line (Wes 2026-09-07).
+  const [editEst, setEditEst] = useState({ roll: '', callTime: '', leaveSet: '', done: '' });
   const [editRate, setEditRate] = useState("");
   const [editQty, setEditQty] = useState("");
   const [editDays, setEditDays] = useState("");
@@ -1870,6 +1883,7 @@ export default function OrderDetailPage() {
     // format would show the day before west of Greenwich.
     setEditPickupDate((li.pickupDate ?? "").slice(0, 10));
     setEditReturnDate((li.returnDate ?? "").slice(0, 10));
+    setEditEst({ roll: li.driverEstimate?.roll ?? '', callTime: li.driverEstimate?.callTime ?? '', leaveSet: li.driverEstimate?.leaveSet ?? '', done: li.driverEstimate?.done ?? '' });
     // Catalog binding — seed from whichever side the existing row
     // points at. Both nullable in the schema; only one can be set at
     // a time per business rule (handled by the API).
@@ -1978,6 +1992,15 @@ export default function OrderDetailPage() {
     const trimmedDesc = editDesc.trim();
     if (trimmedDesc.length > 0) body.description = trimmedDesc;
     if (editDept) body.department = editDept;
+    // The estimated driver day — sent whenever the row is a driver line, so
+    // clearing every field clears the estimate on the server (null).
+    const editingLine = order?.lineItems.find((l) => l.id === lineId);
+    if (editingLine && isDriverLine(editingLine)) {
+      const anyStamp = [editEst.roll, editEst.callTime, editEst.leaveSet, editEst.done].some((v) => v.trim());
+      body.driverEstimate = anyStamp
+        ? { roll: editEst.roll || null, callTime: editEst.callTime || null, leaveSet: editEst.leaveSet || null, done: editEst.done || null }
+        : null;
+    }
     // Catalog binding — always send explicitly so a clear-binding via
     // the combobox's onClearCatalog actually clears in the DB. The
     // PUT route skips fields whose value is `undefined` and accepts
@@ -2166,6 +2189,25 @@ export default function OrderDetailPage() {
             hideCustomChip
           />
         )}
+        {/* Estimated driver day — the four stamps the driver will log for
+            real: roll (left lot), call (on set), leave set, done (fuelled
+            and cleaned). Prints under the line on the quote. */}
+        {isDriverLine(li) && (
+          <div className="mt-2 grid grid-cols-4 gap-1">
+            {([['roll', 'Roll'], ['callTime', 'Call'], ['leaveSet', 'Leave set'], ['done', 'Done']] as const).map(([k, label]) => (
+              <label key={k} className="block">
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-lt-fg3">{label}</span>
+                <input
+                  type="time"
+                  value={editEst[k]}
+                  onChange={(e) => setEditEst((v) => ({ ...v, [k]: e.target.value }))}
+                  className="w-full px-1.5 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+                  aria-label={`Estimated ${label.toLowerCase()} time`}
+                />
+              </label>
+            ))}
+          </div>
+        )}
         {/* Department selector — manual override on top
             of the catalog-derived value. Server's PUT
             honors the explicit dept + runs the
@@ -2188,7 +2230,13 @@ export default function OrderDetailPage() {
         </select>
       </td>
     ) : (
-      <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+      <td className="px-4 py-3 text-lt-fg">
+        {li.description}
+        {(() => {
+          const v = li.driverEstimate ? viewDriverEstimate(li.driverEstimate, li.description) : null;
+          return v ? <div className="mt-0.5 text-[11px] text-lt-fg3 leading-snug max-w-[52ch]">{driverEstimateSentence(v)}</div> : null;
+        })()}
+      </td>
     )}
     {editingLineId === li.id ? (
       <td className="px-4 py-2 whitespace-nowrap">
@@ -2243,7 +2291,12 @@ export default function OrderDetailPage() {
               vehicles included): each button re-suggests billable days
               from the line's own calendar range at that cap. The input
               stays authoritative. */}
-          {weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
+          {/* Partner specialty units and their fees bill straight daily —
+              never the weekly cap (Wes 2026-09-07). No chips; say why. */}
+          {isPartnerFulfilled(li, order?.lineItems ?? []) && li.pickupDate && li.returnDate && (
+            <div className="mt-1 text-center text-[10px] text-lt-fg3">{PARTNER_DAILY_NOTE}</div>
+          )}
+          {!isPartnerFulfilled(li, order?.lineItems ?? []) && weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
             <div className="mt-1 flex flex-wrap justify-center gap-0.5">
               {weekCapChoices(editDept as any).map((cap) => {
                 const suggested = computeBillableDays(

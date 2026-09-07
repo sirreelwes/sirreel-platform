@@ -32,6 +32,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isPartnerFulfilled } from '@/lib/orders/partnerDaily'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { computePushDatesPreview, type CustomItemAction, type PreviewLineItem } from '@/lib/orders/datePushPreview'
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           returnDate: true,
           billableDays: true,
           lineTotal: true,
+          parentLineItemId: true,
+          subRentals: { select: { id: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -123,6 +126,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const items: PreviewLineItem[] = order.lineItems.map((li) => ({
+    partnerDaily: isPartnerFulfilled(li, order.lineItems),
     id: li.id,
     description: li.description,
     department: li.department,
