@@ -209,6 +209,41 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     })
   })()
 
+  // Handoffs. A production can name a second driver after the first has
+  // the keys (Cube 29, 2026-09-07); both check-outs stay on record and the
+  // open checkout record says who appears to hold the unit now. Each
+  // driver's page tells their side: who they took it from, who they gave
+  // it to. Names only — never the other driver's phone or licence.
+  const handoff = await (async () => {
+    if (!da.pickedUpAt) return null
+    const [rec, others] = await Promise.all([
+      prisma.checkoutRecord.findFirst({
+        where: { bookingAssignmentId: asg.id },
+        orderBy: { checkoutTime: 'desc' },
+        select: { driverId: true, returnTime: true },
+      }),
+      prisma.driverAssignment.findMany({
+        where: { bookingAssignmentId: asg.id, id: { not: da.id }, pickedUpAt: { not: null } },
+        orderBy: { pickedUpAt: 'asc' },
+        select: { pickedUpAt: true, driver: { select: { id: true, firstName: true, lastName: true } } },
+      }),
+    ])
+    if (!others.length) return null
+    const nameOf = (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`.trim() || 'another driver'
+    const mine = da.pickedUpAt.getTime()
+    const before = others.filter((o) => o.pickedUpAt!.getTime() < mine)
+    const after = others.filter((o) => o.pickedUpAt!.getTime() > mine)
+    const returned = !!rec?.returnTime
+    const holdsIt = !returned && (rec?.driverId ? rec.driverId === da.driver.id : after.length === 0)
+    const last = before[before.length - 1]
+    return {
+      holdsIt,
+      returned,
+      receivedFrom: last ? { name: nameOf(last.driver), at: last.pickedUpAt!.toISOString() } : null,
+      gaveTo: after[0] ? { name: nameOf(after[0].driver), at: after[0].pickedUpAt!.toISOString() } : null,
+    }
+  })()
+
   const startDate = asg.startDate.toISOString().slice(0, 10)
   const endDate = asg.endDate.toISOString().slice(0, 10)
 
@@ -264,6 +299,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     },
     loadList,
     checkout: selfCheckout,
+    handoff,
     // The photo stager keys blobs under the assignment; the page needs
     // the id only to hand it back to that route.
     bookingAssignmentId: asg.id,

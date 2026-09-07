@@ -60,6 +60,7 @@ interface DriveData {
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
   checkout: SelfCheckoutView
+  handoff?: { holdsIt: boolean; returned: boolean; receivedFrom: { name: string; at: string } | null; gaveTo: { name: string; at: string } | null } | null
   bookingAssignmentId: string
 }
 
@@ -356,6 +357,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
             bookingAssignmentId={data.bookingAssignmentId}
             unitName={data.vehicle.unitName}
             state={data.checkout}
+            handoff={data.handoff ?? null}
             licenceDone={licenceDone}
             onDone={load}
           />

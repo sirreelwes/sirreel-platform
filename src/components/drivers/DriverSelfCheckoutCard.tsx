@@ -21,6 +21,14 @@ import { CheckCircle2, Camera } from 'lucide-react'
 import { GuidedPhotoCapture, type StagedPhoto } from '@/components/fleet/GuidedPhotoCapture'
 import type { PhotoPosition } from '@/lib/fleet/photoPositions'
 
+/** This driver's side of a handoff — see /api/drive/[token]. */
+export interface DriverHandoffView {
+  holdsIt: boolean
+  returned: boolean
+  receivedFrom: { name: string; at: string } | null
+  gaveTo: { name: string; at: string } | null
+}
+
 export interface SelfCheckoutView {
   enabled: boolean
   reason: 'not-unattended' | 'already-done' | 'vehicle-returned' | 'cancelled' | null
@@ -39,14 +47,14 @@ const fmtWhen = (iso: string) =>
   })
 
 export function DriverSelfCheckoutCard({
-  token, bookingAssignmentId, unitName, state, licenceDone, onDone,
-}: {
+  token, bookingAssignmentId, unitName, state, licenceDone, onDone, handoff }: {
   token: string
   bookingAssignmentId: string
   unitName: string
   state: SelfCheckoutView
   licenceDone: boolean
   onDone: () => Promise<void> | void
+  handoff?: DriverHandoffView | null
 }) {
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
   const [mileage, setMileage] = useState('')
@@ -102,15 +110,33 @@ export function DriverSelfCheckoutCard({
         <div className="flex items-start gap-3">
           <CheckCircle2 size={26} aria-hidden className="mt-0.5 flex-shrink-0 text-emerald-400" />
           <div>
-            <h2 className="text-[16px] font-bold text-emerald-100">{unitName} is checked out to you</h2>
+            <h2 className="text-[16px] font-bold text-emerald-100">
+              {handoff?.gaveTo && !handoff.holdsIt
+                ? `You handed ${unitName} off to ${handoff.gaveTo.name}`
+                : `${unitName} is checked out to you`}
+            </h2>
             <p className="mt-1 text-[14px] leading-relaxed text-emerald-200/90">
               {d ? `${fmtWhen(d.at)}` : 'Just now'}
               {d?.mileage != null ? ` · ${d.mileage.toLocaleString('en-US')} mi` : ''}
               {d?.fuelLevel ? ` · fuel ${d.fuelLevel}` : ''}
               {` · ${d?.photoCount ?? justDone?.photos ?? 0} photos on file`}
             </p>
+            {/* The handoff, from this driver's side. Names only. */}
+            {handoff?.receivedFrom && (
+              <p className="mt-1 text-[13px] leading-relaxed text-emerald-200/80">
+                Handed off to you from {handoff.receivedFrom.name}, who checked it out {fmtWhen(handoff.receivedFrom.at)}.
+              </p>
+            )}
+            {handoff?.gaveTo && (
+              <p className="mt-1 text-[13px] leading-relaxed text-emerald-200/80">
+                {handoff.gaveTo.name} checked it out after you, {fmtWhen(handoff.gaveTo.at)}
+                {handoff.holdsIt ? '.' : ' — the vehicle is on their record now.'}
+              </p>
+            )}
             <p className="mt-2 text-[13px] leading-relaxed text-zinc-300">
-              SirReel has your photos and the mileage. Drive safe — the drop-off instructions are on this page when you need them.
+              {handoff?.gaveTo && !handoff.holdsIt
+                ? 'Your photos and mileage stay on file for the time you had it. Thanks for driving with SirReel.'
+                : 'SirReel has your photos and the mileage. Drive safe — the drop-off instructions are on this page when you need them.'}
             </p>
           </div>
         </div>
