@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Eye } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import { formatPhoneDashed } from "@/lib/format/phone";
@@ -545,6 +547,13 @@ export default function PersonDetailPage() {
           <div className="text-right ml-6 flex flex-col items-end gap-2">
             {!editing && (
               <div className="flex gap-2">
+                <Link
+                  href={`/crm/portals/preview/person/${person.id}`}
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-lt-fg2 hover:text-lt-fg border border-lt-hairline hover:border-lt-fg3 px-2 py-1 rounded"
+                  title="Open the portal exactly as this person sees it — nothing is stamped"
+                >
+                  <Eye className="w-3.5 h-3.5" /> See what they see
+                </Link>
                 <button onClick={() => setShowLogOutreach(true)} className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">+ Log outreach</button>
                 <button onClick={() => setEditing(true)} className="text-xs text-lt-fg hover:text-black">Edit</button>
                 <button onClick={deleteContact} className="text-xs text-chip-bad-fg hover:opacity-70">Delete</button>
