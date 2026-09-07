@@ -218,7 +218,11 @@ export async function POST(req: NextRequest, { params }: Params) {
           orderId,
           sortOrder: sortOrder++,
           type: 'FEE',
-          department: 'PRO_SUPPLIES',
+          // A driver is labor on the vehicle, not production supplies
+          // (Wes 2026-09-07: "this is very different"). It also matters to
+          // the money: PRO_SUPPLIES bills a 3-day week, so a driver parked
+          // there would bill three days of a five-day shoot.
+          department: /\bdrivers?\b/i.test(l.description) ? 'VEHICLES' : 'PRO_SUPPLIES',
           description: l.description,
           rateType: l.rateType,
           rate: l.rate,

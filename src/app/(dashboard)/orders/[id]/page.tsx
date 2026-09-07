@@ -1886,6 +1886,13 @@ export default function OrderDetailPage() {
     setEditPickupDate((li.pickupDate ?? "").slice(0, 10));
     setEditReturnDate((li.returnDate ?? "").slice(0, 10));
     setEditEst({ roll: li.driverEstimate?.roll ?? '', callTime: li.driverEstimate?.callTime ?? '', leaveSet: li.driverEstimate?.leaveSet ?? '', done: li.driverEstimate?.done ?? '' });
+    // A driver line has no department of its own — it is labor on the
+    // vehicle above it. Seeding from the parent means saving the row also
+    // corrects the legacy PRO_SUPPLIES classification (Wes 2026-09-07).
+    if (isDriverLine(li)) {
+      const parent = order?.lineItems.find((l) => l.id === li.parentLineItemId);
+      setEditDept((parent?.department as LineItemDepartment) ?? 'VEHICLES');
+    }
     // Catalog binding — seed from whichever side the existing row
     // points at. Both nullable in the schema; only one can be set at
     // a time per business rule (handled by the API).
@@ -2248,6 +2255,17 @@ export default function OrderDetailPage() {
             </div>
           );
         })()}
+        {/* A driver is labor on the vehicle it drives — not a department
+            anyone picks, and emphatically not production supplies (Wes
+            2026-09-07: "this is very different"). Pro Supplies also bills
+            a 3-day week, which would underbill a driver on a long shoot.
+            So the line states where it sits instead of offering a menu. */}
+        {isDriverLine(li) ? (
+          <div className="mt-1 text-[11px] text-lt-fg3">
+            Driver labor — billed with the vehicle.
+          </div>
+        ) : (
+        <>
         {/* Department selector — manual override on top
             of the catalog-derived value. Server's PUT
             honors the explicit dept + runs the
@@ -2268,6 +2286,8 @@ export default function OrderDetailPage() {
           <option value="EXPENDABLES">Expendables</option>
           <option value="ART">Art</option>
         </select>
+        </>
+        )}
       </td>
     ) : (
       <td className="px-4 py-3 text-lt-fg">
