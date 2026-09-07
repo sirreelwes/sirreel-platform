@@ -34,6 +34,31 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
 
+  // A delivered unit: name + mobile, no driver page, no relay, no fan-out.
+  // The office texts or calls this person if the drop-off or pickup moves
+  // on the day (Wes 2026-09-07). Email is optional and only stored.
+  if (body.deliveryContact === true) {
+    const name = typeof body.driverName === 'string' ? body.driverName.trim() : ''
+    const phone = typeof body.driverPhone === 'string' ? body.driverPhone.trim() : ''
+    const emailRaw = typeof body.driverEmail === 'string' ? body.driverEmail.trim().toLowerCase() : ''
+    if (!name) return NextResponse.json({ error: 'A name is required.' }, { status: 400 })
+    if (phone.replace(/\D/g, '').length < 10) return NextResponse.json({ error: 'A mobile number we can text or call is required.' }, { status: 400 })
+    if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) return NextResponse.json({ error: 'That email address doesn’t look right.' }, { status: 400 })
+    await prisma.subRental.update({
+      where: { id: sub.id },
+      data: { driverName: name, driverPhone: phone.slice(0, 30), driverEmail: emailRaw || null, driverAssignedAt: new Date() },
+    })
+    await prisma.auditLog.create({
+      data: {
+        action: 'sub_rental.delivery_contact_set',
+        entityType: 'SubRental',
+        entityId: sub.id,
+        newValues: { driverName: name, driverPhone: phone, driverEmail: emailRaw || null, via: 'vendor-page' },
+      },
+    })
+    return NextResponse.json({ ok: true, driverName: name, driverPhone: phone, driverEmail: emailRaw || null })
+  }
+
   // Roster path (2026-09-05): the partner picked one of their drivers for
   // THIS booking. Snapshot + link + fan-out all happen in assignRosterDriver.
   if (typeof body.vendorDriverId === 'string' && body.vendorDriverId) {

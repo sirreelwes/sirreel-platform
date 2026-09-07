@@ -353,7 +353,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               <div className="mt-1 text-[12px] text-zinc-600">
                 {s.driverName ? (
                   <>
-                    Driver <span className="text-zinc-800">{s.driverName}</span>
+                    {s.receiveMethod === 'DELIVERY' ? 'Delivery contact' : 'Driver'} <span className="text-zinc-800">{s.driverName}</span>
                     {s.driverPhone && ` · ${s.driverPhone}`}
                     {s.relayAddress && (
                       <>

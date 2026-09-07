@@ -142,6 +142,9 @@ export interface VendorView {
   driverName: string | null
   driverEmail: string | null
   driverPhone: string | null
+  /** DELIVERY = the partner drops the unit off and collects it (restroom
+   *  trailers). The page asks for a delivery contact, not a driver. */
+  receiveMethod: string | null
   relayAddress: string | null
   /** The driver has been sent their own page (token minted). */
   driverPageSent: boolean
@@ -185,6 +188,7 @@ export async function getVendorViewByToken(
       driverName: true,
       driverEmail: true,
       driverPhone: true,
+      receiveMethod: true,
       driverToken: true,
       driverViewedAt: true,
       driverAckedAt: true,
@@ -258,6 +262,7 @@ export async function getVendorViewByToken(
     driverName: s.driverName,
     driverEmail: s.driverEmail,
     driverPhone: s.driverPhone,
+    receiveMethod: s.receiveMethod ?? null,
     relayAddress: s.relayTag ? relayAddress(s.relayTag) : null,
     driverPageSent: !!s.driverToken,
     driverViewedAt: s.driverViewedAt,

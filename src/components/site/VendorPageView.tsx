@@ -1,6 +1,7 @@
 import type { VendorView } from '@/lib/sub-rentals/potentialSubRental'
 import VehicleGallery from '@/components/site/VehicleGallery'
 import VendorDriverCard from '@/components/site/VendorDriverCard'
+import VendorDeliveryContactCard from '@/components/site/VendorDeliveryContactCard'
 import VendorHoldCard from '@/components/site/VendorHoldCard'
 import VendorOriginCard from '@/components/site/VendorOriginCard'
 
@@ -124,6 +125,19 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             </div>
           )}
 
+          {/* A delivered unit (restroom trailer) has no driver on set — the
+              partner gives us a name and a mobile instead (Wes 2026-09-07). */}
+          {v.receiveMethod === 'DELIVERY' ? (
+          <VendorDeliveryContactCard
+            token={token}
+            status={v.status}
+            unitName={v.vehicleName}
+            initialName={v.driverName}
+            initialPhone={v.driverPhone}
+            initialEmail={v.driverEmail}
+            readOnly={preview}
+          />
+          ) : (
           <VendorDriverCard
             token={token}
             status={v.status}
@@ -142,6 +156,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             }}
             readOnly={preview}
           />
+          )}
 
           {v.hours.entries.length > 0 && (
             <div className="mt-6">

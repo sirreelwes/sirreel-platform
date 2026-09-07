@@ -279,6 +279,12 @@ export interface VendorBookedNoticeArgs extends VendorNoticeArgs {
   holdConfirmed: boolean
   /** Whether a driver has been named yet. */
   driverNamed: boolean
+  /** The partner DELIVERS the unit (restroom trailers) — casual note, asks
+   *  for a delivery contact (name + mobile) instead of a driver, no driver
+   *  page. Wes 2026-09-07. */
+  delivery?: boolean
+  /** First name of the vendor's contact, for the greeting on the casual note. */
+  contactFirstName?: string | null
 }
 
 export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
@@ -286,6 +292,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
   html: string
   text: string
 } {
+  if (a.delivery) return buildVendorDeliveryBookedNotice(a)
   const range = a.startDate === a.endDate ? fmt(a.startDate) : `${fmt(a.startDate)} — ${fmt(a.endDate)}`
   const subject = `It's a go — ${a.vehicleName}, ${range}`
   const qtyLine = a.quantity && a.quantity > 1 ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">${a.quantity} units</p>` : ''
@@ -370,6 +377,100 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
     '',
     `— ${a.agentName}`,
     '& Team SirReel',
+    '',
+    '8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335',
+  ].join('\n')
+
+  return { subject, html, text }
+}
+
+// ── "It's a go" — delivered units ────────────────────────────────────
+//
+// A restroom trailer is dropped and collected; the partner's driver never
+// meets the production, logs no hours and needs no page. So the note is
+// short and casual, and the one ask is a name and a mobile the office can
+// text or call if the drop-off or pickup moves on the day (Wes 2026-09-07).
+
+function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
+  subject: string
+  html: string
+  text: string
+} {
+  const range = a.startDate === a.endDate ? fmt(a.startDate) : `${fmt(a.startDate)} — ${fmt(a.endDate)}`
+  const subject = `We're on for ${range} — ${a.vehicleName}`
+  const who = a.contactFirstName || a.vendorName
+  const units = a.quantity && a.quantity > 1 ? `${a.quantity} × ${a.vehicleName}` : `the ${a.vehicleName}`
+  const ask = a.driverNamed
+    ? `You've already given us a delivery contact — thanks. If that changes, update it on the booking page.`
+    : `One quick thing: on the booking page, give us a name and a mobile for whoever's doing the drop-off and pickup, so we can text or call them if the address or the timing shifts on the day. No page, no login for them — just a number.`
+
+  const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#f3f4f6;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <tr><td style="background-color:${HEADER_BG};padding:20px 32px;">
+          <img src="https://hq.sirreel.com/sirreel-logo-white.png" alt="SirReel" style="height:28px;width:auto;display:block;" />
+        </td></tr>
+        <tr><td style="padding:28px 32px 4px;">
+          <p style="font-size:17px;color:${TEXT};margin:0 0 12px;line-height:1.5;">Hey ${escapeHtml(who)},</p>
+          <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">
+            Good news &mdash; the production booked, so we're on for ${escapeHtml(units)}. Dates below. Drop-off and pickup details are on your booking page, and they'll update there if anything moves.
+          </p>
+          <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">${escapeHtml(ask)}</p>
+        </td></tr>
+        <tr><td style="padding:14px 32px 0;">
+          <div style="border-left:3px solid ${ACCENT};padding-left:14px;">
+            <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Booked</p>
+            <p style="font-size:20px;font-weight:800;color:${TEXT};margin:0;">${escapeHtml(range)}</p>
+            ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
+            ${rateHtml(a)}
+          </div>
+        </td></tr>
+        <tr><td align="center" style="padding:26px 32px 4px;">
+          <a href="${a.vendorUrl}" style="display:inline-block;background-color:${CTA_BG};color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 28px;border-radius:999px;">Open the booking page &rarr;</a>
+        </td></tr>
+        <tr><td style="padding:22px 32px 0;">
+          <p style="font-size:13px;color:${MUTED};margin:0;line-height:1.6;">
+            If the production cancels inside 24 hours you'll hear from us right away &mdash; otherwise this is firm. Questions, just reply here rather than reaching out to the production.
+          </p>
+        </td></tr>
+        <tr><td style="padding:22px 32px 4px;">
+          <p style="font-size:16px;color:${TEXT};margin:0;line-height:1.6;">
+            Thanks,<br/>${escapeHtml(a.agentName)}<br/>
+            <span style="color:${MUTED};font-size:14px;">SirReel</span>
+          </p>
+        </td></tr>
+        <tr><td align="center" style="padding:18px 32px 26px;">
+          <p style="font-size:12px;color:${MUTED};margin:0;">8500 Lankershim Blvd, Sun Valley CA 91352 &middot; (888) 477-7335</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  const text = [
+    `Hey ${who},`,
+    '',
+    `Good news — the production booked, so we're on for ${units}. Dates below. Drop-off and pickup details are on your booking page, and they'll update there if anything moves.`,
+    '',
+    ask,
+    '',
+    `Booked: ${range}`,
+    ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
+    ...rateText(a),
+    '',
+    `Booking page: ${a.vendorUrl}`,
+    '',
+    `If the production cancels inside 24 hours you'll hear from us right away — otherwise this is firm. Questions, just reply here rather than reaching out to the production.`,
+    '',
+    'Thanks,',
+    a.agentName,
+    'SirReel',
     '',
     '8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335',
   ].join('\n')

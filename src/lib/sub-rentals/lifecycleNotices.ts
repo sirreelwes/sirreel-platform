@@ -63,9 +63,9 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
     where: { ...scope(ctx.orderId, ctx.jobId), status: { in: ['REQUESTED', 'CONFIRMED'] }, vendorBookedNotifiedAt: null },
     select: {
       id: true, itemDescription: true, quantity: true, startDate: true, endDate: true, vendorToken: true,
-      vendorConfirmedAt: true, driverName: true,
+      vendorConfirmedAt: true, driverName: true, receiveMethod: true,
       subcontractedVehicle: { select: { name: true } },
-      vendor: { select: { name: true, email: true, poEmail: true } },
+      vendor: { select: { name: true, email: true, poEmail: true, contactName: true } },
     },
   })
   const out: LifecycleNoticeOutcome[] = []
@@ -83,6 +83,8 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
         reference: ctx.jobCode, vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(s.vendorToken)}`,
         agentName: ctx.agentName ?? 'Team SirReel', holdConfirmed: !!s.vendorConfirmedAt, driverNamed: !!s.driverName,
         rate: cost,
+        delivery: s.receiveMethod === 'DELIVERY',
+        contactFirstName: (s.vendor.contactName ?? '').split(/\s+/)[0] || null,
       })
       const res = await sendAgreementEmail({
         to: [to], cc: await withTeamCc([], to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
