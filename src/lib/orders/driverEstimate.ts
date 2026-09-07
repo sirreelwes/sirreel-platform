@@ -122,7 +122,10 @@ export function driverEstimateSentence(v: DriverEstimateView): string {
   return (
     `Estimated day: ${stamps} \u2014 ${fmtHours(p.spanHours)} hrs portal to portal, ` +
     `${fmtHours(p.paidHours)} paid after a ${DRIVER_LUNCH_HOURS === 0.5 ? '\u00bd' : String(DRIVER_LUNCH_HOURS)}-hour meal break: ` +
-    `${driverPayBreakdown(p)} \u2248 ${money(p.total)}. ` +
+    // "about", not "\u2248" — the quote PDF's embedded font has no glyph for
+    // it and printed a stray capital H on a client-facing document
+    // (caught on S260828-001, 2026-09-07).
+    `${driverPayBreakdown(p)} = about ${money(p.total)}. ` +
     `This is an estimate \u2014 the invoice reflects the hours actually worked.`
   )
 }
