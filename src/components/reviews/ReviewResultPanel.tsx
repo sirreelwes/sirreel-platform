@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
 import { clauseMatches, type MarkupManifest } from '@/lib/contracts/markupShared';
+import { diffClause, hasRealChange } from '@/lib/contracts/clauseDiff';
 import { AlertTriangle, Check, ClipboardList, Search, X, XCircle } from 'lucide-react'
 
 const BASELINE_BY_REF = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c]));
@@ -224,15 +225,25 @@ export function ReviewResultPanel({
                   {change.description && (
                     <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Summary</div><div>{change.description}</div></div>
                   )}
-                  <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Original</div><div>{change.original}</div></div>
-                  <div>
-                    <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Client proposed (AI-transcribed)</div>
-                    <div className="text-[10px] opacity-60 mb-1">The AI&apos;s read of the client&apos;s post-redline clause. Rendered verbatim into the counter-PDF if you Accept — check it against the markup ground truth below.</div>
-                    <div className="bg-white/50 rounded-lg p-2">{change.proposed || <span className="opacity-50 italic">No clause text extracted.</span>}</div>
-                  </div>
+                  <ClauseChangeDiff original={change.original} proposed={change.proposed} operatorEntered={change.playbookSource === 'operator_entered'} />
                   <SourceAgreementPanel sa={change.sourceAgreement} />
                   <ClauseMarkupGroundTruth manifest={manifest} clauseRef={clauseRef} />
-                  <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Reasoning</div><div className="opacity-80">{change.reasoning}</div></div>
+                  <div>
+                    <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">{change.playbookSource === 'operator_entered' ? 'Why it is auto-approved' : 'Reasoning'}</div>
+                    <div className="opacity-80">
+                      {change.playbookSource === 'operator_entered' ? (
+                        <>
+                          This clause came from a redline {review?._meta?.enteredByName ? `${review._meta.enteredByName} ` : ''}entered by hand
+                          {review?._meta?.enteredAt ? ` on ${new Date(review._meta.enteredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''} and
+                          approved for this job at the time. The AI transcribed the clause text; it did not judge the change. What the client
+                          altered is exactly the marked text above — if that is not what you meant to approve, reject it here and it stays out of the counter-PDF.
+                          {change.reasoning && change.reasoning !== 'Entered from the redline the client sent back.' ? ` Note on entry: ${change.reasoning}` : ''}
+                        </>
+                      ) : (
+                        change.reasoning
+                      )}
+                    </div>
+                  </div>
                   {change.suggestedCounter && (
                     <div className="bg-white/50 rounded-lg p-2">
                       <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Suggested Counter</div>
@@ -571,6 +582,64 @@ function DiscussPanel({
  * a disagreement callout when they don't (the guardrail also forces
  * needsOperatorReview in that case). Never auto-resolved.
  */
+/**
+ * What the client actually changed — a word-level diff of the canonical
+ * clause against the proposed clause, struck and inserted, with the two full
+ * texts one click away. Wes 2026-09-07: "there is no way to review the
+ * redlined changes … if we are to approve this I want to know more detail
+ * and why." The raw Original / Proposed dumps that were here made the reader
+ * do the diff by eye across 300 words.
+ */
+function ClauseChangeDiff({ original, proposed, operatorEntered }: { original: unknown; proposed: unknown; operatorEntered: boolean }) {
+  const [showFull, setShowFull] = useState(false);
+  const orig = typeof original === 'string' ? original : '';
+  const prop = typeof proposed === 'string' ? proposed : '';
+  if (!orig && !prop) return <div className="opacity-50 italic">No clause text on this change.</div>;
+  const changed = orig && prop ? hasRealChange(orig, prop) : true;
+  const segments = orig && prop ? diffClause(orig, prop) : [];
+  const dels = segments.filter((x) => x.op === 'del').length;
+  const ins = segments.filter((x) => x.op === 'ins').length;
+  return (
+    <div className="bg-white border border-gray-300 rounded-lg p-2.5">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="font-bold text-gray-500 uppercase text-[9px]">
+          What the client changed{orig && prop ? ` · ${dels} struck, ${ins} inserted` : ''}
+        </div>
+        {orig && prop && (
+          <button type="button" onClick={(e) => { e.stopPropagation(); setShowFull((v) => !v); }} className="text-[10px] font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2">
+            {showFull ? 'Hide full texts' : 'Show full texts'}
+          </button>
+        )}
+      </div>
+      {!changed && <div className="text-[11px] text-gray-500 italic">The proposed text matches the original word for word.</div>}
+      {orig && prop ? (
+        <div className="text-[12px] leading-relaxed text-gray-800 whitespace-pre-wrap">
+          {segments.map((seg, i) =>
+            seg.op === 'same' ? (
+              <span key={i}>{seg.text}</span>
+            ) : seg.op === 'del' ? (
+              <span key={i} className="line-through decoration-red-500 decoration-2 bg-red-50 text-red-800">{seg.text}</span>
+            ) : (
+              <span key={i} className="bg-emerald-100 text-emerald-900 font-semibold">{seg.text}</span>
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="text-[12px] leading-relaxed text-gray-800 whitespace-pre-wrap">{prop || orig}</div>
+      )}
+      {showFull && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div><div className="font-bold text-gray-400 uppercase text-[9px] mb-0.5">Original (our clause)</div><div className="text-[11px] text-gray-700 whitespace-pre-wrap">{orig}</div></div>
+          <div><div className="font-bold text-gray-400 uppercase text-[9px] mb-0.5">{operatorEntered ? 'Client proposed (as entered)' : 'Client proposed (AI-transcribed)'}</div><div className="text-[11px] text-gray-700 whitespace-pre-wrap">{prop}</div></div>
+        </div>
+      )}
+      {!operatorEntered && (
+        <div className="mt-1.5 text-[10px] text-gray-500">The proposed text is the AI&apos;s read of the client&apos;s markup. It goes verbatim into the counter-PDF if you Accept — check it against the markup ground truth below.</div>
+      )}
+    </div>
+  );
+}
+
 function SourceAgreementPanel({ sa }: { sa: any }) {
   if (!sa || typeof sa !== 'object') return null;
   const agree = sa.agree === true;
@@ -620,6 +689,11 @@ function ClauseMarkupGroundTruth({
   clauseRef: string;
 }) {
   if (!manifest || !clauseRef) return null;
+  // An operator-entered redline stores { strikes: [], insertions: [], source }
+  // — no PDF, so no annotations. Calling .filter on the PDF shape's keys
+  // white-screened the whole review page the first time a row was opened
+  // (Wes, 2026-09-07). Anything that isn't the PDF shape renders nothing.
+  if (!Array.isArray(manifest.struck) || !Array.isArray(manifest.inserted)) return null;
   const struck = manifest.struck.filter((s) => clauseMatches(s.clauseGuess, clauseRef));
   const inserted = manifest.inserted.filter((n) => clauseMatches(n.clauseGuess, clauseRef));
   if (struck.length === 0 && inserted.length === 0) return null;
