@@ -31,6 +31,10 @@ type Db = Prisma.TransactionClient | typeof prisma
 export interface KitInputLine {
   inventoryItemId: string | null | undefined
   quantity: number
+  /** When the order line was written. A kit rule only counts lines
+   *  created at or after the rule itself — a new accessory never
+   *  re-prices an existing quote. Omit for lines that don't exist yet. */
+  createdAt?: Date | null
 }
 
 /** One accessory to add, resolved against the live catalog. */
@@ -83,19 +87,23 @@ export async function deriveKitPieceLines(
   companyId?: string | null,
 ): Promise<KitPieceLine[]> {
   // Parent quantities, summed across lines — two radio lines are one
-  // radio count as far as the charging bank is concerned.
-  const parentQty = new Map<string, number>()
+  // radio count as far as the charging bank is concerned. Kept per line
+  // (not pre-summed) because a kit rule only counts lines written AFTER
+  // the rule existed — see the filter below.
+  const parentLines = new Map<string, Array<{ quantity: number; createdAt: Date | null }>>()
   for (const l of lines) {
     if (!l.inventoryItemId) continue
     const q = Math.floor(Number(l.quantity) || 0)
     if (q <= 0) continue
-    parentQty.set(l.inventoryItemId, (parentQty.get(l.inventoryItemId) ?? 0) + q)
+    const arr = parentLines.get(l.inventoryItemId) ?? []
+    arr.push({ quantity: q, createdAt: l.createdAt ?? null })
+    parentLines.set(l.inventoryItemId, arr)
   }
-  if (parentQty.size === 0) return []
+  if (parentLines.size === 0) return []
 
   const kits = await db.inventoryKitPiece.findMany({
     where: {
-      parentItemId: { in: [...parentQty.keys()] },
+      parentItemId: { in: [...parentLines.keys()] },
       isActive: true,
       piece: { isActive: true },
     },
@@ -147,7 +155,16 @@ export async function deriveKitPieceLines(
   >()
   for (const kit of kits) {
     if (kit.suppressIfOrdered && orderedIds.has(kit.pieceItemId)) continue
-    const qty = parentQty.get(kit.parentItemId) ?? 0
+    // A rule never reaches back into money that was already quoted.
+    // Wes 2026-09-07: "rate changes should never change past invoices."
+    // Only lines written at or after the kit row existed count toward
+    // it, so attaching a new accessory to a catalog item cannot add a
+    // charge to a quote that went out last week the next time a rep
+    // touches an unrelated line. Lines with no createdAt (the parse
+    // preview, lines being created right now) are new by definition.
+    const qty = (parentLines.get(kit.parentItemId) ?? [])
+      .filter((l) => !l.createdAt || l.createdAt.getTime() >= kit.createdAt.getTime())
+      .reduce((n, l) => n + l.quantity, 0)
     if (qty <= 0) continue
     const key = [
       kit.pieceItemId,

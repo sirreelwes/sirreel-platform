@@ -93,6 +93,7 @@ export async function syncOrderKitPieces(
       sortOrder: true,
       pickStatus: true,
       type: true,
+      createdAt: true,
     },
     orderBy: { sortOrder: 'asc' },
   })
@@ -116,6 +117,7 @@ export async function syncOrderKitPieces(
     sourceLines.map((l) => ({
       inventoryItemId: l.inventoryItemId,
       quantity: l.quantity,
+      createdAt: l.createdAt,
     })),
     tx,
     orderForRates?.companyId ?? null,
