@@ -285,6 +285,11 @@ export interface VendorBookedNoticeArgs extends VendorNoticeArgs {
   delivery?: boolean
   /** First name of the vendor's contact, for the greeting on the casual note. */
   contactFirstName?: string | null
+  /** Where it goes: the exact report-to when the production has set it,
+   *  else the approximate area with "exact address to follow". Partners
+   *  always get this; their DRIVERS get the exact address only the day
+   *  before (see conduit.driverFacingLogistics). */
+  deliverTo?: { address: string | null; area: string | null }
 }
 
 export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
@@ -428,6 +433,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
             <p style="font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${ACCENT};margin:0 0 2px;">Delivering</p>
             <p style="font-size:22px;font-weight:800;color:${TEXT};margin:0;line-height:1.25;">${a.quantity && a.quantity > 1 ? `${a.quantity} &times; ` : ''}${escapeHtml(a.vehicleName)}</p>
             <p style="font-size:17px;font-weight:700;color:${TEXT};margin:8px 0 0;">${escapeHtml(range)}</p>
+            ${a.deliverTo?.address ? `<p style="font-size:15px;color:${TEXT};margin:6px 0 0;"><span style="color:${MUTED};">To</span> ${escapeHtml(a.deliverTo.address)}</p>` : a.deliverTo?.area ? `<p style="font-size:15px;color:${TEXT};margin:6px 0 0;"><span style="color:${MUTED};">To</span> ${escapeHtml(a.deliverTo.area)} <span style="color:${MUTED};">&middot; exact address to follow</span></p>` : ''}
             ${a.reference ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">SirReel reference ${escapeHtml(a.reference)}</p>` : ''}
             ${rateHtml(a)}
           </div>
@@ -464,6 +470,7 @@ function buildVendorDeliveryBookedNotice(a: VendorBookedNoticeArgs): {
     '',
     `DELIVERING: ${a.quantity && a.quantity > 1 ? `${a.quantity} × ` : ''}${a.vehicleName}`,
     `Dates: ${range}`,
+    ...(a.deliverTo?.address ? [`To: ${a.deliverTo.address}`] : a.deliverTo?.area ? [`To: ${a.deliverTo.area} — exact address to follow`] : []),
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
     ...rateText(a),
     '',

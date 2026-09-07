@@ -240,11 +240,58 @@ export function logisticsFor(row: {
   return { ...v, hasAny: !!(v.address || v.accessNotes || v.arriveTime || v.callTime || v.driverNotes) }
 }
 
+/** YYYY-MM-DD plus n days, in the calendar (no timezone drift). */
+export function addDaysYmd(ymdStr: string, n: number): string {
+  const d = new Date(`${ymdStr}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Today in the yard's timezone. */
+export function todayPacificYmd(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
+/**
+ * What a partner's DRIVER may see, as of `today`.
+ *
+ * Wes 2026-09-07: "we don't want to send to partner drivers directly the
+ * delivery location until day before delivery." The partner always has the
+ * full picture; the driver's page and emails carry the area and the call
+ * time until the day before the first day, and the exact address, gate
+ * notes, on-site contact and pickup address from then on. A daily cron
+ * (releaseDriverLocations) mails the driver the moment it opens.
+ */
+export function driverFacingLogistics(
+  row: { startDate: Date | null },
+  l: LogisticsView,
+  today: string = todayPacificYmd(),
+): { logistics: LogisticsView; withheld: boolean; releaseDate: string | null } {
+  const start = ymd(row.startDate)
+  if (!start) return { logistics: l, withheld: false, releaseDate: null }
+  const releaseDate = addDaysYmd(start, -1)
+  if (today >= releaseDate) return { logistics: l, withheld: false, releaseDate }
+  const gated: LogisticsView = {
+    ...l,
+    address: null,
+    accessNotes: null,
+    onSiteContactName: null,
+    pickupAddress: null,
+    pickupAccessNotes: null,
+  }
+  return {
+    logistics: { ...gated, hasAny: !!(gated.arriveTime || gated.callTime || gated.driverNotes) },
+    withheld: !!(l.address || l.accessNotes || l.onSiteContactName || l.pickupAddress),
+    releaseDate,
+  }
+}
+
 /** Rows for a detailTable — only the facts that are set. */
 function logisticsRows(l: LogisticsView): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = []
   if (l.leavingFrom) rows.push({ label: 'Leaving from', value: l.leavingFrom })
   if (l.address) rows.push({ label: 'Report to', value: l.address })
+  else if (l.area) rows.push({ label: 'Area', value: `${l.area} — exact address to follow` })
   if (l.accessNotes) rows.push({ label: 'Gate / access', value: l.accessNotes })
   if (l.callTime) rows.push({ label: 'Call time', value: l.callTime })
   else if (l.arriveTime) rows.push({ label: 'Arrive', value: l.arriveTime })
@@ -735,7 +782,12 @@ export async function notifyLogisticsChanged(args: {
       if (ok) { vendorMails++; any = true }
     }
 
-    if (row.driverEmail && row.driverName) {
+    // The driver hears only what they may see today. Before the day-before
+    // window the location stays with the partner; the release cron mails
+    // the driver when the window opens. A change inside the window is
+    // sent at once and counts as a release.
+    const dl = driverFacingLogistics(row, logistics)
+    if (row.driverEmail && row.driverName && dl.logistics.hasAny) {
       const token = await ensureDriverToken(row.id, row.driverToken)
       const ok = await send({
         to: row.driverEmail,
@@ -746,14 +798,19 @@ export async function notifyLogisticsChanged(args: {
           unitName,
           startDate: ymd(row.startDate),
           endDate: ymd(row.endDate),
-          logistics,
+          logistics: dl.logistics,
           driverUrl: driverUnitPageUrl(token),
           changed: !!row.driverAckedAt,
         }),
         label: 'sub-rental/logistics-driver',
         orderId: row.orderId,
       })
-      if (ok) { driverMails++; any = true }
+      if (ok) {
+        driverMails++; any = true
+        if (!dl.withheld && dl.logistics.address) {
+          await prisma.subRental.update({ where: { id }, data: { driverLocationReleasedAt: new Date() } })
+        }
+      }
     }
 
     if (any) await prisma.subRental.update({ where: { id }, data: { logisticsNotifiedAt: new Date() } })
@@ -781,13 +838,15 @@ export async function notifyDriverAssigned(subRentalId: string): Promise<{
   const driverMailed = await send({
     to: row.driverEmail,
     replyTo: row.relayTag ? relayAddress(row.relayTag) : undefined,
+    // The welcome shows the driver only what they may see today — the exact
+    // location waits for the day before (driverFacingLogistics).
     mail: buildDriverWelcome({
       driverName: row.driverName,
       vendorName: row.vendor.name,
       unitName,
       startDate: ymd(row.startDate),
       endDate: ymd(row.endDate),
-      logistics,
+      logistics: driverFacingLogistics(row, logistics).logistics,
       driverUrl,
     }),
     label: 'sub-rental/driver-welcome',
@@ -923,4 +982,63 @@ export async function notifyVendorWord(subRentalId: string, kind: 'confirmed' | 
 /** Hours summary for a sub-rental's driver — used by all three pages. */
 export function hoursTotal(row: { driverHours: Array<{ hours: { toString(): string } }> }): number {
   return sumHours(row.driverHours)
+}
+
+
+/**
+ * Day-before release — the cron half of driverFacingLogistics.
+ *
+ * Runs daily (afternoon Pacific). Every live sub-rental whose first day is
+ * TOMORROW, with a named driver who has an email and an exact address on
+ * the job, and no release stamped yet, gets the "Where to take the …" mail
+ * with the full location. Stamps driverLocationReleasedAt so a re-run is
+ * a no-op. Rows whose window opened without an address on file are left
+ * alone; notifyLogisticsChanged sends them the moment the address lands.
+ */
+export async function releaseDriverLocations(today: string = todayPacificYmd()): Promise<{
+  tomorrow: string
+  candidates: number
+  sent: number
+  skipped: Array<{ subRentalId: string; reason: string }>
+}> {
+  const tomorrow = addDaysYmd(today, 1)
+  const rows = await prisma.subRental.findMany({
+    where: {
+      status: { in: ['REQUESTED', 'CONFIRMED', 'PICKED_UP', 'ON_RENT'] },
+      startDate: new Date(`${tomorrow}T00:00:00.000Z`),
+      driverEmail: { not: null },
+      driverName: { not: null },
+      driverLocationReleasedAt: null,
+    },
+    select: { id: true },
+  })
+  let sent = 0
+  const skipped: Array<{ subRentalId: string; reason: string }> = []
+  for (const { id } of rows) {
+    const row = await loadConduit(id)
+    if (!row || !row.driverEmail || !row.driverName) { skipped.push({ subRentalId: id, reason: 'no driver' }); continue }
+    const logistics = logisticsFor(row)
+    if (!logistics.address) { skipped.push({ subRentalId: id, reason: 'no address on the job yet' }); continue }
+    const token = await ensureDriverToken(row.id, row.driverToken)
+    const ok = await send({
+      to: row.driverEmail,
+      replyTo: row.relayTag ? relayAddress(row.relayTag) : undefined,
+      mail: buildLogisticsForDriver({
+        driverName: row.driverName,
+        unitName: unitNameOf(row),
+        startDate: ymd(row.startDate),
+        endDate: ymd(row.endDate),
+        logistics,
+        driverUrl: driverUnitPageUrl(token),
+        changed: false,
+      }),
+      label: 'sub-rental/logistics-driver-release',
+      orderId: row.orderId,
+    })
+    if (ok) {
+      sent++
+      await prisma.subRental.update({ where: { id }, data: { driverLocationReleasedAt: new Date(), logisticsNotifiedAt: new Date() } })
+    } else skipped.push({ subRentalId: id, reason: 'send failed' })
+  }
+  return { tomorrow, candidates: rows.length, sent, skipped }
 }

@@ -10,7 +10,7 @@
 import { prisma } from '@/lib/prisma'
 import { isAckStale, hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import { listHours, type HoursView } from '@/lib/drivers/hoursStore'
-import { loadConduit, logisticsFor, unitNameOf, type ConduitRow, type LogisticsView } from '@/lib/sub-rentals/conduit'
+import { loadConduit, logisticsFor, unitNameOf, driverFacingLogistics, type ConduitRow, type LogisticsView } from '@/lib/sub-rentals/conduit'
 
 export async function subRentalForDriverToken(token: string): Promise<ConduitRow | null> {
   if (!token || token.length < 32) return null
@@ -28,6 +28,9 @@ export interface DriverUnitView {
   endDate: string | null
   reference: string | null
   logistics: LogisticsView
+  /** The exact location is being held back until this date (the day
+   *  before the first day). Null once it's open. */
+  locationHeldUntil: string | null
   ack: { at: string; note: string | null; stale: boolean } | null
   hours: HoursView
   hoursPromptOpen: boolean
@@ -37,6 +40,7 @@ export interface DriverUnitView {
 export async function buildDriverUnitView(row: ConduitRow, today: string): Promise<DriverUnitView> {
   const startDate = row.startDate?.toISOString().slice(0, 10) ?? null
   const endDate = row.endDate?.toISOString().slice(0, 10) ?? null
+  const gated = driverFacingLogistics(row, logisticsFor(row), today)
   return {
     driverName: row.driverName ?? 'Driver',
     vendorName: row.vendor.name,
@@ -45,7 +49,8 @@ export async function buildDriverUnitView(row: ConduitRow, today: string): Promi
     startDate,
     endDate,
     reference: row.job?.jobCode ?? null,
-    logistics: logisticsFor(row),
+    logistics: gated.logistics,
+    locationHeldUntil: gated.withheld ? gated.releaseDate : null,
     ack: row.driverAckedAt
       ? { at: row.driverAckedAt.toISOString(), note: row.driverAckNote, stale: isAckStale(row.driverAckedAt, row.logisticsUpdatedAt) }
       : null,

@@ -4677,6 +4677,10 @@ model SubRental {
   logisticsUpdatedAt  DateTime? @map("logistics_updated_at")
   /// Last time the partner + driver were actually told about a change.
   logisticsNotifiedAt DateTime? @map("logistics_notified_at")
+  /// The exact location was released to the DRIVER (day-before cron, or
+  /// a change after release). Drivers don't get the delivery location
+  /// until the day before (Wes 2026-09-07); the partner always has it.
+  driverLocationReleasedAt DateTime? @map("driver_location_released_at")
 
   /// The partner's driver's OWN no-login page (/drive/unit/[token]) — where
   /// they read the location and call time, confirm receipt, and log hours.

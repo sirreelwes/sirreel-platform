@@ -43,6 +43,7 @@ interface View {
   endDate: string | null
   reference: string | null
   logistics: Logistics
+  locationHeldUntil?: string | null
   ack: { at: string; note: string | null; stale: boolean } | null
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
@@ -167,6 +168,12 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
 
         {/* Where and when — the reason the page exists. */}
         <Section title="Where and when" tone={needsAck && !data.closed ? 'warn' : undefined}>
+          {data.locationHeldUntil && (
+            <p className="mb-3 text-[14px] leading-relaxed text-zinc-300">
+              {l.area ? <><span className="font-semibold text-white">{l.area}</span> &middot; </> : null}
+              The exact address comes to you the day before ({new Date(`${data.locationHeldUntil}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}). Check back here or watch for the email.
+            </p>
+          )}
           {l.hasAny ? (
             <dl className="space-y-3">
               {l.leavingFrom && (
