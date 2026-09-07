@@ -24,6 +24,41 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-07
 
+### Yard screens on one kit; no more "overall condition"
+
+`c7b215d` fleet: the yard screens on one kit, and no more "overall condition"
+
+Wes, after the report: "restyle them too." The three phone screens in a
+vehicle's arc (/fleet/inspection → /fleet/pickup → /fleet/return) each had
+their own header, shell, denied card and done card, ISO/UTC timestamps, and
+a seven-card photo stack. New `components/fleet/yard-ui.tsx` +
+`YardControls.tsx`: opaque zinc-950 ground (outside the light shell on
+purpose — a phone in the yard before dawn), licence-plate header with the
+unit number biggest, a walk-around → handover → return step strip, 16/13px
+yard type, 48px targets, Pacific time, submit pinned above the home
+indicator with a status line ("Waiting for 2 photos…"). GuidedPhotoCapture
+is a two-column tile grid with a progress strip; on a return the check-out
+shot sits INSIDE the empty slot under the camera button and rides along as
+an inset once the new shot exists. Previews are `contain`, never `cover`.
+`DamageDraftList` replaces the damage rows both forms duplicated.
+PickupDriverForm keeps its logic. Verified with Playwright at 390×844
+against mocked upload/photo/driver endpoints (scratch route, not
+committed).
+
+**No "overall condition" question.** Wes: "don't ask subjective condition
+of vehicles in forms." Fuel, odometer, photos and the damage list are
+facts; a one-word verdict is the first thing a client argues with. The
+column is a required enum, so `POST /api/fleet/inspections` and `/return`
+now DERIVE it (damage logged → DAMAGED, else GOOD — the driver self
+check-out's existing rule) and still accept an explicit value. The PDF's
+condition headline is the damage count instead of the word.
+
+Q from Wes mid-session — "did an email go out to the client that the
+driver checked out the truck?" — No. A driver self check-out emails only
+the internal `driver-checkouts` channel (hq@ feed + Wes); a staff handover
+emails nobody; the report send to the renter is still dark behind
+`INSPECTION_REPORT_SENDING`.
+
 ### Condition report: upright, whole, Pacific, and branded
 
 `7fbf3de` fleet: the condition report prints upright, whole, on the yard's clock
