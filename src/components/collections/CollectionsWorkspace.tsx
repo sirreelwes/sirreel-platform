@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { RwConnectionCard } from '@/components/collections/RwConnectionCard'
 import { EodReportPanel } from '@/components/collections/EodReportPanel'
 import { BillingQueuePanel } from '@/components/collections/BillingQueuePanel'
+import { HqInvoiceSearch } from '@/components/collections/HqInvoiceSearch'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -1527,6 +1528,15 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             )})}
           </div>
         </div>
+
+        {/* ── HQ's own invoices ────────────────────────────────────────
+            Ana 2026-09-09: "I have a search bar for RentalWorks but will
+            need to be able to access the HQ ones going forward." Directly
+            beneath the RW list and deliberately its twin, because the two
+            answer the same question about two systems — and for as long as
+            billing straddles both, whichever one an invoice lives in is not
+            something anyone should have to remember before searching. */}
+        <HqInvoiceSearch />
 
         {/* Recent charges + reversal. Without this the history was
             write-only: a mis-keyed amount had no path back short of a
