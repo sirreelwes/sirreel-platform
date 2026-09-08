@@ -167,6 +167,31 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## Internal email — who gets what (2026-09-08 — Wes)
+- Wes: "no one gets anything but absolutely necessary emails. Wes wants
+  to continue getting all HQ emails, but the guys don't need them."
+- **`src/lib/email/notificationChannels.ts` is the ONLY place internal
+  notification audiences are defined.** Every internal send resolves
+  through `channelRecipients(key)`; six that used to hardcode a group
+  address were folded in on 09-08. Do not add a new send with a literal
+  recipient — add a channel.
+- Each channel declares a **tier**: `owner` = awareness (Wes alone) —
+  `desk` = someone other than Wes must act and email is how they find
+  out (that desk plus Wes). A new channel is `owner` unless you can name
+  who acts and what they do. Prefer individuals over group addresses: a
+  group is invisible from the code, which is how hq@ ended up on
+  nineteen channels reaching three people each.
+- Guarded by `npm run test:channel-tiers` — Wes on everything, "Wes
+  only" means only Wes, groups only on `desk`, hq@ nowhere.
+- **Editing a default does not change a channel that has an override
+  row.** The row is the whole audience and wins. `/admin/notifications`
+  banners this and offers "Reset all to defaults"
+  (`DELETE /api/admin/notification-channels`). Check it after any
+  defaults change, or the live behaviour silently differs from the code.
+- Client-facing Reply-To addresses are NOT read off internal channels
+  (that coupling was removed on 09-08) — internal audience and client
+  reply path are separate questions.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

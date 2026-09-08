@@ -22,6 +22,16 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-08
+
+### Internal email dialled back to Wes plus the desk that acts
+
+`4fde258` notifications: dial internal email back to Wes plus the desk that acts
+
+Wes: "no one gets anything but absolutely necessary emails. Wes wants to continue getting all HQ emails, but the guys don't need them." The volume never came from the number of channels — it came from most of them defaulting to a GROUP (hq@ = Wes/Jose/Oliver, rentals@ = Jose/Oliver/Dani), so every portal open, signed PDF, driver photo set and outbound quote hit three or four inboxes regardless of who could act. Every channel now declares a `tier`: `owner` (awareness, or worked inside HQ — Wes alone, 16 channels) or `desk` (someone else must DO something and email is how they learn — that desk plus Wes, 12 channels). hq@ is off the defaults entirely. Six sends that bypassed the registry with hardcoded group addresses were folded in as channels, so nothing internal sends outside `/admin/notifications` any more. `npm run test:channel-tiers` asserts the policy so it cannot drift back quietly.
+
+**A changed default does not reach a channel someone already customised.** An override row IS the whole audience, so a channel edited before 09-08 keeps its old, wider list while the code reads dialled-back. `DELETE /api/admin/notification-channels` clears all overrides at once (audit-logged per channel, deleted by the keys just read) and the page shows a banner offering it whenever any override exists. Anyone changing defaults in `notificationChannels.ts` has to think about this — the code is not the effective state.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
