@@ -4,6 +4,7 @@ import VendorDriverCard from '@/components/site/VendorDriverCard'
 import VendorDeliveryContactCard from '@/components/site/VendorDeliveryContactCard'
 import VendorHoldCard from '@/components/site/VendorHoldCard'
 import VendorOriginCard from '@/components/site/VendorOriginCard'
+import VendorReleaseCard from '@/components/site/VendorReleaseCard'
 
 /**
  * The vendor's page, as a component — rendered at /vendor/[token] for the
@@ -34,7 +35,12 @@ const STATUS_COPY: Record<string, { label: string; blurb: string; tone: string }
   PICKED_UP: { label: 'Picked up', blurb: 'The unit is with us.', tone: '#2f7d5d' },
   ON_RENT: { label: 'On rent', blurb: 'The unit is out on the job.', tone: '#2f7d5d' },
   RETURNED: { label: 'Returned', blurb: 'The unit is back with you. Thank you.', tone: '#5a554c' },
-  CANCELLED: { label: 'Cancelled', blurb: 'This booking is no longer going ahead.', tone: '#8b857a' },
+  CANCELLED: {
+    label: 'Released',
+    blurb:
+      'This booking is no longer going ahead — the dates below are released and yours to book elsewhere. Please confirm below that you have them back.',
+    tone: '#8b857a',
+  },
 }
 
 function fmtDate(d: Date | null): string {
@@ -91,6 +97,14 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             confirmedAt={v.vendorConfirmedAt?.toISOString() ?? null}
             declinedAt={v.vendorDeclinedAt?.toISOString() ?? null}
             declineNote={v.vendorDeclineNote}
+            readOnly={preview}
+          />
+
+          <VendorReleaseCard
+            token={token}
+            status={v.status}
+            releaseAckedAt={v.vendorReleaseAckedAt?.toISOString() ?? null}
+            cancelNotifiedAt={v.vendorCancelNotifiedAt?.toISOString() ?? null}
             readOnly={preview}
           />
 

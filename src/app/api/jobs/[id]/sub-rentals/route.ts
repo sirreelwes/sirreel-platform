@@ -71,6 +71,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       driverAckedAt: true,
       driverAckNote: true,
       vendorConfirmedAt: true,
+      // The release loop — did the notice go, and did they answer it.
+      vendorCancelNotifiedAt: true,
+      vendorReleaseAckedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
       driverHours: { select: { hours: true, workDate: true, odometerOut: true, odometerIn: true, generatorHoursOut: true, generatorHoursIn: true, suppliesNote: true } },

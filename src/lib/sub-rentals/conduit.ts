@@ -648,8 +648,10 @@ export function buildDriverQuestionForProduction(a: {
 }
 
 /** To HQ: the partner confirmed — or cannot hold. */
+export type VendorWordKind = 'confirmed' | 'declined' | 'release-acked'
+
 export function buildVendorWordForHq(a: {
-  kind: 'confirmed' | 'declined'
+  kind: VendorWordKind
   vendorName: string
   unitName: string
   startDate: string | null
@@ -663,24 +665,38 @@ export function buildVendorWordForHq(a: {
   const subject =
     a.kind === 'confirmed'
       ? `${a.vendorName} confirmed the hold — ${a.unitName}, ${range}${ref}`
-      : `${a.vendorName} CANNOT hold — ${a.unitName}, ${range}${ref}`
+      : a.kind === 'release-acked'
+        ? `${a.vendorName} acknowledged the release — ${a.unitName}, ${range}${ref}`
+        : `${a.vendorName} CANNOT hold — ${a.unitName}, ${range}${ref}`
+  const heading =
+    a.kind === 'confirmed'
+      ? `${a.vendorName} confirmed`
+      : a.kind === 'release-acked'
+        ? `${a.vendorName} has the dates back`
+        : `${a.vendorName} can’t hold the dates`
+  const leadHtml =
+    a.kind === 'confirmed'
+      ? `${esc(a.vendorName)} pressed <strong>Confirm hold</strong> on their booking page for the <strong>${esc(a.unitName)}</strong>, ${esc(range)}. The sub-rental is now CONFIRMED.`
+      : a.kind === 'release-acked'
+        ? `${esc(a.vendorName)} confirmed they have the <strong>${esc(a.unitName)}</strong> back for ${esc(range)}. Nothing further is owed on this one — the release landed.`
+        : `${esc(a.vendorName)} says they <strong>cannot hold</strong> the <strong>${esc(a.unitName)}</strong> for ${esc(range)}. The status has NOT been changed — someone needs to source a replacement or talk to the client.`
+  const leadText =
+    a.kind === 'confirmed'
+      ? `${a.vendorName} confirmed the hold on the ${a.unitName}, ${range}. Sub-rental is CONFIRMED.`
+      : a.kind === 'release-acked'
+        ? `${a.vendorName} confirmed they have the ${a.unitName} back for ${range}. The release landed.`
+        : `${a.vendorName} CANNOT hold the ${a.unitName} for ${range}. Status unchanged — source a replacement or talk to the client.`
   const html = renderEmailShell({
     eyebrow: 'Sub-rentals',
-    heading: a.kind === 'confirmed' ? `${a.vendorName} confirmed` : `${a.vendorName} can’t hold the dates`,
+    heading,
     bodyHtml: [
-      p(
-        a.kind === 'confirmed'
-          ? `${esc(a.vendorName)} pressed <strong>Confirm hold</strong> on their booking page for the <strong>${esc(a.unitName)}</strong>, ${esc(range)}. The sub-rental is now CONFIRMED.`
-          : `${esc(a.vendorName)} says they <strong>cannot hold</strong> the <strong>${esc(a.unitName)}</strong> for ${esc(range)}. The status has NOT been changed — someone needs to source a replacement or talk to the client.`,
-      ),
+      p(leadHtml),
       a.note ? calloutBox(`<strong>Their note:</strong><br/>${esc(a.note)}`) : '',
     ].join('\n'),
     cta: { label: 'Open the job in HQ', href: a.hqUrl },
   })
   const text = renderEmailText([
-    a.kind === 'confirmed'
-      ? `${a.vendorName} confirmed the hold on the ${a.unitName}, ${range}. Sub-rental is CONFIRMED.`
-      : `${a.vendorName} CANNOT hold the ${a.unitName} for ${range}. Status unchanged — source a replacement or talk to the client.`,
+    leadText,
     ...(a.note ? ['', `Their note: ${a.note}`] : []),
     '',
     a.hqUrl,
@@ -938,7 +954,7 @@ export async function relayDriverQuestion(subRentalId: string, question: string)
  * the order's agent, the sales desk, and the conduit CC — and an Alert is
  * raised so it shows on the dashboard even if nobody reads mail.
  */
-export async function notifyVendorWord(subRentalId: string, kind: 'confirmed' | 'declined', note: string | null): Promise<void> {
+export async function notifyVendorWord(subRentalId: string, kind: VendorWordKind, note: string | null): Promise<void> {
   const row = await loadConduit(subRentalId)
   if (!row) return
   const unitName = unitNameOf(row)
@@ -962,17 +978,28 @@ export async function notifyVendorWord(subRentalId: string, kind: 'confirmed' | 
       to,
       cc: desk.filter((d) => d.toLowerCase() !== to.toLowerCase()),
       mail,
-      label: kind === 'confirmed' ? 'sub-rental/vendor-confirmed' : 'sub-rental/vendor-declined',
+      label:
+        kind === 'confirmed'
+          ? 'sub-rental/vendor-confirmed'
+          : kind === 'release-acked'
+            ? 'sub-rental/vendor-release-acked'
+            : 'sub-rental/vendor-declined',
       orderId: row.orderId,
     })
   }
   await prisma.alert
     .create({
       data: {
-        type: kind === 'confirmed' ? 'sub_rental.vendor_confirmed' : 'sub_rental.vendor_declined',
+        type:
+          kind === 'confirmed'
+            ? 'sub_rental.vendor_confirmed'
+            : kind === 'release-acked'
+              ? 'sub_rental.vendor_release_acked'
+              : 'sub_rental.vendor_declined',
         title: mail.subject,
         body: note ? `Their note: ${note}` : '',
-        severity: kind === 'confirmed' ? 'medium' : 'high',
+        // An acknowledged release is good news, not an alarm.
+        severity: kind === 'declined' ? 'high' : kind === 'release-acked' ? 'low' : 'medium',
         link: jobId ? `/jobs/${jobId}#sub-rentals` : null,
       },
     })

@@ -112,6 +112,19 @@ export interface JobRow {
   blindPickup?: boolean
   blindReturn?: boolean
   _count?: { orders: number }
+  /**
+   * The fleet this job WAS holding and has since handed back — ours
+   * (BookingItems released to UNFULFILLED) and partners' (SubRentals
+   * cancelled) — plus how much is still held.
+   *
+   * Shipped as counts rather than a new RowState on purpose: releasing
+   * the gear is orthogonal to where the job sits in the cycle (a job can
+   * be released while still Quoted, Booked or Lost), so folding it into
+   * the state machine would have to re-tier the colours, the legend and
+   * the sort. It rides as its own badge instead — same treatment as
+   * approvedUnbooked and redlinePending.
+   */
+  releasedHolds?: { ours: number; partner: number; live: number; windowEnd: string | null }
   // Every booking on the job is CANCELLED. Sent as a fact because it
   // can't be derived here: the Planyo import copies booking dates onto
   // the Job row, and Job.startDate/endDate outrank the envelope.
@@ -324,6 +337,33 @@ export function rowState(j: JobRow, today: string, tomorrow: string): RowState {
       return 'booked'
     }
   }
+}
+
+/**
+ * Has this job's fleet been handed back? (Wes 2026-09-08: "the job tile
+ * also needs to have released clearly readable".)
+ *
+ * TRUE means: something was released, and NOTHING is still held. A job
+ * that gave back the restroom trailer and kept the motorhome is NOT
+ * "released" — it is a job with a partial release, and saying otherwise
+ * on a tile would tell dispatch a truck is free when it isn't. That
+ * case reads through `releasedHolds` on the detail page instead.
+ *
+ * Physically-returned jobs are excluded: gear coming home at the end of
+ * a rental is a RETURN, and 'back' already says so. This badge is about
+ * a commitment we gave up, not one we completed.
+ */
+export function holdsFullyReleased(j: JobRow, today: string): boolean {
+  const r = j.releasedHolds
+  if (!r) return false
+  if (j.returnedAt) return false
+  if (r.live > 0 || r.ours + r.partner === 0) return false
+  // The dates have to still be worth something. Every Planyo-era
+  // cancelled cart also has released items on it, and badging four-month-old
+  // dead jobs in red would bury the one release that happened this morning
+  // — the state a red outline exists to make unmissable. A release only
+  // says something while the window it freed is still sellable.
+  return !!r.windowEnd && r.windowEnd >= today
 }
 
 /** Label with the partial-return modifier the cadence rollup flags. */

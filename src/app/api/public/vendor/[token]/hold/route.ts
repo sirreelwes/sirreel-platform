@@ -3,6 +3,7 @@
  *
  *   { action: 'confirm' }               REQUESTED → CONFIRMED, vendorConfirmedAt stamped
  *   { action: 'decline', note?: string } status UNCHANGED, vendorDeclinedAt + note stamped
+ *   { action: 'ack-release' }            CANCELLED only — vendorReleaseAckedAt stamped
  *
  * Until now the hold-request email said "reply to confirm" and a human read
  * the reply. The page is the vendor's surface, so the answer belongs on it.
@@ -24,14 +25,55 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const sub = await prisma.subRental.findFirst({
     where: { vendorToken: token },
-    select: { id: true, status: true, vendorConfirmedAt: true },
+    select: { id: true, status: true, vendorConfirmedAt: true, vendorReleaseAckedAt: true },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
-  const action = body.action === 'confirm' || body.action === 'decline' ? body.action : null
-  if (!action) return NextResponse.json({ error: 'action must be confirm or decline' }, { status: 400 })
+  const action =
+    body.action === 'confirm' || body.action === 'decline' || body.action === 'ack-release'
+      ? body.action
+      : null
+  if (!action) {
+    return NextResponse.json({ error: 'action must be confirm, decline or ack-release' }, { status: 400 })
+  }
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) || null : null
+
+  // The partner acknowledging a release we sent them. Deliberately a POST
+  // the page makes, not a GET link in the email: mail scanners and link
+  // pre-fetchers follow every URL in a message, and a one-click GET would
+  // report the partner as having acknowledged a release they never opened.
+  if (action === 'ack-release') {
+    if (sub.status !== 'CANCELLED') {
+      return NextResponse.json(
+        { error: 'This booking is not released — nothing to acknowledge.' },
+        { status: 409 },
+      )
+    }
+    const already = !!sub.vendorReleaseAckedAt
+    const now = new Date()
+    if (!already) {
+      await prisma.subRental.update({
+        where: { id: sub.id },
+        data: { vendorReleaseAckedAt: now },
+      })
+      await prisma.auditLog.create({
+        data: {
+          action: 'sub_rental.vendor_release_acked',
+          entityType: 'SubRental',
+          entityId: sub.id,
+          newValues: { via: 'vendor-page' },
+        },
+      })
+      await notifyVendorWord(sub.id, 'release-acked', null).catch((err) =>
+        console.warn('[vendor/hold] notify failed:', err instanceof Error ? err.message : err),
+      )
+    }
+    return NextResponse.json({
+      ok: true,
+      releaseAckedAt: (sub.vendorReleaseAckedAt ?? now).toISOString(),
+    })
+  }
 
   if (action === 'confirm') {
     if (sub.status === 'CANCELLED' || sub.status === 'RETURNED') {

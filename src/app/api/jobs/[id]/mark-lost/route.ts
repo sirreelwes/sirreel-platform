@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { LostReason } from '@prisma/client';
 import { releaseHoldsOnLost } from '@/lib/orders/holdOnQuoteSend';
+import { releaseJobHolds, type ReleaseResult } from '@/lib/jobs/holdInventory';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,16 @@ const ALLOWED_REASONS = new Set<LostReason>([
 // POST — reclassify a job as LOST. Sets Job.status = LOST and marks every
 // non-terminal Order on the job as LOST with the same reason. Pending
 // follow-up drafts on those orders are expired. Write-once on lostAt.
+//
+// RELEASING THE FLEET IS SEPARATE AND EXPLICIT (Wes 2026-09-08). Marking a
+// job lost used to release only the rank-2 soft holds on quotes still at
+// DRAFT/SENT — so on a job that got as far as BOOKED it released nothing
+// at all, and it has never touched a PARTNER's unit in any state. Both are
+// now released, but only for the ids the caller names, because the client
+// releasing one unit and the client walking away from the whole job are
+// different events and the second must not be inferred from the first.
+// The caller (MarkLostModal) shows the list and confirms before sending
+// it. Passing no ids preserves the old behaviour exactly.
 export async function POST(req: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | undefined)?.id || null;
@@ -34,6 +45,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const reason = body.reason as LostReason | undefined;
+  // Holds a human ticked in the confirm step. Validated against the job
+  // inside releaseJobHolds — an id from another job is skipped, not acted on.
+  const asIds = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  const releaseBookingItemIds = asIds(body.releaseBookingItemIds);
+  const releaseSubRentalIds = asIds(body.releaseSubRentalIds);
   if (!reason || !ALLOWED_REASONS.has(reason)) {
     return NextResponse.json(
       { error: 'reason must be one of: ' + Array.from(ALLOWED_REASONS).join(', ') },
@@ -75,6 +92,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     lostOrderIds = openOrders.map((o) => o.id);
   });
 
+  // The holds the human explicitly chose to hand back — ours AND the
+  // partners'. Runs first so the partner's release email reflects what we
+  // actually did, and non-fatal by the same contract as everything else
+  // here: the job is lost whatever the mail does.
+  let release: ReleaseResult | null = null;
+  if (releaseBookingItemIds.length || releaseSubRentalIds.length) {
+    release = await releaseJobHolds(
+      id,
+      { bookingItemIds: releaseBookingItemIds, subRentalIds: releaseSubRentalIds },
+      userId,
+    );
+    if (release.error) console.error('[jobs/mark-lost] hold release failed:', id, release.error);
+  }
+
   // Release each lost quote's rank-2 soft holds (Wes 2026-08-31) —
   // outside the transaction and non-fatal, same contract as the order-
   // level route. WON siblings' promoted (rank-1) holds are untouched.
@@ -85,5 +116,5 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  return NextResponse.json({ ok: true, reason });
+  return NextResponse.json({ ok: true, reason, release });
 }

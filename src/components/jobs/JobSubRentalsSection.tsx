@@ -64,6 +64,8 @@ export interface JobSubRental {
   /** Metered usage from the driver's daily report — feeds the partner-fee lines. */
   usage?: { miles: number; generatorHours: number; daysWithSupplies: number }
   vendorConfirmedAt?: string | null
+  vendorCancelNotifiedAt?: string | null
+  vendorReleaseAckedAt?: string | null
   vendorDeclinedAt?: string | null
   vendorDeclineNote?: string | null
   vendorDriver?: { id: string; profileComplete: boolean; licenseFront: boolean; licenseBack: boolean; trainedVehicles: string[] } | null
@@ -86,7 +88,7 @@ const STATUS_LABEL: Record<string, string> = {
   PICKED_UP: 'Picked up',
   ON_RENT: 'On rent',
   RETURNED: 'Returned',
-  CANCELLED: 'Cancelled',
+  CANCELLED: 'Released',
 }
 
 /** Statuses in which the partner is supposed to be holding the unit. */
@@ -317,6 +319,33 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                   </span>
                 ) : null}
               </div>
+
+              {/* Released: whether the partner was told, and whether they
+                  answered. "We sent it" and "they know" are different facts
+                  (Wes 2026-09-08) — an unacknowledged release is the one
+                  somebody still has to phone about. */}
+              {s.status === 'CANCELLED' && (
+                <div className="mt-1 text-[12px]">
+                  {s.vendorReleaseAckedAt ? (
+                    <span className="text-emerald-700">
+                      <strong className="font-semibold">{s.vendor.name} confirmed they have the dates back</strong>{' '}
+                      ({stamp(s.vendorReleaseAckedAt)}). Nothing outstanding.
+                    </span>
+                  ) : s.vendorCancelNotifiedAt ? (
+                    <span className="text-amber-700">
+                      <strong className="font-semibold">Release emailed {stamp(s.vendorCancelNotifiedAt)}</strong> —
+                      {' '}not acknowledged yet. They have a one-tap confirm on their page.
+                    </span>
+                  ) : (
+                    <span className="text-red-700">
+                      <strong className="font-semibold">Released, but {s.vendor.name} was never emailed.</strong>{' '}
+                      {s.vendor.poEmail || s.vendor.email
+                        ? 'The notice did not send — call them.'
+                        : `No email on file — call ${s.vendor.phone || 'them'}.`}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* The partner's own word, from their page. */}
               {s.vendorDeclinedAt ? (

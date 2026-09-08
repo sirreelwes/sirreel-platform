@@ -156,6 +156,9 @@ export interface VendorView {
   vendorConfirmedAt: Date | null
   vendorDeclinedAt: Date | null
   vendorDeclineNote: string | null
+  /** We sent the release notice / the partner said they have the dates back. */
+  vendorCancelNotifiedAt: Date | null
+  vendorReleaseAckedAt: Date | null
   /** The partner's roster (all their bookings share it) and who is on THIS one. */
   roster: RosterDriver[]
   assignedVendorDriverId: string | null
@@ -200,6 +203,10 @@ export async function getVendorViewByToken(
       vendorConfirmedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
+      // The release loop — when we told them, and whether they said back
+      // that they have the dates (Wes 2026-09-08).
+      vendorCancelNotifiedAt: true,
+      vendorReleaseAckedAt: true,
       vendorId: true,
       vendorDriverId: true,
       subcontractedVehicleId: true,
@@ -275,6 +282,8 @@ export async function getVendorViewByToken(
     vendorConfirmedAt: s.vendorConfirmedAt,
     vendorDeclinedAt: s.vendorDeclinedAt,
     vendorDeclineNote: s.vendorDeclineNote,
+    vendorCancelNotifiedAt: s.vendorCancelNotifiedAt,
+    vendorReleaseAckedAt: s.vendorReleaseAckedAt,
     roster: await rosterForVendor(s.vendorId, s.subcontractedVehicleId),
     assignedVendorDriverId: s.vendorDriverId,
     unitVehicleId: s.subcontractedVehicleId,

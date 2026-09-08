@@ -4729,6 +4729,16 @@ model SubRental {
   /// Distinct from the status so a staff-side status change is never
   /// mistaken for the partner's own word.
   vendorConfirmedAt DateTime? @map("vendor_confirmed_at")
+  /// The partner acknowledged that we RELEASED their unit — one button on
+  /// the release email / their page (Wes 2026-09-08: "can those emails have
+  /// a confirm button for the partners to quickly acknowledge release").
+  ///
+  /// Distinct from the cancel NOTICE stamp: vendorCancelNotifiedAt means we
+  /// sent it, this means they read it and took the dates back. Without the
+  /// pair, "we told King Kong" and "King Kong knows" are the same fact on
+  /// the screen, and they are not — an unacknowledged release a week out is
+  /// the one somebody has to phone about.
+  vendorReleaseAckedAt DateTime? @map("vendor_release_acked_at")
   /// Partner said they cannot hold the dates. Status is NOT changed — a
   /// human decides what to do; this is the alarm.
   vendorDeclinedAt  DateTime? @map("vendor_declined_at")
