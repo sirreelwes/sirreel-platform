@@ -190,3 +190,42 @@ export async function forEachInboxAttachment<T>(args: {
   }
   return processed
 }
+
+/**
+ * Download one attachment's BYTES and nothing else — no Blob write.
+ *
+ * The AP desk (src/lib/ap) reads vendor-invoice PDFs with a model and then
+ * drops them: Gmail is already the store of record for mail we didn't choose
+ * to file, and copying every vendor's invoice into Blob would be a second,
+ * unmanaged copy of SirReel's payables. Claims and HR keep their uploads
+ * because those documents attach to a case file; a bill being read does not.
+ *
+ * Same size cap and same swallow-and-return-null contract as
+ * downloadAndUploadAttachment, so a caller loops over attachments and skips
+ * whatever fails.
+ */
+export async function downloadInboxAttachment(args: {
+  inbox: string
+  gmailMessageId: string
+  attachment: GmailAttachmentMeta
+}): Promise<Buffer | null> {
+  const { inbox, gmailMessageId, attachment } = args
+  if (attachment.size > MAX_ATTACHMENT_BYTES) {
+    console.warn(`[persistGmailAttachments] attachment too large (${attachment.size} bytes): ${attachment.filename}`)
+    return null
+  }
+  try {
+    const gmail = getGmailClientForInbox(inbox)
+    const res = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: gmailMessageId,
+      id: attachment.attachmentId,
+    })
+    const data = res.data.data
+    if (!data) return null
+    return Buffer.from(data, 'base64url')
+  } catch (err) {
+    console.warn(`[persistGmailAttachments] download failed for ${attachment.filename}:`, err instanceof Error ? err.message : err)
+    return null
+  }
+}

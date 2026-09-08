@@ -9396,3 +9396,159 @@ model SmsMessage {
   @@index([jobId])
   @@map("sr_sms_messages")
 }
+
+// ═══════════════════════════════════════
+// 30. ACCOUNTS PAYABLE — vendor bills found in email
+// ═══════════════════════════════════════
+
+/// What the cross-check against SirReel-side purchase orders concluded.
+///
+/// The status the desk exists for is PO_NOT_FOUND: the vendor is citing a
+/// purchase-order number nobody on the team ever recorded — either the PO
+/// was issued verbally / from a personal thread, or the vendor invented it.
+/// Everything else is bookkeeping; that one is a phone call.
+enum ApMatchStatus {
+  /// The bill cites a PO that resolves to a SirReel-issued PO, and any
+  /// amount we can compare agrees.
+  MATCHED
+  /// PO resolved, but the money on the bill and the money on the PO differ
+  /// by more than the tolerance. Not an error — sub-rentals get extended —
+  /// but it is the difference a human should sign off on.
+  AMOUNT_MISMATCH
+  /// The bill cites a PO number and NOTHING on our side carries it. The
+  /// alarm state.
+  PO_NOT_FOUND
+  /// The vendor didn't cite a PO at all. Candidates (same vendor, plausible
+  /// amount/date) are listed for a human to pick from — never auto-linked,
+  /// because "same vendor, similar amount" is how you pay a bill twice.
+  NO_PO_ON_BILL
+  /// No PO cited and nothing on our side looks like it belongs to this bill.
+  NO_CANDIDATES
+}
+
+/// Wes's own read on a row. Deliberately not an approval workflow — this
+/// desk does not authorize payment, it decides what to go ask about.
+enum ApReviewState {
+  NEW
+  /// Looked at, nothing to chase.
+  OK
+  /// Something to ask the team or the vendor about.
+  QUESTION
+  /// Misfire — the email was never a vendor bill. Kept (not deleted) so the
+  /// scanner never re-reads it and so the filter can be tuned against real
+  /// false positives.
+  NOT_A_BILL
+}
+
+/// One inbound email that appears to be a vendor billing SirReel, with what
+/// was read out of it and how it lines up against the purchase orders our
+/// own team created.
+///
+/// ── Why a table and not a live query ──────────────────────────────────────
+/// Reading a bill costs a Sonnet call plus, usually, a Gmail attachment
+/// download — the invoice is nearly always in the PDF, not the message body.
+/// That is far too slow to run per page load, and the result doesn't change:
+/// an email is immutable. Scan once, store, re-match cheaply.
+///
+/// ── Gmail stays the store of record ───────────────────────────────────────
+/// Attachment BYTES are downloaded for the model to read and then dropped —
+/// nothing is copied into Blob. Each row keeps the Gmail message id so the
+/// desk can deep-link to the real PDF in Wes's mailbox.
+///
+/// ── Nothing here pays anything ────────────────────────────────────────────
+/// No write in this model moves money, marks a bill paid, or tells anyone to
+/// pay it. It is a reading desk over mail that already arrived.
+model ApBill {
+  id String @id @default(uuid())
+
+  /// The email this was read out of. Plain column + unique index rather than
+  /// a relation, so EmailMessage stays untouched (same convention as
+  /// EmailThread.jobId). Unique makes the scanner idempotent: re-running it
+  /// over the same window updates rows instead of duplicating them.
+  emailMessageId String @unique @map("email_message_id")
+  gmailMessageId String @map("gmail_message_id")
+  /// Which watched mailbox it landed in — needed to re-open the message
+  /// through DWD, and worth showing (a bill in billing@ vs one that only
+  /// ever reached wes@ are different facts).
+  inbox          String
+  threadId       String? @map("thread_id")
+
+  // ── Denormalised email facts, so the desk renders without a join ──
+  sentAt      DateTime @map("sent_at")
+  fromAddress String   @map("from_address")
+  subject     String   @db.Text
+
+  // ── What the model read off the bill ──
+  vendorName     String?   @map("vendor_name")
+  /// Sender domain, lower-cased. The join key to Vendor when a name doesn't
+  /// match — vendors write their own name six different ways.
+  vendorDomain   String?   @map("vendor_domain")
+  /// Resolved SirReel Vendor row, when the domain or name matched one.
+  /// Plain column; a bill from an unknown vendor is normal and stays null.
+  vendorId       String?   @map("vendor_id")
+  invoiceNumber  String?   @map("invoice_number")
+  invoiceDate    DateTime? @map("invoice_date") @db.Date
+  dueDate        DateTime? @map("due_date") @db.Date
+  amountTotal    Decimal?  @map("amount_total") @db.Decimal(12, 2)
+  currency       String?   @db.VarChar(8)
+  /// Payment terms as written ("Net 30", "Due on receipt").
+  terms          String?
+  /// The PO number AS THE VENDOR WROTE IT. Never normalised in place —
+  /// matching normalises a copy, so the desk can always show what the
+  /// vendor actually printed.
+  poNumberRaw    String?   @map("po_number_raw")
+  /// Job / show / production named on the bill, free text. Often the only
+  /// handle when there is no PO.
+  jobReference   String?   @map("job_reference")
+  /// One line on what is being billed for.
+  lineSummary    String?   @map("line_summary") @db.Text
+
+  /// Attachment filenames seen on the message (no bytes stored). A filename
+  /// like "INV-40231.pdf" is frequently the invoice number.
+  attachmentNames String[] @map("attachment_names")
+  /// Whether a PDF was actually read by the model, or only the body text.
+  /// A body-only read on a bill whose numbers live in the PDF is exactly
+  /// the row a human should not trust — so the desk says which it was.
+  readPdf         Boolean  @default(false) @map("read_pdf")
+
+  /// The model's own verdict that this is a vendor billing SirReel (rather
+  /// than a client replying about one of OUR invoices, which is AR and the
+  /// single most common false positive). False rows are kept so the scanner
+  /// doesn't re-read them.
+  isBill       Boolean  @default(true) @map("is_bill")
+  aiSummary    String?  @map("ai_summary") @db.Text
+  aiConfidence Float?   @map("ai_confidence")
+  aiModel      String?  @map("ai_model")
+  extractedAt  DateTime @default(now()) @map("extracted_at")
+
+  // ── Cross-check against SirReel-issued purchase orders ──
+  matchStatus  ApMatchStatus @default(NO_CANDIDATES) @map("match_status")
+  /// Where the matched PO was found: 'SUB_RENTAL' (a SubRental row carrying
+  /// the PO number) or 'EMAIL_PO' (an outbound message from a SirReel
+  /// address that issued it — a PO that only ever existed as mail).
+  matchedPoSource String? @map("matched_po_source")
+  matchedSubRentalId String? @map("matched_sub_rental_id")
+  /// The outbound EmailMessage that issued the PO, for EMAIL_PO matches.
+  matchedPoEmailId   String? @map("matched_po_email_id")
+  /// Every candidate considered, with its tier and why — the reasoning is
+  /// the useful part of a match a human has to second-guess. Shape:
+  /// [{ source, tier, label, poNumber, vendorName, amount, dates, why }]
+  poCandidates Json?     @map("po_candidates")
+  matchNote    String?   @map("match_note") @db.Text
+  matchedAt    DateTime? @map("matched_at")
+
+  // ── Wes's read ──
+  reviewState  ApReviewState @default(NEW) @map("review_state")
+  reviewNote   String?       @map("review_note") @db.Text
+  reviewedAt   DateTime?     @map("reviewed_at")
+  reviewedById String?       @map("reviewed_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([matchStatus, sentAt])
+  @@index([reviewState])
+  @@index([vendorId])
+  @@index([sentAt])
+  @@map("sr_ap_bills")
+}
