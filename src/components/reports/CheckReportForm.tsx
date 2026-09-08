@@ -30,7 +30,17 @@ import type { ReportDraft, DraftLine } from '@/lib/orders/checkReports'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 
 type Row = DraftLine & { open: boolean }
-type Extra = { key: string; description: string; actualQty: number; note: string }
+type Extra = {
+  key: string
+  description: string
+  actualQty: number
+  note: string
+  /** What the FILED report already records for this row, if it came from
+   *  one. An addition is never written onto the order, so it stays a
+   *  "difference" forever; this is how the form tells an addition it has
+   *  already filed and flagged from one the yard just typed. */
+  filedAs?: { description: string; actualQty: number }
+}
 
 const fmtDay = (ymd: string | null) => {
   if (!ymd) return '—'
@@ -58,6 +68,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       description: e.description,
       actualQty: e.actualQty,
       note: e.note ?? '',
+      filedAs: e.filed ? { description: e.description, actualQty: e.actualQty } : undefined,
     })),
   )
   const [preppedBy, setPreppedBy] = useState(draft.preppedBy)
@@ -80,7 +91,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{
+    /** Something here is the agent's to act on. */
     changedOrder: boolean
+    /** The order's own lines actually moved. Narrower — an added row
+     *  is recorded and flagged, but never written onto the order. */
+    orderLinesChanged: boolean
     changes: string[]
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
@@ -101,14 +116,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * file another.
    */
   const changeList = useMemo(() => {
-    const out: Array<{ key: string; text: string; added: boolean }> = []
+    const out: Array<{ key: string; text: string; added: boolean; alreadyFiled: boolean }> = []
     for (const r of rows) {
       // A line left off this pull says nothing about itself — it is not
       // a change, it is a line that has not happened yet.
       if (!r.onSheet) continue
       const change = classifyCheckLine(r)
       if (change === 'NONE') continue
-      out.push({ key: r.orderLineItemId, text: describeCheckChange(r, change), added: false })
+      out.push({
+        key: r.orderLineItemId, text: describeCheckChange(r, change), added: false, alreadyFiled: false,
+      })
     }
     for (const e of extras) {
       const description = e.description.trim()
@@ -119,11 +136,24 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           orderLineItemId: null, description, expectedQty: 0, actualQty: e.actualQty,
         }),
         added: true,
+        // Untouched since it was filed → already on the report and
+        // already in front of the agent. Not outstanding work.
+        alreadyFiled:
+          !!e.filedAs && e.filedAs.description === description && e.filedAs.actualQty === e.actualQty,
       })
     }
     return out
   }, [rows, extras])
-  const diffs = changeList.length
+  /** Outstanding work — what filing would actually change. An addition
+   *  the last submission already recorded is NOT outstanding: it cannot
+   *  be reconciled against the order by design, so counting it here is
+   *  what made the report re-demand a read-back forever. */
+  const diffs = changeList.filter((c) => !c.alreadyFiled).length
+  const pendingAdditions = changeList.filter((c) => c.alreadyFiled)
+  /** Of the outstanding work, what would actually rewrite the order.
+   *  Additions never do — so a sheet whose only difference is an added
+   *  row must not promise the client a corrected quote. */
+  const orderLineDiffs = changeList.filter((c) => !c.added && !c.alreadyFiled).length
 
   /**
    * The partial pull (Wes, 2026-09-04: "we should have the ability to
@@ -313,6 +343,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       }
       setDone({
         changedOrder: !!data.changedOrder,
+        orderLinesChanged: !!data.orderLinesChanged,
         changes: data.changes ?? [],
         resend: data.resend ?? null,
         gear: data.gear ?? null,
@@ -338,8 +369,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {done.changedOrder ? (
             <>
               <p className="text-lt-fg2 text-[15px] max-w-[52ch] mx-auto">
-                The order has been updated and {draft.agentName || 'the agent'} has been flagged to
-                review what changed.
+                {done.orderLinesChanged
+                  ? `The order has been updated and ${draft.agentName || 'the agent'} has been flagged to review what changed.`
+                  : `${draft.agentName || 'The agent'} has been flagged to price what went out. The order is unchanged until they do — an added row is never written onto it here.`}
               </p>
               <ul className="mt-3 text-[14px] text-chip-warn-fg space-y-0.5">
                 {done.changes.map((c, i) => <li key={i}>{c}</li>)}
@@ -791,18 +823,35 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         </p>
       )}
 
+      {/* The report is filed and the only thing still "differing" is an
+          addition the agent has to price. That is not the yard's work,
+          and it is not a reason to file again — which is exactly what
+          the old screen implied, forever. */}
+      {pendingAdditions.length > 0 && diffs === 0 && !confirming && (
+        <p className="mb-3 text-[14px] text-lt-fg2 border border-lt-hairline bg-lt-card rounded-lg px-3 py-2">
+          <b className="text-lt-fg">This sheet is filed.</b>{' '}
+          {pendingAdditions.length === 1 ? 'One row went out' : `${pendingAdditions.length} rows went out`}{' '}
+          that was not on the order — {pendingAdditions.map((c) => c.text).join(', ')} — and{' '}
+          {draft.agentName || 'the agent'} has been flagged to price{' '}
+          {pendingAdditions.length === 1 ? 'it' : 'them'}. The order will not change until they do.
+          Nothing further is needed here; file again only to correct the counts above.
+        </p>
+      )}
+
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && !confirming && (
         <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
           <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
           <span>
             {diffs} line{diffs === 1 ? '' : 's'} differ from the order.
-            {isOut
-              ? ` Filing this updates the order and flags ${draft.agentName || 'the agent'} to review it.` +
-                (draft.preBooked
-                  ? ' The client is emailed the corrected quote automatically, copying the office.'
-                  : '')
-              : ' A check-in is recorded and flagged, but never changes what was rented — the agent decides what a shortfall costs.'}
+            {!isOut
+              ? ' A check-in is recorded and flagged, but never changes what was rented — the agent decides what a shortfall costs.'
+              : orderLineDiffs > 0
+                ? ` Filing this updates the order and flags ${draft.agentName || 'the agent'} to review it.` +
+                  (draft.preBooked
+                    ? ' The client is emailed the corrected quote automatically, copying the office.'
+                    : '')
+                : ` Nothing on the order moves — added rows are flagged to ${draft.agentName || 'the agent'} to price.`}
           </span>
         </p>
       )}
@@ -852,13 +901,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
           <p className="mt-3 text-[13px] text-chip-warn-fg leading-relaxed">
             {isOut ? (
-              <>
-                Filing this changes what {draft.company} is billed for and flags{' '}
-                {draft.agentName || 'the agent'} to review it.
-                {draft.preBooked
-                  ? ' The corrected quote is emailed to the client automatically, copying the office.'
-                  : ''}
-              </>
+              orderLineDiffs > 0 ? (
+                <>
+                  Filing this changes what {draft.company} is billed for and flags{' '}
+                  {draft.agentName || 'the agent'} to review it.
+                  {draft.preBooked
+                    ? ' The corrected quote is emailed to the client automatically, copying the office.'
+                    : ''}
+                </>
+              ) : (
+                <>
+                  Nothing on the order moves — an added row is never written onto it, because the
+                  yard cannot see rates and a line at $0 would under-bill the job. This records what
+                  went out and flags {draft.agentName || 'the agent'} to price it.
+                </>
+              )
             ) : (
               <>
                 A check-in never changes what was rented — this is recorded and flagged to{' '}

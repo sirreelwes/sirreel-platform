@@ -156,7 +156,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // fetch or a PDF render. The outcome comes back so the screen can say
   // what happened instead of leaving the supervisor guessing.
   let resend: ResendOutcome | null = null
-  if (edge === 'OUT' && result.changedOrder) {
+  // Gated on orderLinesChanged, NOT changedOrder: a report whose only
+  // difference is an added row leaves the order exactly as the client
+  // last saw it, and re-sending an identical "updated quote" teaches
+  // them to ignore the next one that is real.
+  if (edge === 'OUT' && result.orderLinesChanged) {
     try {
       resend = await resendQuoteAfterCheckOut({ orderId: id, changes: result.changes })
     } catch (err) {

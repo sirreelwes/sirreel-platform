@@ -214,7 +214,7 @@ export interface ReportDraft {
   notes: string
   lines: DraftLine[]
   /** Rows a previous report ADDED that are not order lines. */
-  extras: Array<{ description: string; actualQty: number; note: string | null }>
+  extras: Array<{ description: string; actualQty: number; note: string | null; filed?: boolean }>
 }
 
 /**
@@ -312,9 +312,15 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         note: p?.note ?? null,
       }
     }),
+    // `filed: true` marks an addition the previous submission already
+    // recorded and already flagged to the agent. Without it the form
+    // reads its own filed additions back as fresh differences — and an
+    // addition can never be reconciled against the order, so the report
+    // never reaches a settled state: file, reopen, the same two rows
+    // still "differ", file again. That is the loop Jose hit.
     extras: (prior?.lines ?? [])
       .filter((l) => !l.orderLineItemId)
-      .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note })),
+      .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note, filed: true })),
   }
 }
 
@@ -339,7 +345,13 @@ export interface SubmitLineInput {
 
 export interface SubmitResult {
   reportId: string
+  /** Something on the sheet needs the AGENT — a moved quantity OR an
+   *  added row they have to price. Drives the action item. */
   changedOrder: boolean
+  /** The order's own lines were actually rewritten. Narrower than
+   *  `changedOrder`, because an added row never touches the order.
+   *  This is what may email the client, so it must not be widened. */
+  orderLinesChanged: boolean
   /** Human-readable list of what changed, for the audit row + the flag. */
   changes: string[]
   /** The sheet covered only part of the order. */
@@ -398,6 +410,17 @@ export async function submitCheckReport(opts: {
   const offSheet = classified.filter((l) => !l.onSheet).length
   const partial = offSheet > 0
   const differing = classified.filter((l) => l.change !== 'NONE')
+  // `changedOrder` has to carry the AGENT flag — an added row needs
+  // pricing just as much as a moved quantity — but it was also being
+  // read as "the order's lines were rewritten", and those are not the
+  // same fact. An ADDED row is deliberately never written onto the order
+  // (the yard cannot see rates), so a report whose only difference is an
+  // addition changed nothing, yet said it had: S260905-002 was filed
+  // three times on 2026-09-08, twice with changedOrder true and not one
+  // line moved. The client re-send is gated on it too, so a pre-booked
+  // order would have emailed the client an "updated quote" identical to
+  // the one they were already holding.
+  const orderLinesChanged = edge === 'OUT' && differing.some((l) => l.orderLineItemId)
   const applyToOrder = edge === 'OUT' && differing.length > 0
 
   const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
@@ -461,7 +484,7 @@ export async function submitCheckReport(opts: {
       })),
     })
 
-    if (applyToOrder) {
+    if (orderLinesChanged) {
       for (const l of differing) {
         if (!l.orderLineItemId) continue
         const data: Prisma.OrderLineItemUpdateInput = { quantity: l.actualQty }
@@ -498,9 +521,9 @@ export async function submitCheckReport(opts: {
   // Totals move when quantities do. Outside the transaction because
   // recalcOrderTotals opens its own and refuses locked orders on its
   // own terms.
-  if (applyToOrder) await recalcOrderTotals(orderId)
+  if (orderLinesChanged) await recalcOrderTotals(orderId)
 
-  return { reportId, changedOrder: applyToOrder, changes, partial, offSheet }
+  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet }
 }
 
 /**
