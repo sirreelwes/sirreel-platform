@@ -538,7 +538,12 @@ export async function GET(req: NextRequest) {
     // client-facing lineItems DTO above. Only finished sentences cross.
     bookingTerms: buildBookingTerms({
       vehicles: order.lineItems
-        .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT')
+        // A FEE is a charge, not a vehicle — never judge one (the same rule
+        // applyLcdw.ts follows). This mattered the moment driver fees moved
+        // into VEHICLES: the driver line counted as an insurable vehicle and
+        // flipped an all-partner order back to "waiver available"
+        // (S260828-001, 2026-09-08).
+        .filter((li) => li.department === 'VEHICLES' && li.type !== 'DISCOUNT' && li.type !== 'FEE')
         .map<BookingVehicleLine>((li) => ({
           description: li.description,
           code: li.inventoryItem?.code ?? null,
