@@ -14,6 +14,15 @@
  *   - Finished groups collapse to a single line so the screen shrinks as
  *     the day goes, instead of growing.
  *   - Every tap target clears 44px.
+ *
+ * Colour, and where the line is (2026-09-08): the dashboard <main> is
+ * cream (#F5F6F8). Dark styling on this board is legal ONLY inside the
+ * GroupCard <section>, which paints its OWN opaque bg-zinc-900 — no
+ * alpha. It shipped as bg-zinc-900/60, which over cream is not a dark
+ * card, it is a washed mid-grey with white text on it. Everything
+ * OUTSIDE that section — the day nav, the lane headings, the empty
+ * states, the summary line — is light-shell styling on the lt-* tokens.
+ * Adding a zinc class out there puts invisible text on the page.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -54,7 +63,7 @@ function RowCard({ row }: { row: YardRow }) {
     <div
       className={`flex items-center gap-3 rounded-xl border p-3.5 min-h-[44px] transition-colors ${
         done
-          ? 'bg-zinc-900/40 border-zinc-800 active:border-zinc-700'
+          ? 'bg-zinc-900 border-zinc-800 active:border-zinc-700'
           : 'bg-zinc-800 border-zinc-700 active:border-amber-600 hover:border-zinc-600'
       }`}
     >
@@ -67,7 +76,7 @@ function RowCard({ row }: { row: YardRow }) {
               phone "Unit Cargo 37 · Cargo Van w/ Liftgate" truncated to
               "Unit Cargo 37 · Cargo …", which is the half nobody needed. */}
           <span className="block text-white font-semibold text-[15px] truncate">{row.title}</span>
-          <span className="block text-zinc-500 text-xs truncate">{row.detail}</span>
+          <span className="block text-zinc-400 text-xs truncate">{row.detail}</span>
           <span className="mt-1.5 flex items-center gap-2 flex-wrap">
             <span className={`inline-block text-[11px] font-medium rounded-full border px-2 py-0.5 ${STATE_CHIP[row.state]}`}>
               {row.stateLabel}
@@ -80,7 +89,7 @@ function RowCard({ row }: { row: YardRow }) {
                 {row.chip}
               </span>
             )}
-            {row.time && <span className="text-zinc-500 text-[11px]">{row.time}</span>}
+            {row.time && <span className="text-zinc-400 text-[11px]">{row.time}</span>}
           </span>
           {row.progress !== null && row.progress > 0 && row.progress < 100 && (
             <span className="mt-2 block h-1 w-full rounded-full bg-zinc-700 overflow-hidden">
@@ -93,7 +102,7 @@ function RowCard({ row }: { row: YardRow }) {
             button's. */}
         <span
           className={`flex-none text-[12px] font-semibold rounded-lg px-3 py-2 ${
-            done ? 'text-zinc-500' : 'bg-amber-600 text-white'
+            done ? 'text-zinc-400' : 'bg-amber-600 text-white'
           }`}
         >
           {row.action}
@@ -124,7 +133,7 @@ function GroupCard({ group }: { group: YardGroup }) {
   // should get shorter as the day goes, not longer.
   const [open, setOpen] = useState(group.openCount > 0 || group.flagCount > 0)
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -132,7 +141,7 @@ function GroupCard({ group }: { group: YardGroup }) {
       >
         <span className="min-w-0 flex-1">
           <span className="block text-white font-semibold truncate">{group.jobName}</span>
-          <span className="block text-zinc-500 text-xs truncate">{group.company}</span>
+          <span className="block text-zinc-400 text-xs truncate">{group.company}</span>
         </span>
         <span
           className={`flex-none text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
@@ -154,7 +163,7 @@ function GroupCard({ group }: { group: YardGroup }) {
         <ChevronDown
           size={16}
           aria-hidden
-          className={`flex-none text-zinc-600 transition-transform ${open ? '' : '-rotate-90'}`}
+          className={`flex-none text-zinc-400 transition-transform ${open ? '' : '-rotate-90'}`}
         />
       </button>
       {open && (
@@ -172,14 +181,14 @@ function Lane({ title, groups, empty }: { title: string; groups: YardGroup[]; em
   const open = groups.reduce((n, g) => n + g.openCount, 0)
   return (
     <section>
-      <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2">
+      <h2 className="text-lt-fg2 text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2">
         {title}
         {open > 0 && (
-          <span className="text-amber-400 normal-case tracking-normal font-medium">{open} to do</span>
+          <span className="text-amber-700 normal-case tracking-normal font-medium">{open} to do</span>
         )}
       </h2>
       {groups.length === 0 ? (
-        <p className="text-zinc-500 text-sm bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl px-4 py-6 text-center">
+        <p className="text-lt-fg3 text-sm bg-lt-inner border border-dashed border-lt-hairline rounded-xl px-4 py-6 text-center">
           {empty}
         </p>
       ) : (
@@ -251,7 +260,7 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
   return (
     <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       {(pull > 0 || refreshing) && (
-        <p className="text-center text-zinc-500 text-xs mb-2">
+        <p className="text-center text-lt-fg3 text-xs mb-2">
           {refreshing ? 'Refreshing…' : pull >= PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
         </p>
       )}
@@ -261,19 +270,19 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
           type="button"
           onClick={() => setDate(shiftYmd(date, -1))}
           aria-label="Previous day"
-          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 flex items-center justify-center"
+          className="min-h-[44px] w-11 rounded-lg bg-lt-card border border-lt-hairline text-lt-fg2 active:bg-lt-inner flex items-center justify-center"
         >
           <ChevronLeft size={18} aria-hidden />
         </button>
         <div className="flex-1 text-center">
-          <div className="text-white font-semibold">{dayLabel(date, today, tomorrow)}</div>
-          <div className="text-zinc-500 text-[11px]">{date}</div>
+          <div className="text-lt-fg font-semibold">{dayLabel(date, today, tomorrow)}</div>
+          <div className="text-lt-fg3 text-[11px]">{date}</div>
         </div>
         <button
           type="button"
           onClick={() => setDate(shiftYmd(date, 1))}
           aria-label="Next day"
-          className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 flex items-center justify-center"
+          className="min-h-[44px] w-11 rounded-lg bg-lt-card border border-lt-hairline text-lt-fg2 active:bg-lt-inner flex items-center justify-center"
         >
           <ChevronRight size={18} aria-hidden />
         </button>
@@ -281,7 +290,7 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
           type="button"
           onClick={() => void load(date)}
           disabled={refreshing}
-          className="min-h-[44px] px-3 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 active:bg-zinc-700 disabled:opacity-50 flex items-center justify-center"
+          className="min-h-[44px] px-3 rounded-lg bg-lt-card border border-lt-hairline text-lt-fg2 active:bg-lt-inner disabled:opacity-50 flex items-center justify-center"
           aria-label="Refresh"
         >
           <RotateCw size={16} aria-hidden className={refreshing ? 'animate-spin' : ''} />
@@ -292,14 +301,14 @@ export function YardBoard({ initial, today }: { initial: Board; today: string })
         <button
           type="button"
           onClick={() => setDate(today)}
-          className="mb-3 w-full min-h-[44px] rounded-lg border border-zinc-700 bg-zinc-800/60 text-zinc-300 text-sm active:bg-zinc-700 inline-flex items-center justify-center gap-1.5"
+          className="mb-3 w-full min-h-[44px] rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 text-sm active:bg-lt-inner inline-flex items-center justify-center gap-1.5"
         >
           <ArrowLeft size={14} aria-hidden />
           Back to today
         </button>
       )}
 
-      <p className="text-zinc-500 text-xs mb-4">
+      <p className="text-lt-fg2 text-xs mb-4">
         {totalOpen === 0
           ? 'Nothing outstanding — the whole day is clear.'
           : `${totalOpen} thing${totalOpen === 1 ? '' : 's'} still to do.`}
