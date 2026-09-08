@@ -721,3 +721,24 @@ export async function resolveParsedItems(
   // Cadence BEFORE kit expansion so kit pieces copy already-capped days.
   return appendKitPieces(applySectionCadence(resolved))
 }
+
+/**
+ * Which LineItemType a resolved item becomes.
+ *
+ * Lived in /api/orders/from-parse until 2026-09-08, when the paste-onto-
+ * an-existing-order path needed it too and guessed instead — it sent
+ * 'INVENTORY' / 'ASSET', which are not members of the enum (VEHICLE,
+ * EQUIPMENT, EXPENDABLE, LABOR, FEE, DISCOUNT), so every single line
+ * 400'd and nothing reached the order. Shared now so there is one answer.
+ */
+export function resolveLineType(
+  itemType: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | null | undefined,
+  department: LineItemDepartment,
+  catalogLineType?: LineItemType | null,
+): LineItemType {
+  if (itemType === 'PACKAGE') return 'EQUIPMENT'
+  if (catalogLineType) return catalogLineType
+  if (itemType === 'ASSET_CATEGORY') return 'VEHICLE'
+  if (department === 'EXPENDABLES') return 'EXPENDABLE'
+  return 'EQUIPMENT'
+}

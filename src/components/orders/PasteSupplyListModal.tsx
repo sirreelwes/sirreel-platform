@@ -37,6 +37,8 @@ type ParsedItem = {
   billableDays: number
   rate: number
   matchedProduct: { id: string; name: string } | null
+  /** Resolved server-side — never guessed here. */
+  lineType: 'VEHICLE' | 'EQUIPMENT' | 'EXPENDABLE' | 'LABOR' | 'FEE' | 'DISCOUNT'
   matchSource: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null
   warnings: string[]
 }
@@ -100,7 +102,7 @@ export function PasteSupplyListModal({
 
     for (const { it } of chosen) {
       const body: Record<string, unknown> = {
-        type: it.catalogType === 'ASSET_CATEGORY' ? 'ASSET' : 'INVENTORY',
+        type: it.lineType,
         description: it.description,
         inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
         assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,

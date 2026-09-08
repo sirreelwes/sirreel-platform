@@ -54,6 +54,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveLineType } from '@/lib/sales/parseQuoteItems'
 import type { ClientTier, JobRole, LineItemDepartment, LineItemType, Prisma, ProductionType, RateType } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -170,17 +171,6 @@ interface Warning {
  * The legacy catalogType is still honoured for parses stored before the
  * merge, which have no catalogLineType to offer.
  */
-function resolveLineType(
-  itemType: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | null | undefined,
-  department: LineItemDepartment,
-  catalogLineType?: LineItemType | null,
-): LineItemType {
-  if (itemType === 'PACKAGE') return 'EQUIPMENT'
-  if (catalogLineType) return catalogLineType
-  if (itemType === 'ASSET_CATEGORY') return 'VEHICLE'
-  if (department === 'EXPENDABLES') return 'EXPENDABLE'
-  return 'EQUIPMENT'
-}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession()

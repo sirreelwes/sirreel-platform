@@ -27,7 +27,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AiJsonError } from '@/lib/ai/extractJson'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { parseQuoteText, resolveParsedItems } from '@/lib/sales/parseQuoteItems'
+import { parseQuoteText, resolveParsedItems, resolveLineType } from '@/lib/sales/parseQuoteItems'
 
 // Same headroom as the quote parser — a long supply list is a long parse.
 export const maxDuration = 120
@@ -77,9 +77,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       startDate: ymd(window.start),
       endDate: ymd(window.end),
     })
+    // The LineItemType is resolved HERE, not in the browser. The modal
+    // guessed it on the first cut and sent values that are not in the
+    // enum, so every line 400'd; the type is a server fact and now
+    // travels with the item.
+    const withType = items.map((it) => ({
+      ...it,
+      lineType: resolveLineType(it.catalogType, it.department, it.matchedProduct?.lineType),
+    }))
+
     return NextResponse.json({
       ok: true,
-      items,
+      items: withType,
       orderNumber: order.orderNumber,
       window: { start: ymd(window.start), end: ymd(window.end) },
       // Surfaced so the modal can say "these dates were ignored" rather
