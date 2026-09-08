@@ -195,6 +195,30 @@ export async function listClientCreatedUnquoted(
 }
 
 /**
+ * Is THIS job one the client set up themselves and nobody has quoted?
+ * A single-job check for the job page, which needs the answer to decide
+ * whether to offer the next-steps email — cheaper than listing everything.
+ * Includes stale windows on purpose: a rep standing on the job page can
+ * still want to write to them.
+ */
+export async function isClientCreatedUnquoted(jobId: string): Promise<boolean> {
+  const inquiry = await prisma.inquiry.findFirst({
+    where: { convertedJobId: jobId },
+    select: { id: true },
+  })
+  if (!inquiry) return false
+  const entry = await prisma.agreementEntry.findFirst({
+    where: { createdInquiryId: inquiry.id },
+    select: { id: true },
+  })
+  if (!entry) return false
+  const unquoted = await prisma.order.count({
+    where: { jobId, status: 'DRAFT', quoteSentAt: null },
+  })
+  return unquoted > 0
+}
+
+/**
  * "signed · nothing on the order · starts in 5 days" — the one-line state
  * both the action item and the brief print, so the two read identically.
  */

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isPlaceholderJobName } from '@/lib/jobs/displayName'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
@@ -543,9 +544,14 @@ export async function GET(
     // against this job was attached deliberately and always wins.
     const carriedCoi = job.coiChecks.length === 0 ? await resolveJobCoi(job.id) : null
 
+    // Did the CLIENT set this job up on the public site, with nothing
+    // quoted yet? Gates the "Next-steps email" button on the job page.
+    const selfServeUnquoted = await isClientCreatedUnquoted(job.id)
+
     return NextResponse.json({
       job: {
         ...job,
+        selfServeUnquoted,
         coiChecks:
           carriedCoi?.source === 'COMPANY'
             ? [

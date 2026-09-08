@@ -47,6 +47,7 @@ import { isPlaceholderJobName } from '@/lib/jobs/displayName';
 import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
+import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
@@ -1368,6 +1369,20 @@ const driverTone = (d: any): string => {
                   <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-amber-700">Access</span>
                   {job.assistantAuthCode}
                 </span>
+              )}
+              {/* The client set this job up on the public site and nobody
+                  has quoted it. Says so, and offers the next-steps email —
+                  reviewed before it sends (Wes 2026-09-08). */}
+              {(job as { selfServeUnquoted?: boolean }).selfServeUnquoted && (
+                <>
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-violet-50 text-violet-700 border-violet-200"
+                    title="Created by the client on the public rental-agreement page — no quote has gone out"
+                  >
+                    Client-created
+                  </span>
+                  <SelfServeEmailButton jobId={id} />
+                </>
               )}
             </div>
             <h1
