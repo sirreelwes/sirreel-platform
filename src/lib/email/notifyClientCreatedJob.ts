@@ -205,7 +205,7 @@ export async function sweepClientCreatedNotices(now: Date = new Date()): Promise
  * the cron so the email can be read — by a person or in a test — without
  * putting anything in anyone's inbox.
  */
-export async function previewClientCreatedNotices(): Promise<Array<{ jobCode: string; to: string[]; subject: string; text: string; alreadyNotified: boolean }>> {
+export async function previewClientCreatedNotices(): Promise<Array<{ jobCode: string; to: string[]; subject: string; html: string; text: string; alreadyNotified: boolean }>> {
   const jobs = await listClientCreatedUnquoted()
   const to = await channelRecipients('client-created-jobs')
   const out = []
@@ -213,7 +213,7 @@ export async function previewClientCreatedNotices(): Promise<Array<{ jobCode: st
     if (!job.entryId) continue
     const entry = await prisma.agreementEntry.findUnique({ where: { id: job.entryId }, select: { teamNotifiedAt: true } })
     const mail = buildEmail(job, { overnight: true })
-    out.push({ jobCode: job.jobCode, to, subject: mail.subject, text: mail.text, alreadyNotified: !!entry?.teamNotifiedAt })
+    out.push({ jobCode: job.jobCode, to, subject: mail.subject, html: mail.html, text: mail.text, alreadyNotified: !!entry?.teamNotifiedAt })
   }
   return out
 }
