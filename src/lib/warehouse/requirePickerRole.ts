@@ -44,7 +44,12 @@ export async function requirePickerRole(): Promise<RequirePickerRoleResult> {
     }
   }
 
-  if (!getPermissions(user.role).warehouse) {
+  // Email passed so the individually-granted yard allowlist
+  // (src/lib/yard/allowlist.ts) reaches the pick floor too — otherwise
+  // a granted user sees the nav entry and 403s on every action. Same
+  // salesOnly:false pinning as requireYardAccess: it preserves the
+  // previous bare-role semantics exactly.
+  if (!getPermissions({ role: user.role, salesOnly: false, email: session.user.email }).warehouse) {
     return {
       ok: false,
       response: NextResponse.json(

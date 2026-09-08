@@ -40,7 +40,13 @@ export async function requireYardAccess(): Promise<RequireYardAccessResult> {
   if (!user || !user.isActive) {
     return { ok: false, response: NextResponse.json({ error: 'unauthenticated' }, { status: 401 }) }
   }
-  const perms = getPermissions(user.role)
+  // Pass the email so the individually-granted yard allowlist
+  // (src/lib/yard/allowlist.ts) is visible here, not just in the nav.
+  // salesOnly is pinned false to preserve the previous semantics of the
+  // bare-role call — this guard has never applied the sales strip, and
+  // starting now would newly 403 anyone holding a yard role with the
+  // flag set. The allowlist widening is applied after that strip anyway.
+  const perms = getPermissions({ role: user.role, salesOnly: false, email: session.user.email })
   if (!perms.fleet && !perms.warehouse) {
     return {
       ok: false,

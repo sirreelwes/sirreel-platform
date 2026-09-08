@@ -3,6 +3,7 @@ import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { canUseCollections } from '@/lib/collections/allowlist';
 import { isExportApprover } from '@/lib/exports/approver';
 import { isAllowedPayrollEmail } from '@/lib/payroll/allowlist';
+import { isAllowedYardEmail } from '@/lib/yard/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
@@ -302,11 +303,20 @@ export function getPermissions(input: UserRole | PermissionsUser): Permissions {
     ...baseRaw,
     canManageClaims: baseRaw.canManageClaims || isAllowedClaimsEmail(user.email),
   };
-  if (!user.salesOnly) return base;
+  // Individually-granted yard access (src/lib/yard/allowlist.ts — Jose
+  // today). Applied LAST, after the salesOnly strip below, because that
+  // strip re-clears `fleet` — a salesOnly agent granted the board here
+  // would otherwise still hit the wall. `fleet` opens /yard and the two
+  // check in/out report desks; `warehouse` opens the pick lists. Both
+  // guards (requireYardAccess, requirePickerRole) read this same matrix,
+  // so nav and authorization cannot disagree.
+  const withYardGrant = (p: Permissions): Permissions =>
+    isAllowedYardEmail(user.email) ? { ...p, fleet: true, warehouse: true } : p;
+  if (!user.salesOnly) return withYardGrant(base);
   // Sales-only override: a reduced surface. Keep the rest of the
   // AGENT perms intact (pipeline, crm, seePricing, seeClientNames,
   // canSendEmail, etc — the whole sales loop).
-  return {
+  return withYardGrant({
     ...base,
     fleet: false,
     maintenance: false,
@@ -320,7 +330,7 @@ export function getPermissions(input: UserRole | PermissionsUser): Permissions {
     // tools individually via canConfirmBooking / canCancelBooking
     // (already false for AGENT) — and a small nav-builder edit
     // below filters the tools when salesOnly.
-  };
+  });
 }
 
 export function can(input: UserRole | PermissionsUser, permission: keyof Permissions): boolean {
@@ -627,6 +637,20 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         label: 'Ops',
         items: [
           { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+          // Yard surfaces for an individually-granted agent (Jose, so he
+          // can walk the warehouse processes himself — Wes 2026-09-08).
+          // Same predicate the guards use, so the tab and the page agree;
+          // for every other agent this list is just Inventory. The
+          // labels/ids match the yard crew's own nav branch above —
+          // deliberately the same screens, not a sales-flavoured copy.
+          ...(isAllowedYardEmail(navEmail)
+            ? [
+                { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
+                { id: 'order-reports', label: 'Check In/Out Reports', icon: 'ClipboardList', href: '/reports/orders' },
+                { id: 'vehicle-reports', label: 'Vehicle Check In/Out', icon: 'Car', href: '/reports/vehicles' },
+                { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ListChecks', href: '/warehouse/pick' },
+              ]
+            : []),
         ],
       },
       // Collections was tacked onto the end of the sales list; with the
