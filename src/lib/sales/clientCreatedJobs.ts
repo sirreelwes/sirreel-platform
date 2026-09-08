@@ -206,6 +206,47 @@ export async function listClientCreatedUnquoted(
 }
 
 /**
+ * Every DRAFT order a client created that has never been quoted, as ids.
+ *
+ * For the /orders list, whose draft-hygiene filter hides DRAFT rows so
+ * abandoned wizard parses do not clutter the desk. A job the client set
+ * up is not that — it is a real production waiting on a quote, sometimes
+ * with the agreement already signed — and hiding it meant SR-JOB-0315
+ * could not be found in that list at all (Wes 2026-09-08).
+ *
+ * Deliberately UNFILTERED by staleness, unlike listClientCreatedUnquoted:
+ * a work queue should drop a dead window, but a lookup list must still be
+ * able to find it.
+ */
+export async function clientCreatedDraftOrderIds(): Promise<string[]> {
+  const entries = await prisma.agreementEntry.findMany({
+    where: { createdInquiryId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    select: { createdInquiryId: true },
+  })
+  const inquiryIds = entries
+    .map((e) => e.createdInquiryId)
+    .filter((id): id is string => !!id)
+  if (!inquiryIds.length) return []
+
+  const inquiries = await prisma.inquiry.findMany({
+    where: { id: { in: inquiryIds }, convertedJobId: { not: null } },
+    select: { convertedJobId: true },
+  })
+  const jobIds = inquiries
+    .map((i) => i.convertedJobId)
+    .filter((id): id is string => !!id)
+  if (!jobIds.length) return []
+
+  const orders = await prisma.order.findMany({
+    where: { jobId: { in: jobIds }, status: 'DRAFT', quoteSentAt: null },
+    select: { id: true },
+  })
+  return orders.map((o) => o.id)
+}
+
+/**
  * Is THIS job one the client set up themselves and nobody has quoted?
  * A single-job check for the job page, which needs the answer to decide
  * whether to offer the next-steps email — cheaper than listing everything.

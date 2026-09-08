@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrderCreateAccess } from '@/lib/orders/requireOrderCreateAccess';
 import { prisma } from "@/lib/prisma";
+import { clientCreatedDraftOrderIds } from '@/lib/sales/clientCreatedJobs';
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { applyStandingDiscounts } from "@/lib/orders/applyStandingDiscounts";
 import { getServerSession } from "next-auth";
@@ -63,7 +64,28 @@ export async function GET(req: NextRequest) {
     where.NOT = lostWhere;
   } else {
     where.NOT = lostWhere;
-    if (!includeDrafts) where.status = { not: "DRAFT" };
+    if (!includeDrafts) {
+      // ...but a DRAFT the CLIENT created on the public rental-agreement
+      // page is not an abandoned wizard parse. It is a real production
+      // waiting on a quote, sometimes with the rental agreement already
+      // signed against it, and hiding it is why SR-JOB-0315 could not be
+      // found in this list at all (Wes 2026-09-08: "i don't see that
+      // order anywhere in orders").
+      //
+      // Scoped by the same marker every other client-created surface
+      // uses — an AgreementEntry that minted the inquiry this job came
+      // from (src/lib/sales/clientCreatedJobs.ts). Written as AND so it
+      // composes with the search OR below rather than fighting it.
+      const clientCreated = await clientCreatedDraftOrderIds();
+      where.AND = [
+        {
+          OR: [
+            { status: { not: "DRAFT" as const } },
+            ...(clientCreated.length ? [{ id: { in: clientCreated } }] : []),
+          ],
+        },
+      ];
+    }
   }
   // Client-opted agentId filter — only honored when it matches the
   // user's scope. For OWN users we already constrained to their id;
