@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { RwConnectionCard } from '@/components/collections/RwConnectionCard'
 import { EodReportPanel } from '@/components/collections/EodReportPanel'
+import { BillingQueuePanel } from '@/components/collections/BillingQueuePanel'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -954,6 +955,15 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           </div>
         </div>
       )}
+
+      {/* ── to bill ─────────────────────────────────────────────────
+          The step BEFORE collecting. Ana 2026-09-08: she bills the day
+          after check-in, regardless of L&D, and wants that list handed to
+          her rather than assembled from the yard board and her inbox.
+          Full width and above the two columns because it is the first
+          thing worked in the morning — an order has to become a bill
+          before there is anything to chase. */}
+      <BillingQueuePanel />
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] items-start">
         {/* ── invoices ─────────────────────────────────────────── */}

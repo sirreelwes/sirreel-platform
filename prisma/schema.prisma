@@ -3569,6 +3569,10 @@ model Order {
   // other end of BookingAssignment.orderId. Drives the "Order attached"
   // indicator on the unit.
   unitAssignments    BookingAssignment[] @relation("AssignmentOrder")
+  // Ana's ruling on this order in the collections billing queue — snoozed
+  // to a date, or dismissed as "not billed out of HQ". Zero-or-one; the
+  // queue itself is derived from check-in and invoice state.
+  billingMark        OrderBillingMark?
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
@@ -8093,6 +8097,50 @@ model JobRwOrder {
   @@unique([jobId, rwOrderNumber])
   @@index([rwOrderNumber])
   @@map("sr_job_rw_orders")
+}
+
+/// Ana's ruling on ONE order in the billing queue (/collections "To bill").
+///
+/// The queue itself is DERIVED — an order that has come back and has no sent
+/// HQ invoice is due to be billed the next day, per Ana 2026-09-08:
+/// "Regardless of L&D, I always bill out the day after check-in. If an order
+/// came back on 9/8, I would want it queued up on my dashboard on 9/9."
+/// Nothing needs storing for that. This table exists only for the answers a
+/// derivation cannot reach:
+///
+///   SNOOZED    come back on `snoozedUntil` — the client asked to hold, or
+///              the order is waiting on a number that isn't in HQ yet.
+///   DISMISSED  this order is not being billed out of HQ (billed in
+///              RentalWorks, folded into another order, written off).
+///
+/// One row per order, overwritten by the latest ruling, and always
+/// reversible: "Put it back" clears the row, which returns the order to
+/// whatever the derivation says about it. A dismissal is deliberately NOT a
+/// statement that the order was invoiced — it says only that this desk is
+/// done with it, so nothing downstream should read it as billing evidence.
+///
+/// String status, not an enum: the queue is a working surface on top of the
+/// interim RW-era billing split, and a Postgres enum is the one thing that
+/// makes retiring it awkward (same reasoning as JobFinalInvoice.status).
+model OrderBillingMark {
+  id           String    @id @default(uuid())
+  orderId      String    @unique @map("order_id")
+  /// SNOOZED | DISMISSED
+  status       String
+  /// SNOOZED only — the Pacific day the row comes back. A @db.Date because
+  /// it is a day on a calendar, not an instant.
+  snoozedUntil DateTime? @map("snoozed_until") @db.Date
+  /// Why, in Ana's own words. Shown on the row so a colleague reading the
+  /// queue tomorrow does not have to ask.
+  reason       String?   @db.Text
+  markedById   String?   @map("marked_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, snoozedUntil])
+  @@map("sr_order_billing_marks")
 }
 
 /// The FINAL invoice for a job — the number Jose lands on after the back and
