@@ -17,13 +17,15 @@
  * estimate is answering a person, and every client-facing send in this app
  * sets it (see the 2026-08-28 replyTo audit).
  *
- * rentals@ is CC'd on every estimate (Wes 2026-08-28), through the same
- * withTeamCc helper Quick Reply uses rather than a second hardcoded address:
- * a sub-rental quote commits a partner's unit, so the desk needs to see it
- * went out — otherwise two people quote the same coach. CC and Reply-To
- * deliberately differ: rentals@ is a Google Group, which is why it's right
- * for CC and wrong for Reply-To (groups bounce non-member mail). Unsetting
- * TEAM_INBOX_EMAIL retires the CC everywhere at once, no deploy.
+ * Every estimate is CC'd to the 'sales-team-cc' channel (Wes 2026-08-28),
+ * through the same withTeamCc helper Quick Reply uses rather than a second
+ * hardcoded address: a sub-rental quote commits a partner's unit, so the
+ * send needs to be visible — otherwise two people quote the same coach.
+ * That channel was rentals@ until the 2026-09-08 quiet-down pass and is
+ * Wes alone now; edit or empty it at /admin/notifications to change or
+ * retire the CC everywhere at once, no deploy. CC and Reply-To
+ * deliberately differ either way: Reply-To is the sending agent, never a
+ * group, because groups bounce non-member mail.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'

@@ -2,12 +2,19 @@
  * /api/admin/notification-channels — who receives each class of internal
  * HQ notification email (requireAdmin on every method).
  *
- *   GET → { channels: [{ key, label, description, defaults, effective,
- *           overridden, updatedAt, updatedByEmail }] }
+ *   GET → { channels: [{ key, label, description, tier, tierReason,
+ *           defaults, effective, overridden, updatedAt, updatedByEmail }],
+ *           overriddenCount }
  *   PUT → { key, emails: string[] } sets the channel's whole audience
  *         (empty array = deliberately nobody — silences CC-type
  *         channels); { key, reset: true } deletes the override so the
  *         built-in default applies again. Audit-logged either way.
+ *   DELETE → drops EVERY override at once, so all channels fall back to
+ *         the built-in defaults. Added 2026-09-08 with Wes's quiet-down
+ *         pass: that pass changed the defaults, and a channel someone had
+ *         customised earlier would have kept its old, wider audience
+ *         while looking dialled-back from the code. One audit row per
+ *         override cleared, same action as a single reset.
  *
  * The channel registry (labels, defaults, which sends read which key)
  * lives in src/lib/email/notificationChannels.ts.
@@ -41,6 +48,8 @@ export async function GET() {
         key: def.key,
         label: def.label,
         description: def.description,
+        tier: def.tier,
+        tierReason: def.tierReason,
         defaults,
         effective: row ? row.emails : defaults,
         overridden: !!row,
@@ -48,7 +57,45 @@ export async function GET() {
         updatedByEmail: row?.updatedByEmail ?? null,
       }
     }),
+    overriddenCount: rows.filter((r) => NOTIFICATION_CHANNELS.some((c) => c.key === r.key)).length,
   })
+}
+
+/** Drop every override — all channels back to their built-in defaults. */
+export async function DELETE() {
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
+  const { user } = gate
+
+  const rows = await prisma.notificationChannel.findMany()
+  if (rows.length === 0) return NextResponse.json({ ok: true, cleared: 0 })
+
+  await prisma.notificationChannel.deleteMany({
+    where: { key: { in: rows.map((r) => r.key) } },
+  })
+  // One row per channel, carrying the audience we just removed — this is
+  // the only record of what the override WAS, so it has to be per-channel
+  // rather than one summary row. Deletes are by the keys read above.
+  await prisma.auditLog.createMany({
+    data: rows.map((row) => {
+      const def = NOTIFICATION_CHANNELS.find((c) => c.key === row.key)
+      return {
+        action: 'notification_channel.update',
+        entityType: 'NotificationChannel',
+        entityId: row.key,
+        userId: user.id,
+        oldValues: { emails: row.emails, overridden: true },
+        newValues: {
+          emails: def ? def.defaults() : [],
+          overridden: false,
+          reset: true,
+          resetAll: true,
+        },
+      }
+    }),
+  })
+
+  return NextResponse.json({ ok: true, cleared: rows.length })
 }
 
 export async function PUT(req: NextRequest) {

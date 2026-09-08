@@ -30,7 +30,8 @@ import { deriveOrderWindow } from '@/lib/jobs/dateRange'
  */
 
 // Audience: the 'hq-documents' notification channel (admin-managed at
-// /admin/notifications; defaults to HQ_NOTIFY_INBOX / hq@sirreel.com).
+// /admin/notifications; defaults to Wes alone since the 2026-09-08
+// quiet-down pass — it was the hq@ group, which reached three people).
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 export type PaperworkStep = 'agreement' | 'lcdw' | 'cc' | 'studio'

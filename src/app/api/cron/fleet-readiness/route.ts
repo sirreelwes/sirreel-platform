@@ -3,8 +3,9 @@
  *
  * Daily early-AM (vercel.json). For CONFIRMED/ACTIVE bookings with
  * vehicle assignments departing TODAY or TOMORROW (Pacific), sends ONE
- * digest per day per channel — Slack (lib/slack) + email (canonical
- * sendAgreementEmail helper) — to lib/fleet/readinessRecipients.ts.
+ * digest per day per channel — Slack (lib/fleet/readinessRecipients) +
+ * email (canonical sendAgreementEmail helper, audience from the
+ * 'fleet-readiness' notification channel).
  * Each vehicle line links to its pre-rental inspection checkout page.
  *
  * Scope guards (shared with /fleet/today via lib/fleet/todayBoard):
@@ -29,7 +30,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postMessage } from '@/lib/slack'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { FLEET_READINESS_EMAILS, FLEET_READINESS_SLACK_CHANNEL } from '@/lib/fleet/readinessRecipients'
+import { FLEET_READINESS_SLACK_CHANNEL } from '@/lib/fleet/readinessRecipients'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 // Selection logic shared with /fleet/today — one query, no drift.
 import { fleetMovementsOn, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
 
@@ -109,6 +111,11 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: false, reason: 'no departures today or tomorrow', date: today })
   }
 
+  // Email audience — the 'fleet-readiness' notification channel
+  // (/admin/notifications). Resolved before the dry-run branches so the
+  // logged payload shows who it WOULD have gone to, not a stale roster.
+  const fleetReadinessEmails = await channelRecipients('fleet-readiness')
+
   const subject = `Fleet readiness — ${dayOf.length} departing today, ${dayBefore.length} tomorrow (${today})`
   const slackText = `*Fleet readiness digest — ${today}*\n\n${slackSection(`Departing TODAY (${today})`, dayOf)}\n\n${slackSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}\n\n_Complete the pre-rental inspection before each unit leaves the yard._`
   const emailHtml = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#222"><h2 style="margin:0 0 4px">Fleet readiness digest — ${today}</h2><p style="margin:0 0 12px;color:#555">Complete the pre-rental inspection before each unit leaves the yard.</p>${emailSection(`Departing TODAY (${today})`, dayOf)}${emailSection(`Departing TOMORROW (${tomorrow})`, dayBefore)}</div>`
@@ -122,7 +129,7 @@ async function handle(req: NextRequest) {
       counts: { today: dayOf.length, tomorrow: dayBefore.length },
       payloads: {
         slack: { channel: FLEET_READINESS_SLACK_CHANNEL, text: slackText },
-        email: { to: FLEET_READINESS_EMAILS, subject, text: emailText, html: emailHtml },
+        email: { to: fleetReadinessEmails, subject, text: emailText, html: emailHtml },
       },
     })
   }
@@ -139,7 +146,7 @@ async function handle(req: NextRequest) {
         date: today,
         counts: { today: dayOf.length, tomorrow: dayBefore.length },
         slack: { channel: FLEET_READINESS_SLACK_CHANNEL, text: slackText },
-        email: { to: FLEET_READINESS_EMAILS, subject, text: emailText },
+        email: { to: fleetReadinessEmails, subject, text: emailText },
       }),
     )
     return NextResponse.json({
@@ -155,13 +162,17 @@ async function handle(req: NextRequest) {
   const slackResult = await postMessage(slackText, {
     channel: FLEET_READINESS_SLACK_CHANNEL || undefined,
   })
-  const emailResult = await sendAgreementEmail({
-    to: FLEET_READINESS_EMAILS,
-    subject,
-    html: emailHtml,
-    text: emailText,
-    label: 'fleet-readiness-digest',
-  })
+  // An admin can empty the channel to silence the email while leaving
+  // the Slack post alone — sending to nobody would be a Resend error.
+  const emailResult = fleetReadinessEmails.length
+    ? await sendAgreementEmail({
+        to: fleetReadinessEmails,
+        subject,
+        html: emailHtml,
+        text: emailText,
+        label: 'fleet-readiness-digest',
+      })
+    : { ok: true as const, skipped: 'no recipients on the fleet-readiness channel' }
 
   // Marker — written even on partial channel failure so a flaky channel
   // can't cause a double-send on the healthy one; failures are surfaced

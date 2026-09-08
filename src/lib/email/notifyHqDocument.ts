@@ -28,9 +28,11 @@ import {
  * stored and the client's submit has already succeeded; a Resend outage
  * must never fail or delay it. Failures log and are swallowed.
  *
- * hq@sirreel.com is an OUTBOUND-ONLY distribution group (wes/jose/
- * oliver); replies compose from each member's own address. Same inbox
- * and same reasoning as src/lib/email/notifyPublicSubmission.ts.
+ * Audience is the 'hq-documents' channel (/admin/notifications), which
+ * defaults to Wes alone since the 2026-09-08 quiet-down pass — it was
+ * the hq@ distribution group, so every stored document landed in three
+ * mailboxes. Same channel and same reasoning as
+ * src/lib/email/notifyPublicSubmission.ts.
  */
 
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')

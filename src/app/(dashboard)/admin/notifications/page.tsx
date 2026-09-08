@@ -7,18 +7,35 @@
  * Save, and "Use default" to drop the override. ADMIN-only (the API
  * enforces requireAdmin).
  *
- * A channel with no override runs on its built-in default (env var /
- * hardcoded roster / the hq@ and rentals@ Google Groups) — group
- * addresses still fan out through Google like before; this page just
+ * A channel with no override runs on its built-in default; this page
  * makes the audience editable without touching Workspace admin or code.
+ *
+ * 2026-09-08 (Wes's quiet-down pass):
+ *  · Channels are grouped and badged by TIER. 'Needs action' means
+ *    somebody other than Wes has to do something and email is how they
+ *    find out; 'Wes only' is awareness. The tier's reason is printed on
+ *    the card so the next person to widen a list has to argue with it.
+ *  · A banner offers "Reset all to defaults" when any channel is still
+ *    on a custom list. The pass changed the DEFAULTS — an override saved
+ *    before it silently keeps the old, wider audience, and the card
+ *    would read "Custom" without saying it is the loud version.
+ *  · Page chrome uses the lt-* light tokens. The title and intro were
+ *    text-white / text-zinc-400 sitting directly on the shell's cream
+ *    <main> — present, selectable, unreadable. The channel CARDS stay
+ *    dark: they paint their own opaque bg-zinc-900, which is the one
+ *    case CLAUDE.md allows.
  */
 
 import { useEffect, useState } from 'react';
+
+type Tier = 'desk' | 'owner';
 
 interface Channel {
   key: string;
   label: string;
   description: string;
+  tier: Tier;
+  tierReason: string;
   defaults: string[];
   effective: string[];
   overridden: boolean;
@@ -46,6 +63,7 @@ function parseEmails(input: string): { valid: string[]; invalid: string[] } {
 
 export default function AdminNotificationsPage() {
   const [channels, setChannels] = useState<Channel[] | null>(null);
+  const [overriddenCount, setOverriddenCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   // key → draft text while that channel's editor is open; absent = closed.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -59,6 +77,7 @@ export default function AdminNotificationsPage() {
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { setError(json?.error || `HTTP ${r.status}`); return; }
       setChannels(json.channels);
+      setOverriddenCount(json.overriddenCount ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'load failed');
     }
@@ -71,6 +90,31 @@ export default function AdminNotificationsPage() {
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Clears every override so the built-in defaults apply again. Guarded
+  // by a confirm because it is the one action here that touches channels
+  // the admin is not looking at.
+  const resetAll = async () => {
+    if (busy) return;
+    if (!confirm(
+      `Drop the custom recipient list on ${overriddenCount} channel${overriddenCount === 1 ? '' : 's'} ` +
+      `and put every channel back on its built-in default? Each change is written to the audit log.`,
+    )) return;
+    setBusy('__all__');
+    try {
+      const r = await fetch('/api/admin/notification-channels', { method: 'DELETE' });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok || json?.ok === false) {
+        setToast({ kind: 'err', msg: json?.error || `HTTP ${r.status}` });
+        return;
+      }
+      setDrafts({});
+      setToast({ kind: 'ok', msg: `${json.cleared} channel${json.cleared === 1 ? '' : 's'} back to default.` });
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const save = async (ch: Channel, body: { emails: string[] } | { reset: true }) => {
     if (busy) return;
@@ -96,17 +140,23 @@ export default function AdminNotificationsPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold text-white">Notification recipients</h1>
-      <p className="text-[13px] text-zinc-400 mt-1">
+      <h1 className="text-xl font-bold text-lt-fg">Notification recipients</h1>
+      <p className="text-[13px] text-lt-fg2 mt-1">
         Who receives each class of internal HQ email. A channel on its{' '}
-        <span className="text-zinc-300">default</span> follows the built-in audience (the hq@ /
-        rentals@ groups — membership managed in Google Workspace); a{' '}
-        <span className="text-amber-300">custom</span> list set here is the whole audience and
-        takes effect immediately, no deploy.
+        <span className="text-lt-fg">default</span> follows the built-in audience below; a{' '}
+        <span className="text-lt-fg">custom</span> list set here replaces it entirely and takes
+        effect immediately, no deploy. An empty list silences a channel.
+      </p>
+      <p className="text-[13px] text-lt-fg3 mt-2">
+        Since 8 Sep 2026 the defaults are deliberately narrow:{' '}
+        <strong className="text-lt-fg2">Needs action</strong> channels reach the desk that has to
+        do something about them, and everything else goes to Wes alone. Adding a name to a{' '}
+        <strong className="text-lt-fg2">Wes only</strong> channel puts that person back on a feed
+        somebody decided they did not need — the reason is on each card.
       </p>
 
       {error && (
-        <div className="mt-4 text-xs text-red-300 bg-red-900/20 border border-red-900/60 rounded px-3 py-2">
+        <div className="mt-4 text-xs bg-chip-bad-bg text-chip-bad-fg border border-lt-hairline rounded px-3 py-2">
           {error}
         </div>
       )}
@@ -114,15 +164,35 @@ export default function AdminNotificationsPage() {
         <div
           className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
             toast.kind === 'ok'
-              ? 'border-emerald-800 bg-emerald-950/50 text-emerald-200'
-              : 'border-rose-800 bg-rose-950/50 text-rose-200'
+              ? 'border-lt-hairline bg-chip-good-bg text-chip-good-fg'
+              : 'border-lt-hairline bg-chip-bad-bg text-chip-bad-fg'
           }`}
         >
           {toast.msg}
         </div>
       )}
 
-      {!channels && !error && <p className="mt-6 text-sm text-zinc-500">Loading…</p>}
+      {!channels && !error && <p className="mt-6 text-sm text-lt-fg3">Loading…</p>}
+
+      {overriddenCount > 0 && (
+        <div className="mt-4 rounded-lg border border-lt-hairline bg-chip-warn-bg text-chip-warn-fg px-3 py-2.5">
+          <p className="text-[13px] font-semibold">
+            {overriddenCount} channel{overriddenCount === 1 ? ' is' : 's are'} on a custom list.
+          </p>
+          <p className="text-[12px] mt-1">
+            A custom list is the whole audience, so it ignores the built-in default — including the
+            narrower defaults set on 8 Sep 2026. If one of these was saved before then it is still
+            mailing the wider group it was given at the time.
+          </p>
+          <button
+            onClick={resetAll}
+            disabled={busy !== null}
+            className="mt-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[12px] font-bold rounded-lg"
+          >
+            {busy === '__all__' ? 'Resetting…' : 'Reset all to defaults'}
+          </button>
+        </div>
+      )}
 
       <div className="mt-5 space-y-4">
         {channels?.map((ch) => {
@@ -138,6 +208,16 @@ export default function AdminNotificationsPage() {
                     <h2 className="text-sm font-semibold text-white">{ch.label}</h2>
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        ch.tier === 'desk'
+                          ? 'bg-sky-900/40 text-sky-300 border-sky-800'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                      }`}
+                      title={ch.tierReason}
+                    >
+                      {ch.tier === 'desk' ? 'Needs action' : 'Wes only'}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                         ch.overridden
                           ? 'bg-amber-900/40 text-amber-300 border-amber-800'
                           : 'bg-zinc-800 text-zinc-400 border-zinc-700'
@@ -147,6 +227,9 @@ export default function AdminNotificationsPage() {
                     </span>
                   </div>
                   <p className="text-[12px] text-zinc-500 mt-1">{ch.description}</p>
+                  {/* Why this tier — the argument anyone widening the list
+                      has to answer, kept next to the Edit button on purpose. */}
+                  <p className="text-[12px] text-zinc-400 mt-1.5 italic">{ch.tierReason}</p>
                 </div>
                 {!editing && (
                   <button

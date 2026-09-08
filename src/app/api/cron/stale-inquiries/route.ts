@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { renderEmailShell, renderEmailText, calloutBox } from '@/lib/email/templates/shell'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +31,6 @@ export const dynamic = 'force-dynamic'
  */
 
 const ALERT_TYPE = 'sales.web_inquiry_untouched'
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
 /**
@@ -172,8 +172,14 @@ async function sendDigest(rows: StaleRow[]): Promise<void> {
     ...(overflow > 0 ? [`…and ${overflow} more.`] : []),
   ])
 
+  // Audience is the 'stale-inquiries' channel (/admin/notifications).
+  // This mailed the hq@ group directly until 2026-09-08 — outside the
+  // registry, so it could not be dialled back without a deploy.
+  const to = await channelRecipients('stale-inquiries')
+  if (to.length === 0) return
+
   const res = await sendAgreementEmail({
-    to: [HQ_INBOX],
+    to,
     subject: `[SirReel] ${subject}`,
     html,
     text,

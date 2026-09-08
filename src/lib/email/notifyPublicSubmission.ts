@@ -10,8 +10,8 @@
  * is a dropped stage inquiry.
  *
  * Two sends per submission:
- *   1. INTERNAL → HQ_NOTIFY_INBOX (hq@sirreel.com). replyTo is the
- *      client, so an agent can answer straight from the notification.
+ *   1. INTERNAL → the 'hq-documents' channel. replyTo is the client, so
+ *      whoever picks it up can answer straight from the notification.
  *   2. CLIENT → an acknowledgement with the reference number, so the
  *      submission exists in writing on their side too.
  *
@@ -20,15 +20,20 @@
  * the Inquiry row is already written and is the real system of record.
  * Failures are logged and swallowed.
  *
- * hq@sirreel.com is an OUTBOUND-ONLY distribution group (wes/jose/oliver) —
- * nobody works out of it. Each member receives the notification in their own
- * mailbox, so hitting Reply composes from jose@/oliver@, which are already in
- * SALES_CAPTURE_INBOXES; the thread stays CRM-tracked. Deliberately NOT added
- * to that set (src/lib/crm/captureConstants.ts): it never authors mail, and
- * widening the capture gate for an alias that never sends buys nothing.
+ * On hq@sirreel.com: an OUTBOUND-ONLY distribution group (wes/jose/oliver)
+ * that nobody works out of. It was the default audience of the internal
+ * send until the 2026-09-08 quiet-down pass moved that to Wes alone, and
+ * it is still what the CLIENT acknowledgement below uses as its Reply-To.
+ * Each member receives mail sent to it in their own mailbox, so hitting
+ * Reply composes from wes@/jose@/oliver@, all already in
+ * SALES_CAPTURE_INBOXES; the thread stays CRM-tracked. Deliberately NOT
+ * added to that set (src/lib/crm/captureConstants.ts): it never authors
+ * mail, and widening the capture gate for an alias that never sends buys
+ * nothing.
  */
 
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
+import { hqNotifyInbox } from '@/lib/email/copyRecipients'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import {
   renderEmailShell,
@@ -41,7 +46,8 @@ import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 /** Override per-environment so staging never mails the real team. */
 // Audience: the 'hq-documents' notification channel (admin-managed at
-// /admin/notifications; defaults to HQ_NOTIFY_INBOX / hq@sirreel.com).
+// /admin/notifications; defaults to Wes alone since the 2026-09-08
+// quiet-down pass — it was the hq@ group, which reached three people).
 
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
@@ -276,9 +282,16 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
   const res = await sendAgreementEmail({
     to: [sub.contact.email.trim()],
     // No agent exists yet on a public submission, so replies route to
-    // the watched HQ inbox instead of the unmonitored notifications@
-    // sender — "change my dates" replies were previously lost.
-    replyTo: (await channelRecipients('hq-documents'))[0] || 'hq@sirreel.com',
+    // the HQ inbox instead of the unmonitored notifications@ sender —
+    // "change my dates" replies were previously lost.
+    //
+    // Deliberately NOT the first address on the 'hq-documents' channel,
+    // which is what this read until 2026-09-08. That made a CLIENT-facing
+    // Reply-To follow an INTERNAL audience setting: the quiet-down pass
+    // repointed that channel at Wes, and editing it at
+    // /admin/notifications would silently move where client replies land.
+    // Two different questions, two different answers.
+    replyTo: hqNotifyInbox(),
     subject: copy.clientSubject,
     html,
     text,

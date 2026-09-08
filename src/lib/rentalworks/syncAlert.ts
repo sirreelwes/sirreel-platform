@@ -23,8 +23,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const ALERT_TYPE = 'rw_sync_failure'
 
 /** Which mirror failed, and what a reader loses while it is stale. */
@@ -99,8 +99,14 @@ export async function reportRwSyncFailure(reason: string, mirror: RwMirror = 'in
       },
     })
 
+    // Audience is the 'rw-sync-failure' channel (/admin/notifications).
+    // This mailed the whole hq@ group until 2026-09-08, most of whom
+    // cannot fix a sync — it sits with the token alert now.
+    const to = await channelRecipients('rw-sync-failure')
+    if (to.length === 0) return
+
     await sendAgreementEmail({
-      to: [HQ_INBOX],
+      to,
       subject: `SirReel HQ — RentalWorks ${m.label} sync is failing`,
       text: failureText(reason, staleness, m),
       // Internal ops mail, so plain <pre> rather than the client-facing

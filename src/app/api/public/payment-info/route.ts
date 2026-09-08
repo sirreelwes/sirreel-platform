@@ -30,14 +30,15 @@ import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
 export const dynamic = 'force-dynamic'
 
-const BILLING_INBOX = 'billing@sirreel.com'
+// Billing's address now lives on the 'payment-info-requests' channel
+// (/admin/notifications) rather than here — one place to edit it.
 // hq@ is copied on every public submission so one inbox sees the whole
 // funnel. Billing keeps its own feed — this adds, it does not reroute.
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 
 const UNIFORM_RESPONSE = {
   ok: true,
@@ -63,8 +64,13 @@ async function notifyBilling(subject: string, lines: string[]): Promise<void> {
   try {
     const html = `<p>${lines.map(escapeHtml).join('<br/>')}</p>`
     const text = lines.join('\n')
+    // Audience is the 'payment-info-requests' channel
+    // (/admin/notifications) — billing plus Wes. It copied the whole hq@
+    // group as well until 2026-09-08.
+    const to = await channelRecipients('payment-info-requests')
+    if (to.length === 0) return
     const result = await sendAgreementEmail({
-      to: [BILLING_INBOX, HQ_INBOX],
+      to,
       subject,
       html,
       text,

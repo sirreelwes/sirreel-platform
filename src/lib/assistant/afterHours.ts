@@ -28,13 +28,12 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendSms } from '@/lib/sms/sendSms'
 
-const TEAM_INBOX = 'rentals@sirreel.com'
 // Copied on after-hours callbacks and emergency alerts so hq@ sees the whole
 // inbound funnel in one place. rentals@ stays primary — this adds, it does
 // not reroute.
-const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const GRACE_DAYS = 1
 
 function normTokens(s: string): string[] {
@@ -632,15 +631,21 @@ async function notifyDenied(
 
 async function notifyTeam(subject: string, lines: string[]): Promise<void> {
   // Kill-switch for the build/testing phase — set ASSISTANT_SUPPRESS_NOTIFY=1
-  // to avoid emailing rentals@ while we exercise the flow. Unset in prod so
+  // to avoid emailing the desk while we exercise the flow. Unset in prod so
   // the team is notified for real.
   if (process.env.ASSISTANT_SUPPRESS_NOTIFY === '1') {
     console.log(`[after-hours] notify suppressed (${subject})`)
     return
   }
+  // Audience is the 'after-hours-access' channel (/admin/notifications).
+  // Hardcoded to rentals@ + hq@ until 2026-09-08 — five or six inboxes
+  // for one gate. It stays a DESK channel: a driver at the lot at night
+  // needs whoever is on call, not only Wes.
+  const to = await channelRecipients('after-hours-access')
+  if (to.length === 0) return
   try {
     const result = await sendAgreementEmail({
-      to: [TEAM_INBOX, HQ_INBOX],
+      to,
       subject,
       html: `<p>${lines.map(escapeHtml).join('<br/>')}</p>`,
       text: lines.join('\n'),

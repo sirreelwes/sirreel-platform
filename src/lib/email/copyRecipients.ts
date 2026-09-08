@@ -29,3 +29,20 @@ export const COPY_RECIPIENTS = {
 export function hqNotifyInbox(): string {
   return process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 }
+
+/**
+ * Wes's own mailbox — the one address that stays on EVERYTHING.
+ *
+ * Wes 2026-09-08: "no one gets anything but absolutely necessary emails.
+ * Wes wants to continue getting all HQ emails, but the guys don't need
+ * them." So the awareness-tier channels in notificationChannels.ts
+ * resolve here instead of to the hq@ group, which fanned every FYI out
+ * to Jose and Oliver as well.
+ *
+ * A function and env-overridable for the same reason as hqNotifyInbox():
+ * read at call time, and a staging deploy can point it somewhere else
+ * rather than mailing the owner on every test send.
+ */
+export function ownerNotifyInbox(): string {
+  return process.env.OWNER_NOTIFY_INBOX || 'wes@sirreel.com'
+}

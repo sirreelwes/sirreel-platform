@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl, portalBaseUrl } from '@/lib/portal/portalUrl'
@@ -161,11 +162,13 @@ async function notifyRepPreparing(jobs: StageJob[], contactEmail: string, contac
     select: { id: true, jobCode: true, name: true, agent: { select: { email: true, name: true } } },
   })
   const to = [...new Set(agents.map((a) => a.agent?.email).filter((e): e is string => Boolean(e)))]
-  // The job's agent stays the primary recipient, but hq@ is always copied:
-  // a request sitting unread in one agent's inbox while they're on location
-  // is the exact failure this is meant to prevent.
-  const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
-  const recipients = [...new Set([...(to.length ? to : ['info@sirreel.com']), HQ_INBOX])]
+  // The job's agent stays the primary recipient, but a backstop copy
+  // always goes out too: a request sitting unread in one agent's inbox
+  // while they're on location is the exact failure this is meant to
+  // prevent. That copy was the whole hq@ group until 2026-09-08; it is
+  // the 'stage-contract-prep' channel now (/admin/notifications).
+  const backstop = await channelRecipients('stage-contract-prep')
+  const recipients = dedupeEmails([...(to.length ? to : ['info@sirreel.com']), ...backstop])
 
   const rows = agents
     .map((a) => `  • ${a.jobCode} — ${a.name}${a.agent?.name ? ` (agent: ${a.agent.name})` : ' (no agent assigned)'}`)
