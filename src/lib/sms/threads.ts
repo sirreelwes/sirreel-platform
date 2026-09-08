@@ -28,7 +28,7 @@ const IDLE_WINDOW_MS = 24 * 60 * 60 * 1000
 /** Most recent turns the model sees, after the window. */
 const MAX_TURNS = 30
 
-export const OPT_OUT_KEYWORDS = ['STOP', 'END', 'CANCEL', 'UNSUBSCRIBE', 'QUIT', 'STOPALL']
+export const OPT_OUT_KEYWORDS = ['STOP', 'END', 'CANCEL', 'UNSUBSCRIBE', 'QUIT', 'STOPALL', 'OPTOUT', 'REVOKE']
 export const OPT_IN_KEYWORDS = ['START', 'YES', 'UNSTOP']
 export const HELP_KEYWORDS = ['HELP', 'INFO']
 

@@ -28,16 +28,27 @@ End users opt in to SirReel Studio Services booking texts through one of four pa
 
 (1,863 characters; the field limit is 2,048.)
 
-## Sample messages
+## Sample messages (five, as filed 2026-09-08)
 
-Sample 1
+Every sample names the brand in full and ends with the STOP line that
+`sendTracked` appends. Links stay on sirreel.com domains (the client portal is
+tsx.sirreel.com). Driver pages really live on utliiz.com; keep them out of the
+samples so the reviewer sees one brand domain.
+
 ```
 SirReel Studio Services: Call time for your rental on job SR-JOB-0231 has moved to 6:30 AM Thu 9/10. Delivery address is unchanged. Questions? Reply here. Reply STOP to opt out.
 ```
-
-Sample 2
 ```
-SirReel Studio Services: Your 3-ton grip truck is confirmed for pickup Mon 9/14 at 7:00 AM, 8500 Lankershim Blvd, Sun Valley. Booking details: https://sirreel.com/portal Reply STOP to opt out.
+SirReel Studio Services: Your 3-ton grip truck is confirmed for pickup Mon 9/14 at 7:00 AM, 8500 Lankershim Blvd, Sun Valley. Booking details: https://tsx.sirreel.com/portal/job/forgotten-island Reply STOP to opt out.
+```
+```
+SirReel Studio Services: The delivery address for Fri 9/11 is now on your booking page: https://tsx.sirreel.com/portal/job/forgotten-island Gate code follows by text the morning of. Reply STOP to opt out.
+```
+```
+SirReel Studio Services: Gate access has changed for today's delivery. Use Gate 3 and tell security you're with transpo. Questions? Reply here. Reply STOP to opt out.
+```
+```
+SirReel Studio Services: Your vehicle return is scheduled today by 6:00 PM at 8500 Lankershim Blvd, Sun Valley. Reply here if you're running late. Reply STOP to opt out.
 ```
 
 ## Keywords and replies (must match `KEYWORD_REPLIES`)
@@ -49,7 +60,7 @@ Opt-in message
 SirReel Studio Services: You're opted in to booking updates and day-of logistics texts. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.
 ```
 
-Opt-out keywords: `STOP, END, CANCEL, UNSUBSCRIBE, QUIT, STOPALL`
+Opt-out keywords: `STOP, END, CANCEL, UNSUBSCRIBE, QUIT, STOPALL, OPTOUT, REVOKE`
 
 Opt-out message
 ```
@@ -62,6 +73,16 @@ Help message
 ```
 SirReel Studio Services: We text about your rental booking only. Email info@sirreel.com or call (888) 477-7335. Msg & data rates may apply. Reply STOP to opt out.
 ```
+
+### Twilio sends its own STOP/HELP replies too
+
+The number sits in a Messaging Service, and Twilio answers STOP and HELP
+itself with its default text before our webhook's reply (and an opted-out
+number cannot be texted, so our STOP reply never lands). To make what is
+filed match what the person receives, paste the opt-out and help messages
+above into Messaging Services → the service → Opt-Out Management (Advanced
+Opt-Out) as the custom replies. Do not file Twilio's defaults: the default
+help reply carries no brand name or contact, which reviewers reject.
 
 ## Campaign attributes
 
