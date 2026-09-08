@@ -66,8 +66,8 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'client-created-jobs',
     label: 'Client-created jobs',
     description:
-      'A client set up their own Job, Order and portal on the public rental-agreement page, with no agent involved — sometimes signing the agreement against an unpriced draft. One email per job with the dates, whether they signed, and who owns it. Sent the moment it happens during business hours (lot hours: weekdays 6am-6pm, Sat 7am-3:30pm); anything that arrives while we are closed is held and sent at 7am the next business day, so nobody is pinged at 2am and nothing is lost overnight (Wes 2026-09-08). Defaults to the hq@ feed.',
-    defaults: () => [hqNotifyInbox()],
+      'A client set up their own Job, Order and portal on the public rental-agreement page, with no agent involved — sometimes signing the agreement against an unpriced draft. One email per job with the dates, whether they signed, and who owns it. Sent the moment it happens during business hours (lot hours: weekdays 6am-6pm, Sat 7am-3:30pm); anything that arrives while we are closed is held and sent at 7am the next business day, so nobody is pinged at 2am and nothing is lost overnight (Wes 2026-09-08). Goes to the sales desk at rentals@ rather than the hq@ feed — this one needs someone to pick it up and quote it, not just to be seen (Wes 2026-09-08).',
+    defaults: () => ['rentals@sirreel.com'],
   },
   {
     key: 'driver-returns',
