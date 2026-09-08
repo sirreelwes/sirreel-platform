@@ -82,6 +82,10 @@ export default function SmsTermsPage() {
           <li className={LI}>By asking a SirReel team member, in writing, to text you about your booking.</li>
         </ul>
         <p className={P}>Consent to receive text messages is not a condition of renting from SirReel.</p>
+        <p className={P}>
+          The portal, partner and driver forms are behind private links; they are shown as the person sees them at{' '}
+          <Link href="/sms-terms/opt-in-examples" className="text-[#0F7A93] underline underline-offset-2">sirreel.com/sms-terms/opt-in-examples</Link>.
+        </p>
 
         <h2 className={H2} style={{ fontFamily: 'Archivo, sans-serif' }}>Frequency and rates</h2>
         <p className={P}>

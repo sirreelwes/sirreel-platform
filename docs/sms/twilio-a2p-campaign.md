@@ -3,9 +3,11 @@
 Campaign `CMadf71a842a44855e507d1cfbb9436cb0` · use case ACCOUNT_NOTIFICATION ·
 Messaging Service `MGda3482bd81e2c26b45cc188de36124dc` · number (747) 335-1665.
 
-First submission (2026-09-07 16:37Z) was rejected with **error 30909**: the
-Message Flow did not describe every opt-in path and its disclosures. This file
-is the resubmission, field by field, and the source of truth for the keyword
+Rejected twice with **error 30909** (2026-09-07 and again 2026-09-08 after a
+resubmission that described all four paths): reviewers cannot open the portal,
+partner and driver forms, so those opt-in paths could not be verified. The
+third filing cites https://sirreel.com/sms-terms/opt-in-examples, where the
+three gated forms are shown as the person sees them. This file is the filing, field by field, and the source of truth for the keyword
 replies in `src/lib/sms/threads.ts` (`KEYWORD_REPLIES`) — change one, change
 the other.
 
@@ -23,10 +25,10 @@ SirReel Studio Services (SirReel Production Vehicles, Inc.) rents production veh
 ## Message flow / how end users opt in (the 30909 fix)
 
 ```
-End users opt in to SirReel Studio Services booking texts through one of four paths. Every path shows the same consent language beside the mobile-number field, with links to https://sirreel.com/sms-terms and https://sirreel.com/privacy: "OK for SirReel Studio Services to text this number about this booking - day-of changes to call time, delivery address or pickup. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of renting." Consent checkboxes are unchecked by default; no consent is recorded unless the user ticks the box. (1) Public web form at https://sirreel.com/sms-terms#opt-in: the user enters their mobile number, ticks the consent checkbox and submits, and receives the opt-in confirmation text. (2) Keyword: the user texts START to (747) 335-1665; the call to action "Text START to (747) 335-1665" with the full disclosure is displayed at the same public URL. (3) Client portal (login-protected): a client entering the on-site contact for their rental sees the mobile-number field and the consent checkbox on the same form with the language above; consent is recorded only when ticked. (4) Partner and driver pages (login-protected): a vehicle partner or driver entering their own number for a delivery sees the same field, checkbox and language. Each opt-in is stored against the number with the timestamp and source (form, keyword, portal, partner page, driver profile). Messages are transactional only: booking confirmations, day-of logistics and replies to questions the user texted us; no marketing. Every outbound message ends with "Reply STOP to opt out." STOP (also END, CANCEL, UNSUBSCRIBE, QUIT) is honored immediately with one confirmation and blocks all further sends, automated or staff-initiated, until the user texts START. HELP returns our email and phone number.
+End users opt in to SirReel Studio Services booking texts through one of four paths. Every path shows the same consent language beside the mobile-number field, with links to https://sirreel.com/sms-terms and https://sirreel.com/privacy: "OK for SirReel Studio Services to text this number about this booking - day-of changes to call time, delivery address or pickup. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of renting." Checkboxes are unchecked by default; consent is recorded only when the user ticks the box. (1) Public web form at https://sirreel.com/sms-terms#opt-in: the user enters their mobile number, ticks the consent box and submits, and receives the opt-in confirmation text. (2) Keyword: the user texts START to (747) 335-1665; the call to action "Text START to (747) 335-1665" with the full disclosure is displayed at the same URL. (3) Client portal: a client entering the on-site contact for their rental sees the mobile-number field and the consent box on the same form. (4) Partner and driver pages: a vehicle partner or driver entering their own number for a delivery sees the same field, box and language. Paths 3 and 4 are behind private links, so each form is reproduced as the user sees it at https://sirreel.com/sms-terms/opt-in-examples. Each opt-in is stored with the timestamp and source. Messages are transactional only (booking confirmations, day-of logistics, replies to questions the user texted us); no marketing. Every message ends with "Reply STOP to opt out." STOP (also END, CANCEL, UNSUBSCRIBE, QUIT, OPTOUT, REVOKE) is honored immediately with one confirmation and blocks all further sends until the user texts START. HELP returns our email and phone number.
 ```
 
-(1,863 characters; the field limit is 2,048.)
+(1,773 characters; the field limit is 2,048.)
 
 ## Sample messages (five, as filed 2026-09-08)
 
