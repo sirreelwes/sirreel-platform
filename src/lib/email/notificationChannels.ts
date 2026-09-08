@@ -29,6 +29,7 @@ import { COPY_RECIPIENTS, hqNotifyInbox } from '@/lib/email/copyRecipients'
 import { teamInboxEmail } from '@/lib/email/teamVisibility'
 
 export type NotificationChannelKey =
+  | 'client-created-jobs'
   | 'hq-documents'
   | 'portal-card-trouble'
   | 'sales-team-cc'
@@ -61,6 +62,13 @@ export interface NotificationChannelDef {
 }
 
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
+  {
+    key: 'client-created-jobs',
+    label: 'Client-created jobs',
+    description:
+      'A client set up their own Job, Order and portal on the public rental-agreement page, with no agent involved — sometimes signing the agreement against an unpriced draft. One email per job with the dates, whether they signed, and who owns it. Sent the moment it happens during business hours (lot hours: weekdays 6am-6pm, Sat 7am-3:30pm); anything that arrives while we are closed is held and sent at 7am the next business day, so nobody is pinged at 2am and nothing is lost overnight (Wes 2026-09-08). Defaults to the hq@ feed.',
+    defaults: () => [hqNotifyInbox()],
+  },
   {
     key: 'driver-returns',
     label: 'Driver self returns',

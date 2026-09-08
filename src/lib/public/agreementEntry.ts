@@ -5,6 +5,7 @@ import { resolveDefaultSalesAgent } from '@/lib/sales/defaultAgent'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
+import { inBusinessHours } from '@/lib/email/notifyClientCreatedJob'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { companyNameKey } from '@/lib/companies/normalize'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -703,7 +704,21 @@ export async function startNewSubmit(
     // Placed AFTER the mint succeeded, so an unwound attempt (see the
     // refusal branch above) never announces a job that no longer exists.
     // notifyClient:false — startWelcomeInvite hands them the portal.
-    notifyPublicSubmission({
+    // WHEN it goes out (Wes 2026-09-08): "a real time email if during biz
+    // hours" and "7a on the next business day if the order was submitted
+    // overnight". Inside hours the generic public-submission notice fires
+    // now, as it always has, and the entry is stamped. Outside them nothing
+    // is sent and nothing is stamped — the empty teamNotifiedAt is the
+    // queue the 7am sweep reads (lib/email/notifyClientCreatedJob.ts), so a
+    // 2am signature waits for someone who is actually awake to read it.
+    const deskIsOpen = inBusinessHours()
+    if (deskIsOpen) {
+      void prisma.agreementEntry
+        .update({ where: { id: entry.id }, data: { teamNotifiedAt: new Date() } })
+        .catch((err) => console.error('[agreement-start] could not stamp teamNotifiedAt:', err))
+    }
+    if (deskIsOpen)
+      notifyPublicSubmission({
       kind: 'job-created',
       inquiryId: inquiry.id,
       notifyClient: false,

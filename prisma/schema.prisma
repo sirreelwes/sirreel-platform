@@ -5914,6 +5914,11 @@ model AgreementEntry {
   personId         String?   @map("person_id")
   jobId            String?   @map("job_id") // CONFIRM_JOB: the job this link confirms
   createdInquiryId String?   @map("created_inquiry_id") // START_NEW: stamped on submit
+  /// The desk has been emailed about this self-serve job. Stamped either
+  /// at submit (inside business hours) or by the 7am cron the next
+  /// business day (Wes 2026-09-08). Its absence IS the queue, so a missed
+  /// cron run catches up rather than losing the notice.
+  teamNotifiedAt   DateTime? @map("team_notified_at")
   expiresAt        DateTime  @map("expires_at")
   usedAt           DateTime? @map("used_at")
   createdAt        DateTime  @default(now()) @map("created_at")

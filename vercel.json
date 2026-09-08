@@ -107,6 +107,10 @@
     {
       "path": "/api/cron/release-driver-locations",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/client-created-notice",
+      "schedule": "0 14,15 * * *"
     }
   ],
   "functions": {

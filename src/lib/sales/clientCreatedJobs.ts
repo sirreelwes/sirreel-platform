@@ -57,6 +57,10 @@ export interface ClientCreatedJob {
   agentName: string | null
   /** When the client set it up — the clock that matters, not the order's. */
   createdAt: Date
+  /** The AgreementEntry that marks this as self-serve. The desk-notice
+   *  sweep stamps `teamNotifiedAt` on it, so it has to travel with the
+   *  row (notifyClientCreatedJob.ts). */
+  entryId: string | null
 }
 
 /**
@@ -75,7 +79,7 @@ export async function listClientCreatedUnquoted(
     where: { createdInquiryId: { not: null } },
     orderBy: { createdAt: 'desc' },
     take: 200,
-    select: { createdInquiryId: true },
+    select: { id: true, createdInquiryId: true },
   })
   const inquiryIds = entries
     .map((e) => e.createdInquiryId)
@@ -84,13 +88,19 @@ export async function listClientCreatedUnquoted(
 
   const inquiries = await prisma.inquiry.findMany({
     where: { id: { in: inquiryIds }, convertedJobId: { not: null } },
-    select: { createdAt: true, convertedJobId: true },
+    select: { id: true, createdAt: true, convertedJobId: true },
   })
   const jobIds = inquiries
     .map((i) => i.convertedJobId)
     .filter((id): id is string => !!id)
   if (!jobIds.length) return []
   const entryAt = new Map(inquiries.map((i) => [i.convertedJobId!, i.createdAt]))
+  // inquiry -> the entry that created it -> the job, so the notice sweep
+  // can stamp the right row.
+  const entryByInquiry = new Map(entries.filter((e) => e.createdInquiryId).map((e) => [e.createdInquiryId!, e.id]))
+  const entryIdByJob = new Map(
+    inquiries.filter((i) => i.convertedJobId).map((i) => [i.convertedJobId!, entryByInquiry.get(i.id) ?? null]),
+  )
 
   const orders = await prisma.order.findMany({
     where: {
@@ -190,6 +200,7 @@ export async function listClientCreatedUnquoted(
         lineCount: o._count.lineItems,
         agentName: job.agent?.name || job.agent?.email || null,
         createdAt: entryAt.get(job.id) ?? o.createdAt,
+        entryId: entryIdByJob.get(job.id) ?? null,
       }
     })
 }
