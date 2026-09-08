@@ -100,6 +100,40 @@ help reply carries no brand name or contact, which reviewers reject.
 | Direct lending / loan arrangement | No |
 | Affiliate marketing | No |
 
+## Rejection log
+
+| # | Rejected | What was filed | Read |
+|---|---|---|---|
+| 1 | 2026-09-07 | Original flow: START keyword only | 30909 |
+| 2 | 2026-09-08 ~10:37 | Flow describing all four opt-in paths | 30909 |
+| 3 | 2026-09-08 (after the 3rd filing) | Flow citing /sms-terms/opt-in-examples | 30909 |
+
+The Twilio Console threw **React error #310** on the campaign edit form on
+both 9/8 attempts. That is a bug in Twilio's own app, not in the data — but
+it means an edit may never have been saved. The rejection email always
+prints the campaign's ORIGINAL submitted timestamp (2026-09-07T16:37Z), so
+it cannot distinguish a fresh verdict from a stale one either.
+
+**Before rewriting anything a fourth time, prove what Twilio actually
+holds:** `node tmp/a2p-resubmit.mjs --read` (untracked; needs
+TWILIO_ACCOUNT_SID + TWILIO_API_KEY_SID/SECRET in the shell). It prints the
+stored message flow, the reviewer's own `errors` text — which the email
+omits — and says outright whether the stored text matches this document.
+If it does not match, the console edits were lost and the fix is
+`--write`, not new copy.
+
+If the stored text DOES match and 30909 still comes back, the remaining
+candidates, in order:
+1. **Use case.** ACCOUNT_NOTIFICATION but the description and samples say we
+   reply to inbound questions. `CUSTOMER_CARE` or `MIXED` fits what we
+   actually send; a use-case mismatch is read as an unverifiable flow.
+2. **30919 (website).** sirreel.com's home page never mentions the texting
+   program. Reviewers start at the brand's domain; a link in the footer to
+   the Text Message Terms is the cheap fix.
+3. **Twilio support ticket.** Three rejections on a generic code with no
+   specific sub-code is what support is for; they can see the vetting
+   vendor's actual note.
+
 ## If Twilio comes back with 30921 (login-protected flows)
 
 Paths 3 and 4 sit behind client, partner and driver logins, so a reviewer
