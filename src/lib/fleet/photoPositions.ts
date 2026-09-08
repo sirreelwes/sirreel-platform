@@ -26,22 +26,73 @@ export interface PhotoPosition {
   label: string
   /** The one-line instruction under it. Concrete beats exhaustive. */
   hint: string
+  /** Section heading in the capture UI. At 22 slots an undifferentiated
+   *  column is a wall; grouped, it reads as "walk the sides, then the
+   *  wheels, then get in", which is the order the tech moves anyway. */
+  group: PhotoGroup
 }
 
+export type PhotoGroup = 'Sides & corners' | 'Wheels' | 'Detail' | 'Interior' | 'Gauges'
+
+/** Section order for the capture screen. */
+export const PHOTO_GROUPS: readonly PhotoGroup[] = [
+  'Sides & corners', 'Wheels', 'Detail', 'Interior', 'Gauges',
+] as const
+
 /**
- * The seven required slots, in walk-around order — you circle the
- * vehicle, then get in. Odometer and fuel are shots rather than only
- * typed numbers because a photo of the gauge is what settles an
- * argument about the number.
+ * The required slots, in walk-around order — you circle the vehicle,
+ * then get in. Odometer and fuel are shots rather than only typed
+ * numbers because a photo of the gauge is what settles an argument
+ * about the number.
+ *
+ * Went from 7 to 22 on 2026-09-08. Hugo's complaint was simply that
+ * seven was not enough to defend a damage claim — DamageID asks for
+ * about 22 at each end, and the four flat sides miss exactly what gets
+ * hit: corners, bumpers, wheels and the lift gate. The count is the
+ * point, so the additions are the angles a body shop argues about.
+ *
+ * The first seven ids are UNCHANGED and in their original order. Old
+ * photos carry these strings, the driver self-serve subsets pick from
+ * them by id, and a rename would orphan both.
+ *
+ * A truck that checked out under the old seven will show fifteen slots
+ * at check-in with nothing above them to compare against. That is
+ * expected and the capture screen says so per slot rather than leaving
+ * a gap the tech has to interpret.
  */
 export const REQUIRED_POSITIONS: readonly PhotoPosition[] = [
-  { id: 'FRONT',          label: 'Front',          hint: 'Straight on, whole front end in frame' },
-  { id: 'DRIVER_SIDE',    label: 'Driver side',    hint: 'Full length of the driver side' },
-  { id: 'REAR',           label: 'Rear',           hint: 'Straight on, including the liftgate or roll-up' },
-  { id: 'PASSENGER_SIDE', label: 'Passenger side', hint: 'Full length of the passenger side' },
-  { id: 'INTERIOR',       label: 'Interior',       hint: 'Cab and cargo area' },
-  { id: 'ODOMETER',       label: 'Odometer',       hint: 'Close enough to read the number' },
-  { id: 'FUEL_GAUGE',     label: 'Fuel gauge',     hint: 'Needle clearly visible' },
+  // The original four flat sides, ids and order untouched.
+  { id: 'FRONT',          label: 'Front',          hint: 'Straight on, whole front end in frame', group: 'Sides & corners' },
+  { id: 'DRIVER_SIDE',    label: 'Driver side',    hint: 'Full length of the driver side', group: 'Sides & corners' },
+  { id: 'REAR',           label: 'Rear',           hint: 'Straight on, including the liftgate or roll-up', group: 'Sides & corners' },
+  { id: 'PASSENGER_SIDE', label: 'Passenger side', hint: 'Full length of the passenger side', group: 'Sides & corners' },
+  // The corners. A flat side photo flattens the very panel edges that
+  // get clipped backing out of a location; a 3/4 shows both faces.
+  { id: 'FRONT_DRIVER_CORNER',     label: 'Front driver corner',     hint: 'Three-quarter angle — front and driver side in one frame', group: 'Sides & corners' },
+  { id: 'REAR_DRIVER_CORNER',      label: 'Rear driver corner',      hint: 'Three-quarter angle — driver side and rear', group: 'Sides & corners' },
+  { id: 'REAR_PASSENGER_CORNER',   label: 'Rear passenger corner',   hint: 'Three-quarter angle — rear and passenger side', group: 'Sides & corners' },
+  { id: 'FRONT_PASSENGER_CORNER',  label: 'Front passenger corner',  hint: 'Three-quarter angle — passenger side and front', group: 'Sides & corners' },
+
+  // Curbing a wheel is the single most common return damage and the
+  // side shots never show the rim face.
+  { id: 'WHEEL_DRIVER_FRONT',     label: 'Driver front wheel',     hint: 'Rim face and sidewall', group: 'Wheels' },
+  { id: 'WHEEL_DRIVER_REAR',      label: 'Driver rear wheel',      hint: 'Rim face and sidewall', group: 'Wheels' },
+  { id: 'WHEEL_PASSENGER_REAR',   label: 'Passenger rear wheel',   hint: 'Rim face and sidewall', group: 'Wheels' },
+  { id: 'WHEEL_PASSENGER_FRONT',  label: 'Passenger front wheel',  hint: 'Rim face and sidewall', group: 'Wheels' },
+
+  { id: 'ROOF',          label: 'Roof / top',           hint: 'From the mirror or a step — scrapes from low clearances live here', group: 'Detail' },
+  { id: 'WINDSHIELD',    label: 'Windshield',           hint: 'Whole glass, angled so chips show', group: 'Detail' },
+  { id: 'FRONT_BUMPER',  label: 'Front bumper',         hint: 'Low and close, full width', group: 'Detail' },
+  { id: 'REAR_BUMPER',   label: 'Rear bumper / door',   hint: 'Low and close — the roll-up track and rear door edge', group: 'Detail' },
+  { id: 'LIFT_GATE',     label: 'Lift gate / ramp',     hint: 'Deployed if it has one. Skip if this truck has neither', group: 'Detail' },
+
+  // INTERIOR keeps its id — it is on every photo taken before today.
+  { id: 'INTERIOR',        label: 'Cab interior',       hint: 'Seats and floor', group: 'Interior' },
+  { id: 'DASH',            label: 'Dash & controls',    hint: 'Whole dash, including any warning lights showing', group: 'Interior' },
+  { id: 'CARGO_INTERIOR',  label: 'Cargo area',         hint: 'Full length of the box or cargo space, walls and floor', group: 'Interior' },
+
+  { id: 'ODOMETER',   label: 'Odometer',   hint: 'Close enough to read the number', group: 'Gauges' },
+  { id: 'FUEL_GAUGE', label: 'Fuel gauge', hint: 'Needle clearly visible', group: 'Gauges' },
 ] as const
 
 /** Close-ups of specific damage. Unlimited, and never required. */

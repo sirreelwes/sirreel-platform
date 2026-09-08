@@ -30,6 +30,7 @@ import { Camera, Images, RotateCw, Check, X } from 'lucide-react';
 import {
   REQUIRED_POSITIONS,
   DAMAGE_POSITION,
+  PHOTO_GROUPS,
   type PhotoPosition,
 } from '@/lib/fleet/photoPositions';
 
@@ -192,6 +193,8 @@ export function GuidedPhotoCapture({
   const byPosition = new Map(photos.filter((p) => p.position).map((p) => [p.position as string, p]));
   const damagePhotos = photos.filter((p) => p.position === DAMAGE_POSITION);
   const doneRequired = requiredPositions.filter((s) => byPosition.has(s.id)).length;
+  /* The return screen is the one that passes a comparison set at all. */
+  const isReturn = Array.isArray(compareTo);
 
   const Overlay = ({ p }: { p: StagedPhoto }) => (
     <>
@@ -243,6 +246,15 @@ export function GuidedPhotoCapture({
           )}
         </div>
         <p className="text-zinc-500 text-xs mb-2">{slot.hint}</p>
+
+        {/* A truck that checked out before this angle existed has no shot
+            to sit next to. Say that, rather than showing a single frame
+            and letting the tech read it as "nothing changed here". */}
+        {isReturn && !before && (
+          <p className="text-amber-300/80 text-[11px] mb-2">
+            Nothing was shot here at check-out — this one stands alone.
+          </p>
+        )}
 
         <div className={before ? 'grid grid-cols-2 gap-2' : ''}>
           {before && <Thumb src={`/api/fleet/photos/${before.id}`} alt={`${slot.label} at check-out`} badge="Out" />}
@@ -312,13 +324,35 @@ export function GuidedPhotoCapture({
         </span>
       </div>
 
-      <div className="space-y-3">
-        {requiredPositions.map((slot) => (
-          <Slot key={slot.id} slot={slot} />
-        ))}
-        {optionalPositions.map((slot) => (
-          <Slot key={slot.id} slot={slot} optional />
-        ))}
+      {/* Grouped, because 22 slots in one column is a wall — and the
+          groups are the order the tech already walks: round the outside,
+          down at the wheels, then get in. Each header carries its own
+          count so progress is legible without scrolling to the top. */}
+      <div className="space-y-5">
+        {PHOTO_GROUPS.map((group) => {
+          const req = requiredPositions.filter((s) => s.group === group);
+          const opt = optionalPositions.filter((s) => s.group === group);
+          if (req.length === 0 && opt.length === 0) return null;
+          const got = req.filter((s) => byPosition.has(s.id)).length;
+          return (
+            <section key={group}>
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-zinc-300 text-[11px] font-bold uppercase tracking-[0.16em]">
+                  {group}
+                </h3>
+                {req.length > 0 && (
+                  <span className={`text-[11px] font-medium ${got === req.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                    {got} of {req.length}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-3">
+                {req.map((slot) => <Slot key={slot.id} slot={slot} />)}
+                {opt.map((slot) => <Slot key={slot.id} slot={slot} optional />)}
+              </div>
+            </section>
+          );
+        })}
       </div>
 
       <div className="rounded-xl border border-zinc-700 bg-zinc-800/40 p-3">
