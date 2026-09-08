@@ -11,6 +11,7 @@ import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
+import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -44,7 +45,7 @@ import {
   groupLineItemsByDepartment,
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Sparkles } from 'lucide-react'
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -481,6 +482,9 @@ export default function OrderDetailPage() {
   const lastAutoFilledDescRef = useRef<string>("");
 
   const [showAddForm, setShowAddForm] = useState(false);
+  /* Oliver 2026-09-08: the same AI paste box the quote screen has, for
+     the supply list that turns up the day after the vehicle quote. */
+  const [showPasteList, setShowPasteList] = useState(false);
   const [liType, setLiType] = useState<string>("EQUIPMENT");
   const [liDesc, setLiDesc] = useState("");
   const [liAssetCatId, setLiAssetCatId] = useState("");
@@ -3163,6 +3167,15 @@ export default function OrderDetailPage() {
         />
       )}
 
+      {showPasteList && order && (
+        <PasteSupplyListModal
+          orderId={orderId}
+          orderNumber={order.orderNumber}
+          onClose={() => setShowPasteList(false)}
+          onAdded={() => void fetchOrder()}
+        />
+      )}
+
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
@@ -3198,6 +3211,13 @@ export default function OrderDetailPage() {
               <button onClick={() => setShowPartnerFees(true)}
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline border border-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
                 + Partner fees
+              </button>
+              {/* A big list pasted in one go, rather than forty trips
+                  through the one-line form below. */}
+              <button onClick={() => setShowPasteList(true)}
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline border border-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-1.5">
+                <Sparkles size={14} aria-hidden />
+                Paste a list
               </button>
               <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
                 className="px-3 py-1.5 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
