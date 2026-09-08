@@ -295,11 +295,23 @@ export function buildBookingTerms(input: BookingTermsInput): BookingTerm[] {
       body: `Vehicles go out fully (or close to) fueled and should come back at the same level. Refueling is billed at ${money(BOOKING_POLICY.refuelPerGallon)}/gallon.`,
     })
 
+    // Two mileage regimes on one page. The included-miles allowance is
+    // SirReel's own fleet policy; a Specialty Vehicle (a partner's coach,
+    // restroom trailer and the like) bills per mile from the first mile at
+    // the partner's rate, which is on the line itself. Stating only the
+    // allowance made the quote contradict its own mileage line — a client
+    // reading "the first 100 miles are included" would fairly ask why they
+    // were being charged from mile one (Wes 2026-09-08).
+    const specialty = vehicles.filter((v) => v.isPartnerVehicle).map((v) => v.description)
     terms.push({
       key: 'mileage',
       title: 'Mileage',
-      body: `Includes ${BOOKING_POLICY.mileageIncludedPerDay} miles per rental day, or ${BOOKING_POLICY.mileageIncludedPerWeek} miles per week. Additional mileage is billed at ${money(BOOKING_POLICY.mileageOveragePerMile)}/mile.`,
-      note: "Taking the vehicle out of the county? Let us know ahead of time so we can prep it properly for a long trip.",
+      body: `For standard fleet rentals from SirReel: includes ${BOOKING_POLICY.mileageIncludedPerDay} miles per rental day, or ${BOOKING_POLICY.mileageIncludedPerWeek} miles per week. Additional mileage is billed at ${money(BOOKING_POLICY.mileageOveragePerMile)}/mile.`,
+      note:
+        (specialty.length
+          ? `Specialty Vehicles are billed differently — ${listNames(specialty)} ${specialty.length === 1 ? 'is' : 'are'} charged per mile from the first mile, at the rate shown on the line above. `
+          : 'Specialty Vehicles — celebrity motorhomes, restroom trailers and similar units — are billed differently: per mile from the first mile, at the rate shown on the line. ') +
+        'Taking the vehicle out of the county? Let us know ahead of time so we can prep it properly for a long trip.',
     })
 
     terms.push({
