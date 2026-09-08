@@ -26,7 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { list } from '@vercel/blob'
-import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/client'
+import type { DamageSeverity, DamageType, VehicleCondition, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
 import { normalizePosition } from '@/lib/fleet/photoPositions'
@@ -206,20 +206,36 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   }
-  const orderId = new URL(req.url).searchParams.get('orderId')
-  if (!orderId) return NextResponse.json({ error: 'orderId required' }, { status: 400 })
+  const params = new URL(req.url).searchParams
+  const orderId = params.get('orderId')
+  // JOB scope (Wes, 2026-09-08: "the driver pictures should somehow fold
+  // into the damage check for job"). A damage argument is about a show,
+  // not about one invoice: the same truck can move across two orders on
+  // one job, and a rebook orphans Order.bookingId entirely, so an
+  // order-scoped read can show nothing for a vehicle that was fully
+  // photographed. Scoping by the JOB reaches every booking on it.
+  const jobId = params.get('jobId')
+  if (!orderId && !jobId) {
+    return NextResponse.json({ error: 'orderId or jobId required' }, { status: 400 })
+  }
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { bookingId: true },
-  })
-  if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
-  if (!order.bookingId) return NextResponse.json({ inspections: [] })
+  let assignmentWhere: Prisma.BookingAssignmentWhereInput
+  if (jobId) {
+    assignmentWhere = { bookingItem: { booking: { jobId } } }
+  } else {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId as string },
+      select: { bookingId: true },
+    })
+    if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
+    if (!order.bookingId) return NextResponse.json({ inspections: [] })
+    assignmentWhere = { bookingItem: { bookingId: order.bookingId } }
+  }
 
   const inspections = await prisma.inspection.findMany({
     where: {
       type: { in: ['CHECKOUT', 'RETURN'] },
-      bookingAssignment: { bookingItem: { bookingId: order.bookingId } },
+      bookingAssignment: assignmentWhere,
     },
     orderBy: { inspectionDate: 'desc' },
     select: {
@@ -235,7 +251,10 @@ export async function GET(req: NextRequest) {
       bookingAssignment: {
         select: { id: true, asset: { select: { unitName: true } } },
       },
-      photos: { select: { id: true, filename: true }, orderBy: { createdAt: 'asc' } },
+      photos: {
+        select: { id: true, filename: true, position: true },
+        orderBy: { createdAt: 'asc' },
+      },
       damageItems: {
         select: {
           id: true,

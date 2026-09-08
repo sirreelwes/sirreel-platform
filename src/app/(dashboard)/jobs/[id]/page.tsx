@@ -56,6 +56,7 @@ import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementM
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
+import { JobConditionPanel } from '@/components/jobs/JobConditionPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
 import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
@@ -3028,6 +3029,11 @@ const driverTone = (d: any): string => {
       <JobFinalInvoicePanel jobId={job.id} openSignal={finalInvoiceOpen} />
 
       {/* RW quotes/invoices attached to this job (transitional). */}
+      {/* Every vehicle's walk-around, both ends, staff and driver shots
+          together (Wes 2026-09-08). Renders nothing when the job has no
+          vehicles on it. */}
+      <JobConditionPanel jobId={job.id} />
+
       <JobDocumentsPanel jobId={job.id} />
       </>)}
 
