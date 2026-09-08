@@ -4,13 +4,23 @@
  * engine each time so the body always reflects current numbers. Returns the
  * same CompositionOk shape EmailReviewModal renders (synthetic order — Quick
  * Reply has no order yet).
+ *
+ * The subject comes from quickReplySendSubject — the SAME helper the send
+ * route uses. The agent approves what they see here, so a preview that
+ * computed its own subject would be an approval for an email that never
+ * went out.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
-import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
+import {
+  computeQuickReplyTiering,
+  composeQuickReply,
+  quickReplySendSubject,
+} from '@/lib/sales/quickReply'
+import { prisma } from '@/lib/prisma'
 import { buildDetailsLink } from '@/lib/intake/detailsLink'
 
 export const dynamic = 'force-dynamic'
@@ -81,6 +91,18 @@ export async function POST(req: NextRequest) {
     customMessage: payload.customMessage ?? null,
   })
 
+  // The send route answers a real inbound under "Re: <their subject>" so
+  // the reply threads in the client's mailbox. Preview it the same way —
+  // this is the subject the agent is approving.
+  const inboundParent = payload.inboundEmailMessageId
+    ? await prisma.emailMessage
+        .findUnique({
+          where: { id: payload.inboundEmailMessageId },
+          select: { subject: true },
+        })
+        .catch(() => null)
+    : null
+
   return NextResponse.json({
     ok: true,
     // Prefills "Write my own email" with exactly what would otherwise be sent,
@@ -89,7 +111,7 @@ export async function POST(req: NextRequest) {
     to: { id: '', name: payload.recipientName || payload.recipientEmail, email: payload.recipientEmail, role: null, isPrimary: true },
     alternatives: [],
     from: SEND_FROM,
-    subject,
+    subject: quickReplySendSubject(subject, inboundParent?.subject),
     html,
     text,
     attachments: [],

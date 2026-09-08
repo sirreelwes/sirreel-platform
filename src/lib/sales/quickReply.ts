@@ -26,6 +26,7 @@ import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
 import { getCategoryUtilization } from '@/lib/fleet/utilization'
 import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
+import { replySubject } from '@/lib/email/threadingHeaders'
 
 // Re-exported for back-compat with existing importers; the canonical home is
 // src/lib/email/supplyUrl.ts (orders.sirreel.com).
@@ -321,4 +322,28 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
       customBody: args.customMessage ?? null,
     },
   })
+}
+
+/**
+ * The subject a Quick Reply actually SENDS under.
+ *
+ * Wes 2026-09-08 asked for replies to stay inside the client's existing
+ * email thread. Subject is half of how a mail client groups a
+ * conversation (headers are the other half — see
+ * lib/email/threadingHeaders.ts), and a reply titled nothing like the
+ * question reads as a mailshot even when the In-Reply-To is perfect. So
+ * when we are answering a real inbound, the composed subject gives way
+ * to "Re: <what they wrote>".
+ *
+ * This lives here, called by BOTH /quick-reply/preview and
+ * /quick-reply/send, because those two computed the subject
+ * independently. The agent reviews the preview and approves it; if the
+ * two ever disagree, the approval is for an email that was never sent.
+ */
+export function quickReplySendSubject(
+  composedSubject: string,
+  parentSubject: string | null | undefined,
+): string {
+  const parent = (parentSubject ?? '').trim()
+  return parent ? replySubject(parent) : composedSubject
 }

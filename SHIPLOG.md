@@ -24,6 +24,18 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-08
 
+### Replies from HQ now land inside the client's email thread
+
+`(this commit)` email: thread replies into the client's existing conversation
+
+Wes: "If someone starts a reply from incoming email … can it somehow stay in the same incoming email thread?" It could not. Every client-facing send passed only from/to/cc/replyTo/subject/html/text/attachments to Resend — no `In-Reply-To`, no `References`, no `Message-ID` — so an agent's reply arrived in the client's inbox as a brand-new conversation sitting next to the one they wrote. Gmail sometimes groups by subject, which is why this went unnoticed; that grouping dies the moment a subject changes.
+
+`src/lib/email/threadingHeaders.ts` adds the three headers, and `sendAgreementEmail` takes a TYPED `threading` field rather than a free-form `headers` bag — the sender only sets headers it understands, so no call site can smuggle a Bcc through a field meant for threading. A parent Message-ID is a stranger's text off inbound mail: `normalizeMessageId` refuses CR/LF, spaces, nested brackets and absurd length rather than repairing them. Repairing an id containing a newline is how you ship header injection while passing a "does it strip newlines" test — the test asserts refusal, not sanitisation.
+
+**We mint our own Message-ID and store it** (`EmailMessage.rfc822MessageId`, no schema change — the column already existed). That is the part that compounds: `hasKnownConversationLink` matches exactly that column, so a client's reply to an HQ-sent message is now PROVABLY part of a conversation HQ knows. That was impossible before, and it is the limitation behind both the LINKED-mode filter's blind spot and the hello@ `REPLY_CAPTURE_INBOX` workaround (see sendAgreementEmail's note, and Wes's 2026-08-28 ruling).
+
+**Caught in self-review before commit:** the send switched to "Re: <their subject>" while `/quick-reply/preview` still composed its own — and EmailReviewModal shows the agent that subject to approve. Two independent computations of one value meant the agent approving an email that was never sent. Both now call `quickReplySendSubject`.
+
 ### Internal email dialled back to Wes plus the desk that acts
 
 `4fde258` notifications: dial internal email back to Wes plus the desk that acts

@@ -150,7 +150,11 @@ export async function sendCadenceEmail(
       console.error(`[cadence-email] ${input.label || input.eventType || ''} returned error:`, reason)
       return { ok: false, reason, rendered }
     }
-    return { ok: true, id: (result as any)?.data?.id ?? null, rendered }
+    // messageId: cadence emails are not threaded. They continue a quote
+    // conversation, but the quote's own Message-ID is not stored (an
+    // EmailDelivery row has no column for it), so there is nothing
+    // honest to reply to yet — see src/lib/email/threadingHeaders.ts.
+    return { ok: true, id: (result as any)?.data?.id ?? null, messageId: null, rendered }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     console.error(`[cadence-email] ${input.label || input.eventType || ''} threw:`, reason)

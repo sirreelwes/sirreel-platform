@@ -192,6 +192,32 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   (that coupling was removed on 09-08) — internal audience and client
   reply path are separate questions.
 
+## Email threading (2026-09-08 — Wes)
+- Wes: "If someone starts a reply from incoming email … can it somehow
+  stay in the same incoming email thread?" It could not — HQ sent no
+  `In-Reply-To`, no `References` and no `Message-ID`, so every reply
+  arrived as a NEW conversation beside the client's own.
+- **`src/lib/email/threadingHeaders.ts` is the only way headers reach a
+  send.** `sendAgreementEmail` takes a typed `threading?: OutboundThreading`,
+  NOT a free-form `headers` bag — so no call site can smuggle a Bcc
+  through a field meant for threading. A parent Message-ID is untrusted
+  inbound text: `normalizeMessageId` REJECTS anything with CR/LF, spaces
+  or nested brackets rather than repairing it. Never "fix up" an id.
+- **We mint our own `Message-ID`** and store it on the outbound
+  EmailMessage row (`rfc822MessageId`). That is what makes the client's
+  reply provable: `hasKnownConversationLink` matches exactly that column.
+  It closes the gap the hello@ `REPLY_CAPTURE_INBOX` was working around.
+  If Resend ever overrides the header, client-side threading is
+  unaffected — only that linkability degrades to the old behaviour.
+- **Preview and send MUST agree on the subject.** Both call
+  `quickReplySendSubject` (`src/lib/sales/quickReply.ts`). The agent
+  approves the preview; two independent computations meant approving an
+  email that was never sent. Nearly shipped that way.
+- Cadence emails are deliberately NOT threaded — the quote's Message-ID
+  isn't stored (EmailDelivery has no column), so there is nothing honest
+  to reply to. Adding one is a schema change.
+- Guarded by `npm run test:threading-headers` (injection cases included).
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

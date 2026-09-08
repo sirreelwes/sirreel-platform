@@ -12,11 +12,16 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
-import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
+import {
+  computeQuickReplyTiering,
+  composeQuickReply,
+  quickReplySendSubject,
+} from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
 import { autoReplySubjectMarker } from '@/lib/email/autoReply'
 import { buildDetailsLink } from '@/lib/intake/detailsLink'
+import { threadingForReplyTo } from '@/lib/email/threadingHeaders'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,6 +108,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // The inbound being answered — its Message-ID is what makes this send
+  // a reply rather than a new conversation. Read once here; the send and
+  // the thread record below both need it. Best-effort: a missing parent
+  // just means no threading, never a failed reply.
+  const inboundParent = payload.inboundEmailMessageId
+    ? await prisma.emailMessage
+        .findUnique({
+          where: { id: payload.inboundEmailMessageId },
+          select: { rfc822MessageId: true, inReplyTo: true, subject: true },
+        })
+        .catch(() => null)
+    : null
+
   const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
 
   // One-tap link for the "what's the production company / project name?"
@@ -137,27 +155,55 @@ export async function POST(req: NextRequest) {
     customMessage: payload.customMessage ?? null,
   })
 
-  // Transition-period team visibility (see lib/email/teamVisibility.ts):
-  //   · CC the shared GROUP (rentals@) — it fans out to Jose, Oliver and
-  //     Dani, so the team sees the reply went out and nobody answers the
-  //     same client twice. A group is exactly why HQ can't watch it.
-  //   · Reply-To the SENDING AGENT, never the group: groups commonly
-  //     reject non-member mail, so pointing a client's reply there risks
-  //     a bounce. Agent mailboxes ARE ingested by HQ, so the reply reaches
+  // Team visibility (see lib/email/teamVisibility.ts):
+  //   · CC the 'sales-team-cc' notification channel. That was the whole
+  //     desk until Wes's 2026-09-08 quiet-down pass and is Wes alone now;
+  //     the desk sees the reply on the /jobs incoming board instead, via
+  //     recordQuickReplyOnThread below.
+  //   · Reply-To the SENDING AGENT, never a group: groups commonly reject
+  //     non-member mail, so pointing a client's reply there risks a
+  //     bounce. Agent mailboxes ARE ingested by HQ, so the reply reaches
   //     a person and flows back in. Previously there was no Reply-To at
   //     all and replies went to notifications@, which nobody works.
   const ccList = await withTeamCc(manualCc, payload.recipientEmail)
   const replyTo = agentReplyTo(session.user.email)
 
+  // ── Conversation threading (Wes 2026-09-08) ─────────────────────────
+  // "If someone starts a reply from incoming email … can it somehow stay
+  // in the same incoming email thread?" It could not: this send carried
+  // no In-Reply-To, no References and no Message-ID, so it arrived in the
+  // client's inbox as a NEW conversation next to the one they wrote.
+  //
+  // EmailMessage stores the parent's Message-ID and its In-Reply-To but
+  // not its full References chain, so the chain we can honestly rebuild
+  // is [parent's parent, parent] — two hops. That is what Gmail and
+  // Outlook actually match on, and buildReferences drops anything
+  // malformed rather than guessing.
+  //
+  // The subject is re-derived as "Re: <their subject>" by
+  // quickReplySendSubject — same helper the preview route uses, so what
+  // the agent approved is what goes out.
+  const threading = inboundParent
+    ? threadingForReplyTo({
+        kind: 'quick-reply',
+        parentMessageId: inboundParent.rfc822MessageId,
+        parentReferences: inboundParent.inReplyTo,
+      })
+    : undefined
+  // Shared with the preview route — the agent approves a subject, so the
+  // two must never compute it differently.
+  const sendSubject = quickReplySendSubject(subject, inboundParent?.subject)
+
   const result = await sendAgreementEmail({
     to: [payload.recipientEmail],
     cc: ccList.length > 0 ? ccList : undefined,
     replyTo: replyTo ?? undefined,
-    subject,
+    subject: sendSubject,
     html,
     text,
     attachments: [],
     label: 'quick-reply',
+    threading,
   })
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.reason || 'send failed' }, { status: 502 })
@@ -173,9 +219,15 @@ export async function POST(req: NextRequest) {
       inboundEmailMessageId: payload.inboundEmailMessageId,
       staffEmail: session.user.email,
       recipientEmail: payload.recipientEmail,
-      subject,
+      subject: sendSubject,
       bodyText: text ?? null,
       bodyHtml: html ?? null,
+      // Store the Message-ID this actually went out under. The client's
+      // reply carries it as In-Reply-To, and hasKnownConversationLink
+      // (ingestFilter) matches exactly this column — so an HQ-sent
+      // conversation becomes provably ours for the first time.
+      rfc822MessageId: result.messageId,
+      inReplyTo: threading?.inReplyTo ?? null,
     })
   }
 

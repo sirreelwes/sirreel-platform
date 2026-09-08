@@ -8,6 +8,10 @@ import { Resend } from 'resend'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { isWatchedInbox } from '@/lib/email/watchedInboxes'
 import { inboxMode } from '@/lib/email/ingestFilter'
+import {
+  buildThreadingHeaders,
+  type OutboundThreading,
+} from '@/lib/email/threadingHeaders'
 
 export const SEND_FROM = 'SirReel HQ <notifications@sirreel.com>'
 
@@ -50,7 +54,19 @@ function effectiveReplyTo(replyTo: string | undefined): string | string[] | unde
 }
 
 export type EmailResult =
-  | { ok: true; id: string | null }
+  | {
+      ok: true
+      /** Resend's own send id — the EmailDelivery key, NOT an RFC 822 id. */
+      id: string | null
+      /**
+       * The RFC 822 Message-ID this send was given, when the caller
+       * asked for threading. Callers persist it (EmailMessage
+       * .rfc822MessageId) so the client's eventual reply — whose
+       * In-Reply-To carries this value — is provably part of a
+       * conversation HQ knows. See threadingHeaders.ts.
+       */
+      messageId: string | null
+    }
   | { ok: false; reason: string }
 
 export interface EmailPayload {
@@ -84,6 +100,18 @@ export interface EmailPayload {
   orderId?: string | null
   invoiceId?: string | null
   quoteFollowUpId?: string | null
+  /**
+   * Conversation threading (RFC 5322). Build it with
+   * `threadingForReplyTo()` when answering a stored inbound message, so
+   * the reply lands INSIDE the client's existing thread instead of
+   * beside it. Every value is re-validated in buildThreadingHeaders —
+   * a parent Message-ID is untrusted inbound text.
+   *
+   * Deliberately not a free-form `headers` bag: the only headers this
+   * sender sets are ones it understands, so no call site can smuggle a
+   * Bcc through a field meant for threading.
+   */
+  threading?: OutboundThreading | null
 }
 
 /**
@@ -102,13 +130,23 @@ export interface EmailPayload {
  *  - Missing `RESEND_API_KEY` → `{ ok: false, reason: 'RESEND_API_KEY not set' }`
  *  - Resend throws (network, auth, domain unverified, …) → `{ ok: false, reason: <message> }`
  *  - Resend returns an error object → `{ ok: false, reason: <message> }`
- *  - Success → `{ ok: true, id }`
+ *  - Success → `{ ok: true, id, messageId }`
+ *
+ * `payload.threading` adds RFC 5322 In-Reply-To / References /
+ * Message-ID so a reply arrives inside the client's existing thread —
+ * see src/lib/email/threadingHeaders.ts. Omitted by default: this
+ * function is the shared sender for ~34 touchpoints and most of them
+ * start a conversation rather than continue one.
  */
 export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailResult> {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, reason: 'RESEND_API_KEY not set' }
   }
   const resend = new Resend(process.env.RESEND_API_KEY)
+  // Threading headers, if the caller asked for them. Undefined when it
+  // did not, so a send that never wanted threading is byte-for-byte the
+  // request it was before.
+  const threadingHeaders = buildThreadingHeaders(payload.threading)
   try {
     const result = await resend.emails.send({
       from: payload.from || SEND_FROM,
@@ -119,6 +157,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       html: payload.html,
       text: payload.text,
       attachments: payload.attachments,
+      headers: threadingHeaders,
     })
     if ((result as any)?.error) {
       const errMessage = (result as any).error?.message || JSON.stringify((result as any).error)
@@ -149,7 +188,11 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
         quoteFollowUpId: payload.quoteFollowUpId ?? null,
       })
     }
-    return { ok: true, id }
+    // Report the Message-ID we ASKED for. If Resend overrides it the
+    // client-side threading is unaffected (In-Reply-To / References are
+    // what a mail client threads on); only the linkability of the
+    // client's eventual reply falls back to what it was before.
+    return { ok: true, id, messageId: threadingHeaders?.['Message-ID'] ?? null }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     console.error(`[email] ${payload.label || 'send'} threw:`, reason)

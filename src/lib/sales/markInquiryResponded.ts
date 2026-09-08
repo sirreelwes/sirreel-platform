@@ -156,6 +156,14 @@ export async function handleIngestedMessageForInquiryReply(input: {
  * drops the thread from the suggested-inquiries stream), and marks
  * linked inquiries responded attributed to the sending agent.
  *
+ * Since 2026-09-08 it also persists the RFC 822 Message-ID the reply
+ * actually went out under (threadingHeaders.ts mints it; the send route
+ * passes it back). That column is what hasKnownConversationLink()
+ * queries, so a client replying to this message can, for the first time,
+ * be PROVEN to belong to a conversation HQ already knows — which is the
+ * gap the LINKED-mode ingest filter and the hello@ REPLY_CAPTURE_INBOX
+ * were both working around.
+ *
  * Best-effort: the email already went out; failures log and return null.
  */
 export async function recordQuickReplyOnThread(input: {
@@ -167,6 +175,10 @@ export async function recordQuickReplyOnThread(input: {
   subject: string
   bodyText: string | null
   bodyHtml: string | null
+  /** Message-ID this reply was sent under. Null when unthreaded. */
+  rfc822MessageId?: string | null
+  /** The parent's Message-ID, mirroring what went out as In-Reply-To. */
+  inReplyTo?: string | null
 }): Promise<{ emailMessageId: string; respondedInquiryIds: string[] } | null> {
   try {
     const now = new Date()
@@ -219,6 +231,10 @@ export async function recordQuickReplyOnThread(input: {
         // Synthetic id — Quick Replies have no Gmail message. Prefixed so
         // the row is recognizable and can never collide with real Gmail ids.
         gmailMessageId: `quick-reply-${randomUUID()}`,
+        // Our own Message-ID, not Gmail's — see the header note. Null on
+        // an unthreaded send, which is the pre-2026-09-08 behaviour.
+        rfc822MessageId: input.rfc822MessageId ?? null,
+        inReplyTo: input.inReplyTo ?? null,
         fromAddress: parseEmailAddress(input.staffEmail),
         toAddresses: [input.recipientEmail.toLowerCase()],
         subject: input.subject,

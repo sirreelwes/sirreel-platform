@@ -58,6 +58,9 @@
 
 import { prisma } from '@/lib/prisma'
 import type { RoutingHeaders } from '@/lib/email/routingHeaders'
+// One id parser app-wide: what counts as an id in a chain has to mean the
+// same thing when we WRITE a References header as when we match one.
+import { parseMessageIds } from '@/lib/email/threadingHeaders'
 
 export type InboxMode = 'SALES' | 'MONEY' | 'CLAIMS' | 'HR' | 'PRESERVE' | 'LINKED'
 
@@ -281,11 +284,6 @@ export function shouldIngest(input: FilterInput): FilterDecision {
 // ── LINKED-mode conversation proof ──────────────────────────────
 
 /** Angle-bracket Message-ID tokens from a header value ("<a@x> <b@y>"). */
-function parseMessageIds(header: string | null | undefined): string[] {
-  if (!header) return []
-  return header.match(/<[^<>\s]+>/g) ?? []
-}
-
 /**
  * LINKED-mode proof: does this message belong to a conversation HQ
  * already stores? True when its own Message-ID is already in
