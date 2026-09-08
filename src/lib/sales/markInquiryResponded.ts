@@ -16,6 +16,13 @@
  * platform's own automated sender (notifications@ — Resend system
  * sends like cadence emails are not a human reply).
  *
+ * The author gate alone is not enough: an out-of-office responder sends
+ * as the agent themselves, so it passes every authorship test there is.
+ * It would stamp respondedAt and silently satisfy the 3h first-response
+ * SLA (src/lib/sales/inquirySla.ts) — the inquiry stops showing as
+ * waiting on every surface while nobody has actually read it. Callers
+ * pass isAutoReply (src/lib/email/autoReply.ts) and we refuse.
+ *
  * Inquiry ↔ thread matching rule: Inquiry has no thread FK. A GMAIL
  * inquiry records its originating email as sourceMetadata.emailMessageId
  * plus rfc822MessageId. We collect the thread's messages and match
@@ -124,7 +131,13 @@ export async function handleIngestedMessageForInquiryReply(input: {
   threadKeys: string[]
   fromAddress: string
   sentAt: Date
+  /**
+   * Machine-generated send (vacation responder). Never a response —
+   * see the header note at the top of this file.
+   */
+  isAutoReply?: boolean
 }): Promise<string[]> {
+  if (input.isAutoReply) return []
   if (!isStaffReplyAuthor(input.fromAddress)) return []
   return markInquiriesRespondedForThread({
     threadKeys: input.threadKeys,

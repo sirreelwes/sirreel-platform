@@ -15,6 +15,7 @@ import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
+import { autoReplySubjectMarker } from '@/lib/email/autoReply'
 import { buildDetailsLink } from '@/lib/intake/detailsLink'
 
 export const dynamic = 'force-dynamic'
@@ -71,22 +72,29 @@ export async function POST(req: NextRequest) {
           select: { id: true, lastDirection: true, lastOutboundAt: true },
         })
         if (thread?.lastDirection === 'OUTBOUND') {
+          // The last outbound must be a HUMAN one. An out-of-office is not
+          // another agent's reply, and blocking a Quick Reply because the
+          // vacation responder fired is exactly backwards — the client is
+          // still waiting. Threads stamped before the ingest fix still carry
+          // the responder's timestamp, so re-check the message itself.
           const lastOut = await prisma.emailMessage.findFirst({
-            where: { threadId: thread.id, direction: 'outbound' },
+            where: { threadId: thread.id, direction: 'outbound', autoReply: false },
             orderBy: { sentAt: 'desc' },
-            select: { fromAddress: true, sentAt: true },
+            select: { fromAddress: true, sentAt: true, subject: true },
           })
-          return NextResponse.json(
-            {
-              ok: false,
-              error: 'already-replied',
-              alreadyReplied: {
-                by: lastOut?.fromAddress ?? null,
-                at: (lastOut?.sentAt ?? thread.lastOutboundAt)?.toISOString() ?? null,
+          if (lastOut && !autoReplySubjectMarker(lastOut.subject)) {
+            return NextResponse.json(
+              {
+                ok: false,
+                error: 'already-replied',
+                alreadyReplied: {
+                  by: lastOut.fromAddress,
+                  at: lastOut.sentAt.toISOString(),
+                },
               },
-            },
-            { status: 409 },
-          )
+              { status: 409 },
+            )
+          }
         }
       }
     } catch (err) {

@@ -5,6 +5,7 @@ import { getMessageDirection, parseRecipientHeader } from "@/lib/email/direction
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { extractRoutingHeaders } from "@/lib/email/routingHeaders"
+import { detectAutoReply } from "@/lib/email/autoReply"
 import { parseRelayTag, relayInboundMessage } from "@/lib/sub-rentals/driverRelay"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
@@ -128,6 +129,10 @@ async function syncInbox(email: string) {
     // (claims@ → ana@ etc.) so downstream classification can route on
     // true addressing instead of the inbox-of-record.
     const routingHeaders = extractRoutingHeaders(headers)
+    // Machine-generated? An out-of-office responder is stored like any
+    // other message but never counts as a human response — see the
+    // thread-state and inquiry-reply blocks below.
+    const autoReply = detectAutoReply({ headers, subject }).isAutoReply
 
     // ── HR routing-header short-circuit (Path B) ────────────────
     // hr@sirreel.com is configured as a Workspace group/alias that
@@ -282,6 +287,16 @@ async function syncInbox(email: string) {
     // Upsert the thread; directional timestamp + lastDirection are
     // updated below with max-semantics so out-of-order processing can't
     // overwrite a newer timestamp with an older one.
+    // Auto-replies do NOT move the thread's direction state. That state
+    // is read across HQ as "who spoke last / have we written back", and
+    // an autoresponder did neither — on 2026-09-08 Oliver's out-of-office
+    // stamped lastOutboundAt one minute before the client's real reply
+    // and muted a live lead out of New inbound. The message itself is
+    // still stored (autoReply: true) and still advances lastMessageAt +
+    // messageCount, so the thread view is unchanged; only the "someone
+    // answered" signal is withheld. Fixing it HERE rather than at every
+    // read is the point: the thread row is what a dozen surfaces trust,
+    // and once it is stamped nothing downstream can tell what stamped it.
     const thread = await prisma.emailThread.upsert({
       where: { gmailThreadId },
       create: {
@@ -289,9 +304,9 @@ async function syncInbox(email: string) {
         subject,
         lastMessageAt: sentAt,
         messageCount: 1,
-        lastInboundAt: direction === "INBOUND" ? sentAt : null,
-        lastOutboundAt: direction === "OUTBOUND" ? sentAt : null,
-        lastDirection: direction,
+        lastInboundAt: !autoReply && direction === "INBOUND" ? sentAt : null,
+        lastOutboundAt: !autoReply && direction === "OUTBOUND" ? sentAt : null,
+        lastDirection: autoReply ? null : direction,
       },
       update: { lastMessageAt: sentAt, messageCount: { increment: 1 } },
     })
@@ -300,7 +315,7 @@ async function syncInbox(email: string) {
     // message is the new latest in its direction (and the new overall
     // latest, for lastDirection).
     const sameDirAt = direction === "INBOUND" ? thread.lastInboundAt : thread.lastOutboundAt
-    if (!sameDirAt || sentAt > sameDirAt) {
+    if (!autoReply && (!sameDirAt || sentAt > sameDirAt)) {
       const otherDirAt = direction === "INBOUND" ? thread.lastOutboundAt : thread.lastInboundAt
       const isOverallLatest = !otherDirAt || sentAt >= otherDirAt
       await prisma.emailThread.update({
@@ -320,6 +335,7 @@ async function syncInbox(email: string) {
         rfc822MessageId,
         inReplyTo,
         routingHeaders: routingHeaders ?? undefined,
+        autoReply,
         duplicateOfId,
         fromAddress,
         toAddresses,
@@ -405,6 +421,7 @@ async function syncInbox(email: string) {
         threadKeys: [thread.id, gmailThreadId],
         fromAddress,
         sentAt,
+        isAutoReply: autoReply,
       })
     }
 

@@ -6,6 +6,7 @@ import {
   classifyInquiryForPipeline,
   type InquiryClassification,
 } from '@/lib/email/classifyInquiryForPipeline';
+import { autoReplySubjectMarker } from '@/lib/email/autoReply';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,10 +165,54 @@ export async function GET() {
       (best, t) => (!best || t.messageCount > best.messageCount ? t : best),
       null,
     );
+  // ── Did an autoresponder do the "responding"? ─────────────────────
+  //
+  // 2026-09-08: a new-account request reached oliver@ at 02:20 UTC.
+  // Oliver's out-of-office answered at 02:20, stamping lastOutboundAt;
+  // the client's real reply landed at 02:21. The thread read as handled
+  // and the lead never appeared in New inbound — Oliver: "did not see
+  // this inquiry on my HQ dashboard".
+  //
+  // The ingest no longer lets an auto-reply stamp the thread (see the
+  // pubsub handler), but threads stamped BEFORE that fix still carry the
+  // bad timestamp, and the row keeps no record of what stamped it. So
+  // judge from the messages themselves where we have them: a thread is
+  // answered when it carries an outbound that is NOT an auto-reply.
+  // Threads with no persisted outbound at all (the legacy gmail/fetch
+  // path stores the raw Gmail thread id on the message, so its rows
+  // don't join here) fall back to the stamped fields — losing a real
+  // reply is worse than showing an answered lead twice.
+  //
+  // Rows ingested BEFORE the header capture went in carry autoReply=false
+  // even when they are responders, so every outbound read here re-applies
+  // the subject-banner rule on top of the flag. That keeps this route
+  // correct whether or not scripts/backfill-auto-reply-flag.ts has run.
+  const isAutoReplyRow = (m: { autoReply?: boolean; subject?: string | null }) =>
+    m.autoReply === true || autoReplySubjectMarker(m.subject);
+
+  const allThreadIds = [...new Set(emails.flatMap((e) => threadsOf(e).map((t) => t.id)))];
+  const outboundOnThreads = allThreadIds.length
+    ? await prisma.emailMessage.findMany({
+        where: { threadId: { in: allThreadIds }, direction: 'outbound' },
+        select: { threadId: true, autoReply: true, subject: true },
+      })
+    : [];
+  const humanOutboundThreads = new Set<string>();
+  const anyOutboundThreads = new Set<string>();
+  for (const o of outboundOnThreads) {
+    if (!o.threadId) continue;
+    anyOutboundThreads.add(o.threadId);
+    if (!isAutoReplyRow(o)) humanOutboundThreads.add(o.threadId);
+  }
+
   // Thread-based reply detection. Necessary but NOT sufficient — see
   // repliedByParticipant below.
   const respondedOnThread = (e: EmailRow) =>
-    threadsOf(e).some((t) => t.lastDirection === 'OUTBOUND' || !!t.lastOutboundAt);
+    threadsOf(e).some((t) =>
+      anyOutboundThreads.has(t.id)
+        ? humanOutboundThreads.has(t.id)
+        : t.lastDirection === 'OUTBOUND' || !!t.lastOutboundAt,
+    );
 
   // First in thread = no In-Reply-To header OR the thread has only one message.
   const isFirstInThread = (e: EmailRow) => {
@@ -204,12 +249,15 @@ export async function GET() {
           direction: 'outbound',
           sentAt: { gte: since },
           toAddresses: { hasSome: candidateAddresses },
+          // An out-of-office to this address is not us writing back.
+          autoReply: false,
         },
-        select: { toAddresses: true, sentAt: true },
+        select: { toAddresses: true, sentAt: true, autoReply: true, subject: true },
       })
     : [];
   const latestReplyTo = new Map<string, Date>();
   for (const o of outboundToCandidates) {
+    if (isAutoReplyRow(o)) continue;
     for (const raw of o.toAddresses) {
       const addr = raw.toLowerCase().trim();
       const cur = latestReplyTo.get(addr);
@@ -309,11 +357,14 @@ export async function GET() {
   const latestOutboundByThread = new Map<string, { fromAddress: string; sentAt: Date }>();
   if (respondedThreadIds.length > 0) {
     const outs = await prisma.emailMessage.findMany({
-      where: { threadId: { in: respondedThreadIds }, direction: 'outbound' },
+      // autoReply excluded — the marker must name the person who
+      // answered, not the vacation responder that fired first.
+      where: { threadId: { in: respondedThreadIds }, direction: 'outbound', autoReply: false },
       orderBy: { sentAt: 'desc' },
-      select: { threadId: true, fromAddress: true, sentAt: true },
+      select: { threadId: true, fromAddress: true, sentAt: true, autoReply: true, subject: true },
     });
     for (const o of outs) {
+      if (isAutoReplyRow(o)) continue;
       if (o.threadId && !latestOutboundByThread.has(o.threadId)) {
         latestOutboundByThread.set(o.threadId, { fromAddress: o.fromAddress, sentAt: o.sentAt });
       }
@@ -349,9 +400,11 @@ export async function GET() {
           select: { fromAddress: true, sentAt: true, subject: true, snippet: true, bodyText: true },
         }),
         prisma.emailMessage.findMany({
-          where: { direction: 'outbound', toAddresses: { hasSome: respondedAddresses } },
+          // Same exclusion as above: summarising an out-of-office as
+          // "what we said back" is worse than saying nothing.
+          where: { direction: 'outbound', toAddresses: { hasSome: respondedAddresses }, autoReply: false },
           orderBy: { sentAt: 'desc' },
-          select: { id: true, toAddresses: true, fromAddress: true, sentAt: true, snippet: true, bodyText: true, replySummary: true },
+          select: { id: true, toAddresses: true, fromAddress: true, sentAt: true, snippet: true, bodyText: true, replySummary: true, autoReply: true, subject: true },
         }),
       ])
     : [[], []];
@@ -365,6 +418,7 @@ export async function GET() {
   }
   const ourLatest = new Map<string, (typeof ourLatestRows)[number]>();
   for (const r of ourLatestRows) {
+    if (isAutoReplyRow(r)) continue;
     for (const raw of r.toAddresses) {
       const addr = raw.toLowerCase().trim();
       if (!ourLatest.has(addr)) ourLatest.set(addr, r);

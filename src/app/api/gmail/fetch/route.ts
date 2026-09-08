@@ -12,6 +12,7 @@ import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
+import { detectAutoReply, AUTO_REPLY_HEADER_NAMES } from "@/lib/email/autoReply"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
           userId: "me",
           id: msgId,
           format: "metadata",
-          metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES],
+          metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES, ...AUTO_REPLY_HEADER_NAMES],
         })
 
         const headers = full.data.payload?.headers || []
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
         const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
         const inReplyTo = get("In-Reply-To") || null
         const routingHeaders = extractRoutingHeaders(headers)
+        const autoReply = detectAutoReply({ headers, subject }).isAutoReply
         let duplicateOfId: string | null = null
         if (rfc822MessageId) {
           const existing = await prisma.emailMessage.findFirst({
@@ -141,6 +143,7 @@ export async function POST(req: NextRequest) {
             rfc822MessageId,
             inReplyTo,
             routingHeaders: routingHeaders ?? undefined,
+            autoReply,
             duplicateOfId,
             fromAddress,
             toAddresses,
@@ -172,6 +175,7 @@ export async function POST(req: NextRequest) {
             threadKeys: [threadId],
             fromAddress,
             sentAt,
+            isAutoReply: autoReply,
           })
         }
         // claims@ onboarding bridge — same shared gate as pubsub/sync.

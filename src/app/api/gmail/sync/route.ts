@@ -8,6 +8,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
+import { detectAutoReply, AUTO_REPLY_HEADER_NAMES } from "@/lib/email/autoReply"
 import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
@@ -119,7 +120,7 @@ export async function POST() {
             const existing = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id! } })
             if (existing) { skipped++; continue }
 
-            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES] })
+            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES, ...AUTO_REPLY_HEADER_NAMES] })
             const get = (h: string) => full.data.payload?.headers?.find(x => x.name?.toLowerCase() === h.toLowerCase())?.value || ""
 
             const fromAddress = get("From")
@@ -131,6 +132,7 @@ export async function POST() {
             const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
             const inReplyTo = get("In-Reply-To") || null
             const routingHeaders = extractRoutingHeaders(full.data.payload?.headers)
+            const autoReply = detectAutoReply({ headers: full.data.payload?.headers, subject }).isAutoReply
             let duplicateOfId: string | null = null
             if (rfc822MessageId) {
               const dupExisting = await prisma.emailMessage.findFirst({
@@ -216,6 +218,7 @@ export async function POST() {
                 rfc822MessageId,
                 inReplyTo,
                 routingHeaders: routingHeaders ?? undefined,
+                autoReply,
                 duplicateOfId,
                 fromAddress,
                 toAddresses: [email],

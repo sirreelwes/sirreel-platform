@@ -2097,6 +2097,17 @@ model EmailMessage {
   // don't need to worry about case sensitivity.
   routingHeaders Json? @map("routing_headers")
 
+  // Machine-generated message (out-of-office responder, vacation reply).
+  // Set at ingest from RFC 3834 `Auto-Submitted` / `X-Autoreply` /
+  // `X-Autorespond` / `Precedence: auto_reply`, with a subject-banner
+  // fallback — see src/lib/email/autoReply.ts. An auto-reply is stored
+  // like any other message but must never count as "we responded": it
+  // does not advance EmailThread.lastOutboundAt/lastDirection, does not
+  // stamp Inquiry.respondedAt, and is filtered out of the New inbound
+  // reply checks. Origin: Oliver's responder muted a live lead on
+  // 2026-09-08.
+  autoReply Boolean @default(false) @map("auto_reply")
+
   sentAt       DateTime       @map("sent_at")
   isRead       Boolean        @default(false) @map("is_read")
   // Triage
