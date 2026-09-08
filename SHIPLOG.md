@@ -22,6 +22,60 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-08
+
+### Accounts payable: vendor bills read out of email, checked against our own POs
+
+`1d15408` /ap + ApBill + email/sub-rental PO matcher, allowlisted to Wes
+
+Wes: "all the emails that show invoices coming from vendors, and try to
+cross-check with purchase orders that you find created by someone on the
+SirReel team." HQ has never held a payable — bills arrive as PDFs across five
+watched mailboxes and get paid from memory.
+
+**A PO here is two things, and the second is the point.** `SubRental.poNumber`
+is the only purchase order HQ models. Most SirReel POs have never been a row
+at all — they were an email somebody sent a vendor. So the matcher also
+searches OUTBOUND `@sirreel.com` mail for the cited number and reports who
+sent it and when. Checking the database alone would return PO_NOT_FOUND on
+nearly every properly-authorised bill and train the reader to ignore the
+alarm.
+
+**The PDF is fetched, not the stored body read.** A vendor invoice is a
+document; the mail carrying it says "invoice attached" and nothing else.
+Bytes come fresh from Gmail through DWD into a Sonnet document block — the
+path claims/COI/redline already use — and are then dropped. Nothing is copied
+into Blob; Gmail stays the store of record for mail we didn't file. A row
+read without a PDF is stamped `readPdf=false` and says so on its face.
+
+**Direction of trade is the entire classification problem.** SirReel invoices
+productions constantly and those threads use identical language. A regex
+cannot separate "here is our invoice, Net 30" from "please find our invoice,
+Net 30", and getting it backwards puts SirReel's own RECEIVABLES on a
+payables desk. The prefilter therefore never tries: it asks only "is this
+billing-shaped", rules out anything quoting a SirReel order/job number (ours
+by construction), and hands the judgement to a model biased to isBill=false
+whenever direction is unclear.
+
+**Nothing auto-links on a resemblance.** Exact PO number links. Same vendor /
+similar amount / overlapping dates is a CANDIDATE with its reasoning, left
+for a human — that resemblance is how a duplicate invoice gets paid twice.
+AMOUNT_MISMATCH reports the delta rather than picking a side.
+
+**Nothing on the page pays anything.** No write approves, schedules or records
+a payment; the header total is what we appear to have been BILLED, not what is
+owed. Batched scanning (8 per pass, 180-day window) because each candidate
+costs a Gmail fetch plus a document read; rows key on `emailMessageId`, and
+emails read as NOT a bill are kept so they are never paid for twice.
+
+Allowlisted to wes@ on its own list (`AP_ALLOWLIST` merges, never replaces) —
+separate from payroll's because what we pay our people and what we owe outside
+are different grants. Page, nav row and all three API routes gate
+independently.
+
+Schema additive only (`ApBill`, `ApMatchStatus`, `ApReviewState`); `prisma db
+push` required before the desk loads.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
