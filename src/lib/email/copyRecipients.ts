@@ -9,7 +9,13 @@
  * only defines what applies when no override row exists.
  */
 export const COPY_RECIPIENTS = {
-  sales: ['jose@sirreel.com', 'oliver@sirreel.com'],
+  // The GROUP, not the individuals. This listed jose@ + oliver@ until
+  // 2026-09-08; both are in the rentals@ group, so naming them here sent
+  // duplicates and, worse, silently excluded anyone added to the desk
+  // since. A default that has to be edited when the team changes is a
+  // default that will be wrong (Wes: "Oliver is in rentals@ group so no
+  // need for extra cc"). Overrides at /admin/notifications still win.
+  sales: ['rentals@sirreel.com'],
   billing: ['ana@sirreel.com'],
 } as const
 

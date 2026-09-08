@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { channelRecipients } from '@/lib/email/notificationChannels'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +18,6 @@ const TEMPLATE_PATH = path.join(
   'contracts',
   'sirreel-rental-agreement-template.docx',
 )
-
-const SALES_EMAILS = ['jose@sirreel.com', 'oliver@sirreel.com']
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -112,9 +111,19 @@ async function sendSalesDownloadEmail(args: {
     </div>
   </div>
 </body></html>`
+  // The admin-managed roster, not two names in a file. The SIGN route
+  // beside this one has always read the channel; this one hardcoded
+  // jose@ + oliver@, so it kept mailing people individually after the
+  // desk moved to the rentals@ group and quietly missed anyone added
+  // since (Wes 2026-09-08). An empty roster means the desk turned this
+  // notification off — respect it rather than falling back to names.
+  const to = await channelRecipients('signed-contract-sales')
+  if (to.length === 0) {
+    return { ok: false, reason: 'no recipients on the signed-contract-sales channel' }
+  }
   return sendAgreementEmail({
     label: 'portal/agreement/download',
-    to: SALES_EMAILS,
+    to,
     subject: `${args.companyName} downloaded agreement for review`,
     html,
   })
