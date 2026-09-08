@@ -34,6 +34,9 @@
  *   - The EOD figures, and which are pre-filled vs checked →
  *     src/lib/collections/eodReport.ts.
  *   - A red RentalWorks meter stops invoice imports → RwConnectionCard.
+ *   - To bill: an order lands the day AFTER check-in, L&D never holds it,
+ *     and "unconfirmed return" means the calendar, not a person, said it
+ *     was back → src/lib/collections/billingQueue.ts.
  */
 import Link from 'next/link'
 
@@ -147,6 +150,34 @@ export default function CollectingGuidePage() {
                 <strong>on clients</strong>. Money waiting on a carrier is not a client who is ignoring
                 you, and chasing them for it damages the relationship for nothing.
               </p>
+            </Step>
+            <Step n={4} title="Work To bill before you chase anything">
+              <p>
+                <strong>To bill</strong> is the day&rsquo;s invoicing: every order that has come back and
+                has no invoice with the client yet. An order checks in one day and lands here the next.
+                Nobody hands it over — the list builds itself from the check-in, so an order sales forgot
+                about still appears.
+              </p>
+              <p>
+                <strong>Generate invoice</strong> cuts the document; <strong>Send</strong> is what
+                actually bills the client, and only Send clears the row. An invoice generated but not
+                sent stays on the list, badged, because the client has not been billed.
+              </p>
+              <p>
+                Damage and short counts show as notes on the row and never hold it. Bill the rental;
+                settle L&amp;D separately.
+              </p>
+              <Note tone="warn" label="Unconfirmed return">
+                A row marked <strong>unconfirmed return</strong> has no check-in behind it at all — the
+                queue is going on the order&rsquo;s own end date, and the gear may still be out. Check
+                before you send. If it is genuinely still out, <strong>Snooze</strong> it to the day you
+                expect it back.
+              </Note>
+              <Note tone="plain" label="Not billing it here">
+                Use <strong>Not billing here</strong> for anything invoiced out of RentalWorks or folded
+                into another order. It asks why, because that reason is what answers &ldquo;where did
+                that order go?&rdquo; a week later. Both snooze and dismiss are reversible.
+              </Note>
             </Step>
           </ol>
         </section>
