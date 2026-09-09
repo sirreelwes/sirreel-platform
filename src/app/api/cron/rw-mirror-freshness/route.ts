@@ -24,8 +24,17 @@ export const maxDuration = 60
  * existed on 2026-08-22 it would have fired on the 23rd instead of the
  * problem being found by hand twelve days later.
  *
- * Runs after the day's syncs have had their chance. Silent when
- * everything is current — a daily green email is a daily unread email.
+ * Runs HOURLY (2026-09-09; was four times a day). The check gap, not
+ * the threshold, was setting how long a dead mirror stayed quiet — the
+ * invoice limit was 90 minutes, but with a six-hour gap nobody heard for
+ * up to seven and a half hours. Lowering the thresholds without this
+ * would have bought about thirty minutes.
+ *
+ * Hourly is affordable because the whole check is five aggregates, and
+ * safe because the alert AND the email are deduped per calendar day
+ * below — a mirror that stays stale all day is one message, not 24.
+ *
+ * Silent when everything is current — a green email is an unread email.
  *
  * Manual run:
  *   curl -H "Authorization: Bearer $CRON_SECRET" \

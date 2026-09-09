@@ -62,20 +62,45 @@ export interface MirrorHealth {
   } | null
 }
 
+/**
+ * ── Lowered 2026-09-09 (Wes) ───────────────────────────────────────
+ *
+ * These only ever meant anything together with how often the freshness
+ * cron RUNS. It ran 4x a day, so the check gap — not the threshold —
+ * set how long a dead mirror stayed quiet: the invoice limit was 90
+ * minutes but nobody heard for up to 7.5 hours. The cron is hourly now,
+ * and these came down with it.
+ *
+ * ── The floor on a cursor mirror, and why it is not lower ───────────
+ *
+ * Every row in a paged cycle carries that cycle's START stamp, so
+ * `max(syncedAt)` on a HEALTHY quote/order mirror climbs to a full cycle
+ * period before it resets. Derived from the crons and the measured fetch
+ * times (quote 331.9s, order ~350s, budget 210s a run → 2 runs a cycle,
+ * cycles every 4h):
+ *
+ *   healthy peak today ............ 4h
+ *   if RW decays to 3 runs/cycle .. 6h
+ *
+ * 8h is therefore the floor, not a preference. RW's list endpoints get
+ * slower as rows grow — that decay is documented and ongoing — so a
+ * threshold under 8h would start firing on a mirror doing exactly what
+ * it is supposed to, and an alarm that cries wolf is worse than none.
+ * Do not "tighten" these without re-deriving the peak above.
+ */
 const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
   // Every 15 minutes (since 2026-09-05 — Ana asked for the balances to
-  // keep up with her as she works), all-or-nothing, ~110s a run. 90
-  // minutes is six missed runs: one lost run is jitter, six is an
-  // outage. No cursor, so no cycle age to check.
-  invoice: { label: 'Invoices', hours: 1.5, cycleHours: null },
-  // Every 2h since 2026-09-05 (was 6h). A full cycle is ~300s of RW
-  // fetch, so it still takes two runs and closes about every 4h — which
-  // is also the ceiling on row age, because every row in a cycle carries
-  // that cycle's START stamp. 12h is three missed cycles.
-  quote: { label: 'Quotes', hours: 12, cycleHours: 12 },
+  // keep up with her as she works), all-or-nothing, ~110s a run. Healthy
+  // peak row age is ~0.3h, so 1h is about four missed runs. Not tighter:
+  // RW answers a bare 503 often enough (three in the week to 09-09) that
+  // two consecutive misses are jitter, not an outage.
+  invoice: { label: 'Invoices', hours: 1, cycleHours: null },
+  // Every 2h since 2026-09-05 (was 6h). Two runs a cycle, cycles every
+  // 4h — see the floor note above before changing this.
+  quote: { label: 'Quotes', hours: 8, cycleHours: 8 },
   // Every 2h since 2026-09-05 (was three times daily). ~350s of fetch,
-  // two runs, same 4h cycle and the same reasoning.
-  orderRef: { label: 'Order index', hours: 12, cycleHours: 12 },
+  // two runs, same 4h cycle and the same floor.
+  orderRef: { label: 'Order index', hours: 8, cycleHours: 8 },
 }
 
 export async function checkRwMirrorFreshness(now = new Date()): Promise<MirrorHealth[]> {
