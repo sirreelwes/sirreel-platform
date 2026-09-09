@@ -39,7 +39,7 @@ export type CardTroubleKind = 'CARD_INVALID' | 'SUBMIT_REJECTED' | 'AUTH_DECLINE
 const KIND_LABEL: Record<CardTroubleKind, string> = {
   CARD_INVALID: 'The card number is being refused as they type it',
   SUBMIT_REJECTED: 'Their submission was turned away',
-  AUTH_DECLINED: 'Their bank declined the $0 verification',
+  AUTH_DECLINED: 'Their bank declined the card verification',
 }
 
 /** Failures inside this window count toward the threshold. */

@@ -103,9 +103,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  // $0 stored-credential authorization — the same validation the portal runs.
+  // Stored-credential authorization — the same validation the portal runs.
   // It proves the card is live and gives later merchant-initiated charges the
-  // retref the card-brand framework wants them to reference.
+  // retref the card-brand framework wants them to reference. $0 for Visa/MC;
+  // an Amex that refuses $0 gets a $1 auth-only that is voided immediately
+  // (see authorizeStoredCredential).
   let auth = {
     retref: null as string | null,
     respcode: null as string | null,
@@ -114,6 +116,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     validatedAt: null as Date | null,
   }
   let approved = false
+  let verifiedAmount = '0'
+  let holdReleased: boolean | undefined
   try {
     const zero = await authorizeStoredCredential({
       cardToken,
@@ -130,6 +134,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       validatedAt: new Date(),
     }
     approved = isApproved(zero)
+    verifiedAmount = zero.verifiedAmount
+    holdReleased = zero.holdReleased
   } catch (err) {
     console.error('[keyed-card] $0 validation threw:', err)
     return NextResponse.json(
@@ -186,16 +192,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           authorizationRef,
           sourceJobId,
           authRetref: auth.retref,
+          verifiedAmount,
+          holdReleased: holdReleased ?? null,
         },
       },
     })
     .catch((err) => console.error('[keyed-card] audit write failed', company.id, err))
+
+  // The staffer is often on the phone with the client when this runs, so a
+  // dollar appearing on the card is something they should be able to explain
+  // before the client asks — especially in the case where the void did not
+  // take and it sits there for a few days.
+  const notice =
+    verifiedAmount === '1.00'
+      ? holdReleased
+        ? 'This card would not take a $0 verification, so it was verified with a $1 authorization that has already been released. The client may briefly see a $1 pending charge.'
+        : 'This card was verified with a $1 authorization that could not be released immediately. Nothing was captured — the hold will expire on its own, usually within a few days.'
+      : null
 
   return NextResponse.json({
     ok: true,
     cardId,
     created,
     authRetref: auth.retref,
+    notice,
     cards: await listCompanyCards(company.id),
   })
 }

@@ -332,8 +332,31 @@ function storedCredentialFields(kind?: 'initial' | 'merchant' | 'customer'): {
   return {}
 }
 
+export interface StoredCredentialAuth extends AuthResponse {
+  /** What the verification auth was actually placed for: '0' normally, or
+   *  '1.00' when the Amex fallback below ran. */
+  verifiedAmount: '0' | '1.00'
+  /** Only meaningful when verifiedAmount is '1.00' AND the auth approved:
+   *  whether the hold was released again. `false` means a dollar is sitting
+   *  on the cardholder's card until the issuer expires the authorization. */
+  holdReleased?: boolean
+}
+
 /**
- * $0 authorization that VALIDATES a card and establishes it as a stored
+ * Amex is the brand that rejects a zero-dollar account verification outright.
+ *
+ * 2026-09-09: Jose keyed a client-authorized Amex on /crm/[id]#cards and it
+ * came back `500 Decline` on the $0 auth. Visa/Mastercard take $0 fine, which
+ * is why nothing surfaced this until the first Amex went through the keyed
+ * form. Read off the token, which CardSecure mints format-preserving — the
+ * PAN itself never reaches us.
+ */
+function rejectsZeroDollarAuth(cardToken: string): boolean {
+  return cardDisplayFromToken(cardToken).cardType === 'AMEX'
+}
+
+/**
+ * Authorization that VALIDATES a card and establishes it as a stored
  * credential — no money moves.
  *
  * The portal's card-authorization step previously saved a token with no
@@ -343,6 +366,21 @@ function storedCredentialFields(kind?: 'initial' | 'merchant' | 'customer'): {
  * the job had wrapped and the leverage was gone.
  *
  * capture 'N' — authorize only, never settle.
+ *
+ * $0 first, then $1.00 auth-only on an Amex that refused it (Wes, 2026-09-09).
+ * The $1 is never captured and is voided immediately, so it shows as a pending
+ * hold that falls off; a capture would be money moving through a form whose
+ * entire promise is that none does. This is the standard account-verification
+ * workaround and it needs no CVV — which matters here, because the token being
+ * validated is deliberately minted WITHOUT one (see /api/cardpointe/config:
+ * a stored token replays its CVV on every later charge, which is what Fiserv
+ * flagged on 2026-08-14). Retried only for Amex: every other brand that
+ * declines $0 is declining the card, and a second attempt on a dead card is
+ * just another decline on the issuer's record.
+ *
+ * The returned retref is the one that ACTUALLY authorized — the $1 when the
+ * fallback ran — because that is the transaction later merchant-initiated
+ * charges must reference under the stored-credential framework.
  */
 export async function authorizeStoredCredential(args: {
   cardToken: string
@@ -351,7 +389,7 @@ export async function authorizeStoredCredential(args: {
   reference?: string
   /** Cardholder billing postal — see AuthRequest.postal. */
   postal?: string
-}): Promise<AuthResponse> {
+}): Promise<StoredCredentialAuth> {
   const cfg = readConfig()
   const body: AuthRequest = {
     account: args.cardToken,
@@ -365,7 +403,31 @@ export async function authorizeStoredCredential(args: {
     postal: args.postal,
     ...storedCredentialFields('initial'),
   }
-  return postAuth(cfg, body)
+
+  const zero = await postAuth(cfg, body)
+  if (isApproved(zero) || !rejectsZeroDollarAuth(args.cardToken)) {
+    return { ...zero, verifiedAmount: '0' }
+  }
+
+  const one = await postAuth(cfg, { ...body, amount: '1.00' })
+  if (!isApproved(one)) return { ...one, verifiedAmount: '1.00' }
+
+  // Release it. A void is best-effort: the hold expires on the issuer's own
+  // schedule regardless, and failing the whole validation over an unreleased
+  // dollar would throw away a card that just proved it is good. The caller is
+  // told instead, via holdReleased.
+  let holdReleased = false
+  if (one.retref) {
+    try {
+      holdReleased = isApproved(await voidByRetref(one.retref))
+    } catch (err) {
+      console.error('[cardpointe] $1 verification hold could not be voided:', one.retref, err)
+    }
+    if (!holdReleased) {
+      console.error('[cardpointe] $1 verification hold NOT released, retref', one.retref)
+    }
+  }
+  return { ...one, verifiedAmount: '1.00', holdReleased }
 }
 
 export async function chargeCard(args: {

@@ -67,6 +67,8 @@ export function CompanyCardsPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState('');
   const [adding, setAdding] = useState(false);
+  // Explains a $1 verification hold to the staffer before the client asks.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -129,6 +131,11 @@ export function CompanyCardsPanel({
       </p>
 
       {error && <p className="text-xs text-chip-bad-fg mb-2">{error}</p>}
+      {notice && (
+        <p className="text-xs bg-chip-neutral-bg text-chip-neutral-fg rounded px-2 py-1.5 mb-2">
+          {notice}
+        </p>
+      )}
 
       <div className="mb-3">
         {adding ? (
@@ -136,9 +143,10 @@ export function CompanyCardsPanel({
             companyId={companyId}
             sourceJobId={sourceJobId}
             onCancel={() => setAdding(false)}
-            onAdded={(next) => {
+            onAdded={(next, notice) => {
               setAdding(false);
               setCards(next);
+              setNotice(notice);
             }}
           />
         ) : (
@@ -363,7 +371,7 @@ function KeyedCardForm({
   companyId: string;
   sourceJobId?: string | null;
   onCancel: () => void;
-  onAdded: (cards: CardOnFile[]) => void;
+  onAdded: (cards: CardOnFile[], notice: string | null) => void;
 }) {
   const [iframeUrl, setIframeUrl] = useState('');
   const [live, setLive] = useState<boolean | null>(null);
@@ -446,7 +454,7 @@ function KeyedCardForm({
         setErr(j?.error || 'Could not store the card.');
         return;
       }
-      onAdded(j.cards || []);
+      onAdded(j.cards || [], typeof j.notice === 'string' ? j.notice : null);
     } catch {
       setErr('Could not store the card.');
     } finally {
