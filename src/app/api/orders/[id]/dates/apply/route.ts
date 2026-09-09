@@ -73,8 +73,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!Number.isFinite(newStart.getTime()) || !Number.isFinite(newEnd.getTime())) {
     return NextResponse.json({ error: 'invalid date format' }, { status: 400 })
   }
-  if (newEnd.getTime() <= newStart.getTime()) {
-    return NextResponse.json({ error: 'endDate must be after startDate' }, { status: 400 })
+  // Same-day is legal (one-day rental — out and back the same date).
+  if (newEnd.getTime() < newStart.getTime()) {
+    return NextResponse.json({ error: 'endDate cannot be before startDate' }, { status: 400 })
   }
 
   const order = await prisma.order.findUnique({

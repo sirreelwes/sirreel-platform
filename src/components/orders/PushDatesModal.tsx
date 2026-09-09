@@ -114,7 +114,9 @@ export function PushDatesModal({
 
   const datesValid = useMemo(() => {
     if (!newStart || !newEnd) return false
-    return new Date(newEnd).getTime() > new Date(newStart).getTime()
+    // Same-day is legal — a one-day rental goes out and comes back on the
+    // same date (calendarDays() floors at 1). Only end BEFORE start is bad.
+    return new Date(newEnd).getTime() >= new Date(newStart).getTime()
   }, [newStart, newEnd])
 
   const datesUnchanged = useMemo(() => {
