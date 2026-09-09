@@ -24,6 +24,48 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-08
 
+### Team desk: each watched employee against their own prior window
+
+`9e4c2d9` /team + three tabs (outcomes / effort / responsiveness), allowlisted to Wes
+
+Wes: "an efficiency page showing how much different watched employees
+perform. For now Ana, Jose and Oliver but eventually more."
+
+**No leaderboard, because there is no shared denominator.** Ana's outcome
+lives in `RwCollectionCharge`/`RwInvoicePaidMark`, a rep's in
+`Order.bookedTotal`. Her inbound passes billing@/payments@'s positive-only
+MONEY filter; theirs passes SALES mode's negative junk filter. Ranking those
+against each other measures ROLE, not effort. Each person declares a KIND and
+gets the outcome family that applies; every figure is paired with the same
+person's preceding window of equal length.
+
+**The dedup trap `watchedInboxes.ts` warns about is live here.**
+billing@/payments@/jobs@ forward into ana@ and the ingest marks later copies
+`duplicateOfId`. Filtering `duplicateOfId: null` per inbox UNDER-counts Ana;
+not filtering double-counts her. Mail queries fetch every copy across her
+mailboxes and dedupe in memory on `rfc822MessageId`. A naive version of this
+page would have been quietly wrong about one specific named employee — which
+is the failure mode that matters most on a page like this.
+
+**`PaymentLog.logged_by` defaults to `'ana@sirreel.com'` at the schema
+level.** It is a default, not attribution, and would credit her for every
+unattributed row. The desk never reads that table; her numbers come from
+`chargedById` and `markedById`.
+
+**Auto-replies excluded** from sent counts and never close a response-time
+measurement (Oliver's responder muted a live lead 2026-09-08). Response time
+is per THREAD, not per message, and replies are counted past the window end
+so a Friday email answered Monday is answered.
+
+**A missing User row reads "unavailable", not zero** — on a performance page
+those are opposite claims. Caveats ride on the page: no phone calls, nothing
+inside RentalWorks, nothing from the shared info@/hello@ inboxes (a shared
+mailbox credits whoever is on the roster). Effort is a floor. Deltas stay
+grey wherever "better" is not self-evident.
+
+Own allowlist, the narrowest in the app and separate from payroll's — what we
+pay a person and how productive they look are different grants.
+
 ### Accounts payable: vendor bills read out of email, checked against our own POs
 
 `1d15408` /ap + ApBill + email/sub-rental PO matcher, allowlisted to Wes
