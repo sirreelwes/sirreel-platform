@@ -3,7 +3,9 @@
  *
  *   { action: 'confirm' }               REQUESTED → CONFIRMED, vendorConfirmedAt stamped
  *   { action: 'decline', note?: string } status UNCHANGED, vendorDeclinedAt + note stamped
- *   { action: 'ack-release' }            CANCELLED only — vendorReleaseAckedAt stamped
+ *   { action: 'ack-release' }            CANCELLED only — the partner has the dates
+ *                                        back; recorded as an AuditLog event
+ *                                        (lib/sub-rentals/releaseAck)
  *
  * Until now the hold-request email said "reply to confirm" and a human read
  * the reply. The page is the vendor's surface, so the answer belongs on it.
