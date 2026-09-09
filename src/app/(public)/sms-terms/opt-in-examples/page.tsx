@@ -18,7 +18,6 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'SirReel · Where we ask for text-message consent',
   description: 'The forms on which SirReel Studio Services collects consent to send booking texts, shown as the person sees them.',
-  robots: { index: false, follow: false },
   alternates: { canonical: '/sms-terms/opt-in-examples' },
 }
 

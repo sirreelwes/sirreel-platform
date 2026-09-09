@@ -42,6 +42,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: publicUrl('/rental-agreement'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
     { url: publicUrl('/stage-contract'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
     { url: publicUrl('/payment-info'), lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    // Carrier reviewers verify the SMS call-to-action by crawling the site;
+    // these must be discoverable, not just reachable by direct link.
+    { url: publicUrl('/sms-terms'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
+    { url: publicUrl('/sms-terms/opt-in-examples'), lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    { url: publicUrl('/privacy'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
   ]
 
   // Detail pages. Any of these can fail if the DB is unreachable at crawl
