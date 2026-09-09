@@ -84,10 +84,24 @@ export function CompanyPortalAccessPanel({
   const [logoBusy, setLogoBusy] = useState(false)
   const [logoError, setLogoError] = useState<string | null>(null)
 
+  /** The client's own ask for an annual, when one is open. Shown beside the
+   *  button that answers it — an agent arriving from the action item should
+   *  see who asked without opening another page. */
+  const [annualRequest, setAnnualRequest] = useState<{
+    requestedAt: string
+    requestedByName: string | null
+    source: string
+  } | null>(null)
+
   const load = useCallback(async () => {
-    const res = await fetch(`/api/crm/companies/${companyId}/portal-access`)
-    const json = await res.json().catch(() => ({}))
+    const [accessRes, annualRes] = await Promise.all([
+      fetch(`/api/crm/companies/${companyId}/portal-access`),
+      fetch(`/api/crm/companies/${companyId}/agreements/offer-annual`),
+    ])
+    const json = await accessRes.json().catch(() => ({}))
     setRows(json.access || [])
+    const annual = await annualRes.json().catch(() => ({}))
+    setAnnualRequest(annual?.request ?? null)
   }, [companyId])
 
   useEffect(() => {
@@ -161,6 +175,9 @@ export function CompanyPortalAccessPanel({
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || 'Could not file the annual')
       setNotice(`Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign; each job still logs a one-page addendum under it.`)
+      // Filing it answers any open ask — the route closes the request, so
+      // the panel stops advertising one.
+      setAnnualRequest(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not file the annual')
     } finally {
@@ -213,6 +230,15 @@ export function CompanyPortalAccessPanel({
             show, the invoices, the agreements and the standing discounts. They sign in with their
             own email; this only decides what they may see.
           </p>
+          {annualRequest && (
+            <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-chip-warn-fg bg-chip-warn-bg border border-lt-hairline rounded px-2 py-1">
+              <FileSignature className="w-3.5 h-3.5 shrink-0" />
+              {annualRequest.requestedByName || 'The client'} asked for an annual agreement
+              {' · '}
+              {fmt(annualRequest.requestedAt)}
+              {annualRequest.source === 'ACCOUNT_PORTAL' ? ' · account portal' : ' · job paperwork'}
+            </p>
+          )}
         </div>
         {canEdit && !adding && (
           <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -222,8 +248,14 @@ export function CompanyPortalAccessPanel({
             <button
               onClick={offerAnnual}
               disabled={busy}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-lt-fg hover:text-black"
-              title="File the annual rental agreement for signature in their portal"
+              className={`inline-flex items-center gap-1 text-xs font-semibold hover:text-black ${
+                annualRequest ? 'text-amber-700' : 'text-lt-fg'
+              }`}
+              title={
+                annualRequest
+                  ? 'The client asked for this — file the annual for signature in their portal'
+                  : 'File the annual rental agreement for signature in their portal'
+              }
             >
               <FileSignature className="w-3.5 h-3.5" /> Offer annual agreement
             </button>

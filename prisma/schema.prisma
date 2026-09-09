@@ -580,6 +580,7 @@ model Company {
   cardsOnFile                     CompanyCard[]
   portalAccesses                  CompanyPortalAccess[]
   discounts                       CompanyDiscount[]
+  annualRequests                  CompanyAnnualRequest[]
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -707,6 +708,7 @@ model Person {
   // survivor. Loser rows are deleted at merge time (their snapshot lives
   // on PersonMerge), so there's no loser-side back-relation to model.
   mergesAsSurvivor      PersonMerge[]               @relation("MergeSurvivor")
+  annualRequests        CompanyAnnualRequest[]      @relation("AnnualRequestRequester")
 
   @@map("people")
 }
@@ -2426,8 +2428,9 @@ model User {
   detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
 
   // Account-level client portal grants this user issued.
-  companyPortalGrants     CompanyPortalAccess[] @relation("CompanyPortalGrantor")
-  companyDiscountsCreated CompanyDiscount[]     @relation("CompanyDiscountCreator")
+  companyPortalGrants     CompanyPortalAccess[]  @relation("CompanyPortalGrantor")
+  companyDiscountsCreated CompanyDiscount[]      @relation("CompanyDiscountCreator")
+  annualRequestsResolved  CompanyAnnualRequest[] @relation("AnnualRequestResolver")
 
   @@map("users")
 }
@@ -4273,12 +4276,12 @@ model PickList {
   // "pull it now" on an approved-but-unbooked order, without reopening
   // the 2026-09-01 flood (19 of 20 open lists belonged to orders nobody
   // had booked). Re-sending re-stamps; the audit log holds every send.
-  releasedAt       DateTime?      @map("released_at")
-  releasedById     String?        @map("released_by_id")
+  releasedAt   DateTime? @map("released_at")
+  releasedById String?   @map("released_by_id")
   // What the rep told the floor when they sent it ("front half only —
   // the LED package is still a maybe"). Prints on the sheet-less email,
   // not on the PDF.
-  releaseNote      String?        @map("release_note") @db.Text
+  releaseNote  String?   @map("release_note") @db.Text
 
   order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   assignedTo  User?          @relation("PickListAssignedTo", fields: [assignedToId], references: [id])
@@ -5855,6 +5858,9 @@ model Job {
   /// Narrow after-hours links the client (or an agent) forwarded to a
   /// driver / PA. See AfterHoursShare — they die with this job's release.
   afterHoursShares      AfterHoursShare[]
+  /// Client asks to be put on an annual agreement, raised from this
+  /// job's paperwork page. See CompanyAnnualRequest.
+  annualRequests        CompanyAnnualRequest[]
 
   @@index([companyId])
   @@index([status])
@@ -6778,6 +6784,64 @@ model CompanyAgreement {
   @@index([deletedAt])
   @@index([autoCoverJobs])
   @@map("sr_company_agreements")
+}
+
+/// A CLIENT asking to be set up on an annual rental agreement.
+///
+/// The ask had nowhere to land until now. The account portal's terms block
+/// told clients to "ask your rep about an annual agreement" — prose, with no
+/// button under it — and the job paperwork page, where a coordinator is
+/// actually sitting when the thought occurs, never mentioned the option at
+/// all. The only self-serve route was the public Cognito form, whose
+/// submissions HQ cannot see until someone runs the import script.
+///
+/// This row is the ask, captured where the client already is, so it becomes
+/// an action item instead of an email somebody has to remember.
+///
+/// It is a REQUEST, never a signature and never an offer: annual terms are
+/// an account-level decision, and the coordinator doing per-job paperwork is
+/// usually not the executive who can sign one. Staff answer it with the
+/// existing "Offer annual agreement" button
+/// (POST /api/crm/companies/[id]/agreements/offer-annual), which is what
+/// files the pending master the client then signs.
+model CompanyAnnualRequest {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// The job whose paperwork prompted the ask, when it came from a job
+  /// portal. Null for an ask made from the account portal, which is not
+  /// about any one show.
+  jobId String? @map("job_id")
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  /// Who asked. The Person link is the durable one; name and email are
+  /// snapshotted beside it so the queue still reads right if that contact
+  /// is later merged or unlinked from the job.
+  requestedByPersonId String? @map("requested_by_person_id")
+  requestedByPerson   Person? @relation("AnnualRequestRequester", fields: [requestedByPersonId], references: [id])
+  requestedByName     String? @map("requested_by_name")
+  requestedByEmail    String? @map("requested_by_email")
+
+  /// JOB_PORTAL | ACCOUNT_PORTAL. A string, not an enum: it only ever
+  /// labels the row for a human reading the queue.
+  source String @default("JOB_PORTAL")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Answered — stamped when staff file the annual for signature, or when
+  /// someone closes the ask by hand. The action-item provider does not
+  /// trust this alone: it also drops any company that already carries a
+  /// pending or covering master, so a request can never outlive the thing
+  /// it asked for.
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedReason String?   @map("resolved_reason")
+  resolvedById   String?   @map("resolved_by_id")
+  resolvedBy     User?     @relation("AnnualRequestResolver", fields: [resolvedById], references: [id])
+
+  @@index([companyId, resolvedAt])
+  @@index([resolvedAt])
+  @@map("sr_company_annual_requests")
 }
 
 // Attaches ONE job to a CompanyAgreement as an addendum — "add the job to

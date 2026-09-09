@@ -63,6 +63,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'lcdw-unapplied': { label: 'Damage waiver mismatch', hint: 'The client’s waiver answer and the quote’s money disagree' },
   'possible-duplicate-job': { label: 'Possible duplicate job', hint: 'The Planyo import landed beside a job that may be the same production — merge, or dismiss if they are different shows' },
   'partner-coi-missing': { label: 'Partner COI', hint: 'A vehicle partner signed and we hold no certificate' },
+  'annual-requested': { label: 'Annual agreement asked for', hint: 'A client asked in their portal to sign once for the year — offer it on the company page' },
   'rw-token': { label: 'RentalWorks', hint: 'The RentalWorks credential needs renewing' },
 };
 

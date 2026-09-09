@@ -16,6 +16,8 @@ import {
   annualCoverageSentence,
   annualCoverageTitle,
 } from '@/lib/orders/annualCoverage'
+import { findOpenAnnualRequest } from '@/lib/portal/annualRequest'
+import { findPendingAnnual } from '@/lib/portal/companyAnnual'
 import { summarizeJobLcdwCoverage, effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import {
@@ -403,6 +405,16 @@ export async function GET(req: NextRequest) {
     : (await applyAnnualCoverage(order.id)) ??
       (order.company?.id ? await findCompanyAnnualCoverage(order.company.id) : null)
   const jobCoverage = ownSigned || annualCoverage ? null : await findJobCoverage(order.id)
+
+  // "Sign once for the year?" — the option, offered on the paperwork row
+  // where the thought actually occurs. Three states and no more: OFFER
+  // (say the option exists), REQUESTED (their rep has the ask), and
+  // PENDING_SIGNATURE (a master is already with their executives). An
+  // account already covered gets none of them — it is not an option, it is
+  // what they have. Nothing here changes what THIS job must sign.
+  const annualOption = await resolveAnnualOption(
+    annualCoverage ? null : (order.company?.id ?? null),
+  )
   const agreementCoverage = jobCoverage
     ? {
         orderNumber: jobCoverage.orderNumber,
@@ -501,6 +513,9 @@ export async function GET(req: NextRequest) {
     portalAccessId: resolved.portalAccessId,
     company: { id: order.company.id, name: order.company.name },
     standingAgreement,
+    /** The annual-agreement option on this account: null when it doesn't
+     *  apply (already covered), otherwise the state of the ask. */
+    annualOption,
     annualAgreement: annualCoverage
       ? {
           title: annualCoverageTitle(annualCoverage),
@@ -707,4 +722,27 @@ export async function GET(req: NextRequest) {
       })),
     activity,
   })
+}
+
+/**
+ * The annual-agreement option for an account that is not already covered.
+ *
+ * Returns null when there is nothing to say — no company, or the client is
+ * on an annual already (the caller passes null for that case, because a
+ * covered account is described by the coverage banner instead).
+ */
+async function resolveAnnualOption(companyId: string | null): Promise<
+  | { state: 'OFFER' }
+  | { state: 'REQUESTED'; requestedAt: string }
+  | { state: 'PENDING_SIGNATURE' }
+  | null
+> {
+  if (!companyId) return null
+  const [pending, request] = await Promise.all([
+    findPendingAnnual(companyId),
+    findOpenAnnualRequest(companyId),
+  ])
+  if (pending) return { state: 'PENDING_SIGNATURE' }
+  if (request) return { state: 'REQUESTED', requestedAt: request.createdAt.toISOString() }
+  return { state: 'OFFER' }
 }
