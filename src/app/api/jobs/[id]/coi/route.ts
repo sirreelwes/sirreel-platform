@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 
 export const dynamic = 'force-dynamic'
 // AI review can take a beat; give it headroom past the default function cap.
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const job = await prisma.job.findUnique({
     where: { id: params.id },
-    select: { id: true, companyId: true },
+    // Vehicle scope rides along: the auto checks are NA on a job that rents
+    // no truck (src/lib/coi/vehicleScope.ts).
+    select: { id: true, companyId: true, ...VEHICLE_SCOPE_SELECT },
   })
   if (!job) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // here gets the identical analysis (risk level, pass/fail, extracted
   // expiry). Best-effort — never blocks the file from being filed.
   const ai = await runCoiAiReview(buffer, 'application/pdf')
-  const aiFields = coiCheckWriteFields(ai)
+  const aiFields = coiCheckWriteFields(ai, { vehiclesOnJob: deriveVehicleScope(job).hasVehicles })
   // Agent-entered expiry wins; otherwise fall back to what the AI extracted.
   const effectiveExpiry = policyExpiryDate ?? aiFields.policyExpiryDate
 

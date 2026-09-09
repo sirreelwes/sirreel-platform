@@ -32,6 +32,8 @@
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
+import { coiScopeGap } from '@/lib/coi/coiState'
+import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { createAgentDirectBooking } from '@/lib/paperwork/ensurePaperworkBooking'
 
@@ -339,11 +341,41 @@ export async function clientPaperworkIn(orderId: string): Promise<{
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { humanDecision: true, coverageVerified: true, policyExpiryDate: true },
+            select: {
+              humanDecision: true,
+              coverageVerified: true,
+              policyExpiryDate: true,
+              decidedWithVehicles: true,
+            },
           },
+          orders: {
+            select: {
+              status: true,
+              lineItems: {
+                select: {
+                  type: true,
+                  department: true,
+                  fulfillmentLane: true,
+                  assetCategory: { select: { department: true } },
+                  inventoryItem: { select: { department: true } },
+                },
+              },
+            },
+          },
+          subRentals: { select: { status: true, subcontractedVehicleId: true } },
           bookings: {
             where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
-            select: { paperworkRequests: { select: { ccCardNumberEncrypted: true } } },
+            select: {
+              status: true,
+              items: {
+                select: {
+                  status: true,
+                  category: { select: { department: true } },
+                  catalogItem: { select: { department: true } },
+                },
+              },
+              paperworkRequests: { select: { ccCardNumberEncrypted: true } },
+            },
           },
         },
       },
@@ -353,7 +385,18 @@ export async function clientPaperworkIn(orderId: string): Promise<{
 
   const coi = order.job?.coiChecks[0] ?? null
   const coiExpired = coi?.policyExpiryDate ? coi.policyExpiryDate.getTime() < Date.now() : false
-  const coiOk = !!coi && !coiExpired && coi.humanDecision === 'APPROVED' && coi.coverageVerified
+  // A certificate signed off on a gear-only job says nothing about the truck
+  // that has since been added to it, so it cannot firm up a hold on one
+  // (Wes 2026-09-09 — lib/coi/coiState.coiScopeGap).
+  const coiScopeShort = coiScopeGap({
+    humanDecision: coi?.humanDecision ?? '',
+    policyExpiryDate: coi?.policyExpiryDate ?? null,
+    coverageVerified: !!coi?.coverageVerified,
+    decidedWithVehicles: coi?.decidedWithVehicles,
+    jobHasVehicles: order.job ? deriveVehicleScope(order.job).hasVehicles : null,
+  })
+  const coiOk =
+    !!coi && !coiExpired && !coiScopeShort && coi.humanDecision === 'APPROVED' && coi.coverageVerified
 
   const rental = order.signedAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT')
   const signOk =

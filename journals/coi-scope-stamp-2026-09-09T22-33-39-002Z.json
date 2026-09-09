@@ -1,0 +1,28 @@
+{
+  "script": "stamp-mitu-coi-scope",
+  "at": "2026-09-09T22:33:39.002Z",
+  "jobId": "639e11ae-3625-47ce-a3ae-85d9e34d4515",
+  "jobCode": "SR-JOB-0326",
+  "reason": "Approved while the job rented no vehicle; stamps the scope so adding one reopens the COI.",
+  "before": [
+    {
+      "id": "8ac67454-9b4e-46a1-b207-e1fe263b669c",
+      "originalFilename": "951512f5-246f-4e96-b593-931561e1b7c9.pdf",
+      "humanDecision": "APPROVED",
+      "humanDecisionAt": "2026-09-09T16:53:24.445Z",
+      "decidedWithVehicles": null
+    },
+    {
+      "id": "ebb38474-e7cf-4676-bfa7-f46efb2980c7",
+      "originalFilename": "SirReel Production Vehicles Inc_COI_MITU NGL_09.09.2026.pdf",
+      "humanDecision": "APPROVED",
+      "humanDecisionAt": "2026-09-09T22:10:54.688Z",
+      "decidedWithVehicles": null
+    }
+  ],
+  "updated": 2,
+  "ids": [
+    "8ac67454-9b4e-46a1-b207-e1fe263b669c",
+    "ebb38474-e7cf-4676-bfa7-f46efb2980c7"
+  ]
+}

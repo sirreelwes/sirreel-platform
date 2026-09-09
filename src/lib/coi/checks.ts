@@ -24,7 +24,14 @@ import {
  * & Non-Contributory has not confirmed it.
  */
 
-export type CoiCheckStatus = 'PASS' | 'FAIL' | 'UNKNOWN'
+/**
+ * NA is not a pass and not a gap — it is a requirement that does not apply to
+ * THIS job. Today that is only the two auto checks on a job with no vehicle on
+ * it (src/lib/coi/vehicleScope.ts). It reads as its own thing everywhere
+ * because the alternative — quietly passing it — would make a gear-only
+ * certificate look like it carried auto coverage the day a truck gets added.
+ */
+export type CoiCheckStatus = 'PASS' | 'FAIL' | 'UNKNOWN' | 'NA'
 export type CoiCheckTier = 'CRITICAL' | 'ALERT'
 
 export interface CoiChecklistRow {
@@ -47,7 +54,20 @@ export interface CoiCheckContext {
   workersCompCoveredElsewhere?: boolean
   /** Human-readable provenance, e.g. "ADP Workers Comp cert, expires …". */
   workersCompNote?: string | null
+  /**
+   * Does the job rent the client a VEHICLE? `false` marks the two auto checks
+   * NA. Undefined — a caller with no job in hand — means "assume it does",
+   * because over-asking is an awkward email and under-asking is an uninsured
+   * truck. See src/lib/coi/vehicleScope.ts.
+   */
+  vehiclesOnJob?: boolean | null
 }
+
+/** The requirements that exist only because a client is driving our truck. */
+export const AUTO_CHECK_KEYS: ReadonlySet<string> = new Set(['autoLiability', 'autoPhysicalDamage'])
+
+/** Why an auto row is NA, in the reviewer's words. */
+export const NO_VEHICLE_NOTE = 'Not required — this job rents no vehicle from SirReel.'
 
 export const COI_CHECK_LABELS: Record<string, string> = {
   certificateHolder: 'Certificate Holder: SirReel',
@@ -107,6 +127,20 @@ export function coiChecklist(
   if (!ai) return []
   const build = (key: string, tier: CoiCheckTier): CoiChecklistRow => {
     const item = asItem(ai[key])
+    // No truck, no auto requirement. Deliberately BEFORE the stored verdict
+    // is read: the review prompt is job-blind and will have marked a
+    // gear-only certificate's Hired Auto Physical Damage as failing. That
+    // verdict is correct about the document and wrong about the job.
+    if (ctx?.vehiclesOnJob === false && AUTO_CHECK_KEYS.has(key)) {
+      return {
+        key,
+        label: COI_CHECK_LABELS[key] || key,
+        tier,
+        status: 'NA',
+        found: item ? str(item.found) : null,
+        note: NO_VEHICLE_NOTE,
+      }
+    }
     // Workers' Comp satisfied by a SEPARATE certificate on the job
     // (Wes 2026-09-01: "a review of the COI work comp section should
     // not have a warning if a work comp policy was separately uploaded
@@ -186,8 +220,10 @@ export function coiFlags(ai: CoiAiResponse | null | undefined, ctx?: CoiCheckCon
     }
   }
 
-  const criticalOpen = rows.filter((r) => r.tier === 'CRITICAL' && r.status !== 'PASS')
-  const alertOpen = rows.filter((r) => r.tier === 'ALERT' && r.status !== 'PASS')
+  // NA is neither open nor a pass — a requirement this job does not have.
+  const open = (r: CoiChecklistRow) => r.status !== 'PASS' && r.status !== 'NA'
+  const criticalOpen = rows.filter((r) => r.tier === 'CRITICAL' && open(r))
+  const alertOpen = rows.filter((r) => r.tier === 'ALERT' && open(r))
   const criticalPass = criticalOpen.length === 0
   const alertPass = alertOpen.length === 0
 
@@ -203,6 +239,20 @@ export function coiFlags(ai: CoiAiResponse | null | undefined, ctx?: CoiCheckCon
 }
 
 /** Did the review confirm SirReel is an Additional Insured? */
+/**
+ * Would this certificate still clear if the job gained a vehicle tomorrow?
+ *
+ * The point of the whole scope idea is that the requirement comes BACK. A
+ * gear-only job whose certificate shows no auto coverage is fine today and is
+ * a hole the moment someone adds a truck, so the surfaces that sign off on it
+ * have to be able to say which kind of "fine" they are looking at.
+ */
+export function coiCoversVehicles(ai: CoiAiResponse | null | undefined): boolean {
+  const rows = coiChecklist(ai)
+  const auto = rows.filter((r) => AUTO_CHECK_KEYS.has(r.key))
+  return auto.length > 0 && auto.every((r) => r.status === 'PASS')
+}
+
 export function coiAdditionalInsured(ai: CoiAiResponse | null | undefined): boolean {
   if (!ai) return false
   const item = asItem(ai.additionalInsured)
@@ -217,7 +267,7 @@ export function coiAdditionalInsured(ai: CoiAiResponse | null | undefined): bool
  * waiver, no umbrella) reaches the desk as something to look at rather than
  * silently blocking the certificate.
  */
-export function coiCheckWriteFields(ai: CoiAiResponse): {
+export function coiCheckWriteFields(ai: CoiAiResponse, ctx?: CoiCheckContext): {
   aiResponse: object
   aiRiskLevel: string
   aiRecommendation: string
@@ -225,7 +275,10 @@ export function coiCheckWriteFields(ai: CoiAiResponse): {
   policyExpiryDate: Date | null
   additionalInsured: boolean
 } {
-  const flags = coiFlags(ai)
+  // ctx so the recommendation matches what a reviewer will be shown: a
+  // gear-only job's missing auto coverage is not a reason to flag a
+  // certificate for review (src/lib/coi/vehicleScope.ts).
+  const flags = coiFlags(ai, ctx)
   const expiry =
     typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
       ? new Date(ai.policyExpiryDate)

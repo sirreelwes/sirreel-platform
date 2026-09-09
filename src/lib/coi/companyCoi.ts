@@ -48,6 +48,10 @@ export const COI_SELECT = {
   policyExpiryDate: true,
   coverageVerified: true,
   additionalInsured: true,
+  // The scope the sign-off was made under. Carried especially matters here:
+  // an account certificate approved on a gear-only job spreads to every
+  // sibling job, including ones that DO rent a truck (lib/coi/coiState).
+  decidedWithVehicles: true,
   createdAt: true,
 } as const
 

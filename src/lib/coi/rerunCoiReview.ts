@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
 import { runCoiAiReview } from './reviewCoi'
 import { coiCheckWriteFields, hasCoiChecklist } from './checks'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from './vehicleScope'
 
 /**
  * Re-run the AI review against a certificate's STORED file and persist the
@@ -39,6 +40,10 @@ export async function rerunCoiAiReview(id: string): Promise<RerunOutcome> {
       policyExpiryDate: true,
       aiResponse: true,
       deletedAt: true,
+      // Vehicle scope, so the stored recommendation matches what the desk is
+      // shown: no truck on the job, no auto requirement to flag it for
+      // (src/lib/coi/vehicleScope.ts).
+      job: { select: VEHICLE_SCOPE_SELECT },
     },
   })
   if (!existing || existing.deletedAt) return { ok: false, error: 'not found' }
@@ -47,7 +52,9 @@ export async function rerunCoiAiReview(id: string): Promise<RerunOutcome> {
   if (!buffer) return { ok: false, error: 'Could not read the stored file to review it.' }
 
   const ai = await runCoiAiReview(buffer, existing.mimeType || 'application/pdf')
-  const fields = coiCheckWriteFields(ai)
+  const fields = coiCheckWriteFields(ai, {
+    vehiclesOnJob: deriveVehicleScope(existing.job ?? {}).hasVehicles,
+  })
   const namedInsured = fields.namedInsured ?? existing.namedInsured
   const hadChecklist = hasCoiChecklist(existing.aiResponse as never)
 

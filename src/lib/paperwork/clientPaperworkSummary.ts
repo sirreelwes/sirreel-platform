@@ -28,6 +28,7 @@
 import { prisma } from '@/lib/prisma'
 import { rollupCoiState } from '@/lib/coi/coiState'
 import { resolveJobCoi } from '@/lib/coi/companyCoi'
+import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { carriedCoiApplies, getJobCoiConfirmation } from '@/lib/coi/jobCoiConfirmation'
 import { describeAgreementStatus, isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { isStageLineItem } from '@/lib/orders/stageLines'
@@ -117,15 +118,32 @@ export async function buildClientPaperworkSummary(
               coveredByAgreementId: true,
             },
           },
-          lineItems: { select: { department: true, description: true } },
+          lineItems: {
+            select: {
+              department: true,
+              description: true,
+              // Vehicle scope for the COI verdict — see lib/coi/vehicleScope.
+              type: true,
+              fulfillmentLane: true,
+              assetCategory: { select: { department: true } },
+              // description/slug also feed isStageLineItem's legacy fallback.
+              inventoryItem: { select: { department: true, description: true, slug: true } },
+            },
+          },
         },
       },
       bookings: {
         where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
         select: {
           id: true,
+          status: true,
           items: {
             select: {
+              status: true,
+              // Vehicle scope — a truck held on the reservation counts even
+              // before an order line exists for it (lib/coi/vehicleScope).
+              category: { select: { department: true } },
+              catalogItem: { select: { department: true } },
               assignments: {
                 where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
                 select: {
@@ -190,6 +208,11 @@ export async function buildClientPaperworkSummary(
       humanDecision: governing.humanDecision,
       policyExpiryDate: governing.policyExpiryDate,
       coverageVerified: !!governing.coverageVerified,
+      // A certificate cleared for a gear-only job, on a job that has since
+      // gained a vehicle, reads as needing a correction — which is exactly
+      // what the client has to go and get (lib/coi/coiState).
+      decidedWithVehicles: governing.decidedWithVehicles,
+      jobHasVehicles: deriveVehicleScope(job).hasVehicles,
     })
     const expiry = fmtDate(expiresAt)
     // Covers the start of the rental and lapses before the end. Clean on

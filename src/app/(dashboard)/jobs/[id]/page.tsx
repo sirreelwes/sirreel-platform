@@ -310,11 +310,14 @@ interface JobDetail {
   company: { id: string; name: string; notes: string | null };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; humanDecisionAt: string | null; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; humanDecisionAt: string | null; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; decidedWithVehicles?: boolean | null; createdAt: string;
     /** Carried from the company rather than uploaded here — and whether the
      *  production has confirmed it covers THIS job. Blank word = nothing to
      *  say; this is a chip beside the verdict, never a second verdict. */
     carriedFromCompany?: boolean; confirmationState?: string; confirmationWord?: string }>;
+  /** Does the job rent a vehicle? Server-computed, and only when a
+   *  certificate was signed off gear-only — null otherwise. */
+  jobHasVehicles?: boolean | null;
   /** Set once the production tells us this job runs on its own policy, so
    *  the account certificate stopped standing in for it. */
   coiSeparatePolicy?: { sentence: string; decidedAt: string | null; confirmerName: string | null; note: string | null } | null;
@@ -1234,6 +1237,10 @@ const driverTone = (d: any): string => {
       humanDecision: latest.humanDecision,
       policyExpiryDate: latest.policyExpiryDate,
       coverageVerified: !!latest.coverageVerified,
+      // A sign-off made when the job rented no vehicle does not cover the one
+      // added afterwards — it reads Rejected here, not Verified.
+      decidedWithVehicles: latest.decidedWithVehicles ?? null,
+      jobHasVehicles: job.jobHasVehicles ?? null,
     });
     return state === 'VERIFIED' ? 'Verified' : state === 'EXPIRED' ? 'Expired' : state === 'ISSUE' ? 'Rejected' : 'Pending';
   })();

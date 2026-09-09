@@ -1,6 +1,6 @@
 import type { InsuredMatchResult } from '@/lib/coi/insuredMatch'
 import { CLIENT_SIGNOFF } from '@/lib/email/signoff'
-import { coiChecklist, hasCoiChecklist } from '@/lib/coi/checks'
+import { coiChecklist, coiFlags, hasCoiChecklist, type CoiCheckContext } from '@/lib/coi/checks'
 import type { CoiAiResponse } from '@/lib/coi/reviewCoi'
 import { formatCalendarDate } from '@/lib/dates/calendarDate'
 
@@ -17,6 +17,12 @@ import { formatCalendarDate } from '@/lib/dates/calendarDate'
  * the rule is the same and it is the one that matters: only an explicit FAIL
  * becomes an ask. A requirement the review never looked at is OUR gap to
  * close by re-running it, not something to demand from the client.
+ *
+ * Scope-safe too, since 2026-09-09: the checklist is read through the same
+ * `CoiCheckContext` the review desk uses, so an auto requirement that is NA on
+ * a gear-only job never becomes a bullet. This module is the surface where
+ * getting that wrong actually costs something — it is the text that goes to
+ * the client's broker.
  *
  * Client-safe by construction: every line describes SirReel's requirement or
  * the client's OWN certificate. The named-insured line comes from
@@ -78,9 +84,11 @@ export function buildCoiFixIssues(args: {
   ai: CoiAiFacts | null
   match: InsuredMatchResult | null
   policyExpiryDate: Date | null
+  /** What this job actually rents — see src/lib/coi/vehicleScope.ts. */
+  ctx?: CoiCheckContext
   now?: Date
 }): string[] {
-  const { ai, match, policyExpiryDate } = args
+  const { ai, match, policyExpiryDate, ctx } = args
   const now = args.now ?? new Date()
   const issues: string[] = []
 
@@ -91,7 +99,7 @@ export function buildCoiFixIssues(args: {
     // Per-check verdicts. FAIL only — an UNKNOWN row is a review that never
     // asked, and asking the client to fix something we never looked at is how
     // we look like we didn't read their certificate.
-    for (const row of coiChecklist(ai)) {
+    for (const row of coiChecklist(ai, ctx)) {
       if (row.status !== 'FAIL') continue
       if (row.tier === 'ALERT' && !ASKABLE_ALERTS.has(row.key)) continue
       const ask = ASK_BY_CHECK[row.key]
@@ -105,12 +113,17 @@ export function buildCoiFixIssues(args: {
     // Pre-checklist review: the four flat booleans are all it ever carried.
     if (failed(ai?.coverageVerified)) {
       issues.push(
-        'Coverage limits: we need General Liability of at least $1,000,000 each occurrence and ' +
-          '$2,000,000 general aggregate, and Automobile Liability at a $1,000,000 combined single ' +
-          'limit covering Hired and Non-Owned Autos.',
+        ctx?.vehiclesOnJob === false
+          ? 'Coverage limits: we need General Liability of at least $1,000,000 each occurrence and ' +
+            '$2,000,000 general aggregate.'
+          : 'Coverage limits: we need General Liability of at least $1,000,000 each occurrence and ' +
+            '$2,000,000 general aggregate, and Automobile Liability at a $1,000,000 combined single ' +
+            'limit covering Hired and Non-Owned Autos.',
       )
     }
-    if (failed(ai?.autoPhysicalDamage)) {
+    // A legacy review carries no per-check rows for the scope rule to mark
+    // NA, so the same exemption has to be applied by hand here.
+    if (failed(ai?.autoPhysicalDamage) && ctx?.vehiclesOnJob !== false) {
       issues.push(ASK_BY_CHECK.autoPhysicalDamage)
     }
     if (failed(ai?.additionalInsured)) {
@@ -132,7 +145,23 @@ export function buildCoiFixIssues(args: {
 
   // Nothing specific failed but the certificate still didn't pass — fall back
   // to the reviewer's own words rather than sending an empty ask.
-  if (issues.length === 0 && ai && ai.overallPass !== true && typeof ai.notes === 'string' && ai.notes.trim()) {
+  //
+  // Gated on the RECOMPUTED verdict, not the stored `overallPass` summary
+  // (2026-09-09). `notes` is prose the model wrote about the document, and it
+  // names every requirement it thought was short — including the ones this
+  // job does not have. On MITU NGL's Starlink order every enumerated check
+  // came back clear or NA and this line still put "MISSING Hired Auto
+  // Physical Damage coverage" in front of the client, which is how the
+  // scope fix could have been complete everywhere else and still leaked.
+  // Same principle as coiFlags itself: a stored summary that predates half
+  // the rules is not a verdict.
+  const stillOpen = ai ? (() => {
+    const flags = coiFlags(ai, ctx)
+    return flags.hasChecklist
+      ? flags.criticalOpen.length > 0 || flags.alertOpen.some((r) => ASKABLE_ALERTS.has(r.key))
+      : ai.overallPass !== true
+  })() : false
+  if (issues.length === 0 && stillOpen && typeof ai?.notes === 'string' && ai.notes.trim()) {
     issues.push(ai.notes.trim())
   }
   return issues
@@ -142,6 +171,7 @@ export function buildCoiFixDraft(args: {
   ai: CoiAiFacts | null
   match: InsuredMatchResult | null
   policyExpiryDate: Date | null
+  ctx?: CoiCheckContext
   jobName: string | null
   uploadUrl: string | null
   contactFirstName?: string | null

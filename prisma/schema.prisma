@@ -6585,6 +6585,26 @@ model CoiCheck {
   humanDecisionById String?        @map("human_decision_by_id")
   humanDecisionAt   DateTime?      @map("human_decision_at")
 
+  /// Did the job rent a VEHICLE at the moment a human signed this off?
+  ///
+  /// The two auto checks — Auto Liability and Hired Auto Physical Damage —
+  /// are NA on a gear-only job (src/lib/coi/vehicleScope.ts), so a
+  /// certificate with no auto coverage on it can legitimately be approved.
+  /// That approval is only good for the job it was made about. Wes,
+  /// 2026-09-09: "I approved their COI for the order, but it needs to
+  /// protect against someone adding a vehicle later and not having the
+  /// coverage."
+  ///
+  /// So the SCOPE of the sign-off is stamped here, and every surface that
+  /// reads "verified" compares it against what the job holds NOW. Adding a
+  /// truck to a job whose certificate was approved gear-only reopens the
+  /// COI — it does not quietly stay green.
+  ///
+  /// null on every row decided before 2026-09-09 and on rows never decided:
+  /// unknown scope raises nothing, because a retroactive alarm across the
+  /// whole history is noise nobody can act on.
+  decidedWithVehicles Boolean? @map("decided_with_vehicles")
+
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")

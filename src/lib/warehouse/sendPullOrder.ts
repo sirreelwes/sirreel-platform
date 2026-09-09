@@ -54,6 +54,7 @@ import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannel
 import { renderPickListPdf } from '@/lib/warehouse/renderPickListPdf'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { rollupCoiState } from '@/lib/coi/coiState'
+import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
@@ -146,13 +147,28 @@ export async function previewPullOrder(
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { humanDecision: true, policyExpiryDate: true, coverageVerified: true },
+            select: {
+              humanDecision: true,
+              policyExpiryDate: true,
+              coverageVerified: true,
+              decidedWithVehicles: true,
+            },
           },
           orders: {
             where: { status: { not: 'CANCELLED' }, archivedAt: null },
             select: {
+              status: true,
               signedAgreements: {
                 select: { contractType: true, status: true, coveredByAgreementId: true },
+              },
+              lineItems: {
+                select: {
+                  type: true,
+                  department: true,
+                  fulfillmentLane: true,
+                  assetCategory: { select: { department: true } },
+                  inventoryItem: { select: { department: true } },
+                },
               },
             },
           },
@@ -163,6 +179,10 @@ export async function previewPullOrder(
               items: {
                 select: {
                   status: true,
+                  // Vehicle scope — a truck can be held on the reservation
+                  // with no order line for it yet.
+                  category: { select: { department: true } },
+                  catalogItem: { select: { department: true } },
                   assignments: {
                     select: { status: true, _count: { select: { driverAssignments: true } } },
                   },
@@ -210,18 +230,43 @@ export async function previewPullOrder(
  */
 function jobReadiness(
   job: {
-    coiChecks: { humanDecision: string; policyExpiryDate: Date | null; coverageVerified: boolean }[]
-    orders: { signedAgreements: { contractType: string; status: string; coveredByAgreementId: string | null }[] }[]
+    coiChecks: {
+      humanDecision: string
+      policyExpiryDate: Date | null
+      coverageVerified: boolean
+      decidedWithVehicles?: boolean | null
+    }[]
+    orders: {
+      status?: string | null
+      signedAgreements: { contractType: string; status: string; coveredByAgreementId: string | null }[]
+      lineItems?: {
+        type?: string | null
+        department?: string | null
+        fulfillmentLane?: string | null
+        assetCategory?: { department?: string | null } | null
+        inventoryItem?: { department?: string | null } | null
+      }[]
+    }[]
     bookings: {
       paperworkRequests: { id: string }[]
-      items: { status: string; assignments: { status: string; _count: { driverAssignments: number } }[] }[]
+      items: {
+        status: string
+        category?: { department?: string | null } | null
+        catalogItem?: { department?: string | null } | null
+        assignments: { status: string; _count: { driverAssignments: number } }[]
+      }[]
     }[]
   } | null,
 ): { blockers: string[]; ready: boolean } {
   if (!job) return { blockers: [], ready: true }
 
   const coi = job.coiChecks[0]
-  const coiState = coi ? rollupCoiState(coi).state : 'NONE'
+  // A certificate approved for a gear-only job does not cover a truck someone
+  // added since. This is the last gate before the pull sheet leaves for the
+  // warehouse, so it is exactly where that has to bite.
+  const coiState = coi
+    ? rollupCoiState({ ...coi, jobHasVehicles: deriveVehicleScope(job).hasVehicles }).state
+    : 'NONE'
 
   const liveOrderCount = job.orders.length
   const allAgreements = job.orders.flatMap((o) => o.signedAgreements)

@@ -25,7 +25,36 @@ export interface CoiStateInputs {
   humanDecision: string
   policyExpiryDate: Date | string | null
   coverageVerified: boolean
+  /** Scope the sign-off was made under — CoiCheck.decidedWithVehicles.
+   *  Null on rows decided before the column existed. */
+  decidedWithVehicles?: boolean | null
+  /** What the job holds NOW (src/lib/coi/vehicleScope.ts). Null when the
+   *  caller could not see the job; then no scope verdict is reached. */
+  jobHasVehicles?: boolean | null
 }
+
+/**
+ * A certificate approved for a gear-only job, on a job that now rents a truck.
+ *
+ * Wes, 2026-09-09, approving MITU NGL's certificate on a Starlink-only order:
+ * "it needs to protect against someone adding a vehicle later and not having
+ * the coverage." The sign-off was honest about the job in front of him; it
+ * simply is not a sign-off about a vehicle, and a stored `coverageVerified`
+ * boolean cannot tell the two apart on its own.
+ *
+ * Deliberately one-directional. Approved WITH vehicles and the vehicles later
+ * come off — nothing reopens, because the certificate carries more coverage
+ * than the job needs, which is not a problem.
+ */
+export function coiScopeGap(coi: CoiStateInputs): boolean {
+  return coi.decidedWithVehicles === false && coi.jobHasVehicles === true
+}
+
+/** What to tell whoever is looking at the reopened certificate. */
+export const COI_SCOPE_GAP_NOTE =
+  'This certificate was approved for a job with no vehicle on it, so the auto ' +
+  'requirements were not applied. The job now rents a vehicle — the certificate ' +
+  'needs Auto Liability and Hired Auto Physical Damage before it goes out.'
 
 export function rollupCoiState(
   coi: CoiStateInputs,
@@ -36,6 +65,10 @@ export function rollupCoiState(
   const expired = expiry ? expiry.getTime() < now.getTime() : false
   if (expired) return { state: 'EXPIRED', expiresAt }
   if (coi.humanDecision === 'REJECTED') return { state: 'ISSUE', expiresAt }
+  // Ahead of the APPROVED branch on purpose: the sign-off is real, it just
+  // does not reach this job any more. ISSUE, not PENDING — nobody is waiting
+  // on a broker, someone has to look.
+  if (coiScopeGap(coi)) return { state: 'ISSUE', expiresAt }
   if (coi.humanDecision === 'APPROVED' && coi.coverageVerified) return { state: 'VERIFIED', expiresAt }
   // PENDING / COUNTERED / APPROVED-without-coverage all read as "in flight".
   return { state: 'PENDING', expiresAt }

@@ -25,6 +25,7 @@ import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 
 export const dynamic = 'force-dynamic'
@@ -231,6 +232,10 @@ export async function GET(req: NextRequest) {
             humanDecision: true,
             policyExpiryDate: true,
             coverageVerified: true,
+            // The scope the sign-off was made under. A certificate approved
+            // for a gear-only job does not cover the truck someone added
+            // afterwards (src/lib/coi/coiState.coiScopeGap).
+            decidedWithVehicles: true,
           },
         },
         // Job-level agreement coverage — the job attached as an addendum to
@@ -332,7 +337,13 @@ export async function GET(req: NextRequest) {
             policyExpiryDate: { not: null },
           },
           orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
-          select: { companyId: true, humanDecision: true, policyExpiryDate: true, coverageVerified: true },
+          select: {
+            companyId: true,
+            humanDecision: true,
+            policyExpiryDate: true,
+            coverageVerified: true,
+            decidedWithVehicles: true,
+          },
         })
       : []
     const companyCoisByCompany = new Map<string, typeof companyCois>()
@@ -356,6 +367,29 @@ export async function GET(req: NextRequest) {
         })
       ).map((r) => r.jobId),
     )
+
+    // Does the job rent a vehicle? Only asked of the jobs where the answer can
+    // change anything — a certificate signed off gear-only. That is a handful
+    // of rows, and loading every line item and booking item for 300 jobs to
+    // answer it for the other 295 would be a real cost for no verdict.
+    const scopeCandidateIds = jobs
+      .filter((j) => {
+        const own = j.coiChecks[0]
+        if (own) return own.decidedWithVehicles === false
+        if (!j.companyId) return false
+        return (companyCoisByCompany.get(j.companyId) ?? []).some(
+          (c) => c.decidedWithVehicles === false,
+        )
+      })
+      .map((j) => j.id)
+    const jobHasVehicles = new Map<string, boolean>()
+    if (scopeCandidateIds.length) {
+      const scoped = await prisma.job.findMany({
+        where: { id: { in: scopeCandidateIds } },
+        select: { id: true, ...VEHICLE_SCOPE_SELECT },
+      })
+      for (const j of scoped) jobHasVehicles.set(j.id, deriveVehicleScope(j).hasVehicles === true)
+    }
 
     // Kanban manual placements (side table, presentation-only). One
     // query for the whole page of jobs. PREJOB/OUT only — RETURNED is
@@ -465,8 +499,9 @@ export async function GET(req: NextRequest) {
           ? rollupAgreementState(allAgreements.filter((a) => a.contractType === 'STAGE_CONTRACT'), liveOrders.length)
           : null
       let coi: { state: CoiRollupState; expiresAt?: string | null } = { state: 'NONE' }
+      const hasVehicles = jobHasVehicles.has(j.id) ? jobHasVehicles.get(j.id)! : null
       if (j.coiChecks[0]) {
-        coi = rollupCoiState(j.coiChecks[0])
+        coi = rollupCoiState({ ...j.coiChecks[0], jobHasVehicles: hasVehicles })
       } else if (
         j.companyId &&
         companyCoisByCompany.has(j.companyId) &&
@@ -483,7 +518,7 @@ export async function GET(req: NextRequest) {
         const covering =
           certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= end) ??
           certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= start)
-        if (covering) coi = rollupCoiState(covering)
+        if (covering) coi = rollupCoiState({ ...covering, jobHasVehicles: hasVehicles })
       }
 
       const paperwork = {

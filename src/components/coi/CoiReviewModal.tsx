@@ -30,7 +30,7 @@ import {
   type InsuredMatchResult,
 } from '@/lib/coi/insuredMatch';
 import type { CoiChecklistRow } from '@/lib/coi/checks';
-import { Check, X } from 'lucide-react';
+import { Check, Minus, X } from 'lucide-react';
 
 interface StaleAgreement {
   orderId: string;
@@ -72,12 +72,22 @@ interface CoiReviewData {
   contacts: { name: string; email: string; role: string | null }[];
   /** Server-built draft of what the certificate still needs. */
   fixDraft: { issues: string[]; message: string };
+  /** Does the job rent a vehicle? null = no job to read it off. */
+  vehiclesOnJob: boolean | null;
+  /** What made it true, so the reviewer can see the truck named. */
+  vehicleReasons: string[];
+  /** Scope this certificate was signed off under. */
+  decidedWithVehicles: boolean | null;
+  /** Approved gear-only, and the job has since gained a vehicle. */
+  scopeGap: boolean;
+  scopeGapNote: string | null;
 }
 
 const CHECK_MARK: Record<CoiChecklistRow['status'], React.ReactNode> = {
   PASS: <Check size={13} aria-hidden />,
   FAIL: <X size={13} aria-hidden />,
   UNKNOWN: '–',
+  NA: <Minus size={13} aria-hidden />,
 };
 
 const CHECK_TONE: Record<CoiChecklistRow['status'], string> = {
@@ -87,6 +97,9 @@ const CHECK_TONE: Record<CoiChecklistRow['status'], string> = {
   // certificate, it is a gap in OUR review. Amber would read as the client's
   // problem to fix.
   UNKNOWN: 'text-zinc-600',
+  // Grey, like "not checked" — an NA row is not the certificate's doing
+  // either way, and a green tick here would read as coverage it does carry.
+  NA: 'text-zinc-600',
 };
 
 /**
@@ -118,7 +131,7 @@ function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
                       className={`min-w-0 flex-1 break-words ${
                         r.status === 'FAIL'
                           ? 'text-rose-200'
-                          : r.status === 'UNKNOWN'
+                          : r.status === 'UNKNOWN' || r.status === 'NA'
                             ? 'text-zinc-500'
                             : 'text-zinc-300'
                       }`}
@@ -127,6 +140,9 @@ function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
                     </span>
                     {r.status === 'UNKNOWN' && (
                       <span className="flex-shrink-0 text-[11px] text-zinc-600">not checked</span>
+                    )}
+                    {r.status === 'NA' && (
+                      <span className="flex-shrink-0 text-[11px] text-zinc-600">not required</span>
                     )}
                   </div>
                   {/* What the AI actually READ off the certificate. This used
@@ -137,13 +153,18 @@ function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
                       ignored during intrinsic sizing, so the 1fr track inflated
                       past the modal, squeezed the document pane to a sliver and
                       put a horizontal scrollbar under the whole dialog. */}
-                  {r.status !== 'UNKNOWN' && r.found && (
+                  {r.status !== 'UNKNOWN' && r.status !== 'NA' && r.found && (
                     <div className="ml-5 text-[11px] leading-relaxed text-zinc-500 break-words">
                       {r.found}
                     </div>
                   )}
                   {r.status === 'FAIL' && r.note && (
                     <div className="ml-5 mt-0.5 text-[11px] leading-relaxed text-rose-300/80 break-words">
+                      {r.note}
+                    </div>
+                  )}
+                  {r.status === 'NA' && r.note && (
+                    <div className="ml-5 mt-0.5 text-[11px] leading-relaxed text-zinc-500 break-words">
                       {r.note}
                     </div>
                   )}
@@ -498,6 +519,23 @@ export function CoiReviewModal({
                     production company.
                   </div>
                 ) : null}
+                {/* The sign-off was about a different job than the one going
+                    out. Loudest thing in the panel on purpose: it is the only
+                    state here where a green "Verified" badge somewhere else in
+                    HQ is actively wrong. */}
+                {data.scopeGap && (
+                  <div className="mb-2 rounded-lg border border-rose-700/60 bg-rose-950/30 px-2.5 py-2 text-[12px] leading-relaxed text-rose-200">
+                    <span className="font-semibold">A vehicle was added after this was approved.</span>{' '}
+                    {data.scopeGapNote}
+                  </div>
+                )}
+                {data.vehiclesOnJob === false && (
+                  <div className="mb-2 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-2 text-[12px] leading-relaxed text-zinc-300">
+                    <span className="font-semibold">No vehicle on this job.</span> Auto Liability and
+                    Hired Auto Physical Damage do not apply, so they are marked not required and are
+                    left out of anything sent to the client. Adding a vehicle brings them back.
+                  </div>
+                )}
                 {data.aiRan ? (
                   <>
                     <div className="flex items-center gap-2 mb-1.5">

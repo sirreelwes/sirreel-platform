@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 // reads through the shared one now.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
@@ -138,7 +139,17 @@ export async function POST(
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true, agent: true, job: { select: { id: true, name: true } } } } }
+      include: {
+        booking: {
+          include: {
+            company: true,
+            agent: true,
+            // Vehicle scope: the auto checks are NA on a job that rents no
+            // truck (src/lib/coi/vehicleScope.ts).
+            job: { select: { id: true, name: true, ...VEHICLE_SCOPE_SELECT } },
+          },
+        },
+      }
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -181,7 +192,10 @@ export async function POST(
           }
         : undefined
 
-    const flags = coiFlags(review, wcCtx)
+    const vehiclesOnJob = deriveVehicleScope(request.booking?.job ?? {}).hasVehicles
+    const ctx = { ...(wcCtx ?? {}), vehiclesOnJob }
+
+    const flags = coiFlags(review, ctx)
     if (wcCtx) {
       // Reflect it in the stored review too, so every later reader (the
       // job page, the review desk, this email's own checklist) sees the
@@ -192,6 +206,12 @@ export async function POST(
         found: wcCtx.workersCompNote,
       }
     }
+    // Deliberately NOT mirrored into the stored review, unlike the Workers
+    // Comp carry-over above. A separate WC certificate really does satisfy
+    // that requirement; a gear-only job does not put auto coverage on this
+    // certificate. Writing pass:true here would read as coverage it does not
+    // carry — and would defeat the whole guard, because the day a truck is
+    // added the scope context lifts and the stored verdict is what gets read.
     review.criticalPass = flags.criticalPass && !match.needsAttention
     review.alertPass = flags.alertPass
     review.overallPass = review.criticalPass && review.alertPass

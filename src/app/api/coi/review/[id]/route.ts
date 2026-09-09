@@ -5,7 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
-import { coiChecklist, coiFlags } from '@/lib/coi/checks'
+import { coiChecklist, coiFlags, type CoiCheckContext } from '@/lib/coi/checks'
+import { COI_SCOPE_GAP_NOTE, coiScopeGap } from '@/lib/coi/coiState'
+import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiUploadUrl } from '@/lib/portal/portalUrl'
@@ -73,6 +75,7 @@ const coiSelect = {
   humanDecision: true,
   humanDecisionNote: true,
   humanDecisionAt: true,
+  decidedWithVehicles: true,
   deletedAt: true,
   humanDecisionBy: { select: { name: true, email: true } },
   uploadedBy: { select: { name: true } },
@@ -94,8 +97,19 @@ const coiSelect = {
             select: { wcOriginalFilename: true, wcUploadedAt: true, wcAiReview: true },
             orderBy: { wcUploadedAt: 'desc' },
           },
+          // Vehicle scope — the two auto checks only apply if the client is
+          // actually driving one of our trucks (src/lib/coi/vehicleScope.ts).
+          status: true,
+          items: {
+            select: {
+              status: true,
+              category: { select: { department: true } },
+              catalogItem: { select: { department: true } },
+            },
+          },
         },
       },
+      subRentals: { select: { status: true, subcontractedVehicleId: true } },
       // Recipients for "Request fix" — the certificate is the client's to
       // correct, so the ask goes to the job's contacts (primary first).
       jobContacts: {
@@ -110,8 +124,18 @@ const coiSelect = {
         select: {
           id: true,
           orderNumber: true,
+          status: true,
           signedAgreements: {
             select: { contractType: true, status: true, signedAt: true, signerName: true },
+          },
+          lineItems: {
+            select: {
+              type: true,
+              department: true,
+              fulfillmentLane: true,
+              assetCategory: { select: { department: true } },
+              inventoryItem: { select: { department: true } },
+            },
           },
         },
       },
@@ -138,15 +162,35 @@ function serialize(coi: NonNullable<CoiRow>) {
     const r = (w.wcAiReview ?? null) as Record<string, unknown> | null
     return r?.pass === true && r?.expired !== true
   })
-  const wcCtx = passingWc
-    ? {
-        workersCompCoveredElsewhere: true,
-        workersCompNote: `Covered by ${passingWc.wcOriginalFilename || 'a separate Workers Comp certificate'} filed on this job`,
-      }
-    : undefined
 
-  const flags = coiFlags(ai as never, wcCtx)
-  const checks = coiChecklist(ai as never, wcCtx)
+  // Does this job put one of our vehicles in the client's hands? If not, the
+  // two auto checks are NA and must never reach the client's broker — the
+  // MITU NGL Starlink order is why (src/lib/coi/vehicleScope.ts).
+  const scope = deriveVehicleScope(coi.job ?? {})
+
+  const ctx: CoiCheckContext = {
+    ...(passingWc
+      ? {
+          workersCompCoveredElsewhere: true,
+          workersCompNote: `Covered by ${passingWc.wcOriginalFilename || 'a separate Workers Comp certificate'} filed on this job`,
+        }
+      : {}),
+    vehiclesOnJob: scope.hasVehicles,
+  }
+
+  const flags = coiFlags(ai as never, ctx)
+  const checks = coiChecklist(ai as never, ctx)
+
+  // The sign-off was made about a job with no truck on it, and the job has a
+  // truck on it now. The approval stands as a fact; it just no longer covers
+  // what is going out (Wes 2026-09-09).
+  const scopeGap = coiScopeGap({
+    humanDecision: coi.humanDecision,
+    policyExpiryDate: coi.policyExpiryDate,
+    coverageVerified: coi.coverageVerified,
+    decidedWithVehicles: coi.decidedWithVehicles,
+    jobHasVehicles: scope.hasVehicles,
+  })
 
   // Agreements already signed under the CURRENT company. Surfaced because a
   // name mismatch that is resolved by changing the production company makes
@@ -199,6 +243,7 @@ function serialize(coi: NonNullable<CoiRow>) {
     ai: ai as Parameters<typeof buildCoiFixDraft>[0]['ai'],
     match,
     policyExpiryDate: coi.policyExpiryDate,
+    ctx,
     jobName: coi.job?.name ?? null,
     uploadUrl,
     contactFirstName: contacts[0]?.name?.split(' ')[0] ?? null,
@@ -260,6 +305,12 @@ function serialize(coi: NonNullable<CoiRow>) {
     signedAgreements,
     contacts,
     fixDraft,
+    /** null = we could not see the job; the auto checks stay required. */
+    vehiclesOnJob: scope.hasVehicles,
+    vehicleReasons: scope.reasons,
+    decidedWithVehicles: coi.decidedWithVehicles,
+    scopeGap,
+    scopeGapNote: scopeGap ? COI_SCOPE_GAP_NOTE : null,
   }
 }
 
@@ -381,6 +432,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
+  // Scope AT THE MOMENT OF SIGN-OFF, read off the job the reviewer was
+  // looking at. `null` when we cannot tell (a COI attached to a company or an
+  // inquiry rather than a job) — an unknown scope raises nothing later, which
+  // is the right default for a certificate with no job to gain a truck.
+  const decidedScope = deriveVehicleScope(existing.job ?? {}).hasVehicles
+
   let policyExpiryDate: Date | null | undefined
   if (typeof body.policyExpiryDate === 'string') {
     const raw = body.policyExpiryDate.trim()
@@ -406,6 +463,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // flag, and leaving them disagreeing is how a "Verified" badge ends
       // up sitting next to an unreviewed certificate.
       coverageVerified: decision === 'APPROVED',
+      // …and WHAT it was a sign-off about. A certificate approved while the
+      // job rented no vehicle carries no promise about one, so this is what
+      // lets a truck added next week reopen it instead of inheriting a green
+      // badge (Wes 2026-09-09). Cleared back to null on PENDING — an undone
+      // decision has no scope.
+      decidedWithVehicles: decision === 'PENDING' ? null : decidedScope,
       ...(policyExpiryDate !== undefined ? { policyExpiryDate } : {}),
     },
   })

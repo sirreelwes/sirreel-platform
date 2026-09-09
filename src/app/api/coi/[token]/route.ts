@@ -4,6 +4,7 @@ import { verifyCoiToken } from '@/lib/coi/coiUploadToken'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
@@ -99,6 +100,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const inquiryId = payload.inquiryId && (await prisma.inquiry.findUnique({ where: { id: payload.inquiryId }, select: { id: true } })) ? payload.inquiryId : null
 
   const ai = await runCoiAiReview(buffer, 'application/pdf')
+  // Does the job this drop link points at rent a vehicle? Null when the link
+  // carries no job — then the auto checks stay required, which is the safe
+  // direction (src/lib/coi/vehicleScope.ts).
+  const dropVehicleScope = jobId
+    ? deriveVehicleScope(
+        (await prisma.job.findUnique({ where: { id: jobId }, select: VEHICLE_SCOPE_SELECT })) ?? {},
+      ).hasVehicles
+    : null
 
   const coi = await prisma.coiCheck.create({
     data: {
@@ -115,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       clientUploaderEmail: uploaderEmail,
       // Raw facts off the certificate; the production-company comparison is
       // computed on read (src/lib/coi/insuredMatch.ts).
-      ...coiCheckWriteFields(ai),
+      ...coiCheckWriteFields(ai, { vehiclesOnJob: dropVehicleScope }),
       // humanDecision stays PENDING: the AI reads the certificate, a human
       // still signs off on it in the review desk.
     },

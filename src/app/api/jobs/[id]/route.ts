@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
+import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import {
   getJobCoiConfirmation,
   carriedCoiApplies,
@@ -71,6 +72,7 @@ export async function GET(
             aiRiskLevel: true,
             aiRecommendation: true,
             namedInsured: true,
+            decidedWithVehicles: true,
             createdAt: true,
           },
         },
@@ -562,6 +564,17 @@ export async function GET(
       job.coiChecks.length === 0 ? await getJobCoiConfirmation(job.id, carriedCoi) : NO_CONFIRMATION
     const carriedCoiStands = carriedCoiApplies(coiConfirmation)
 
+    // Does this job rent a vehicle? Only asked when a certificate was signed
+    // off gear-only — otherwise there is no verdict for it to change, and
+    // this loads every line item and booking item on the job to answer it.
+    const governingCoi = carriedCoi?.coi ?? job.coiChecks[0] ?? null
+    const jobHasVehicles =
+      governingCoi?.decidedWithVehicles === false
+        ? deriveVehicleScope(
+            (await prisma.job.findUnique({ where: { id: job.id }, select: VEHICLE_SCOPE_SELECT })) ?? {},
+          ).hasVehicles
+        : null
+
     // Did the CLIENT set this job up on the public site, with nothing
     // quoted yet? Gates the "Next-steps email" button on the job page.
     const selfServeUnquoted = await isClientCreatedUnquoted(job.id)
@@ -591,6 +604,9 @@ export async function GET(
         ...job,
         selfServeUnquoted,
         duplicateSignals,
+        // Feeds rollupCoiState on the page — a certificate approved before a
+        // truck was added reads as an issue, not as Verified (Wes 2026-09-09).
+        jobHasVehicles,
         coiChecks:
           carriedCoi?.source === 'COMPANY' && carriedCoiStands
             ? [
