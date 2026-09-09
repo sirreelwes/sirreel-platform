@@ -132,7 +132,8 @@ export function MakeReservationModal({
   const [notes, setNotes] = useState('')
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
-  const [contactName, setContactName] = useState('')
+  const [contactFirst, setContactFirst] = useState('')
+  const [contactLast, setContactLast] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [jobContacts, setJobContacts] = useState<{ name: string; email: string; role: string }[] | null>(null)
   const [contactsLoading, setContactsLoading] = useState(false)
@@ -253,25 +254,37 @@ export function MakeReservationModal({
   const nextFreeRank = Math.max(2, deepest + 1)
   const stackFull = nextFreeRank > MAX_HOLD_RANK
 
+  // First/last/email as THREE labelled fields. They used to be two
+  // side-by-side boxes — "name" and "email" — which read as First and
+  // Last, so a surname landed in the email box, failed the pattern, and
+  // the only feedback was a greyed-out button (Wes 2026-09-09).
   const contactTyped =
-    contactName.trim().split(/\s+/).length >= 2 && /\S+@\S+\.\S+/.test(contactEmail.trim())
+    !!contactFirst.trim() && !!contactLast.trim() && /\S+@\S+\.\S+/.test(contactEmail.trim())
   /** The job already satisfies the Booking's person requirement. */
   const jobHasContact = (jobContacts?.length ?? 0) > 0
   const contactReady = jobHasContact || contactTyped
 
-  const canSubmit =
-    !!category &&
-    !!company &&
-    !!job &&
-    contactReady &&
-    !contactsLoading &&
-    !availLoading &&
-    quantity > 0 &&
-    datesValid &&
-    // At capacity the agent must say WHICH hold this is. Falling through
-    // to a plain create would put a second 1st Hold on the same units.
-    (!atCapacity || queueChoice !== 'none') &&
-    !submitting
+  /**
+   * WHY the button is off, in the agent's words. A disabled primary CTA
+   * that explains nothing is a dead end — Wes hit exactly that on
+   * 2026-09-09, having typed a surname into what turned out to be the
+   * email box. Never render the disabled state without this list.
+   */
+  const blockers: string[] = []
+  if (!category) blockers.push('pick a vehicle type')
+  if (!datesValid) blockers.push('check the dates')
+  if (quantity < 1) blockers.push('how many?')
+  if (!company) blockers.push('pick a company')
+  if (!job) blockers.push('pick a job')
+  if (!contactReady && !contactsLoading) {
+    if (!contactFirst.trim() || !contactLast.trim()) blockers.push("the contact's first and last name")
+    if (!/\S+@\S+\.\S+/.test(contactEmail.trim())) blockers.push("the contact's email")
+  }
+  if (atCapacity && queueChoice === 'none' && !stackFull) {
+    blockers.push('choose 2nd Hold or take the 1st')
+  }
+
+  const canSubmit = blockers.length === 0 && !contactsLoading && !availLoading && !submitting
 
   function onJobResolved(r: ResolvedJob) {
     setJob({ id: r.id, jobCode: r.jobCode, name: r.name })
@@ -341,14 +354,13 @@ export function MakeReservationModal({
         mark('contact', 'skipped')
       } else {
       mark('contact', 'running')
-      const parts = contactName.trim().split(/\s+/)
       const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: contactEmail.trim(),
-          firstName: parts[0],
-          lastName: parts.slice(1).join(' '),
+          firstName: contactFirst.trim(),
+          lastName: contactLast.trim(),
           role: 'PRODUCER',
         }),
       })
@@ -838,19 +850,41 @@ export function MakeReservationModal({
                   </div>
                 )}
                 {(!job || (!contactsLoading && !jobHasContact)) && (
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    placeholder="First and last name"
-                    className="border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
-                  />
-                  <input
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="Email"
-                    className="border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
-                  />
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5">
+                        First name
+                      </span>
+                      <input
+                        value={contactFirst}
+                        onChange={(e) => setContactFirst(e.target.value)}
+                        className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5">
+                        Last name
+                      </span>
+                      <input
+                        value={contactLast}
+                        onChange={(e) => setContactLast(e.target.value)}
+                        className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5">
+                      Email
+                    </span>
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="name@company.com"
+                      className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                    />
+                  </label>
                 </div>
                 )}
                 {(!job || (!contactsLoading && !jobHasContact)) && (
@@ -1007,6 +1041,12 @@ export function MakeReservationModal({
                   {stepRow('hold', 'Reserving the category')}
                   {atCapacity && stepRow('rank', queueChoice === 'take-first' ? 'Taking the 1st Hold' : 'Queueing the hold')}
                   {stepRow('assign', 'Assigning a unit')}
+                </div>
+              )}
+
+              {blockers.length > 0 && !submitting && (
+                <div className="text-[11px] text-lt-fg3 text-right">
+                  Still needed: {blockers.join(' · ')}
                 </div>
               )}
 
