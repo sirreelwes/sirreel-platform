@@ -160,3 +160,91 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
   { label: 'Maintenance / Unit N/A', swatch: `${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border}` },
   { label: 'Backup (queued)', swatch: 'bg-blue-200/70 border border-dashed border-blue-400' },
 ]
+
+/* ────────────────────────────────────────────────────────────────────
+ * Readiness meter (Wes 2026-09-09) — "could holds start out as an
+ * outline when quoted, then slowly fill as items are done: client
+ * accepts, COI, RA, CCA, driver info… and turn full green when all
+ * necessary items are met?"
+ *
+ * Rendered as a 5px SEGMENTED rail along the bar's bottom edge, not as a
+ * wash across the bar body, for two reasons that both bit on the mockup:
+ *
+ *  1. The gantt's horizontal axis is TIME. A bar filled 60% from the left
+ *     reads as "confirmed through Wednesday, tentative after" — a real
+ *     misread on a board people scan against the date header. Hard
+ *     notches at every step boundary are what defuse it: five ticked
+ *     boxes are a count, a smooth fill is a position.
+ *  2. Bar labels are 9px white-on-colour. A light-green wash across the
+ *     body puts white text on mint and the client name stops being
+ *     readable — the same failure as the 2026-09-04 check in/out screen.
+ *
+ * It is a background-image, not a child element, so it needs no z-index
+ * against the label and no DOM on 300+ bars.
+ *
+ * The five steps are computeReadiness's (COI · agreement · card · driver ·
+ * gear) — see src/lib/jobs/readiness.ts. "Client accepts" is deliberately
+ * NOT one of them: on this board it is already the bar's own colour
+ * transition, dashed inquiry → blue hold → green booked.
+ */
+import type { CSSProperties } from 'react'
+
+/** Filled step. Two greens, and the split is not cosmetic: green-500 on a
+ *  BOOKED bar is green-on-green and disappears — which is the one bar where
+ *  an unmet check matters most (booked, no COI, out on Thursday). The light
+ *  green reads on every solid bar we paint: blue hold, booked green, the
+ *  order-attached red, the blind-pickup violet. */
+const METER_FILL_ON_DARK = '#86efac'
+const METER_FILL_ON_LIGHT = '#16a34a'
+/** Unfilled track. Dark on solid bars so the empty steps read as a groove
+ *  cut into the bar rather than as more bar. */
+const METER_TRACK_ON_DARK = 'rgba(0,0,0,0.30)'
+const METER_TRACK_ON_LIGHT = 'rgba(0,0,0,0.13)'
+const METER_NOTCH_ON_DARK = 'rgba(0,0,0,0.55)'
+const METER_NOTCH_ON_LIGHT = 'rgba(255,255,255,0.85)'
+/** Rail height. 5px of a 24px bar — a strong horizontal line at desk
+ *  distance without taking room from the 9px label. The compact variant is
+ *  for the 18px "needs a unit" chips, where 5px is a quarter of the chip. */
+const METER_HEIGHT = '5px'
+const METER_HEIGHT_COMPACT = '3px'
+
+/**
+ * Style for the bottom rail. Spread onto the bar's existing inline style.
+ * `light` for bars whose own surface is pale or transparent (backup
+ * sub-lane, dashed inquiry outline) so the empty track stays visible;
+ * `compact` for the short "needs a unit" chips.
+ */
+export function readinessMeterStyle(
+  done: number,
+  total: number,
+  opts?: { light?: boolean; compact?: boolean },
+): CSSProperties {
+  const steps = Math.max(1, total)
+  const pct = Math.max(0, Math.min(1, done / steps)) * 100
+  const step = 100 / steps
+  const light = opts?.light === true
+  const track = light ? METER_TRACK_ON_LIGHT : METER_TRACK_ON_DARK
+  const fill = light ? METER_FILL_ON_LIGHT : METER_FILL_ON_DARK
+  const notch = light ? METER_NOTCH_ON_LIGHT : METER_NOTCH_ON_DARK
+  return {
+    backgroundImage: [
+      // Notches first so they paint ON TOP of the fill.
+      `repeating-linear-gradient(to right, transparent 0 calc(${step}% - 1px), ${notch} calc(${step}% - 1px) ${step}%)`,
+      `linear-gradient(to right, ${fill} 0 ${pct}%, ${track} ${pct}% 100%)`,
+    ].join(', '),
+    backgroundSize: `100% ${opts?.compact ? METER_HEIGHT_COMPACT : METER_HEIGHT}`,
+    backgroundPosition: 'left bottom',
+    backgroundRepeat: 'no-repeat',
+  }
+}
+
+/** Hover text — "Ready to go out" or "3 of 5 · missing COI, Card". */
+export function readinessMeterTitle(r: {
+  done: number
+  total: number
+  ready: boolean
+  blockers: { label: string }[]
+}): string {
+  if (r.ready) return 'Ready to go out — COI · agreement · card · driver · gear'
+  return `${r.done} of ${r.total} ready · still needed: ${r.blockers.map((b) => b.label).join(', ')}`
+}

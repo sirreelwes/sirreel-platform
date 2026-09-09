@@ -8,7 +8,13 @@
  * children after the derived rows.
  */
 
-import { LEGEND_ITEMS, TIER_COLORS, TIER_LABELS, TIER_ORDER } from '@/lib/scheduling/statusTokens'
+import {
+  LEGEND_ITEMS,
+  TIER_COLORS,
+  TIER_LABELS,
+  TIER_ORDER,
+  readinessMeterStyle,
+} from '@/lib/scheduling/statusTokens'
 
 export default function StatusLegend({
   showTiers = false,
@@ -23,6 +29,20 @@ export default function StatusLegend({
         <div key={l.label} className="flex items-center gap-1">
           <div className={`w-3 h-2 rounded-sm ${l.swatch}`} />
           <span className={`text-gray-500 ${l.struck ? 'line-through' : ''}`}>{l.label}</span>
+        </div>
+      ))}
+      {/* Paperwork meter — the same gradient the bars draw, so the key and
+          the rail cannot drift. Three samples read better than one: the
+          point is that it FILLS. */}
+      <span className="text-gray-300">|</span>
+      <span className="text-gray-400 font-medium">Paperwork:</span>
+      {[0, 3, 5].map((done) => (
+        <div key={done} className="flex items-center gap-1">
+          <div
+            className="w-8 h-3 rounded-sm bg-blue-500"
+            style={readinessMeterStyle(done, 5)}
+          />
+          <span className="text-gray-500">{done === 5 ? 'ready' : `${done} of 5`}</span>
         </div>
       ))}
       {showTiers && (

@@ -25,7 +25,10 @@ import {
   TODAY_HEADER_CLASS,
   UNIT_NA_COLOR,
   ART_DEPT_TAG_CHIP,
+  readinessMeterStyle,
+  readinessMeterTitle,
 } from '@/lib/scheduling/statusTokens';
+import type { JobReadiness } from '@/lib/jobs/readiness';
 import StatusLegend from '@/components/scheduling/StatusLegend';
 import { StageAreasPicker } from '@/components/scheduling/StageAreasPicker';
 import OutBackStrip from '@/components/scheduling/OutBackStrip';
@@ -266,6 +269,8 @@ interface DayMeta { ds: string; weekend: boolean; isToday: boolean; label: strin
 //    to the previous inline JSX — pure render-perf extraction. ──
 interface TimelineUnitRowProps {
   entry: any
+  /** Readiness by job id — see the meter note in lib/scheduling/statusTokens. */
+  readiness: Record<string, JobReadiness>
   dayMeta: DayMeta[]
   dayWidth: number
   renderedStartDate: string
@@ -284,6 +289,7 @@ interface TimelineUnitRowProps {
 
 const TimelineUnitRow = memo(function TimelineUnitRow({
   entry,
+  readiness,
   dayMeta,
   dayWidth,
   renderedStartDate,
@@ -372,11 +378,20 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
           const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
+          // Paperwork meter along the bottom edge. Absent for a job with no
+          // unfinished bar (the server only ships those) and for job-less
+          // call-in holds — draw nothing rather than an empty 0-of-5 rail,
+          // which would read as a deficiency where there is no job to chase.
+          const rdy = b.jobId ? readiness[b.jobId] : undefined
+          const meter = rdy
+            ? readinessMeterStyle(rdy.done, rdy.total, { light: b.status === 'inquiry' || b.status === 'cancelled' })
+            : undefined
           return (
             <div
               key={`p-${j}`}
+              title={rdy ? readinessMeterTitle(rdy) : undefined}
               className={`absolute h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'} ${b.dimmed ? 'opacity-25' : ''}`}
-              style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
+              style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH, ...meter }}
               onPointerDown={canBindUnit ? (ev) => onBarPointerDown(ev, b, entry.unit) : undefined}
               onPointerMove={canBindUnit ? onBarPointerMove : undefined}
               onPointerUp={canBindUnit ? onBarPointerUp : undefined}
@@ -416,16 +431,18 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             if (!bar) return null
             const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
             const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
+            const rdy = b.jobId ? readiness[b.jobId] : undefined
+            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true }) : undefined
             return (
               <div
                 key={`b-${j}`}
                 className={`absolute h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden ${b.dimmed ? 'opacity-25' : ''}`}
-                style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
+                style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH, ...meter }}
                 onClick={(ev) => {
                   ev.stopPropagation()
                   onBackupClick(b, entry.unit, rank)
                 }}
-                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
+                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}${rdy ? `\n${readinessMeterTitle(rdy)}` : ''}`}
               >
                 <IncompleteBadge gaps={b.infoGaps} />
                 <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
@@ -544,6 +561,10 @@ export function GanttBoard() {
   const [jobs, setJobs] = useState<any[]>([])
   const [units, setUnits] = useState<any[]>([])
   const [unassignedHolds, setUnassignedHolds] = useState<any[]>([])
+  // Readiness keyed by JOB id — one entry per job, not per bar (a job's
+  // fleet spans sibling bookings and they all answer the same question).
+  // Only jobs with an unfinished bar are present; absent = draw no meter.
+  const [readiness, setReadiness] = useState<Record<string, JobReadiness>>({})
   const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
@@ -740,12 +761,16 @@ export function GanttBoard() {
   // with the server — the root of the drag-back 404/409 bug). If a snapshot
   // is skipped because mutations are pending, the settle path refetches.
   const refetchSeq = useRef(0)
+  // Bumped by every refreshTimeline so the meters re-derive after a drop —
+  // assigning a unit is exactly what clears the Gear segment.
+  const [readinessNonce, setReadinessNonce] = useState(0)
   const inFlightReassigns = useRef<Set<string>>(new Set())
   // Refetch requested by ANY drop — fires once the LAST in-flight settles
   // (shared across overlapping drops so no request is lost).
   const pendingRefetch = useRef(false)
   const refreshTimeline = useCallback(() => {
     const seq = ++refetchSeq.current
+    setReadinessNonce((n) => n + 1)
     setLoading(true)
     const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
     fetch(`/api/timeline-native?${params.toString()}`)
@@ -761,6 +786,20 @@ export function GanttBoard() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [fetchRange.from, fetchRange.to])
+
+  // Paperwork meter — its own request, deliberately not folded into the
+  // timeline payload. Gathering the five checks for a 140-job window costs
+  // about a second, and the bars must not wait on a decoration to paint.
+  // Meters appear a beat after the board; a failure just leaves them off.
+  useEffect(() => {
+    const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
+    let live = true
+    fetch(`/api/scheduling/readiness?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d) => { if (live && d.ok) setReadiness(d.readiness || {}) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [fetchRange.from, fetchRange.to, readinessNonce])
 
   // Art Dept job tag toggle (Planyo's yellow, carried over as a TAG).
   // Optimistic flip on the open modal; the board refetch reconciles bars.
@@ -1890,13 +1929,19 @@ export function GanttBoard() {
                               t.needed > 1 ? `${t.needed} needed` : null,
                               fromPlanyo ? `Planyo cart ${t.planyoCartId}${hint ? ` · "${hint}"` : ''}` : null,
                             ].filter(Boolean).join(' · ')
+                            // These ARE holds — the ones with no truck on
+                            // them yet — so they carry the meter too. Their
+                            // Gear step is the one that is definitionally
+                            // unmet, which is the point of the row.
+                            const rdy = t.jobId ? readiness[t.jobId] : undefined
+                            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, compact: true }) : undefined
                             return (
                               <div
                                 key={`uh-${k}`}
                                 className={`absolute rounded border border-dashed flex items-center overflow-hidden bg-rose-100 border-rose-500 text-rose-900 ${canBindUnit ? 'cursor-pointer hover:bg-rose-200 transition-colors' : ''}`}
-                                style={{ left: bar.left, width: bar.width, top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H }}
+                                style={{ left: bar.left, width: bar.width, top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H, ...meter }}
                                 onClick={canBindUnit ? (ev) => { ev.stopPropagation(); setAssignBookingItemId(t.bookingItemId) } : undefined}
-                                title={`Needs a unit — ${t.categoryName}${detail ? ` · ${detail}` : ''}${canBindUnit ? ' · click to pick a unit' : ''}`}
+                                title={`Needs a unit — ${t.categoryName}${detail ? ` · ${detail}` : ''}${canBindUnit ? ' · click to pick a unit' : ''}${rdy ? `\n${readinessMeterTitle(rdy)}` : ''}`}
                               >
                                 <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
                                   {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
@@ -1937,6 +1982,7 @@ export function GanttBoard() {
                     <TimelineUnitRow
                       key={`u-${entry.unit.assetId}`}
                       entry={entry}
+                      readiness={readiness}
                       dayMeta={dayMeta}
                       dayWidth={dayWidth}
                       renderedStartDate={renderedStartDate}
@@ -1970,10 +2016,15 @@ export function GanttBoard() {
                       const bar = getBar(job.startDate, job.endDate)
                       if (!bar) return null
                       const sc = barColor(job.status, { blindPickup: job.blindPickup, hasOrder: job.hasOrder })
+                      const rdy = job.jobId ? readiness[job.jobId] : undefined
+                      const meter = rdy
+                        ? readinessMeterStyle(rdy.done, rdy.total, { light: job.status === 'inquiry' || job.status === 'cancelled' })
+                        : undefined
                       return (
                         <div
+                          title={rdy ? readinessMeterTitle(rdy) : undefined}
                           className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}
-                          style={{ left: bar.left, width: bar.width }}
+                          style={{ left: bar.left, width: bar.width, ...meter }}
                           onClick={() => setSelected(job)}
                         >
                           <IncompleteBadge gaps={job.infoGaps} />
