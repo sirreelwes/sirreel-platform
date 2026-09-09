@@ -8,7 +8,7 @@
  * conversion); this section is the Job-side read surface.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { JobEmailButton } from '@/components/jobs/JobEmailButton'
 
 interface ThreadMsg {
@@ -84,12 +84,16 @@ export function JobEmailThreads({ jobId, tone = 'dark' }: { jobId: string; tone?
   const [threads, setThreads] = useState<JobThread[] | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch(`/api/jobs/${jobId}/threads`)
       .then((r) => r.json())
       .then((d) => setThreads(Array.isArray(d.threads) ? d.threads : []))
       .catch(() => setThreads([]))
   }, [jobId])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   // Section hides entirely until the job has at least one filed thread
   // — an empty "Email" box on every job is noise.
@@ -148,7 +152,7 @@ export function JobEmailThreads({ jobId, tone = 'dark' }: { jobId: string; tone?
                 </button>
                 {tone === 'light' && (
                   <div className="flex-shrink-0 pt-2">
-                    <JobEmailButton jobId={jobId} threadId={t.id} label="Reply" />
+                    <JobEmailButton jobId={jobId} threadId={t.id} label="Reply" onSent={load} />
                   </div>
                 )}
               </div>

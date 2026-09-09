@@ -70,11 +70,17 @@ export function JobEmailButton({
   jobId,
   threadId,
   label = 'Email client',
+  onSent,
 }: {
   jobId: string
   /** Opens addressed to this specific conversation (the per-thread Reply). */
   threadId?: string
   label?: string
+  /** Fired after a successful send. The thread list renders a message
+   *  count and an In/Out badge that this send just changed — without
+   *  this the reply is invisible until the page is reloaded, which reads
+   *  as "did it go?" */
+  onSent?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -156,6 +162,7 @@ export function JobEmailButton({
       const j = await r.json()
       if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
       setSentTo(j.to)
+      onSent?.()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Send failed.')
     } finally {
@@ -328,7 +335,12 @@ export function JobEmailButton({
                       onChange={(e) => setBody(e.target.value)}
                       rows={9}
                       autoFocus
-                      placeholder={`Hi ${(draft.to || 'there').split('@')[0]},`}
+                      // Tracks the live To, not the draft's — the agent may
+                      // have just retyped who this is going to.
+                      placeholder={`Hi ${
+                        draft.contacts.find((c) => c.email === to.trim().toLowerCase())?.name.split(' ')[0] ||
+                        (to || 'there').split('@')[0]
+                      },`}
                       className="w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm leading-relaxed text-lt-fg"
                     />
                     <span className="mt-1 block text-xs text-lt-fg3">
