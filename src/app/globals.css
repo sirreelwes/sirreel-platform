@@ -26,6 +26,35 @@ body {
 input:focus, select:focus, textarea:focus { outline: none; border-color: #bbb !important; }
 ::selection { background: rgba(0, 0, 0, 0.12); }
 
+/* ── Form controls carry their own text color ─────────────────────────
+ *
+ * Tailwind's preflight gives input/textarea/select `color: inherit`, so
+ * a control with no `text-*` of its own picks up whatever an ancestor
+ * set — and `position: fixed` does NOT break inheritance. The New Job
+ * modal opens from a button in MobileNav's header (`bg-[#1a1a1a]
+ * text-white`), so on a phone every field in it rendered white text on
+ * a white card: present, selectable, invisible (2026-09-09).
+ *
+ * Audited across all 838 textual form controls in src/ at the time this
+ * was added: 784 already set their own color, and the remaining 54 all
+ * sit on the default white control background, where dark text is the
+ * only correct answer. Nothing in the app renders light field text by
+ * inheritance, so this is a no-op everywhere except the bug.
+ *
+ * Dark fields say `text-white` (or an inline `color`) on the element
+ * itself — the driver check-in pages, the marketing-site forms. A
+ * utility class beats this element selector on both specificity and
+ * layer order, so they are untouched, and that remains the way to opt
+ * out: put the color on the control, never on an ancestor.
+ */
+@layer base {
+  input,
+  textarea,
+  select {
+    color: var(--text);
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply px-4 py-2 bg-black text-white font-bold text-sm rounded-md hover:bg-gray-800 transition-colors cursor-pointer;
