@@ -95,7 +95,7 @@ export async function GET() {
         code: p.json?.code ?? null,
         message: p.json?.message ?? null,
       })),
-      hint: 'Every probe 401 (including the plain account read, which needs no scope) means the credential itself is not authenticating: the key was deleted, or it belongs to a different Twilio account than the one holding the campaign. Compare credentials.accountSid against the Account SID in Twilio\'s rejection email, then create a fresh Standard API key IN THAT ACCOUNT and update both Vercel Production values.',
+      hint: "The key authenticated but carries no permissions. Twilio answers a WRONG secret with 20003 'invalid username'; 'actor doesn't have any assertions' (8001/70051) means the identity was accepted and then found to hold no grants — the signature of a RESTRICTED API key with no permissions assigned. Open Console -> Account -> API keys & tokens, click the key, and check its type: grant it Read on the resources below, or replace it with a Standard key. Standard keys carry full account permissions and are what the send path expects.",
     }, { status: 502 })
   }
 
