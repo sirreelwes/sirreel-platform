@@ -20,6 +20,7 @@ import {
   type PeopleSegmentKey,
 } from "@/lib/crm/peopleSegments";
 import { RequestExportModal } from "@/components/crm/RequestExportModal";
+import { ClientGrowthStrip } from "@/components/crm/ClientGrowthStrip";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -584,6 +585,14 @@ export default function CRMPage() {
           if (next === 'quiet' || next === 'discount') setTab('companies');
         }}
       />
+
+      {/* Book growth — new contacts (and companies) added this week /
+          month / year, each against the same point in the previous
+          period. Informational, so it sits below the actionable
+          Needs-attention cards; it fetches its own aggregates rather
+          than widening /api/crm/stats, which the strip above and the
+          segment chips both read. */}
+      <ClientGrowthStrip />
 
       {/* Tabs — People first; Contacts renamed to People (label only;
           underlying tab key + route + data shape unchanged). Follow-
