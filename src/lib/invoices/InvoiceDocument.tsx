@@ -57,6 +57,34 @@ export interface InvoiceLineSnapshotEntry {
    *  italic muted text below the description, matching the existing
    *  qualifier style. */
   notes?: string | null
+  /**
+   * Billed days — what the line is actually charged for
+   * (OrderLineItem.billableDays), and the calendar span it covers.
+   *
+   * Ana, 2026-09-09: "is there a way to make billed days per week show?
+   * I don't see it on invoices currently." The quote PDF has carried a
+   * Days column since it shipped; the invoice had Qty / Rate / Amount
+   * and nothing else, so a client on a weekly rate — a vehicle week
+   * bills 5 days of 7, supplies 3 — got a line whose amount could not
+   * be reconstructed from the figures printed next to it, and neither
+   * could Ana when they called about it.
+   *
+   * `days` null means the concept does not apply (a purchase, a
+   * discount, an adjustment, a damage charge) OR the snapshot predates
+   * this field — invoices issued before 2026-09-09 carry neither, and
+   * the column is dropped entirely when no line has a value, so those
+   * re-render exactly as they were sent.
+   *
+   * `spanDays` is only printed when it differs from `days`; that
+   * difference IS the weekly-rate concession, and printing it is the
+   * point.
+   */
+  days?: number | null
+  spanDays?: number | null
+  /** What the rate in the Rate column buys — "/day" or "/wk". A weekly
+   *  rate must SAY weekly (Wes 2026-09-05) rather than print a derived
+   *  per-day number that reads as the client's day rate. */
+  rateUnit?: 'DAY' | 'WEEK' | null
 }
 
 export interface InvoiceCompanyForRender {
@@ -253,11 +281,29 @@ const styles = StyleSheet.create({
     borderBottomColor: C.ruleSoft,
   },
   rowAlt: { backgroundColor: C.zebra },
-  // Column widths sum to 100
+  // Column widths sum to 100. Two sets: the Days column exists only on
+  // invoices whose lines carry billable days (see `showDays`), so an
+  // invoice issued before that field existed keeps its original layout
+  // instead of gaining a column of dashes.
   colDesc: { width: '55%', fontSize: 9, paddingRight: 4 },
   colQty:  { width: '8%',  fontSize: 9, textAlign: 'right' },
   colRate: { width: '17%', fontSize: 9, textAlign: 'right' },
   colAmt:  { width: '20%', fontSize: 9, textAlign: 'right' },
+  // With Days: the description gives up the width the column needs.
+  colDescD: { width: '47%', fontSize: 9, paddingRight: 4 },
+  colQtyD:  { width: '7%',  fontSize: 9, textAlign: 'right' },
+  colDaysD: { width: '9%',  fontSize: 9, textAlign: 'right' },
+  colRateD: { width: '17%', fontSize: 9, textAlign: 'right' },
+  colAmtD:  { width: '20%', fontSize: 9, textAlign: 'right' },
+  /** The calendar span beside the billed days — "5 / 7". Same treatment
+   *  as the quote's Days cell so the two documents reconcile by eye. */
+  daysSpan: { fontSize: 7, color: C.faint },
+  /** "/day" / "/wk" beside the rate — small, so it reads as a unit
+   *  rather than as part of the number. */
+  rateUnitText: { fontSize: 7, color: C.faint },
+  /** The one-sentence key under the table, printed only when some line
+   *  actually shows a concession. */
+  daysKey: { fontSize: 7.5, color: C.muted, marginTop: 5, lineHeight: 1.35 },
   cellCat: { fontSize: 8, color: C.faint, marginTop: 1 },
   cellNote: { fontSize: 8, color: C.muted, fontStyle: 'italic', marginTop: 1, lineHeight: 1.3 },
   cellKindBadge: {
@@ -499,6 +545,21 @@ export function InvoiceDocument({
       ? 'LOSS & DAMAGE INVOICE'
       : 'INVOICE'
 
+  // Days column: present only when some line has days to show. An L&D
+  // invoice (damage charges) and every invoice issued before the field
+  // existed have none, and re-render byte-for-byte as they were sent.
+  const showDays = lines.some((l) => l.days != null)
+  const cDesc = showDays ? styles.colDescD : styles.colDesc
+  const cQty = showDays ? styles.colQtyD : styles.colQty
+  const cRate = showDays ? styles.colRateD : styles.colRate
+  const cAmt = showDays ? styles.colAmtD : styles.colAmt
+  // The "5 / 7" key is only worth printing when a line actually shows
+  // one — on an all-daily invoice it would explain a column that never
+  // varies.
+  const showDaysKey = lines.some(
+    (l) => l.days != null && l.spanDays != null && l.spanDays !== l.days,
+  )
+
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
@@ -611,10 +672,11 @@ export function InvoiceDocument({
 
         {/* ── Table head ───────────────────────────────────────── */}
         <View style={styles.tableHead} fixed>
-          <Text style={styles.colDesc}>Description</Text>
-          <Text style={styles.colQty}>Qty</Text>
-          <Text style={styles.colRate}>Rate</Text>
-          <Text style={styles.colAmt}>Amount</Text>
+          <Text style={cDesc}>Description</Text>
+          <Text style={cQty}>Qty</Text>
+          {showDays && <Text style={styles.colDaysD}>Days</Text>}
+          <Text style={cRate}>Rate</Text>
+          <Text style={cAmt}>Amount</Text>
         </View>
 
         {/* ── Line items ───────────────────────────────────────── */}
@@ -622,7 +684,7 @@ export function InvoiceDocument({
           const isMember = !!line.isPackageMember
           return (
             <View key={i} style={[styles.row, i % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
-              <View style={styles.colDesc}>
+              <View style={cDesc}>
                 <Text style={isMember ? { paddingLeft: 14, color: '#555' } : undefined}>
                   {isMember ? `· ${line.description}` : line.description}
                 </Text>
@@ -634,16 +696,55 @@ export function InvoiceDocument({
                   <Text style={styles.cellKindBadge}>{line.kind.replace('_', ' ')}</Text>
                 )}
               </View>
-              <Text style={styles.colQty}>{line.qty}</Text>
-              <Text style={isMember ? [styles.colRate, { color: '#888', fontStyle: 'italic' }] : styles.colRate}>
-                {isMember ? 'included' : fmtUsd(line.unitPrice)}
+              <Text style={cQty}>{line.qty}</Text>
+              {showDays && (
+                <Text style={styles.colDaysD}>
+                  {line.days == null ? (
+                    '—'
+                  ) : (
+                    <>
+                      {line.days}
+                      {line.spanDays != null && line.spanDays !== line.days && (
+                        <Text style={styles.daysSpan}> / {line.spanDays}</Text>
+                      )}
+                    </>
+                  )}
+                </Text>
+              )}
+              <Text style={isMember ? [cRate, { color: '#888', fontStyle: 'italic' }] : cRate}>
+                {isMember ? (
+                  'included'
+                ) : (
+                  <>
+                    {fmtUsd(line.unitPrice)}
+                    {line.rateUnit && (
+                      <Text style={styles.rateUnitText}>
+                        {line.rateUnit === 'WEEK' ? '/wk' : '/day'}
+                      </Text>
+                    )}
+                  </>
+                )}
               </Text>
-              <Text style={isMember ? [styles.colAmt, { color: '#888', fontStyle: 'italic' }] : styles.colAmt}>
+              <Text style={isMember ? [cAmt, { color: '#888', fontStyle: 'italic' }] : cAmt}>
                 {isMember ? '—' : fmtUsd(line.amount)}
               </Text>
             </View>
           )
         })}
+
+        {/* The Days key. Two numbers in that column is the weekly-rate
+            concession, and a client who cannot tell what the second one
+            means calls Ana to ask — which is where this whole column
+            came from. Wording carries no department figures on purpose:
+            the cap is 5 days for vehicles and 3 for supplies, and a
+            sentence naming one would be wrong on the other. */}
+        {showDaysKey && (
+          <Text style={styles.daysKey}>
+            Days is what each line bills. Where two numbers appear (5 / 7), the
+            line is on a weekly rate: the first is the days charged, the second
+            the days you had it.
+          </Text>
+        )}
 
         {/* ── Totals (kept together; never split across pages) ── */}
         <View style={styles.totals} wrap={false}>

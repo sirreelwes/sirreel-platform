@@ -45,6 +45,7 @@
  */
 
 import { catalogInvoiceLabel } from '@/lib/catalog/display'
+import { BILLING_RULES } from '@/lib/orders/billing'
 import { discountDisplayLabel } from '@/lib/orders/discountLabel'
 import React from 'react'
 import { randomUUID } from 'crypto'
@@ -73,6 +74,49 @@ export type GenerateRentalInvoiceResult =
       error: string
       existingInvoiceId?: string
     }
+
+/** Calendar days a line covers — the fallback when computedDays was
+ *  never backfilled. Both columns are @db.Date, so the arithmetic is
+ *  done in UTC; doing it locally is how a west-coast render loses a
+ *  day. */
+function spanOf(pickup: Date, ret: Date): number {
+  return Math.max(1, Math.round((ret.getTime() - pickup.getTime()) / 86_400_000))
+}
+
+/**
+ * The Days / Rate-unit half of one invoice line. See the block comment
+ * over `rentalLines` for why each case returns what it does.
+ */
+function invoiceDaysFor(li: {
+  type: string
+  department: keyof typeof BILLING_RULES
+  rateType: string
+  billableDays: number | null
+  computedDays: number | null
+  pickupDate: Date
+  returnDate: Date
+  isPackageHeader: boolean
+  packageInstanceId: string | null
+}): { days: number | null; spanDays: number | null; rateUnit: 'DAY' | 'WEEK' | null } {
+  const rules = BILLING_RULES[li.department]
+  const isMember = !!(li.packageInstanceId && !li.isPackageHeader)
+  if (
+    li.type === 'DISCOUNT' ||
+    isMember ||
+    rules.model === 'PURCHASE' ||
+    li.rateType === 'FLAT' ||
+    li.billableDays == null
+  ) {
+    return { days: null, spanDays: null, rateUnit: null }
+  }
+  const span = li.computedDays ?? spanOf(li.pickupDate, li.returnDate)
+  return {
+    days: li.billableDays,
+    spanDays: span,
+    rateUnit:
+      rules.model === 'CAP_PER_WEEK' && li.rateType === 'WEEKLY' ? 'WEEK' : 'DAY',
+  }
+}
 
 export async function generateRentalInvoice(args: {
   orderId: string
@@ -162,6 +206,19 @@ export async function generateRentalInvoice(args: {
   // invoice mirrors what the client signed, not SirReel's sourcing.
   // Internal sub-rental surfaces read OrderLineItem.subRentals directly
   // and never come through this DTO.
+  //
+  // Billed days ride along with each line (Ana 2026-09-09 — the invoice
+  // printed Qty / Rate / Amount and nothing that explained the amount).
+  // Three rules, all of them about not printing a number that is a lie:
+  //   - a purchase, a discount, or a package member that prints
+  //     "included" has no days concept — null, which renders "—"
+  //   - the calendar span only prints when it DIFFERS from the billed
+  //     days; that gap is the weekly-rate concession
+  //   - the rate unit comes off BILLING_RULES, not off rateType alone:
+  //     a WEEKLY rate is a week's price on the cap-per-week departments
+  //     (vehicles bill 5 days of 7, supplies 3) but a discounted DAY
+  //     rate on STAGES, and labelling that one "/wk" would misstate the
+  //     charge by a factor of five.
   const rentalLines: InvoiceLineSnapshotEntry[] = order.lineItems.map((li) => ({
     description: li.description,
     // Fee-catalog lines label as "FEE · <code>" so charges read
@@ -182,6 +239,7 @@ export async function generateRentalInvoice(args: {
     // requirement, seeded from InventoryItem.clientNote at add time).
     // Renders italic small-print under the description on the PDF.
     notes: li.notes,
+    ...invoiceDaysFor(li),
   }))
 
   const liveSubtotal = rentalLines.reduce((s, l) => s + l.amount, 0)
