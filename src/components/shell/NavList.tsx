@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import type { NavSection } from '@/lib/permissions';
 import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
+import { IncomingPill } from '@/components/jobs/IncomingPill';
 import {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
@@ -53,8 +54,23 @@ export function NavList({
   /** Sheet mount: pad rows out to a 44px tap target. */
   touch?: boolean;
 }) {
+  // The Incoming strip, copied out of the /jobs toolbar and pinned
+  // above the first section header (Wes, 2026-09-09) — the inbound
+  // queue is the front of the funnel and was only reachable from
+  // /jobs. Same component, dark skin.
+  //
+  // Shown only to navs that carry /jobs: the yard-crew branch has no
+  // sales surface, and the pill's destination would 403-shaped
+  // redirect them out of the one view they were given.
+  const hasJobs = sections.some((s) => s.items.some((i) => i.href === '/jobs'));
+
   return (
     <>
+      {hasJobs && (
+        <div className="px-1 pt-1 pb-2">
+          <IncomingPill variant="nav" onNavigate={onNavigate} touch={touch} className="w-full" />
+        </div>
+      )}
       {sections.map((section, si) => (
         <div key={si} className={si === 0 ? 'mt-1' : 'mt-4'}>
           {/* Static section divider — NOT a toggle. */}

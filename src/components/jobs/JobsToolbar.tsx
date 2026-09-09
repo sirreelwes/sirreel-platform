@@ -18,13 +18,13 @@
  */
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
-import { Inbox, X } from 'lucide-react'
+import { useRef } from 'react'
+import { X } from 'lucide-react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
+import { IncomingPill } from './IncomingPill'
 import { NewJobLauncher } from './NewJobLauncher'
 import { STATE, URGENCY } from '@/lib/jobs/listRow'
-import { inquiryPastResponseSla } from '@/lib/sales/inquirySla'
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'All jobs' },
@@ -74,36 +74,6 @@ export function JobsToolbar() {
   const incomingPanel = searchParams?.get('panel') === 'incoming'
   const selected = !!selectedId || incomingPanel
 
-  // Pending-incoming count for the strip — the same two streams
-  // NewInboundColumn merges (persistent NEW inquiries + Gmail
-  // suggestions), counted the same way, on the same 60s cadence.
-  const [incomingCount, setIncomingCount] = useState<number | null>(null)
-  // Inquiries past the first-response SLA — turns the strip red so
-  // the breach is visible even from a job detail page.
-  const [incomingOverdue, setIncomingOverdue] = useState(0)
-  useEffect(() => {
-    let active = true
-    const load = () => {
-      Promise.all([
-        fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
-      ]).then(([inq, sug]) => {
-        if (!active) return
-        const rows2 = (inq?.inquiries ?? []) as {
-          source: string; respondedAt?: string | null; createdAt: string
-        }[]
-        const pending = rows2.filter((i) => !i.respondedAt)
-        setIncomingCount(pending.length + ((sug?.suggestions ?? []) as unknown[]).length)
-        setIncomingOverdue(
-          pending.filter((i) => inquiryPastResponseSla({ ...i, respondedAt: i.respondedAt ?? null })).length,
-        )
-      })
-    }
-    load()
-    const t = setInterval(load, 60_000)
-    return () => { active = false; clearInterval(t) }
-  }, [])
-
   // Only states actually present get a key entry — a legend full of
   // zeroes is noise.
   const keyStates = URGENCY.filter((s) => (counts.get(s) ?? 0) > 0)
@@ -130,38 +100,9 @@ export function JobsToolbar() {
         {/* Incoming — the lifecycle's front door. Inquiries are
             pre-jobs (no Job row yet), so they are NOT rows in the
             rail; the strip hands you to the landing workspace where
-            the queue lives. Count = pending inbound, both streams. */}
-        <Link
-          href="/jobs?panel=incoming"
-          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[44px] md:min-h-0 rounded-lg border transition-colors ${
-            incomingOverdue > 0
-              ? 'border-red-300 bg-red-50 hover:bg-red-100'
-              : incomingCount !== null && incomingCount > 0
-                ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-                : 'border-zinc-200 bg-white hover:bg-zinc-100'
-          }`}
-        >
-          <Inbox size={13} aria-hidden className="text-zinc-500" />
-          <span className="text-[12px] font-semibold text-zinc-800">Incoming</span>
-          {incomingOverdue > 0 && (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">
-              {incomingOverdue} waiting
-            </span>
-          )}
-          {incomingCount !== null && (
-            <span
-              className={`text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded ${
-                incomingOverdue > 0
-                  ? 'bg-red-500 text-white'
-                  : incomingCount > 0
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-zinc-100 text-zinc-500'
-              }`}
-            >
-              {incomingCount}
-            </span>
-          )}
-        </Link>
+            the queue lives. Count = pending inbound, both streams.
+            Same component as the copy at the top of the left nav. */}
+        <IncomingPill />
 
         {/* Wes 2026-09-03: clearing the search meant holding backspace
             through the whole query. The X only appears once there is
