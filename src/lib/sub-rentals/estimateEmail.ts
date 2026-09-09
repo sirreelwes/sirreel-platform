@@ -367,7 +367,7 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
     ...(greetingText ? [greetingText, ''] : []),
     bodyText,
     '',
-    `SIRREEL ESTIMATE — ${v.name}`,
+    `SirReel Estimate — ${v.name}`,
     typeLabel,
     '',
     ...terms.map((t) => `  ${t.label}: ${t.value}`),

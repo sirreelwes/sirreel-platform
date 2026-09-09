@@ -651,7 +651,7 @@ export async function resolveItem(
   }
 }
 
-// Sirreel agent inboxes — anything @sirreel.com is us, not a client
+// SirReel agent inboxes — anything @sirreel.com is us, not a client
 // contact. Defensive belt-and-suspenders to the AI prompt's own filter.
 
 /**
