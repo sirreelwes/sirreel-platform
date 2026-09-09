@@ -22,6 +22,7 @@
  */
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { getReleaseAck } from '@/lib/sub-rentals/releaseAck'
 import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 import { logisticsFor, type LogisticsView } from '@/lib/sub-rentals/conduit'
 import { isAckStale } from '@/lib/drivers/hoursEntry'
@@ -156,6 +157,9 @@ export interface VendorView {
   vendorConfirmedAt: Date | null
   vendorDeclinedAt: Date | null
   vendorDeclineNote: string | null
+  /** We sent the release notice / the partner said they have the dates back. */
+  vendorCancelNotifiedAt: Date | null
+  vendorReleaseAckedAt: Date | null
   /** The partner's roster (all their bookings share it) and who is on THIS one. */
   roster: RosterDriver[]
   assignedVendorDriverId: string | null
@@ -200,6 +204,9 @@ export async function getVendorViewByToken(
       vendorConfirmedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
+      // The release loop — when we told them. The partner's answer is an
+      // event, read separately (lib/sub-rentals/releaseAck).
+      vendorCancelNotifiedAt: true,
       vendorId: true,
       vendorDriverId: true,
       subcontractedVehicleId: true,
@@ -275,6 +282,8 @@ export async function getVendorViewByToken(
     vendorConfirmedAt: s.vendorConfirmedAt,
     vendorDeclinedAt: s.vendorDeclinedAt,
     vendorDeclineNote: s.vendorDeclineNote,
+    vendorCancelNotifiedAt: s.vendorCancelNotifiedAt,
+    vendorReleaseAckedAt: await getReleaseAck(s.id),
     roster: await rosterForVendor(s.vendorId, s.subcontractedVehicleId),
     assignedVendorDriverId: s.vendorDriverId,
     unitVehicleId: s.subcontractedVehicleId,

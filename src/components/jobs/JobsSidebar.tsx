@@ -44,7 +44,9 @@ import {
   fmtMoney,
   fmtRelative,
   gearSummary,
+  holdsFullyReleased,
   jobPhase,
+  listDays,
   rowValue,
   stateLabel,
   type BillingRollupState,
@@ -96,6 +98,9 @@ export function JobsSidebar() {
     phaseCounts.set(p, (phaseCounts.get(p) ?? 0) + 1)
   }
   const paneRows = phaseTab ? rows.filter((r) => jobPhase(r.state) === phaseTab) : rows
+  // Same day boundary the list's own states are derived from, so the
+  // Released badge can't disagree with the row it sits on.
+  const { today } = listDays()
 
   if (collapsed && selected) {
     return (
@@ -183,7 +188,7 @@ export function JobsSidebar() {
           </div>
         ) : (
           paneRows.map(({ job, state }) => (
-            <JobTile key={job.id} job={job} state={state} selected={job.id === selectedId} />
+            <JobTile key={job.id} job={job} state={state} today={today} selected={job.id === selectedId} />
           ))
         )}
       </div>
@@ -239,10 +244,12 @@ const ROLE_WORD: Record<string, string> = {
 function JobTile({
   job: j,
   state,
+  today,
   selected,
 }: {
   job: JobRow
   state: RowState
+  today: string
   selected: boolean
 }) {
   const meta = STATE[state]
@@ -336,6 +343,12 @@ function JobTile({
   const toBook = j.approvedUnbooked ?? 0
   const redlines = j.redlinePending ?? 0
   const billing = j.billing && BILLING_WORDS[j.billing.state] ? j.billing : null
+  // Fleet handed back (Wes 2026-09-08: "the job tile also needs to have
+  // released clearly readable and may be a red outline"). It outranks the
+  // selected/hover outline below because it is a fact about the gear, not
+  // about what the cursor is doing.
+  const released = holdsFullyReleased(j, today)
+  const rel = j.releasedHolds
   const touched = fmtRelative(j.lastActivityAt ?? j.createdAt)
 
   return (
@@ -345,7 +358,9 @@ function JobTile({
       className={`group flex items-stretch rounded-lg border overflow-hidden transition-colors ${
         selected
           ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-500'
-          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/60'
+          : released
+            ? 'border-red-500 ring-1 ring-red-500 bg-white hover:bg-red-50/40'
+            : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/60'
       }`}
     >
       {/* Rail — the old color code, kept as a second cue. */}
@@ -400,6 +415,18 @@ function JobTile({
             )}
           </span>
           <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            {released && (
+              <span
+                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded whitespace-nowrap bg-red-600 text-white"
+                title={
+                  rel
+                    ? `Holds released — ${rel.ours} of ours, ${rel.partner} partner unit${rel.partner === 1 ? '' : 's'} handed back. Nothing is still held for this job.`
+                    : 'Holds released — nothing is still held for this job'
+                }
+              >
+                Released
+              </span>
+            )}
             <span
               className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded whitespace-nowrap ${pillCls}`}
               title={STATE_HINT[state]}

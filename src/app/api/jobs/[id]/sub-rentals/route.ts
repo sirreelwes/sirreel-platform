@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
+import { getReleaseAcks } from '@/lib/sub-rentals/releaseAck'
 import { getPermissions } from '@/lib/permissions'
 import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
@@ -71,6 +72,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       driverAckedAt: true,
       driverAckNote: true,
       vendorConfirmedAt: true,
+      // The release loop — did the notice go. Their answer is an event,
+      // joined in below (lib/sub-rentals/releaseAck).
+      vendorCancelNotifiedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
       driverHours: { select: { hours: true, workDate: true, odometerOut: true, odometerIn: true, generatorHoursOut: true, generatorHoursIn: true, suppliesNote: true } },
@@ -93,10 +97,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     },
   })
 
+  // The partners' release acknowledgements, one query for the whole panel
+  // rather than a lookup per row (lib/sub-rentals/releaseAck).
+  const releaseAcks = await getReleaseAcks(rows.map((r) => r.id))
+
   return NextResponse.json({
     seePricing,
     subRentals: rows.map((r) => ({
       ...r,
+      vendorReleaseAckedAt: releaseAcks.get(r.id) ?? null,
       vendorTotal: r.vendorTotal ? Number(r.vendorTotal) : null,
       clientTotal: r.clientTotal ? Number(r.clientTotal) : null,
       vehicleName: r.subcontractedVehicle?.name ?? r.itemDescription,

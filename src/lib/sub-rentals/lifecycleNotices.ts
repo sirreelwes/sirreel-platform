@@ -56,6 +56,38 @@ function scope(orderId: string, jobId: string | null) {
   return { OR: [{ orderId }, ...(jobId ? [{ orderId: null, jobId }] : [])] }
 }
 
+/** Everything the partner notices need that isn't on the sub-rental row.
+ *  orderId is nullable because a JOB-level release (the "release the whole
+ *  job" button) has no single order to attribute the send to — an estimated
+ *  sub-rental exists before any order does. */
+export interface LifecycleContext {
+  orderId: string | null
+  jobId: string | null
+  jobCode: string | null
+  agentName: string | null
+  agentEmail: string | null
+  deliverTo: { address: string | null; area: string | null }
+  jobName: string | null
+}
+
+/** Same context, resolved from the JOB rather than one of its orders. */
+export async function jobLifecycleContext(jobId: string): Promise<LifecycleContext | null> {
+  const j = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true, jobCode: true, name: true, reportToAddress: true, shootArea: true,
+      agent: { select: { name: true, email: true } },
+    },
+  })
+  if (!j) return null
+  return {
+    orderId: null, jobId: j.id, jobCode: j.jobCode,
+    agentName: j.agent?.name ?? null, agentEmail: j.agent?.email ?? null,
+    deliverTo: { address: j.reportToAddress ?? null, area: j.shootArea ?? null },
+    jobName: j.name ?? null,
+  }
+}
+
 /** The order was BOOKED: tell every partner with a live unit on it. */
 export async function notifySubRentalsBooked(orderId: string): Promise<LifecycleNoticeOutcome[]> {
   const ctx = await orderContext(orderId)
@@ -115,8 +147,44 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
 export async function notifySubRentalsCancelled(orderId: string): Promise<LifecycleNoticeOutcome[]> {
   const ctx = await orderContext(orderId)
   if (!ctx) return []
+  return cancelSubRentalsWhere(
+    { ...scope(ctx.orderId, ctx.jobId), status: { in: RELEASABLE_SUB_RENTAL_STATUSES } },
+    ctx,
+  )
+}
+
+/** The statuses a hold can still be RELEASED from. PICKED_UP / ON_RENT are
+ *  deliberately absent: the partner's unit is physically out, so ending that
+ *  is a return, not a release, and must not be done by a checkbox. */
+export const RELEASABLE_SUB_RENTAL_STATUSES = ['ESTIMATED', 'REQUESTED', 'CONFIRMED'] as const
+
+/**
+ * Release a NAMED set of sub-rentals and tell each partner (Wes 2026-09-08:
+ * "theoretically, they could release the restroom trailer and not the
+ * motorhome"). Same release + notice + audit as the order-cancelled path —
+ * the only difference is which rows are in scope, so a partial release and a
+ * whole-job release cannot drift apart.
+ *
+ * Ids are intersected with `scopeWhere` by the caller's own query, so an id
+ * from another job can never be released through here.
+ */
+export async function cancelSubRentalsById(
+  subRentalIds: string[],
+  ctx: LifecycleContext,
+): Promise<LifecycleNoticeOutcome[]> {
+  if (subRentalIds.length === 0) return []
+  return cancelSubRentalsWhere(
+    { id: { in: subRentalIds }, status: { in: RELEASABLE_SUB_RENTAL_STATUSES } },
+    ctx,
+  )
+}
+
+async function cancelSubRentalsWhere(
+  where: Record<string, unknown>,
+  ctx: LifecycleContext,
+): Promise<LifecycleNoticeOutcome[]> {
   const subs = await prisma.subRental.findMany({
-    where: { ...scope(ctx.orderId, ctx.jobId), status: { in: ['ESTIMATED', 'REQUESTED', 'CONFIRMED'] } },
+    where,
     select: {
       id: true, status: true, itemDescription: true, quantity: true, startDate: true, endDate: true, vendorToken: true,
       vendorHoldRequestedAt: true, vendorNotifiedAt: true, vendorCancelNotifiedAt: true,
@@ -154,7 +222,13 @@ export async function notifySubRentalsCancelled(orderId: string): Promise<Lifecy
       } else o.warning = `${s.vendor.name} could not be told ${vehicleName} is released: ${res.reason}`
     }
     await prisma.auditLog.create({
-      data: { action: 'sub_rental.cancelled_by_order', entityType: 'SubRental', entityId: s.id, oldValues: { status: s.status }, newValues: { status: 'CANCELLED', notified: o.notified, warning: o.warning, orderId: ctx.orderId } },
+      // Named for what actually released it, so the trail distinguishes an
+      // order cancellation from a human releasing this unit off the job.
+      data: {
+        action: ctx.orderId ? 'sub_rental.cancelled_by_order' : 'sub_rental.released_by_job',
+        entityType: 'SubRental', entityId: s.id, oldValues: { status: s.status },
+        newValues: { status: 'CANCELLED', notified: o.notified, warning: o.warning, orderId: ctx.orderId, jobId: ctx.jobId },
+      },
     }).catch(() => {})
     out.push(o)
   }

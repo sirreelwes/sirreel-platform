@@ -153,6 +153,9 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             subtotal: true,
+            // Released-fleet badge — the order-linked half of the job's
+            // partner units (see the job-level subRentals select above).
+            subRentals: { select: { status: true, endDate: true } },
             // Feeds the "Recently touched" sort. Sending a quote updates
             // the ORDER, not the Job — which is exactly why a list
             // ordered on Job.createdAt left a just-quoted job thirty
@@ -244,6 +247,10 @@ export async function GET(req: NextRequest) {
           },
         },
         _count: { select: { orders: true } },
+        // Released-fleet badge (Wes 2026-09-08). Job-linked sub-rentals
+        // only here; the order-linked ones come off the orders select
+        // below, because a SubRental reaches a job either way.
+        subRentals: { select: { status: true, endDate: true } },
         // Board placement inputs — booking envelope dates (fallback when
         // the Job itself is date-less) and the delivery signal. Items /
         // assignments / driver counts + the card flag feed the readiness
@@ -626,7 +633,50 @@ export async function GET(req: NextRequest) {
       const allBookingsCancelled =
         j.bookings.length > 0 && liveBookings.length === 0
 
-      const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, agreementAddenda: _ignoreAddenda, ...rest } = j
+      // ── Released fleet (Wes 2026-09-08) ───────────────────────────
+      // What this job WAS holding and gave back, and what it still
+      // holds. Counted across EVERY booking, cancelled ones included:
+      // releasing the last item cancels the booking, so looking only at
+      // live bookings would make a fully released job look like it never
+      // held anything. Sub-rentals reach the job by either anchor
+      // (job-linked estimate, or through an order), so both are unioned
+      // and de-duplicated is unnecessary — the two sets are disjoint by
+      // construction (a row has orderId set or it doesn't).
+      type ReleaseBooking = { endDate: Date | null; items?: { status: string }[] }
+      const releaseBookings = j.bookings as unknown as ReleaseBooking[]
+      const allItems = releaseBookings.flatMap((b) => b.items || [])
+      const jobSubRentals = [
+        ...((j as unknown as { subRentals?: { status: string; endDate: Date | null }[] }).subRentals || []),
+        ...j.orders.flatMap(
+          (o) => (o as unknown as { subRentals?: { status: string; endDate: Date | null }[] }).subRentals || [],
+        ),
+      ]
+      // The far edge of what the release FREED. The badge is scoped by it
+      // (see holdsFullyReleased): a cart released in May must not sit in
+      // red beside this morning's release. Read off the released rows
+      // themselves, because a fully released job's bookings are cancelled
+      // and drop out of every "live window" the list computes.
+      const releasedEnds = [
+        ...releaseBookings
+          .filter((b) => (b.items || []).some((it) => it.status === 'UNFULFILLED'))
+          .map((b) => b.endDate),
+        ...jobSubRentals.filter((sr) => sr.status === 'CANCELLED').map((sr) => sr.endDate),
+      ].filter((d): d is Date => !!d)
+      const releasedHolds = {
+        ours: allItems.filter((it) => it.status === 'UNFULFILLED').length,
+        partner: jobSubRentals.filter((sr) => sr.status === 'CANCELLED').length,
+        live:
+          allItems.filter((it) => it.status === 'REQUESTED' || it.status === 'ASSIGNED').length +
+          jobSubRentals.filter(
+            (sr) => sr.status !== 'CANCELLED' && sr.status !== 'RETURNED',
+          ).length,
+        windowEnd: releasedEnds.length
+          ? releasedEnds.reduce((a, b) => (a > b ? a : b)).toISOString().slice(0, 10)
+          : null,
+      }
+
+      const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, agreementAddenda: _ignoreAddenda, subRentals: _ignoreSubRentals, ...rest } = j
+      void _ignoreSubRentals
       void _ignoreCoi
       void _ignoreBookings
       void _ignoreAddenda
@@ -657,6 +707,7 @@ export async function GET(req: NextRequest) {
         bookingWindow,
         hasDelivery,
         allBookingsCancelled,
+        releasedHolds,
         boardPhaseOverride: overrideByJob.get(j.id) ?? null,
         estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
         orderTotal,

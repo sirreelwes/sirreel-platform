@@ -537,6 +537,10 @@ export function buildVendorCancelledNotice(a: VendorCancelledNoticeArgs): {
             ${rateHtml(a)}
           </div>
         </td></tr>
+        ${a.vendorUrl ? `<tr><td align="center" style="padding:22px 32px 0;">
+          <a href="${escapeHtml(a.vendorUrl)}?ack=release" style="display:inline-block;background-color:${ACCENT};color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:14px 30px;border-radius:10px;">Confirm you have the dates back</a>
+          <p style="font-size:13px;color:${MUTED};margin:10px 0 0;">One tap, so we know the release reached you and nobody has to chase it.</p>
+        </td></tr>` : ''}
         <tr><td style="padding:22px 32px 4px;">
           <p style="font-size:16px;color:${TEXT};margin:0;line-height:1.6;">
             ${escapeHtml(a.agentName)}<br/>
@@ -560,6 +564,10 @@ export function buildVendorCancelledNotice(a: VendorCancelledNoticeArgs): {
     `Released: ${range}`,
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
     ...rateText(a),
+    '',
+    ...(a.vendorUrl
+      ? ['', `Confirm you have the dates back: ${a.vendorUrl}?ack=release`]
+      : []),
     '',
     `Sorry for the churn. If a cancellation fee applies under our agreement, we'll settle it with you directly.`,
     '',

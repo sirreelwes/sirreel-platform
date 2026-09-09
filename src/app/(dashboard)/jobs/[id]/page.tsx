@@ -464,6 +464,9 @@ export default function JobDetailPage() {
   // records WHY, expires the follow-up ladder and releases the quote's
   // holds, none of which a status flip did.
   const [markLostOpen, setMarkLostOpen] = useState(false);
+  // Release the fleet WITHOUT losing the job — a production dropping one
+  // unit is not a lost job (Wes 2026-09-08).
+  const [releaseOpen, setReleaseOpen] = useState(false);
   const [returnSaving, setReturnSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
@@ -1504,6 +1507,12 @@ const driverTone = (d: any): string => {
                       </button>
                       <button onClick={openEdit} className="w-full text-left text-[14px] text-zinc-800 hover:bg-zinc-100 rounded-lg px-2.5 py-2">
                         Edit job details
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpen(false); setReleaseOpen(true); }}
+                        className="w-full text-left text-[14px] text-rose-700 hover:bg-zinc-100 rounded-lg px-2.5 py-2"
+                      >
+                        Release holds…
                       </button>
                       {job.status !== 'LOST' && (
                         <button
@@ -3335,6 +3344,20 @@ const driverTone = (d: any): string => {
           }}
           onClose={() => setMarkLostOpen(false)}
           onMarked={() => { setMarkLostOpen(false); load(); }}
+        />
+      )}
+
+      {releaseOpen && (
+        <MarkLostModal
+          mode="release"
+          job={{
+            id: job.id,
+            name: job.name,
+            jobCode: job.jobCode,
+            company: { name: job.company?.name ?? '' },
+          }}
+          onClose={() => setReleaseOpen(false)}
+          onMarked={() => { setReleaseOpen(false); load(); }}
         />
       )}
 
