@@ -104,9 +104,14 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
         </span>
       )}
 
+      {/* The card carries its own `text-gray-900`. This modal is a DOM child of
+          its trigger, and on a phone that trigger lives in MobileNav's dark
+          header (`bg-[#1a1a1a] text-white`) — `fixed` positioning does not
+          break inheritance. Tailwind preflight gives inputs `color: inherit`,
+          so without this the fields were white text on a white card. */}
       {open && !resolving && (
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={reset}>
-          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl w-[460px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white text-gray-900 rounded-2xl w-[460px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">New Job</h3>
@@ -117,7 +122,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
             <div className="space-y-3">
               <div>
                 <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Job name *</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400" />
               </div>
               <div className="relative">
                 <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Production company *</label>
@@ -127,7 +132,7 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
                   onFocus={() => { if (typed.length > 0 && !companyId) setCompanyOpen(true) }}
                   placeholder="Search existing or type a new company…"
                   autoComplete="off"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400"
                 />
                 {companyId && (
                   <div className="text-[10px] text-emerald-600 mt-0.5">existing company — will be linked, not duplicated</div>
@@ -160,15 +165,15 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Contact name</label>
-                  <input value={contactName} onChange={(e) => setContactName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                  <input value={contactName} onChange={(e) => setContactName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400" />
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Phone</label>
-                  <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                  <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400" />
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Email</label>
-                  <input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                  <input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400" />
                 </div>
               </div>
               <button
