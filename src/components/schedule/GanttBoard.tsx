@@ -1342,8 +1342,9 @@ export function GanttBoard() {
   // idle float and its "N idle in this window" divider are removed.
   // Recomputes only on filteredUnits / window changes — not every
   // horizontal-scroll frame.
-  // ── Each unit's bookings split into primary (holdRank=1 OR
-  //    legacy missing holdRank) vs backup (holdRank>=2). Backup
+  // ── Each unit's bookings split into primary vs backup. A booking is
+  //    BACKUP only when a lower-ranked hold overlaps it on the same
+  //    unit — rank alone doesn't say it (see splitBookings). Backup
   //    bookings render as a greyed sub-lane beneath the asset
   //    row. ORPHANED backups (unit holding only a rank-2 after
   //    a primary release-without-promote) still render — otherwise
@@ -1359,14 +1360,43 @@ export function GanttBoard() {
   const { rowEntries } = useMemo(() => {
     const visibleStart = startDate
     const visibleEnd = addDays(startDate, totalDays - 1)
+    // A hold is in the QUEUE only when something is actually ahead of it
+    // on this unit for these days — not merely because its rank is 2.
+    //
+    // holdRank carries two unrelated meanings. `reconcileHoldFirmness`
+    // uses 1 vs 2 for FIRM vs SOFT, so every freshly quoted vehicle is
+    // minted at rank 2 and stays there until the order is approved with
+    // paperwork in. Ranking ALSO means queue position ("2nd Hold"). The
+    // old test was `rank >= 2 → backup`, so a brand-new reservation —
+    // first and only on its truck — was drawn in the "2nd hold queue"
+    // lane with nobody ahead of it (Wes 2026-09-09, SR-Q-1788990601162
+    // on Pass 1). Reading the queue off the raw number was only ever
+    // right by accident.
+    //
+    // A REAL backup on a unit row comes from the row-click flow ("I want
+    // Pass 1 specifically, behind whoever has it"), and it has the hold
+    // it is queued behind sitting on the same unit over the same days.
+    // That overlap is the actual test.
     const splitBookings = (u: any): { primary: any[]; backup: any[] } => {
       const bs: any[] = Array.isArray(u.bookings) ? u.bookings : []
       const primary: any[] = []
       const backup: any[] = []
+      const rankOf = (b: any) => (typeof b.holdRank === 'number' ? b.holdRank : 1)
       for (const b of bs) {
         if (!b) continue
-        const rank = typeof b.holdRank === 'number' ? b.holdRank : 1
-        if (rank >= 2) backup.push(b)
+        const rank = rankOf(b)
+        const somebodyAhead =
+          rank >= 2 &&
+          bs.some(
+            (o: any) =>
+              o &&
+              o !== b &&
+              rankOf(o) < rank &&
+              // inclusive overlap, same convention as the availability engine
+              o.start <= b.end &&
+              o.end >= b.start,
+          )
+        if (somebodyAhead) backup.push(b)
         else primary.push(b)
       }
       return { primary, backup }
