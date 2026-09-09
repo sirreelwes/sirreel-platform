@@ -502,7 +502,7 @@ export function CompanyPortalView({
                       it lands in the desk's queue instead of an inbox. */}
                   <AskForAnnualButton
                     companyId={companyId}
-                    requestedAt={terms.annualRequestedAt ? terms.annualRequestedAt.toString() : null}
+                    requestedAt={terms.annualRequestedAt ? terms.annualRequestedAt.toISOString() : null}
                     preview={!!preview}
                   />
                 </div>
