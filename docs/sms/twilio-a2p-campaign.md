@@ -100,6 +100,30 @@ help reply carries no brand name or contact, which reviewers reject.
 | Direct lending / loan arrangement | No |
 | Affiliate marketing | No |
 
+## THE CAMPAIGN NO LONGER EXISTS (2026-09-09)
+
+Read with a working key, Twilio returns **404 / 20404** for campaign
+`CMadf71a842a44855e507d1cfbb9436cb0`, and the messaging service has **no
+A2P campaign attached at all**. The rejected campaign was removed, so
+there is nothing to edit and nothing to resubmit — **a new campaign must
+be created** on messaging service `MGda3482bd81e2c26b45cc188de36124dc`.
+
+That also explains the rest of it: the Console's React #310 crash was it
+failing to render an edit form for a campaign that was already gone, and
+the repeated rejection emails carried the ORIGINAL submitted timestamp
+because no new submission was ever created.
+
+**The brand is fine — do not re-register it.** `BN8ceaba8e959be179480ba5034eabe104`
+is APPROVED, brand type STANDARD, identity VERIFIED. Only the campaign
+needs creating.
+
+Create it in Console → Messaging → Regulatory Compliance → A2P 10DLC →
+Campaigns (or on the messaging service), pick the brand above, and fill
+every field from this document. Verify afterwards with
+`/api/admin/a2p-campaign` — a real campaign comes back in `campaigns[]`
+with its `campaign_status`, and after any future rejection that endpoint
+carries the reviewer's own `errors` text, which the email omits.
+
 ## Rejection log
 
 | # | Rejected | What was filed | Read |
