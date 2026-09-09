@@ -394,14 +394,17 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
   promoted: number
   demoted: number
   firm: boolean
+  /** The hold is firm because a human vouched for it, not because the
+   *  paperwork is in. `missing` is still populated in that case. */
+  staffAttested: boolean
   missing: string[]
   error: string | null
 }> {
-  const out = { promoted: 0, demoted: 0, firm: false, missing: [] as string[], error: null as string | null }
+  const out = { promoted: 0, demoted: 0, firm: false, staffAttested: false, missing: [] as string[], error: null as string | null }
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { bookingId: true, jobId: true, quoteStatus: true, status: true },
+      select: { bookingId: true, jobId: true, quoteStatus: true, status: true, verbalApprovalAt: true },
     })
     if (!order) return { ...out, error: 'order not found' }
 
@@ -414,9 +417,21 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
         order.status,
       )
 
+    // A staff member recorded the client saying yes off-portal (Wes
+    // 2026-09-09). That attestation OVERRIDES the paperwork gate for this
+    // order — see Order.verbalApprovalAt. It is checked here rather than
+    // at the call sites because the demotion below is the thing it has to
+    // survive: this function runs from a nightly cron and six other
+    // paths, any of which would otherwise quietly drop the truck back to
+    // a backup hold hours after someone promised it to a client.
+    const staffAttested = !!order.verbalApprovalAt
+
     const paperwork = await clientPaperworkIn(orderId)
-    const firm = approved && paperwork.ok
+    const firm = staffAttested || (approved && paperwork.ok)
     out.firm = firm
+    out.staffAttested = staffAttested
+    // Still REPORTED when a staff mark is carrying the hold — the hold no
+    // longer self-releases, so the gaps have to stay visible to a human.
     out.missing = approved ? paperwork.missing : ['client approval', ...paperwork.missing]
 
     const bookingIds: string[] = []

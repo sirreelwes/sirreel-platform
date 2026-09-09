@@ -3420,6 +3420,29 @@ model Order {
   expiresAt       DateTime?        @map("expires_at")
   wonAt           DateTime?        @map("won_at")
   lostAt          DateTime?        @map("lost_at")
+
+  // ── Client said yes OFF the portal (Wes 2026-09-09) ─────────────────
+  // "If they tell us this verbally or via email, we should have a button
+  // to push that isn't 'on rental' because it may not have started yet,
+  // but 'booked'."
+  //
+  // This is a HUMAN ATTESTATION, not a derived fact, and it exists as a
+  // column for one reason: reconcileHoldFirmness DEMOTES a firm hold back
+  // to a backup whenever the client paperwork is not in, and a nightly
+  // cron re-runs it. Without a durable marker, a staff "they said yes,
+  // hold the truck" would be undone by the next sweep.
+  //
+  // It deliberately OVERRIDES the 2026-09-01 paperwork gate (approval +
+  // COI + signed agreement + card on file) for this order: a person who
+  // spoke to the client is better evidence than the absence of a PDF. The
+  // cost is that the hold no longer self-releases when a COI lapses, so
+  // the mark-booked response reports what paperwork is still missing
+  // rather than silently dropping the hold. Clearing these three fields
+  // hands the order back to the automatic rule.
+  verbalApprovalAt   DateTime? @map("verbal_approval_at")
+  verbalApprovalById String?   @map("verbal_approval_by_id")
+  /// How the client said yes — "call with Laura 9/9", "email from Darsh".
+  verbalApprovalNote String?   @map("verbal_approval_note") @db.Text
   notes           String?          @db.Text
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")

@@ -48,6 +48,7 @@ import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
+import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
@@ -269,6 +270,11 @@ interface JobOrder {
   // path. Drives the "Add-on" chip on this row.
   addedToJobAt: string | null;
 }
+
+/** Order states a verbal/emailed yes can act on. Mirrors BOOKABLE_FROM in
+ *  the mark-booked route — DRAFT is excluded on purpose: a client cannot
+ *  have approved a quote nobody sent them. */
+const MARK_BOOKABLE = new Set(['QUOTE_SENT', 'APPROVED']);
 
 /** A "these might be one production" pairing from the Planyo importer.
  *  Derived server-side by lib/jobs/duplicateSignal — never recomputed here. */
@@ -2917,6 +2923,16 @@ const driverTone = (d: any): string => {
                       Open order →
                     </Link>
                   </button>
+
+                  {/* The client rang / emailed to say yes. One click from
+                      HERE, because this is the page the agent is on when
+                      that happens — the order page's Mark Approved + Book
+                      it were two clicks a screen away. */}
+                  {MARK_BOOKABLE.has(o.status) && (
+                    <div className="px-4 pb-2.5 -mt-1">
+                      <MarkBookedButton orderId={o.id} orderNumber={o.orderNumber} onDone={load} />
+                    </div>
+                  )}
 
                   {expanded && (
                     <div className="border-t border-zinc-200 px-4 py-3 space-y-4">
