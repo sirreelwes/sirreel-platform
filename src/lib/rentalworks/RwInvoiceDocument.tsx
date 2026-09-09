@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import '@/lib/pdf/hyphenation'
+import { BRAND_NAME, REMIT_TO_DBA_LINE } from '@/lib/brand/payee'
 
 /**
  * HQ-rendered duplicate of a RentalWorks invoice, styled to MATCH the
@@ -96,6 +97,8 @@ const s = StyleSheet.create({
   // Issued To / Remit To
   partyRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
   party: { width: '46%' },
+  // dba qualifier under the Remit To payee — see src/lib/brand/payee.ts.
+  remitDba: { fontSize: 7.5, color: '#666666' },
   partyHead: { backgroundColor: BLUE_BG, borderBottomWidth: 1, borderBottomColor: BLUE, fontFamily: 'Helvetica-Bold', fontSize: 9, paddingVertical: 2, paddingHorizontal: 5, marginBottom: 4 },
   // meta band
   metaBand: { flexDirection: 'row', marginTop: 14, borderTopWidth: 1, borderTopColor: HAIR, borderBottomWidth: 1, borderBottomColor: HAIR, paddingVertical: 6 },
@@ -163,7 +166,7 @@ export function RwInvoiceDocument({ inv, renderedAt }: { inv: RwInvoiceDetail; r
         <View style={s.headRow}>
           <View style={{ width: 200 }}>
             {LOGO_BUFFER ? <Image src={LOGO_BUFFER} style={s.logo} /> : <Text style={s.brandText}>SirReel</Text>}
-            <Text style={s.addrBold}>SirReel Studio Services</Text>
+            <Text style={s.addrBold}>{BRAND_NAME}</Text>
             <Text style={s.addr}>8500 Lankershim Blvd</Text>
             <Text style={s.addr}>Sun Valley, CA 91352</Text>
             <Text style={s.addr}>Phone:  (888) 477-7335</Text>
@@ -200,7 +203,8 @@ export function RwInvoiceDocument({ inv, renderedAt }: { inv: RwInvoiceDetail; r
           </View>
           <View style={s.party}>
             <Text style={s.partyHead}>Remit To</Text>
-            <Text>Sirreel Studio Services</Text>
+            <Text>{BRAND_NAME}</Text>
+            <Text style={s.remitDba}>{REMIT_TO_DBA_LINE}</Text>
             <Text>8500 Lankershim Blvd</Text>
             <Text>Sun Valley, CA 91352</Text>
           </View>

@@ -5,6 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { ZellePayBlock } from './ZellePayBlock'
+import { BRAND_NAME, BRAND_QUALIFIER, REMIT_TO_DBA_LINE, REMIT_TO_NAME } from '@/lib/brand/payee'
 
 /**
  * SirReel Invoice PDF. Shell mirrors the QuoteDocument / contracts
@@ -238,6 +239,10 @@ const styles = StyleSheet.create({
   infoValue: { width: '54%', fontSize: 9 },
   infoStrong: { fontFamily: 'Helvetica-Bold', fontSize: 10 },
   infoSub: { fontSize: 9, color: C.muted, marginTop: 1 },
+  // The dba line under the Remit To name — smaller than the address
+  // lines so it reads as a qualifier on the payee, not another
+  // address row. See src/lib/brand/payee.ts for why it is there.
+  infoDba: { fontSize: 7.5, color: C.muted, marginTop: 1, marginBottom: 1 },
 
   // ── Charges table ───────────────────────────────────────────
   sectionHeader: {
@@ -571,7 +576,15 @@ export function InvoiceDocument({
             ) : (
               <Text style={styles.brandName}>SirReel</Text>
             )}
-            <Text style={styles.brandSub}>SirReel Production Vehicles, Inc.</Text>
+            {/* The logo already reads "SirReel / STUDIO SERVICES"; a sub
+                line under it only repeats the wordmark. The text fallback
+                is the one path that still needs the qualifier spelled out.
+
+                This line used to read "SirReel Production Vehicles, Inc."
+                while Remit To, on the same page, said "SirReel Studio
+                Services" — one document naming two companies, on the one
+                document where the client is deciding who to pay. */}
+            {!LOGO_BUFFER && <Text style={styles.brandSub}>{BRAND_QUALIFIER}</Text>}
             <Text style={styles.brandAddress}>8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
             <Text style={styles.brandAddress}>(888) 477-7335 · info@sirreel.com</Text>
           </View>
@@ -656,7 +669,8 @@ export function InvoiceDocument({
           {/* Remit To */}
           <View style={[styles.infoSection, styles.infoSectionRemitTo]}>
             <Text style={styles.infoTitle}>Remit To</Text>
-            <Text style={styles.infoStrong}>SirReel Studio Services</Text>
+            <Text style={styles.infoStrong}>{BRAND_NAME}</Text>
+            <Text style={styles.infoDba}>{REMIT_TO_DBA_LINE}</Text>
             <Text style={styles.infoSub}>8500 Lankershim Blvd</Text>
             <Text style={styles.infoSub}>Sun Valley, CA 91352</Text>
             <Text style={styles.infoSub}>billing@sirreel.com</Text>
@@ -810,7 +824,9 @@ export function InvoiceDocument({
           <View style={styles.termsBox}>
             <View style={styles.termsRow}>
               <Text style={styles.termsLabel}>Payment Terms</Text>
-              <Text style={styles.termsValue}>{PAYMENT_TERMS_LABEL} · payable to SirReel Studio Services</Text>
+              <Text style={styles.termsValueWrap}>
+                {PAYMENT_TERMS_LABEL} · payable to {REMIT_TO_NAME}
+              </Text>
             </View>
           </View>
         )}
@@ -828,7 +844,7 @@ export function InvoiceDocument({
           </Text>
           <Text style={styles.paymentLine}>
             <Text style={{ fontFamily: 'Helvetica-Bold' }}>Check:</Text>{' '}
-            Make payable to <Text style={{ fontFamily: 'Helvetica-Bold' }}>SirReel Studio Services</Text>,
+            Make payable to <Text style={{ fontFamily: 'Helvetica-Bold' }}>{REMIT_TO_NAME}</Text>,
             mail to 8500 Lankershim Blvd, Sun Valley, CA 91352. Include invoice number on the memo line.
           </Text>
         </View>
@@ -865,7 +881,7 @@ export function InvoiceDocument({
 
         {/* ── Footer ───────────────────────────────────────────── */}
         <View style={styles.footer} fixed>
-          <Text>SirReel Studio Services · {invoiceNumber}</Text>
+          <Text>{BRAND_NAME} · {invoiceNumber}</Text>
           <Text
             render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
           />

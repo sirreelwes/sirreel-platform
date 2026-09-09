@@ -43,6 +43,17 @@ try {
  * surface agrees today; if the record changes, this must be updated to match
  * or the invoice PDF will contradict the email.
  */
+/**
+ * DO NOT rewrite this to the brand name. It is not a label — it is the
+ * string the client's banking app shows them to confirm before the money
+ * moves, and it must match the Zelle record character for character.
+ * SiteSetting.paymentZelleName holds the same value.
+ *
+ * This is a deliberate exception to Wes's 2026-09-04 ruling that the
+ * entity name is never client-facing — the same carve-out COI
+ * requirement text gets, and for the same reason: naming anything else
+ * breaks the document. src/lib/brand/payee.ts has the full note.
+ */
 export const ZELLE_ACCOUNT_NAME = 'SIRREEL PRODUCTION VEHICLES INC'
 
 /**

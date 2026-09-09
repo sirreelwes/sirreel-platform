@@ -13,6 +13,7 @@ import { discountDisplayLabel } from '@/lib/orders/discountLabel'
 // last-registration-wins setting — see that module for the policy and
 // the load-order bug this replaces). Do not register a callback here.
 import '@/lib/pdf/hyphenation'
+import { BRAND_QUALIFIER } from '@/lib/brand/payee'
 
 // Load the SirReel logo once at module load (server-only — the QuoteDocument
 // is rendered exclusively via renderToBuffer in the API route). Passing the
@@ -705,7 +706,10 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
             ) : (
               <Text style={styles.brandName}>SirReel</Text>
             )}
-            <Text style={styles.brandSub}>Production Vehicles, Inc.</Text>
+            {/* The logo already reads "SirReel / STUDIO SERVICES"; a sub
+                line under it only repeats the wordmark. The text fallback
+                is the one path that still needs the qualifier spelled out. */}
+            {!LOGO_BUFFER && <Text style={styles.brandSub}>{BRAND_QUALIFIER}</Text>}
             <Text style={styles.brandAddress}>8500 Lankershim Blvd</Text>
             <Text style={styles.brandAddress}>Sun Valley, CA 91352</Text>
             <Text style={styles.brandAddress}>(888) 477-7335</Text>
