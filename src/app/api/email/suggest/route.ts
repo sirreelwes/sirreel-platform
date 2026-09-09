@@ -40,6 +40,7 @@ type Kind =
   | 'followup-job'
   | 'ask-job-name'
   | 'estimate'
+  | 'paperwork-summary'
 
 interface Body {
   kind?: string
@@ -102,6 +103,14 @@ function purposeFor(kind: Kind, stage: string | null): string {
         'processor, the other ways to pay, and the secure button all render underneath automatically —',
         'do not write those, and NEVER ask them to send a card number by email or phone.',
       ].join(' ')
+    case 'paperwork-summary':
+      return [
+        'This email tells a client where their paperwork stands. The checklist itself — what is on',
+        'file, what is still needed, and a button on every outstanding item — renders underneath your',
+        'words automatically, so do not list the items or say what is missing: you will contradict it',
+        'the moment something changes. Write two or three sentences of context (why now, what the',
+        'deadline is) and point at the list below.',
+      ].join(' ')
     case 'followup-order':
     case 'followup-job': {
       const s = (stage || '').toUpperCase()
@@ -127,6 +136,7 @@ const KINDS: Kind[] = [
   // Suggest button works the day it ships.
   'ask-job-name',
   'estimate',
+  'paperwork-summary',
 ]
 
 function firstNameOf(full: string | null | undefined): string {

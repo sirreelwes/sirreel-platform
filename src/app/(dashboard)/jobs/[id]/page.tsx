@@ -755,6 +755,15 @@ export default function JobDetailPage() {
   // (Wes 2026-08-26).
   const sendCcRequest = () => setEmailTarget({ kind: 'card-auth', jobId: id });
 
+  // "Send summary" — the client-facing reading of this very strip: what we
+  // have, what we still need, and a button on every outstanding row (Wes
+  // 2026-09-09). Goes through the same review modal as every other client
+  // send, and the checklist is derived server-side
+  // (lib/paperwork/clientPaperworkSummary) rather than from these tiles, so
+  // it stays right when the page is stale.
+  const sendPaperworkSummary = () =>
+    setEmailTarget({ kind: 'paperwork-summary', jobId: id });
+
   // The link on its own, for staff who'd rather paste it into a text or
   // an existing thread than send our email. Kept from the old button.
   const copyCcLink = async () => {
@@ -1748,16 +1757,36 @@ const driverTone = (d: any): string => {
           COI + Rental Agreement jump to their sections; Card Auth carries
           the "Send CC request" action (client authorizes in their portal). */}
       <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between gap-3 mb-2.5">
           <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
-          {stripScored ? (
-            <span className="text-[12px] text-zinc-600">
-              {readiness.done} of {readiness.total} complete
-              {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
-            </span>
-          ) : (
-            <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
-          )}
+          <div className="flex items-center gap-3">
+            {stripScored ? (
+              <span className="text-[12px] text-zinc-600">
+                {readiness.done} of {readiness.total} complete
+                {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
+              </span>
+            ) : (
+              <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
+            )}
+            {/* The client's own copy of this strip. Named recipient for the
+                same reason "Send for signature → Mikey" carries one: nobody
+                should have to guess who an email reaches before pressing it.
+                The modal previews it and the send is a separate decision. */}
+            <button
+              onClick={sendPaperworkSummary}
+              disabled={!primaryContact}
+              title={
+                primaryContact
+                  ? `Previews a paperwork status email to ${primaryContact.person.email} — what is on file, what is still needed, with a link on each`
+                  : 'Add a contact to this job first'
+              }
+              className="text-[12px] font-semibold text-amber-700 hover:text-amber-600 border border-zinc-200 hover:border-amber-400 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {primaryContact
+                ? `Send summary → ${primaryContact.person.firstName}`
+                : 'Send summary'}
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* COI */}
@@ -3499,8 +3528,11 @@ const driverTone = (d: any): string => {
         target={emailTarget}
         onClose={() => setEmailTarget(null)}
         onSent={(info) => {
+          // Two kinds share this modal — the toast has to say which went out.
+          const what =
+            emailTarget?.kind === 'paperwork-summary' ? 'Paperwork summary' : 'Card request';
           setEmailTarget(null);
-          flashToast(`Card request sent to ${info.recipient}`);
+          flashToast(`${what} sent to ${info.recipient}`);
           load();
         }}
       />

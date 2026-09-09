@@ -146,6 +146,11 @@ export type EmailReviewTarget =
   // token is minted at SEND time, so the preview's portal CTA is an
   // annotation rather than a live button.
   | { kind: 'card-auth'; jobId: string; message?: string | null }
+  // "Where your paperwork stands" — the job page's Paperwork strip. The
+  // checklist renders from the job, so this is the one composing kind whose
+  // Send is NOT gated on the rep writing something: an empty box sends the
+  // standard opener above the list.
+  | { kind: 'paperwork-summary'; jobId: string; message?: string | null }
   // "Ask client for job name" from Review Quote. There is no Order and often
   // no saved Person yet, so the recipient travels in the target rather than
   // being derived server-side. Wes 2026-09-02: this used to send on the first
@@ -224,6 +229,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         send: `/api/jobs/${target.jobId}/card-auth/send`,
         titleKind: 'Card authorization request',
       };
+    case 'paperwork-summary':
+      return {
+        preview: `/api/jobs/${target.jobId}/paperwork-summary/preview`,
+        send: `/api/jobs/${target.jobId}/paperwork-summary/send`,
+        titleKind: 'Paperwork summary',
+      };
     case 'ask-job-name':
       return {
         preview: `/api/inquiries/${target.inquiryId}/ask-job-name/preview`,
@@ -271,7 +282,11 @@ function buildPreviewBody(
   // Card auth: same, except the shell also keeps the security paragraph —
   // the rep cannot write away the copy that tells a client this is not
   // phishing (see cardAuthRequest.ts).
-  if (target.kind === 'quote' || target.kind === 'card-auth') {
+  if (
+    target.kind === 'quote' ||
+    target.kind === 'card-auth' ||
+    target.kind === 'paperwork-summary'
+  ) {
     base.customMessage = customMessage.trim() || null;
   }
   // Ask-job-name: the recipient isn't saved anywhere yet (the quote it is
@@ -654,13 +669,19 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     target.kind === 'quick-reply' ||
     target.kind === 'followup-order' ||
     target.kind === 'followup-job' ||
-    target.kind === 'ask-job-name';
+    target.kind === 'ask-job-name' ||
+    target.kind === 'paperwork-summary';
+  // …with one exception. For every other kind the rep's words ARE the email,
+  // so an empty box means an empty send. The paperwork summary's content is
+  // the checklist — statuses and buttons derived from the job — and the box
+  // is an optional opener above it, so Send stays live on a blank page.
+  const bodyOptional = target.kind === 'paperwork-summary';
   // Nothing is written for the rep any more, so an empty box would mean an
   // empty email. The templated fallback still lives server-side for
   // non-composer callers, but firing it from here would quietly hand back
   // the canned default this change removed — so Send stays dark until there
   // are words, and "Suggest with AI" is one click away.
-  const bodyMissing = singleBox && !customMessage.trim();
+  const bodyMissing = singleBox && !bodyOptional && !customMessage.trim();
 
   return (
     <div
@@ -776,7 +797,11 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   <div className="mt-2 pt-2 border-t border-zinc-800 space-y-1">
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Other contacts on this{' '}
-                      {target.kind === 'followup-job' || target.kind === 'card-auth' ? 'job' : 'order'}
+                      {target.kind === 'followup-job' ||
+                      target.kind === 'card-auth' ||
+                      target.kind === 'paperwork-summary'
+                        ? 'job'
+                        : 'order'}
                     </div>
                     {preview.alternatives.map((alt) => (
                       <button
@@ -950,7 +975,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                           ? 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the “add gear or vehicles” button and the sign-off stay.'
                           : target.kind === 'ask-job-name'
                             ? 'Blank page — write it, or press Suggest. Your words are the whole ask, greeting included; the link the client taps to answer, and the sign-off, stay — without the link there is nothing for them to fill in.'
-                            : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
+                            : target.kind === 'paperwork-summary'
+                              ? 'Optional. The checklist below your words does the work — what is on file, what is still needed, a button on every outstanding item. Leave this blank and the standard opener goes out; write here and it replaces that opener, greeting included.'
+                              : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
                   </p>
                   <div className="mt-2 space-y-2">
                       {/* Who this is going to — reference, not a promise.
@@ -985,7 +1012,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                               ? 'Write the quote email — start with a greeting. The total, dates and portal button are added underneath, so there’s no need to retype them. Or press Suggest.'
                               : target.kind === 'card-auth'
                                 ? 'Write the ask — start with a greeting. The security paragraph and the secure button follow it; never ask for the number itself. Or press Suggest.'
-                                : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
+                                : target.kind === 'paperwork-summary'
+                                  ? 'Optional — leave blank to send the standard opener. Anything you write replaces it, greeting included; do not list the items, the checklist below does that.'
+                                  : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
                         }
                         className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-500 resize-y disabled:opacity-50"
                       />

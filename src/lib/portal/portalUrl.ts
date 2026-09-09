@@ -70,6 +70,18 @@ export function portalJobAfterHoursUrl(slug: string, token?: string): string {
 }
 
 /**
+ * The job page's damage-waiver screen — `/portal/job/<slug>/lcdw`.
+ * Deep-linked from the paperwork summary so a client who owes only the
+ * waiver answer lands on the question rather than on the portal home
+ * with something to find. Carries `?token=` for the same reason the
+ * landing URL does: the page performs its own token-to-cookie handshake.
+ */
+export function portalJobLcdwUrl(slug: string, token?: string): string {
+  const t = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${portalBaseUrl()}/portal/job/${slug}/lcdw${t}`
+}
+
+/**
  * Legacy single-token portal entry (`/portal/[token]`). Kept for
  * backward compat with old PortalAccess emails that addressed the
  * token directly in the path.

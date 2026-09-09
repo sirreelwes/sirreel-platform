@@ -803,7 +803,11 @@ export default function JobPortalPage() {
         )}
 
         {/* ── Paperwork ───────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
+        {/* id="paperwork": the paperwork-summary email links every
+            outstanding row here (#paperwork), the way the driver ask lands
+            on #drivers. Without the anchor those links dropped the client at
+            the top of the page with the list to find. */}
+        <section id="paperwork" className="scroll-mt-4 bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
           <h2 className="text-base font-bold text-gray-900">Paperwork</h2>
 
           {/* Your paperwork */}

@@ -36,6 +36,10 @@ const REVIEW_REQUIRED: Record<EmailReviewKind, boolean> = {
   // one click mailed the client (Wes 2026-09-02). Being in the union is
   // what makes the gate enforceable.
   'ask-job-name': true,
+  // Paperwork summary from the job page's Paperwork strip. Reviewed like
+  // the rest: it names a client's outstanding obligations, which is
+  // exactly the kind of email a rep wants to read once before it goes.
+  'paperwork-summary': true,
 }
 
 export function shouldReview(kind: EmailReviewKind): boolean {
