@@ -24,12 +24,22 @@
  *     rather than pasted in front of a client.
  * Fees render at their list `amount` for the same reason — `discountApplies`
  * changes what WE pay, not what the client is quoted.
+ *
+ * ── The driver, on a union job ────────────────────────────────────────────
+ * When the production puts the driver on their own payroll (Wes 2026-09-09)
+ * the driver row is still PRINTED, with "On production payroll" where the rate
+ * would be. Dropping the row silently would leave the client's rate card one
+ * line different from every other estimate of the same unit with no
+ * explanation — and this is exactly the term worth putting in writing, since
+ * it is the client who is agreeing to supply the driver.
  */
 import { prisma } from '@/lib/prisma'
 import {
   fmtMoney,
   formatFeeRate,
   coversHoursNote,
+  isDriverLaborFee,
+  PAYROLL_DRIVER_LABEL,
   PORTAL_TO_PORTAL_QUAL,
   UNION_SCOPE_LABEL,
   type SubFeeUnit,
@@ -61,6 +71,11 @@ export interface EstimateEmailArgs {
   clientFirstName?: string | null
   agentName: string
   agentPhone?: string | null
+  /**
+   * Union job: the production carries the driver on their own payroll, so the
+   * driver row prints "On production payroll" instead of a rate.
+   */
+  driverOnProductionPayroll?: boolean
 }
 
 export interface EstimateEmailOk {
@@ -122,9 +137,14 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
       unit: true,
       coversHours: true,
       unionScope: true,
+      isDriverLabor: true,
     },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
   })
+
+  /** Rows the production is paying for directly — priced as such, not dropped. */
+  const onPayroll = (f: (typeof fees)[number]) =>
+    args.driverOnProductionPayroll === true && isDriverLaborFee(f)
 
   const terms = (
     [
@@ -195,7 +215,7 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
 
   const feeRows = fees
     .map((f) => {
-      const rate = formatFeeRate({
+      const rate = onPayroll(f) ? PAYROLL_DRIVER_LABEL : formatFeeRate({
         amount: String(f.amount),
         unit: f.unit as SubFeeUnit,
         coversHours: f.coversHours ? String(f.coversHours) : null,
@@ -206,12 +226,14 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
         coversHours: f.coversHours ? String(f.coversHours) : null,
       })
       const scope = f.unionScope as SubFeeUnionScope
-      const quals = [
-        covers,
-        // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
-        covers ? PORTAL_TO_PORTAL_QUAL : null,
-        scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
-      ].filter(Boolean).join(' · ')
+      const quals = onPayroll(f)
+        ? 'Supplied by the production — not billed by SirReel'
+        : [
+            covers,
+            // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
+            covers ? PORTAL_TO_PORTAL_QUAL : null,
+            scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
+          ].filter(Boolean).join(' · ')
       return `
               <tr>
                 <td style="padding: 9px 16px; font-size: 14px; color: ${TEXT}; border-top: 1px solid #f0f0f0;">
@@ -375,7 +397,7 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
   if (fees.length) {
     textParts.push('', 'Additional charges:')
     for (const f of fees) {
-      const rate = formatFeeRate({
+      const rate = onPayroll(f) ? PAYROLL_DRIVER_LABEL : formatFeeRate({
         amount: String(f.amount),
         unit: f.unit as SubFeeUnit,
         coversHours: f.coversHours ? String(f.coversHours) : null,
@@ -386,12 +408,14 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
         coversHours: f.coversHours ? String(f.coversHours) : null,
       })
       const scope = f.unionScope as SubFeeUnionScope
-      const quals = [
-        covers,
-        // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
-        covers ? PORTAL_TO_PORTAL_QUAL : null,
-        scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
-      ].filter(Boolean).join(' · ')
+      const quals = onPayroll(f)
+        ? 'Supplied by the production — not billed by SirReel'
+        : [
+            covers,
+            // Shift-priced labor only — see PORTAL_TO_PORTAL_QUAL.
+            covers ? PORTAL_TO_PORTAL_QUAL : null,
+            scope !== 'ALL' ? UNION_SCOPE_LABEL[scope] : null,
+          ].filter(Boolean).join(' · ')
       textParts.push(`  ${f.label}: ${rate}${quals ? ` (${quals})` : ''}`)
     }
   }

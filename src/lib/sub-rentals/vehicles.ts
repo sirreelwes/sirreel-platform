@@ -107,6 +107,40 @@ export const PORTAL_TO_PORTAL_QUAL = 'portal to portal from Sun Valley, CA'
 export const PORTAL_TO_PORTAL_SENTENCE =
   'Driver hours are portal to portal from Sun Valley, CA.'
 
+// ── Driver labor vs. the production's payroll ───────────────────────
+// On a union job the driver goes on the PRODUCTION's payroll, so the
+// driver charge must not reach our invoice (SubRental
+// .driverOnProductionPayroll). That switch needs to know which fee row
+// IS the driver — and the fee schedule is free text a partner writes,
+// so there is no enum to read.
+//
+// Explicit answer first (`isDriverLabor`), label only as the fallback.
+// The fallback exists because every fee row that predates the column has
+// no answer stored, and defaulting those to "not a driver" would have
+// made the payroll switch quietly do nothing on the one booking it was
+// built for. Being deliberately narrow: "driver", "driving",
+// "chauffeur", "teamster". NOT "operator" (a generator operator is not a
+// driver) and NOT a bare "labor", which on a partner schedule is as
+// likely to be a swamper as a driver — either would strip a real charge
+// off a quote with nothing to show for it.
+
+const DRIVER_LABOR_RE = /\b(drivers?|driving|chauffeurs?|teamsters?)\b/i
+
+export interface DriverLaborLike {
+  label: string
+  isDriverLabor?: boolean | null
+}
+
+export function isDriverLaborFee(fee: DriverLaborLike): boolean {
+  if (fee.isDriverLabor != null) return fee.isDriverLabor
+  return DRIVER_LABOR_RE.test(fee.label)
+}
+
+/** Why a driver charge is missing, wherever a reader would look for it. */
+export const PAYROLL_DRIVER_LABEL = 'On production payroll'
+export const PAYROLL_DRIVER_NOTE =
+  'Driver is on the production’s payroll for this job — not billed by SirReel.'
+
 export function coversHoursNote(fee: FeeLike): string | null {
   if (fee.coversHours == null || fee.coversHours === '') return null
   const h = Number(fee.coversHours)

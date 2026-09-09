@@ -62,6 +62,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       driverEmail: true,
       driverPhone: true,
       driverAssignedAt: true,
+      driverOnProductionPayroll: true,
       relayTag: true,
       callTime: true,
       driverNotes: true,

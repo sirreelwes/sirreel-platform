@@ -3,8 +3,13 @@
  *
  *   GET    → single sub-rental with vendor + order + line
  *   PATCH  → edit Phase 1 fields (vendor, qty, dates, vendor* rates,
- *            receiveMethod, PO #, notes, status). Re-derives client*
- *            when quantity changes and orderLineItemId is set.
+ *            receiveMethod, PO #, notes, status), plus
+ *            driverOnProductionPayroll — the union-job switch that keeps the
+ *            driver charge off our invoice. That one is audit-logged on its
+ *            own: it decides who pays a person, it changes after the fact
+ *            (a job goes union late), and the partner reads the answer on
+ *            their page. Re-derives client* when quantity changes and
+ *            orderLineItemId is set.
  *   DELETE → soft "cancel" via status=CANCELLED (no row removal —
  *            we keep the audit trail).
  *
@@ -45,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const existing = await prisma.subRental.findUnique({
     where: { id: params.id },
-    select: { id: true, orderLineItemId: true, quantity: true },
+    select: { id: true, orderLineItemId: true, quantity: true, driverOnProductionPayroll: true },
   })
   if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
@@ -62,6 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     poNumber?: string | null
     notes?: string | null
     status?: SubRentalStatus
+    driverOnProductionPayroll?: boolean
   } | null
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 })
 
@@ -113,6 +119,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(body.poNumber !== undefined ? { poNumber: body.poNumber } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
       ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(typeof body.driverOnProductionPayroll === 'boolean'
+        ? { driverOnProductionPayroll: body.driverOnProductionPayroll }
+        : {}),
       ...(derivedClientDailyRate !== undefined ? { clientDailyRate: derivedClientDailyRate } : {}),
       ...(derivedClientTotal !== undefined ? { clientTotal: derivedClientTotal } : {}),
     },
@@ -122,6 +131,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       orderLineItem: { select: { id: true, description: true } },
     },
   })
+
+  // Who pays the driver is the one field here worth its own audit row: the
+  // charge it suppresses is several hundred dollars a day, and "nobody
+  // remembers turning it on" is exactly the argument this settles.
+  if (
+    typeof body.driverOnProductionPayroll === 'boolean' &&
+    body.driverOnProductionPayroll !== existing.driverOnProductionPayroll
+  ) {
+    await prisma.auditLog.create({
+      data: {
+        action: 'sub_rental.driver_payroll_set',
+        entityType: 'SubRental',
+        entityId: params.id,
+        userId: gate.user.id,
+        oldValues: { driverOnProductionPayroll: existing.driverOnProductionPayroll },
+        newValues: { driverOnProductionPayroll: body.driverOnProductionPayroll, via: 'sub_rental.patch' },
+      },
+    })
+  }
+
   return NextResponse.json(updated)
 }
 

@@ -39,6 +39,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (typeof body.unionScope === 'string' && Object.values(SubFeeUnionScope).includes(body.unionScope as SubFeeUnionScope)) {
     data.unionScope = body.unionScope as SubFeeUnionScope
   }
+  // Tri-state, and `null` is a real value here: it hands the row back to the
+  // label heuristic. `'isDriverLabor' in body` rather than a typeof check so
+  // clearing an override is possible at all.
+  if ('isDriverLabor' in body) {
+    data.isDriverLabor = typeof body.isDriverLabor === 'boolean' ? body.isDriverLabor : null
+  }
   if (typeof body.discountApplies === 'boolean') data.discountApplies = body.discountApplies
   if ('notes' in body) data.notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive

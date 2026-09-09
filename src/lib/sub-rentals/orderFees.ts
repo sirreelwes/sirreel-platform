@@ -20,6 +20,20 @@
  * rep estimates, and the quote says so — hence `usageEstimated` plus the
  * client-facing note, which prints under the description on the quote PDF.
  *
+ * ── The driver, when the production is paying them ──────────────────────────
+ * On a union job the driver goes on the PRODUCTION's payroll, so the driver
+ * charge must not reach our invoice (SubRental.driverOnProductionPayroll —
+ * Wes 2026-09-09). `buildFeeLines` therefore takes `excludeDriverLabor`, and
+ * drops those rows before anything is priced. Every other fee on the schedule
+ * — mileage, generator hours, supplies — is unaffected: the production pays
+ * the driver, not the fuel.
+ *
+ * The flag lives on the BOOKING and is resolved server-side by the caller.
+ * `PartnerFee.driverLabor` is carried out to the UI so the modal can show the
+ * dropped rows struck through with the reason, rather than silently returning
+ * a smaller list — the same discipline as the metered "won't be on the quote"
+ * warning.
+ *
  * ── The money rule still holds ──────────────────────────────────────────────
  * Fees are added at the vendor's LIST `amount`. `discountApplies` changes what
  * WE pay, never what the client is quoted — the same rule estimateEmail.ts
@@ -27,7 +41,7 @@
  * margin cannot leak into a client document through here.
  */
 import { prisma } from '@/lib/prisma'
-import { PORTAL_TO_PORTAL_SENTENCE } from '@/lib/sub-rentals/vehicles'
+import { PORTAL_TO_PORTAL_SENTENCE, isDriverLaborFee } from '@/lib/sub-rentals/vehicles'
 import type { FeeUnit, Prisma } from '@prisma/client'
 
 /** The wording the client reads under an estimated line, on every surface. */
@@ -72,6 +86,8 @@ export interface PartnerFee {
   unionScope: string
   metered: boolean
   usageNoun: string
+  /** This row is the DRIVER — the charge a union production absorbs itself. */
+  driverLabor: boolean
 }
 
 /**
@@ -101,6 +117,7 @@ export async function partnerFeeSchedule(vehicleId: string): Promise<{
     select: {
       id: true, label: true, amount: true, unit: true,
       coversHours: true, unionScope: true, vehicleId: true,
+      isDriverLabor: true,
     },
   })
 
@@ -123,6 +140,7 @@ export async function partnerFeeSchedule(vehicleId: string): Promise<{
       unionScope: r.unionScope,
       metered: isMetered(r.unit),
       usageNoun: usageNoun(r.unit),
+      driverLabor: isDriverLaborFee(r),
     })),
   }
 }
@@ -141,6 +159,16 @@ export interface BuiltFeeLine {
   lineTotal: Prisma.Decimal
 }
 
+export interface BuildFeeLineOptions {
+  /**
+   * The driver is on the production's payroll (union job), so driver-labor
+   * rows are left off the order entirely — no line, no $0 line. A $0 line
+   * would read as "driver included", which is a promise we haven't made:
+   * the production is hiring the driver, not getting one free.
+   */
+  excludeDriverLabor?: boolean
+}
+
 /**
  * Shape the lines without writing them, so the API can preview and the caller
  * can total them before anything is persisted.
@@ -154,10 +182,12 @@ export function buildFeeLines(
   estimates: FeeEstimates,
   days: number,
   Decimal: typeof Prisma.Decimal,
+  opts: BuildFeeLineOptions = {},
 ): BuiltFeeLine[] {
   const out: BuiltFeeLine[] = []
 
   for (const fee of fees) {
+    if (opts.excludeDriverLabor && fee.driverLabor) continue
     const amount = new Decimal(fee.amount)
 
     if (fee.unit === 'PER_DAY') {

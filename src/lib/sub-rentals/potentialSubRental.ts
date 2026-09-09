@@ -39,6 +39,13 @@ export interface CreatePotentialArgs {
   startDate: string
   endDate: string
   createdByUserId: string
+  /**
+   * Union job — the driver goes on the PRODUCTION's payroll, so we neither
+   * bill the client for driver labor nor pay the partner for it. Captured at
+   * quote time because that is when the rep knows; editable afterwards from
+   * the job's sub-rental panel.
+   */
+  driverOnProductionPayroll?: boolean
 }
 
 export interface PotentialCreated {
@@ -101,6 +108,7 @@ export async function createPotentialSubRental(
       // stale vendorTotal on a speculative row would be worse than none.
       clientDailyRate: vehicle.listDailyRate,
       clientWeeklyRate: vehicle.listWeeklyRate,
+      driverOnProductionPayroll: args.driverOnProductionPayroll === true,
       vendorToken,
       vendorTokenMintedAt: new Date(),
     },
@@ -119,6 +127,7 @@ export async function createPotentialSubRental(
         vendor: vehicle.vendor.name,
         startDate: args.startDate,
         endDate: args.endDate,
+        driverOnProductionPayroll: args.driverOnProductionPayroll === true,
       },
     },
   })
@@ -165,6 +174,11 @@ export interface VendorView {
   /** We sent the release notice / the partner said they have the dates back. */
   vendorCancelNotifiedAt: Date | null
   vendorReleaseAckedAt: Date | null
+  /**
+   * The production is carrying this driver on their own payroll (union job).
+   * The partner sees it because it decides what they may invoice us for.
+   */
+  driverOnProductionPayroll: boolean
   /** The partner's roster (all their bookings share it) and who is on THIS one. */
   roster: RosterDriver[]
   assignedVendorDriverId: string | null
@@ -209,6 +223,7 @@ export async function getVendorViewByToken(
       vendorConfirmedAt: true,
       vendorDeclinedAt: true,
       vendorDeclineNote: true,
+      driverOnProductionPayroll: true,
       // The release loop — when we told them. The partner's answer is an
       // event, read separately (lib/sub-rentals/releaseAck).
       vendorCancelNotifiedAt: true,
@@ -289,6 +304,7 @@ export async function getVendorViewByToken(
     vendorDeclineNote: s.vendorDeclineNote,
     vendorCancelNotifiedAt: s.vendorCancelNotifiedAt,
     vendorReleaseAckedAt: await getReleaseAck(s.id),
+    driverOnProductionPayroll: s.driverOnProductionPayroll,
     roster: await rosterForVendor(s.vendorId, s.subcontractedVehicleId),
     assignedVendorDriverId: s.vendorDriverId,
     unitVehicleId: s.subcontractedVehicleId,
