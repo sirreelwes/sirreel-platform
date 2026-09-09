@@ -28,6 +28,44 @@ const VALID_ROLES: JobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING',
  * (job, person, role) unique key, so re-adding is idempotent. First contact
  * on a job becomes primary, matching the order-page rule.
  */
+/**
+ * GET /api/jobs/[id]/contacts — who is already on this job.
+ *
+ * Added for the Make Reservation modal, which must know whether it has
+ * to ASK for a contact. It only genuinely needs one when the job has
+ * nobody: a Booking cannot be created without a person (see
+ * holdOnQuoteSend), so an empty job would produce an order holding
+ * nothing. A job that already has contacts should not make the agent
+ * retype one.
+ */
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const contacts = await prisma.jobContact.findMany({
+    where: { jobId: params.id },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    select: {
+      id: true,
+      role: true,
+      isPrimary: true,
+      person: { select: { id: true, firstName: true, lastName: true, email: true } },
+    },
+  })
+  return NextResponse.json({
+    ok: true,
+    contacts: contacts.map((c) => ({
+      id: c.id,
+      role: c.role,
+      isPrimary: c.isPrimary,
+      personId: c.person.id,
+      name: `${c.person.firstName} ${c.person.lastName}`.trim(),
+      email: c.person.email,
+    })),
+  })
+}
+
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
   if (!session?.user?.email) {

@@ -30,15 +30,19 @@
  * phone is the job page's "Client said yes" button, which is a
  * different decision than booking a truck.
  *
- * A CONTACT is required, and that is not paperwork for its own sake:
+ * A CONTACT is required ONLY when the job has nobody on it, and that
+ * is not paperwork for its own sake:
  * `holdOnQuoteSend` cannot create the Booking without a person on the
  * job or an affiliation on the company, and it fails NON-FATALLY. A
  * reservation taken for a brand-new client with nobody attached
  * therefore produced an order and NO hold at all — the truck reading
  * free on the board while a live order committed it (the Wild Goats
  * Creative failure, 2026-08-29). Posting the contact to the job first
- * closes that hole; the endpoint is find-or-create on both the Person
- * and the JobContact, so naming the same person twice is a no-op.
+ * closes that hole. A job that already has contacts satisfies the rule
+ * as it stands, so the field collapses to a one-line confirmation and
+ * asks for nothing (Wes 2026-09-09). The endpoint is find-or-create on
+ * both the Person and the JobContact, so naming someone twice is a
+ * no-op.
  *
  * Nothing here emails anybody. Creating an order + hold is internal
  * work; the client-facing sends live behind Send quote / Book it, and
@@ -110,9 +114,12 @@ export function MakeReservationModal({
   const [resolverOpen, setResolverOpen] = useState(false)
   const [assignNext, setAssignNext] = useState(true)
   const [notes, setNotes] = useState('')
-  // The person this reservation is for. Required — see the header.
+  // The person this reservation is for. Only asked for when the job has
+  // nobody — see the header. `null` = not looked up yet (or no job).
   const [contactName, setContactName] = useState('')
   const [contactEmail, setContactEmail] = useState('')
+  const [jobContacts, setJobContacts] = useState<{ name: string; email: string; role: string }[] | null>(null)
+  const [contactsLoading, setContactsLoading] = useState(false)
 
   // Inline "+ New company" — same 409 near-match discipline the hold
   // modal uses: the agent picks "use existing" or "create anyway",
@@ -138,6 +145,34 @@ export function MakeReservationModal({
       .catch(() => {})
   }, [])
 
+  // Does this job already have somebody on it? Decides whether the
+  // contact field is required or merely offered.
+  useEffect(() => {
+    if (!job) {
+      setJobContacts(null)
+      return
+    }
+    let cancelled = false
+    setContactsLoading(true)
+    fetch(`/api/jobs/${job.id}/contacts`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        setJobContacts(d?.ok ? d.contacts || [] : [])
+      })
+      .catch(() => {
+        // Unknown, so fall back to ASKING. Better a redundant contact
+        // than an order that holds nothing.
+        if (!cancelled) setJobContacts([])
+      })
+      .finally(() => {
+        if (!cancelled) setContactsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [job])
+
   const category = useMemo(
     () => categories.find((c) => c.id === categoryId) ?? null,
     [categories, categoryId],
@@ -146,11 +181,21 @@ export function MakeReservationModal({
   const datesValid =
     /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && end >= start
 
-  const contactReady =
+  const contactTyped =
     contactName.trim().split(/\s+/).length >= 2 && /\S+@\S+\.\S+/.test(contactEmail.trim())
+  /** The job already satisfies the Booking's person requirement. */
+  const jobHasContact = (jobContacts?.length ?? 0) > 0
+  const contactReady = jobHasContact || contactTyped
 
   const canSubmit =
-    !!category && !!company && !!job && contactReady && quantity > 0 && datesValid && !submitting
+    !!category &&
+    !!company &&
+    !!job &&
+    contactReady &&
+    !contactsLoading &&
+    quantity > 0 &&
+    datesValid &&
+    !submitting
 
   function onJobResolved(r: ResolvedJob) {
     setJob({ id: r.id, jobCode: r.jobCode, name: r.name })
@@ -214,6 +259,11 @@ export function MakeReservationModal({
       // possible two steps later; a failure here is fatal to the flow
       // BY DESIGN, because continuing would produce the exact silent
       // no-hold order this step exists to prevent.
+      if (jobHasContact && !contactTyped) {
+        // Nothing to add — the job's existing contact is what the
+        // Booking will attach to.
+        mark('contact', 'skipped')
+      } else {
       mark('contact', 'running')
       const parts = contactName.trim().split(/\s+/)
       const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
@@ -237,6 +287,7 @@ export function MakeReservationModal({
         return
       }
       mark('contact', 'done')
+      }
 
       // 1 — the Order. Job-as-root: jobId is required and never created here.
       mark('order', 'running')
@@ -632,10 +683,23 @@ export function MakeReservationModal({
                 )}
               </div>
 
-              {/* Contact — required: the hold cannot be created without a
-                  person on the job. */}
+              {/* Contact — asked for ONLY when the job has nobody. */}
               <div>
                 <label className="block text-[11px] font-semibold text-lt-fg2 mb-1">Contact</label>
+                {job && contactsLoading && (
+                  <div className="text-[12px] text-lt-fg3">Checking who&apos;s on this job…</div>
+                )}
+                {job && !contactsLoading && jobHasContact && (
+                  <div className="rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 text-[12px] text-lt-fg2">
+                    <span className="font-semibold text-lt-fg">{jobContacts![0].name}</span>
+                    {jobContacts![0].email ? ` · ${jobContacts![0].email}` : ''}
+                    <span className="text-lt-fg3">
+                      {' '}· already on this job
+                      {jobContacts!.length > 1 ? ` (+${jobContacts!.length - 1} more)` : ''}
+                    </span>
+                  </div>
+                )}
+                {(!job || (!contactsLoading && !jobHasContact)) && (
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     value={contactName}
@@ -650,10 +714,13 @@ export function MakeReservationModal({
                     className="border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-lt-fg3">
-                  Who the reservation is for. Required — a job with nobody on it can&apos;t hold a
-                  unit. Already known? Same name and email just re-links them.
-                </p>
+                )}
+                {(!job || (!contactsLoading && !jobHasContact)) && (
+                  <p className="mt-1 text-[11px] text-lt-fg3">
+                    Who the reservation is for. Required — a job with nobody on it can&apos;t hold a
+                    unit. Already known? The same name and email just re-links them.
+                  </p>
+                )}
               </div>
 
               {/* Notes */}
