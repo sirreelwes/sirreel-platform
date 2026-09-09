@@ -230,3 +230,27 @@ export async function pingRwToken(token: string): Promise<{ ok: boolean; httpSta
     clearTimeout(timer)
   }
 }
+
+/**
+ * Mint a fresh token, prove it works, and store it. The whole remedy in
+ * one call, so the daily check and the live-request retry in rwClient
+ * cannot drift apart on what "rotate" means.
+ *
+ * A minted token that does NOT ping is deliberately not stored: the one
+ * we already hold may still be the better of the two, and overwriting it
+ * with a dud would turn a recoverable state into an unrecoverable one.
+ */
+export async function rotateRwToken(): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const mint = await mintRwToken()
+  if (!mint.ok) return { ok: false, reason: `rotation failed: ${mint.reason}` }
+
+  const ping = await pingRwToken(mint.token)
+  if (!ping.ok) {
+    await recordVerify('EXPIRED')
+    return { ok: false, reason: `minted token rejected (HTTP ${ping.httpStatus}) — not stored` }
+  }
+
+  await writeRwToken({ token: mint.token, updatedBy: 'system' })
+  await recordVerify('OK')
+  return { ok: true }
+}

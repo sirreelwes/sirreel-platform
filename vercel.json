@@ -78,7 +78,7 @@
     },
     {
       "path": "/api/cron/rw-token-check",
-      "schedule": "0 13,14 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/rw-quote-sync",

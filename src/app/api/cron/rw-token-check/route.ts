@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   ROTATE_AFTER_DAYS,
   isRotationDue,
-  mintRwToken,
   pingRwToken,
   readRwToken,
   recordVerify,
+  rotateRwToken,
   rwCredentialStatus,
-  writeRwToken,
 } from '@/lib/rentalworks/credential'
+import { prisma } from '@/lib/prisma'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p as emailP, calloutBox } from '@/lib/email/templates/shell'
@@ -17,8 +17,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * GET /api/cron/rw-token-check — the daily RentalWorks credential check,
- * 06:00 Pacific.
+ * GET /api/cron/rw-token-check — the RentalWorks credential check, HOURLY.
  *
  * The flow Wes specified (2026-09-02):
  *
@@ -28,31 +27,55 @@ export const maxDuration = 60
  * Plus a proactive renewal at 45 days, so the yellow band is a safety net
  * rather than a routine state — the token is replaced before it can lapse.
  *
- * DST: Vercel crons are UTC only, so a fixed hour drifts an hour twice a
- * year and "06:00 PT" quietly becomes 05:00. Both candidate UTC hours are
- * scheduled and the wrong one returns early — the daily-brief precedent.
+ * ── Why hourly, and why the DST twins are gone (2026-09-09) ────────
+ *
+ * This ran once a day at 06:00 Pacific, which meant the check could only
+ * ever catch a token that had already been dead for up to 24 hours. On
+ * 2026-09-09 it passed at 13:00 UTC, the token died around 13:30, and
+ * every RW mirror stayed dark until somebody looked. Hourly caps that
+ * exposure at an hour.
+ *
+ * rwFetch now rotates on a live 401 as well (see rwClient), so in
+ * practice a mid-day expiry is repaired within seconds by whichever sync
+ * hits it first. This route is the BACKSTOP: it covers the stretches
+ * when no sync happens to run, and it is the only thing that renews a
+ * token proactively before it lapses at all.
+ *
+ * The DST twin-hours trick went with the daily schedule — running every
+ * hour means there is no target hour to drift off. `force` is kept
+ * because the runbook and the /collections card both reference it, and
+ * it now simply has nothing to skip.
  *
  * Manual run:
  *   curl -H "Authorization: Bearer $CRON_SECRET" \
  *     "https://hq.sirreel.com/api/cron/rw-token-check?force=1"
  */
 
-const TARGET_PACIFIC_HOUR = 6
+/**
+ * Hourly checking must not mean hourly mail. A credential stays red
+ * until a human fixes it, and 24 identical "connection is down" emails a
+ * day is how a real alert gets filtered into a folder nobody opens — the
+ * same reasoning as the per-day dedupe in syncAlert.ts, whose Alert row
+ * doubles as the record of what has already been said.
+ *
+ * Calendar day on the server clock (UTC on Vercel), matching syncAlert.
+ */
+const NOTICE_TYPE = 'rw_token_check'
+
+async function alreadyNotifiedToday(): Promise<boolean> {
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  const existing = await prisma.alert.findFirst({
+    where: { type: NOTICE_TYPE, created_at: { gte: since } },
+    select: { id: true },
+  })
+  return !!existing
+}
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return true
   return (req.headers.get('authorization') || '') === `Bearer ${secret}`
-}
-
-function pacificHour(d: Date): number {
-  return Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      hour: '2-digit',
-      hour12: false,
-    }).format(d),
-  )
 }
 
 async function notify(subject: string, heading: string, lines: string[]) {
@@ -85,16 +108,6 @@ export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  const force = req.nextUrl.searchParams.get('force') === '1'
-  const now = new Date()
-  if (!force && pacificHour(now) !== TARGET_PACIFIC_HOUR) {
-    return NextResponse.json({
-      ok: true,
-      skipped: 'wrong Pacific hour — the other DST twin will run',
-      pacificHour: pacificHour(now),
-    })
-  }
-
   const steps: string[] = []
 
   // 1. Does the token we hold still work?
@@ -111,25 +124,17 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Rotate when it failed, or proactively at 45 days so yellow is rare.
+  //    rotateRwToken() is the same call rwFetch makes on a live 401, so
+  //    the scheduled remedy and the on-demand one cannot drift apart.
   const dueForRotation = healthy && (await isRotationDue())
   if (!healthy || dueForRotation) {
     steps.push(dueForRotation ? `proactive rotation (${ROTATE_AFTER_DAYS}d)` : 'attempting rotation')
-    const mint = await mintRwToken()
-    if (mint.ok) {
-      const ping = await pingRwToken(mint.token)
-      if (ping.ok) {
-        await writeRwToken({ token: mint.token, updatedBy: 'system' })
-        await recordVerify('OK')
-        healthy = true
-        steps.push('rotated and verified')
-      } else {
-        // Minted but not accepted — do NOT store it over a token that may
-        // still be the better of the two.
-        await recordVerify('EXPIRED')
-        steps.push(`minted token rejected (HTTP ${ping.httpStatus}) — not stored`)
-      }
+    const rotated = await rotateRwToken()
+    if (rotated.ok) {
+      healthy = true
+      steps.push('rotated and verified')
     } else {
-      steps.push(`rotation failed: ${mint.reason}`)
+      steps.push(rotated.reason)
     }
   }
 
@@ -139,15 +144,29 @@ export async function GET(req: NextRequest) {
   //    that emails every morning is a green check nobody reads.
   let notified: { sent: boolean; reason?: string } | null = null
   if (status.health !== 'green') {
-    notified = await notify(
+    const heading =
       status.health === 'red'
         ? 'RentalWorks connection is down'
-        : 'RentalWorks token is due for renewal',
-      status.health === 'red'
-        ? 'RentalWorks connection is down'
-        : 'RentalWorks token is due for renewal',
-      steps.map((s) => `• ${s}`),
-    )
+        : 'RentalWorks token is due for renewal'
+    if (await alreadyNotifiedToday()) {
+      notified = { sent: false, reason: 'already notified today' }
+    } else {
+      // The Alert row is both the Action-Queue surface and the record
+      // that stops the next 23 runs re-sending this. Written FIRST, so a
+      // send that throws still suppresses the repeat.
+      await prisma.alert
+        .create({
+          data: {
+            type: NOTICE_TYPE,
+            title: heading,
+            body: [...steps.map((s) => `• ${s}`), '', 'Fix it on the RentalWorks card on Collections.'].join('\n'),
+            severity: status.health === 'red' ? 'high' : 'medium',
+            link: '/collections',
+          },
+        })
+        .catch((err) => console.error('[rw-token-check] could not record the notice:', err))
+      notified = await notify(heading, heading, steps.map((s) => `• ${s}`))
+    }
   }
 
   return NextResponse.json({
