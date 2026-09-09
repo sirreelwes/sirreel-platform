@@ -3,17 +3,21 @@
 /**
  * /admin/dedup — human review surface for the Person dedup primitive.
  *
- * Internal admin tool. Functional over polished — uses existing
- * `lt-*` brand tokens, no new design language.
+ * Internal admin tool, but NOT a jargon dump: the reviewer is deciding
+ * whether two humans are one human, so every control names the PEOPLE
+ * (name + email), never the row's uuid. The 2026-09-08 rewrite killed
+ * the "Merge 5d21cc… → survivor" buttons — a reviewer cannot tell which
+ * contact a hex prefix belongs to, and a wrong click destroys a contact.
  *
  * Flow:
  *   - Loads clusters via GET /api/admin/dedup (LIKELY_DUPE first,
  *     UNCERTAIN next, LIKELY_OFFICE_MAINLINE hidden by default).
- *   - Per cluster: side-by-side diff, survivor selector, canonical-
- *     email selector, field-conflict pickers, "suppress" / "merge".
- *   - Confirm summary before merge (refs to repoint, affils to sum,
- *     jobContact collisions). No silent merge.
- *   - "Recent merges" sidebar with one-click reverse — the safety net.
+ *   - Per cluster: side-by-side diff + an "After merge" column that
+ *     shows the record that actually results, keep-picker, canonical-
+ *     email selector, per-field value pickers, "not a dupe" / "merge".
+ *   - Confirm summary before merge (refs to repoint, alias minted,
+ *     snapshot kept). No silent merge.
+ *   - "Recent merges" sidebar with one-click undo — the safety net.
  *
  * Admin gating is server-side via requireDedupAccess() on every
  * endpoint; the page renders, the APIs return 403 — gracefully shown.
@@ -74,15 +78,56 @@ const FIELD_KEYS = [
 type FieldKey = (typeof FIELD_KEYS)[number]
 
 const FIELD_LABELS: Record<FieldKey, string> = {
-  firstName: 'First',
-  lastName: 'Last',
+  firstName: 'First name',
+  lastName: 'Last name',
   phone: 'Phone',
   mobile: 'Mobile',
   role: 'Role',
   tier: 'Tier',
-  rawTitle: 'Raw title',
+  rawTitle: 'Title (as written)',
   lastKnownProject: 'Last project',
   notes: 'Notes',
+}
+
+/** Columns mergePersons() back-fills from the merged-in row when the kept
+ *  row is blank. Mirrored here so the "After merge" column tells the truth. */
+const NULL_FILL_KEYS: FieldKey[] = ['phone', 'mobile', 'rawTitle', 'lastKnownProject']
+
+const CLASSIFICATION_LABEL: Record<Classification, string> = {
+  LIKELY_DUPE: 'Likely the same person',
+  UNCERTAIN: 'Needs a human call',
+  LIKELY_OFFICE_MAINLINE: 'Looks like a shared office line',
+}
+
+const METHOD_LABEL: Record<Cluster['method'], string> = {
+  EMAIL: 'share an email address',
+  PHONE: 'share a phone number',
+  NAME: 'have the same name',
+}
+
+/** "Trina Reyna (Sabertooth)" — the display name a reviewer recognises.
+ *  `lastName` is a placeholder (""/".") on more than half the table, so it
+ *  is dropped rather than printed. */
+function displayName(r: Row): string {
+  const last = r.lastName.trim().replace(/^\.$/, '')
+  const name = `${r.firstName.trim()} ${last}`.trim()
+  return name || r.email
+}
+
+function fieldValue(r: Row, k: FieldKey): string {
+  return (((r as unknown) as Record<string, unknown>)[k] as string | null)?.trim() ?? ''
+}
+
+/** The matched value, in the shape a human reads it. Cluster keys arrive
+ *  as `phone:6302005986` / `email:x@y.com` / `name:trina reyna`. */
+function matchedOn(cluster: Cluster): string {
+  const raw = cluster.key.replace(/^(phone|email|name):/, '')
+  if (cluster.method === 'PHONE') {
+    const d = raw.replace(/\D/g, '')
+    if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+    if (d.length === 11 && d.startsWith('1')) return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`
+  }
+  return raw
 }
 
 export default function DedupPage() {
@@ -143,21 +188,23 @@ export default function DedupPage() {
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
       <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-lt-fg">Dedup review</h1>
+        <div className="max-w-xl">
+          <h1 className="text-2xl font-bold text-lt-fg">Duplicate contacts</h1>
           <p className="text-sm text-lt-fg2 mt-1">
-            Human-in-the-loop merge queue. Every merge is auditable and reversible from
-            the &ldquo;Recent merges&rdquo; panel.
+            Each group below is a set of contact records that <em>might</em> be the
+            same person. Pick the record to keep, pick which values it ends up with,
+            then merge the others into it. Nothing is lost — every merge can be undone
+            from &ldquo;Recently merged&rdquo;.
           </p>
         </div>
         {counts && (
           <div className="text-sm text-lt-fg2 flex gap-4 flex-wrap items-center">
-            <span><span className="font-bold text-lt-fg">{counts.totalOpen}</span> open</span>
-            <span><span className="font-bold text-chip-good-fg">{counts.likelyDupe}</span> likely dupe</span>
-            <span><span className="font-bold text-lt-fg">{counts.uncertain}</span> uncertain</span>
-            <span><span className="font-bold text-lt-fg3">{counts.officeMainline}</span> office line</span>
-            <span><span className="font-bold text-lt-fg3">{counts.suppressed}</span> suppressed</span>
-            <span><span className="font-bold text-chip-good-fg">{mergedThisSession}</span> merged this session</span>
+            <span><span className="font-bold text-lt-fg">{counts.totalOpen}</span> to review</span>
+            <span><span className="font-bold text-chip-good-fg">{counts.likelyDupe}</span> likely the same</span>
+            <span><span className="font-bold text-lt-fg">{counts.uncertain}</span> needs a call</span>
+            <span><span className="font-bold text-lt-fg3">{counts.officeMainline}</span> office lines</span>
+            <span><span className="font-bold text-lt-fg3">{counts.suppressed}</span> set aside</span>
+            <span><span className="font-bold text-chip-good-fg">{mergedThisSession}</span> merged today</span>
           </div>
         )}
       </header>
@@ -175,7 +222,7 @@ export default function DedupPage() {
             checked={showOffice}
             onChange={(e) => setShowOffice(e.target.checked)}
           />
-          <span className="text-lt-fg2">Show office mainlines + suppressed</span>
+          <span className="text-lt-fg2">Also show office lines + groups already set aside</span>
         </label>
         <button
           onClick={load}
@@ -187,10 +234,10 @@ export default function DedupPage() {
 
       <div className="grid grid-cols-[1fr_320px] gap-6">
         <main className="space-y-4">
-          {loading && <div className="text-sm text-lt-fg3">Loading clusters…</div>}
+          {loading && <div className="text-sm text-lt-fg3">Loading…</div>}
           {!loading && visible.length === 0 && (
             <div className="text-sm text-lt-fg3 p-6 border border-dashed border-lt-hairline rounded">
-              Queue clear. {counts && counts.officeMainline > 0 ? `${counts.officeMainline} office mainlines hidden — toggle above to view.` : ''}
+              Nothing to review. {counts && counts.officeMainline > 0 ? `${counts.officeMainline} shared office lines are hidden — tick the box above to see them.` : ''}
             </div>
           )}
           {visible.map((c) => (
@@ -199,10 +246,11 @@ export default function DedupPage() {
         </main>
 
         <aside className="text-sm">
-          <h2 className="font-semibold text-lt-fg mb-2">Recent merges (last 2d)</h2>
+          <h2 className="font-semibold text-lt-fg mb-1">Recently merged</h2>
+          <p className="text-xs text-lt-fg3 mb-2">Last 2 days. Undo puts the record back exactly as it was.</p>
           {recent.length === 0 && (
             <div className="text-xs text-lt-fg3 p-3 border border-dashed border-lt-hairline rounded">
-              No recent un-reversed merges.
+              Nothing merged in the last 2 days.
             </div>
           )}
           <ul className="space-y-2">
@@ -226,41 +274,80 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
   const [survivorId, setSurvivorId] = useState<string>(
     cluster.survivorId ?? cluster.rows[0].id,
   )
+  const survivor = cluster.rows.find((r) => r.id === survivorId)!
+  const losers = cluster.rows.filter((r) => r.id !== survivorId)
+
   // Available emails for the canonical picker — every row's address.
   const emailOptions = useMemo(
     () => Array.from(new Set(cluster.rows.map((r) => r.email.trim().toLowerCase()))),
     [cluster.rows],
   )
-  const survivor = cluster.rows.find((r) => r.id === survivorId)!
-  // Default canonical = survivor's email lowercased
   const [canonicalEmail, setCanonicalEmail] = useState<string>(
     survivor.email.trim().toLowerCase(),
   )
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  // When the survivor changes, default the canonical pick to the
-  // new survivor's email (reviewer can still override).
+  // Which value wins for each field. `undefined` for a field means "no
+  // explicit pick" — the kept record's own value stands. Re-seeded from the
+  // kept record whenever the reviewer changes who is kept, so the radio the
+  // page shows as selected is always the value that will actually be written.
+  const [overrides, setOverrides] = useState<Partial<Record<FieldKey, { from: string; value: string }>>>({})
+
   useEffect(() => {
     setCanonicalEmail(survivor.email.trim().toLowerCase())
-  }, [survivorId, survivor.email])
+    setConfirming(null)
+    const seeded: Partial<Record<FieldKey, { from: string; value: string }>> = {}
+    for (const k of FIELD_KEYS) {
+      const v = fieldValue(survivor, k)
+      if (v) seeded[k] = { from: survivor.id, value: v }
+    }
+    setOverrides(seeded)
+  }, [survivorId, survivor])
 
-  // Field-conflict picks. Default: survivor's value wins (== undefined override).
-  // For each field where survivor and at least one loser hold non-null
-  // but different values, the user picks one.
-  const [overrides, setOverrides] = useState<Partial<Record<FieldKey, { from: string; value: string | null }>>>({})
+  // Find field conflicts: same field, ≥2 distinct non-blank values.
+  const conflicts = useMemo(() => {
+    const out = new Set<FieldKey>()
+    for (const k of FIELD_KEYS) {
+      const distinct = new Set(
+        cluster.rows.map((r) => fieldValue(r, k)).filter((v) => v !== ''),
+      )
+      if (distinct.size > 1) out.add(k)
+    }
+    return out
+  }, [cluster.rows])
 
-  const onClusterMerge = async (loserId: string) => {
-    // For a >2-member cluster, the reviewer merges pairs one at a
-    // time. The state ratchets — after each merge the cluster reloads
-    // with one fewer row.
+  // What the kept record actually looks like after every merge in this
+  // group lands — the reviewer should never have to model this in their head.
+  const resolved = useCallback((k: FieldKey): { value: string; fromId: string | null } => {
+    const picked = overrides[k]
+    if (picked && picked.value) return { value: picked.value, fromId: picked.from }
+    const own = fieldValue(survivor, k)
+    if (own) return { value: own, fromId: survivor.id }
+    if (NULL_FILL_KEYS.includes(k)) {
+      const filler = losers.find((l) => fieldValue(l, k) !== '')
+      if (filler) return { value: fieldValue(filler, k), fromId: filler.id }
+    }
+    return { value: '', fromId: null }
+  }, [overrides, survivor, losers])
+
+  // The canonical email must belong to the survivor or to the row being
+  // merged in — mergePersons() rejects anything else with a 409. So a
+  // canonical borrowed from row C blocks merging row B until C is in.
+  const canonicalOwner = cluster.rows.find(
+    (r) => r.email.trim().toLowerCase() === canonicalEmail,
+  )
+  const canonicalIsSurvivors = canonicalOwner?.id === survivorId
+
+  const runMerge = async (loserId: string) => {
+    setBusy(true)
     const body: Record<string, unknown> = {
       survivorId,
       loserId,
       canonicalEmail,
-    }
-    if (Object.keys(overrides).length > 0) {
-      body.fieldOverrides = Object.fromEntries(
+      fieldOverrides: Object.fromEntries(
         Object.entries(overrides).map(([k, v]) => [k, v?.value ?? null]),
-      )
+      ),
     }
     const res = await fetch('/api/admin/dedup/merge', {
       method: 'POST',
@@ -268,6 +355,8 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
       body: JSON.stringify(body),
     })
     const data = await res.json().catch(() => ({}))
+    setBusy(false)
+    setConfirming(null)
     if (!res.ok) {
       alert(`Merge failed: ${data.error || res.statusText}`)
       return
@@ -276,7 +365,7 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
   }
 
   const onSuppress = async () => {
-    if (!confirm('Mark this cluster as "shared office line"? It will be hidden from the default queue but can be unsuppressed later.')) {
+    if (!confirm('Mark these as different people sharing one line? The group is hidden from the review list; you can bring it back with the checkbox at the top.')) {
       return
     }
     const res = await fetch('/api/admin/dedup/suppress', {
@@ -285,99 +374,125 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
       body: JSON.stringify({ personIds: cluster.rows.map((r) => r.id) }),
     })
     if (!res.ok) {
-      alert(`Suppress failed: HTTP ${res.status}`)
+      alert(`Could not set aside: HTTP ${res.status}`)
       return
     }
     onSuppressed()
   }
 
-  // Find field conflicts: same field, ≥2 distinct non-null values
-  // across the cluster.
-  const conflicts = useMemo(() => {
-    const out: Array<{ key: FieldKey; values: Array<{ rowId: string; value: string }> }> = []
-    for (const k of FIELD_KEYS) {
-      const values = cluster.rows
-        .map((r) => ({ rowId: r.id, value: ((r as unknown as Record<string, unknown>)[k] as string | null) ?? '' }))
-        .filter((v) => v.value !== '')
-      const distinct = new Set(values.map((v) => v.value))
-      if (distinct.size > 1) out.push({ key: k, values })
-    }
-    return out
-  }, [cluster.rows])
-
   const badgeClass: Record<Classification, string> = {
     LIKELY_DUPE: 'bg-chip-good-bg text-chip-good-fg',
-    UNCERTAIN: 'bg-lt-card text-lt-fg2 border border-lt-hairline',
+    UNCERTAIN: 'bg-chip-warn-bg text-chip-warn-fg',
     LIKELY_OFFICE_MAINLINE: 'bg-lt-card text-lt-fg3 border border-lt-hairline',
   }
 
   return (
-    <section className="border border-lt-hairline rounded-lg overflow-hidden">
-      <header className="px-4 py-3 bg-lt-card/60 border-b border-lt-hairline flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${badgeClass[cluster.classification]}`}>
-            {cluster.classification.replace(/_/g, ' ')}
-          </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-lt-fg3 px-2 py-0.5 border border-lt-hairline rounded">
-            {cluster.method}
-          </span>
-          <span className="text-sm text-lt-fg font-mono">{cluster.key}</span>
-          <span className="text-xs text-lt-fg3">· {cluster.rows.length} rows</span>
+    <section className="border border-lt-hairline rounded-lg overflow-hidden bg-lt-card">
+      <header className="px-4 py-3 bg-lt-inner border-b border-lt-hairline flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${badgeClass[cluster.classification]}`}>
+              {CLASSIFICATION_LABEL[cluster.classification]}
+            </span>
+            <span className="text-sm text-lt-fg font-semibold">
+              {cluster.rows.length} records that {METHOD_LABEL[cluster.method]}
+            </span>
+            <span className="text-sm text-lt-fg2">— {matchedOn(cluster)}</span>
+          </div>
+          <div className="text-xs text-lt-fg3 mt-1">Why they were grouped: {cluster.rationale}</div>
         </div>
         <button
           onClick={onSuppress}
-          className="text-xs px-2 py-1 border border-lt-hairline rounded text-lt-fg2 hover:text-lt-fg"
-          title="Not a dupe — shared office line"
+          className="text-xs px-2 py-1 border border-lt-hairline rounded text-lt-fg2 hover:text-lt-fg whitespace-nowrap"
+          title="Different people who happen to share this line — hide this group"
         >
-          Not a dupe (office line)
+          Not the same people
         </button>
       </header>
 
-      <div className="px-4 py-2 text-xs text-lt-fg2 italic">{cluster.rationale}</div>
+      <div className="px-4 pt-3 pb-1 text-xs text-lt-fg2">
+        Choose <span className="font-semibold text-lt-fg">Keep this one</span> at the top of a
+        column, then use the dots in a row to choose which value the kept record ends up with.
+        The <span className="font-semibold text-lt-fg">After merge</span> column on the right is
+        the record you will be left with.
+      </div>
 
-      {/* Side-by-side diff */}
+      {/* Side-by-side diff + result preview */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-lt-card/40 text-lt-fg3">
+          <thead className="text-lt-fg3">
             <tr>
-              <th className="text-left px-3 py-2 font-semibold uppercase tracking-wider">Field</th>
-              {cluster.rows.map((r) => (
-                <th key={r.id} className="text-left px-3 py-2 font-semibold uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1 cursor-pointer">
+              <th className="text-left px-3 py-2 font-semibold uppercase tracking-wider w-32">Field</th>
+              {cluster.rows.map((r) => {
+                const keep = r.id === survivorId
+                return (
+                  <th
+                    key={r.id}
+                    className={`text-left px-3 py-2 align-top font-normal border-l border-lt-hairline/60 ${keep ? 'bg-chip-good-bg/40' : ''}`}
+                  >
+                    <label className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="radio"
                         name={`survivor-${cluster.key}`}
-                        checked={survivorId === r.id}
+                        checked={keep}
                         onChange={() => setSurvivorId(r.id)}
                       />
-                      <span className="text-[10px]">SURVIVOR</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${keep ? 'text-chip-good-fg' : 'text-lt-fg3'}`}>
+                        {keep ? 'Keeping this one' : 'Keep this one'}
+                      </span>
                     </label>
-                    <span className="text-lt-fg font-mono">{r.id.slice(0, 8)}…</span>
-                    <span className="text-chip-good-fg font-mono">refs={r.refCount}</span>
-                    {r.hasUserAccount && (
-                      <span className="text-[9px] text-chip-good-fg uppercase tracking-wider">portal</span>
+                    <div className="text-sm text-lt-fg font-semibold mt-1 normal-case tracking-normal">
+                      {displayName(r)}
+                    </div>
+                    <div className="text-[11px] text-lt-fg2 break-all normal-case tracking-normal">{r.email}</div>
+                    <div className="text-[11px] text-lt-fg3 normal-case tracking-normal mt-0.5">
+                      used in {r.refCount} place{r.refCount === 1 ? '' : 's'}
+                      {' · '}added {r.createdAt.slice(0, 10)}
+                      {r.hasUserAccount && <span className="text-chip-good-fg"> · has portal login</span>}
+                    </div>
+                    {!keep && (
+                      <div className="text-[11px] text-lt-fg3 normal-case tracking-normal italic mt-0.5">
+                        will be merged in
+                      </div>
                     )}
-                  </div>
-                </th>
-              ))}
+                  </th>
+                )
+              })}
+              <th className="text-left px-3 py-2 align-top font-normal border-l-2 border-lt-fg/20 bg-lt-inner w-56">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-lt-fg2">After merge</div>
+                <div className="text-sm text-lt-fg font-semibold mt-1 normal-case tracking-normal">
+                  {displayName(survivor)}
+                </div>
+                <div className="text-[11px] text-lt-fg2 break-all normal-case tracking-normal">{canonicalEmail}</div>
+                <div className="text-[11px] text-lt-fg3 normal-case tracking-normal mt-0.5">
+                  the one record everything points at
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="text-lt-fg2">
             {FIELD_KEYS.map((k) => {
-              const conflict = conflicts.find((c) => c.key === k)
+              const isConflict = conflicts.has(k)
+              const result = resolved(k)
               return (
                 <tr key={k} className="border-t border-lt-hairline/60">
-                  <td className="px-3 py-1.5 text-lt-fg3 font-semibold">{FIELD_LABELS[k]}</td>
+                  <td className="px-3 py-1.5 text-lt-fg3 font-semibold align-top">
+                    {FIELD_LABELS[k]}
+                    {isConflict && <span className="block text-[10px] font-normal text-lt-fg3">pick one</span>}
+                  </td>
                   {cluster.rows.map((r) => {
-                    const v = (((r as unknown) as Record<string, unknown>)[k] as string | null) ?? ''
-                    const isPicked = overrides[k]?.from === r.id
+                    const v = fieldValue(r, k)
+                    const isPicked = overrides[k]?.from === r.id && overrides[k]?.value === v && v !== ''
                     return (
-                      <td key={r.id} className={`px-3 py-1.5 align-top ${conflict && isPicked ? 'bg-chip-good-bg/40' : ''}`}>
-                        {conflict && v !== '' ? (
-                          <label className="flex items-start gap-1 cursor-pointer">
+                      <td
+                        key={r.id}
+                        className={`px-3 py-1.5 align-top border-l border-lt-hairline/60 ${isConflict && isPicked ? 'bg-chip-good-bg/40' : ''}`}
+                      >
+                        {isConflict && v !== '' ? (
+                          <label className="flex items-start gap-1.5 cursor-pointer">
                             <input
                               type="radio"
+                              className="mt-0.5"
                               name={`override-${cluster.key}-${k}`}
                               checked={isPicked}
                               onChange={() => setOverrides((prev) => ({
@@ -385,165 +500,172 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
                                 [k]: { from: r.id, value: v },
                               }))}
                             />
-                            <span className="font-mono break-all">{v}</span>
+                            <span className="break-words">{v}</span>
                           </label>
                         ) : (
-                          <span className="font-mono break-all">{v || <em className="text-lt-fg3">∅</em>}</span>
+                          <span className="break-words">{v || <span className="text-lt-fg3">—</span>}</span>
                         )}
                       </td>
                     )
                   })}
+                  <td className="px-3 py-1.5 align-top border-l-2 border-lt-fg/20 bg-lt-inner">
+                    <span className="text-lt-fg break-words">
+                      {result.value || <span className="text-lt-fg3">empty</span>}
+                    </span>
+                    {result.fromId && result.fromId !== survivorId && (
+                      <span className="block text-[10px] text-lt-fg3">
+                        filled in from {displayName(cluster.rows.find((r) => r.id === result.fromId)!)}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
-            <tr className="border-t border-lt-hairline/60 bg-lt-card/30">
-              <td className="px-3 py-1.5 text-lt-fg3 font-semibold">Email</td>
-              {cluster.rows.map((r) => (
-                <td key={r.id} className="px-3 py-1.5 font-mono break-all">
-                  {r.email}
-                </td>
-              ))}
+            <tr className="border-t border-lt-hairline/60">
+              <td className="px-3 py-1.5 text-lt-fg3 font-semibold align-top">Email</td>
+              {cluster.rows.map((r) => {
+                const isCanonical = r.email.trim().toLowerCase() === canonicalEmail
+                return (
+                  <td key={r.id} className="px-3 py-1.5 break-all align-top border-l border-lt-hairline/60">
+                    {r.email}
+                    <span className="block text-[10px] text-lt-fg3">
+                      {isCanonical ? 'main address' : 'kept as an alternate address'}
+                    </span>
+                  </td>
+                )
+              })}
+              <td className="px-3 py-1.5 align-top border-l-2 border-lt-fg/20 bg-lt-inner break-all">
+                <span className="text-lt-fg">{canonicalEmail}</span>
+                {emailOptions.length > 1 && (
+                  <span className="block text-[10px] text-lt-fg3">
+                    + {emailOptions.length - 1} alternate address{emailOptions.length - 1 === 1 ? '' : 'es'}
+                  </span>
+                )}
+              </td>
             </tr>
             <tr className="border-t border-lt-hairline/60">
-              <td className="px-3 py-1.5 text-lt-fg3 font-semibold">Created</td>
+              <td className="px-3 py-1.5 text-lt-fg3 font-semibold align-top">Came from</td>
               {cluster.rows.map((r) => (
-                <td key={r.id} className="px-3 py-1.5 font-mono text-[11px]">
-                  {r.createdAt.slice(0, 10)}
+                <td key={r.id} className="px-3 py-1.5 align-top border-l border-lt-hairline/60">
+                  {r.source || <span className="text-lt-fg3">—</span>}
                 </td>
               ))}
-            </tr>
-            <tr className="border-t border-lt-hairline/60">
-              <td className="px-3 py-1.5 text-lt-fg3 font-semibold">Source</td>
-              {cluster.rows.map((r) => (
-                <td key={r.id} className="px-3 py-1.5 font-mono">
-                  {r.source || <em className="text-lt-fg3">∅</em>}
-                </td>
-              ))}
+              <td className="px-3 py-1.5 align-top border-l-2 border-lt-fg/20 bg-lt-inner">
+                <span className="text-lt-fg3">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* Canonical-email picker + merge actions */}
-      <div className="px-4 py-3 border-t border-lt-hairline bg-lt-card/30 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-lt-fg3">Canonical email:</span>
+      {/* Main-address picker + merge actions */}
+      <div className="px-4 py-3 border-t border-lt-hairline bg-lt-inner flex items-center justify-between gap-4 flex-wrap">
+        <label className="flex items-center gap-2 text-xs">
+          <span className="text-lt-fg2">Main email address to keep:</span>
           <select
             value={canonicalEmail}
-            onChange={(e) => setCanonicalEmail(e.target.value)}
-            className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-lt-fg font-mono"
+            onChange={(e) => { setCanonicalEmail(e.target.value); setConfirming(null) }}
+            className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-lt-fg"
           >
             {emailOptions.map((e) => (
               <option key={e} value={e}>{e}</option>
             ))}
           </select>
-          <span className="text-lt-fg3 italic">other addresses → aliases</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {cluster.rows.filter((r) => r.id !== survivorId).map((loser) => (
-            <MergeButton
-              key={loser.id}
-              cluster={cluster}
-              survivor={survivor}
-              loser={loser}
-              canonicalEmail={canonicalEmail}
-              overrides={overrides}
-              onConfirm={() => onClusterMerge(loser.id)}
-            />
-          ))}
+          <span className="text-lt-fg3">the others stay on the record as alternates</span>
+        </label>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {losers.map((loser) => {
+            // Blocked when the chosen main address belongs to a DIFFERENT
+            // row than this one — that address only arrives when its own
+            // row is merged in.
+            const blocked = !canonicalIsSurvivors && canonicalOwner?.id !== loser.id
+            return (
+              <button
+                key={loser.id}
+                onClick={() => setConfirming(confirming === loser.id ? null : loser.id)}
+                disabled={busy || blocked}
+                title={blocked && canonicalOwner
+                  ? `Merge ${displayName(canonicalOwner)} first — the main address you chose is on that record.`
+                  : `Merge ${displayName(loser)} into ${displayName(survivor)}`}
+                className="text-xs px-3 py-1.5 bg-lt-fg text-white rounded hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Merge <span className="font-semibold">{displayName(loser)}</span> into {displayName(survivor)}
+              </button>
+            )
+          })}
         </div>
       </div>
+
+      {confirming && (() => {
+        const loser = cluster.rows.find((r) => r.id === confirming)
+        if (!loser) return null
+        const loserEmail = loser.email.trim().toLowerCase()
+        const aliasEmail = canonicalEmail === loserEmail
+          ? survivor.email.trim().toLowerCase()
+          : loserEmail
+        const aliasNeeded = aliasEmail !== canonicalEmail
+        const pickedFromLoser = FIELD_KEYS.filter((k) => overrides[k]?.from === loser.id)
+        return (
+          <div className="px-4 py-3 border-t border-lt-hairline bg-chip-warn-bg/40 text-xs">
+            <div className="font-semibold text-lt-fg text-sm mb-1">
+              Merge {displayName(loser)} into {displayName(survivor)}?
+            </div>
+            <ul className="space-y-0.5 text-lt-fg2">
+              <li>
+                • The {loser.refCount} place{loser.refCount === 1 ? '' : 's'} that point at{' '}
+                {displayName(loser)} (jobs, orders, bookings, affiliations) will point at{' '}
+                {displayName(survivor)} instead.
+              </li>
+              <li>• Main email address becomes <span className="font-semibold">{canonicalEmail}</span>.</li>
+              {aliasNeeded && (
+                <li>• <span className="font-semibold">{aliasEmail}</span> is kept as an alternate address, so old mail still finds this person.</li>
+              )}
+              {pickedFromLoser.length > 0 && (
+                <li>
+                  • Values taken from {displayName(loser)}:{' '}
+                  {pickedFromLoser.map((k) => FIELD_LABELS[k].toLowerCase()).join(', ')}.
+                </li>
+              )}
+              <li>
+                • The {displayName(loser)} record is removed. A full copy is saved — undo it any
+                time from &ldquo;Recently merged&rdquo;.
+              </li>
+              {losers.length > 1 && (
+                <li className="text-lt-fg3">
+                  • {losers.length - 1} more record{losers.length - 1 === 1 ? '' : 's'} in this
+                  group; merge them one at a time.
+                </li>
+              )}
+            </ul>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => runMerge(loser.id)}
+                disabled={busy}
+                className="text-xs px-3 py-1.5 bg-chip-good-fg text-white rounded hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? 'Merging…' : 'Yes, merge them'}
+              </button>
+              <button
+                onClick={() => setConfirming(null)}
+                className="text-xs px-3 py-1.5 text-lt-fg2 hover:text-lt-fg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </section>
   )
 }
 
-// ── Merge button with confirm summary ──────────────────────────────
-
-function MergeButton({
-  cluster, survivor, loser, canonicalEmail, overrides, onConfirm,
-}: {
-  cluster: Cluster
-  survivor: Row
-  loser: Row
-  canonicalEmail: string
-  overrides: Partial<Record<FieldKey, { from: string; value: string | null }>>
-  onConfirm: () => void
-}) {
-  const [open, setOpen] = useState(false)
-
-  // Pre-flight summary: counts come from the rows we already have +
-  // the cluster shape. Real collision detection happens server-side
-  // in the merge primitive transaction; this is a "good-faith
-  // estimate so the reviewer isn't blind."
-  const summary = useMemo(() => {
-    const fieldOverrideCount = Object.keys(overrides).length
-    const aliasNeeded = canonicalEmail.trim().toLowerCase() !==
-      // The "other" email — whichever one isn't canonical
-      [survivor.email, loser.email]
-        .find((e) => e.trim().toLowerCase() !== canonicalEmail.trim().toLowerCase())
-        ?.trim()
-        ?.toLowerCase()
-    return {
-      refsToRepoint: loser.refCount,
-      fieldOverrideCount,
-      aliasNeeded,
-      // Best-effort: there's no client-side way to know JobContact /
-      // Affiliation collisions without re-querying — the server
-      // surfaces the actuals in the response. Leave the summary
-      // honest about that.
-    }
-  }, [cluster.method, overrides, canonicalEmail, survivor.email, loser.email])
-  void cluster.method  // silence unused warning when method-specific logic gets added
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs px-3 py-1 bg-lt-fg text-white rounded hover:bg-black"
-      >
-        Merge {loser.id.slice(0, 6)}… → survivor
-      </button>
-    )
-  }
-
-  return (
-    <div className="flex items-center gap-2 text-xs p-2 border border-lt-hairline rounded bg-lt-card">
-      <div className="text-lt-fg2">
-        <div className="font-semibold text-lt-fg">Confirm:</div>
-        <ul className="text-[11px] mt-1 space-y-0.5">
-          <li>• {summary.refsToRepoint} refs repoint loser → survivor</li>
-          <li>• JobContact + Affiliation unique collisions resolved in-transaction</li>
-          <li>• Survivor email becomes <span className="font-mono">{canonicalEmail}</span></li>
-          {summary.aliasNeeded && <li>• Other address minted as PersonEmailAlias</li>}
-          <li>• {summary.fieldOverrideCount} field override{summary.fieldOverrideCount === 1 ? '' : 's'} from conflict UI</li>
-          <li>• Loser row archived to PersonMerge.loserSnapshot (full restore via Recent merges)</li>
-        </ul>
-      </div>
-      <div className="flex flex-col gap-1">
-        <button
-          onClick={() => { setOpen(false); onConfirm() }}
-          className="text-xs px-3 py-1 bg-chip-good-fg text-white rounded hover:opacity-90"
-        >
-          Confirm merge
-        </button>
-        <button
-          onClick={() => setOpen(false)}
-          className="text-xs px-3 py-1 text-lt-fg3 hover:text-lt-fg"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Recent merges row with one-click reverse ────────────────────────
+// ── Recent merges row with one-click undo ───────────────────────────
 
 function RecentMergeRow({ merge, onReversed }: { merge: RecentMerge; onReversed: () => void }) {
   const [busy, setBusy] = useState(false)
 
   const reverse = async () => {
-    if (!confirm(`Reverse merge of ${merge.loser.name} (${merge.loser.email}) into ${merge.survivor.name}?`)) return
+    if (!confirm(`Undo this merge and put ${merge.loser.name} (${merge.loser.email}) back as its own record?`)) return
     setBusy(true)
     const res = await fetch('/api/admin/dedup/reverse', {
       method: 'POST',
@@ -553,7 +675,7 @@ function RecentMergeRow({ merge, onReversed }: { merge: RecentMerge; onReversed:
     setBusy(false)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      alert(`Reverse failed: ${data.error || res.statusText}`)
+      alert(`Undo failed: ${data.error || res.statusText}`)
       return
     }
     onReversed()
@@ -561,19 +683,22 @@ function RecentMergeRow({ merge, onReversed }: { merge: RecentMerge; onReversed:
 
   return (
     <li className="border border-lt-hairline rounded p-2 text-xs">
-      <div className="text-lt-fg font-mono">{merge.loser.email}</div>
-      <div className="text-lt-fg3 text-[11px]">→ {merge.survivor.email}</div>
+      <div className="text-lt-fg font-semibold">{merge.loser.name || merge.loser.email}</div>
+      <div className="text-lt-fg3 text-[11px] break-all">{merge.loser.email}</div>
+      <div className="text-lt-fg2 text-[11px] mt-0.5">
+        merged into {merge.survivor.name || merge.survivor.email}
+      </div>
       <div className="text-lt-fg3 text-[11px] mt-1">
         {new Date(merge.mergedAt).toLocaleString()}
         {' · '} by {merge.mergedBy.name}
-        {merge.aliasCount > 0 && <span className="ml-1">· {merge.aliasCount} alias</span>}
+        {merge.aliasCount > 0 && <span className="ml-1">· {merge.aliasCount} alternate address kept</span>}
       </div>
       <button
         onClick={reverse}
         disabled={busy}
         className="mt-1 text-[11px] px-2 py-0.5 border border-lt-hairline rounded text-chip-bad-fg hover:bg-chip-bad-bg disabled:opacity-50"
       >
-        {busy ? 'Reversing…' : 'Reverse'}
+        {busy ? 'Undoing…' : 'Undo this merge'}
       </button>
     </li>
   )
