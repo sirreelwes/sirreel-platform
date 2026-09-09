@@ -12,6 +12,15 @@
  * as that model's comment warned. See src/lib/sub-rentals/orderFees.ts for how
  * each fee unit becomes a line and why metered ones carry an estimate note.
  *
+ * Driver on the production's payroll: a union job puts the partner's driver on
+ * the PRODUCTION's payroll, so the driver charge is not ours to bill (Wes
+ * 2026-09-09). The answer lives on the BOOKING (SubRental
+ * .driverOnProductionPayroll) and is resolved here, server-side, on both verbs
+ * — a POST that trusted the browser's copy of the flag could bill a union
+ * client for a driver they are already paying. The rep may also flip it from
+ * the fee modal, in which case it is written back to the booking so the
+ * partner's page and the client's quote cannot disagree about who pays.
+ *
  * Idempotency: re-adding the same vehicle's fees to the same order is refused
  * rather than silently doubling the charges. A rep who wants to redo them
  * deletes the lines first — deleting is visible, a duplicated $550 driver fee
@@ -23,6 +32,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
 import { partnerFeeSchedule, buildFeeLines, type FeeEstimates } from '@/lib/sub-rentals/orderFees'
+import { PAYROLL_DRIVER_NOTE } from '@/lib/sub-rentals/vehicles'
 import { sumHours } from '@/lib/drivers/hoursEntry'
 import { usageOfRows } from '@/lib/drivers/hoursStore'
 
@@ -64,6 +74,28 @@ function orderDays(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>): n
     if (span > 0) return span
   }
   return 1
+}
+
+/**
+ * The bookings of this unit on this job — the rows that carry the payroll
+ * answer, and the rows that must be kept in step when a rep changes it.
+ *
+ * Plural because one job can hold the same unit over two windows (a pre-shoot
+ * hold and the shoot itself), and a driver on the production's payroll is on
+ * it for both. Bookings reach a job either directly (the estimate flow) or
+ * through their order (the line-level flow), so both arms are queried — the
+ * same scope GET /api/jobs/[id]/sub-rentals uses.
+ */
+async function payrollBookings(jobId: string | null, vehicleId: string) {
+  if (!jobId) return []
+  return prisma.subRental.findMany({
+    where: {
+      subcontractedVehicleId: vehicleId,
+      status: { not: 'CANCELLED' },
+      OR: [{ jobId }, { order: { jobId } }],
+    },
+    select: { id: true, driverOnProductionPayroll: true },
+  })
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -138,7 +170,21 @@ export async function GET(req: NextRequest, { params }: Params) {
     ? { days: reportedRows.length, hours: sumHours(reportedRows), ...usageOfRows(reportedRows) }
     : null
 
-  return NextResponse.json({ ...schedule, days: orderDays(order), reported })
+  // The booking's answer, so the modal opens on the truth rather than on a
+  // default the rep has to remember to set. Any live booking of this unit on
+  // this job saying "payroll" is enough — see payrollBookings.
+  const bookings = await payrollBookings(order.jobId, vehicleId)
+  const driverOnProductionPayroll = bookings.some((b) => b.driverOnProductionPayroll)
+
+  return NextResponse.json({
+    ...schedule,
+    days: orderDays(order),
+    reported,
+    driverOnProductionPayroll,
+    /** False when no booking exists yet — the checkbox then applies to this add only. */
+    hasBooking: bookings.length > 0,
+    payrollNote: PAYROLL_DRIVER_NOTE,
+  })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -150,6 +196,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     vehicleId?: unknown
     parentLineItemId?: unknown
     estimates?: unknown
+    driverOnProductionPayroll?: unknown
   }
   const vehicleId = typeof body.vehicleId === 'string' ? body.vehicleId : ''
   if (!vehicleId) return NextResponse.json({ error: 'vehicleId is required.' }, { status: 400 })
@@ -188,10 +235,27 @@ export async function POST(req: NextRequest, { params }: Params) {
     )
   }
 
+  // ── Who pays the driver ──────────────────────────────────────────────────
+  // The booking is the record; the checkbox in the modal is the rep telling us
+  // it changed. Either saying "payroll" excludes the driver lines — the rep
+  // can turn it ON here, and turning it OFF is equally their call, which is
+  // why the booking is then updated rather than silently overruling them.
+  const bookings = await payrollBookings(order.jobId, vehicleId)
+  const asked =
+    typeof body.driverOnProductionPayroll === 'boolean' ? body.driverOnProductionPayroll : null
+  const excludeDriverLabor = asked ?? bookings.some((b) => b.driverOnProductionPayroll)
+
   const days = orderDays(order)
-  const lines = buildFeeLines(schedule.fees, estimates, days, Prisma.Decimal)
+  const lines = buildFeeLines(schedule.fees, estimates, days, Prisma.Decimal, { excludeDriverLabor })
   if (!lines.length) {
-    return NextResponse.json({ error: 'Nothing to add — no day-rate fees and no usage estimated.' }, { status: 400 })
+    return NextResponse.json(
+      {
+        error: excludeDriverLabor && schedule.fees.some((f) => f.driverLabor)
+          ? 'Nothing to add — the driver is on the production’s payroll and no other fee applies.'
+          : 'Nothing to add — no day-rate fees and no usage estimated.',
+      },
+      { status: 400 },
+    )
   }
 
   // Fee lines inherit the order's own window. OrderLineItem requires both,
@@ -246,6 +310,32 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   await recalcOrderTotals(orderId)
 
+  // Keep the booking in step with what was just billed (or not billed). Without
+  // this the quote would say "driver on production payroll" while the partner's
+  // page still read as a normal driver day — two answers to one question, and
+  // the partner invoices us for a driver the production hired.
+  const stale = bookings.filter((b) => b.driverOnProductionPayroll !== excludeDriverLabor)
+  if (asked !== null && stale.length) {
+    await prisma.subRental.updateMany({
+      where: { id: { in: stale.map((b) => b.id) } },
+      data: { driverOnProductionPayroll: excludeDriverLabor },
+    })
+    for (const b of stale) {
+      await prisma.auditLog.create({
+        data: {
+          action: 'sub_rental.driver_payroll_set',
+          entityType: 'SubRental',
+          entityId: b.id,
+          newValues: {
+            driverOnProductionPayroll: excludeDriverLabor,
+            via: 'order.partner_fees',
+            orderId,
+          },
+        },
+      })
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       action: 'order.partner_fees_added',
@@ -256,6 +346,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         vehicleName: schedule.vehicleName,
         days,
         estimates,
+        driverOnProductionPayroll: excludeDriverLabor,
+        driverFeesOmitted: excludeDriverLabor
+          ? schedule.fees.filter((f) => f.driverLabor).map((f) => f.label)
+          : [],
         parentLineItemId,
         parentDescription: parent.description,
         lines: lines.map((l) => ({ description: l.description, total: l.lineTotal.toString() })),

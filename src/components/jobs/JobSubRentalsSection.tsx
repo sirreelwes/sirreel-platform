@@ -39,6 +39,8 @@ export interface JobSubRental {
   driverName: string | null
   driverPhone: string | null
   driverEmail: string | null
+  /** Union job: the production carries the driver, so we bill nothing for one. */
+  driverOnProductionPayroll?: boolean
   relayAddress: string | null
   vendorUrl: string | null
   vendorTotal: number | null
@@ -190,6 +192,40 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
     [load],
   )
 
+  /**
+   * Who pays the driver. Lives here rather than only at quote time because a
+   * job goes union AFTER it was quoted far more often than the reverse, and
+   * without a switch on the booking the only fix was a hand-deleted line on
+   * the order — which leaves the partner's page still saying we're paying.
+   */
+  const setPayroll = useCallback(
+    async (s: JobSubRental, on: boolean) => {
+      setBusyId(s.id)
+      setErr(null)
+      setMsg(null)
+      try {
+        const r = await fetch(`/api/sub-rentals/${s.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ driverOnProductionPayroll: on }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Could not update it (${r.status})`)
+        setMsg(
+          on
+            ? `${s.vehicleName}: driver goes on the production's payroll — we won't bill for one.`
+            : `${s.vehicleName}: we bill the driver and pass it through.`,
+        )
+        await load()
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Could not update it')
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [load],
+  )
+
   const copy = useCallback(async (s: JobSubRental, which: 'vendor' | 'driver' = 'vendor') => {
     const url = which === 'vendor' ? s.vendorUrl : s.driverUrl
     if (!url) return
@@ -269,6 +305,11 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                     >
                       {STATUS_LABEL[s.status] ?? s.status}
                     </span>
+                    {s.driverOnProductionPayroll && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700">
+                        Driver on production payroll
+                      </span>
+                    )}
                     {s.order && (
                       <Link
                         href={`/orders/${s.order.id}`}
@@ -436,6 +477,25 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                 ) : null}
               </div>
 
+              {/* Who pays that driver. Stated on every live row, not only when
+                  it's on: "we're billing for the driver" is the default and is
+                  worth reading before a union quote goes out. */}
+              {!DEAD.includes(s.status) && s.receiveMethod !== 'DELIVERY' && (
+                <div className="mt-1 text-[12px]">
+                  {s.driverOnProductionPayroll ? (
+                    <span className="text-indigo-700">
+                      <strong className="font-semibold">Driver is on the production&rsquo;s payroll.</strong>{' '}
+                      No driver charge on our invoice, and {s.vendor.name} doesn&rsquo;t invoice us for
+                      one. Hours are still logged — the production needs them for payroll.
+                    </span>
+                  ) : (
+                    <span className="text-zinc-600">
+                      We bill the driver and pass it through to {s.vendor.name}.
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
               <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                 {unaskedRow && (s.vendor.poEmail || s.vendor.email) && (
@@ -480,6 +540,15 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                       Driver view
                     </Link>
                   </>
+                )}
+                {!DEAD.includes(s.status) && s.receiveMethod !== 'DELIVERY' && (
+                  <button
+                    onClick={() => setPayroll(s, !s.driverOnProductionPayroll)}
+                    disabled={busy}
+                    className="text-[12px] px-2.5 py-1 rounded-lg border border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:text-zinc-900 disabled:opacity-50"
+                  >
+                    {s.driverOnProductionPayroll ? 'We bill the driver' : 'Driver → production payroll'}
+                  </button>
                 )}
                 {!DEAD.includes(s.status) && (
                   <select

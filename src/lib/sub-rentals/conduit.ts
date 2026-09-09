@@ -88,6 +88,7 @@ const CONDUIT_SELECT = {
   driverName: true,
   driverEmail: true,
   driverPhone: true,
+  driverOnProductionPayroll: true,
   driverToken: true,
   driverAckedAt: true,
   driverAckNote: true,

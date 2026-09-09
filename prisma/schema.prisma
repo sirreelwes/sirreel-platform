@@ -4679,6 +4679,28 @@ model SubRental {
   driverPhone      String?   @map("driver_phone") @db.VarChar(30)
   driverAssignedAt DateTime? @map("driver_assigned_at")
 
+  /// UNION JOB: the driver rides on the PRODUCTION COMPANY's payroll for this
+  /// booking, so SirReel does not bill the client for driver labor and the
+  /// partner does not invoice us for it (Wes 2026-09-09: "sometimes we will
+  /// bill for the Driver on our invoice and pass that along to them, but
+  /// there are also times when it is a union job and the driver will be on
+  /// the payroll of the Production company").
+  ///
+  /// Per BOOKING, not per unit or per partner: the same coach goes out union
+  /// one week and non-union the next, and the answer belongs to the job it is
+  /// going out on. Set when the unit is quoted/booked and editable after — a
+  /// job goes union late far more often than it goes non-union late.
+  ///
+  /// What reads it: the partner-fee builder (driver-labor lines are left OFF
+  /// the order — src/lib/sub-rentals/orderFees.ts), the client estimate (the
+  /// driver row prints "On production payroll" instead of a rate), the vendor
+  /// page and the driver's own page. The driver still logs hours: the
+  /// production needs them for payroll even though we aren't billing them.
+  ///
+  /// Who set it and when lives in AuditLog (sub_rental.driver_payroll_set),
+  /// not in two more columns here.
+  driverOnProductionPayroll Boolean @default(false) @map("driver_on_production_payroll")
+
   /// The plus-tag half of the relay address: jobs+{relayTag}@sirreel.com.
   /// Gmail routes ONLY `+suffix` back to the base mailbox, so the tag lives
   /// after the plus rather than in a prettier dotted local part — a different
@@ -5047,6 +5069,22 @@ model SubcontractedFee {
   /// NULL for everything metered continuously (per-mile, per-hour).
   coversHours Decimal?         @map("covers_hours") @db.Decimal(5, 2)
   unionScope  SubFeeUnionScope @default(ALL) @map("union_scope")
+
+  /// Is this row DRIVER LABOR — the charge a union production puts on its own
+  /// payroll instead of ours (SubRental.driverOnProductionPayroll)? Getting
+  /// this wrong costs money in both directions: a missed driver row bills a
+  /// union client for a driver they are already paying, and a false positive
+  /// silently drops $550/day off a non-union quote.
+  ///
+  /// NULLABLE on purpose, and null is not "false": null means "nobody has
+  /// answered", and readers fall back to `isDriverLaborFee` in
+  /// lib/sub-rentals/vehicles.ts, which reads the label. A plain
+  /// `Boolean @default(false)` would have silently declassified every fee row
+  /// that already exists — King Kong's "Driver" among them — and the payroll
+  /// switch would have quietly done nothing. Set true/false to overrule the
+  /// label (a partner who calls it "Teamster", or a "Driver's room" that is
+  /// not labor at all).
+  isDriverLabor Boolean? @map("is_driver_labor")
 
   /// Whether our negotiated discount comes off this fee too. Defaults
   /// FALSE: ancillaries are normally pass-through and the discount is

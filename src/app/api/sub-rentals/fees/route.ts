@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
     unit?: string
     coversHours?: number | string | null
     unionScope?: string | null
+    isDriverLabor?: boolean | null
     discountApplies?: boolean
     notes?: string | null
     sortOrder?: number
@@ -118,6 +119,9 @@ export async function POST(req: NextRequest) {
       unit: body.unit as FeeUnit,
       coversHours: parseMoney(body.coversHours),
       unionScope,
+      // Tri-state: true/false is an explicit answer, null leaves the label to
+      // decide (isDriverLaborFee). See SubcontractedFee.isDriverLabor.
+      isDriverLabor: typeof body.isDriverLabor === 'boolean' ? body.isDriverLabor : null,
       discountApplies: body.discountApplies === true,
       notes: body.notes?.trim() || null,
       sortOrder: Number.isInteger(body.sortOrder) ? (body.sortOrder as number) : 0,
