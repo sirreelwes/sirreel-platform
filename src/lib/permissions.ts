@@ -2,6 +2,8 @@ import { UserRole } from '@prisma/client';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { canUseCollections } from '@/lib/collections/allowlist';
 import { isExportApprover } from '@/lib/exports/approver';
+import { isAllowedApEmail } from '@/lib/ap/allowlist';
+import { isAllowedTeamMetricsEmail } from '@/lib/team/allowlist';
 import { isAllowedPayrollEmail } from '@/lib/payroll/allowlist';
 import { isAllowedYardEmail } from '@/lib/yard/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
@@ -830,6 +832,24 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // it too; this only hides the nav row.
         ...(isAllowedPayrollEmail(navEmail)
           ? [{ id: 'payroll', label: 'Payroll', icon: 'Clock', href: '/payroll' }]
+          : []),
+        // Accounts payable — vendor bills read out of email, cross-checked
+        // against the POs the team issued. Email-gated on its own list
+        // (src/lib/ap/allowlist.ts), NOT role-gated: Wes asked for it as his
+        // own view, and it puts vendor cost next to client billing. Separate
+        // from payroll's list on purpose — what we pay our people and what we
+        // owe outside are different grants. The page and every /api/ap route
+        // enforce it too; this only hides the nav row.
+        ...(isAllowedApEmail(navEmail)
+          ? [{ id: 'accounts-payable', label: 'Accounts Payable', icon: 'FileText', href: '/ap' }]
+          : []),
+        // Team metrics — each watched employee against their own prior
+        // window. Its own allowlist (src/lib/team/allowlist.ts), the
+        // narrowest in the app: this is a judgement ABOUT named people
+        // assembled from their mail and their clicks, which is a different
+        // grant from payroll's "what they are paid". Page and API re-check.
+        ...(isAllowedTeamMetricsEmail(navEmail)
+          ? [{ id: 'team-metrics', label: 'Team', icon: 'Users', href: '/team' }]
           : []),
       ],
     },
