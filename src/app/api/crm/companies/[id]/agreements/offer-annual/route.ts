@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { offerAnnualForSignature, findPendingAnnual } from '@/lib/portal/companyAnnual'
+import { findOpenAnnualRequest, resolveAnnualRequests } from '@/lib/portal/annualRequest'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -16,7 +17,23 @@ export const maxDuration = 60
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const g = await requireCompanyTermsEditor()
   if ('error' in g) return g.error
-  return NextResponse.json({ ok: true, pending: await findPendingAnnual(params.id) })
+  // The client's own ask, when there is one — so the panel can say who
+  // asked and when, right beside the button that answers it.
+  const [pending, request] = await Promise.all([
+    findPendingAnnual(params.id),
+    findOpenAnnualRequest(params.id),
+  ])
+  return NextResponse.json({
+    ok: true,
+    pending,
+    request: request
+      ? {
+          requestedAt: request.createdAt.toISOString(),
+          requestedByName: request.requestedByName,
+          source: request.source,
+        }
+      : null,
+  })
 }
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -24,6 +41,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   if ('error' in g) return g.error
   try {
     const pending = await offerAnnualForSignature(params.id, { byUserId: g.user.id })
+    // Filing the annual IS the answer to the ask — close it here rather
+    // than leaving the desk a queue row that outlived its reason.
+    await resolveAnnualRequests({
+      companyId: params.id,
+      reason: 'OFFERED',
+      byUserId: g.user.id,
+    })
     return NextResponse.json({ ok: true, pending })
   } catch (e) {
     console.error('[offer-annual] failed:', e)

@@ -48,6 +48,17 @@ interface PortalData {
     /** Master + this job's addendum as ONE PDF, once it has been cut. */
     jobCopyUrl: string | null;
   } | null;
+  /** The annual-agreement option for this account, when it isn't already
+   *  on one. OFFER = the option exists and nobody has asked; REQUESTED =
+   *  the ask is with their rep; PENDING_SIGNATURE = a master is already
+   *  waiting for an executive's signature in the account portal. Null when
+   *  the option doesn't apply. Purely informational — none of it changes
+   *  what this job's paperwork requires. */
+  annualOption:
+    | { state: 'OFFER' }
+    | { state: 'REQUESTED'; requestedAt: string }
+    | { state: 'PENDING_SIGNATURE' }
+    | null;
   /** Damage-waiver election for the JOB. `available` is false when nothing
    *  booked can carry the waiver — the row then explains rather than offers. */
   lcdw: {
@@ -335,6 +346,12 @@ export default function JobPortalPage() {
   // treats release as best-effort, so "approved" and "ready to sign" are
   // two different facts — never promise the second on the first.
   const [agreementReady, setAgreementReady] = useState(false);
+  // The annual-agreement ask. Optimistic on success so the line changes
+  // under the client's finger; the server is idempotent per account, so a
+  // double-tap (or a colleague on another show) never stacks a duplicate.
+  const [annualAsking, setAnnualAsking] = useState(false);
+  const [annualAsked, setAnnualAsked] = useState(false);
+  const [annualAskError, setAnnualAskError] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -456,6 +473,23 @@ export default function JobPortalPage() {
       setApproveError('Could not approve the quote. Please try again.');
     } finally {
       setApproving(false);
+    }
+  };
+
+  const askForAnnual = async () => {
+    setAnnualAsking(true);
+    setAnnualAskError('');
+    try {
+      const r = await fetch('/api/portal/job/annual-request', { method: 'POST' });
+      if (!r.ok) {
+        setAnnualAskError('Could not send that. Email your rep and they will set it up.');
+        return;
+      }
+      setAnnualAsked(true);
+    } catch {
+      setAnnualAskError('Could not send that. Email your rep and they will set it up.');
+    } finally {
+      setAnnualAsking(false);
     }
   };
 
@@ -1013,6 +1047,52 @@ export default function JobPortalPage() {
                   <span className="text-xs text-gray-500">
                     Approve your quote above and the rental agreement appears here to sign.
                   </span>
+                )}
+
+                {/* Sign once for the year. A production renting from us
+                    four times a year signs this same agreement four times,
+                    and the option to stop doing that was invisible: the
+                    account portal mentioned it in prose ("ask your rep"),
+                    this page not at all, and the only self-serve route was
+                    a public form HQ can't see. It sits UNDER the signing
+                    affordance and never in front of it — this job's
+                    paperwork is unaffected either way. */}
+                {data.annualOption && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    {data.annualOption.state === 'PENDING_SIGNATURE' ? (
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        An annual agreement is with your account&rsquo;s executives to sign. Until
+                        it&rsquo;s signed, each show is papered on its own — including this one.
+                      </p>
+                    ) : annualAsked || data.annualOption.state === 'REQUESTED' ? (
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        <span className="font-semibold text-gray-700">
+                          Annual agreement requested.
+                        </span>{' '}
+                        Your rep has it and will follow up — an executive at your company signs it
+                        once, and after that each show is confirmed with a one-page addendum
+                        instead of the full agreement.
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-gray-500 leading-relaxed">
+                          Renting from us more than once this year? An annual agreement is signed
+                          once by an executive at your company; every show after that is confirmed
+                          with a one-page addendum instead of the full agreement.
+                        </p>
+                        <button
+                          onClick={askForAnnual}
+                          disabled={annualAsking}
+                          className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                        >
+                          {annualAsking ? 'Sending…' : 'Ask about an annual agreement →'}
+                        </button>
+                        {annualAskError && (
+                          <p className="text-[11px] text-red-600">{annualAskError}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </PaperworkRow>
 

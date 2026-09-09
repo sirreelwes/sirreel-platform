@@ -30,6 +30,9 @@
  *   - driver-hours-untrued (DERIVED) — a partner's driver logged their
  *     hours and the order still bills the quoted estimate. Clears when
  *     the desk applies them (lib/orders/driverTrueUp.ts).
+ *   - annual-requested (DERIVED) — a client asked, from their portal, to
+ *     be set up on an annual rental agreement. Clears when the annual is
+ *     offered for signature (or a master is already pending/covering).
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -82,6 +85,7 @@ import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
 import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
+import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 
 const PROVIDERS: ActionItemProvider[] = [
   // A client set up their own job on the public agreement page and may
@@ -105,6 +109,10 @@ const PROVIDERS: ActionItemProvider[] = [
   // the same production. It has always flagged this; the flag went only
   // to Slack until 2026-09-09, and work got split across both twins.
   possibleDuplicateJobProvider,
+  // A client asked, in their own portal, to be set up on an annual
+  // agreement. Answering is one click on the company page; nothing else in
+  // HQ fires on the ask.
+  annualRequestedProvider,
   holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import type { CompanyPortalRole } from '@prisma/client'
 import { COMPANY_PORTAL_ROLE_LABEL } from '@/lib/portal/companyPortal'
+import { AskForAnnualButton } from '@/components/portal/company/AskForAnnualButton'
 import {
   DEPARTMENT_PUBLIC_PATH,
   JOB_STATE_LABEL,
@@ -493,8 +494,17 @@ export function CompanyPortalView({
                   <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
                     Your account signs SirReel&apos;s rental agreement per show — each job&apos;s
                     coordinator signs it in their own job portal. If you&apos;d rather sign once for
-                    the year, ask your rep about an annual agreement.
+                    the year, an executive here signs an annual agreement and every show after that
+                    is confirmed with a one-page addendum.
                   </p>
+                  {/* The sentence used to end "ask your rep about an annual
+                      agreement" and stop there. Now the ask is a button, and
+                      it lands in the desk's queue instead of an inbox. */}
+                  <AskForAnnualButton
+                    companyId={companyId}
+                    requestedAt={terms.annualRequestedAt ? terms.annualRequestedAt.toISOString() : null}
+                    preview={!!preview}
+                  />
                 </div>
               )}
             </div>
