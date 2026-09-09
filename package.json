@@ -27,6 +27,7 @@
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:cadence": "tsx tests/jobs/cadence.test.ts",
+    "test:agreement-rollup": "tsx tests/jobs/agreement-rollup.test.ts",
     "test:hold-release": "tsx tests/jobs/hold-release.test.ts",
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
     "test:paged-sync": "tsx tests/sync/paged-sync.test.ts",

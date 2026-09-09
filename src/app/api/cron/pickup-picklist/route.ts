@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { AgreementStatus, ContractType, ReviewDecision } from '@prisma/client'
+import type { ContractType, ReviewDecision } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/templates/shell'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { computeReadiness } from '@/lib/jobs/readiness'
-import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
+import { rollupJobAgreement, ordersForContractType } from '@/lib/jobs/agreementRollup'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -108,19 +108,6 @@ function dayLabel(iso: string): string {
   })
 }
 
-// Mini agreement rollup — the cron needs only SIGNED-or-not. Mirrors
-// the /api/jobs rollupAgreementState semantics (a row papered by a
-// sibling order counts via coveredByAgreementId) without importing
-// from a route file, which may only export handlers.
-function agreementState(
-  rows: { status: AgreementStatus; coveredByAgreementId: string | null }[],
-  liveOrderCount: number,
-): 'SIGNED' | 'NONE' {
-  if (rows.length === 0) return 'NONE'
-  const signed = rows.filter((r) => isSignedAgreementStatus(r.status) || !!r.coveredByAgreementId).length
-  return signed === rows.length && rows.length >= liveOrderCount ? 'SIGNED' : 'NONE'
-}
-
 // Mirrors /api/jobs rollupCoiState — VERIFIED is the only state
 // readiness accepts, so the rest collapse to PENDING here.
 function coiState(coi: {
@@ -173,6 +160,8 @@ export async function GET(req: NextRequest) {
         where: { status: { not: 'CANCELLED' }, archivedAt: null },
         select: {
           id: true,
+          // Same-company rule in the shared agreement rollup.
+          companyId: true,
           orderNumber: true,
           status: true,
           startDate: true,
@@ -227,8 +216,12 @@ export async function GET(req: NextRequest) {
 
     const liveOrders = j.orders
     const allAgreements = liveOrders.flatMap((o) => o.signedAgreements)
-    const rentalRows = allAgreements.filter((a) => a.contractType === ('RENTAL_AGREEMENT' as ContractType))
     const stageRows = allAgreements.filter((a) => a.contractType === ('STAGE_CONTRACT' as ContractType))
+    // Shared with the /jobs tile and the job page (lib/jobs/agreementRollup)
+    // — this used to be a fourth local copy, and it read a job papered by
+    // one order's signature as unsigned on the warehouse's picklist.
+    const rollupFor = (type: ContractType) =>
+      rollupJobAgreement(ordersForContractType(liveOrders, type)).state
     const liveItems = j.bookings.flatMap((b) =>
       b.items.filter((it) => it.status === 'REQUESTED' || it.status === 'ASSIGNED'),
     )
@@ -238,8 +231,8 @@ export async function GET(req: NextRequest) {
 
     const readiness = computeReadiness({
       coi: coiState(j.coiChecks[0] ?? null),
-      rental: agreementState(rentalRows, liveOrders.length),
-      stage: stageRows.length > 0 ? agreementState(stageRows, liveOrders.length) : null,
+      rental: rollupFor('RENTAL_AGREEMENT' as ContractType),
+      stage: stageRows.length > 0 ? rollupFor('STAGE_CONTRACT' as ContractType) : null,
       cardOnFile: j.bookings.some((b) => b.paperworkRequests.length > 0),
       gear: {
         total: liveItems.length,

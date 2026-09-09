@@ -108,6 +108,11 @@ export async function GET(
           orderBy: { createdAt: 'desc' },
           select: {
             id: true,
+            // Feeds the shared agreement rollup (lib/jobs/agreementRollup):
+            // a sibling signature papers the job only under the SAME
+            // company — see findJobCoverage for why that matters after a
+            // production-company correction.
+            companyId: true,
             orderNumber: true,
             status: true,
             subtotal: true,

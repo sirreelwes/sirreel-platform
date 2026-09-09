@@ -27,9 +27,11 @@
 export const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
-// Phase 7 — paperwork rollup shape returned by /api/jobs. See
-// rollupAgreementState / rollupCoiState in the route for state derivation.
-export type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
+// Phase 7 — paperwork rollup shape returned by /api/jobs. State derivation
+// lives in lib/jobs/agreementRollup (agreements, shared with the job page
+// and the pickup picklist) and lib/coi/coiState (COI).
+import type { AgreementRollupState } from './agreementRollup'
+export type { AgreementRollupState }
 export type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
 // Phase 7 — billing rollup. Derived from the reconciled Invoice columns
 // only (status / balanceDue / total / dueDate). PENDING/SETTLED ACH

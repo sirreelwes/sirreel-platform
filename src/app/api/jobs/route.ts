@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { prisma } from '@/lib/prisma'
 import { isNativeToHq, jobOrigin } from '@/lib/provenance'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
@@ -23,6 +22,7 @@ import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
+import { rollupJobAgreement } from '@/lib/jobs/agreementRollup'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
@@ -151,6 +151,12 @@ export async function GET(req: NextRequest) {
         },
         orders: {
           select: {
+            // id + companyId feed the shared agreement rollup
+            // (lib/jobs/agreementRollup) — coverage is per ORDER, and the
+            // same-company rule keeps a signature made under a corrected
+            // production company from papering the new one.
+            id: true,
+            companyId: true,
             status: true,
             subtotal: true,
             // Released-fleet badge — the order-linked half of the job's
@@ -441,14 +447,39 @@ export async function GET(req: NextRequest) {
             a.companyAgreement.contractType === type &&
             !(a.companyAgreement.isAnnual && a.companyAgreement.expiryDate && a.companyAgreement.expiryDate < now),
         )
+      // Per contract type, across the job's live orders — see
+      // lib/jobs/agreementRollup for why an order with NO row of its own is
+      // still covered by a sibling's signature (SR-JOB-0294 read
+      // "Missing: Agreement" here and "On file" on the job page).
+      // The dynamic select above (quoteStatus / lineItems are conditional)
+      // widens Prisma's inferred row type, hence the local shape.
+      const rollupFor = (type: ContractType) =>
+        rollupJobAgreement(
+          liveOrders.map((o) => {
+            const row = o as unknown as {
+              id: string
+              companyId: string | null
+              signedAgreements?: {
+                contractType: ContractType
+                status: AgreementStatus
+                coveredByAgreementId: string | null
+              }[]
+            }
+            return {
+              id: row.id,
+              companyId: row.companyId,
+              rows: (row.signedAgreements || []).filter((a) => a.contractType === type),
+            }
+          }),
+        )
       const rentalAgreement = coveredBy('RENTAL_AGREEMENT')
         ? { state: 'SIGNED' as const, count: Math.max(1, liveOrders.length) }
-        : rollupAgreementState(allAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT'), liveOrders.length)
+        : rollupFor('RENTAL_AGREEMENT')
       const stageAgreementsExist = allAgreements.some((a) => a.contractType === 'STAGE_CONTRACT')
       const stageAgreement = coveredBy('STAGE_CONTRACT')
         ? { state: 'SIGNED' as const, count: Math.max(1, liveOrders.length) }
         : stageAgreementsExist
-          ? rollupAgreementState(allAgreements.filter((a) => a.contractType === 'STAGE_CONTRACT'), liveOrders.length)
+          ? rollupFor('STAGE_CONTRACT')
           : null
       let coi: { state: CoiRollupState; expiresAt?: string | null } = { state: 'NONE' }
       if (j.coiChecks[0]) {
@@ -856,40 +887,10 @@ export async function POST(req: NextRequest) {
 
 // Phase 7 — Jobs-list paperwork rollup helpers.
 //
-// SignedAgreement is per-Order. A job with two non-cancelled orders
-// either has 0/1/2 rental agreement rows. We collapse to a single
-// state for the chip:
-//   - NONE   → no rows for this contractType
-//   - DRAFT  → all rows in pre-release states (PORTAL_GENERATED only)
-//   - SENT   → at least one out the door but nothing signed
-//   - PARTIAL → some signed, some not (multi-order case)
-//   - SIGNED → every live order has a SIGNED_* row
-// Was a local list that missed SIGNED_OFFLINE, so a filed agreement still
-// read "RENTAL Sent" on the pipeline card. See isSignedAgreementStatus.
-const PRE_RELEASE_STATES: AgreementStatus[] = ['PORTAL_GENERATED']
-
-export type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
-
-function rollupAgreementState(
-  rows: { status: AgreementStatus; coveredByAgreementId?: string | null }[],
-  liveOrderCount: number,
-): { state: AgreementRollupState; count: number } {
-  if (rows.length === 0) return { state: 'NONE', count: 0 }
-  // A row papered by a sibling order on the same job is SATISFIED, even
-  // though it carries no signature of its own. Without this a second order
-  // attached to a papered job pins the chip on PARTIAL forever and the desk
-  // chases paperwork that nobody is ever going to send.
-  const signed = rows.filter(
-    (r) => isSignedAgreementStatus(r.status) || !!r.coveredByAgreementId,
-  ).length
-  if (signed === rows.length && rows.length >= liveOrderCount) {
-    return { state: 'SIGNED', count: signed }
-  }
-  if (signed > 0) return { state: 'PARTIAL', count: signed }
-  const allPreRelease = rows.every((r) => PRE_RELEASE_STATES.includes(r.status))
-  if (allPreRelease) return { state: 'DRAFT', count: rows.length }
-  return { state: 'SENT', count: rows.length }
-}
+// The agreement rollup moved to src/lib/jobs/agreementRollup.ts (2026-09-09)
+// so the tile, the job page and the pickup picklist share ONE answer — three
+// copies had drifted, and SR-JOB-0294 showed "Missing: Agreement" here while
+// the job page said "On file".
 
 // COI state lives in src/lib/coi/coiState.ts — shared with the job detail
 // page so the tile and the strip cannot disagree (2026-09-06).

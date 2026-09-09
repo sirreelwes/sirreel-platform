@@ -63,6 +63,7 @@ import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { computeReadiness } from '@/lib/jobs/readiness';
+import { rollupJobAgreement, ordersForContractType } from '@/lib/jobs/agreementRollup';
 import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, Check, User } from 'lucide-react'
 
@@ -205,6 +206,10 @@ interface OrderSignedAgreement {
   signerName: string | null;
   signedDocumentUrl: string | null;
   updatedAt: string;
+  /** Sibling coverage — a signature on another order of this job papers
+   *  this one (lib/orders/agreementCoverage). Selected by /api/jobs/[id]
+   *  since 2026-09-04; the page only started reading it on 09-09. */
+  coveredByAgreementId: string | null;
   /** Set once a redline has been recorded against this agreement. */
   contractReviewId: string | null;
 }
@@ -251,6 +256,7 @@ interface OrderStageBookingTerms {
 
 interface JobOrder {
   id: string;
+  companyId: string | null;
   orderNumber: string;
   status: string;
   subtotal: number;
@@ -1023,12 +1029,6 @@ export default function JobDetailPage() {
       setSignSendBusy(false);
     }
   };
-  const rentalAgreement = liveOrders
-    .flatMap((o) => o.signedAgreements)
-    .find((a) => a.contractType === 'RENTAL_AGREEMENT');
-  const stageAgreement = liveOrders
-    .flatMap((o) => o.signedAgreements)
-    .find((a) => a.contractType === 'STAGE_CONTRACT');
   // Job-level agreement coverage takes precedence: a job attached to an
   // on-file (often annual) master reads "on file" regardless of orders.
   // An expired annual window is surfaced as its own state.
@@ -1048,31 +1048,37 @@ export default function JobDetailPage() {
   // jobs) or a per-order contract signed through the portal. `source`
   // lets the chip say "On file" rather than "Signed", because the two
   // mean different things to a rep chasing paperwork.
-  // Was a local set that did not know about SIGNED_OFFLINE — see
-  // isSignedAgreementStatus.
+  //
+  // The per-order half is the SHARED rollup (lib/jobs/agreementRollup), the
+  // same one /api/jobs feeds the tile. This used to be a `.find()` on the
+  // flattened rows — the FIRST agreement across the job's orders, read
+  // alone — so a two-order job read "On file" here off one signature while
+  // the tile read "Missing: Agreement", and which answer you got depended
+  // on order sort (SR-JOB-0294, 2026-09-09).
   type CoverageState = 'signed' | 'pending' | 'expired' | 'none';
   const resolveCoverage = (
-    addendum?: JobAgreementAddendum,
-    agreement?: { status: string; coveredByAgreementId?: string | null },
+    addendum: JobAgreementAddendum | undefined,
+    contractType: 'RENTAL_AGREEMENT' | 'STAGE_CONTRACT',
   ): { state: CoverageState; source: 'onFile' | 'portal' | null } => {
     if (addendum) {
       return { state: isAnnualExpired(addendum) ? 'expired' : 'signed', source: 'onFile' };
     }
-    if (agreement && isSignedAgreementStatus(agreement.status)) {
-      return { state: 'signed', source: 'portal' };
-    }
-    // Covered by a signature on a sibling order of this job — the agreement
-    // papers the JOB (lib/orders/agreementCoverage). Same rule the /jobs
-    // list applies in rollupAgreementState, so the two can't disagree.
-    if (agreement?.coveredByAgreementId) {
-      return { state: 'signed', source: 'onFile' };
-    }
-    if (agreement) return { state: 'pending', source: 'portal' };
-    return { state: 'none', source: null };
+    const roll = rollupJobAgreement(ordersForContractType(liveOrders, contractType));
+    if (roll.state === 'NONE') return { state: 'none', source: null };
+    if (roll.state !== 'SIGNED') return { state: 'pending', source: 'portal' };
+    // Signed — but by whom? An order papered by a SIBLING order's signature
+    // has no signer, timestamp or PDF of its own, so the chip says "On file"
+    // rather than implying this order was signed through the portal.
+    const everyOrderSignedItself = liveOrders.every((o) =>
+      o.signedAgreements.some(
+        (a) => a.contractType === contractType && isSignedAgreementStatus(a.status),
+      ),
+    );
+    return { state: 'signed', source: everyOrderSignedItself ? 'portal' : 'onFile' };
   };
 
-  const rentalCoverage = resolveCoverage(rentalAddendum, rentalAgreement);
-  const stageCoverage = resolveCoverage(stageAddendum, stageAgreement);
+  const rentalCoverage = resolveCoverage(rentalAddendum, 'RENTAL_AGREEMENT');
+  const stageCoverage = resolveCoverage(stageAddendum, 'STAGE_CONTRACT');
 
   // A stage contract is only owed when the job actually books a stage —
   // same department test the order page and canPickupConfirm use.
@@ -1726,7 +1732,7 @@ const driverTone = (d: any): string => {
               {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : stripScored ? 'Not linked' : 'Not yet'}
             </div>
             <div className="mt-1.5 text-[12px] text-zinc-700">{agreementStatus === 'signed'
-                ? 'Coverage on file'
+                ? rentalCoverage.source === 'portal' ? 'Signed by the client' : 'Signed agreement on file'
                 : !stripScored && agreementStatus === 'none'
                   ? 'Sends with the quote'
                   : SHOW_AGREEMENT_ON_FILE
