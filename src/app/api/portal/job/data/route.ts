@@ -18,6 +18,13 @@ import {
 } from '@/lib/orders/annualCoverage'
 import { summarizeJobLcdwCoverage, effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
+import {
+  getJobCoiConfirmation,
+  carriedCoiApplies,
+  confirmationQuestion,
+  separatePolicySentence,
+  NO_CONFIRMATION,
+} from '@/lib/coi/jobCoiConfirmation'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
@@ -301,6 +308,17 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve([]),
   ])
+
+  // "Active COI on file — but is it the right one for THIS job?" (Wes,
+  // 2026-09-09). Only a CARRIED certificate raises the question; the
+  // client's answer is bound to the document they were shown.
+  const coiConfirmation = order.jobId
+    ? await getJobCoiConfirmation(order.jobId, latestCoi)
+    : NO_CONFIRMATION
+  // A production that told us it carries its own insurance is NOT covered by
+  // the account cert. Stop it standing in — the row goes back to asking for
+  // their certificate, with the reason said out loud.
+  const governingCoi = carriedCoiApplies(coiConfirmation) ? latestCoi : null
 
   // Activity feed — synthesised from order milestones + portal access events.
   // No dedicated history table yet; this is good enough for the brief's
@@ -608,25 +626,25 @@ export async function GET(req: NextRequest) {
       dotSheetGeneratedAt: order.dotSheetGeneratedAt,
       agreement: rentalAgreement,
       stageContract,
-      coi: latestCoi
+      coi: governingCoi
         ? {
-            id: latestCoi.coi.id,
-            fileUrl: latestCoi.coi.fileUrl,
-            originalFilename: latestCoi.coi.originalFilename,
-            humanDecision: latestCoi.coi.humanDecision,
-            aiRiskLevel: latestCoi.coi.aiRiskLevel,
-            policyExpiryDate: latestCoi.coi.policyExpiryDate,
-            coverageVerified: latestCoi.coi.coverageVerified,
-            additionalInsured: latestCoi.coi.additionalInsured,
-            uploadedAt: latestCoi.coi.createdAt,
+            id: governingCoi.coi.id,
+            fileUrl: governingCoi.coi.fileUrl,
+            originalFilename: governingCoi.coi.originalFilename,
+            humanDecision: governingCoi.coi.humanDecision,
+            aiRiskLevel: governingCoi.coi.aiRiskLevel,
+            policyExpiryDate: governingCoi.coi.policyExpiryDate,
+            coverageVerified: governingCoi.coi.coverageVerified,
+            additionalInsured: governingCoi.coi.additionalInsured,
+            uploadedAt: governingCoi.coi.createdAt,
             // Carried from the account rather than uploaded for this job.
             // Said out loud: a client who never sent a certificate for this
             // job should understand why we are not asking for one.
-            source: latestCoi.source,
-            sourceSentence: coiSourceSentence(latestCoi, order.company?.name),
+            source: governingCoi.source,
+            sourceSentence: coiSourceSentence(governingCoi, order.company?.name),
             // Named when the policy lapses mid-rental. NOT silently treated
             // as coverage — the renewal is still needed before the last day.
-            expiresDuringRental: latestCoi.expiresDuringRental?.toISOString() ?? null,
+            expiresDuringRental: governingCoi.expiresDuringRental?.toISOString() ?? null,
             // The client is told about a name mismatch on their OWN
             // certificate — Wes, 2026-08-25: "flag it for both SirReel and
             // User side". Only the client-safe sentence crosses the wire;
@@ -634,10 +652,23 @@ export async function GET(req: NextRequest) {
             // Empty string means "nothing to say", so the portal never has
             // to know the verdict vocabulary.
             insuredNotice:
-              evaluateInsuredMatch(latestCoi.coi.namedInsured, [order.company?.name, order.job?.name])
+              evaluateInsuredMatch(governingCoi.coi.namedInsured, [order.company?.name, order.job?.name])
                 .clientMessage || null,
+            // The one question only the client can answer. 'NEEDED' means
+            // the certificate is on file and unconfirmed for this job —
+            // which is an open question, never a coverage failure.
+            confirmation: {
+              state: coiConfirmation.state,
+              aboutSupersededCoi: coiConfirmation.aboutSupersededCoi,
+              decidedAt: coiConfirmation.decidedAt?.toISOString() ?? null,
+              confirmerName: coiConfirmation.confirmerName,
+              question: confirmationQuestion(order.company?.name),
+            },
           }
         : null,
+      // Said out loud wherever the account certificate has stopped standing
+      // in: silence here would read as a client who simply never uploaded.
+      coiSeparatePolicyNotice: separatePolicySentence(coiConfirmation) || null,
       legacyPaperworkPortalUrl: paperworkPortal
         ? portalTokenUrl(paperworkPortal.token)
         : null,

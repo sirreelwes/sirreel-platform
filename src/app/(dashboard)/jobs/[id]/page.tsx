@@ -309,7 +309,14 @@ interface JobDetail {
   company: { id: string; name: string; notes: string | null };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; humanDecisionAt: string | null; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string }>;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; humanDecisionAt: string | null; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string;
+    /** Carried from the company rather than uploaded here — and whether the
+     *  production has confirmed it covers THIS job. Blank word = nothing to
+     *  say; this is a chip beside the verdict, never a second verdict. */
+    carriedFromCompany?: boolean; confirmationState?: string; confirmationWord?: string }>;
+  /** Set once the production tells us this job runs on its own policy, so
+   *  the account certificate stopped standing in for it. */
+  coiSeparatePolicy?: { sentence: string; decidedAt: string | null; confirmerName: string | null; note: string | null } | null;
   agreementAddenda: JobAgreementAddendum[];
   orders: JobOrder[];
   bookings: JobBooking[];
@@ -1991,10 +1998,28 @@ const driverTone = (d: any): string => {
           </div>
         </div>
         {job.coiChecks.length === 0 ? (
-          <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
-            No certificate on file. Upload one the client sent by email or broker, or use
-            <span className="text-zinc-700"> Copy COI link</span> to have them drop it in.
-          </div>
+          // A job with no certificate is usually one nobody has sent yet —
+          // but it can also be one the production PULLED off the account
+          // policy. Those need opposite things from the desk, so they never
+          // read the same. Wes, 2026-09-09.
+          job.coiSeparatePolicy ? (
+            <div className="rounded-xl border border-chip-warn-fg/20 bg-chip-warn-bg px-4 py-3 space-y-1">
+              <p className="text-[15px] text-chip-warn-fg">{job.coiSeparatePolicy.sentence}</p>
+              {job.coiSeparatePolicy.note && (
+                <p className="text-[13px] text-lt-fg2">&ldquo;{job.coiSeparatePolicy.note}&rdquo;</p>
+              )}
+              <p className="text-[12px] text-lt-fg3">
+                Told to us{job.coiSeparatePolicy.confirmerName ? ` by ${job.coiSeparatePolicy.confirmerName}` : ''}
+                {job.coiSeparatePolicy.decidedAt ? ` on ${fmtDate(job.coiSeparatePolicy.decidedAt)}` : ''} in the
+                client portal.
+              </p>
+            </div>
+          ) : (
+            <div className="text-[15px] text-zinc-700 border border-dashed border-zinc-200 rounded-xl px-4 py-4 text-center bg-zinc-50">
+              No certificate on file. Upload one the client sent by email or broker, or use
+              <span className="text-zinc-700"> Copy COI link</span> to have them drop it in.
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {job.coiChecks.map((c) => {
@@ -2043,6 +2068,21 @@ const driverTone = (d: any): string => {
                         {match.verdict !== 'UNKNOWN' && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${INSURED_MATCH_TONE_LIGHT[match.verdict]}`}>
                             {INSURED_MATCH_LABEL[match.verdict]}
+                          </span>
+                        )}
+                        {/* Carried from the account. Whether the production
+                            has said it covers THIS job is a separate fact
+                            from whether the certificate is good — an
+                            unconfirmed one is still coverage. */}
+                        {c.confirmationWord && (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${
+                              c.confirmationState === 'CONFIRMED'
+                                ? 'bg-chip-good-bg text-chip-good-fg'
+                                : 'bg-chip-neutral-bg text-chip-neutral-fg'
+                            }`}
+                          >
+                            {c.confirmationWord}
                           </span>
                         )}
                       </div>

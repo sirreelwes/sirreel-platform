@@ -5,6 +5,13 @@ import { prisma } from '@/lib/prisma'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
+import {
+  getJobCoiConfirmation,
+  carriedCoiApplies,
+  separatePolicySentence,
+  COI_CONFIRMATION_WORD,
+  NO_CONFIRMATION,
+} from '@/lib/coi/jobCoiConfirmation'
 import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
@@ -545,6 +552,16 @@ export async function GET(
     // against this job was attached deliberately and always wins.
     const carriedCoi = job.coiChecks.length === 0 ? await resolveJobCoi(job.id) : null
 
+    // Has the production confirmed the account's certificate is the right
+    // insurance for THIS job (Wes, 2026-09-09)? Unconfirmed is an open
+    // question, not a coverage failure — the certificate still shows. A
+    // production that told us it carries its OWN policy is the one case
+    // where the carried cert stops standing in, and the job reads as
+    // awaiting theirs.
+    const coiConfirmation =
+      job.coiChecks.length === 0 ? await getJobCoiConfirmation(job.id, carriedCoi) : NO_CONFIRMATION
+    const carriedCoiStands = carriedCoiApplies(coiConfirmation)
+
     // Did the CLIENT set this job up on the public site, with nothing
     // quoted yet? Gates the "Next-steps email" button on the job page.
     const selfServeUnquoted = await isClientCreatedUnquoted(job.id)
@@ -575,7 +592,7 @@ export async function GET(
         selfServeUnquoted,
         duplicateSignals,
         coiChecks:
-          carriedCoi?.source === 'COMPANY'
+          carriedCoi?.source === 'COMPANY' && carriedCoiStands
             ? [
                 {
                   ...carriedCoi.coi,
@@ -584,9 +601,24 @@ export async function GET(
                   carriedFromCompany: true,
                   expiresDuringRental: carriedCoi.expiresDuringRental?.toISOString() ?? null,
                   sourceSentence: coiSourceSentence(carriedCoi, job.company?.name),
+                  // Blank unless there is something to say — the chip beside
+                  // the verdict, never a second verdict.
+                  confirmationState: coiConfirmation.state,
+                  confirmationWord: COI_CONFIRMATION_WORD[coiConfirmation.state],
                 },
               ]
             : job.coiChecks,
+        // The production told us this job runs on its own policy. Rendered
+        // wherever the job would otherwise read as a plain "no COI" — staff
+        // are chasing THEIR certificate, not wondering if we lost one.
+        coiSeparatePolicy: !carriedCoiStands
+          ? {
+              sentence: separatePolicySentence(coiConfirmation),
+              decidedAt: coiConfirmation.decidedAt?.toISOString() ?? null,
+              confirmerName: coiConfirmation.confirmerName,
+              note: coiConfirmation.note,
+            }
+          : null,
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
         cadence,

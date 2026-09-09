@@ -38,6 +38,7 @@ scripts/*
 !scripts/backfillContactRoles.ts
 !scripts/backfillContactRolesAi.ts
 !scripts/rollupCompanySpend.ts
+!scripts/sync-company-coi-expiry.ts
 !scripts/archive-dormant-jobs.ts
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts

@@ -1,0 +1,382 @@
+{
+  "at": "2026-09-09T18:01:59.933Z",
+  "write": true,
+  "changes": [
+    {
+      "companyId": "eda18660-0370-4a26-aaeb-d003eaab8def",
+      "name": "Black Solid, Inc",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-01-30T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "3d9896b3-7243-4e1a-8016-84e01fd38b29",
+      "file": "SirReel COI.pdf"
+    },
+    {
+      "companyId": "5f1756af-e346-433b-8bb5-ebe6f2f67d2d",
+      "name": "Chaotic Neutral LTD",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": "2026-09-17T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-08-24T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "7d776e1a-c91b-4c2f-abff-c1db336de757",
+      "file": "COI_SirReel.pdf"
+    },
+    {
+      "companyId": "aead2f5b-5aff-4249-b15d-90a35d853659",
+      "name": "Concrete Media / HQ / YBM Company, LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-05-15T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-05-15T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "d3d8deff-29d6-4c99-9498-56b59fb47d98",
+      "file": "EXP 05_15_2027 + WC.PDF"
+    },
+    {
+      "companyId": "e9c95e54-adb6-4cd5-a7c4-662fb713b283",
+      "name": "Creative Riff",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-08-13T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "c24e6ebe-1ebd-4cc4-b0c2-fb35461b4637",
+      "file": "Criff COI - SirReel Production Vehicles Inc 09012026.pdf"
+    },
+    {
+      "companyId": "0a7c3ed3-6d85-44c3-9a95-50f6b5536d0b",
+      "name": "Dreambear LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-07-26T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-09-30T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "ea0f7262-6d14-47ce-9c25-a20451b93580",
+      "file": "(SirReel Studio Services - Complete) WMG COI 2025-2026_Catastrophe_BLANK.pdf"
+    },
+    {
+      "companyId": "61f201c2-e1d4-491d-bfd2-16d1a8349816",
+      "name": "Figs, Inc",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-07-27T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-07-27T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "c9a8dbda-152d-4055-a2fb-6e84041051d6",
+      "file": "SirReel Studio Rentals.pdf"
+    },
+    {
+      "companyId": "7983e4cd-373c-431a-a73b-dfadc8ea30b1",
+      "name": "Fox Sports",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-06-30T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-06-30T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "202938ab-3282-4587-964c-b96e0ff2d5eb",
+      "file": "Fox Sports COI.pdf"
+    },
+    {
+      "companyId": "8dc50d04-9542-4e5d-918b-fedd96a25448",
+      "name": "Gopher Digital Productions, Inc",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": "2024-02-09T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-02-09T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "e858908a-e58f-4ae1-a43a-3d288dc4b722",
+      "file": "SirReel Production Vehicles Inc.pdf"
+    },
+    {
+      "companyId": "b42c8ee9-6e3b-41d3-b291-5f5608899984",
+      "name": "Harbor Freight",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-09-01T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-09-01T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "91a975f5-c3b2-4d23-97db-121ee6627496",
+      "file": "UPADTED SirReel Production Vehicles Inc.- 23529480.pdf"
+    },
+    {
+      "companyId": "09f5a3ba-1b06-45ca-9e24-11096078d93d",
+      "name": "MDC Movie LLC",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-07-31T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "8624557d-ccce-4b50-b8bf-de583c827a57",
+      "file": "SirReel CERT_My Darling California.pdf"
+    },
+    {
+      "companyId": "81514b4f-b0b4-4b41-b94d-d942842d3f19",
+      "name": "MITU NGL, LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-01-27T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-02-27T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "8ac67454-9b4e-46a1-b207-e1fe263b669c",
+      "file": "951512f5-246f-4e96-b593-931561e1b7c9.pdf"
+    },
+    {
+      "companyId": "8e83877f-a89f-4e53-b3ea-cbff93ea6540",
+      "name": "Mt. Vernon Entertainment",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-10-25T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "28cfe503-71c0-4d32-ae45-5f7db8a05e16",
+      "file": "SirReel X MTVE COI.pdf"
+    },
+    {
+      "companyId": "ad0df203-d05b-4c9a-9215-d31739dc3b69",
+      "name": "Neko Studio",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-05-01T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "b4489aee-91d9-4b33-8634-73420b12250c",
+      "file": "Discovery - AIS-LA Tourism - SirReel COI (1).pdf"
+    },
+    {
+      "companyId": "8bb14cf4-658e-4017-b94c-bd90022c5167",
+      "name": "PREMIERETV",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-03-01T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "aa967959-d312-4d68-b74f-8fd7273116e1",
+      "file": "Updated COI SirReel Production Vehicles Inc._Premiere TV Inc._26-27 COI_9-2-2026_2009378951.pdf"
+    },
+    {
+      "companyId": "296f798c-c8d6-49af-8019-d932ce1ac9f4",
+      "name": "Party Giraffes, LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-02-12T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-04-14T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "bdc44f1d-64c4-42e4-8ced-9a5c22672452",
+      "file": "905c79eb-c3ce-4b8f-9b75-d13a39d54ce8.pdf"
+    },
+    {
+      "companyId": "b93a3553-62f8-4ecd-9452-33a15c9eca0e",
+      "name": "Peacoat Productions LLC",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-09-06T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "e709ae30-4364-40e8-a8c5-a4093c99c63a",
+      "file": "SirReel Cert.pdf"
+    },
+    {
+      "companyId": "1f453021-64dc-4ecd-afe7-6dd531de1f87",
+      "name": "Pink Box Studios",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-03-21T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "36853b2e-9de2-40d5-bd41-2fa5620f6784",
+      "file": "Rollin - Sir Reel - COI.pdf"
+    },
+    {
+      "companyId": "8f51a0c5-87dc-4bc3-85e7-96fbdb0511a5",
+      "name": "Pop Up Mob LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-06-05T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-02-06T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "c9dc8d92-ef2b-4136-9ee6-774e3aefd37a",
+      "file": "SirReel COI.pdf"
+    },
+    {
+      "companyId": "bf4f8c07-0630-43e7-af0d-7b17349b8002",
+      "name": "Rave Collective",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-01-01T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "fd6de693-4752-45ff-9d27-8d35a0e17ca6",
+      "file": "Rave Collective LLC, FKA The Refine_SirReel Production Vehicles Inc. (1) (1).pdf"
+    },
+    {
+      "companyId": "db034e80-4581-48ee-9fd5-a38f0d9c4dab",
+      "name": "Russel Nichols",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-09-18T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "5d86847a-2523-40b3-a69e-cd1496a5ab22",
+      "file": "SirReel Cert.pdf"
+    },
+    {
+      "companyId": "694aacc4-4c8b-43ba-96b1-85c6c8a4dea0",
+      "name": "Shotclock",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-07-16T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "01459115-93ac-4658-85fc-da40cbd8eeeb",
+      "file": "SirReel COI.pdf"
+    },
+    {
+      "companyId": "7033d19b-7303-4a30-90c0-9f578ef619a0",
+      "name": "Softspot c/o Needs",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-12-12T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "b748094d-cdd0-4e54-b013-ab81333a03d1",
+      "file": "SirReel_COI.pdf"
+    },
+    {
+      "companyId": "a75656e2-d3d2-46bc-8d36-9c8e7d3cdb71",
+      "name": "Someday Studio LLC",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-03-12T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-03-12T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "ac45d7eb-957f-4d34-be7e-ebf0e572d517",
+      "file": "COI SirReel Production Vehicles Inc..pdf"
+    },
+    {
+      "companyId": "617293b9-c5c7-43a7-beed-45a592e189ee",
+      "name": "Subplot Entertainment",
+      "from": {
+        "coiOnFile": false,
+        "coiExpiry": null
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-08-31T00:00:00.000Z"
+      },
+      "expired": false,
+      "coiCheckId": "6ae870df-edde-434b-abac-227b92926d55",
+      "file": "COI-CGL-WC-SirReel-2026-2.pdf"
+    },
+    {
+      "companyId": "425c098a-6805-4a93-9ed0-89427c5b18b1",
+      "name": "Supplying Demand Inc dba Liquid Death",
+      "from": {
+        "coiOnFile": true,
+        "coiExpiry": "2026-05-16T00:00:00.000Z"
+      },
+      "to": {
+        "coiOnFile": true,
+        "coiExpiry": "2027-05-16T00:00:00.000Z"
+      },
+      "expired": true,
+      "coiCheckId": "08eb6c51-06c7-4bd0-a35d-09bebffa70ee",
+      "file": "Sirreel Production Vehicles Inc (3).pdf"
+    }
+  ],
+  "aheadOfCerts": []
+}

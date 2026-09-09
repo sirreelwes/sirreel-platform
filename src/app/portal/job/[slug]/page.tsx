@@ -172,7 +172,21 @@ interface PortalData {
       sourceSentence: string;
       /** Set when a carried policy lapses BEFORE this rental ends. */
       expiresDuringRental: string | null;
+      /** "Active COI on file — is it the right one for THIS job?" A carried
+       *  certificate covers the account; only the production knows whether
+       *  this particular job runs on its own policy. NEEDED is an open
+       *  question, not a coverage failure. */
+      confirmation: {
+        state: 'NOT_APPLICABLE' | 'NEEDED' | 'CONFIRMED' | 'SEPARATE_POLICY';
+        aboutSupersededCoi: boolean;
+        decidedAt: string | null;
+        confirmerName: string | null;
+        question: string;
+      };
     } | null;
+    /** Present once the production has told us this job carries its own
+     *  policy — the account certificate has stopped standing in for it. */
+    coiSeparatePolicyNotice: string | null;
     legacyPaperworkPortalUrl: string | null;
     vehicles: {
       assetId: string;
@@ -309,6 +323,7 @@ export default function JobPortalPage() {
   }>({ hasPreInvoice: false, awaitingReview: false });
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiUploading, setCoiUploading] = useState(false);
+  const [coiConfirming, setCoiConfirming] = useState<'CONFIRMED' | 'SEPARATE_POLICY' | null>(null);
   const [coiError, setCoiError] = useState<string>('');
   // Quote approval. Two-step on purpose — approving is a commitment that
   // releases the rental agreement, so it should not be a single stray tap.
@@ -391,6 +406,32 @@ export default function JobPortalPage() {
       setCoiError('Upload failed');
     } finally {
       setCoiUploading(false);
+    }
+  };
+
+  // The client's answer to "is the certificate on file the right insurance
+  // for this job?". SEPARATE_POLICY pulls the account cert off this job, so
+  // the row goes back to asking for theirs — a real change, not a checkbox.
+  const answerCoiConfirmation = async (decision: 'CONFIRMED' | 'SEPARATE_POLICY') => {
+    setCoiConfirming(decision);
+    setCoiError('');
+    try {
+      const r = await fetch('/api/portal/job/coi-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setCoiError(body.error || 'Could not save that — try again.');
+        return;
+      }
+      const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
+      if (res.ok) setData(await res.json());
+    } catch {
+      setCoiError('Could not save that — try again.');
+    } finally {
+      setCoiConfirming(null);
     }
   };
 
@@ -1201,6 +1242,62 @@ export default function JobPortalPage() {
                         {data.paperwork.coi.sourceSentence}
                       </div>
                     )}
+                    {/* The one question only the production can answer.
+                        Wes, 2026-09-09: "there are times that productions use
+                        separate insurance for whatever reason." The badge
+                        still reads as on file — the account IS insured — and
+                        this asks whether that policy is the one covering
+                        THIS job. Only ever shown for a carried certificate;
+                        one uploaded against this job needs no confirming. */}
+                    {data.paperwork.coi.source === 'COMPANY' &&
+                      data.paperwork.coi.confirmation.state === 'NEEDED' && (
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
+                          <p className="text-[11px] font-semibold text-gray-900">
+                            {data.paperwork.coi.confirmation.question}
+                          </p>
+                          {data.paperwork.coi.confirmation.aboutSupersededCoi && (
+                            <p className="text-[11px] text-gray-500 leading-relaxed">
+                              You confirmed an earlier certificate — this is a newer one, so we&rsquo;re
+                              checking again.
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => answerCoiConfirmation('CONFIRMED')}
+                              disabled={coiConfirming !== null}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg"
+                            >
+                              {coiConfirming === 'CONFIRMED' ? 'Saving…' : 'Yes — that covers this job'}
+                            </button>
+                            <button
+                              onClick={() => answerCoiConfirmation('SEPARATE_POLICY')}
+                              disabled={coiConfirming !== null}
+                              className="px-3 py-1.5 border border-gray-300 hover:border-gray-400 disabled:opacity-50 text-gray-700 text-xs font-semibold rounded-lg bg-white"
+                            >
+                              {coiConfirming === 'SEPARATE_POLICY'
+                                ? 'Saving…'
+                                : 'No — this job has its own insurance'}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">
+                            If this production carries its own policy, tell us here and send that
+                            certificate instead — we&rsquo;ll stop counting the one on file for this job.
+                          </p>
+                          {coiError && <div className="text-[11px] text-red-600">{coiError}</div>}
+                        </div>
+                      )}
+                    {data.paperwork.coi.confirmation.state === 'CONFIRMED' && (
+                      <p className="text-[11px] text-gray-500">
+                        Confirmed as the coverage for this job
+                        {data.paperwork.coi.confirmation.confirmerName
+                          ? ` by ${data.paperwork.coi.confirmation.confirmerName}`
+                          : ''}
+                        {data.paperwork.coi.confirmation.decidedAt
+                          ? ` on ${new Date(data.paperwork.coi.confirmation.decidedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                          : ''}
+                        .
+                      </p>
+                    )}
                     {/* The certificate is on file but insures a different
                         entity than the one this job is booked under. Said
                         here, plainly, because the client is the only one who
@@ -1220,6 +1317,15 @@ export default function JobPortalPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {/* They told us this job runs on its own policy, so the
+                        account certificate stopped standing in. Without this
+                        the row would read as if they had simply never sent
+                        one — and they would wonder why we forgot. */}
+                    {data.paperwork.coiSeparatePolicyNotice && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
+                        {data.paperwork.coiSeparatePolicyNotice}
+                      </div>
+                    )}
                     <label
                       htmlFor="portal-coi-file"
                       className={`block border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${

@@ -343,6 +343,20 @@ export async function GET(req: NextRequest) {
       companyCoisByCompany.set(c.companyId, arr)
     }
 
+    // …unless the production told us THIS job runs on its own policy (Wes,
+    // 2026-09-09). That is the one answer that stops the account cert
+    // standing in — carrying it anyway would show the tile as insured while
+    // the certificate we actually need is still outstanding. Unconfirmed
+    // jobs keep their coverage; only an explicit SEPARATE_POLICY opts out.
+    const separatePolicyJobIds = new Set(
+      (
+        await prisma.jobCoiConfirmation.findMany({
+          where: { jobId: { in: jobs.map((j) => j.id) }, decision: 'SEPARATE_POLICY' },
+          select: { jobId: true },
+        })
+      ).map((r) => r.jobId),
+    )
+
     // Kanban manual placements (side table, presentation-only). One
     // query for the whole page of jobs. PREJOB/OUT only — RETURNED is
     // semantic (Job.returnedAt) now; legacy 'RETURNED' override rows
@@ -453,7 +467,11 @@ export async function GET(req: NextRequest) {
       let coi: { state: CoiRollupState; expiresAt?: string | null } = { state: 'NONE' }
       if (j.coiChecks[0]) {
         coi = rollupCoiState(j.coiChecks[0])
-      } else if (j.companyId && companyCoisByCompany.has(j.companyId)) {
+      } else if (
+        j.companyId &&
+        companyCoisByCompany.has(j.companyId) &&
+        !separatePolicyJobIds.has(j.id)
+      ) {
         // Newest-expiry first (the query's order), so the first cert that
         // covers the whole window is the one that governs; failing that,
         // the first that covers the start — the same fallback the detail

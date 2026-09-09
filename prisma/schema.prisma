@@ -951,13 +951,13 @@ model DriverAssignment {
   /// When the driver took the vehicle. Stamped by the driver's own
   /// check-out on a blind pickup (self check-out) and by the staff
   /// handover route; the PICKED_UP status alone never said WHEN.
-  pickedUpAt DateTime? @map("picked_up_at")
+  pickedUpAt           DateTime? @map("picked_up_at")
   /// Odometer the driver typed at self check-out. Kept here as well as
   /// on the Inspection so the job page can show it without a join.
-  pickupMileage Int? @map("pickup_mileage")
+  pickupMileage        Int?      @map("pickup_mileage")
   /// The CHECKOUT Inspection the driver's photos landed on. Plain id, no
   /// relation — a staff walk-around may already own that row.
-  checkoutInspectionId String? @map("checkout_inspection_id")
+  checkoutInspectionId String?   @map("checkout_inspection_id")
 
   notes String? @db.Text
 
@@ -2388,19 +2388,20 @@ model User {
   jobsMarkedReturned Job[]      @relation("JobReturnedBy")
   lotChecks          LotCheck[] @relation("LotCheckedBy")
 
-  uploadedContractReviews   ContractReview[]       @relation("ContractReviewUploader")
-  decidedContractReviews    ContractReview[]       @relation("ContractReviewDecider")
-  counterPdfsGenerated      ContractReview[]       @relation("CounterPdfGenerator")
-  changeDecisionsDecided    ReviewChangeDecision[] @relation("ChangeDecisionDecider")
-  uploadedCoiChecks         CoiCheck[]             @relation("CoiCheckUploader")
-  decidedCoiChecks          CoiCheck[]             @relation("CoiCheckDecider")
-  uploadedCompanyAgreements CompanyAgreement[]     @relation("CompanyAgreementUploader")
-  uploadedJobDocuments      JobDocument[]          @relation("JobDocumentUploader")
-  addedJobAgreementAddenda  JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
-  lcdwElectionsRecorded     LcdwElection[]         @relation("LcdwElectionRecordedBy")
-  companyCardsAdded         CompanyCard[]          @relation("CompanyCardAddedBy")
-  reviewClauseMessages      ReviewClauseMessage[]  @relation("ReviewClauseMessageAuthor")
-  assignedInquiries         Inquiry[]              @relation("InquiryAssignedTo")
+  uploadedContractReviews     ContractReview[]       @relation("ContractReviewUploader")
+  decidedContractReviews      ContractReview[]       @relation("ContractReviewDecider")
+  counterPdfsGenerated        ContractReview[]       @relation("CounterPdfGenerator")
+  changeDecisionsDecided      ReviewChangeDecision[] @relation("ChangeDecisionDecider")
+  uploadedCoiChecks           CoiCheck[]             @relation("CoiCheckUploader")
+  decidedCoiChecks            CoiCheck[]             @relation("CoiCheckDecider")
+  uploadedCompanyAgreements   CompanyAgreement[]     @relation("CompanyAgreementUploader")
+  uploadedJobDocuments        JobDocument[]          @relation("JobDocumentUploader")
+  addedJobAgreementAddenda    JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
+  lcdwElectionsRecorded       LcdwElection[]         @relation("LcdwElectionRecordedBy")
+  jobCoiConfirmationsRecorded JobCoiConfirmation[]   @relation("JobCoiConfirmationRecordedBy")
+  companyCardsAdded           CompanyCard[]          @relation("CompanyCardAddedBy")
+  reviewClauseMessages        ReviewClauseMessage[]  @relation("ReviewClauseMessageAuthor")
+  assignedInquiries           Inquiry[]              @relation("InquiryAssignedTo")
 
   followUpsSent    QuoteFollowUp[] @relation("FollowUpSentBy")
   followUpsSkipped QuoteFollowUp[] @relation("FollowUpSkippedBy")
@@ -3443,9 +3444,9 @@ model Order {
   verbalApprovalById String?   @map("verbal_approval_by_id")
   /// How the client said yes — "call with Laura 9/9", "email from Darsh".
   verbalApprovalNote String?   @map("verbal_approval_note") @db.Text
-  notes           String?          @db.Text
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  notes              String?   @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   // Locked enum reason populated when an Order transitions to LOST. The column
   // was previously free-text but had zero rows in production at the time of
@@ -4552,23 +4553,23 @@ model Vendor {
   /// When (and to whom) HQ last emailed the account link. Minting alone is
   /// not an invite — the Portals tab reads this to say "invited Sep 6 · not
   /// yet opened" instead of the misleading "link minted".
-  portalInvitedAt DateTime? @map("portal_invited_at")
-  portalInvitedTo String?   @map("portal_invited_to")
+  portalInvitedAt     DateTime? @map("portal_invited_at")
+  portalInvitedTo     String?   @map("portal_invited_to")
   /// THE DEAL (Wes 2026-09-06, King Kong: "20% of vehicle rental rate goes
   /// to SirReel"). SirReel's share of the vehicle rental rate, in percent.
   /// The partner's listed rate is what the production pays; the partner
   /// receives list × (1 − share/100). SubcontractedVehicle.discountPercent
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
-  partnerSharePercent Decimal? @map("partner_share_percent") @db.Decimal(5, 2)
+  partnerSharePercent Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
   /// The partner's certificate of insurance (agreement clause 4: their
   /// owner's auto liability + physical damage, SirReel additional insured).
   /// Wes 2026-09-06: not demanded up front — "I don't want it to hold up
   /// this week's rental" — so the welcome email no longer asks; the
   /// partner-coi-missing action item follows up a week after signature and
   /// clears when HQ stamps receipt here. Expiry re-raises it.
-  coiReceivedAt DateTime? @map("coi_received_at")
-  coiExpiresAt  DateTime? @map("coi_expires_at")
+  coiReceivedAt       DateTime? @map("coi_received_at")
+  coiExpiresAt        DateTime? @map("coi_expires_at")
 
   /// The partner's mark on their account page — same treatment as
   /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).
@@ -4666,16 +4667,16 @@ model SubRental {
   /// the vendor never sees who the client is, and the client never sees whose
   /// unit it is. Later this is where location, call time and driver details
   /// get exchanged, still without the two sides talking directly.
-  vendorToken           String?   @unique @map("vendor_token")
-  vendorTokenMintedAt   DateTime? @map("vendor_token_minted_at")
+  vendorToken            String?   @unique @map("vendor_token")
+  vendorTokenMintedAt    DateTime? @map("vendor_token_minted_at")
   /// The vendor opened their page. Stamped by /vendor/[token] on load so the
   /// Portals tab can say "opened Sep 5 (2×)" for a vendor link the same way
   /// it does for a client's (Wes 2026-09-05: "Will Vendor portals also fold
   /// into that tab?"). Sent ≠ opened ≠ acted; this is the middle one.
-  vendorViewedAt        DateTime? @map("vendor_viewed_at")
-  vendorViewCount       Int       @default(0) @map("vendor_view_count")
+  vendorViewedAt         DateTime? @map("vendor_viewed_at")
+  vendorViewCount        Int       @default(0) @map("vendor_view_count")
   /// When the vendor was told we had quoted these dates.
-  vendorNotifiedAt      DateTime? @map("vendor_notified_at")
+  vendorNotifiedAt       DateTime? @map("vendor_notified_at")
   /// When the vendor was asked to actually HOLD the dates — stamped on the
   /// client-approval hook, and only once that notice really left. Distinct
   /// from the status flip on purpose: approval moves the row to REQUESTED
@@ -4683,7 +4684,7 @@ model SubRental {
   /// vendorHoldRequestedAt IS NULL` is exactly the set a human still has to
   /// phone. Without it a failed send is indistinguishable from a delivered
   /// one and the vendor silently never hears.
-  vendorHoldRequestedAt DateTime? @map("vendor_hold_requested_at")
+  vendorHoldRequestedAt  DateTime? @map("vendor_hold_requested_at")
   /// The "this job is a go" note — stamped only on a send that really
   /// left, when the ORDER is booked (Wes 2026-09-06: estimate → please
   /// hold when the client says hold → it's a go when the client books).
@@ -4722,15 +4723,15 @@ model SubRental {
   // without them. They still never see the production's name, company or
   // contacts. The client still never sees the partner's name.
   /// Production's call time for this unit's driver — free text ("6:00 AM").
-  callTime            String?   @map("call_time") @db.VarChar(120)
+  callTime                 String?   @map("call_time") @db.VarChar(120)
   /// Production's note to the driver ("park along the east fence").
-  driverNotes         String?   @map("driver_notes") @db.Text
+  driverNotes              String?   @map("driver_notes") @db.Text
   /// Last change to anything the driver is asked to acknowledge — the job's
   /// report-to fields OR the per-unit fields above. A driverAckedAt older
   /// than this means they confirmed a previous version.
-  logisticsUpdatedAt  DateTime? @map("logistics_updated_at")
+  logisticsUpdatedAt       DateTime? @map("logistics_updated_at")
   /// Last time the partner + driver were actually told about a change.
-  logisticsNotifiedAt DateTime? @map("logistics_notified_at")
+  logisticsNotifiedAt      DateTime? @map("logistics_notified_at")
   /// The exact location was released to the DRIVER (day-before cron, or
   /// a change after release). Drivers don't get the delivery location
   /// until the day before (Wes 2026-09-07); the partner always has it.
@@ -4843,8 +4844,8 @@ model DriverHoursEntry {
   generatorHoursIn  Decimal? @map("generator_hours_in") @db.Decimal(8, 1)
   suppliesNote      String?  @map("supplies_note") @db.Text
   /// wrap − left lot, once wrap is in. Null while the day is open.
-  hours        Decimal? @db.Decimal(5, 2)
-  notes        String?  @db.Text
+  hours             Decimal? @db.Decimal(5, 2)
+  notes             String?  @db.Text
 
   submittedAt DateTime @default(now()) @map("submitted_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -4852,8 +4853,8 @@ model DriverHoursEntry {
   /// Third anchor: a partner's OWN booking in their Utliiz workspace.
   workspaceBookingId String? @map("workspace_booking_id")
 
-  subRental        SubRental?        @relation(fields: [subRentalId], references: [id])
-  driverAssignment DriverAssignment? @relation(fields: [driverAssignmentId], references: [id])
+  subRental        SubRental?              @relation(fields: [subRentalId], references: [id])
+  driverAssignment DriverAssignment?       @relation(fields: [driverAssignmentId], references: [id])
   workspaceBooking VendorWorkspaceBooking? @relation(fields: [workspaceBookingId], references: [id], onDelete: Cascade)
 
   @@unique([subRentalId, workDate])
@@ -4912,9 +4913,9 @@ model VendorDriver {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  vendor          Vendor                 @relation(fields: [vendorId], references: [id])
-  trainedVehicles SubcontractedVehicle[] @relation("VendorDriverTrainedVehicles")
-  subRentals      SubRental[]
+  vendor            Vendor                   @relation(fields: [vendorId], references: [id])
+  trainedVehicles   SubcontractedVehicle[]   @relation("VendorDriverTrainedVehicles")
+  subRentals        SubRental[]
   workspaceBookings VendorWorkspaceBooking[]
 
   /// One roster row per address per partner — re-adding refreshes the invite.
@@ -5017,14 +5018,14 @@ model SubcontractedVehicle {
   /// keeps meaning what it meant: a unit we can rent.
   offeredToSirReel Boolean @default(true) @map("offered_to_sirreel")
 
-  vendor         Vendor                      @relation(fields: [vendorId], references: [id])
-  fees           SubcontractedFee[]
-  photos         SubcontractedVehiclePhoto[]
-  subRentals     SubRental[]
+  vendor            Vendor                      @relation(fields: [vendorId], references: [id])
+  fees              SubcontractedFee[]
+  photos            SubcontractedVehiclePhoto[]
+  subRentals        SubRental[]
   /// The partner's OWN bookings of this unit, kept in their HQ workspace.
   workspaceBookings VendorWorkspaceBooking[]
   /// Roster drivers the partner says are trained on this unit.
-  trainedDrivers VendorDriver[]              @relation("VendorDriverTrainedVehicles")
+  trainedDrivers    VendorDriver[]              @relation("VendorDriverTrainedVehicles")
 
   @@index([vendorId])
   @@map("sub_contracted_vehicles")
@@ -5743,7 +5744,7 @@ model Job {
   /// partners and their drivers BEFORE the exact report-to address exists
   /// (Wes 2026-09-07). Never a substitute for reportToAddress — the pages
   /// say "exact address to follow" next to it. Staff-entered.
-  shootArea String? @map("shoot_area")
+  shootArea            String? @map("shoot_area")
   reportToAddress      String? @map("report_to_address") @db.Text
   reportToAccessNotes  String? @map("report_to_access_notes") @db.Text
   reportToContactName  String? @map("report_to_contact_name")
@@ -5830,6 +5831,7 @@ model Job {
   /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
   subRentals            SubRental[]
   lcdwElection          LcdwElection?
+  coiConfirmation       JobCoiConfirmation?
   /// Narrow after-hours links the client (or an agent) forwarded to a
   /// driver / PA. See AfterHoursShare — they die with this job's release.
   afterHoursShares      AfterHoursShare[]
@@ -6550,14 +6552,17 @@ model CoiCheck {
   deletedAt   DateTime? @map("deleted_at")
   deletedById String?   @map("deleted_by_id")
 
-  job             Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  inquiry         Inquiry?         @relation("InquiryCoiChecks", fields: [inquiryId], references: [id], onDelete: SetNull)
-  uploadedBy      User?            @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
-  humanDecisionBy User?            @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
+  job              Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  company          Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  inquiry          Inquiry?             @relation("InquiryCoiChecks", fields: [inquiryId], references: [id], onDelete: SetNull)
+  uploadedBy       User?                @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
+  humanDecisionBy  User?                @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
   // Phase 5 commit 4 — claims that reference this COI as the policy
   // they were filed against.
-  insuranceClaims InsuranceClaim[]
+  insuranceClaims  InsuranceClaim[]
+  /// Per-job client confirmations that THIS certificate is the right
+  /// insurance for that job (carry-forward only).
+  jobConfirmations JobCoiConfirmation[] @relation("JobCoiConfirmations")
 
   @@index([jobId])
   @@index([companyId])
@@ -6568,6 +6573,88 @@ model CoiCheck {
   @@index([humanDecision])
   @@index([policyExpiryDate])
   @@map("sr_coi_checks")
+}
+
+/// The client CONFIRMING that the account's certificate is the right
+/// insurance for THIS job.
+///
+/// Wes, 2026-09-09: "there are times that productions use separate
+/// insurance for whatever reason. Can we show 'Active COI on File' but ask
+/// them to confirm it is the proper insurance for this job?"
+///
+/// Carry-forward (src/lib/coi/companyCoi.ts) spreads an account's approved
+/// certificate across its jobs so nobody is chased for a document HQ
+/// already holds. That is right for the common case and silently wrong for
+/// the exception: a production insured under its own policy — a co-pro, a
+/// network-supplied cert, a one-off with its own producer's package —
+/// looks covered by a certificate that does not name it. Nothing in HQ
+/// could tell the two apart, because the account cert answers both.
+///
+/// So the certificate keeps reading as ON FILE (it is; the account is
+/// insured) and the client is asked the one question only they can answer.
+///
+/// Rules this must not bend:
+///
+/// 1. **Bound to the certificate, not the job.** `coiCheckId` records WHICH
+///    document was confirmed. When the account files a new cert the old
+///    confirmation no longer matches and the job asks again — the same
+///    discipline as LcdwElection.acknowledgedAgreementId. A confirmation
+///    that floats free of the document proves nothing.
+/// 2. **Unconfirmed is NOT uninsured.** The COI verdict (coiState.ts) is
+///    untouched by this row; a job with a carried, approved cert is covered
+///    whether or not anyone has confirmed it. This is an open QUESTION, not
+///    a failure — rendering it as missing insurance would send staff
+///    chasing a document they already hold ([[carry-forward rule 2]]).
+/// 3. **Only carried certificates ask.** A certificate uploaded against
+///    this job was sent FOR this job; there is nothing to confirm.
+model JobCoiConfirmation {
+  id    String @id @default(uuid())
+  jobId String @unique @map("job_id")
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// The certificate the answer is ABOUT. Never null: an answer with no
+  /// document attached cannot be read back two years from now.
+  coiCheckId String   @map("coi_check_id")
+  coiCheck   CoiCheck @relation("JobCoiConfirmations", fields: [coiCheckId], references: [id], onDelete: Cascade)
+
+  /// CONFIRMED       — yes, that policy covers this job.
+  /// SEPARATE_POLICY — this job is insured under its own certificate, which
+  ///                   they still owe us. The carried cert stops standing in
+  ///                   for it: the job reads as awaiting ITS certificate.
+  decision  JobCoiConfirmationDecision
+  decidedAt DateTime                   @default(now()) @map("decided_at")
+
+  /// Free text from the client on the separate policy — who writes it, when
+  /// it is coming. Only meaningful on SEPARATE_POLICY.
+  note String? @db.Text
+
+  /// Who said it, in their own name. A confirmation that cannot be
+  /// attributed is worth as little as one with no document.
+  confirmerName      String? @map("confirmer_name")
+  confirmerEmail     String? @map("confirmer_email")
+  /// Recomposed from the LIVE certificate at answer time, never a constant:
+  /// the sentence stored is the sentence they actually saw.
+  acknowledgmentText String? @map("acknowledgment_text") @db.Text
+  ipAddress          String? @map("ip_address")
+  userAgent          String? @map("user_agent") @db.Text
+
+  /// PORTAL_JOB — the client answered in the portal.
+  /// STAFF      — recorded on their behalf (phone/email), with recordedBy set.
+  source       String  @default("PORTAL_JOB")
+  recordedById String? @map("recorded_by_id")
+  recordedBy   User?   @relation("JobCoiConfirmationRecordedBy", fields: [recordedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([coiCheckId])
+  @@index([decision])
+  @@map("sr_job_coi_confirmations")
+}
+
+enum JobCoiConfirmationDecision {
+  CONFIRMED
+  SEPARATE_POLICY
 }
 
 // A rental/stage agreement ON FILE — the executed master document. Often
@@ -8884,16 +8971,16 @@ model CompanyPortalAccess {
   /// same settings.
   cadence CompanyPortalCadence @default(IMMEDIATE)
 
-  grantedById String?  @map("granted_by_id")
-  grantedBy   User?    @relation("CompanyPortalGrantor", fields: [grantedById], references: [id])
-  grantedAt   DateTime @default(now()) @map("granted_at")
+  grantedById       String?  @map("granted_by_id")
+  grantedBy         User?    @relation("CompanyPortalGrantor", fields: [grantedById], references: [id])
+  grantedAt         DateTime @default(now()) @map("granted_at")
   /// Set when a CLIENT added this person from inside their own portal
   /// (2026-09-06, Wes: "if she wants to add people she can do so in her
   /// portal"). The id of the CompanyPortalAccess that did the adding —
   /// so "who let this person in" is answerable on the staff panel, and a
   /// client-made grant is distinguishable from one a rep issued. Null on
   /// every rep-issued grant.
-  grantedByAccessId String? @map("granted_by_access_id")
+  grantedByAccessId String?  @map("granted_by_access_id")
 
   revokedAt   DateTime? @map("revoked_at")
   revokedById String?   @map("revoked_by_id")
@@ -9263,18 +9350,18 @@ enum VendorWorkspaceBookingStatus {
 /// of their own clients. SirReel's bookings of the same units are
 /// SubRental rows and are merged in at read time — never copied here.
 model VendorWorkspaceBooking {
-  id          String          @id @default(uuid())
-  workspaceId String          @map("workspace_id")
-  workspace   VendorWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  vehicleId   String          @map("vehicle_id")
-  vehicle     SubcontractedVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  clientId    String?         @map("client_id")
+  id          String                 @id @default(uuid())
+  workspaceId String                 @map("workspace_id")
+  workspace   VendorWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicleId   String                 @map("vehicle_id")
+  vehicle     SubcontractedVehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  clientId    String?                @map("client_id")
   client      VendorWorkspaceClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   /// The show / production, as the partner names it.
   title     String
-  startDate DateTime @map("start_date") @db.Date
-  endDate   DateTime @map("end_date") @db.Date
+  startDate DateTime                     @map("start_date") @db.Date
+  endDate   DateTime                     @map("end_date") @db.Date
   status    VendorWorkspaceBookingStatus @default(HOLD)
 
   dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
@@ -9300,15 +9387,15 @@ model VendorWorkspaceBooking {
   driverAckedAt       DateTime? @map("driver_acked_at")
   driverAckNote       String?   @map("driver_ack_note") @db.Text
   /// Check-out: the driver pressed "Rolling" with the meters.
-  rollingAt         DateTime? @map("rolling_at")
-  checkOutOdometer  Int?      @map("check_out_odometer")
-  checkOutGenerator Decimal?  @map("check_out_generator") @db.Decimal(8, 1)
-  checkOutNotes     String?   @map("check_out_notes") @db.Text
+  rollingAt           DateTime? @map("rolling_at")
+  checkOutOdometer    Int?      @map("check_out_odometer")
+  checkOutGenerator   Decimal?  @map("check_out_generator") @db.Decimal(8, 1)
+  checkOutNotes       String?   @map("check_out_notes") @db.Text
   /// Check-in: "Back on the lot" with the meters.
-  backAt           DateTime? @map("back_at")
-  checkInOdometer  Int?      @map("check_in_odometer")
-  checkInGenerator Decimal?  @map("check_in_generator") @db.Decimal(8, 1)
-  checkInNotes     String?   @map("check_in_notes") @db.Text
+  backAt              DateTime? @map("back_at")
+  checkInOdometer     Int?      @map("check_in_odometer")
+  checkInGenerator    Decimal?  @map("check_in_generator") @db.Decimal(8, 1)
+  checkInNotes        String?   @map("check_in_notes") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -9327,11 +9414,11 @@ model VendorWorkspaceBooking {
 /// and provisions by hand (Wes 2026-09-06: replace the mailto buttons with
 /// a request form).
 model UtliizLead {
-  id      String @id @default(uuid())
-  name    String
-  company String
-  email   String
-  phone   String? @db.VarChar(30)
+  id        String  @id @default(uuid())
+  name      String
+  company   String
+  email     String
+  phone     String? @db.VarChar(30)
   /// Bucket, not a number: "1-5", "6-15", "16-40", "40+".
   fleetSize String? @map("fleet_size") @db.VarChar(20)
   /// What they run, in their words ("12 star wagons, 3 honeywagons").
@@ -9365,26 +9452,26 @@ enum SmsDirection {
 }
 
 model SmsThread {
-  id        String  @id @default(uuid())
+  id             String    @id @default(uuid())
   /// E.164, unique — the thread key.
-  phone     String  @unique
+  phone          String    @unique
   /// Carrier-grade opt-out (STOP). Nothing automated may text this number
   /// while set; a human-triggered text is refused too.
-  optedOutAt   DateTime? @map("opted_out_at")
+  optedOutAt     DateTime? @map("opted_out_at")
   /// Affirmative opt-in and where it came from: 'keyword' (START/YES),
   /// 'portal', 'partner-page', 'staff', 'form'.
-  optedInAt    DateTime? @map("opted_in_at")
-  optedInVia   String?   @map("opted_in_via")
+  optedInAt      DateTime? @map("opted_in_at")
+  optedInVia     String?   @map("opted_in_via")
   lastInboundAt  DateTime? @map("last_inbound_at")
   lastOutboundAt DateTime? @map("last_outbound_at")
   /// Best guess at who this is, refreshed on each inbound: a Person, a
   /// partner driver / delivery contact (SubRental), or nothing.
-  personId    String? @map("person_id")
-  subRentalId String? @map("sub_rental_id")
+  personId       String?   @map("person_id")
+  subRentalId    String?   @map("sub_rental_id")
   /// Free-text label staff can set ("Luis — KK driver").
-  label String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  label          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
 
   messages SmsMessage[]
 
@@ -9393,27 +9480,27 @@ model SmsThread {
 }
 
 model SmsMessage {
-  id        String       @id @default(uuid())
-  threadId  String       @map("thread_id")
-  thread    SmsThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  direction SmsDirection
-  body      String       @db.Text
+  id          String       @id @default(uuid())
+  threadId    String       @map("thread_id")
+  thread      SmsThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction   SmsDirection
+  body        String       @db.Text
   /// Twilio MessageSid (SM…). Inbound: from the webhook. Outbound: from the
   /// send response — the status callback updates `status` by it.
-  twilioSid String? @unique @map("twilio_sid")
+  twilioSid   String?      @unique @map("twilio_sid")
   /// Twilio status (queued/sent/delivered/undelivered/failed/received) or
   /// our own: 'skipped-unconfigured', 'skipped-opted-out', 'skipped-quiet'.
-  status    String?
-  errorText String? @map("error_text") @db.Text
+  status      String?
+  errorText   String?      @map("error_text") @db.Text
   /// What produced an outbound: 'assistant', 'keyword', 'staff', 'system'.
   /// Inbound rows carry 'twilio'.
-  source    String
+  source      String
   /// Anchors, when known.
-  jobId       String? @map("job_id")
-  subRentalId String? @map("sub_rental_id")
+  jobId       String?      @map("job_id")
+  subRentalId String?      @map("sub_rental_id")
   /// Staff user who pressed send, for 'staff' rows.
-  sentById String? @map("sent_by_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  sentById    String?      @map("sent_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
 
   @@index([threadId, createdAt])
   @@index([jobId])
