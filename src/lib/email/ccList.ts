@@ -21,6 +21,21 @@ export const MAX_CC = 5
 // wrong person gets copied.
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;.]+(?:\.[^\s@<>,;.]+)+$/
 
+/**
+ * Is this string, on its own, a sendable address?
+ *
+ * Exported because the address lists we READ are not all trustworthy.
+ * EmailMessage.toAddresses is written by the Gmail ingest, which splits
+ * the raw header on commas and so shatters a quoted display name —
+ * `"Proval, Marc" <marc.proval@fox.com>` is stored as the two entries
+ * `"proval` and `marc.proval@fox.com`. That junk token must never reach a
+ * CC line: Resend rejects the whole send on one malformed recipient, so
+ * it would cost the agent the email rather than just one copy.
+ */
+export function isEmailAddress(raw: unknown): boolean {
+  return typeof raw === 'string' && EMAIL_RE.test(raw.trim().toLowerCase())
+}
+
 function tokenize(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.flatMap((v) => (typeof v === 'string' ? v.split(/[,;]/) : []))
   if (typeof raw === 'string') return raw.split(/[,;\n]/)

@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { JobEmailButton } from '@/components/jobs/JobEmailButton'
 
 interface ThreadMsg {
   id: string
@@ -116,25 +117,41 @@ export function JobEmailThreads({ jobId, tone = 'dark' }: { jobId: string; tone?
           const latest = t.messages[t.messages.length - 1]
           return (
             <div key={t.id} className={`border ${T.row} rounded-lg overflow-hidden`}>
-              <button
-                onClick={() => toggle(t.id)}
-                className={`w-full text-left px-3 py-2.5 ${T.rowHover} transition-colors`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`text-[13px] font-medium ${T.subject} truncate`}>
-                    {t.subject || '(no subject)'}
-                  </span>
-                  <span className={`ml-auto flex-shrink-0 text-[10px] ${T.meta}`}>
-                    {t.messageCount} msg{t.messageCount === 1 ? '' : 's'} · {fmtWhen(t.lastMessageAt)}
-                  </span>
-                  <span className={`${T.meta} text-[10px]`} aria-hidden>{expanded ? '▾' : '▸'}</span>
-                </div>
-                {!expanded && latest && (
-                  <div className={`mt-0.5 text-[11px] ${T.meta} truncate`}>
-                    {fromName(latest.fromAddress)}: {latest.snippet || latest.bodyText?.slice(0, 140) || ''}
+              {/* Header row, not a full-width button: Reply lives here and
+                  a button cannot nest inside a button. Reply is addressed
+                  to THIS conversation — the composer reads its CC list off
+                  the thread's latest message.
+
+                  Light only: the other surface rendering this component is
+                  /rentalworks/reconcile, a read-only reconciliation view
+                  with no business sending client mail (and the composer's
+                  lt-* palette would not survive there). */}
+              <div className={`flex items-start gap-2 pr-2.5 ${T.rowHover} transition-colors`}>
+                <button
+                  onClick={() => toggle(t.id)}
+                  className="min-w-0 flex-1 text-left px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[13px] font-medium ${T.subject} truncate`}>
+                      {t.subject || '(no subject)'}
+                    </span>
+                    <span className={`ml-auto flex-shrink-0 text-[10px] ${T.meta}`}>
+                      {t.messageCount} msg{t.messageCount === 1 ? '' : 's'} · {fmtWhen(t.lastMessageAt)}
+                    </span>
+                    <span className={`${T.meta} text-[10px]`} aria-hidden>{expanded ? '▾' : '▸'}</span>
+                  </div>
+                  {!expanded && latest && (
+                    <div className={`mt-0.5 text-[11px] ${T.meta} truncate`}>
+                      {fromName(latest.fromAddress)}: {latest.snippet || latest.bodyText?.slice(0, 140) || ''}
+                    </div>
+                  )}
+                </button>
+                {tone === 'light' && (
+                  <div className="flex-shrink-0 pt-2">
+                    <JobEmailButton jobId={jobId} threadId={t.id} label="Reply" />
                   </div>
                 )}
-              </button>
+              </div>
               {expanded && (
                 <div className={`border-t divide-y ${T.body}`}>
                   {t.messages.map((m) => {

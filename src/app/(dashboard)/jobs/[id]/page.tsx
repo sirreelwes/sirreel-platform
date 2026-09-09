@@ -48,6 +48,7 @@ import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
+import { JobEmailButton } from '@/components/jobs/JobEmailButton';
 import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -1446,8 +1447,14 @@ const driverTone = (d: any): string => {
                 />
               </div>
             )}
+            {/* Who we'd be writing to, and the button that writes to them.
+                The button is NOT inside the `primaryContact &&` guard —
+                a job with no contact on file is exactly the one whose
+                client is only reachable through the email thread, which
+                is where the composer gets its address from. */}
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
             {primaryContact && (
-              <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <div className="inline-flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
                 <span className="w-7 h-7 rounded-full bg-amber-50 border border-amber-300 flex items-center justify-center text-[12px] font-bold text-amber-700" style={{ fontFamily: "Georgia, serif" }}>
                   {(primaryContact.person.firstName?.[0] ?? '') + (primaryContact.person.lastName?.[0] ?? '')}
                 </span>
@@ -1469,6 +1476,8 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             )}
+              <JobEmailButton jobId={job.id} />
+            </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
             <div className="mt-3">

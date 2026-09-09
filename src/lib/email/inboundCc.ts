@@ -36,6 +36,32 @@ export interface InboundCcResult {
 }
 
 /**
+ * Every address in a raw RFC-5322 header list, lower-cased, in header
+ * order, deduped. Display-name forms are read through — that's the whole
+ * point of this module (see the header note).
+ *
+ * Exported because the Job-page composer reads To: and Cc: the same way
+ * this file has always read Cc: (src/lib/email/threadParticipants.ts).
+ */
+export function extractAddresses(rawHeader: string | null | undefined): string[] {
+  if (!rawHeader || typeof rawHeader !== 'string') return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const match of rawHeader.match(ADDRESS_RE) ?? []) {
+    const addr = match.trim().toLowerCase()
+    if (!addr || seen.has(addr)) continue
+    seen.add(addr)
+    out.push(addr)
+  }
+  return out
+}
+
+/** Is this one of our own mailboxes? Never CC'd back onto a client reply. */
+export function isInternalAddress(addr: string): boolean {
+  return addr.trim().toLowerCase().endsWith(`@${INTERNAL_DOMAIN}`)
+}
+
+/**
  * Pull addresses out of a raw Cc header.
  * `exclude` drops anyone already on the reply (the To: recipient).
  */
@@ -49,13 +75,9 @@ export function parseInboundCc(
   const skip = new Set(
     exclude.filter((e): e is string => !!e).map((e) => e.trim().toLowerCase()),
   )
-  const seen = new Set<string>()
-
-  for (const match of rawCcHeader.match(ADDRESS_RE) ?? []) {
-    const addr = match.trim().toLowerCase()
-    if (seen.has(addr) || skip.has(addr)) continue
-    seen.add(addr)
-    if (addr.endsWith(`@${INTERNAL_DOMAIN}`)) out.internal.push(addr)
+  for (const addr of extractAddresses(rawCcHeader)) {
+    if (skip.has(addr)) continue
+    if (isInternalAddress(addr)) out.internal.push(addr)
     else out.clients.push(addr)
   }
   return out
