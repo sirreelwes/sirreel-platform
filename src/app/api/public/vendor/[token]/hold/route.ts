@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notifyVendorWord } from '@/lib/sub-rentals/conduit'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
+import { recordReleaseAck } from '@/lib/sub-rentals/releaseAck'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const sub = await prisma.subRental.findFirst({
     where: { vendorToken: token },
-    select: { id: true, status: true, vendorConfirmedAt: true, vendorReleaseAckedAt: true },
+    select: { id: true, status: true, vendorConfirmedAt: true },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
@@ -50,29 +51,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         { status: 409 },
       )
     }
-    const already = !!sub.vendorReleaseAckedAt
-    const now = new Date()
-    if (!already) {
-      await prisma.subRental.update({
-        where: { id: sub.id },
-        data: { vendorReleaseAckedAt: now },
-      })
-      await prisma.auditLog.create({
-        data: {
-          action: 'sub_rental.vendor_release_acked',
-          entityType: 'SubRental',
-          entityId: sub.id,
-          newValues: { via: 'vendor-page' },
-        },
-      })
+    // Idempotent in the helper: a second tap returns the first timestamp
+    // and tells HQ nothing, so opening the email twice is not two alerts.
+    const { ackedAt, created } = await recordReleaseAck(sub.id)
+    if (created) {
       await notifyVendorWord(sub.id, 'release-acked', null).catch((err) =>
         console.warn('[vendor/hold] notify failed:', err instanceof Error ? err.message : err),
       )
     }
-    return NextResponse.json({
-      ok: true,
-      releaseAckedAt: (sub.vendorReleaseAckedAt ?? now).toISOString(),
-    })
+    return NextResponse.json({ ok: true, releaseAckedAt: ackedAt.toISOString() })
   }
 
   if (action === 'confirm') {
