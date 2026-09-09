@@ -28,6 +28,7 @@ import { schedulingCategoryId } from '@/lib/catalog/resolve'
 import { getServerSession } from 'next-auth'
 import { can } from '@/lib/permissions'
 import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
+import { MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,6 +183,22 @@ export async function POST(req: NextRequest) {
       _max: { holdRank: true },
     })
     effectiveRank = Math.max(2, (maxRankAgg._max.holdRank ?? 1) + 1)
+  }
+  // 1st, 2nd, 3rd — no 4th (Wes 2026-09-09). A queue that deep on one
+  // truck is a sub-rental conversation, not a reservation, and the
+  // board stops being readable. Refused loudly rather than clamped:
+  // silently landing a 4th request on top of the 3rd would tell the
+  // agent they have a place in a queue that they do not have.
+  if (effectiveRank > MAX_HOLD_RANK) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'stack-full',
+        reason: `Holds go 1st, 2nd, 3rd. This category already has ${MAX_HOLD_RANK} on those dates.`,
+        suggestion: 'release a hold that is no longer live, or sub-rent the unit',
+      },
+      { status: 409 },
+    )
   }
   const isPrimary = effectiveRank === 1
 

@@ -1196,6 +1196,18 @@ model BookingItem {
   /// releases, an agent surfaces the next-rank backup explicitly.
   /// Replaces the Planyo "X - 2ND HOLD" placeholder workaround.
   holdRank   Int               @default(1) @map("hold_rank")
+  /// A HUMAN placed this hold in the queue — "2nd Hold", or "1st Hold and
+  /// demote the other" — so `reconcileHoldFirmness` must NOT move it.
+  /// Queue position beats paperwork (Wes 2026-09-09): without this lock the
+  /// nightly sweep promotes any rank-2 whose own paperwork is in, which
+  /// jumps the queue and leaves two rank-1 holds on the same units, and it
+  /// reverts a demotion the moment the demoted order reconciles. Same
+  /// pattern as Order.verbalApprovalAt: an automatic rule yields to a
+  /// recorded human decision. Clearing these three columns hands the hold
+  /// back to the automatic rule.
+  rankLockedAt     DateTime? @map("rank_locked_at")
+  rankLockedById   String?   @map("rank_locked_by_id")
+  rankLockedReason String?   @map("rank_locked_reason") @db.Text
   notes      String?           @db.Text
 
   // Relations

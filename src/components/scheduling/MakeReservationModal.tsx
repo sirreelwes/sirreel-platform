@@ -52,6 +52,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
+import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 
 interface Category {
@@ -73,6 +74,18 @@ interface Conflict {
   quantity: number
 }
 
+/** One hold already in this category's window. */
+interface StackEntry {
+  bookingItemId: string
+  holdRank: number
+  quantity: number
+  bookingNumber: string
+  jobName: string | null
+}
+
+/** What the desk chose to do about a category at capacity. */
+type QueueChoice = 'none' | 'second' | 'take-first'
+
 interface Result {
   orderId: string
   orderNumber: string
@@ -80,6 +93,9 @@ interface Result {
   /** null when nothing was assigned — either not asked for, or no unit was free. */
   assigned: { unitName: string }[]
   assignNote: string | null
+  /** Where this reservation landed in the queue, when it was stacked. */
+  holdRank?: number
+  demoted?: { bookingNumber: string; from: number; to: number }[]
 }
 
 /** One line of the submit progress list. */
@@ -130,6 +146,13 @@ export function MakeReservationModal({
   const [companyError, setCompanyError] = useState<string | null>(null)
   const [companyNearMatch, setCompanyNearMatch] = useState<{ id: string; name: string; message: string } | null>(null)
 
+  // Capacity for the chosen category+window, and who is already in the
+  // queue for it. Both refresh whenever the type or the dates move.
+  const [avail, setAvail] = useState<{ availableToHold: number; serviceableCount: number } | null>(null)
+  const [stack, setStack] = useState<StackEntry[]>([])
+  const [availLoading, setAvailLoading] = useState(false)
+  const [queueChoice, setQueueChoice] = useState<QueueChoice>('none')
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<Conflict[] | null>(null)
@@ -178,8 +201,57 @@ export function MakeReservationModal({
     [categories, categoryId],
   )
 
+  // Preflight: is there anything left for these dates, and who is
+  // holding it if not? This is what turns "Create reservation" into the
+  // 2nd-Hold choice rather than a silent over-commit.
+  useEffect(() => {
+    if (!categoryId || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) {
+      setAvail(null)
+      setStack([])
+      return
+    }
+    let cancelled = false
+    setAvailLoading(true)
+    Promise.all([
+      fetch(`/api/scheduling/availability?categoryId=${categoryId}&start=${start}&end=${end}`).then((r) => r.json()),
+      fetch(`/api/scheduling/stacked-holds?categoryId=${categoryId}&start=${start}&end=${end}`).then((r) => r.json()),
+    ])
+      .then(([a, st]) => {
+        if (cancelled) return
+        setAvail(
+          typeof a?.availableToHold === 'number'
+            ? { availableToHold: a.availableToHold, serviceableCount: a.serviceableCount ?? 0 }
+            : null,
+        )
+        // `rows` — the stacked-holds route's key, already ordered rank
+        // then oldest-first within a rank.
+        setStack(Array.isArray(st?.rows) ? st.rows : [])
+        setQueueChoice('none')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvail(null)
+          setStack([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAvailLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [categoryId, start, end])
+
   const datesValid =
     /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && end >= start
+
+  /** Nothing left for these dates — the moment the queue matters. */
+  const atCapacity = !!avail && avail.availableToHold < quantity
+  const incumbents = stack.filter((h) => h.holdRank === 1)
+  const deepest = stack.reduce((m, h) => Math.max(m, h.holdRank), 0)
+  /** Where a "2nd Hold" would actually land (2, or 3 behind a 2nd). */
+  const nextFreeRank = Math.max(2, deepest + 1)
+  const stackFull = nextFreeRank > MAX_HOLD_RANK
 
   const contactTyped =
     contactName.trim().split(/\s+/).length >= 2 && /\S+@\S+\.\S+/.test(contactEmail.trim())
@@ -193,8 +265,12 @@ export function MakeReservationModal({
     !!job &&
     contactReady &&
     !contactsLoading &&
+    !availLoading &&
     quantity > 0 &&
     datesValid &&
+    // At capacity the agent must say WHICH hold this is. Falling through
+    // to a plain create would put a second 1st Hold on the same units.
+    (!atCapacity || queueChoice !== 'none') &&
     !submitting
 
   function onJobResolved(r: ResolvedJob) {
@@ -371,10 +447,51 @@ export function MakeReservationModal({
       const bookingItemId: string | null = hold?.bookingItem?.id ?? null
       mark('hold', bookingItemId ? 'done' : 'failed')
 
+      // 3b — the queue decision, when the desk made one. The hold the
+      // line-items route minted carries an AUTOMATIC rank; this stamps
+      // the human one over it and locks it so the firmness sweep leaves
+      // it alone. Done before assignment so a 2nd Hold never grabs a
+      // unit out from under the 1st.
+      let placedRank: number | undefined
+      let demoted: { bookingNumber: string; from: number; to: number }[] = []
+      if (bookingItemId && queueChoice !== 'none') {
+        mark('rank', 'running')
+        const wantRank = queueChoice === 'second' ? nextFreeRank : 1
+        const rankRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/rank`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rank: wantRank,
+            demoteOthers: queueChoice === 'take-first',
+            reason: notes.trim() || null,
+          }),
+        })
+        const rankJson = await rankRes.json().catch(() => ({}))
+        if (!rankRes.ok) {
+          mark('rank', 'failed')
+          setError(
+            `${rankJson?.reason || rankJson?.error || `Could not place the hold in the queue (${rankRes.status}).`} ` +
+              `Order ${order.orderNumber} exists and the units are held — open it to sort the queue out.`,
+          )
+          setSubmitting(false)
+          return
+        }
+        placedRank = rankJson.holdRank
+        demoted = rankJson.demoted || []
+        mark('rank', 'done')
+      }
+
       // 4 — optional: bind the next free unit(s).
       const assigned: { unitName: string }[] = []
       let assignNote: string | null = null
-      if (assignNext && canBindUnit && bookingItemId) {
+      // A queued hold gets NO unit. The whole point of a 2nd Hold is
+      // that the truck is somebody else's until they release it;
+      // assigning one here would double-book the asset for real.
+      const queuedBehind = (placedRank ?? 1) > 1
+      if (queuedBehind) {
+        mark('assign', 'skipped')
+        assignNote = `Queued as the ${holdRankLabel(placedRank!)} Hold — no unit is assigned until the hold ahead releases.`
+      } else if (assignNext && canBindUnit && bookingItemId) {
         mark('assign', 'running')
         for (let i = 0; i < quantity; i++) {
           const availRes = await fetch(
@@ -427,6 +544,8 @@ export function MakeReservationModal({
         bookingNumber: hold?.booking?.bookingNumber ?? null,
         assigned,
         assignNote,
+        holdRank: placedRank,
+        demoted,
       })
       setConflicts(null)
       onCreated()
@@ -488,6 +607,20 @@ export function MakeReservationModal({
                 <div>
                   {category?.name} × {quantity} · {start} – {end}
                 </div>
+                {result.holdRank != null && result.holdRank > 1 && (
+                  <div>
+                    Queued as the{' '}
+                    <span className="font-semibold text-lt-fg">{holdRankLabel(result.holdRank)} Hold</span>
+                  </div>
+                )}
+                {result.demoted && result.demoted.length > 0 && (
+                  <div>
+                    Demoted:{' '}
+                    <span className="font-semibold text-lt-fg">
+                      {result.demoted.map((d) => `${d.bookingNumber} → ${holdRankLabel(d.to)}`).join(', ')}
+                    </span>
+                  </div>
+                )}
                 {result.assigned.length > 0 && (
                   <div>
                     Assigned:{' '}
@@ -547,6 +680,11 @@ export function MakeReservationModal({
                     aria-label="How many"
                   />
                 </div>
+                {category && !availLoading && avail && !atCapacity && (
+                  <p className="mt-1 text-[11px] text-chip-good-fg">
+                    {avail.availableToHold} of {avail.serviceableCount} available for these dates
+                  </p>
+                )}
                 {category?.dailyRate != null && (
                   <p className="mt-1 text-[11px] text-lt-fg3">
                     ${category.dailyRate}/day list — the client&apos;s own rate card is applied when the line is priced.
@@ -755,6 +893,76 @@ export function MakeReservationModal({
                 </label>
               )}
 
+              {/* Zero availability — the 2nd Hold moment (Wes 2026-09-09).
+                  A category at capacity with no replacement unit is a
+                  queue decision, not an error, so the two real answers
+                  are offered by name. Backups never consume capacity,
+                  so a 2nd Hold costs the production ahead nothing. */}
+              {atCapacity && (
+                <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg px-3 py-2.5 space-y-2.5">
+                  <div className="text-[12px] font-semibold text-chip-warn-fg">
+                    No {category?.name ?? 'unit'} free {start === end ? `on ${start}` : `${start} – ${end}`}
+                    {avail ? ` — 0 of ${avail.serviceableCount} available` : ''}
+                  </div>
+                  {incumbents.length > 0 && (
+                    <div className="text-[11px] text-chip-warn-fg/90 space-y-0.5">
+                      {stack.slice(0, 4).map((h) => (
+                        <div key={h.bookingItemId}>
+                          {holdRankLabel(h.holdRank)} Hold · {h.jobName || h.bookingNumber}
+                          {h.quantity > 1 ? ` · ${h.quantity} units` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {stackFull ? (
+                    <div className="text-[11px] text-chip-warn-fg">
+                      This category already has {MAX_HOLD_RANK} holds on those dates. Release one
+                      that isn&apos;t live, or sub-rent the unit — holds go 1st, 2nd, 3rd.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQueueChoice('second')}
+                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                          queueChoice === 'second'
+                            ? 'bg-lt-fg text-white border-lt-fg'
+                            : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
+                        }`}
+                      >
+                        {holdRankLabel(nextFreeRank)} Hold
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQueueChoice('take-first')}
+                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                          queueChoice === 'take-first'
+                            ? 'bg-lt-fg text-white border-lt-fg'
+                            : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
+                        }`}
+                      >
+                        Make 1st Hold and demote other
+                      </button>
+                    </div>
+                  )}
+                  {queueChoice === 'second' && (
+                    <div className="text-[11px] text-chip-warn-fg">
+                      Queues behind {incumbents.length === 1 ? 'them' : 'the holds above'}. No unit is
+                      assigned until the hold ahead releases, and this costs them nothing — a
+                      backup doesn&apos;t consume capacity.
+                    </div>
+                  )}
+                  {queueChoice === 'take-first' && (
+                    <div className="text-[11px] text-chip-warn-fg">
+                      {incumbents.length > 0
+                        ? `${incumbents.map((i) => i.jobName || i.bookingNumber).join(', ')} drops to ${holdRankLabel(2)} Hold.`
+                        : 'Takes the front of the queue.'}{' '}
+                      Recorded against your name on the reservation. Nobody is emailed.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Conflict override */}
               {conflicts && (
                 <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px] space-y-2">
@@ -773,10 +981,14 @@ export function MakeReservationModal({
                   </ul>
                   <button
                     onClick={() => submit(true)}
-                    disabled={submitting}
-                    className="px-3 py-1.5 rounded-lg bg-lt-card border border-lt-hairline text-[12px] font-semibold text-lt-fg"
+                    disabled={submitting || (atCapacity && queueChoice === 'none')}
+                    className="px-3 py-1.5 rounded-lg bg-lt-card border border-lt-hairline text-[12px] font-semibold text-lt-fg disabled:opacity-50"
                   >
-                    Reserve anyway
+                    {atCapacity && queueChoice === 'second'
+                      ? `Reserve as ${holdRankLabel(nextFreeRank)} Hold`
+                      : atCapacity && queueChoice === 'take-first'
+                        ? 'Take the 1st Hold'
+                        : 'Reserve anyway'}
                   </button>
                 </div>
               )}
@@ -793,6 +1005,7 @@ export function MakeReservationModal({
                   {stepRow('order', 'Creating the order')}
                   {stepRow('line', `Adding ${category?.name ?? 'the vehicle'} × ${quantity}`)}
                   {stepRow('hold', 'Reserving the category')}
+                  {atCapacity && stepRow('rank', queueChoice === 'take-first' ? 'Taking the 1st Hold' : 'Queueing the hold')}
                   {stepRow('assign', 'Assigning a unit')}
                 </div>
               )}
@@ -809,7 +1022,13 @@ export function MakeReservationModal({
                   disabled={!canSubmit}
                   className="mt-3 px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-[12px] font-semibold"
                 >
-                  {submitting ? 'Working…' : 'Create reservation'}
+                  {submitting
+                    ? 'Working…'
+                    : atCapacity && queueChoice === 'second'
+                      ? `Create ${holdRankLabel(nextFreeRank)} Hold`
+                      : atCapacity && queueChoice === 'take-first'
+                        ? 'Create and demote other'
+                        : 'Create reservation'}
                 </button>
               </div>
             </div>

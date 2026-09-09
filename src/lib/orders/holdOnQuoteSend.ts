@@ -393,6 +393,9 @@ export async function clientPaperworkIn(orderId: string): Promise<{
 export async function reconcileHoldFirmness(orderId: string): Promise<{
   promoted: number
   demoted: number
+  /** Holds this sweep deliberately did NOT move because a human set the
+   *  rank. Reported so "why didn't it promote?" has an answer. */
+  rankLocked: number
   firm: boolean
   /** The hold is firm because a human vouched for it, not because the
    *  paperwork is in. `missing` is still populated in that case. */
@@ -400,7 +403,7 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
   missing: string[]
   error: string | null
 }> {
-  const out = { promoted: 0, demoted: 0, firm: false, staffAttested: false, missing: [] as string[], error: null as string | null }
+  const out = { promoted: 0, demoted: 0, rankLocked: 0, firm: false, staffAttested: false, missing: [] as string[], error: null as string | null }
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -445,21 +448,37 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
     }
     if (bookingIds.length === 0) return out
 
+    // A rank a HUMAN set is never moved by this sweep (Wes 2026-09-09:
+    // queue position beats paperwork). Without the `rankLockedAt: null`
+    // guard, a deliberate 2nd Hold whose own paperwork happens to be in
+    // gets promoted to 1st — jumping the queue and putting two rank-1
+    // holds on the same units — and a "demote the other production"
+    // decision is reverted the next time that order reconciles, which is
+    // a nightly cron plus six other call sites. See
+    // BookingItem.rankLockedAt.
     if (firm) {
       const res = await prisma.bookingItem.updateMany({
-        where: { bookingId: { in: bookingIds }, holdRank: 2, status: 'REQUESTED' },
+        where: { bookingId: { in: bookingIds }, holdRank: 2, status: 'REQUESTED', rankLockedAt: null },
         data: { holdRank: 1 },
       })
       out.promoted = res.count
+      const held = await prisma.bookingItem.count({
+        where: { bookingId: { in: bookingIds }, holdRank: { gte: 2 }, status: 'REQUESTED', rankLockedAt: { not: null } },
+      })
+      out.rankLocked = held
     } else {
       // Something lapsed (a COI expired, an agreement was re-issued):
       // the hold drops back to a backup rather than silently keeping a
       // firm block it no longer earns.
       const res = await prisma.bookingItem.updateMany({
-        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED' },
+        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED', rankLockedAt: null },
         data: { holdRank: 2 },
       })
       out.demoted = res.count
+      const held = await prisma.bookingItem.count({
+        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED', rankLockedAt: { not: null } },
+      })
+      out.rankLocked = held
     }
     return out
   } catch (e) {
