@@ -133,6 +133,29 @@ way with `/api/admin/a2p-campaign`: once a campaign is properly
 associated it appears in `campaigns[]` and carries the reviewer's own
 `errors` text after any future rejection.
 
+## What the Console says that the email does not (2026-09-09)
+
+The campaign page's own banner: *"rejected due to issues verifying the
+Call to Action (CTA) provided for the campaign"*. The email only ever said
+30909. **Read the Console banner, not the email.**
+
+The stored fields there also proved the 9/8 edits SAVED — the flow on file
+is the four-path version citing `/sms-terms/opt-in-examples`. So the
+rejections were neither lost edits nor bad wording; the reviewer could not
+VERIFY the call to action.
+
+Verified good on 2026-09-09: every sample-message link resolves 200, the
+CTA and the consent form are server-rendered (present with JS disabled),
+and the home-page footer links both legal pages.
+
+Fixed: `/sms-terms/opt-in-examples` carried `noindex, nofollow` — the very
+page the campaign cites for the gated opt-in paths, which a vetting
+crawler may decline to evaluate. It is now crawlable and, with `/sms-terms`
+and `/privacy`, listed in the sitemap.
+
+**Use "Edit & resubmit" on the campaign page.** The onboarding checklist's
+"Update campaign details" button is the one that throws React #310.
+
 ## Rejection log
 
 | # | Rejected | What was filed | Read |
