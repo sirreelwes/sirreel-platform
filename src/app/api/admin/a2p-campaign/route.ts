@@ -45,6 +45,25 @@ export async function GET() {
   }
   const auth = 'Basic ' + Buffer.from(keySid && keySecret ? `${keySid}:${keySecret}` : `${sid}:${authToken}`).toString('base64')
 
+  // Shape check on the stored credentials. Every Twilio read returned 401
+  // "actor doesn't have any assertions" on 2026-09-08 — including the plain
+  // account read, which needs no scope — so the question is whether the
+  // values are well-formed and whether they belong to the account the
+  // campaign actually lives in. The account SID is not a secret (it is
+  // printed in Twilio's own rejection emails); the key secret is never
+  // echoed, only measured.
+  const mask = (v: string | undefined) => (v && v.length > 10 ? `${v.slice(0, 6)}…${v.slice(-4)}` : null)
+  const credentials = {
+    accountSidWellFormed: /^AC[0-9a-f]{32}$/i.test(sid),
+    accountSid: mask(sid),
+    accountSidLength: sid.length,
+    keySidWellFormed: /^SK[0-9a-f]{32}$/i.test(keySid ?? ''),
+    keySid: mask(keySid),
+    keySidLength: keySid?.length ?? 0,
+    keySecretLength: keySecret?.length ?? 0,
+    hasAuthToken: Boolean(authToken),
+  }
+
   const call = async (url: string) => {
     const r = await fetch(url, { headers: { Authorization: auth }, cache: 'no-store' })
     const j = await r.json().catch(() => ({}))
@@ -68,6 +87,7 @@ export async function GET() {
       ok: false,
       error: 'Twilio refused the credentials for the campaign resource.',
       credentialKind: keySid && keySecret ? 'api-key' : 'auth-token',
+      credentials,
       campaign: { status: res.status, code: res.json?.code, message: res.json?.message },
       probes: probes.map((p) => ({
         resource: p.url.replace(/https:\/\/[^/]+/, '').replace(sid, '{account}').replace(MESSAGING_SERVICE_SID, '{service}'),
@@ -75,7 +95,7 @@ export async function GET() {
         code: p.json?.code ?? null,
         message: p.json?.message ?? null,
       })),
-      hint: 'If the account read succeeds and the campaign read does not, the API key lacks A2P/TrustHub scope — read it with the account Auth Token instead, or from the Console.',
+      hint: 'Every probe 401 (including the plain account read, which needs no scope) means the credential itself is not authenticating: the key was deleted, or it belongs to a different Twilio account than the one holding the campaign. Compare credentials.accountSid against the Account SID in Twilio\'s rejection email, then create a fresh Standard API key IN THAT ACCOUNT and update both Vercel Production values.',
     }, { status: 502 })
   }
 
