@@ -100,29 +100,38 @@ help reply carries no brand name or contact, which reviewers reject.
 | Direct lending / loan arrangement | No |
 | Affiliate marketing | No |
 
-## THE CAMPAIGN NO LONGER EXISTS (2026-09-09)
+## The campaign exists, but is DETACHED from the messaging service (2026-09-09)
 
-Read with a working key, Twilio returns **404 / 20404** for campaign
-`CMadf71a842a44855e507d1cfbb9436cb0`, and the messaging service has **no
-A2P campaign attached at all**. The rejected campaign was removed, so
-there is nothing to edit and nothing to resubmit — **a new campaign must
-be created** on messaging service `MGda3482bd81e2c26b45cc188de36124dc`.
+Two sources disagreed, and the Console is the accurate one:
 
-That also explains the rest of it: the Console's React #310 crash was it
-failing to render an edit form for a campaign that was already gone, and
-the repeated rejection emails carried the ORIGINAL submitted timestamp
-because no new submission was ever created.
+- **Console** → Trust Hub → Registrations → A2P 10DLC Campaigns lists
+  campaign `CMadf71a…` as **Rejected**, brand SirReel `BN8ceaba…`,
+  use case Account Notification, messaging service `MGda3482…`.
+- **API** → `/v1/Services/MGda3482…/Compliance/Usa2p` returns an EMPTY
+  list, and fetching that campaign SID under that service returns
+  **404 / 20404**.
+
+Read together: the campaign record still exists in the A2P registry, but
+its association with the messaging service was torn down when it was
+rejected. The `Usa2p` resource IS that association, which is why the API
+cannot see it. Do not conclude from the 404 alone that the campaign is
+gone — check the Console list too.
+
+That still explains the Console crash: "Update campaign details" on the
+onboarding checklist tries to load the campaign through the association
+that no longer exists, and throws React #310.
 
 **The brand is fine — do not re-register it.** `BN8ceaba8e959be179480ba5034eabe104`
-is APPROVED, brand type STANDARD, identity VERIFIED. Only the campaign
-needs creating.
+is APPROVED, brand type STANDARD, identity VERIFIED.
 
-Create it in Console → Messaging → Regulatory Compliance → A2P 10DLC →
-Campaigns (or on the messaging service), pick the brand above, and fill
-every field from this document. Verify afterwards with
-`/api/admin/a2p-campaign` — a real campaign comes back in `campaigns[]`
-with its `campaign_status`, and after any future rejection that endpoint
-carries the reviewer's own `errors` text, which the email omits.
+**Next step:** open the campaign from the Campaigns list (click its SID)
+and see what actions it offers. If it can be edited and resubmitted, file
+the fields below. If a rejected campaign cannot be edited — which is
+common — use **Create A2P Campaign** on that page and file the same
+fields against the existing brand and messaging service. Verify either
+way with `/api/admin/a2p-campaign`: once a campaign is properly
+associated it appears in `campaigns[]` and carries the reviewer's own
+`errors` text after any future rejection.
 
 ## Rejection log
 
