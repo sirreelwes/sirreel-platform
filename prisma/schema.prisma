@@ -2410,6 +2410,7 @@ model User {
   pickListsAssigned     PickList[]     @relation("PickListAssignedTo")
   pickListItemsPicked   PickListItem[] @relation("PickListItemPickedBy")
   pickListsCheckedIn    PickList[]     @relation("PickListCheckedInBy")
+  pickListsReleased     PickList[]     @relation("PickListReleasedBy")
   pickListItemsReturned PickListItem[] @relation("PickListItemReturnedBy")
 
   // Phase 5 commit 3 — native payment recording.
@@ -4261,9 +4262,28 @@ model PickList {
   checkedInAt      DateTime?      @map("checked_in_at")
   checkedInById    String?        @map("checked_in_by_id")
 
+  // ── Release to the warehouse ────────────────────────────────────
+  // The explicit "send the pull order to the warehouse" handoff (Wes,
+  // 2026-09-09). A PickList is filed the moment a warehouse line is
+  // added, at ANY order status — so its existence has never meant the
+  // floor was asked to pull anything. That is what these stamp.
+  //
+  // The picking queue shows a list when its order is BOOKED-or-beyond
+  // OR when this is set: an explicit release is the escape hatch for
+  // "pull it now" on an approved-but-unbooked order, without reopening
+  // the 2026-09-01 flood (19 of 20 open lists belonged to orders nobody
+  // had booked). Re-sending re-stamps; the audit log holds every send.
+  releasedAt       DateTime?      @map("released_at")
+  releasedById     String?        @map("released_by_id")
+  // What the rep told the floor when they sent it ("front half only —
+  // the LED package is still a maybe"). Prints on the sheet-less email,
+  // not on the PDF.
+  releaseNote      String?        @map("release_note") @db.Text
+
   order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   assignedTo  User?          @relation("PickListAssignedTo", fields: [assignedToId], references: [id])
   checkedInBy User?          @relation("PickListCheckedInBy", fields: [checkedInById], references: [id])
+  releasedBy  User?          @relation("PickListReleasedBy", fields: [releasedById], references: [id])
   items       PickListItem[]
 
   @@index([status])

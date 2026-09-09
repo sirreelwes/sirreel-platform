@@ -52,6 +52,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
           },
         },
       },
+      // Warehouse release stamp — drives the "Sent to warehouse …" line
+      // under the Warehouse actions row. See lib/warehouse/sendPullOrder.ts.
+      pickList: {
+        select: {
+          id: true,
+          status: true,
+          releasedAt: true,
+          releaseNote: true,
+          releasedBy: { select: { id: true, name: true, email: true } },
+        },
+      },
       jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
       // Job's full contact roster — drives the "Will send to" recipient
       // display + multi-recipient tooltip on the Order detail page.

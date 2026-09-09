@@ -38,6 +38,7 @@ export type NotificationChannelKey =
   | 'invoice-billing-cc'
   | 'coi-team'
   | 'pickup-picklists'
+  | 'warehouse-pull-orders'
   | 'daily-brief'
   | 'rw-token'
   | 'hq-escalation-sales'
@@ -182,6 +183,18 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'The day-before digest, weekday afternoons: jobs picking up tomorrow with all paperwork and approvals complete, each with a link to print its warehouse pick list — plus a heads-up list of pickups that are NOT ready. Friday’s run covers the weekend and Monday. A short-term bridge until picking is fully digital.',
     defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'warehouse-pull-orders',
+    label: 'Warehouse pull orders',
+    description:
+      'A single order sent to the floor from its page in HQ — "pull this". The pull sheet is ATTACHED as a PDF rather than linked, because during the transition the people pulling do not all have HQ logins and the floor still works on paper. Carries the rep’s note and names any paperwork still outstanding. Defaults to warehouse@sirreel.com (Wes, 2026-09-09).',
+    // Wes, 2026-09-09: "during the transition, pull list pdfs should be
+    // sent to warehouse@sirreel.com for them to pull." A channel rather
+    // than a hardcoded address so it can move without a deploy — but the
+    // DEFAULT is the address he named, so it is right on day one with
+    // nothing configured.
+    defaults: () => ['warehouse@sirreel.com'],
   },
   {
     key: 'hq-escalation-sales',

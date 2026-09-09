@@ -37,6 +37,12 @@ const ALL_STATES = [...OPEN_STATES, 'CHECKED_IN', 'CANCELLED'] as const
 //
 // Gated on order STATUS, not bookedAt — one legitimately booked order
 // carries a null bookedAt, and hiding a real list is the worse error.
+//
+// The OR on `releasedAt` is the escape hatch (Wes 2026-09-09): a rep
+// who explicitly sends the pull order to the warehouse gets the list on
+// the floor whatever the order status, because they said so. It cannot
+// reflood the queue the way the old status-blind rule did — a stamp per
+// order, put there by a person. See lib/warehouse/sendPullOrder.ts.
 const BOOKED_ORDER_STATES = [
   'BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED',
 ] as const
@@ -51,7 +57,12 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.pickList.findMany({
     where: {
       status: { in: [...statuses] },
-      order: { status: { in: [...BOOKED_ORDER_STATES] } },
+      OR: [
+        { order: { status: { in: [...BOOKED_ORDER_STATES] } } },
+        { releasedAt: { not: null } },
+      ],
+      // A cancelled order has nothing to pull no matter who released it.
+      order: { status: { not: 'CANCELLED' } },
     },
     select: {
       id: true,
@@ -59,6 +70,9 @@ export async function GET(req: NextRequest) {
       createdAt: true,
       startedAt: true,
       completedAt: true,
+      releasedAt: true,
+      releaseNote: true,
+      releasedBy: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, name: true } },
       order: {
         select: {
@@ -76,6 +90,9 @@ export async function GET(req: NextRequest) {
         },
       },
     },
+    // Pickup date stays the primary sort — the floor works the day, not
+    // the inbox. A release is surfaced by its badge on the row, not by
+    // jumping the queue.
     orderBy: [
       // NULLS LAST is the Postgres default for ascending, which keeps
       // dateless orders at the bottom of the queue rather than the top.
@@ -96,6 +113,9 @@ export async function GET(req: NextRequest) {
       createdAt: r.createdAt,
       startedAt: r.startedAt,
       completedAt: r.completedAt,
+      releasedAt: r.releasedAt,
+      releaseNote: r.releaseNote,
+      releasedBy: r.releasedBy,
       assignedTo: r.assignedTo,
       order: r.order,
       itemCount: r.items.length,

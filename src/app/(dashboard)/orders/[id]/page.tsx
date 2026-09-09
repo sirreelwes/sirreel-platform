@@ -26,6 +26,7 @@ import { driverPayBreakdown } from "@/lib/orders/driverRate";
 import { isPartnerFulfilled, PARTNER_DAILY_NOTE } from "@/lib/orders/partnerDaily";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
+import { SendToWarehouseModal, type SendToWarehouseResult } from "@/components/orders/SendToWarehouseModal";
 import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
@@ -45,7 +46,7 @@ import {
   groupLineItemsByDepartment,
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
-import { AlertTriangle, Sparkles } from 'lucide-react'
+import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -199,6 +200,16 @@ type Order = {
   // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
   // progress panel + "Mark Fleet Ready" / undo buttons.
   fleetReadyAt: string | null;
+  // The warehouse release stamp. `releasedAt` non-null means a rep
+  // explicitly sent the pull order to the floor — which is also what
+  // puts the list on /warehouse/pick ahead of BOOKED.
+  pickList: {
+    id: string;
+    status: string;
+    releasedAt: string | null;
+    releaseNote: string | null;
+    releasedBy: { id: string; name: string | null; email: string } | null;
+  } | null;
   // Phase 5 commit 1 — booked snapshot anchor. The Generate invoice
   // button is gated on bookedTotal being non-null.
   bookedTotal: string | null;
@@ -937,6 +948,10 @@ export default function OrderDetailPage() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   // "Change dates" deliberate-action modal (push-dates flow).
   const [pushDatesOpen, setPushDatesOpen] = useState(false);
+  // "Send pull order to warehouse" — preview-first, because it emails
+  // the floor. Flash carries the outcome back onto the Warehouse row.
+  const [sendWarehouseOpen, setSendWarehouseOpen] = useState(false);
+  const [sendWarehouseFlash, setSendWarehouseFlash] = useState<string | null>(null);
   const [addContactBusy, setAddContactBusy] = useState(false);
   const [addContactErr, setAddContactErr] = useState<string>("");
   const [addEmail, setAddEmail] = useState("");
@@ -2854,30 +2869,67 @@ export default function OrderDetailPage() {
               onto these line items and flags the agent. Sales edits the
               order right here on this page. */}
           {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
-            <div className="mt-5 pt-4 border-t border-lt-hairline flex flex-wrap items-center gap-2">
-              <span className="text-lt-fg3 text-xs uppercase tracking-wider font-semibold mr-1">
-                Warehouse
-              </span>
-              <a
-                href={`/api/orders/${orderId}/pick-list-pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
-              >
-                Print pull sheet ↗
-              </a>
-              <Link
-                href={`/reports/orders/${orderId}?edge=OUT`}
-                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
-              >
-                Check-out report
-              </Link>
-              <Link
-                href={`/reports/orders/${orderId}?edge=IN`}
-                className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
-              >
-                Check-in report
-              </Link>
+            <div className="mt-5 pt-4 border-t border-lt-hairline">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-lt-fg3 text-xs uppercase tracking-wider font-semibold mr-1">
+                  Warehouse
+                </span>
+                {/* The handoff itself (Wes, 2026-09-09: "we need a 'send
+                    picklist pull order to warehouse' on orders"). Printing
+                    the sheet is what a rep does standing at the printer;
+                    this is what they do when the floor is the one who has
+                    to know. It emails the pick-list channel AND puts the
+                    list on /warehouse/pick regardless of order status —
+                    the only way to reach the floor before BOOKED. */}
+                <button
+                  type="button"
+                  onClick={() => { setSendWarehouseFlash(null); setSendWarehouseOpen(true); }}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white"
+                >
+                  <Send size={14} aria-hidden />
+                  {order.pickList?.releasedAt ? "Re-send pull order" : "Send pull order to warehouse"}
+                </button>
+                <a
+                  href={`/api/orders/${orderId}/pick-list-pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+                >
+                  Print pull sheet ↗
+                </a>
+                <Link
+                  href={`/reports/orders/${orderId}?edge=OUT`}
+                  className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+                >
+                  Check-out report
+                </Link>
+                <Link
+                  href={`/reports/orders/${orderId}?edge=IN`}
+                  className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+                >
+                  Check-in report
+                </Link>
+              </div>
+              {sendWarehouseFlash ? (
+                <div className="mt-2.5 text-xs text-chip-good-fg">{sendWarehouseFlash}</div>
+              ) : order.pickList?.releasedAt ? (
+                <div className="mt-2.5 text-xs text-lt-fg3">
+                  Sent to the warehouse{" "}
+                  {new Date(order.pickList.releasedAt).toLocaleString("en-US", {
+                    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                  })}
+                  {order.pickList.releasedBy?.name ? ` by ${order.pickList.releasedBy.name}` : ""}
+                  {order.pickList.releaseNote ? ` — “${order.pickList.releaseNote}”` : ""}
+                  {" · "}
+                  <Link href="/warehouse/pick" className="underline underline-offset-2 hover:text-lt-fg">
+                    picking floor
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-2.5 text-xs text-lt-fg3">
+                  The floor hasn&apos;t been told about this order yet.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -4934,6 +4986,28 @@ export default function OrderDetailPage() {
         <div className="fixed bottom-6 right-6 z-40 bg-chip-good-bg border border-chip-good-fg/30 text-chip-good-fg text-sm px-4 py-2.5 rounded-lg shadow-lg">
           {sendQuoteFlash}
         </div>
+      )}
+
+      {sendWarehouseOpen && (
+        <SendToWarehouseModal
+          orderId={orderId}
+          onClose={() => setSendWarehouseOpen(false)}
+          onSent={(r: SendToWarehouseResult) => {
+            setSendWarehouseOpen(false);
+            // The email is the part that can quietly not happen — an
+            // empty channel or a Resend failure. Say which, rather than
+            // a green "Sent" over nothing having been delivered.
+            setSendWarehouseFlash(
+              r.emailSent
+                ? `${r.resent ? "Updated pull order" : "Pull order"} sent to the warehouse — ${r.recipients} notified${r.sheetAttached ? " with the pull sheet attached" : ", but the sheet could not be rendered (the email carries the link)"}. It's on the picking floor.`
+                : `Released to the picking floor, but the email did not go out${r.emailReason ? `: ${r.emailReason}` : "."}`,
+            );
+            // Re-read so the "Sent to the warehouse …" line reflects the
+            // new stamp once the flash clears.
+            void fetchOrder();
+            window.setTimeout(() => setSendWarehouseFlash(null), 10000);
+          }}
+        />
       )}
 
       <LineItemUndoToast toast={lineItemUndoToast} />

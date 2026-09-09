@@ -39,6 +39,12 @@ interface QueueItem {
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+  /** Set when a rep explicitly sent the pull order over (see
+   *  lib/warehouse/sendPullOrder.ts). It is ALSO what puts a
+   *  not-yet-booked order on this page at all. */
+  releasedAt: string | null
+  releaseNote: string | null
+  releasedBy: { id: string; name: string | null } | null
   assignedTo: { id: string; name: string } | null
   order: {
     id: string
@@ -105,18 +111,18 @@ function WarehousePickQueuePageInner() {
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-white">All pick lists</h1>
-          <p className="text-sm text-zinc-400 mt-0.5 max-w-[70ch]">
+          <h1 className="text-2xl font-semibold text-lt-fg">All pick lists</h1>
+          <p className="text-sm text-lt-fg2 mt-0.5 max-w-[70ch]">
             Print the sheet for the floor, soonest pickup first. When it comes back marked up,
             photograph it on{' '}
-            <Link href="/reports/orders" className="text-amber-500 hover:text-amber-400">
+            <Link href="/reports/orders" className="text-amber-700 hover:text-amber-600">
               Check In/Out Reports
             </Link>{' '}
             and HQ reads the handwriting. Today’s work is on the{' '}
-            <Link href="/yard" className="text-amber-500 hover:text-amber-400">yard board</Link>.
+            <Link href="/yard" className="text-amber-700 hover:text-amber-600">yard board</Link>.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-xs text-zinc-300 select-none cursor-pointer">
+        <label className="flex items-center gap-2 text-xs text-lt-fg2 select-none cursor-pointer">
           <input
             type="checkbox"
             checked={includeTerminal}
@@ -134,9 +140,9 @@ function WarehousePickQueuePageInner() {
       )}
 
       {picklists === null ? (
-        <div className="text-sm text-zinc-500 py-12 text-center">Loading…</div>
+        <div className="text-sm text-lt-fg3 py-12 text-center">Loading…</div>
       ) : picklists.length === 0 ? (
-        <div className="text-sm text-zinc-500 py-12 text-center border border-dashed border-zinc-800 rounded-xl">
+        <div className="text-sm text-lt-fg3 py-12 text-center border border-dashed border-lt-hairline rounded-xl">
           {includeTerminal
             ? 'No pick lists yet.'
             : 'Nothing to pick. New pick lists appear here as orders get booked.'}
@@ -158,6 +164,11 @@ function WarehousePickQueuePageInner() {
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_BADGE[p.status]}`}>
                         {p.status.replaceAll('_', ' ')}
                       </span>
+                      {p.releasedAt && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-amber-900/40 text-amber-300 border-amber-800">
+                          Sent over
+                        </span>
+                      )}
                       {p.assignedTo && (
                         <span className="text-[11px] text-zinc-400">· {p.assignedTo.name}</span>
                       )}
@@ -183,6 +194,19 @@ function WarehousePickQueuePageInner() {
                     </div>
                   </div>
                 </div>
+
+                {/* What the rep said when they sent it over. This is the
+                    half of a pull order the sheet cannot carry — "front
+                    half only, the LED package is still a maybe" — so it
+                    sits above the print button, not behind a click. */}
+                {p.releaseNote && (
+                  <div className="mt-3 rounded-lg border-l-[3px] border-amber-700 bg-zinc-800 px-3 py-2 text-[13px] leading-relaxed text-zinc-200">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                      From {p.releasedBy?.name || 'the rep'}
+                    </span>
+                    {p.releaseNote}
+                  </div>
+                )}
 
                 {/* Actions. Print first and loudest: it is what this page
                     is for. The scan session is still one click away for
