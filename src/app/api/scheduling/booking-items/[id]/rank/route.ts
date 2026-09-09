@@ -35,6 +35,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
 import { MAX_HOLD_RANK, holdRankLabel } from '@/lib/scheduling/holdRanks'
+import { getCategoryAvailability } from '@/lib/scheduling/availability'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,12 +113,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderBy: { holdRank: 'asc' },
   })
 
+  // A 1st Hold is NOT exclusive per category — a 4-van category can carry
+  // four separate 1st Holds, one per van. Rank only becomes contended when
+  // demand exceeds supply, so "is this slot taken?" is a CAPACITY question,
+  // not "does any rank-1 exist?". The earlier version asked the latter and
+  // would have refused the ordinary case of a second production booking a
+  // different van on the same days.
+  const availability = await getCategoryAvailability(
+    item.categoryId,
+    item.booking.startDate,
+    item.booking.endDate,
+    1,
+    item.id, // exclude this hold's own demand — it is the one being placed
+  )
+  const roomAtFirst = availability.availableToHold >= item.quantity
   const incumbents = others.filter((o) => o.holdRank === 1)
 
-  // Taking a rank that is already occupied, without saying to demote the
-  // occupant, would silently produce two 1st Holds on the same units —
-  // the exact over-commit this endpoint exists to replace.
-  if (rank === 1 && incumbents.length > 0 && !body.demoteOthers) {
+  // Taking the front WITHOUT room, and without saying to demote anyone,
+  // would silently put two 1st Holds on the same units — the exact
+  // over-commit this endpoint exists to replace. With room, rank 1 is
+  // simply granted.
+  if (rank === 1 && !roomAtFirst && incumbents.length > 0 && !body.demoteOthers) {
     return NextResponse.json(
       {
         error: 'rank taken',
@@ -135,7 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Cap: demoting the incumbent pushes it to 2, so anything already at
   // MAX would be pushed off the end.
-  if (rank === 1 && body.demoteOthers) {
+  if (rank === 1 && body.demoteOthers && !roomAtFirst) {
     const wouldOverflow = others.some((o) => o.holdRank >= MAX_HOLD_RANK)
     if (wouldOverflow) {
       return NextResponse.json(
@@ -154,7 +170,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const result = await prisma.$transaction(async (tx) => {
     const demoted: { id: string; from: number; to: number; bookingNumber: string }[] = []
 
-    if (rank === 1 && body.demoteOthers) {
+    // Nobody is demoted when the category had room — the request simply
+    // did not need anyone's slot, whatever the caller asked for.
+    if (rank === 1 && body.demoteOthers && !roomAtFirst) {
       for (const inc of incumbents) {
         const to = inc.holdRank + 1
         await tx.bookingItem.update({

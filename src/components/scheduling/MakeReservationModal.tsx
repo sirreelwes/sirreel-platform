@@ -466,8 +466,20 @@ export function MakeReservationModal({
       // unit out from under the 1st.
       let placedRank: number | undefined
       let demoted: { bookingNumber: string; from: number; to: number }[] = []
-      if (bookingItemId && queueChoice !== 'none') {
+      if (bookingItemId) {
         mark('rank', 'running')
+        // 1st Hold unless the agent explicitly queued behind somebody
+        // (Wes 2026-09-09: "ranking should always default to 1 and only
+        // present other options when there is a conflict").
+        //
+        // Without this the reservation kept whatever rank
+        // holdOnQuoteSend minted — SOFT, i.e. 2 — so an uncontested
+        // booking on a free van came out labelled a 2nd Hold behind
+        // nobody. The rank is LOCKED, which is the same principle as
+        // the queue choices: a rank a human set is not the firmness
+        // sweep's to move. The cost is that this hold no longer
+        // self-demotes when paperwork lapses; the gaps still surface on
+        // the job and in reconcile's `missing`.
         const wantRank = queueChoice === 'second' ? nextFreeRank : 1
         const rankRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/rank`, {
           method: 'POST',
@@ -619,10 +631,12 @@ export function MakeReservationModal({
                 <div>
                   {category?.name} × {quantity} · {start} – {end}
                 </div>
-                {result.holdRank != null && result.holdRank > 1 && (
+                {result.holdRank != null && (
                   <div>
-                    Queued as the{' '}
-                    <span className="font-semibold text-lt-fg">{holdRankLabel(result.holdRank)} Hold</span>
+                    {result.holdRank > 1 ? 'Queued as the ' : 'Placed as the '}
+                    <span className="font-semibold text-lt-fg">
+                      {holdRankLabel(result.holdRank)} Hold
+                    </span>
                   </div>
                 )}
                 {result.demoted && result.demoted.length > 0 && (
@@ -667,14 +681,19 @@ export function MakeReservationModal({
             <div className="px-5 py-4 space-y-4">
               {/* Vehicle type */}
               <div>
-                <label className="block text-[11px] font-semibold text-lt-fg2 mb-1">
-                  Vehicle type
-                </label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="reservation-type"
+                      className="block text-[11px] font-semibold text-lt-fg2 mb-1"
+                    >
+                      Vehicle type
+                    </label>
                   <select
+                    id="reservation-type"
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className="flex-1 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                    className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
                   >
                     <option value="">Select a type…</option>
                     {categories.map((c) => (
@@ -683,14 +702,23 @@ export function MakeReservationModal({
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="number"
-                    min={1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
-                    aria-label="How many"
-                  />
+                  </div>
+                  <div className="shrink-0">
+                    <label
+                      htmlFor="reservation-qty"
+                      className="block text-[11px] font-semibold text-lt-fg2 mb-1"
+                    >
+                      How many
+                    </label>
+                    <input
+                      id="reservation-qty"
+                      type="number"
+                      min={1}
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                    />
+                  </div>
                 </div>
                 {category && !availLoading && avail && !atCapacity && (
                   <p className="mt-1 text-[11px] text-chip-good-fg">
@@ -1039,7 +1067,12 @@ export function MakeReservationModal({
                   {stepRow('order', 'Creating the order')}
                   {stepRow('line', `Adding ${category?.name ?? 'the vehicle'} × ${quantity}`)}
                   {stepRow('hold', 'Reserving the category')}
-                  {atCapacity && stepRow('rank', queueChoice === 'take-first' ? 'Taking the 1st Hold' : 'Queueing the hold')}
+                  {stepRow(
+                    'rank',
+                    queueChoice === 'second'
+                      ? `Queueing as the ${holdRankLabel(nextFreeRank)} Hold`
+                      : 'Placing the 1st Hold',
+                  )}
                   {stepRow('assign', 'Assigning a unit')}
                 </div>
               )}
