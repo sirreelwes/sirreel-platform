@@ -1,0 +1,95 @@
+{
+  "ranAt": "2026-09-09T21:38:55.623Z",
+  "orderId": "a14eaadc-d921-4a16-8d0a-3c13c7079055",
+  "lineId": "290ea35d-ff66-4bbf-b7bf-94dfac5ef179",
+  "from": "Passenger Van",
+  "to": "15-Passenger Van",
+  "before": {
+    "orderNumber": "S260902-006",
+    "status": "QUOTE_SENT",
+    "subtotal": "3178",
+    "taxAmount": "0",
+    "total": "3178",
+    "lineItems": [
+      {
+        "id": "2486a30b-eeef-4896-b278-fbd4bc0d80eb",
+        "description": "Table, 6' Folding",
+        "quantity": 3,
+        "rate": "6",
+        "lineTotal": "18"
+      },
+      {
+        "id": "3d518dbb-c4de-4313-b131-4ba1ad0e8674",
+        "description": "Chairs, Folding",
+        "quantity": 15,
+        "rate": "2",
+        "lineTotal": "30"
+      },
+      {
+        "id": "e5177c46-b56b-40fa-99f4-75e48a4b94be",
+        "description": "PopVan",
+        "quantity": 1,
+        "rate": "400",
+        "lineTotal": "2000"
+      },
+      {
+        "id": "290ea35d-ff66-4bbf-b7bf-94dfac5ef179",
+        "description": "Passenger Van",
+        "quantity": 1,
+        "rate": "220",
+        "lineTotal": "1100"
+      },
+      {
+        "id": "4037030c-9bab-443f-9589-5827bc6dcfd8",
+        "description": "Caravan Canopy Tent -10' x 10', Black",
+        "quantity": 1,
+        "rate": "30",
+        "lineTotal": "30"
+      }
+    ]
+  },
+  "after": {
+    "orderNumber": "S260902-006",
+    "status": "QUOTE_SENT",
+    "subtotal": "3178",
+    "taxAmount": "0",
+    "total": "3178",
+    "lineItems": [
+      {
+        "id": "2486a30b-eeef-4896-b278-fbd4bc0d80eb",
+        "description": "Table, 6' Folding",
+        "quantity": 3,
+        "rate": "6",
+        "lineTotal": "18"
+      },
+      {
+        "id": "3d518dbb-c4de-4313-b131-4ba1ad0e8674",
+        "description": "Chairs, Folding",
+        "quantity": 15,
+        "rate": "2",
+        "lineTotal": "30"
+      },
+      {
+        "id": "e5177c46-b56b-40fa-99f4-75e48a4b94be",
+        "description": "PopVan",
+        "quantity": 1,
+        "rate": "400",
+        "lineTotal": "2000"
+      },
+      {
+        "id": "290ea35d-ff66-4bbf-b7bf-94dfac5ef179",
+        "description": "15-Passenger Van",
+        "quantity": 1,
+        "rate": "220",
+        "lineTotal": "1100"
+      },
+      {
+        "id": "4037030c-9bab-443f-9589-5827bc6dcfd8",
+        "description": "Caravan Canopy Tent -10' x 10', Black",
+        "quantity": 1,
+        "rate": "30",
+        "lineTotal": "30"
+      }
+    ]
+  }
+}
