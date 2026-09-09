@@ -81,6 +81,7 @@ import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCo
 import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
 import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
+import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 
 const PROVIDERS: ActionItemProvider[] = [
   // A client set up their own job on the public agreement page and may
@@ -100,6 +101,10 @@ const PROVIDERS: ActionItemProvider[] = [
   // The client answered the waiver question and the quote's money
   // doesn't match the answer — usually the auto-apply could not run.
   lcdwUnappliedProvider,
+  // The nightly Planyo import landed a booking beside a job that may be
+  // the same production. It has always flagged this; the flag went only
+  // to Slack until 2026-09-09, and work got split across both twins.
+  possibleDuplicateJobProvider,
   holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,

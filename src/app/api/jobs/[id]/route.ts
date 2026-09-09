@@ -3,6 +3,7 @@ import { isPlaceholderJobName } from '@/lib/jobs/displayName'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
+import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
 import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
@@ -548,10 +549,31 @@ export async function GET(
     // quoted yet? Gates the "Next-steps email" button on the job page.
     const selfServeUnquoted = await isClientCreatedUnquoted(job.id)
 
+    // Does the Planyo importer think this job has a twin? Asked with
+    // THIS job's id so the banner appears on BOTH sides of the pairing —
+    // the person who opened the wrong twin is the one who needs telling.
+    // Same derivation as the /jobs action-items panel, never a second
+    // copy of the rule.
+    const duplicateSignals = (await listDuplicateJobSignals({ jobId: job.id })).map((sig) => ({
+      eventId: sig.eventId,
+      detectedAt: sig.detectedAt.toISOString(),
+      mode: sig.mode,
+      sentence: describeDuplicateSignal(sig),
+      // The OTHER job(s) — from this page's point of view the twin is
+      // whichever side of the pairing this job is not.
+      others: [
+        ...(sig.job.jobId === job.id ? [] : [{ jobId: sig.job.jobId, jobCode: sig.job.jobCode, name: sig.job.name }]),
+        ...sig.candidates
+          .filter((c) => c.jobId !== job.id)
+          .map((c) => ({ jobId: c.jobId, jobCode: c.jobCode, name: c.name })),
+      ],
+    })).filter((sig) => sig.others.length > 0)
+
     return NextResponse.json({
       job: {
         ...job,
         selfServeUnquoted,
+        duplicateSignals,
         coiChecks:
           carriedCoi?.source === 'COMPANY'
             ? [

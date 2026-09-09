@@ -270,6 +270,16 @@ interface JobOrder {
   addedToJobAt: string | null;
 }
 
+/** A "these might be one production" pairing from the Planyo importer.
+ *  Derived server-side by lib/jobs/duplicateSignal — never recomputed here. */
+interface DuplicateSignal {
+  eventId: string;
+  detectedAt: string;
+  mode: 'created_sibling' | 'attached_ambiguous';
+  sentence: string;
+  others: { jobId: string; jobCode: string; name: string }[];
+}
+
 interface JobDetail {
   id: string;
   jobCode: string;
@@ -1674,6 +1684,43 @@ const driverTone = (d: any): string => {
           </div>
         </div>
       </div>
+
+      {/* Possible duplicate job. The nightly Planyo import flags this
+          itself and used to say so only in a 6 AM Slack alert — which is
+          how "WS" and "WS-RK" ran as two jobs for two days (2026-09-09).
+          Rendered on BOTH sides of the pairing: whoever opened the twin
+          that is missing the paperwork is exactly who needs to see it.
+          Same derivation as the /jobs action-items panel. */}
+      {(job as { duplicateSignals?: DuplicateSignal[] }).duplicateSignals?.map((sig) => (
+        <div
+          key={sig.eventId}
+          className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold text-amber-900">
+                {sig.mode === 'created_sibling'
+                  ? 'This job may be a duplicate'
+                  : 'Confirm this booking is on the right job'}
+              </div>
+              <div className="mt-1 text-[13px] text-amber-900/90">{sig.sentence}</div>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {sig.others.map((o) => (
+                  <Link
+                    key={o.jobId}
+                    href={`/jobs/${o.jobId}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[13px] text-amber-900 hover:border-amber-500 transition-colors"
+                  >
+                    <span className="font-mono text-[11px] font-bold tracking-wide">{o.jobCode}</span>
+                    <span className="truncate max-w-[16rem]">{o.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
 
       {/* Paperwork status strip — glanceable client-paperwork state.
           COI + Rental Agreement jump to their sections; Card Auth carries

@@ -61,6 +61,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'client-created-unquoted': { label: 'Client set up their own job', hint: 'They started the paperwork on the public site — confirm availability and get a quote out' },
   'check-report-changes': { label: 'Order changed at the dock', hint: 'The yard changed a booked order and the agent has not acknowledged it' },
   'lcdw-unapplied': { label: 'Damage waiver mismatch', hint: 'The client’s waiver answer and the quote’s money disagree' },
+  'possible-duplicate-job': { label: 'Possible duplicate job', hint: 'The Planyo import landed beside a job that may be the same production — merge, or dismiss if they are different shows' },
   'partner-coi-missing': { label: 'Partner COI', hint: 'A vehicle partner signed and we hold no certificate' },
   'rw-token': { label: 'RentalWorks', hint: 'The RentalWorks credential needs renewing' },
 };

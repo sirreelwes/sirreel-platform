@@ -7,6 +7,7 @@ import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
+import { jobNamesRelated, looseKey } from '@/lib/jobs/jobNameMatch'
 // Re-exported so server callers can reach it from the module they
 // already import; the definition is Prisma-free because the Review Quote
 // page is a client component. See jobDisambiguation.ts.
@@ -115,11 +116,6 @@ const RUNG_SCORES = {
 } as const
 
 const EXCLUDED: JobStatus[] = ['WRAPPED', 'LOST']
-
-/** Loose name key for rung ⑤ — lowercase alnum only. */
-function looseKey(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
 
 const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
@@ -257,9 +253,25 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
   }
 
   // ⑤ fuzzy jobNameHint vs Job.name
+  //
+  // Both passes confirm through jobNamesRelated (lib/jobs/jobNameMatch).
+  // The SQL `contains` is only a cheap prefilter — on its own it let an
+  // incoming "Newsroom" claim a full name match against an open job
+  // called "WS", because "newsroom" contains "ws".
+  //
+  // A job already in the bag still earns its name reason. It used to be
+  // skipped outright, which had the rung backwards: the more OTHER
+  // evidence a candidate carried (③ company+dates, ④ shared contact),
+  // the less likely it was to be annotated with the one reason that
+  // resolveJobForBooking treats as an attach anchor. That is exactly how
+  // SR-JOB-0328 "WS-RK" was created beside SR-JOB-0315 "WS" instead of
+  // attaching to it. Only the duplicate SCORE is suppressed.
   if (ctx.jobNameHint?.trim()) {
     const hint = ctx.jobNameHint.trim()
     const hintKey = looseKey(hint)
+    const named = (jobId: string): boolean =>
+      (bag.get(jobId)?.reasons ?? []).some((r) => r.startsWith('job name'))
+
     const hits = await prisma.job.findMany({
       where: {
         status: { notIn: EXCLUDED },
@@ -269,7 +281,10 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
       select: { id: true, name: true },
       take: 10,
     })
-    for (const h of hits) add(h.id, RUNG_SCORES.nameHint, `job name matches "${hint}"`)
+    for (const h of hits) {
+      if (!jobNamesRelated(h.name, hint) || named(h.id)) continue
+      add(h.id, RUNG_SCORES.nameHint, `job name matches "${hint}"`)
+    }
     if (hintKey.length >= 4) {
       const scope = await prisma.job.findMany({
         where: { status: { notIn: EXCLUDED }, ...(resolvedCompany ? { companyId: resolvedCompany.id } : {}) },
@@ -278,9 +293,8 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
         orderBy: { createdAt: 'desc' },
       })
       for (const j of scope) {
-        if (bag.has(j.id)) continue
-        const k = looseKey(j.name)
-        if (k.includes(hintKey) || hintKey.includes(k)) {
+        if (named(j.id)) continue
+        if (jobNamesRelated(j.name, hint)) {
           add(j.id, RUNG_SCORES.nameHint - 10, `job name is close to "${hint}"`)
         }
       }
