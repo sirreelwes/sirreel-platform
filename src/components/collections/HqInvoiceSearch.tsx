@@ -13,6 +13,13 @@
  * already one more than anyone wants; two different search boxes on top of
  * that would be gratuitous.
  *
+ * Scope pills (Ana, 2026-09-09: "is there a way to access paid invoices?
+ * Right now the path is likely roundabout") browse the blank list — owed,
+ * paid, or all. They apply to the LIST, not to a search: typing a number
+ * searches everything, because a filtered search is how an invoice someone
+ * is holding in their hand comes back "not found" for having been paid. The
+ * pills dim and say so while the box has text.
+ *
  * What it does NOT copy is the RW list's click-to-charge. Payment against an
  * HQ invoice is recorded on the invoice itself, and a second path into
  * charging — from a search result, where it is easy to have the wrong row
@@ -98,8 +105,17 @@ function StatusChip({ inv }: { inv: HqInvoice }) {
   )
 }
 
+type Scope = 'owed' | 'paid' | 'all'
+
+const SCOPES: { key: Scope; label: string; hint: string }[] = [
+  { key: 'owed', label: 'Owed', hint: 'Sent and still carrying a balance — the collections worklist' },
+  { key: 'paid', label: 'Paid', hint: 'Settled invoices, most recently paid first' },
+  { key: 'all', label: 'All', hint: 'Every HQ invoice, newest first — including drafts and voids' },
+]
+
 export function HqInvoiceSearch() {
   const [q, setQ] = useState('')
+  const [scope, setScope] = useState<Scope>('owed')
   const [rows, setRows] = useState<HqInvoice[]>([])
   const [total, setTotal] = useState(0)
   const [truncated, setTruncated] = useState(false)
@@ -107,13 +123,15 @@ export function HqInvoiceSearch() {
   const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
 
-  const load = useCallback(async (query: string) => {
+  const load = useCallback(async (query: string, sc: Scope) => {
     // Every keystroke fires a request; without this an earlier, slower
     // response can land last and paint results for a query the box no longer
     // holds.
     const mine = ++seq.current
     try {
-      const res = await fetch(`/api/collections/invoices?q=${encodeURIComponent(query)}`)
+      const res = await fetch(
+        `/api/collections/invoices?q=${encodeURIComponent(query)}&scope=${sc}`,
+      )
       const json = await res.json()
       if (mine !== seq.current) return
       if (!res.ok || json.ok === false) {
@@ -133,9 +151,13 @@ export function HqInvoiceSearch() {
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => void load(q), q ? 250 : 0)
+    const t = setTimeout(() => void load(q, scope), q ? 250 : 0)
     return () => clearTimeout(t)
-  }, [q, load])
+  }, [q, scope, load])
+
+  // A search ignores scope server-side; say so rather than leaving a pill
+  // lit over a list it did not filter.
+  const searching = q.trim().length > 0
 
   return (
     <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
@@ -145,7 +167,13 @@ export function HqInvoiceSearch() {
         </h2>
         {total > 0 && (
           <span className="text-[11px] text-zinc-600">
-            {q.trim() ? `${total} ${total === 1 ? 'match' : 'matches'}` : `${total} owed`}
+            {searching
+              ? `${total} ${total === 1 ? 'match' : 'matches'}`
+              : scope === 'owed'
+                ? `${total} owed`
+                : scope === 'paid'
+                  ? `${total} paid`
+                  : `${total} total`}
           </span>
         )}
       </div>
@@ -155,10 +183,33 @@ export function HqInvoiceSearch() {
 
       <input
         className="w-full bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 outline-none focus:border-amber-600"
-        placeholder="Search invoice #, order #, client, job… (blank = all with a balance)"
+        placeholder="Search invoice #, order #, client, job… (searches every invoice)"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
+
+      <div className="mt-2 flex items-center gap-1.5">
+        {SCOPES.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setScope(s.key)}
+            title={searching ? 'Clear the search box to browse by status' : s.hint}
+            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${
+              searching
+                ? 'border-zinc-200 text-zinc-400'
+                : scope === s.key
+                  ? 'border-amber-600 bg-amber-50 text-amber-800'
+                  : 'border-zinc-300 text-zinc-600 hover:border-zinc-400'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+        {searching && (
+          <span className="text-[11px] text-zinc-500">Searching every invoice</span>
+        )}
+      </div>
 
       {error && (
         <div className="mt-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-700">
@@ -171,9 +222,13 @@ export function HqInvoiceSearch() {
           <div className="py-6 text-sm text-zinc-600 text-center">Loading…</div>
         ) : rows.length === 0 ? (
           <div className="py-6 text-sm text-zinc-600 text-center">
-            {q.trim()
+            {searching
               ? `Nothing matches “${q.trim()}”.`
-              : 'No HQ invoices with a balance. Anything owed will appear here once it is sent.'}
+              : scope === 'paid'
+                ? 'No HQ invoices settled yet. Billing that runs through RentalWorks is in the list above.'
+                : scope === 'all'
+                  ? 'No HQ invoices yet.'
+                  : 'No HQ invoices with a balance. Anything owed will appear here once it is sent.'}
           </div>
         ) : (
           rows.map((i) => {

@@ -14,6 +14,14 @@ export const dynamic = 'force-dynamic'
  * chasing a specific invoice by number should find it even if RW already
  * shows it settled.
  *
+ * `scope` browses the blank list: owed (default), paid, or all. Ana,
+ * 2026-09-09: "is there a way to access paid invoices? Right now the path is
+ * likely roundabout." It was — 3,136 settled RW invoices were reachable only
+ * by typing something that matched one, so "what did we bill this client
+ * last season" required already knowing. Scope is ignored when a query is
+ * present, for the same reason the default list and search disagree about
+ * sort: a typed number must be found whatever state it is in.
+ *
  * Each result carries any charges already taken against it. Without that, two
  * people working the same list can double-charge a client, and the mirror
  * itself won't show a payment taken here until RW syncs.
@@ -24,6 +32,8 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 403 })
 
   const q = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 80)
+  const scopeRaw = req.nextUrl.searchParams.get('scope')
+  const scope: 'owed' | 'paid' | 'all' = scopeRaw === 'paid' || scopeRaw === 'all' ? scopeRaw : 'owed'
 
   // Invoices someone has already marked paid in HQ. The mirror still shows a
   // balance on them — RW has not been told, or has not synced back — so
@@ -66,16 +76,30 @@ export async function GET(req: NextRequest) {
       // populated on a void, so "remaining > 0" alone offered Ana cancelled
       // obligations to charge cards against). Search still surfaces them,
       // with the status visible on the row.
-    : collectibleWhere([...paidMarkedIds, ...writtenOff])
+    : scope === 'paid'
+      ? {
+          // Settled: the mirror shows nothing left to collect, or someone
+          // here marked it paid before RW caught up. VOID is excluded —
+          // a cancelled invoice carries no balance either, and listing it
+          // under Paid would claim money that was never owed, let alone
+          // received (the same trap the collectible list fell into with
+          // 1,197 voided invoices in August).
+          NOT: { status: 'VOID' },
+          OR: [{ remainingTotal: { lte: 0 } }, { rwInvoiceId: { in: paidMarkedIds } }],
+        }
+      : scope === 'all'
+        ? {}
+        : collectibleWhere([...paidMarkedIds, ...writtenOff])
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
     // Default list: oldest debt first — this is a worklist, and the invoice
     // most in need of a call belongs at the top (Wes, 2026-08-19). SEARCH
     // keeps newest-first: someone typing a number wants recency, not aging.
-    orderBy: q
-      ? [{ invoiceDate: 'desc' as const }]
-      : [{ dueDate: { sort: 'asc' as const, nulls: 'last' as const } }, { invoiceDate: 'asc' as const }],
+    orderBy:
+      q || scope !== 'owed'
+        ? [{ invoiceDate: { sort: 'desc' as const, nulls: 'last' as const } }]
+        : [{ dueDate: { sort: 'asc' as const, nulls: 'last' as const } }, { invoiceDate: 'asc' as const }],
     take: 50,
     select: {
       rwInvoiceId: true,
@@ -116,8 +140,17 @@ export async function GET(req: NextRequest) {
   // otherwise tell they are quoting a stale number to a client on the phone.
   const freshest = await prisma.rwInvoice.aggregate({ _max: { syncedAt: true } })
 
+  // How many the scope actually holds. The list is capped at 50 and gave
+  // no sign of it; on a browse of 3,136 settled invoices that silence is
+  // the difference between "that's all of them" and "that's the first
+  // page" — the same truncation that quietly lost 50 rows off /jobs.
+  const total = await prisma.rwInvoice.count({ where })
+
   return NextResponse.json({
     ok: true,
+    scope: q ? 'all' : scope,
+    total,
+    truncated: total > invoices.length,
     syncedAt: freshest._max.syncedAt ?? null,
     invoices: invoices.map((i) => {
       const mark = paidMarkById.get(i.rwInvoiceId)

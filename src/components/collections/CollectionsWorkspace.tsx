@@ -67,8 +67,9 @@ interface RwInvoice {
   invoiceTotal: number
   remainingTotal: number
   alreadyCharged: { count: number; total: number; last: string | null }
-  /** Set when someone already recorded this as paid in HQ. Only ever appears
-   *  in SEARCH results — the collectible list excludes them. */
+  /** Set when someone already recorded this as paid in HQ. Never appears on
+   *  the owed list, which excludes them; a search or the Paid browse shows
+   *  them, flagged. */
   paidMarkedAt?: string | null
   paidMarkNote?: string | null
   /** Waiting on an insurance carrier, not the client (aging-review flag). */
@@ -295,6 +296,13 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // snapshot (refreshed every 15 minutes), not live — an operator quoting a
   // number to a client needs to know how old it is.
   const [syncedAt, setSyncedAt] = useState<string | null>(null)
+  // Which slice of the RW mirror the blank list shows. Ana, 2026-09-09:
+  // paid invoices had no browsable path — 3,136 settled ones were reachable
+  // only by typing something that matched. Applies to the LIST only; a
+  // search still crosses everything (see the route).
+  const [invScope, setInvScope] = useState<'owed' | 'paid' | 'all'>('owed')
+  const [invTotal, setInvTotal] = useState(0)
+  const [invTruncated, setInvTruncated] = useState(false)
   const [invoice, setInvoice] = useState<RwInvoice | null>(null)
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -565,20 +573,26 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
     loadCharges()
   }, [loadCharges])
 
-  const loadInvoices = useCallback((query: string) => {
-    fetch(`/api/collections/rw-invoices?q=${encodeURIComponent(query)}`)
+  const loadInvoices = useCallback((query: string, scope: 'owed' | 'paid' | 'all') => {
+    fetch(`/api/collections/rw-invoices?q=${encodeURIComponent(query)}&scope=${scope}`)
       .then((r) => r.json())
       .then((d) => {
         if (!d.ok) return
         setInvoices(d.invoices ?? [])
         setSyncedAt(d.syncedAt ?? null)
+        setInvTotal(d.total ?? 0)
+        setInvTruncated(!!d.truncated)
       })
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    loadInvoices('')
-  }, [loadInvoices])
+    // Typing re-fetches from the input's own handler; this effect owns the
+    // first load and the scope switch, carrying whatever is in the box at
+    // that moment. `q` is deliberately not a dependency — with it here every
+    // keystroke would fire twice.
+    loadInvoices(q, invScope)
+  }, [invScope, loadInvoices])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // CardSecure iframe — same contract as the client portal's pay panel.
   useEffect(() => {
@@ -749,7 +763,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setCrossClientOk(false)
         setAmount('')
         setFinalPick(null)
-        loadInvoices(q)
+        loadInvoices(q, invScope)
         loadFinals()
         loadCharges()
       }
@@ -1422,24 +1436,68 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           </div>
           <input
             className={input}
-            placeholder="Search invoice #, customer, order, production… (blank = all with a balance)"
+            placeholder="Search invoice #, customer, order, production… (searches every invoice)"
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
-              loadInvoices(e.target.value)
+              loadInvoices(e.target.value, invScope)
             }}
           />
+
+          {/* Scope pills. Dimmed while the box has text because the server
+              ignores scope on a search — an invoice someone typed must be
+              found whether it is owed, paid or void. */}
+          <div className="mt-2 flex items-center gap-1.5">
+            {([
+              ['owed', 'Owed', 'Still carrying a balance — the collections worklist'],
+              ['paid', 'Paid', 'Settled in RentalWorks, or marked paid here. Newest first'],
+              ['all', 'All', 'Every invoice in the mirror, newest first — including voids'],
+            ] as const).map(([key, label, hint]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setInvScope(key)}
+                title={q.trim() ? 'Clear the search box to browse by status' : hint}
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                  q.trim()
+                    ? 'border-zinc-200 text-zinc-400'
+                    : invScope === key
+                      ? 'border-amber-600 bg-amber-50 text-amber-800'
+                      : 'border-zinc-300 text-zinc-600 hover:border-zinc-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="flex-1" />
+            {invTotal > 0 && (
+              <span className="text-[11px] text-zinc-600">
+                {q.trim()
+                  ? `${invTotal} ${invTotal === 1 ? 'match' : 'matches'}`
+                  : `${invTotal.toLocaleString()} ${invScope === 'owed' ? 'owed' : invScope === 'paid' ? 'paid' : 'total'}`}
+              </span>
+            )}
+          </div>
           <div className="mt-3 max-h-[320px] overflow-y-auto divide-y divide-zinc-200">
             {invoices.length === 0 && (
               <div className="py-6 text-sm text-zinc-600 text-center">No invoices found.</div>
             )}
+            {invTruncated && (
+              <div className="py-1.5 px-2 text-[11px] text-zinc-600">
+                Showing the first {invoices.length.toLocaleString()} of{' '}
+                {invTotal.toLocaleString()}. Narrow the search to see the rest.
+              </div>
+            )}
             {invoices.map((i, idx) => {
               const a = invoiceAge(i.dueDate, i.invoiceDate)
               // Divider when the aging bucket changes — only meaningful on the
-              // default list, which the server sorts oldest-first. Search is
-              // newest-first, so buckets would interleave into noise.
+              // owed list, which the server sorts oldest-first. Search and the
+              // paid/all browses are newest-first, so buckets would interleave
+              // into noise (and "90+ days" over a settled invoice is not aging,
+              // it is history).
               const prev = idx > 0 ? invoiceAge(invoices[idx - 1].dueDate, invoices[idx - 1].invoiceDate) : null
-              const showDivider = !q.trim() && a && (!prev || prev.bucket !== a.bucket)
+              const showDivider = !q.trim() && invScope === 'owed' && a && (!prev || prev.bucket !== a.bucket)
+              const settled = i.remainingTotal <= 0
               return (
               <div key={i.rwInvoiceId}>
                 {showDivider && (
@@ -1472,13 +1530,22 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       </a>
                     )}
                   </span>
-                  <span className="text-sm text-amber-700 font-semibold">
-                    {money(i.remainingTotal)} due
-                  </span>
+                  {/* A settled row must not read "$0.00 due" in collections
+                      amber — on the Paid browse that is most of the list, and
+                      the colour is what the eye reads first. */}
+                  {settled ? (
+                    <span className="text-sm text-emerald-700 font-semibold">
+                      {i.status === 'VOID' ? 'Void' : `${money(i.invoiceTotal)} paid`}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-amber-700 font-semibold">
+                      {money(i.remainingTotal)} due
+                    </span>
+                  )}
                 </div>
                 {/* Partial payments change the phone call — same phrasing the
                     aging review uses. */}
-                {i.invoiceTotal > i.remainingTotal && (
+                {!settled && i.invoiceTotal > i.remainingTotal && (
                   <div className="text-xs text-zinc-600 mt-0.5">
                     {money(i.invoiceTotal - i.remainingTotal)} of {money(i.invoiceTotal)} received
                   </div>
@@ -1506,10 +1573,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     </span>
                   )}
                 </div>
-                {/* Only reachable via an explicit search — the collectible
-                    list filters these out. Flagged loudly because chasing an
-                    invoice a colleague already settled is the specific
-                    embarrassment this prevents. */}
+                {/* Filtered out of the owed list; reachable by search or the
+                    Paid browse. Flagged loudly because chasing an invoice a
+                    colleague already settled is the specific embarrassment
+                    this prevents. */}
                 {i.paidMarkedAt && (
                   <div className="text-xs text-emerald-700 mt-1">
                     Already marked paid in HQ on{' '}
@@ -1667,6 +1734,18 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 <div className="text-xs text-zinc-600 mt-0.5">
                   {invoice.customerName || '—'} · balance {money(invoice.remainingTotal)}
                 </div>
+                {/* Browsing settled invoices is now one click (the Paid
+                    pill), which puts thousands of nothing-owed rows next to
+                    a card form. Charging one is not blocked — an overpayment
+                    or a re-bill is a real thing — but it must be a decision,
+                    not a mis-click. */}
+                {invoice.remainingTotal <= 0 && (
+                  <div className="text-xs text-emerald-700 mt-1">
+                    Nothing outstanding on this invoice
+                    {invoice.status === 'VOID' ? ' — it is void' : ' — RentalWorks shows it settled'}.
+                    Check this is the one you meant before charging.
+                  </div>
+                )}
                 {/* The queue and browse rows flag prior charges, but THIS box
                     is what the operator reads while charging. */}
                 {invoice.alreadyCharged.total > 0 && (
