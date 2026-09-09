@@ -16,12 +16,12 @@
  * matches docs/sms/twilio-a2p-campaign.md. False means the Console lost the
  * edit and the fix is to re-file, not to rewrite the copy.
  */
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
 
 export const dynamic = 'force-dynamic'
 
-const MESSAGING_SERVICE_SID = 'MGda3482bd81e2c26b45cc188de36124dc'
+const DEFAULT_MESSAGING_SERVICE_SID = 'MGda3482bd81e2c26b45cc188de36124dc'
 
 /** The first sentence of the flow as filed — enough to fingerprint it
  *  without shipping the whole document into the bundle. */
@@ -32,9 +32,15 @@ const DOC_FLOW_MARKERS = [
   'OPTOUT, REVOKE',
 ]
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
+
+  // ?service= overrides the default messaging service; ?campaign= fetches one
+  // campaign by SID even when it is no longer attached to the service.
+  const url = new URL(req.url)
+  const MESSAGING_SERVICE_SID = url.searchParams.get('service') || DEFAULT_MESSAGING_SERVICE_SID
+  const campaignSid = url.searchParams.get('campaign')
 
   const sid = process.env.TWILIO_ACCOUNT_SID
   const keySid = process.env.TWILIO_API_KEY_SID
@@ -102,6 +108,34 @@ export async function GET() {
   const body = res.json
 
   const compliances = Array.isArray(body.compliances) ? (body.compliances as Array<Record<string, unknown>>) : []
+  // The service came back with NO campaign on 2026-09-09, though Twilio's
+  // rejection emails name one. So widen: list every messaging service and
+  // brand on the account, and fetch the named campaign directly by SID. A
+  // rejected campaign that has been detached from (or deleted off) the
+  // service is invisible to the compliance list but may still be readable.
+  if (compliances.length === 0 || campaignSid) {
+    const [services, brands, direct] = await Promise.all([
+      call('https://messaging.twilio.com/v1/Services?PageSize=20'),
+      call('https://messaging.twilio.com/v1/a2p/BrandRegistrations?PageSize=20'),
+      campaignSid
+        ? call(`https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}/Compliance/Usa2p/${campaignSid}`)
+        : Promise.resolve(null),
+    ])
+    const svc = Array.isArray((services.json as { services?: unknown[] })?.services) ? (services.json as { services: Array<Record<string, unknown>> }).services : []
+    const brandList = Array.isArray((brands.json as { data?: unknown[] })?.data) ? (brands.json as { data: Array<Record<string, unknown>> }).data : []
+    return NextResponse.json({
+      ok: true,
+      note: compliances.length === 0
+        ? 'This messaging service has NO A2P campaign attached. A rejected campaign that was removed cannot be edited or resubmitted — a new one must be created.'
+        : 'Campaign fetched directly by SID.',
+      queriedService: MESSAGING_SERVICE_SID,
+      messagingServices: svc.map((x) => ({ sid: x.sid, friendlyName: x.friendly_name, useInboundWebhookOnNumber: x.use_inbound_webhook_on_number })),
+      brands: brandList.map((b) => ({ sid: b.sid, status: b.status, brandType: b.brand_type, identityStatus: b.identity_status, failureReason: b.failure_reason ?? null })),
+      directCampaign: direct ? { status: direct.status, json: direct.json } : null,
+      campaigns: [],
+    })
+  }
+
   const campaigns = compliances.map((c) => {
     const flow = typeof c.message_flow === 'string' ? c.message_flow : ''
     return {
