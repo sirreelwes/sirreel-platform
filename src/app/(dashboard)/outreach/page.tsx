@@ -469,7 +469,9 @@ export default function OutreachComposerPage() {
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
           <h2 className="text-sm font-semibold text-lt-fg mb-1">What real people will get</h2>
           <p className="text-xs text-lt-fg3 mb-4">
-            Three actual contacts from this audience — the first, one from the middle, and the last.
+            Actual contacts from this audience — the first, one from the middle, and the last. If none
+            of those three can be personalised, one that can is added, so you always see the copy that
+            will go out.
           </p>
           {(!data || data.previews.length === 0) && (
             <p className="text-sm text-lt-fg3">Write a subject and body to see previews.</p>

@@ -161,6 +161,12 @@ export interface PreviewRow {
  * and a synthetic preview hides exactly those. Samples are taken from
  * the front, middle and end of the resolved list so a preview is not
  * three variations of the same well-populated record.
+ *
+ * If none of those three would actually send, one that WILL is appended.
+ * On 2026-09-09 the executive-portal audience (39% of it missing a
+ * company) drew three skips in a row, and a panel of three red rows reads
+ * as "this campaign is broken" rather than "these three are sparse" — the
+ * rep has no way to see the copy they are about to send.
  */
 export function buildPreview(
   subjectTemplate: string,
@@ -175,7 +181,7 @@ export function buildPreview(
   if (recipients.length > 1) idx.add(recipients.length - 1)
   const picks = [...idx].slice(0, count)
 
-  return picks.map((i) => {
+  const render = (i: number): PreviewRow => {
     const r = recipients[i]
     const rendered = renderForRecipient(subjectTemplate, bodyTemplate, r.ctx)
     return {
@@ -186,7 +192,21 @@ export function buildPreview(
       body: rendered.body,
       missing: rendered.missing,
     }
-  })
+  }
+
+  const rows = picks.map(render)
+  if (!rows.some((row) => row.ok)) {
+    const chosen = new Set(picks)
+    for (let i = 0; i < recipients.length; i += 1) {
+      if (chosen.has(i)) continue
+      const row = render(i)
+      if (row.ok) {
+        rows.push(row)
+        break
+      }
+    }
+  }
+  return rows
 }
 
 /**
