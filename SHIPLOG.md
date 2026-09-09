@@ -22,6 +22,51 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-09
+
+### Partner vehicles: who pays the driver
+
+`192eb0f` SubRental.driverOnProductionPayroll + driver-labor fee classification
+
+A union job puts the partner's driver on the PRODUCTION's payroll, so the
+driver day is not ours to bill (Wes: "sometimes we will bill for the Driver on
+our invoice and pass that along to them, but there are also times when it is a
+union job and the driver will be on the payroll of the Production company").
+Every partner-fee path assumed we always bill it — the only way to quote a
+union job right was to add the fees and hand-delete the driver line, which left
+the partner's page still saying we were paying.
+
+**The flag is on the BOOKING, not the unit or the partner.** The same coach
+goes out union one week and non-union the next; the answer belongs to the job
+it is going out on. Set at quote time (Send Estimate), from the order's fee
+modal (which writes back to the booking), or from the job's sub-rental panel
+for the common case of a job that goes union after it was quoted. The last two
+are audit-logged as `sub_rental.driver_payroll_set` — it suppresses several
+hundred dollars a day and "nobody remembers turning it on" is the argument it
+has to settle.
+
+**Dropped, not zeroed.** A $0 line on a quote reads as "driver included", which
+is the opposite of what it means — the production is hiring the driver, not
+getting one free. The client's ESTIMATE is the exception and still prints the
+row, with "On production payroll" where the rate goes: it is the client
+agreeing to supply the driver, so it belongs in writing rather than as a
+silently shorter rate card.
+
+**`SubcontractedFee.isDriverLabor` is nullable on purpose, and null is not
+false.** Which row IS the driver is free text a partner writes, so null falls
+back to the label (`isDriverLaborFee` — driver/driving/chauffeur/teamster, and
+deliberately not "operator" or a bare "labor"), and true/false overrules it. A
+plain `Boolean @default(false)` would have declassified every fee row that
+already existed — King Kong's "Driver" among them — and the switch would have
+quietly done nothing on the one booking it was built for.
+
+Both failure directions cost money and neither is visible on the quote that
+leaves, so `npm run test:driver-payroll` asserts both: a union client billed
+for a driver they already pay, and a real charge silently dropped off a
+non-union quote (S260828-001 again).
+
+Schema additive only — two ADD COLUMN, no drops.
+
 ## 2026-09-02
 
 ### RentalWorks token: encrypted, self-renewing, and loud when it breaks
