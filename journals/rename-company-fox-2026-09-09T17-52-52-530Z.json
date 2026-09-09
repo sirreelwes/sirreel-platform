@@ -1,0 +1,8 @@
+{
+  "at": "2026-09-09T17:52:52.531Z",
+  "companyId": "7983e4cd-373c-431a-a73b-dfadc8ea30b1",
+  "from": "Fox Sports Productions",
+  "to": "Fox Sports",
+  "reason": "Wes 2026-09-09: rename the merge keeper to the client-facing name.",
+  "reverse": "prisma.company.update({ where: { id: '7983e4cd-373c-431a-a73b-dfadc8ea30b1' }, data: { name: \"Fox Sports Productions\" } })"
+}
