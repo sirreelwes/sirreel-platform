@@ -45,6 +45,12 @@ export async function GET() {
       qtyOwned: true,
       planyoResourceId: true,
       department: true,
+      // Rate + code ride along for the Make Reservation modal, which
+      // creates an ORDER LINE for the category it holds. The line-items
+      // route re-resolves the rate server-side (client rate card wins),
+      // so this is the list price the modal shows and submits, never the
+      // price of record.
+      dailyRate: true,
     },
     orderBy: { description: 'asc' },
   })
@@ -52,9 +58,11 @@ export async function GET() {
     id: r.legacyAssetCategoryId as string,
     name: r.description || r.code,
     slug: r.slug,
+    code: r.code,
     totalUnits: r.qtyOwned,
     planyoResourceId: r.planyoResourceId,
     department: r.department,
+    dailyRate: r.dailyRate == null ? null : Number(r.dailyRate),
   }))
   return NextResponse.json({ ok: true, categories })
 }

@@ -6,6 +6,7 @@ import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2, Pencil, Search, Timer, Wrench, X } from 'lucide-react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
+import { MakeReservationModal } from '@/components/scheduling/MakeReservationModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
@@ -477,6 +478,9 @@ export function GanttBoard() {
   // lane, so the gantt is its natural entry point. Sales-gated same as
   // the endpoint.
   const [newTaskOpen, setNewTaskOpen] = useState(false)
+  // Planyo-parity intake: one window that takes type + dates + client
+  // + job and leaves an Order behind (Wes 2026-09-09).
+  const [makeResOpen, setMakeResOpen] = useState(false)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
   // What's WRONG with the unit — captured at the moment it's greyed so
@@ -1554,6 +1558,15 @@ export function GanttBoard() {
           </div>
           {canBindUnit && (
             <button
+              onClick={() => setMakeResOpen(true)}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-semibold"
+              title="Book a vehicle type for a client and job — creates the order and holds the units"
+            >
+              Make Reservation
+            </button>
+          )}
+          {canBindUnit && (
+            <button
               onClick={() => setNewTaskOpen(true)}
               className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-semibold"
               title="Schedule a delivery or pickup (no order) — lands in the needs-assignment lane"
@@ -2487,6 +2500,17 @@ export function GanttBoard() {
             setHoldModal(null)
             refreshTimeline()
           }}
+        />
+      )}
+
+      {/* Reservation intake — the top-bar "Make Reservation" button.
+          Creates the Order first and lets the line-items route mint the
+          hold; see the modal header for why that ordering matters. */}
+      {makeResOpen && (
+        <MakeReservationModal
+          canBindUnit={canBindUnit}
+          onClose={() => setMakeResOpen(false)}
+          onCreated={() => refreshTimeline()}
         />
       )}
 
