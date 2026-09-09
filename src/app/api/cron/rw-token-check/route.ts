@@ -24,8 +24,9 @@ export const maxDuration = 60
  *   verify → if it fails, try ONE automatic rotation through /jwt
  *          → if that fails too, go red and tell someone.
  *
- * Plus a proactive renewal at 45 days, so the yellow band is a safety net
- * rather than a routine state — the token is replaced before it can lapse.
+ * Plus a proactive renewal at ROTATE_AFTER_DAYS, so the yellow band is a
+ * safety net rather than a routine state — the token is replaced before it
+ * can lapse.
  *
  * ── Why hourly, and why the DST twins are gone (2026-09-09) ────────
  *
@@ -123,7 +124,8 @@ export async function GET(req: NextRequest) {
     steps.push(ping.ok ? 'verify ok' : `verify failed (HTTP ${ping.httpStatus})`)
   }
 
-  // 2. Rotate when it failed, or proactively at 45 days so yellow is rare.
+  // 2. Rotate when it failed, or proactively at ROTATE_AFTER_DAYS so
+  //    yellow is rare.
   //    rotateRwToken() is the same call rwFetch makes on a live 401, so
   //    the scheduled remedy and the on-demand one cannot drift apart.
   const dueForRotation = healthy && (await isRotationDue())

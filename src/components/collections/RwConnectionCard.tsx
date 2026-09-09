@@ -204,8 +204,9 @@ export function RwConnectionCard() {
             {busy === 'paste' ? 'Saving…' : 'Save & verify'}
           </button>
           <p className="w-full text-[11px] text-zinc-500">
-            HQ renews this itself every 45 days. Pasting is the backup for when it cannot —
-            the token is checked against RentalWorks before it is stored, and never shown again.
+            HQ renews this itself every 14 days, and again straight away if RentalWorks ever
+            rejects it. Pasting is the backup for when it cannot — the token is checked against
+            RentalWorks before it is stored, and never shown again.
           </p>
         </div>
       )}

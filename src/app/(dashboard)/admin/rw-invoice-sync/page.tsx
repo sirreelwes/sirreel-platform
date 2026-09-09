@@ -379,8 +379,11 @@ export default function RwInvoiceSyncPage() {
                   label: 'Expiry',
                   value: 'not knowable — RW stamps 300s and ignores it',
                 },
-                { label: 'Refresh', value: 'manual — no refresh mechanism' },
-                { label: 'Rotation cadence', value: 'every ~50 days' },
+                {
+                  label: 'Refresh',
+                  value: 'automatic — re-minted on a rejection, and checked hourly',
+                },
+                { label: 'Rotation cadence', value: 'every 14 days (measured life ~18)' },
               ]}
             />
           </div>

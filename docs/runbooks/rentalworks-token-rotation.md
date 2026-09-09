@@ -60,15 +60,32 @@ System Update, User`), and no per-user key. That walk simply missed the
 
 ## When to rotate
 
-- **Reactive**: `/admin/health` shows RentalWorks **DOWN** with HTTP 401.
-  This is what triggers the Slack alert from `/api/cron/health-check`.
-- **Proactive**: every ~50 days. Observed lifetimes: the May 2026 incident
-  hit at day ~57; the token rotated 2026-08-16 had been in place since
-  2026-03-23 (~146 days) — so the real ceiling is not well characterised.
-  Rotating at day 50 keeps a buffer either way.
+**Since 2026-09-09 you should not have to.** HQ renews the token itself:
 
-> :calendar: **Set a calendar reminder for 50 days from each rotation.**
-> Today's date + 50 days = your next rotation due date.
+- **On rejection** — `rwFetch` re-mints and retries once when RentalWorks
+  answers 401/403, so a token that dies mid-day is replaced within seconds
+  by whichever sync hits it first (`src/lib/rentalworks/rwClient.ts`).
+- **Proactively at `ROTATE_AFTER_DAYS`** (14 days) and on any failed
+  verify, via `/api/cron/rw-token-check`, which runs **hourly**.
+
+Both go through `/api/v1/jwt` with `RENTALWORKS_USERNAME` /
+`RENTALWORKS_PASSWORD`. The procedure below is the fallback for when that
+cannot work — the login itself refused, which means a locked account or a
+changed password, not an aged token.
+
+### Why 14 days, not the ~50 this runbook used to advise
+
+The old figure came from two data points that measured when somebody
+LOOKED, not when the token died: the May 2026 incident surfaced at day ~57,
+and the token rotated 2026-08-16 had been in place since 2026-03-23 (~146
+days) — both had been sitting unused-but-unchecked. The one lifetime
+measured end to end is **17.9 days**: minted 2026-08-22 16:50, rejected
+~2026-09-09 13:30. A 45-day proactive window was therefore longer than a
+token survives and never once fired.
+
+> :calendar: **No calendar reminder needed any more.** If the RentalWorks
+> card on `/collections` goes red, the automatic renewal has already failed
+> and the login is the problem — follow the procedure below.
 
 **Ignore the `exp` claim.** The JWT stamps a 300-second expiry, but RW
 honours these for weeks or months — the server tracks its own session. A

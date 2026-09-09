@@ -7,17 +7,34 @@ import { decryptSecret, encryptSecret, rwTokenKey } from '@/lib/crypto/secretBox
  *
  * Status is driven by LIVE VERIFICATION, never by the token's own exp claim
  * (Wes 2026-09-02). RentalWorks is a Database Works "FW" product and issues
- * a cosmetic ~300-second `exp` that it then honors for weeks; the real
- * rotation cadence is ~50 days. A meter keyed to that claim would be red
- * five minutes after every rotation and would teach everyone to ignore it.
+ * a cosmetic ~300-second `exp` that it then honors for weeks. A meter keyed
+ * to that claim would be red five minutes after every rotation and would
+ * teach everyone to ignore it.
  *
- *   green   last verify said OK, and rotated inside 45 days
- *   yellow  last verify said OK, but the token is 45+ days old
+ *   green   last verify said OK, and rotated inside ROTATE_AFTER_DAYS
+ *   yellow  last verify said OK, but the token is older than that
  *   red     last verify failed, or nothing has ever verified it
  */
 
 export const RW_PROVIDER = 'RENTALWORKS'
-export const ROTATE_AFTER_DAYS = 45
+/**
+ * Renew proactively at this age. 14 days, set by Wes on 2026-09-09.
+ *
+ * It was 45, chosen when RW's token lifetime was believed to be ~50 days
+ * — the runbook's estimate, drawn from two rotations that had each been
+ * left in place far longer than they had to be, so they measured when
+ * somebody LOOKED, not when the token died.
+ *
+ * The one lifetime actually measured end to end is 17.9 days: minted
+ * 2026-08-22 16:50, rejected ~2026-09-09 13:30. A 45-day window is
+ * therefore longer than a token survives, which made this branch dead
+ * code — every rotation to date has been reactive, after an outage. 14
+ * days renews with real headroom under the only figure we have.
+ *
+ * If tokens start lapsing before this fires, shorten it; the reactive
+ * path in rwFetch covers the gap either way.
+ */
+export const ROTATE_AFTER_DAYS = 14
 
 const JWT_URL = 'https://sirreel.rentalworks.cloud/api/v1/jwt'
 const PING_URL = 'https://sirreel.rentalworks.cloud/api/v1/item?pageNo=1&pageSize=1'
@@ -35,7 +52,7 @@ export interface RwCredentialStatus {
   /** Informational only — see the note above. Never an input to `health`. */
   jwtExpInformational: string | null
   updatedBy: string | null
-  /** When the 45-day proactive rotation is due. */
+  /** When the proactive rotation is due (ROTATE_AFTER_DAYS after the last). */
   rotateDueAt: string | null
   /** True while the env var is still the only source (pre-migration). */
   usingEnvFallback: boolean
