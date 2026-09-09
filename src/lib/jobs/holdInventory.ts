@@ -29,6 +29,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { holdRankLabel } from '@/lib/scheduling/holdRanks'
 import {
   cancelSubRentalsById,
   jobLifecycleContext,
@@ -140,8 +141,8 @@ export async function getJobHoldInventory(jobId: string): Promise<JobHoldInvento
       detail: assignedUnits.length
         ? `Assigned · ${assignedUnits.join(', ')}`
         : it.holdRank === 1
-          ? 'Firm hold, no unit assigned yet'
-          : `Backup hold (rank ${it.holdRank})`,
+          ? 'Hold, no unit assigned yet'
+          : `${holdRankLabel(it.holdRank)} Hold — queued behind another production`,
       assignedUnits,
       vendorName: null,
       notifiesVendor: false,

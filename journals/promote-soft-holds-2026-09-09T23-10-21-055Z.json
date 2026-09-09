@@ -1,0 +1,309 @@
+{
+  "ranAt": "2026-09-09T23:10:21.055Z",
+  "promoted": [
+    {
+      "bookingItemId": "2266a1dc-dde0-47b5-b061-c4c2cfb6fc35",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Lankershim Studios",
+      "quantity": 1,
+      "booking": "SR-2026-0135",
+      "jobName": "Short",
+      "window": "2026-09-20..2026-09-20"
+    },
+    {
+      "bookingItemId": "c8166799-e20e-4740-9687-aa4143927364",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788206126570",
+      "jobName": "JUST PONDS",
+      "window": "2026-09-17..2026-10-07"
+    },
+    {
+      "bookingItemId": "80351980-882c-484e-912d-0c22ce63a35f",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788980615068",
+      "jobName": "MNX",
+      "window": "2026-09-11..2026-09-14"
+    },
+    {
+      "bookingItemId": "78d8263d-e2a2-4492-905d-5f7e018003c2",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788206084591",
+      "jobName": "Exo-LA",
+      "window": "2026-09-04..2026-09-09"
+    },
+    {
+      "bookingItemId": "39b7dd12-3939-4823-a6c7-f4d9af3ec21f",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "ProScout / VideoVan",
+      "quantity": 1,
+      "booking": "SR-Q-1788302328610",
+      "jobName": "Platinum In Conversation",
+      "window": "2026-09-29..2026-09-29"
+    },
+    {
+      "bookingItemId": "895b6847-0742-4bab-ae15-c044d4777290",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "PopVan",
+      "quantity": 1,
+      "booking": "SR-Q-1788400742249",
+      "jobName": "Season #",
+      "window": "2026-09-21..2026-09-25"
+    },
+    {
+      "bookingItemId": "a61d5018-324d-4e09-93b5-22fb7f81f7a4",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "PopVan",
+      "quantity": 1,
+      "booking": "SR-Q-1788453657045",
+      "jobName": "TXU",
+      "window": "2026-09-22..2026-09-26"
+    },
+    {
+      "bookingItemId": "bc360fba-8185-4438-9c38-4dc78482eafa",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "2 Unit Restroom Trailer",
+      "quantity": 1,
+      "booking": "SR-Q-1788453657045",
+      "jobName": "TXU",
+      "window": "2026-09-22..2026-09-26"
+    },
+    {
+      "bookingItemId": "9aff7c04-590c-420f-890e-4881c6b2a166",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 2,
+      "booking": "SR-Q-1788453657045",
+      "jobName": "TXU",
+      "window": "2026-09-22..2026-09-26"
+    },
+    {
+      "bookingItemId": "6117d0e7-db44-4050-8790-868e43ff9780",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788453657045",
+      "jobName": "TXU",
+      "window": "2026-09-22..2026-09-26"
+    },
+    {
+      "bookingItemId": "4c9ed86b-6f8f-43d7-8594-27f6d9cb25c3",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-2026-0295",
+      "jobName": "Coven Academy PROMO",
+      "window": "2026-09-03..2026-09-09"
+    },
+    {
+      "bookingItemId": "4771e050-a41c-4050-8706-b721cd41f398",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "15-Passenger Van",
+      "quantity": 1,
+      "booking": "SR-Q-1788400742249",
+      "jobName": "Season #",
+      "window": "2026-09-21..2026-09-25"
+    },
+    {
+      "bookingItemId": "42d90b2d-0416-4a78-aeb7-71c632f6e115",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "15-Passenger Van",
+      "quantity": 2,
+      "booking": "SR-Q-1788453657045",
+      "jobName": "TXU",
+      "window": "2026-09-22..2026-09-26"
+    },
+    {
+      "bookingItemId": "5e3f8ee5-e713-4ac8-b473-51b948979234",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "ProScout / VideoVan",
+      "quantity": 1,
+      "booking": "SR-Q-1788551668703",
+      "jobName": "Lunch Rush",
+      "window": "2026-09-14..2026-09-15"
+    },
+    {
+      "bookingItemId": "3dd62717-48f4-49ce-9dfe-244c5b95dc41",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788553233405",
+      "jobName": "OBB x Cybmiotika",
+      "window": "2026-09-15..2026-09-18"
+    },
+    {
+      "bookingItemId": "eec353fa-8010-4cb0-a2a4-667ea0b90de5",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788553233405",
+      "jobName": "OBB x Cybmiotika",
+      "window": "2026-09-15..2026-09-18"
+    },
+    {
+      "bookingItemId": "91d93f67-c9bb-43e4-921b-498e7a706a51",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788798480811",
+      "jobName": "What Will We Tell Them",
+      "window": "2026-09-08..2026-09-10"
+    },
+    {
+      "bookingItemId": "a018bfd3-658e-4831-b801-bd62fbfe9c0b",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788880507031",
+      "jobName": "TS X O",
+      "window": "2026-09-08..2026-09-09"
+    },
+    {
+      "bookingItemId": "7d1e95a1-369e-4907-863e-20141b990236",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 2,
+      "booking": "SR-Q-1788884606302",
+      "jobName": "The Target",
+      "window": "2026-09-11..2026-09-21"
+    },
+    {
+      "bookingItemId": "816129c3-9462-4912-af06-2b722db053f1",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788902483858",
+      "jobName": "Light As A Feather",
+      "window": "2026-09-24..2026-09-28"
+    },
+    {
+      "bookingItemId": "e7cd3a7e-30f1-4a8b-9aff-a3e17ccdf454",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788906297512",
+      "jobName": "NFS",
+      "window": "2026-10-30..2026-11-05"
+    },
+    {
+      "bookingItemId": "ef5ca8a0-ed17-4d55-a9b9-6040f2833e6a",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788906297512",
+      "jobName": "NFS",
+      "window": "2026-10-30..2026-11-05"
+    },
+    {
+      "bookingItemId": "4cab33b0-1160-4de9-9df4-1fc9571e28dd",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788913427812",
+      "jobName": "Hot Pink",
+      "window": "2026-09-10..2026-09-14"
+    },
+    {
+      "bookingItemId": "1a4e73d7-9f42-4ea8-9872-791984998187",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788915429649",
+      "jobName": "Rodeo Queen",
+      "window": "2026-09-11..2026-09-21"
+    },
+    {
+      "bookingItemId": "a7f37632-f3c7-485d-9cb4-cc41dffbed9c",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788972436116",
+      "jobName": "Lizzy McAlpine",
+      "window": "2026-09-12..2026-09-15"
+    },
+    {
+      "bookingItemId": "a10500f3-d355-4c29-82da-01a4229cb231",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788979081484",
+      "jobName": "Lego Playball",
+      "window": "2026-09-11..2026-09-16"
+    },
+    {
+      "bookingItemId": "3263730c-3f26-4769-b521-cd4f49d5171e",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "Cargo Van w/ Liftgate",
+      "quantity": 1,
+      "booking": "SR-Q-1788986045578",
+      "jobName": "HEXCLAD",
+      "window": "2026-09-10..2026-09-14"
+    },
+    {
+      "bookingItemId": "97b0d9b3-9a48-487d-8b30-66de2c78351d",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788988032241",
+      "jobName": "Boston Jeff",
+      "window": "2026-09-10..2026-09-11"
+    },
+    {
+      "bookingItemId": "c3b36a67-eb75-497c-82e2-20659f11b7c6",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "PopVan",
+      "quantity": 1,
+      "booking": "SR-Q-1788991178719",
+      "jobName": "Project Sprinkles",
+      "window": "2026-09-11..2026-09-11"
+    },
+    {
+      "bookingItemId": "01142e88-267f-404c-a7bf-6b74aee7f171",
+      "fromRank": 2,
+      "toRank": 1,
+      "category": "SuperCube Truck",
+      "quantity": 1,
+      "booking": "SR-Q-1788993657008",
+      "jobName": "LWL4",
+      "window": "2026-09-11..2026-09-14"
+    }
+  ],
+  "keptAsBackup": [
+    "42e215e1-bd08-4059-990f-4afb0a772d99",
+    "02d0cbc2-0058-4a46-98f8-298440476368"
+  ]
+}

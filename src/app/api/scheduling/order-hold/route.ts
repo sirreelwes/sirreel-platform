@@ -44,13 +44,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, bookingId: null, bookingItem: null })
   }
 
-  // Rank is NOT pinned here, and that is deliberate. A freshly quoted
-  // vehicle is held SOFT (rank 2) by holdOnQuoteSend; it only becomes
-  // rank 1 when `reconcileHoldFirmness` sees an approved order with the
-  // paperwork in. Filtering on rank 1 therefore found nothing at all on
-  // a new reservation — the caller concluded "no hold" for a hold that
-  // very much existed. Lowest rank wins, so a promoted primary is
-  // preferred over a backup if both are somehow present.
+  // Rank is NOT pinned here. Quoted vehicles now hold at rank 1 like
+  // anything else, but a hold placed BEHIND another production sits at
+  // 2 or 3, and this lookup has to find it either way. (Before
+  // 2026-09-09 holdOnQuoteSend minted at rank 2, so pinning rank 1
+  // found nothing at all on a new reservation and the caller concluded
+  // "no hold" for a hold that very much existed.) Lowest rank wins.
   const bookingItem = await prisma.bookingItem.findFirst({
     where: { bookingId: order.bookingId, categoryId },
     orderBy: { holdRank: 'asc' },

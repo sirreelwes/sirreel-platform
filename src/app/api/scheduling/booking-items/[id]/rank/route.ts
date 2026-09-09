@@ -13,14 +13,12 @@
  *                                      the incumbent rank-1 holds on the
  *                                      same category+window drop to 2.
  *
- * Both LOCK the rank (`rankLockedAt`), and that is the whole point.
- * `reconcileHoldFirmness` otherwise re-ranks 1↔2 automatically off each
- * order's own paperwork — it would promote a deliberate 2nd Hold whose
- * paperwork is in, and it would undo a demotion the moment the demoted
- * order next reconciled (nightly cron + six other call sites). Wes's
- * ruling: queue position beats paperwork, so a human decision wins and
- * the sweep leaves it alone. Clearing the lock columns hands the hold
- * back to the automatic rule.
+ * Both LOCK the rank (`rankLockedAt`). Since 2026-09-09 nothing
+ * automatic re-ranks a hold — `reconcileHoldFirmness` reports firmness
+ * and no longer writes holdRank at all — so the lock is now belt AND
+ * braces rather than the only thing standing between a human's queue
+ * decision and the nightly sweep. It still records WHO decided and why,
+ * which is what the audit trail needs.
  *
  * Depth is capped at 3 (Wes): a 4-deep queue on one truck is a
  * sub-rental conversation, not a reservation.

@@ -6,10 +6,18 @@
  * Before this, sending a quote reserved nothing: an approved order and
  * even a BOOKED one could exist with the unit showing free on the board.
  *
- * SOFT, not firm. Holds are created as backups (holdRank 2) so the unit
- * reads as spoken-for on the Reservations board without hard-blocking —
- * a quote that never converts must not freeze a truck. Approval promotes
- * them to rank 1 (see promoteHoldsOnApproval).
+ * Holds are created at RANK 1 and consume capacity like any other hold
+ * (Wes 2026-09-09: "quoted vehicles should consume capacity too — they
+ * should rank like normal holds until capacity becomes an issue and the
+ * agent decides rank").
+ *
+ * They used to be created at rank 2 so a quote that never converted
+ * could not freeze a truck. The cost of that was invisible and worse:
+ * `getCategoryAvailability` counts rank-1 demand only, so 29 live
+ * quoted vehicles were held on paper while still reading as FREE to the
+ * next rep — two people could quote the same van and both be told yes.
+ * Rank is now purely queue position; firmness is reported by
+ * `reconcileHoldFirmness`, never encoded in the rank.
  *
  * Only UNIT-TRACKED lines are held. Quote lines carry an InventoryItem,
  * NOT an AssetCategory — an early version of this filtered on
@@ -293,8 +301,18 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
           quantity: want,
           dailyRate: 0,
           status: 'REQUESTED',
-          // Backup rank: visible as spoken-for, doesn't hard-block.
-          holdRank: 2,
+          // Rank 1 — a quoted vehicle is a NORMAL hold and consumes
+          // capacity like any other (Wes 2026-09-09: "quoted vehicles
+          // should consume capacity too — they should rank like normal
+          // holds until capacity becomes an issue and the agent decides
+          // rank"). It used to land at rank 2 to avoid hard-blocking,
+          // but `getCategoryAvailability` counts rank-1 demand only, so
+          // 29 live quoted vehicles were held on paper while still
+          // reading as free to the next rep — two people could quote the
+          // same van and both get a green light. Ranking is now purely
+          // queue position, decided by an agent when capacity actually
+          // runs out.
+          holdRank: 1,
         },
       })
       out.created++
@@ -491,38 +509,24 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
     }
     if (bookingIds.length === 0) return out
 
-    // A rank a HUMAN set is never moved by this sweep (Wes 2026-09-09:
-    // queue position beats paperwork). Without the `rankLockedAt: null`
-    // guard, a deliberate 2nd Hold whose own paperwork happens to be in
-    // gets promoted to 1st — jumping the queue and putting two rank-1
-    // holds on the same units — and a "demote the other production"
-    // decision is reverted the next time that order reconciles, which is
-    // a nightly cron plus six other call sites. See
-    // BookingItem.rankLockedAt.
-    if (firm) {
-      const res = await prisma.bookingItem.updateMany({
-        where: { bookingId: { in: bookingIds }, holdRank: 2, status: 'REQUESTED', rankLockedAt: null },
-        data: { holdRank: 1 },
-      })
-      out.promoted = res.count
-      const held = await prisma.bookingItem.count({
-        where: { bookingId: { in: bookingIds }, holdRank: { gte: 2 }, status: 'REQUESTED', rankLockedAt: { not: null } },
-      })
-      out.rankLocked = held
-    } else {
-      // Something lapsed (a COI expired, an agreement was re-issued):
-      // the hold drops back to a backup rather than silently keeping a
-      // firm block it no longer earns.
-      const res = await prisma.bookingItem.updateMany({
-        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED', rankLockedAt: null },
-        data: { holdRank: 2 },
-      })
-      out.demoted = res.count
-      const held = await prisma.bookingItem.count({
-        where: { bookingId: { in: bookingIds }, holdRank: 1, status: 'REQUESTED', rankLockedAt: { not: null } },
-      })
-      out.rankLocked = held
-    }
+    // THIS SWEEP NO LONGER MOVES RANKS (Wes 2026-09-09). holdRank is
+    // queue position — 1st Hold, 2nd Hold, 3rd Hold — and only an agent
+    // sets it, through /booking-items/[id]/rank when capacity actually
+    // runs out. It used to double as the firm/soft flag, flipping 1<->2
+    // off each order's paperwork, which is why a quoted van sat at rank
+    // 2 and consumed no capacity, and why a deliberate 2nd Hold got
+    // promoted over the production ahead of it.
+    //
+    // What remains here is the REPORT: `firm`, `staffAttested` and
+    // `missing` still say whether the client's paperwork is in, and
+    // callers still surface that. Nothing is re-ranked as a side effect.
+    // `promoted`/`demoted` stay in the shape, always 0, because callers
+    // log them.
+    //
+    // The lapse behaviour this drops was a safety valve — a firm hold
+    // demoted itself when a COI expired, freeing the truck. Holds now
+    // keep their capacity until a human releases them, which is the same
+    // trade already accepted for staff-placed reservations.
     return out
   } catch (e) {
     return { ...out, error: e instanceof Error ? e.message : 'reconcile failed' }
