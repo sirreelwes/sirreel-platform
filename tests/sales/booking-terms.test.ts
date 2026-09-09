@@ -154,11 +154,22 @@ check(classifyVehicleLine(veh({ code: null, description: 'Honeywagon' })) === 'u
   'a honeywagon is neither — unknown, not a guess')
 
 check(periodTermsFor([veh()]).join() === 'truck', 'truck-only order names ONLY the 24-hour cycle')
-check(periodTermsFor([veh({ code: 'CAT_PASSENGER_VAN', description: '15-Passenger Van' })]).join() === 'van',
+check(periodTermsFor([veh({ code: 'CAT_PASSENGER_VAN_15', description: '15-Passenger Van' })]).join() === 'van',
   'van-only order names ONLY the calendar day')
+// The 2026-09-09 split: BOTH halves are vans, and the retired code still
+// classifies so historical orders keep their billing basis on a re-render.
+check(periodTermsFor([veh({ code: 'CAT_PASSENGER_VAN_12', description: '12-Passenger Van' })]).join() === 'van',
+  '12-passenger van classifies as a van too')
+check(periodTermsFor([veh({ code: 'CAT_PASSENGER_VAN', description: 'Passenger Van' })]).join() === 'van',
+  'the retired pre-split code still classifies — old orders re-render correctly')
+// Descriptions carrying "van" would pass the checks above on the NAME
+// pattern alone, which is what the codes exist to stop being load-bearing.
+// A renamed line proves the new codes are wired into VAN_CODES themselves.
+check(periodTermsFor([veh({ code: 'CAT_PASSENGER_VAN_12', description: 'Crew shuttle' })]).join() === 'van',
+  'the 12-passenger CODE classifies on its own, with no help from the description')
 // The unsafe direction: narrowing to one cycle on an order carrying both, or
 // carrying something unrecognised, tells the client the wrong billing basis.
-check(periodTermsFor([veh(), veh({ code: 'CAT_PASSENGER_VAN', description: '15-Passenger Van' })]).length === 2,
+check(periodTermsFor([veh(), veh({ code: 'CAT_PASSENGER_VAN_15', description: '15-Passenger Van' })]).length === 2,
   'a MIXED order shows both cycles')
 check(periodTermsFor([veh(), veh({ code: null, description: 'Honeywagon' })]).length === 2,
   'an order with an unrecognised unit shows both cycles rather than guessing')
@@ -180,7 +191,7 @@ check(!!m.note && /out of the county/i.test(m.note), 'the out-of-county heads-up
 
 check(/2 in tandem per truck/.test(find(truckTerms, 'parking')!.body),
   'truck-only order states tandem parking only')
-const vanTerms = buildBookingTerms({ vehicles: [veh({ code: 'CAT_PASSENGER_VAN', description: '15-Passenger Van' })] })
+const vanTerms = buildBookingTerms({ vehicles: [veh({ code: 'CAT_PASSENGER_VAN_15', description: '15-Passenger Van' })] })
 check(!/tandem/.test(find(vanTerms, 'parking')!.body),
   'van-only order does not promise tandem spaces')
 

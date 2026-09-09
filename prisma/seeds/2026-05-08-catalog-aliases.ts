@@ -128,7 +128,12 @@ const ASSET_CATEGORY_ALIASES: { slug: string; aliases: string[] }[] = [
   { slug: 'camera-cube',          aliases: ['camera cube', 'camera truck', 'cam cube'] },
   { slug: 'cargo-van-liftgate',   aliases: ['cargo van with liftgate', 'liftgate van', 'lift van'] },
   { slug: 'cargo-van-no-liftgate', aliases: ['cargo van', 'cargo vans', 'van', 'cargo van no lift'] },
-  { slug: 'passenger-van',        aliases: ['passenger van', 'pass van', 'pax van', '12 passenger', '12-pass'] },
+  // Split 2026-09-09 (Wes) — one "Passenger Van" option could not tell the
+  // yard which van a client had actually been sold. The bare terms
+  // ("passenger van", "pax van") default to 15-passenger: that is the
+  // five-truck pool, and what an unqualified ask has always meant here.
+  { slug: '12-passenger-van',     aliases: ['12 passenger van', '12-passenger van', '12 pass van', '12 passenger', '12-pass', 'nissan nv'] },
+  { slug: '15-passenger-van',     aliases: ['15 passenger van', '15-passenger van', '15 pass van', '15 passenger', '15-pass', 'passenger van', 'pass van', 'pax van'] },
   { slug: 'studios',              aliases: ['stage', 'stages', 'soundstage', 'soundstages', 'studio', 'sound stage'] },
   { slug: 'popvan',               aliases: ['popvan', 'pop van', 'pop-van'] },
   { slug: 'stakebed',             aliases: ['stakebed', 'stake bed', 'flatbed'] },

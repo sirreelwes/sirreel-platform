@@ -41,6 +41,8 @@ for (const [code, desc] of [
   ['CAT_CUBE_TRUCK', 'SuperCube Truck'],
   ['CAT_CARGO_VAN_LIFTGATE', 'Cargo Van w/ Liftgate'],
   ['CAT_CARGO_VAN_NO_LIFTGATE', 'Cargo Van w/o Liftgate'],
+  ['CAT_PASSENGER_VAN_12', '12-Passenger Van'],
+  ['CAT_PASSENGER_VAN_15', '15-Passenger Van'],
   ['CAT_PASSENGER_VAN', 'Passenger Van'],
   ['CAT_CAMERA_CUBE', 'Camera Cube'],
 ] as const) {
@@ -81,7 +83,7 @@ check(judgeLcdwLine(line({ quantity: 1, billableDays: null })).vehicleDays === 0
 console.log('\nA mixed order reports BOTH sides')
 {
   const q = quoteLcdw([
-    line({ id: 'a', code: 'CAT_PASSENGER_VAN', description: 'Passenger Van', quantity: 1, billableDays: 3 }),
+    line({ id: 'a', code: 'CAT_PASSENGER_VAN_15', description: '15-Passenger Van', quantity: 1, billableDays: 3 }),
     line({ id: 'b', code: 'CAT_CUBE_TRUCK', description: 'SuperCube Truck', quantity: 2, billableDays: 3 }),
     line({ id: 'c', code: 'CAT_POPVAN', description: 'PopVan', quantity: 1, billableDays: 3 }),
     line({ id: 'd', department: 'GE', description: 'Grip package' }),

@@ -185,7 +185,11 @@ const TRUCK_CODES: ReadonlySet<string> = new Set([
 const VAN_CODES: ReadonlySet<string> = new Set([
   'CAT_CARGO_VAN_LIFTGATE',
   'CAT_CARGO_VAN_NO_LIFTGATE',
+  // Split 2026-09-09 into 12-/15-passenger. The retired parent code stays
+  // listed so a pre-split order re-renders with the same billing basis.
   'CAT_PASSENGER_VAN',
+  'CAT_PASSENGER_VAN_12',
+  'CAT_PASSENGER_VAN_15',
   'CAT_POPVAN',
   'CAT_PROSCOUT_VTR',
 ])

@@ -43,6 +43,7 @@ import { ContactPicker, type ContactPickerValue } from '@/components/shared/Cont
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
+import { configNotesForCategoryName, appendConfigNote } from '@/lib/catalog/configNotes'
 import { AlertTriangle, Check } from 'lucide-react'
 
 interface AvailabilitySummary {
@@ -712,10 +713,30 @@ export function NewHoldModal({
 
           <label className="block">
             <span className="text-xs uppercase tracking-wide text-zinc-600">Notes (optional)</span>
+            {/* Configuration requests the yard has to act on — the
+                12-/15-passenger split says which van, this says how it
+                goes out. One click so the request is in writing on the
+                reservation the crew actually reads. Never pre-filled. */}
+            {configNotesForCategoryName(categoryName).length > 0 && (
+              <span className="mt-1 flex flex-wrap gap-1">
+                {configNotesForCategoryName(categoryName).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setNotes((n) => appendConfigNote(n, s))}
+                    title={`Add "${s}" to this reservation's notes`}
+                    className="px-1.5 py-0.5 text-[11px] rounded border border-zinc-300 bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
+                  >
+                    + {s}
+                  </button>
+                ))}
+              </span>
+            )}
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
+              placeholder="e.g. remove last row of seats"
               className="mt-1 block w-full rounded border-zinc-300 text-sm px-2 py-1.5"
             />
           </label>

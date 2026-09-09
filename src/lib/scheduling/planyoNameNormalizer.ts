@@ -116,7 +116,14 @@ const CATEGORY_TO_SHORT: Record<string, string> = {
   'SuperCube Truck': 'Cube',
   'Cargo Van w/ Liftgate': 'Cargo',
   'Cargo Van w/o Liftgate': 'Cargo',
+  // Split 2026-09-09 into 12-/15-passenger. All three keys map to the same
+  // "Pass N" asset naming — Planyo still has ONE passenger-van resource, so
+  // a drift import arrives named for whichever HQ category fronts it, and
+  // its units resolve across the family (see scheduling-planyo-migration.ts).
+  // Keep the retired key: historical callers and journal replays still pass it.
   'Passenger Van': 'Pass',
+  '12-Passenger Van': 'Pass',
+  '15-Passenger Van': 'Pass',
   // HQ category name is one-word "PopVan"; Planyo has been observed
   // (and will continue) to surface the two-word "Pop Van" spelling
   // for the same resource. Mapping BOTH spellings to "Pop" here so

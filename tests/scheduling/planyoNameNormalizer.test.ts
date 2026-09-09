@@ -39,6 +39,12 @@ check(normalizePlanyoUnitName('2 (12 Pass) (Cargo Space) (A)', 'Passenger Van'),
 check(normalizePlanyoUnitName('10 (Mid Roof) (A)', 'Passenger Van'), { normalized: 'Pass 10' }, '10 (Mid Roof) (A) → Pass 10')
 check(normalizePlanyoUnitName('8 (Mid Roof) A', 'Passenger Van'), { normalized: 'Pass 8' }, 'trailing slot-letter "A" stripped → Pass 8')
 check(normalizePlanyoUnitName('9 (Mid Roof) A', 'Passenger Van'), { normalized: 'Pass 9' }, 'trailing slot-letter "A" stripped → Pass 9')
+
+// 2026-09-09 split. Planyo still has ONE passenger-van resource, so a drift
+// import arrives named for whichever HQ category holds it — both must reach
+// the same "Pass N" units, and the retired name must keep working for replays.
+check(normalizePlanyoUnitName('1 (12 Pass) (Nissan) (A)', '12-Passenger Van'), { normalized: 'Pass 1' }, '12-Passenger Van → Pass 1')
+check(normalizePlanyoUnitName('8 (Mid Roof) A', '15-Passenger Van'), { normalized: 'Pass 8' }, '15-Passenger Van → Pass 8')
 // Trailing "A" / "B" without parens — Planyo's "other" slot-indicator
 // format (symmetric with the leading "A - "). Multi-letter trailing
 // words like "Wardrobe" are NOT stripped — those need operator review.

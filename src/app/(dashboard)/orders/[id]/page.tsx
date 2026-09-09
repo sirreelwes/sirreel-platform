@@ -42,6 +42,7 @@ import {
   lineEditLockReason as lineEditLockReasonFn,
 } from "@/lib/orders/editability";
 import { isStageLineItem } from "@/lib/orders/stageLines";
+import { configNotesFor, appendConfigNote } from "@/lib/catalog/configNotes";
 import {
   groupLineItemsByDepartment,
   lineItemSectionLabel,
@@ -517,6 +518,12 @@ export default function OrderDetailPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   // The estimated driver day, edited inline on a driver line (Wes 2026-09-07).
   const [editEst, setEditEst] = useState({ roll: '', callTime: '', leaveSet: '', done: '' });
+  // The line's client-facing note. Prints under the description on the
+  // quote, and it is where a configuration request ("remove last row of
+  // seats") gets written down — the field existed and was seeded from the
+  // catalog's clientNote, but nothing on this page could edit it, so a
+  // rep taking that request had nowhere to put it (Wes 2026-09-09).
+  const [editNotes, setEditNotes] = useState('');
   const [editRate, setEditRate] = useState("");
   const [editQty, setEditQty] = useState("");
   const [editDays, setEditDays] = useState("");
@@ -1905,6 +1912,7 @@ export default function OrderDetailPage() {
     setEditPickupDate((li.pickupDate ?? "").slice(0, 10));
     setEditReturnDate((li.returnDate ?? "").slice(0, 10));
     setEditEst({ roll: li.driverEstimate?.roll ?? '', callTime: li.driverEstimate?.callTime ?? '', leaveSet: li.driverEstimate?.leaveSet ?? '', done: li.driverEstimate?.done ?? '' });
+    setEditNotes(li.notes ?? '');
     // A driver line has no department of its own — it is labor on the
     // vehicle above it. Seeding from the parent means saving the row also
     // corrects the legacy PRO_SUPPLIES classification (Wes 2026-09-07).
@@ -2020,6 +2028,9 @@ export default function OrderDetailPage() {
     const trimmedDesc = editDesc.trim();
     if (trimmedDesc.length > 0) body.description = trimmedDesc;
     if (editDept) body.department = editDept;
+    // Always sent, so emptying the box actually clears the note rather
+    // than leaving a stale configuration request printing on the quote.
+    body.notes = editNotes.trim();
     // The estimated driver day — sent whenever the row is a driver line, so
     // clearing every field clears the estimate on the server (null).
     const editingLine = order?.lineItems.find((l) => l.id === lineId);
@@ -2217,6 +2228,48 @@ export default function OrderDetailPage() {
             hideCustomChip
           />
         )}
+        {/* Client-facing note — prints under the description on the quote.
+            This is where a configuration request lands: the 12-/15-passenger
+            split says WHICH van, the note says how it is set up. Suggestions
+            are one click and never pre-filled; a note nobody typed is a
+            promise nobody made. */}
+        {li.type !== 'DISCOUNT' && li.type !== 'FEE' && (() => {
+          const suggestions = configNotesFor(li.inventoryItem?.code ?? null);
+          return (
+            <div className="mt-2 min-w-[260px]">
+              <div className="text-[9px] font-semibold uppercase tracking-wider text-lt-fg3 mb-1">
+                Note on this line <span className="font-normal normal-case tracking-normal">— prints on the quote</span>
+              </div>
+              {suggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setEditNotes((n) => appendConfigNote(n, s))}
+                      title={`Add "${s}" to this line's note`}
+                      className="px-1.5 py-0.5 text-[10px] rounded border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                // The row saves on Enter. In a textarea Enter has to mean
+                // "new line" or a two-line note is unwritable, so keep the
+                // keystroke here and leave Escape to cancel the row.
+                onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}
+                rows={2}
+                placeholder="e.g. remove last row of seats"
+                aria-label="Client-facing note for this line"
+                className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+              />
+            </div>
+          );
+        })()}
         {/* Estimated driver day — the four stamps the driver will log for
             real: roll (left lot), call (on set), leave set, done (fuelled
             and cleaned). Prints under the line on the quote. */}

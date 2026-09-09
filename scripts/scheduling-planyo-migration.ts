@@ -234,6 +234,28 @@ async function main() {
   for (const a of allAssets) {
     assetByCategoryAndName.set(`${a.categoryId}|${a.unitName}`, a)
   }
+  // Fleet-wide fallback for a unit whose HQ category no longer matches the
+  // Planyo resource it arrives under. Planyo has ONE passenger-van resource;
+  // HQ split that into 12- and 15-passenger on 2026-09-09, so a Planyo
+  // "1 (12 Pass) (Nissan)" normalizes to "Pass 1" — which lives in the
+  // 12-passenger category while the resource maps to the 15-passenger one.
+  // Without this the unit goes unmatched and the vehicle silently vanishes
+  // from the board, which is the 2026-09 unbindable-import failure mode.
+  //
+  // Only fires when the name is UNAMBIGUOUS fleet-wide. "Cargo 22" and
+  // "Cargo 25" each exist in both cargo-van categories, and guessing which
+  // one a booking meant is exactly what we must not do — those still need
+  // the in-category match and are reported unmatched otherwise.
+  const assetsByName = new Map<string, (typeof allAssets)[number][]>()
+  for (const a of allAssets) {
+    const bucket = assetsByName.get(a.unitName) ?? []
+    bucket.push(a)
+    assetsByName.set(a.unitName, bucket)
+  }
+  const uniqueAssetByName = new Map<string, (typeof allAssets)[number]>()
+  for (const [name, bucket] of assetsByName) {
+    if (bucket.length === 1) uniqueAssetByName.set(name, bucket[0])
+  }
 
   // ── Pre-load Companies / Persons for find-or-create ──
   const allCompanies = await prisma.company.findMany({ select: { id: true, name: true } })
@@ -806,12 +828,28 @@ async function main() {
       const endDateISO = resEnd.toISOString().slice(0, 10)
       const itemHoldRank = norm.isBackupHold ? 2 : 1
 
+      // ── Resolve the unit BEFORE creating the item: the item's category
+      //    follows the ASSET, not the Planyo resource. One Planyo resource
+      //    can now front two HQ categories (12-/15-passenger), and a hold
+      //    filed under the wrong one is a hold the yard cannot fill. ──
+      let asset: (typeof allAssets)[number] | null = null
+      let aliasedTo: string | null = null
+      if (!forceUnassigned && norm.normalized && !norm.isBackupHold) {
+        const lookupName = NAME_ALIASES[norm.normalized] ?? norm.normalized
+        if (lookupName !== norm.normalized) aliasedTo = lookupName
+        asset =
+          assetByCategoryAndName.get(`${category.id}|${lookupName}`) ??
+          uniqueAssetByName.get(lookupName) ??
+          null
+      }
+      const itemCategoryId = asset?.categoryId ?? category.id
+
       let bookingItemId = ''
       try {
         if (!dryRun) {
           const item = await prisma.bookingItem.create({
             data: {
-              bookingId, categoryId: category.id, quantity: 1, dailyRate: category.dailyRate,
+              bookingId, categoryId: itemCategoryId, quantity: 1, dailyRate: category.dailyRate,
               status: 'REQUESTED', holdRank: itemHoldRank,
               notes: norm.isBackupHold
                 ? 'Backup hold from Planyo "X - 2ND HOLD" workaround. Primary linkage unknown — review.'
@@ -825,14 +863,6 @@ async function main() {
       } catch (e) {
         report.errors.push({ cart: cartId, error: `bookingItem.create: ${(e as Error).message.slice(0, 120)}` })
         continue
-      }
-
-      let asset: ReturnType<typeof assetByCategoryAndName.get> | null = null
-      let aliasedTo: string | null = null
-      if (!forceUnassigned && norm.normalized && !norm.isBackupHold) {
-        const lookupName = NAME_ALIASES[norm.normalized] ?? norm.normalized
-        if (lookupName !== norm.normalized) aliasedTo = lookupName
-        asset = assetByCategoryAndName.get(`${category.id}|${lookupName}`) ?? null
       }
 
       if (!asset) {

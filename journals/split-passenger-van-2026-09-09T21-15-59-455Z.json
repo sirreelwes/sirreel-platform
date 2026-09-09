@@ -1,0 +1,747 @@
+{
+  "ranAt": "2026-09-09T21:15:53.591Z",
+  "write": true,
+  "source": {
+    "item": {
+      "id": "d5674020-8f13-44f2-820c-95fbf0a2e183",
+      "code": "CAT_PASSENGER_VAN",
+      "description": "Passenger Van",
+      "slug": "passenger-van",
+      "dailyRate": "220",
+      "weeklyRate": "1100",
+      "department": "VEHICLES",
+      "type": "VEHICLE",
+      "trackingMode": "UNIT_TRACKED",
+      "region": "LA",
+      "minRentalHours": 24,
+      "maxRentalDays": 365,
+      "reservableOnGantt": true,
+      "publicVisible": false,
+      "isActive": true,
+      "sortOrder": 4,
+      "planyoResourceId": 117158,
+      "legacyAssetCategoryId": "efe74778-de92-4329-8954-6a21e0df6f1c",
+      "aliases": [
+        "passenger van",
+        "pass van",
+        "pax van",
+        "12 passenger",
+        "12-pass"
+      ],
+      "qtyOwned": 7,
+      "categoryId": "97e094a9-3843-493c-9363-180ad7c6fe0b",
+      "imageUrl": "https://bcq1ijd3eb7xz1ch.private.blob.vercel-storage.com/asset-categories/2026/06/520649cb-c7f3-4b77-a3b8-06286bf06a2b-efe74778-de92-4329-8954-6a21e0df6f1c-image.jpg",
+      "catalogDescription": null
+    },
+    "category": {
+      "id": "efe74778-de92-4329-8954-6a21e0df6f1c",
+      "name": "Passenger Van",
+      "slug": "passenger-van",
+      "totalUnits": 7,
+      "dailyRate": "220",
+      "weeklyRate": "1100",
+      "minRentalHours": 24,
+      "maxRentalDays": 365,
+      "region": "LA",
+      "isPublished": true,
+      "isActive": true,
+      "archivedAt": null,
+      "requiresDelivery": false,
+      "reservableOnGantt": true,
+      "description": null,
+      "imageUrl": "https://bcq1ijd3eb7xz1ch.private.blob.vercel-storage.com/asset-categories/2026/06/520649cb-c7f3-4b77-a3b8-06286bf06a2b-efe74778-de92-4329-8954-6a21e0df6f1c-image.jpg",
+      "sortOrder": 4,
+      "aliases": [
+        "passenger van",
+        "pass van",
+        "pax van",
+        "12 passenger",
+        "12-pass"
+      ],
+      "department": "VEHICLES",
+      "needsReview": false,
+      "rwLastSyncedAt": null,
+      "rwId": null,
+      "planyoResourceId": 117158,
+      "rentalworksCategId": null,
+      "createdAt": "2026-03-24T14:04:37.523Z",
+      "updatedAt": "2026-07-08T17:37:04.210Z"
+    }
+  },
+  "plan": {
+    "itemPlan": [
+      {
+        "id": "c85783c9-9944-4a9a-bcb0-ade5e1005358",
+        "job": "RB Activation",
+        "status": "CONFIRMED",
+        "window": "2026-07-31→2026-08-04",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "15abddcd-98bf-4919-9122-94799bad0255",
+        "job": "(unnamed)",
+        "status": "CONFIRMED",
+        "window": "2026-07-26→2026-07-28",
+        "quantity": 4,
+        "units": [
+          "Pass 1",
+          "Pass 9",
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": {
+          "target": "12",
+          "quantity": 1,
+          "assignmentIds": [
+            "04251b6c-31bf-4c0f-b509-246ed72a8577"
+          ]
+        }
+      },
+      {
+        "id": "e8513242-1e7a-4d32-bb95-d1170409d77d",
+        "job": "OK",
+        "status": "CONFIRMED",
+        "window": "2026-07-21→2026-07-23",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "a87460c8-61b6-4890-84b9-5a34cae965a4",
+        "job": "Humana",
+        "status": "CONFIRMED",
+        "window": "2026-08-01→2026-08-05",
+        "quantity": 3,
+        "units": [
+          "Pass 8",
+          "Pass 10",
+          "Pass 9"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "51c38c8c-4ad6-41bd-a120-fe705a4317c1",
+        "job": "Little One",
+        "status": "CONFIRMED",
+        "window": "2026-06-17→2026-07-17",
+        "quantity": 3,
+        "units": [
+          "Pass 10",
+          "Pass 9",
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "f532f1ff-fab9-4eef-8ff8-2ca1ee4fd9ff",
+        "job": "Elevate",
+        "status": "CONFIRMED",
+        "window": "2026-08-03→2026-08-07",
+        "quantity": 2,
+        "units": [
+          "Pass 9",
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "58630643-fd6c-414d-9d65-3797c7619f7f",
+        "job": "Aetna 2026",
+        "status": "CONFIRMED",
+        "window": "2026-07-14→2026-08-07",
+        "quantity": 2,
+        "units": [
+          "Pass 7",
+          "Pass 6"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "b2bf071b-32d5-4db0-a373-d8c3a847b125",
+        "job": "Toyota",
+        "status": "CONFIRMED",
+        "window": "2026-07-20→2026-07-22",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "f3f48312-b718-4e5a-bb2d-0189e2e4ddda",
+        "job": "Lunazul x Luar",
+        "status": "CONFIRMED",
+        "window": "2026-07-21→2026-07-24",
+        "quantity": 3,
+        "units": [
+          "Pass 10",
+          "Pass 7",
+          "Pass 6"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "e732a174-e1e5-4c89-8470-96e6606fa452",
+        "job": "Okeefe",
+        "status": "CONFIRMED",
+        "window": "2026-07-21→2026-07-31",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "9fb1a09e-296a-48c4-a79f-cfdc8ded9cf4",
+        "job": "Progressives Campaign Shoot",
+        "status": "CONFIRMED",
+        "window": "2026-08-10→2026-08-14",
+        "quantity": 1,
+        "units": [
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "5b667fa4-d4a2-4b27-9305-94041470a03b",
+        "job": "AG Jeans",
+        "status": "CONFIRMED",
+        "window": "2026-08-26→2026-08-29",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "a0f390eb-cc68-48fe-b7f6-1a1b04a2137d",
+        "job": "DoorDash x Popeyes",
+        "status": "CONFIRMED",
+        "window": "2026-07-17→2026-07-21",
+        "quantity": 1,
+        "units": [
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "c210da92-11ca-4722-935c-b15277d60780",
+        "job": "(unnamed)",
+        "status": "CONFIRMED",
+        "window": "2026-07-22→2026-07-23",
+        "quantity": 1,
+        "units": [
+          "Pass 2"
+        ],
+        "future": false,
+        "target": "12",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "9345dafc-4782-438a-a7ae-8188a09ca949",
+        "job": "Phone Heads",
+        "status": "REQUEST",
+        "window": "2026-09-08→2026-09-11",
+        "quantity": 1,
+        "units": [
+          "Pass 10"
+        ],
+        "future": true,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "ef71d766-32bc-45d8-bd22-3bbb241a82be",
+        "job": "Phone Heads",
+        "status": "REQUEST",
+        "window": "2026-09-08→2026-09-11",
+        "quantity": 1,
+        "units": [
+          "Pass 9"
+        ],
+        "future": true,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "787b6b87-3beb-432a-ae48-61f7bc0e66dd",
+        "job": "Etsy #2626",
+        "status": "REQUEST",
+        "window": "2026-08-20→2026-08-24",
+        "quantity": 1,
+        "units": [
+          "Pass 6"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "a89c3b12-2402-4a74-ad3c-145032a8ffa3",
+        "job": "adi x RAB",
+        "status": "REQUEST",
+        "window": "2026-08-20→2026-08-21",
+        "quantity": 1,
+        "units": [
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "9436f5bc-4b95-444e-a0b0-a9a4587dd7fb",
+        "job": "Phone Heads",
+        "status": "REQUEST",
+        "window": "2026-08-20→2026-08-20",
+        "quantity": 1,
+        "units": [
+          "Pass 1"
+        ],
+        "future": false,
+        "target": "12",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "d26d2701-d730-48ab-bec6-bc59188085ea",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 7"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "2ad77ff8-9131-4739-b9a4-ec89b72ab07f",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "d8c842b3-ee78-4999-a290-84fa15d9c5d4",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "831cde7a-1fc2-4dd6-865d-3d136648491e",
+        "job": "(unnamed)",
+        "status": "CONFIRMED",
+        "window": "2026-08-28→2026-08-30",
+        "quantity": 1,
+        "units": [
+          "Pass 1"
+        ],
+        "future": false,
+        "target": "12",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "1f12ce19-da61-4d5e-89a7-5e24994a56f2",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 9"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "e4bc76cf-83a7-4526-936a-b54975d8db05",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "cccdce5b-b9ad-4b13-92c6-323835f46f30",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 8"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "a527fa83-82f2-45ee-8057-ab7ab3466ac5",
+        "job": "Ramp",
+        "status": "REQUEST",
+        "window": "2026-08-24→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 9"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "b2141c3e-a154-413c-8cd1-483545b69592",
+        "job": "HS x Adidas 2 #CLO2607",
+        "status": "CONFIRMED",
+        "window": "2026-08-28→2026-08-28",
+        "quantity": 1,
+        "units": [
+          "Pass 7"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "353a0f5c-8a9c-4b38-8eb8-78c66a425a92",
+        "job": "Goggles",
+        "status": "CONFIRMED",
+        "window": "2026-08-28→2026-08-31",
+        "quantity": 3,
+        "units": [
+          "Pass 1",
+          "Pass 6",
+          "Pass 2"
+        ],
+        "future": false,
+        "target": "12",
+        "derived": true,
+        "split": {
+          "target": "15",
+          "quantity": 1,
+          "assignmentIds": [
+            "67f4f648-eb0e-4019-ade7-8b54389ee857"
+          ]
+        }
+      },
+      {
+        "id": "b41abc7b-921b-424d-a18b-37dc419f651d",
+        "job": "Jordan",
+        "status": "CONFIRMED",
+        "window": "2026-09-01→2026-09-03",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 6"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "b1e1e23c-661f-4967-8190-4c3f44a6e879",
+        "job": "HDZ",
+        "status": "REQUEST",
+        "window": "2026-08-28→2026-08-31",
+        "quantity": 2,
+        "units": [
+          "Pass 8",
+          "Pass 9"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "04610e6d-d99a-4ee2-b03b-2db680764f10",
+        "job": "Wrong Number",
+        "status": "CONFIRMED",
+        "window": "2026-09-03→2026-09-09",
+        "quantity": 2,
+        "units": [
+          "Pass 10"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "9f6fc0cb-e879-4923-9bdd-88373078372a",
+        "job": "Project More",
+        "status": "CONFIRMED",
+        "window": "2026-09-02→2026-09-02",
+        "quantity": 1,
+        "units": [
+          "Pass 2"
+        ],
+        "future": false,
+        "target": "12",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "0d5b3d9a-20ba-4525-b396-a2258c0aa912",
+        "job": "Happy Thanksgiving #202672",
+        "status": "CANCELLED",
+        "window": "2026-09-08→2026-09-09",
+        "quantity": 2,
+        "units": [
+          "Pass 2",
+          "Pass 6"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": {
+          "target": "12",
+          "quantity": 1,
+          "assignmentIds": [
+            "73bbe382-7187-49ac-b8de-46d93e0181fd"
+          ]
+        }
+      },
+      {
+        "id": "3d30aace-301c-4443-bf14-8c5bd59fbaf7",
+        "job": "Unscripted",
+        "status": "CONFIRMED",
+        "window": "2026-09-09→2026-09-11",
+        "quantity": 1,
+        "units": [
+          "Pass 2"
+        ],
+        "future": true,
+        "target": "12",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "957ae2cc-6572-4250-992b-678b26e15a0c",
+        "job": "Unscripted",
+        "status": "CANCELLED",
+        "window": "2026-09-09→2026-09-11",
+        "quantity": 1,
+        "units": [],
+        "future": true,
+        "target": "15",
+        "derived": false,
+        "split": null
+      },
+      {
+        "id": "ba78e99e-d319-49ca-8788-2a5184fb14f0",
+        "job": "Room Tours",
+        "status": "CONFIRMED",
+        "window": "2026-09-03→2026-09-04",
+        "quantity": 1,
+        "units": [
+          "Pass 9"
+        ],
+        "future": false,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "56603fcb-fead-428d-9a20-2e2008ff6b82",
+        "job": "Wrong Number",
+        "status": "CONFIRMED",
+        "window": "2026-09-10→2026-10-03",
+        "quantity": 2,
+        "units": [
+          "Pass 7",
+          "Pass 10"
+        ],
+        "future": true,
+        "target": "15",
+        "derived": true,
+        "split": null
+      },
+      {
+        "id": "4771e050-a41c-4050-8706-b721cd41f398",
+        "job": "Season #",
+        "status": "REQUEST",
+        "window": "2026-09-21→2026-09-25",
+        "quantity": 1,
+        "units": [],
+        "future": true,
+        "target": "15",
+        "derived": false,
+        "split": null
+      },
+      {
+        "id": "42d90b2d-0416-4a78-aeb7-71c632f6e115",
+        "job": "TXU",
+        "status": "REQUEST",
+        "window": "2026-09-22→2026-09-26",
+        "quantity": 2,
+        "units": [],
+        "future": true,
+        "target": "15",
+        "derived": false,
+        "split": null
+      },
+      {
+        "id": "cdd4b564-dc59-4786-badc-8c71ff71b3af",
+        "job": "TXU",
+        "status": "CONFIRMED",
+        "window": "2026-09-22→2026-09-26",
+        "quantity": 2,
+        "units": [
+          "Pass 10",
+          "Pass 6"
+        ],
+        "future": true,
+        "target": "15",
+        "derived": true,
+        "split": null
+      }
+    ],
+    "linePlan": [
+      {
+        "id": "64649c15-b5c1-455d-8c7e-cd0335a032ec",
+        "order": "S260831-002",
+        "status": "BOOKED",
+        "description": "12-Passenger Van",
+        "target": "12",
+        "derived": true
+      },
+      {
+        "id": "07936e37-4aba-4882-82e2-a6f16399e80f",
+        "order": "S260831-006",
+        "status": "CANCELLED",
+        "description": "12-Passenger Van",
+        "target": "12",
+        "derived": true
+      },
+      {
+        "id": "290ea35d-ff66-4bbf-b7bf-94dfac5ef179",
+        "order": "S260902-006",
+        "status": "QUOTE_SENT",
+        "description": "Passenger Van",
+        "target": "15",
+        "derived": false
+      },
+      {
+        "id": "f6e72d9d-4d62-45a0-ae0d-fc78682ebf87",
+        "order": "S260903-002",
+        "status": "QUOTE_SENT",
+        "description": "15 Pass Vans",
+        "target": "15",
+        "derived": true
+      }
+    ]
+  },
+  "siblingBookingItems": [
+    {
+      "from": "15abddcd-98bf-4919-9122-94799bad0255",
+      "id": "9d180e2f-ba14-4b77-b23c-6e07d1292968",
+      "target": "12",
+      "quantity": 1
+    },
+    {
+      "from": "353a0f5c-8a9c-4b38-8eb8-78c66a425a92",
+      "id": "ea7c9d54-bd8a-4977-beaf-7921c0034831",
+      "target": "15",
+      "quantity": 1
+    },
+    {
+      "from": "0d5b3d9a-20ba-4525-b396-a2258c0aa912",
+      "id": "87f1b1cc-6059-43be-a864-4613a589a707",
+      "target": "12",
+      "quantity": 1
+    }
+  ],
+  "created": {
+    "12": {
+      "categoryId": "573d8071-30f0-48d5-876f-ac8732f92b03",
+      "itemId": "38d4b820-b46f-4a0e-8935-a3432b2c4416"
+    },
+    "15": {
+      "categoryId": "0b886639-b41c-4e99-99a3-0345f72a03f3",
+      "itemId": "b797b717-0cb4-4e1c-9964-9de2959f1b32"
+    }
+  }
+}
