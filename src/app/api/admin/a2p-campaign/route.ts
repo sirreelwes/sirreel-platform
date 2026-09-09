@@ -45,16 +45,44 @@ export async function GET() {
   }
   const auth = 'Basic ' + Buffer.from(keySid && keySecret ? `${keySid}:${keySecret}` : `${sid}:${authToken}`).toString('base64')
 
-  const res = await fetch(`https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}/Compliance/Usa2p`, {
-    headers: { Authorization: auth },
-    cache: 'no-store',
-  })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    return NextResponse.json({ ok: false, status: res.status, twilio: { code: body?.code, message: body?.message } }, { status: 502 })
+  const call = async (url: string) => {
+    const r = await fetch(url, { headers: { Authorization: auth }, cache: 'no-store' })
+    const j = await r.json().catch(() => ({}))
+    return { url, status: r.status, ok: r.ok, json: j as Record<string, unknown> }
   }
 
-  const campaigns = (body.compliances ?? []).map((c: Record<string, unknown>) => {
+  const CAMPAIGN_URL = `https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}/Compliance/Usa2p`
+  let res = await call(CAMPAIGN_URL)
+
+  // Twilio answered 70051 "actor doesn't have any assertions" for a Standard
+  // API key on 2026-09-08 — an IAM scope problem, not a bad credential. Probe
+  // the ladder so the failure says WHICH permission is missing rather than
+  // just "401": account read → messaging service → brand → campaign.
+  if (!res.ok) {
+    const probes = await Promise.all([
+      call(`https://api.twilio.com/2010-04-01/Accounts/${sid}.json`),
+      call(`https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}`),
+      call('https://messaging.twilio.com/v1/a2p/BrandRegistrations?PageSize=5'),
+    ])
+    return NextResponse.json({
+      ok: false,
+      error: 'Twilio refused the credentials for the campaign resource.',
+      credentialKind: keySid && keySecret ? 'api-key' : 'auth-token',
+      campaign: { status: res.status, code: res.json?.code, message: res.json?.message },
+      probes: probes.map((p) => ({
+        resource: p.url.replace(/https:\/\/[^/]+/, '').replace(sid, '{account}').replace(MESSAGING_SERVICE_SID, '{service}'),
+        status: p.status,
+        code: p.json?.code ?? null,
+        message: p.json?.message ?? null,
+      })),
+      hint: 'If the account read succeeds and the campaign read does not, the API key lacks A2P/TrustHub scope — read it with the account Auth Token instead, or from the Console.',
+    }, { status: 502 })
+  }
+
+  const body = res.json
+
+  const compliances = Array.isArray(body.compliances) ? (body.compliances as Array<Record<string, unknown>>) : []
+  const campaigns = compliances.map((c) => {
     const flow = typeof c.message_flow === 'string' ? c.message_flow : ''
     return {
       sid: c.sid,
