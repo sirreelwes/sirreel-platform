@@ -19,7 +19,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { Building2, Eye, Link2, Truck, Users } from 'lucide-react'
+import { Building2, Eye, Link2, Send, Truck, Users } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -229,6 +229,15 @@ export default async function CompanyPortalsPage() {
             {!canEdit && ' Company terms here are changed by Wes, Dani or Jose.'}
           </p>
         </div>
+        {/* The other direction: this page is who HAS a portal, and the
+            template is how the rest get offered one. */}
+        <Link
+          href="/outreach?template=exec-portal-invite"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-lt-hairline text-sm text-lt-fg2 hover:border-lt-fg2 hover:text-lt-fg"
+        >
+          <Send className="w-4 h-4" />
+          Invite more executives
+        </Link>
       </div>
 
       <PortalsTabs

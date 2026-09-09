@@ -69,7 +69,9 @@ export async function POST(req: NextRequest) {
     bodyTemplate?: string
     segmentKey?: string | null
     roleKey?: string | null
+    roleKeys?: string[] | null
     search?: string | null
+    excludePortalAccess?: boolean | null
     savedSegmentId?: string | null
     replyTo?: string | null
   } | null
@@ -82,8 +84,15 @@ export async function POST(req: NextRequest) {
   if (!subject) return NextResponse.json({ error: 'subject required' }, { status: 400 })
   if (!template) return NextResponse.json({ error: 'body required' }, { status: 400 })
 
+  const roleKeys = (body.roleKeys ?? []).filter(Boolean)
   const { recipients } = await resolveRecipients(
-    { segmentKey: body.segmentKey, roleKey: body.roleKey, search: body.search },
+    {
+      segmentKey: body.segmentKey,
+      roleKey: body.roleKey,
+      roleKeys,
+      search: body.search,
+      excludePortalAccess: body.excludePortalAccess,
+    },
     user.id,
     user.name ?? null,
   )
@@ -108,7 +117,10 @@ export async function POST(req: NextRequest) {
       subject,
       bodyTemplate: template,
       segmentKey: body.segmentKey ?? null,
-      roleKey: body.roleKey ?? null,
+      // Provenance only — the recipient rows are the truth about who was
+      // mailed. A multi-role pick is stored joined so "who did this go to"
+      // still reads without a new column.
+      roleKey: roleKeys.length > 0 ? roleKeys.join(',') : (body.roleKey ?? null),
       search: body.search ?? null,
       savedSegmentId: body.savedSegmentId ?? null,
       // The rep's own address, per Wes's ruling that outreach comes from

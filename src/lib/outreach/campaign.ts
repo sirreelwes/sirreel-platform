@@ -40,8 +40,21 @@ import { isPeopleSegmentKey } from '@/lib/crm/peopleSegments'
 
 export interface SegmentSelection {
   segmentKey?: string | null
+  /** Single role — kept for callers that predate the multi-select. */
   roleKey?: string | null
+  /** Roles to include. OR-ed together; empty or absent means every role. */
+  roleKeys?: string[] | null
   search?: string | null
+  /**
+   * Leave out anyone who already holds a live company-portal grant.
+   *
+   * The portal invite is the copy that needs this: offering an executive a
+   * page they have been signing into for a month reads as a mailing list
+   * that does not know its own customers. Grain is the PERSON, not the
+   * company — a producer at a company whose owner has access has not been
+   * offered anything yet.
+   */
+  excludePortalAccess?: boolean | null
 }
 
 export interface ResolvedRecipient {
@@ -68,7 +81,12 @@ export async function resolveRecipients(
     { NOT: { email: { contains: '@sirreel.com', mode: 'insensitive' } } },
   ]
 
-  if (selection.roleKey) clauses.push({ role: selection.roleKey as never })
+  const roles = (selection.roleKeys ?? []).filter(Boolean)
+  if (roles.length > 0) clauses.push({ role: { in: roles as never[] } })
+  else if (selection.roleKey) clauses.push({ role: selection.roleKey as never })
+  if (selection.excludePortalAccess) {
+    clauses.push({ companyPortalAccesses: { none: { revokedAt: null } } })
+  }
   if (selection.search?.trim()) {
     const tokens = selection.search.trim().split(/\s+/).filter(Boolean)
     clauses.push({

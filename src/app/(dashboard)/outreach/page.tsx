@@ -22,6 +22,12 @@ import {
   type PeopleSegmentKey,
 } from '@/lib/crm/peopleSegments'
 import { MERGE_TOKENS, MERGE_TOKEN_META } from '@/lib/outreach/mergeFields'
+import { PERSON_ROLE_VALUES, PERSON_ROLE_LABELS } from '@/lib/crm/roleMapping'
+import {
+  OUTREACH_TEMPLATES,
+  findOutreachTemplate,
+  type OutreachStarterTemplate,
+} from '@/lib/outreach/starterTemplates'
 
 interface PreviewRow {
   personId: string
@@ -70,6 +76,9 @@ interface PreviewResponse {
 
 export default function OutreachComposerPage() {
   const [segment, setSegment] = useState<PeopleSegmentKey | ''>('')
+  const [roleKeys, setRoleKeys] = useState<string[]>([])
+  const [excludePortalAccess, setExcludePortalAccess] = useState(false)
+  const [template, setTemplate] = useState<OutreachStarterTemplate | null>(null)
   const [name, setName] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyTemplate, setBodyTemplate] = useState('')
@@ -94,7 +103,13 @@ export default function OutreachComposerPage() {
       const res = await fetch('/api/outreach/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segmentKey: segment || null, subject, bodyTemplate }),
+        body: JSON.stringify({
+          segmentKey: segment || null,
+          roleKeys,
+          excludePortalAccess,
+          subject,
+          bodyTemplate,
+        }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
@@ -103,7 +118,7 @@ export default function OutreachComposerPage() {
     } finally {
       setLoading(false)
     }
-  }, [segment, subject, bodyTemplate])
+  }, [segment, roleKeys, excludePortalAccess, subject, bodyTemplate])
 
   // Audience refreshes on segment change immediately; copy changes are
   // debounced so typing doesn't hammer the endpoint.
@@ -111,6 +126,45 @@ export default function OutreachComposerPage() {
     const t = setTimeout(refresh, 400)
     return () => clearTimeout(t)
   }, [refresh])
+
+  /**
+   * Fill the composer from a starter template.
+   *
+   * Anything already typed is protected by a confirm — a rep who has
+   * written three paragraphs and then clicks a template to "have a look"
+   * should not lose them. The template's audience comes along with its
+   * copy, because the two were written for each other.
+   */
+  const applyTemplate = useCallback(
+    (t: OutreachStarterTemplate, opts?: { silent?: boolean }) => {
+      const dirty = subject.trim() !== '' || bodyTemplate.trim() !== ''
+      if (dirty && !opts?.silent) {
+        const ok = window.confirm(`Replace what's in the composer with "${t.label}"?`)
+        if (!ok) return
+      }
+      setTemplate(t)
+      setName((n) => (n.trim() ? n : t.defaultName))
+      setSubject(t.subject)
+      setBodyTemplate(t.body)
+      setRoleKeys(t.roleKeys ?? [])
+      setExcludePortalAccess(!!t.excludePortalAccess)
+      setNotice(null)
+    },
+    [subject, bodyTemplate],
+  )
+
+  // /outreach?template=exec-portal-invite — the link the Portals tab uses,
+  // so "start reaching out" is one click from where the accounts are.
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get('template')
+    const t = findOutreachTemplate(key)
+    if (t) applyTemplate(t, { silent: true })
+    // Mount only: re-running would stomp edits on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const toggleRole = (role: string) =>
+    setRoleKeys((rs) => (rs.includes(role) ? rs.filter((r) => r !== role) : [...rs, role]))
 
   const createDraft = async () => {
     setCreating(true)
@@ -120,7 +174,14 @@ export default function OutreachComposerPage() {
       const res = await fetch('/api/outreach/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, subject, bodyTemplate, segmentKey: segment || null }),
+        body: JSON.stringify({
+          name,
+          subject,
+          bodyTemplate,
+          segmentKey: segment || null,
+          roleKeys,
+          excludePortalAccess,
+        }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -164,6 +225,41 @@ export default function OutreachComposerPage() {
           </div>
         )}
 
+        {/* Templates. Copy that has been through Wes lives in git
+            (starterTemplates.ts) so every rep sends the same thing and
+            an edit to it is a commit, not a rumour. */}
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-lt-fg">Start from a template</h2>
+          <p className="text-xs text-lt-fg3 mt-0.5">
+            Fills the copy and the audience. Edit anything after — nothing is written back.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {OUTREACH_TEMPLATES.map((t) => {
+              const active = template?.key === t.key
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => applyTemplate(t)}
+                  className={`text-left rounded-lg border px-3 py-2 max-w-[320px] ${
+                    active
+                      ? 'border-amber-600 bg-amber-600/5'
+                      : 'border-lt-hairline hover:border-lt-fg3'
+                  }`}
+                >
+                  <span className="block text-sm font-medium text-lt-fg">{t.label}</span>
+                  <span className="block text-[11px] text-lt-fg3 mt-0.5">{t.blurb}</span>
+                </button>
+              )
+            })}
+          </div>
+          {template?.note && (
+            <p className="text-[11px] text-lt-fg2 mt-3 border-t border-lt-hairline pt-3">
+              {template.note}
+            </p>
+          )}
+        </div>
+
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             <div>
@@ -187,6 +283,64 @@ export default function OutreachComposerPage() {
                 className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3" />
             </div>
           </div>
+
+          {/* Role filter. resolveRecipients has taken a role for as long as
+              the campaign table has had a column for it; the composer just
+              never offered one, so every campaign went to a segment whole. */}
+          <div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs text-lt-fg3">Roles</span>
+              {roleKeys.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRoleKeys([])}
+                  className="text-[11px] text-lt-fg3 hover:text-lt-fg2 underline"
+                >
+                  clear ({roleKeys.length})
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {PERSON_ROLE_VALUES.map((r) => {
+                const on = roleKeys.includes(r)
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => toggleRole(r)}
+                    className={`text-[11px] px-2 py-1 rounded border ${
+                      on
+                        ? 'border-amber-600 bg-amber-600 text-white'
+                        : 'border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+                    }`}
+                  >
+                    {PERSON_ROLE_LABELS[r]}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-lt-fg3 mt-1.5">
+              {roleKeys.length === 0
+                ? 'Every role. Pick one or more to narrow it.'
+                : 'Contacts in any of the selected roles.'}
+            </p>
+          </div>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={excludePortalAccess}
+              onChange={(e) => setExcludePortalAccess(e.target.checked)}
+              className="mt-0.5 accent-amber-600"
+            />
+            <span className="text-xs text-lt-fg2">
+              Skip anyone who already has account access
+              <span className="block text-[11px] text-lt-fg3">
+                Leaves out contacts with a live company-portal grant — don&rsquo;t offer someone a page
+                they already sign into.
+              </span>
+            </span>
+          </label>
 
           {/* The three numbers, before the copy box. */}
           {a && (

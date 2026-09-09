@@ -30,7 +30,9 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     segmentKey?: string | null
     roleKey?: string | null
+    roleKeys?: string[] | null
     search?: string | null
+    excludePortalAccess?: boolean | null
     subject?: string
     bodyTemplate?: string
   } | null
@@ -40,7 +42,13 @@ export async function POST(req: NextRequest) {
   const template = (body.bodyTemplate ?? '').trim()
 
   const { recipients, suppressedCount, totalBeforeSuppression } = await resolveRecipients(
-    { segmentKey: body.segmentKey, roleKey: body.roleKey, search: body.search },
+    {
+      segmentKey: body.segmentKey,
+      roleKey: body.roleKey,
+      roleKeys: body.roleKeys,
+      search: body.search,
+      excludePortalAccess: body.excludePortalAccess,
+    },
     user.id,
     user.name ?? null,
   )
