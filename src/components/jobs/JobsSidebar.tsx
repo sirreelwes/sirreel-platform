@@ -219,6 +219,7 @@ const STATE_HINT: Record<RowState, string> = {
   'on-rental': 'Gear is out with the client',
   booked: 'Locked in, nothing out yet',
   new: 'Just came in — no quote sent yet',
+  drafted: 'A quote is already written on this job — finish it, don’t start over',
   quoted: 'Quote is with the client',
   hold: 'Client paused it',
   back: 'Gear is back in the yard',

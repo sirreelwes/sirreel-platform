@@ -156,6 +156,7 @@ export type RowState =
   | 'on-rental'
   | 'booked'
   | 'new'
+  | 'drafted'
   | 'quoted'
   | 'hold'
   | 'back'
@@ -192,6 +193,7 @@ export const STATE: Record<RowState, StateMeta> = {
   'on-rental':       { label: 'On rental',           short: 'On rental',  rail: 'bg-emerald-500', fg: 'text-emerald-800',  tint: 'bg-emerald-100'  },
   booked:            { label: 'Booked',              short: 'Booked',     rail: 'bg-sky-600',     fg: 'text-sky-800',      tint: 'bg-sky-100'      },
   new:               { label: 'New',                 short: 'New',        rail: 'bg-yellow-400',  fg: 'text-yellow-800',   tint: 'bg-yellow-100'   },
+  drafted:           { label: 'Quote drafted',       short: 'Drafted',    rail: 'bg-fuchsia-500', fg: 'text-fuchsia-800',  tint: 'bg-fuchsia-100'  },
   quoted:            { label: 'Quoted',              short: 'Quoted',     rail: 'bg-violet-500',  fg: 'text-violet-800',   tint: 'bg-violet-100'   },
   hold:              { label: 'Hold',                short: 'Hold',       rail: 'bg-stone-500',   fg: 'text-stone-700',    tint: 'bg-stone-200'    },
   back:              { label: 'Returned',            short: 'Returned',   rail: 'bg-purple-500',  fg: 'text-purple-800',   tint: 'bg-purple-100'   },
@@ -210,6 +212,7 @@ export const URGENCY: RowState[] = [
   'on-rental',
   'booked',
   'new',
+  'drafted',
   'quoted',
   'hold',
   'back',
@@ -275,7 +278,7 @@ export function jobWindow(j: JobRow): { start: string | null; end: string | null
 function isOut(j: JobRow, today: string): boolean {
   if (j.status === 'HOLD' || j.status === 'LOST') return false
   const c = j.cadence?.state
-  if (c === 'new' || c === 'quoted') return false
+  if (c === 'new' || c === 'drafted' || c === 'quoted') return false
   if (c === 'on-rental' || c === 'returning-tmw' || c === 'returning-today') return true
   // Orders say returned/invoiced (or the job is WRAPPED) but nobody
   // confirmed the physical return — still out, and overdue.
@@ -324,8 +327,9 @@ export function rowState(j: JobRow, today: string, tomorrow: string): RowState {
   }
 
   switch (j.cadence?.state) {
-    case 'new':    return 'new'
-    case 'quoted': return 'quoted'
+    case 'new':     return 'new'
+    case 'drafted': return 'drafted'
+    case 'quoted':  return 'quoted'
     case 'hold':   return 'hold'
     case 'lost':   return 'lost'
     case 'picking-today': return 'picking-today'

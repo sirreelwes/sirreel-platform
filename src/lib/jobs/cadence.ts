@@ -17,8 +17,10 @@
  *
  * Everything else (NEW / QUOTED / ACTIVE) yields to the orders: a job
  * with gear out reads "On rental" whether or not anyone flipped it to
- * ACTIVE, and a job whose orders are still DRAFT/QUOTE_SENT reads
- * "Quoted" — no phantom promotion.
+ * ACTIVE, a job whose quote has gone to the client reads "Quoted", and
+ * a job whose only order is an unsent draft reads "Quote drafted" — so
+ * nobody rewrites a quote somebody else already started. No phantom
+ * promotion either way.
  */
 import type { JobStatus, OrderStatus } from '@prisma/client'
 
@@ -38,6 +40,7 @@ export interface VehicleOnJob {
 
 export type CadenceState =
   | 'new'
+  | 'drafted'
   | 'quoted'
   | 'hold'
   | 'lost'
@@ -58,6 +61,7 @@ export interface CadenceRollup {
 
 export const CADENCE_LABEL: Record<CadenceState, string> = {
   new:              'New',
+  drafted:          'Quote drafted',
   quoted:           'Quoted',
   hold:             'Hold',
   lost:             'Lost',
@@ -166,10 +170,13 @@ export function cadenceForVehicle(v: VehicleOnJob, today: string, tomorrow: stri
  *      Checked-out vehicles add their own out/return events, so the
  *      rollup follows the truck when the order lags behind it. A return
  *      event with other orders still out is flagged `partial`.
- *   3. No orders worth reading (all DRAFT / QUOTE_SENT, or none at all)
- *      — fall back to the commercial state. A legacy hand-set ACTIVE
- *      with nothing live still reads 'booked' so Planyo-era imports and
- *      mid-cycle jobs don't regress to "Quoted".
+ *   3. No operational events (every order still DRAFT / QUOTE_SENT, or
+ *      no orders at all) — the orders STILL get the vote, because
+ *      "somebody already wrote this quote" is the whole point of the
+ *      list: a sent quote reads 'quoted', an unsent draft reads
+ *      'drafted'. Only a job with nothing on it falls back to the
+ *      hand-set commercial state, where a legacy ACTIVE still reads
+ *      'booked' so Planyo-era imports don't regress to "Quoted".
  */
 export function rollupCadence(
   jobStatus: JobStatus,
@@ -187,6 +194,17 @@ export function rollupCadence(
   ].filter((e): e is CadenceState => e !== null)
 
   if (events.length === 0) {
+    // DRAFT and QUOTE_SENT carry no operational event — nothing is
+    // going anywhere yet — but they are still FACTS about the job, and
+    // they outrank Job.status because nobody hand-maintains it: only
+    // the portal welcome ever writes QUOTED, so 23 jobs whose quote was
+    // already with the client read "New" on the board, and 16 jobs
+    // whose only work was an unsent draft read New / Quoted / Booked
+    // with nothing to say a quote had been started (measured
+    // 2026-09-09). A sent quote wins over a draft beside it: the client
+    // has something either way, and the draft shows in the order list.
+    if (liveOrders.some((o) => o.status === 'QUOTE_SENT')) return { state: 'quoted', partial: false }
+    if (liveOrders.some((o) => o.status === 'DRAFT')) return { state: 'drafted', partial: false }
     if (jobStatus === 'NEW') return { state: 'new', partial: false }
     if (jobStatus === 'QUOTED') return { state: 'quoted', partial: false }
     return { state: 'booked', partial: false }

@@ -106,6 +106,7 @@ type JobStatus = (typeof JOB_STATUSES)[number];
 
 const CADENCE_BADGE: Record<CadenceState, string> = {
   new:              'bg-sky-50 text-sky-700 border-sky-200',
+  drafted:          'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
   quoted:           'bg-purple-50 text-purple-700 border-purple-200',
   hold:             'bg-amber-50 text-amber-700 border-amber-300',
   lost:             'bg-red-50 text-red-700 border-red-200',

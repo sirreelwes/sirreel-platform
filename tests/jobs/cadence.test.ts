@@ -52,6 +52,17 @@ eq(rollupCadence('HOLD', fi, today, tomorrow, [{ status: 'CHECKED_OUT', endDate:
 eq(rollupCadence('ACTIVE', [order('BOOKED', '2026-09-10', '2026-09-12')], today, tomorrow, [{ status: 'CHECKED_OUT', endDate: d(today) }]), { state: 'returning-today', partial: true }, 'one truck due back today, another order still ahead → partial return')
 eq(rollupCadence('ACTIVE', [order('ON_JOB', '2026-09-06', '2026-09-09')], today, tomorrow, [{ status: 'CHECKED_OUT', endDate: d('2026-09-09') }]), { state: 'on-rental', partial: false }, 'order and truck agree → on rental, not partial')
 
+console.log('\nrollupCadence — a written-but-unsent quote is its own state')
+const draft = (status: OrderStatus) => ({ status, startDate: null, endDate: null })
+eq(rollupCadence('NEW', [draft('DRAFT')], today, tomorrow), { state: 'drafted', partial: false }, 'NEW job with a draft order says the quote is already started (Black Creek, 2026-09-09)')
+eq(rollupCadence('NEW', [draft('QUOTE_SENT')], today, tomorrow), { state: 'quoted', partial: false }, 'a sent quote reads Quoted even though nobody moved Job.status off NEW (23 jobs)')
+eq(rollupCadence('QUOTED', [draft('DRAFT')], today, tomorrow), { state: 'drafted', partial: false }, 'the order grain outranks a hand-set QUOTED: nothing was sent')
+eq(rollupCadence('ACTIVE', [draft('DRAFT')], today, tomorrow), { state: 'drafted', partial: false }, 'a legacy ACTIVE with only a draft is not Booked')
+eq(rollupCadence('NEW', [draft('DRAFT'), draft('QUOTE_SENT')], today, tomorrow), { state: 'quoted', partial: false }, 'sent beats drafted when both are on the job')
+eq(rollupCadence('LOST', [draft('DRAFT')], today, tomorrow), { state: 'lost', partial: false }, 'the off-ramps still win outright')
+eq(rollupCadence('NEW', [draft('CANCELLED')], today, tomorrow), { state: 'new', partial: false }, 'a cancelled order is not a draft — the job is still just New')
+eq(rollupCadence('NEW', [draft('DRAFT'), order('BOOKED', '2026-09-20', '2026-09-22')], today, tomorrow), { state: 'booked', partial: false }, 'a real operational event still outranks the draft beside it')
+
 console.log()
 if (failures.length) { console.log(`${failures.length} failure(s)`); process.exit(1) }
 console.log('all passed')
