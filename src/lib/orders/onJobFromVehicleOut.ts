@@ -1,5 +1,5 @@
 /**
- * A vehicle leaving the yard is the "order is out" moment.
+ * Gear or a vehicle leaving the yard is the "order is out" moment.
  *
  * Wes, 2026-09-07 (Forgotten Island / S260905-001): the driver had
  * checked Cube 29 out on the blind pickup the night before, and the job
@@ -23,6 +23,14 @@
  * one-order job leaves no ambiguity about whose truck it is. A multi-
  * order job with a dangling link advances nothing; the manual button
  * still exists for that.
+ *
+ * Jose, 2026-09-09 (Fox Sports / S260909-002): the same hole on the GEAR
+ * side. He filed the check-out sheet for a warehouse-only order — no
+ * truck, so nothing here ever fired — and the job still read "Picking up
+ * today". A filed check-out sheet is the same statement a driver's
+ * check-out makes, so settleGearAfterReport calls the single-order
+ * helper below. Hence the shared piece: one place decides what ON_JOB
+ * costs and what it writes, whatever said the order left.
  */
 import type { Prisma, OrderStatus, PrismaClient } from '@prisma/client'
 import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
@@ -48,13 +56,51 @@ export async function ordersCarriedByBooking(db: Db, jobId: string, bookingId: s
   return live.length === 1 ? live : []
 }
 
+/** For the audit row — who or what said the order left. */
+export type OnJobSource =
+  | 'driver-self-checkout'
+  | 'book-after-vehicle-out'
+  | 'gear-check-out-sheet'
+
 export interface AdvanceOnJobInput {
   jobId: string | null | undefined
   bookingId: string
   bookingAssignmentId: string
   userId: string | null
-  /** For the audit row — who or what said the truck left. */
-  source: 'driver-self-checkout' | 'book-after-vehicle-out'
+  source: OnJobSource
+}
+
+/**
+ * Move ONE order to ON_JOB. Status-guarded updateMany rather than
+ * update, so a second check-out on the same order (two trucks and two
+ * drivers, or a truck plus a gear sheet) cannot re-stamp one already
+ * out. Returns true only when THIS call is what moved it.
+ */
+export async function advanceOneOrderToOnJob(
+  db: Db,
+  order: CarriedOrder,
+  userId: string | null,
+  source: OnJobSource,
+  /** Extra provenance for the audit row — the booking, the report. */
+  detail: Record<string, string> = {},
+): Promise<boolean> {
+  if (!ADVANCEABLE_TO_ON_JOB.includes(order.status)) return false
+  const r = await db.order.updateMany({
+    where: { id: order.id, status: { in: [...ADVANCEABLE_TO_ON_JOB] } },
+    data: { status: 'ON_JOB' },
+  })
+  if (r.count === 0) return false
+  await db.auditLog.create({
+    data: {
+      userId,
+      action: 'order.on_job_by_vehicle_out',
+      entityType: 'Order',
+      entityId: order.id,
+      oldValues: { status: order.status },
+      newValues: { status: 'ON_JOB', source, ...detail },
+    },
+  })
+  return true
 }
 
 /**
@@ -67,30 +113,11 @@ export async function advanceOrdersToOnJob(db: Db, input: AdvanceOnJobInput): Pr
   const carried = await ordersCarriedByBooking(db, input.jobId, input.bookingId)
   const moved: string[] = []
   for (const o of carried) {
-    if (!ADVANCEABLE_TO_ON_JOB.includes(o.status)) continue
-    // Status-guarded updateMany: a second check-out on the same booking
-    // (two trucks, two drivers) must not re-stamp an order already out.
-    const r = await db.order.updateMany({
-      where: { id: o.id, status: { in: [...ADVANCEABLE_TO_ON_JOB] } },
-      data: { status: 'ON_JOB' },
+    const ok = await advanceOneOrderToOnJob(db, o, input.userId, input.source, {
+      bookingAssignmentId: input.bookingAssignmentId,
+      bookingId: input.bookingId,
     })
-    if (r.count === 0) continue
-    moved.push(o.id)
-    await db.auditLog.create({
-      data: {
-        userId: input.userId,
-        action: 'order.on_job_by_vehicle_out',
-        entityType: 'Order',
-        entityId: o.id,
-        oldValues: { status: o.status },
-        newValues: {
-          status: 'ON_JOB',
-          bookingAssignmentId: input.bookingAssignmentId,
-          bookingId: input.bookingId,
-          source: input.source,
-        },
-      },
-    })
+    if (ok) moved.push(o.id)
   }
   return moved
 }

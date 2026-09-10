@@ -26,12 +26,16 @@
  * on OrderCheckReport.
  */
 
-import type { OrderCheckEdge, OrderCheckLineChange, PickListStatus, Prisma } from '@prisma/client'
+import type {
+  LineItemPickStatus, OrderCheckEdge, OrderCheckLineChange, OrderStatus, PickListStatus, Prisma,
+} from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
+import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
+import { advanceOneOrderToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 
 /**
  * Orders a check report can be filed against.
@@ -553,12 +557,18 @@ const OUT_NOT_YET: PickListStatus[] = ['DRAFT', 'PICKING', 'READY_TO_STAGE', 'ST
 const IN_NOT_YET: PickListStatus[] = [
   'DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED', 'LOADED', 'CHECKING_IN',
 ]
+/** Line states an outbound sheet may move forward. RETURNED / SHORT are
+ *  the inbound pass and are never walked back to LOADED. */
+const OUT_LINE_NOT_YET: LineItemPickStatus[] = ['PENDING_PICK', 'PICKED', 'STAGED']
 
 export interface GearSettleResult {
   /** Whether this order's pick list moved (0 or 1 — one list per order). */
   pickListAdvanced: boolean
   /** Whether this sheet is what stamped Job.returnedAt. */
   jobReturned: boolean
+  /** Whether this sheet is what advanced the ORDER to ON_JOB — i.e.
+   *  whether the job now reads "On rental" because of it. */
+  orderOut: boolean
 }
 
 export async function settleGearAfterReport(
@@ -571,11 +581,11 @@ export async function settleGearAfterReport(
    *  returned while cases are still out. */
   partial = false,
 ): Promise<GearSettleResult> {
-  if (partial) return { pickListAdvanced: false, jobReturned: false }
+  if (partial) return { pickListAdvanced: false, jobReturned: false, orderOut: false }
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { jobId: true },
+    select: { id: true, orderNumber: true, status: true, jobId: true, startDate: true },
   })
 
   const list = await prisma.pickList.findUnique({
@@ -614,11 +624,92 @@ export async function settleGearAfterReport(
     })
   }
 
+  // The LINES, not just the list header. Jose, 2026-09-09 (Fox Sports /
+  // S260909-002): he filed the check-out sheet and the order page still
+  // read "0 / 3 loaded", because the authoritative lane state is
+  // OrderLineItem.pickStatus and only the scan session ever wrote it.
+  // The header said LOADED while every line under it said PENDING_PICK,
+  // so the BOOKED → LOADED_READY rollup — which counts loaded lines —
+  // could never fire either.
+  //
+  // A complete sheet speaks for every warehouse line on the order,
+  // including one counted zero: that line is recorded SHORT on the
+  // report and the floor has nothing left to do with it. (A PARTIAL
+  // sheet returned above and touches none of this.)
+  const outLines = edge === 'OUT'
+    ? await prisma.orderLineItem.updateMany({
+        where: { orderId, fulfillmentLane: 'WAREHOUSE', pickStatus: { in: OUT_LINE_NOT_YET } },
+        data: { pickStatus: 'LOADED' },
+      })
+    : { count: 0 }
+
   // Only the inbound sheet can close a job out. Going out settles
   // nothing — the gear has just left.
   const settled = edge === 'IN'
     ? await settleJobReturnSafe(order?.jobId ?? null, userId)
     : { stamped: false }
 
-  return { pickListAdvanced: advanced.count > 0, jobReturned: settled.stamped }
+  const orderOut = edge === 'OUT' && order ? await settleOrderOut(order, userId, outLines.count) : false
+
+  return { pickListAdvanced: advanced.count > 0, jobReturned: settled.stamped, orderOut }
+}
+
+/**
+ * The outbound half of "what a filed sheet means to the rest of HQ":
+ * BOOKED → LOADED_READY → ON_JOB.
+ *
+ * Jose again, same order: "Should this now say On Rental?" It should.
+ * The job's operational state is DERIVED from its orders, and a
+ * warehouse-only order has no truck, so neither of the two paths to
+ * ON_JOB could reach it — the driver check-out never fires without a
+ * vehicle, and the manual "Mark On Job" button only appears once an
+ * order is already LOADED_READY, which the stalled rollup made
+ * unreachable. The sheet was the only record that the gear had left,
+ * and it was a dead end.
+ *
+ * Both steps are guarded and forward-only, so a re-filed correction is
+ * a no-op rather than a second departure.
+ *
+ * The one thing a sheet does NOT do is book: an order still in quote
+ * form stays there (ADVANCEABLE_TO_ON_JOB is BOOKED / LOADED_READY),
+ * because booking snapshots money and routes lanes and the yard does
+ * not price work. Same line the driver token respects.
+ */
+async function settleOrderOut(
+  order: { id: string; orderNumber: string; status: OrderStatus; startDate: Date | null },
+  userId: string,
+  linesLoaded: number,
+): Promise<boolean> {
+  // Warehouse lane just went terminal, so re-run the rollup the picking
+  // floor would have run. Idempotent, and a no-op when the fleet lane is
+  // still pending — a truck that has not been stamped ready still gates
+  // the order, exactly as it does from /warehouse/pick.
+  let status = order.status
+  try {
+    const rollup = await recomputeAndMaybeAdvanceLoadReady(order.id)
+    if (rollup.advanced) status = 'LOADED_READY'
+  } catch (err) {
+    console.error('[check-report] LOADED_READY rollup failed:', err)
+  }
+
+  // The sheet reaches four days FORWARD (REPORT_DAYS_FORWARD) so a
+  // supervisor can prep tomorrow's pull today. Filing one of those is
+  // not gear leaving the yard, and putting the job on rental early would
+  // start the client's in-progress cadence days before the pickup. So
+  // the ON_JOB step waits for the day itself; the lane state above is
+  // true either way. Order.startDate is the maintained mirror of the
+  // line dates (syncOrderWindow) and is what the list matched on to put
+  // this sheet on screen — @db.Date, so read the UTC calendar day.
+  const startYmd = order.startDate ? order.startDate.toISOString().slice(0, 10) : null
+  if (startYmd && startYmd > pacificYmd(0)) return false
+
+  const moved = await advanceOneOrderToOnJob(
+    prisma, { ...order, status }, userId, 'gear-check-out-sheet', { linesLoaded: String(linesLoaded) },
+  )
+  // IN_PROGRESS on the cadence ladder. This clears unfired future events,
+  // which drops the LOADED_AND_READY the rollup just scheduled — and that
+  // is the right way round: that email tells a client their gear is ready
+  // to collect, and this sheet says it already left.
+  if (moved) await projectOnJob([order.id])
+  return moved
 }
