@@ -23,6 +23,25 @@ export const dynamic = 'force-dynamic'
  * `listDailyRate` / `listWeeklyRate` ride along so the picker can show
  * what the negotiated number replaced.
  *
+ * PARTNER UNITS (2026-09-10). A rep building a quote types into this box, so
+ * anything that isn't in it doesn't get sold — which made "one agreement, lots
+ * of services" untrue in the only place it had to be true. SubcontractedVehicle
+ * is a separate table from the merged catalog, so partner units are queried
+ * alongside and returned as type 'SUB_VEHICLE'. Before this, the only way a
+ * partner unit reached an order was the "Sub-rent…" button on a line that
+ * already existed — which needs the rep to already know PowerTrip can supply it.
+ *
+ * Three things are deliberately different about those hits:
+ *   · they price at the partner's LIST rate and ignore the client's rate card.
+ *     A CompanyRate is a deal on OUR catalog; the partner's list is what the
+ *     production pays either way (partnerShare.ts), and SirReel's share comes
+ *     out of the partner's side.
+ *   · `lcdwEligible` is always false. Wes 2026-09-07, on finding a $24/day
+ *     waiver offered against King Kong's motorhome: "close it." We cannot
+ *     waive damage on a vehicle we don't own.
+ *   · they carry `vendorName` — staff-facing, so always shown here regardless
+ *     of the client-facing naming permission (partnerAttribution.ts).
+ *
  * Hits carry `trackingMode` so the picker can tell a unit-tracked
  * vehicle or stage from warehouse gear. The legacy `types=` values still
  * work and now select on that: ASSET_CATEGORY => UNIT_TRACKED,
@@ -43,6 +62,10 @@ export async function GET(req: NextRequest) {
   const typesParam = searchParams.get('types')
   const types = typesParam
     ? new Set(typesParam.split(',').map((t) => t.trim().toUpperCase()))
+    // SUB_VEHICLE is OPT-IN, not in the default set. A caller that gets a
+    // partner hit has to know what to do with one — bind subcontractedVehicleId
+    // rather than a catalog FK — and a picker that doesn't would quietly write
+    // a SubcontractedVehicle id into inventoryItemId. Ask for it by name.
     : new Set(['INVENTORY', 'ASSET_CATEGORY', 'PACKAGE'])
 
   // Both legacy catalog types now live in one table, separated by
@@ -105,7 +128,33 @@ export async function GET(req: NextRequest) {
     .filter((row) => aliasesAnswerQuery(row.aliases, variants))
     .map((row) => row.id)
 
-  const [invItems, packages] = await Promise.all([
+  // Partner units. Matched on name + type only: their `specs` is a spec sheet
+  // and `publicDescription` is marketing copy, and letting either into an
+  // AND-ed token match makes "generator" hit a light tower whose blurb happens
+  // to mention one.
+  const subVehiclesP = types.has('SUB_VEHICLE')
+    ? prisma.subcontractedVehicle.findMany({
+        where: {
+          isActive: true,
+          offeredToSirReel: true,
+          vendor: { isActive: true },
+          AND: variants.map((vs) => ({
+            OR: vs.flatMap((v) => [
+              { name: { contains: v, mode: 'insensitive' as const } },
+              { vehicleType: { contains: v, mode: 'insensitive' as const } },
+            ]),
+          })),
+        },
+        select: {
+          id: true, name: true, vehicleType: true, listDailyRate: true, listWeeklyRate: true,
+          vendor: { select: { name: true, partnerKind: true } },
+        },
+        take: limit,
+        orderBy: { name: 'asc' },
+      })
+    : Promise.resolve([])
+
+  const [invItems, packages, subVehicles] = await Promise.all([
     wantsQuantity || wantsUnitTracked
       ? prisma.inventoryItem.findMany({
           where: {
@@ -166,6 +215,7 @@ export async function GET(req: NextRequest) {
           orderBy: { name: 'asc' },
         })
       : Promise.resolve([]),
+    subVehiclesP,
   ])
 
   // Relevance pass. The DB filter only says "every token hit something" —
@@ -206,6 +256,8 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+
+  const num = (d: unknown) => (d == null ? 0 : Number(d))
 
   const results = [
     // Packages first — they're the "best" answer when they match
@@ -252,6 +304,25 @@ export async function GET(req: NextRequest) {
         negotiated: !!deal,
       }
     }),
+    // Partner units last: they are a real answer but never the obvious one,
+    // and a rep searching "generator" should see what we own first.
+    ...subVehicles.map((v) => ({
+      id: v.id,
+      type: 'SUB_VEHICLE' as const,
+      name: v.name,
+      // Partner units carry no LineItemDepartment; the kind is the closest
+      // honest answer and is what the line should bill under.
+      department: v.vendor.partnerKind === 'EQUIPMENT' ? 'GE' : 'VEHICLES',
+      dailyRate: num(v.listDailyRate),
+      weeklyRate: num(v.listWeeklyRate),
+      listDailyRate: num(v.listDailyRate),
+      listWeeklyRate: num(v.listWeeklyRate),
+      negotiated: false,
+      // Never — we cannot waive damage on a vehicle we do not own.
+      lcdwEligible: false,
+      vendorName: v.vendor.name,
+      unitType: v.vehicleType,
+    })),
   ].slice(0, limit)
 
   return NextResponse.json({ results })

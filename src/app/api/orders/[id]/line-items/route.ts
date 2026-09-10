@@ -36,6 +36,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const {
       type, description, inventoryItemId, assetCategoryId,
+      // A PARTNER's unit picked from the catalog box. Not a catalog FK — it
+      // lives in SubcontractedVehicle — so it creates the SubRental behind
+      // the line instead of binding one.
+      subcontractedVehicleId,
       startDate, endDate, rateType = "DAILY", rate, quantity = 1, notes,
       department, qualifier, billableDays, pickupDate, returnDate, claimedDays,
       // Package metadata. Headers carry packageId + isPackageHeader=true;
@@ -674,10 +678,54 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
     }
 
+    // ── A partner unit: create the booking behind the line ──────────────
+    //
+    // bindToOrderLine.ts documents two ways a SubRental comes into being, and
+    // only one of them knows a line. This is that one: the link is set at
+    // CREATION and is therefore always right. It matters beyond bookkeeping —
+    // every LCDW path asks `line.subRentals.length > 0` to decide whether a
+    // vehicle is ours to insure, so an unlinked partner unit reads as a SirReel
+    // vehicle and HQ offers a waiver on a coach we do not own.
+    //
+    // ESTIMATED, not REQUESTED: putting a unit on a quote is a pitch. The
+    // partner is told their calendar is being shown (that mail is sent by the
+    // quote flow, not here) and nothing is held until the client accepts.
+    let subRental: { id: string; vendorId: string } | null = null;
+    if (subcontractedVehicleId) {
+      const unit = await prisma.subcontractedVehicle.findFirst({
+        where: { id: subcontractedVehicleId, isActive: true, offeredToSirReel: true },
+        select: { id: true, name: true, vendorId: true, listDailyRate: true, listWeeklyRate: true },
+      });
+      if (unit) {
+        subRental = await prisma.subRental.create({
+          data: {
+            vendorId: unit.vendorId,
+            subcontractedVehicleId: unit.id,
+            orderId,
+            orderLineItemId: lineItem.id,
+            jobId: (await prisma.order.findUnique({ where: { id: orderId }, select: { jobId: true } }))?.jobId ?? null,
+            itemDescription: unit.name,
+            quantity: lineItem.quantity,
+            startDate: lineItem.startDate,
+            endDate: lineItem.endDate,
+            status: "ESTIMATED",
+            // What the CLIENT is billed, mirrored from the line so the
+            // partner-side numbers can be stamped later without re-deriving
+            // it (partnerShare.stampVendorCost fills the vendor side).
+            clientDailyRate: lineItem.rate,
+          },
+          select: { id: true, vendorId: true },
+        });
+      }
+    }
+
     await syncOrderWindowSafe(orderId);
 
     return NextResponse.json({
       lineItem,
+      // Present only when the line is a partner unit — the UI says so rather
+      // than silently booking somebody else's calendar.
+      subRental,
       totals,
       // Included accessories that appeared or resized because of this
       // add. The UI announces them — a $0 line the rep did not type
