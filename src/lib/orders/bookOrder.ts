@@ -102,8 +102,16 @@ export async function bookOrder(args: {
   orderId: string
   userId: string | null
   ipAddress?: string | null
+  /**
+   * Book without the BOOKING_WELCOME email. Set by mark-booked when the
+   * order goes straight from DRAFT — no quote was sent, so a "your
+   * booking is confirmed" mail would quote numbers the client has never
+   * seen. The rest of the BOOKED plan (pickup/return reminders) and the
+   * partner "it's a go" notices still run.
+   */
+  skipBookingWelcome?: boolean
 }): Promise<BookOrderResult> {
-  const { orderId, userId, ipAddress = null } = args
+  const { orderId, userId, ipAddress = null, skipBookingWelcome = false } = args
 
   // ── Phase 1: atomic transaction ────────────────────────────────
   // Done as a single $transaction so a half-booked order can't exist.
@@ -331,7 +339,9 @@ export async function bookOrder(args: {
   // never ran (operator-driven approval path), this fires the BOOKED
   // event plan which auto-schedules BOOKING_WELCOME and the rest.
   try {
-    await projectCadenceFromOrderStatus(orderId, 'BOOKED')
+    await projectCadenceFromOrderStatus(orderId, 'BOOKED', {
+      suppress: skipBookingWelcome ? ['BOOKING_WELCOME'] : undefined,
+    })
   } catch (err) {
     console.error('[bookOrder] cadence projection failed:', err)
     // Non-fatal — the order is BOOKED. Cadence drift can be reconciled

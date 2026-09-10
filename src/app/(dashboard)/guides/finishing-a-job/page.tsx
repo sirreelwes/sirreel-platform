@@ -105,7 +105,10 @@ export default function FinishingAJobGuidePage() {
               <p>
                 <strong>Generate rental invoice</strong> is greyed out until the order is booked — the
                 invoice anchors to the booked value, so there is nothing to anchor to before that. If the
-                order is still sitting at approved, hit <strong>Book it</strong> on the order first.
+                order is still sitting at approved, hit <strong>Book it</strong> on the order first. If it
+                never left draft (the client agreed by phone or email and no quote went out), hit{' '}
+                <strong>Mark booked</strong> instead — it books at the current total without a quote round
+                and without emailing the client; the pre-invoice is the first thing they see.
               </p>
               <p>Hover the greyed-out button and it tells you which of the two is missing.</p>
             </Step>

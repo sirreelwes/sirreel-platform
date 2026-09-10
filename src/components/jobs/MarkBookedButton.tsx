@@ -25,6 +25,12 @@ import { CalendarCheck, Loader2 } from 'lucide-react';
 interface Props {
   orderId: string;
   orderNumber: string;
+  /**
+   * The order's current status. From DRAFT no quote was ever sent, so the
+   * server books WITHOUT the client booking-confirmation email and the
+   * panel says so — the pre-invoice is the first document the client sees.
+   */
+  orderStatus?: string;
   /** Refresh the job after a successful book. */
   onDone: () => void | Promise<void>;
 }
@@ -38,7 +44,8 @@ interface MarkBookedResult {
   reason?: string;
 }
 
-export function MarkBookedButton({ orderId, orderNumber, onDone }: Props) {
+export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: Props) {
+  const fromDraft = orderStatus === 'DRAFT';
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,7 +95,9 @@ export function MarkBookedButton({ orderId, orderNumber, onDone }: Props) {
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
         className="ml-2 shrink-0 inline-flex items-center gap-1.5 rounded-md border border-amber-600 bg-amber-600 px-2.5 py-1 text-[12px] font-bold text-white hover:bg-amber-500 transition-colors"
-        title={`Record that the client approved ${orderNumber} verbally or by email, and book it`}
+        title={fromDraft
+          ? `Book ${orderNumber} without sending a quote — the client agreed off-portal`
+          : `Record that the client approved ${orderNumber} verbally or by email, and book it`}
       >
         <CalendarCheck className="w-3.5 h-3.5" />
         Client said yes
@@ -107,7 +116,15 @@ export function MarkBookedButton({ orderId, orderNumber, onDone }: Props) {
       <ul className="mt-1.5 space-y-0.5 text-[12px] text-amber-900/90 list-disc list-inside">
         <li>Order moves to <strong>Booked</strong>; the job reads Booked too.</li>
         <li>Held units go <strong>firm</strong> — they stop reading as backup holds.</li>
-        <li>Sends the client the booking confirmation, and tells any partner on this order it’s a go.</li>
+        {fromDraft ? (
+          <li>
+            No quote was sent, so <strong>no booking confirmation goes to the client</strong> — send
+            the pre-invoice from the order page once it&rsquo;s booked. Any partner on this order is told
+            it&rsquo;s a go.
+          </li>
+        ) : (
+          <li>Sends the client the booking confirmation, and tells any partner on this order it’s a go.</li>
+        )}
       </ul>
       <input
         value={note}

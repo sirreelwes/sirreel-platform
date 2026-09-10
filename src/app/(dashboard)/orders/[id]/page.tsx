@@ -440,9 +440,17 @@ type StatusAction = {
 // equivalent. "Back to Draft" and "Close Order" use a restrained
 // muted tone since they aren't forward-progress on the engagement.
 const STATUS_ACTIONS: Record<string, StatusAction[]> = {
-  DRAFT: [{ label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" }],
+  // "Mark booked" (endpoint mark-booked) is the client-said-yes shortcut:
+  // APPROVED + Book it in one go, holds firmed. From DRAFT it books with no
+  // quote round and no booking-welcome email (Wes 2026-09-10 — a rep must
+  // be able to book and go straight to the pre-invoice).
+  DRAFT: [
+    { label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" },
+    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
+  ],
   QUOTE_SENT: [
     { label: "Mark Approved", next: "APPROVED", color: "bg-lt-fg hover:bg-black" },
+    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
     { label: "Back to Draft", next: "DRAFT", color: "bg-lt-fg2 hover:bg-lt-fg" },
   ],
   APPROVED: [
@@ -1540,6 +1548,39 @@ export default function OrderDetailPage() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.ok) {
         setBookErr(`Book it failed: ${data.error || `HTTP ${r.status}`}`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  // "Mark booked" — DRAFT / QUOTE_SENT → BOOKED via the client-said-yes
+  // route (verbal-approval stamp + APPROVED + the real bookOrder + hold
+  // firming). Confirms first because the QUOTE_SENT path emails the client
+  // a booking confirmation; from DRAFT the server suppresses that email
+  // (no quote was sent) and the confirm says so.
+  const markBooked = async () => {
+    if (booking) return;
+    const fromDraft = order?.status === "DRAFT";
+    const ok = confirm(
+      fromDraft
+        ? `Book ${order?.orderNumber} without a quote round?\n\nThe order goes to Booked at its current total and the held units firm up. No booking-confirmation email goes to the client — the pre-invoice is the first thing they see. Partners on the order are told it's a go.`
+        : `Book ${order?.orderNumber} on the client's word?\n\nThe order goes to Booked at its current total, the held units firm up, and the client gets the booking confirmation.`,
+    );
+    if (!ok) return;
+    setBooking(true);
+    setBookErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/mark-booked`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: fromDraft ? "booked from draft on the order page" : null }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setBookErr(`Mark booked failed: ${data.reason || data.error || `HTTP ${r.status}`}`);
         return;
       }
       await fetchOrder();
@@ -2857,9 +2898,10 @@ export default function OrderDetailPage() {
               {actions.map((action) => {
                 const isSendQuote = action.next === "QUOTE_SENT";
                 const isBook = action.endpoint === "book";
+                const isMarkBooked = action.endpoint === "mark-booked";
                 const disabled =
                   (isSendQuote && (noRecipient || !order.quotePdfUrl)) ||
-                  (isBook && booking);
+                  ((isBook || isMarkBooked) && booking);
                 const title = isSendQuote
                   ? noRecipient
                     ? "Add a contact to the job before sending the quote."
@@ -2871,7 +2913,9 @@ export default function OrderDetailPage() {
                   ? openSendQuoteReview
                   : isBook
                     ? bookIt
-                    : () => updateStatus(action.next);
+                    : isMarkBooked
+                      ? markBooked
+                      : () => updateStatus(action.next);
                 return (
                   <button
                     key={action.next}
@@ -2880,7 +2924,7 @@ export default function OrderDetailPage() {
                     title={title}
                     className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    {isBook && booking ? "Booking…" : action.label}
+                    {(isBook || isMarkBooked) && booking ? "Booking…" : action.label}
                   </button>
                 );
               })}

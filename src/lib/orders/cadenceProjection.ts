@@ -42,7 +42,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import type { OrderStatus, CadenceState } from '@prisma/client'
+import type { OrderStatus, CadenceState, CadenceEventType } from '@prisma/client'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 
 const ORDER_TO_CADENCE: Partial<Record<OrderStatus, CadenceState>> = {
@@ -97,6 +97,7 @@ export interface ProjectionResult {
 export async function projectCadenceFromOrderStatus(
   orderId: string,
   newStatus: OrderStatus,
+  opts: { suppress?: CadenceEventType[] } = {},
 ): Promise<ProjectionResult> {
   const target = ORDER_TO_CADENCE[newStatus]
   if (!target) return { advanced: false, reason: 'no-projection' }
@@ -125,6 +126,6 @@ export async function projectCadenceFromOrderStatus(
     return { advanced: false, reason: 'monotonic-skip', from: order.cadenceState, to: target }
   }
 
-  await transitionCadenceState(orderId, target)
+  await transitionCadenceState(orderId, target, { suppress: opts.suppress })
   return { advanced: true, from: order.cadenceState, to: target }
 }

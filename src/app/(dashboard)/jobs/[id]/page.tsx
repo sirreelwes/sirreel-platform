@@ -281,7 +281,10 @@ interface JobOrder {
 /** Order states a verbal/emailed yes can act on. Mirrors BOOKABLE_FROM in
  *  the mark-booked route — DRAFT is excluded on purpose: a client cannot
  *  have approved a quote nobody sent them. */
-const MARK_BOOKABLE = new Set(['QUOTE_SENT', 'APPROVED']);
+// DRAFT included 2026-09-10 (Wes): an order the client agreed to off-portal
+// can be booked without a quote round. The server skips the booking
+// welcome on that path; the button's panel says so.
+const MARK_BOOKABLE = new Set(['DRAFT', 'QUOTE_SENT', 'APPROVED']);
 
 /** A "these might be one production" pairing from the Planyo importer.
  *  Derived server-side by lib/jobs/duplicateSignal — never recomputed here. */
@@ -3233,7 +3236,7 @@ const driverTone = (d: any): string => {
                       it were two clicks a screen away. */}
                   {MARK_BOOKABLE.has(o.status) && (
                     <div className="px-4 pb-2.5 -mt-1">
-                      <MarkBookedButton orderId={o.id} orderNumber={o.orderNumber} onDone={load} />
+                      <MarkBookedButton orderId={o.id} orderNumber={o.orderNumber} orderStatus={o.status} onDone={load} />
                     </div>
                   )}
 
