@@ -12,8 +12,9 @@
  *   "LCDW is ONLY available for fleet rental vehicles such as: Cube
  *    Trucks, Cargo Vans, Stake Bed Trucks. Specialty Vehicles such as
  *    Motorhomes, Combos, PopVans, VTR/PeopleMover Vans, Restroom
- *    Trailers, Scissor Lifts, Golf Carts or any vehicle requiring a
- *    commercial driver's license are NOT ELIGIBLE for LCDW."
+ *    Trailers, Wardrobe Trailers, Hair/Makeup Trailers, Scissor Lifts,
+ *    Golf Carts or any vehicle requiring a commercial driver's license
+ *    are NOT ELIGIBLE for LCDW."
  *
  * So this module is the contract text made executable. If the two ever
  * disagree, the CONTRACT wins and this file is the bug — a waiver we

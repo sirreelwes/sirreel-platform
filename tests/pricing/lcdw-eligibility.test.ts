@@ -152,6 +152,24 @@ console.log('\nThe exclusion set and the signed contract text agree')
     check(!!phrase && LCDW_ELIGIBILITY_NOTE.includes(phrase),
       `${code} is named as excluded in the signed agreement ("${phrase}")`)
   }
+
+  // The same invariant for the vehicles that have no catalog code at all.
+  // Wardrobe and hair/makeup trailers are refused by NAME (they are
+  // Specialty Vehicles with no InventoryItem row), so the signed text has
+  // to name them too — Wes 2026-09-10. Judged through the real code path,
+  // not by asserting the regex list, so a change to either side breaks
+  // this.
+  const namedOnly: { description: string; phrase: string }[] = [
+    { description: 'Wardrobe Trailer', phrase: 'Wardrobe Trailer' },
+    { description: 'Hair / Makeup Trailer', phrase: 'Hair/Makeup Trailer' },
+  ]
+  for (const { description, phrase } of namedOnly) {
+    const v = judgeLcdwLine(line({ description, code: null }))
+    check(!v.eligible && v.reason === 'specialty-vehicle',
+      `an uncoded "${description}" line is refused as a specialty vehicle`)
+    check(LCDW_ELIGIBILITY_NOTE.includes(phrase),
+      `"${phrase}" is named as excluded in the signed agreement`)
+  }
 }
 
 if (failures.length > 0) {
