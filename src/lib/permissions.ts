@@ -820,6 +820,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
         { id: 'gateway-calls', label: 'Gateway Calls', icon: 'CreditCard', href: '/admin/cardpointe-calls' },
         { id: 'home-tiles', label: 'Home Tiles', icon: 'LayoutDashboard', href: '/admin/home-tiles' },
+        // What clients can find on the order form + site search. The
+        // publicVisible flag had no UI at all until 2026-09-09.
+        { id: 'public-catalog', label: 'Public Catalog', icon: 'Eye', href: '/admin/public-catalog' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
         // Payroll. Email-gated like Data Exports, NOT role-gated: ADMIN is

@@ -38,6 +38,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { PUBLIC_CATALOG_VISIBLE_WHERE, hasPublicPrice } from '@/lib/catalog/publicVisibility'
 import { haystack, matchesQuery, queryVariants } from '@/lib/site/publicTextMatch'
 
 export const dynamic = 'force-dynamic'
@@ -49,14 +50,8 @@ export async function GET(req: NextRequest) {
   // Visibility gate is always enforced server-side — only client-orderable
   // items (publicVisible + active + categorized) are ever returned, so an
   // alias can never surface an internal-only item.
-  const where: Record<string, unknown> = {
-    publicVisible: true,
-    isActive: true,
-    categoryId: { not: null },
-  }
-
   const rows = await prisma.inventoryItem.findMany({
-    where,
+    where: PUBLIC_CATALOG_VISIBLE_WHERE,
     select: {
       id: true,
       code: true,
@@ -108,13 +103,13 @@ export async function GET(req: NextRequest) {
   for (const it of items) {
     if (!it.category) continue
     const price = Number(it.dailyRate)
-    // $0 disambiguation (fail-safe):
+    // $0 disambiguation (fail-safe) — see hasPublicPrice:
     //   price > 0                         → normal, orderable.
     //   price === 0 && includedFree       → "Included", not orderable.
     //   price === 0 && !includedFree      → missing price → HIDE entirely, so
     //                                       an un-priced item never leaks as
     //                                       "FREE"/orderable to a client.
-    if (price === 0 && !it.includedFree) continue
+    if (!hasPublicPrice(it)) continue
     const slot =
       groups.get(it.category.id) ?? {
         id: it.category.id,

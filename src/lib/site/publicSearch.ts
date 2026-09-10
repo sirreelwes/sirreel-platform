@@ -26,6 +26,7 @@ import { prisma } from '@/lib/prisma'
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 import { haystack as buildHaystack, matchesQuery, placement, queryVariants } from '@/lib/site/publicTextMatch'
+import { PUBLIC_CATALOG_VISIBLE_WHERE, hasPublicPrice } from '@/lib/catalog/publicVisibility'
 import type { PublicSearchHit, PublicSearchKind } from '@/lib/site/publicSearchTypes'
 
 export type { PublicSearchKind, PublicSearchHit } from '@/lib/site/publicSearchTypes'
@@ -61,9 +62,11 @@ const norm = buildHaystack
 
 async function buildIndex(): Promise<IndexEntry[]> {
   const [items, vehicles, spaces] = await Promise.all([
-    // Same gate as /api/public/catalog: orderable rows only.
+    // The shared gate — same predicate /api/public/catalog and the
+    // publish desk read, so what search finds is exactly what the order
+    // form shows.
     prisma.inventoryItem.findMany({
-      where: { publicVisible: true, isActive: true, categoryId: { not: null } },
+      where: PUBLIC_CATALOG_VISIBLE_WHERE,
       select: {
         id: true, code: true, description: true, aliases: true, imageUrl: true,
         dailyRate: true, includedFree: true,
@@ -91,8 +94,7 @@ async function buildIndex(): Promise<IndexEntry[]> {
 
   for (const it of items) {
     // $0 without includedFree = missing price → hidden everywhere public.
-    const price = Number(it.dailyRate)
-    if (price === 0 && !it.includedFree) continue
+    if (!hasPublicPrice(it)) continue
     const name = it.description ?? ''
     if (!name) continue
     entries.push({
