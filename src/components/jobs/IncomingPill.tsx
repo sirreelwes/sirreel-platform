@@ -43,9 +43,15 @@ export function useIncomingCount() {
       ]).then(([inq, sug]) => {
         if (!active) return
         const rows = (inq?.inquiries ?? []) as {
-          source: string; respondedAt?: string | null; createdAt: string
+          source: string
+          respondedAt?: string | null
+          createdAt: string
+          // Set when the lead is already an order in HQ — the quote went
+          // out on its own thread, so respondedAt never fired. Same
+          // pending test New inbound uses (lib/sales/inquiryHandledInHq).
+          handledInHq?: unknown | null
         }[]
-        const pending = rows.filter((i) => !i.respondedAt)
+        const pending = rows.filter((i) => !i.respondedAt && !i.handledInHq)
         setCount(pending.length + ((sug?.suggestions ?? []) as unknown[]).length)
         setOverdue(
           pending.filter((i) => inquiryPastResponseSla({ ...i, respondedAt: i.respondedAt ?? null })).length,

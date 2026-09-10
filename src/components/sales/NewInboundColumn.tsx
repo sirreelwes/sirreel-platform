@@ -39,6 +39,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ThreadDrawer } from './ThreadDrawer'
 import { QuickReplyLauncher } from './QuickReplyLauncher'
@@ -75,6 +76,23 @@ interface PersistentInquiry {
   // below the pending list, with "Replied by … · time" attribution.
   respondedAt: string | null
   respondedBy: string | null
+  // Set by /api/inquiries when an order-linked send (a quote, a portal
+  // invite) reached this contact AFTER they wrote in — i.e. the lead is
+  // already an order in HQ even though nobody replied on its email
+  // thread. Derived, never stored. See lib/sales/inquiryHandledInHq.
+  handledInHq: HandledInHq | null
+}
+
+interface HandledInHq {
+  orderId: string
+  orderNumber: string
+  orderStatus: string
+  jobId: string | null
+  jobCode: string | null
+  jobName: string | null
+  subject: string
+  sentAt: string
+  address: string
 }
 
 interface PortalAddOnMetadata {
@@ -414,8 +432,14 @@ export function NewInboundColumn({
   // Responded inquiries (team already replied on the thread) drop out of
   // the pending stream into a muted block below — visibly separated, not
   // hidden, since they're still open leads awaiting capture/convert.
-  const pendingInquiries = (inquiries ?? []).filter((i) => !i.respondedAt)
-  const respondedInquiries = (inquiries ?? []).filter((i) => !!i.respondedAt)
+  // "Handled" is respondedAt OR handledInHq: a lead someone quoted through
+  // HQ was answered just as surely as one someone emailed back, and until
+  // 2026-09-10 only the second kind left this queue (Wes: the D&B Doomsday
+  // card "still showing as incoming and not that Jose actually processed
+  // the order through HQ already with them").
+  const isHandled = (i: PersistentInquiry) => !!i.respondedAt || !!i.handledInHq
+  const pendingInquiries = (inquiries ?? []).filter((i) => !isHandled(i))
+  const respondedInquiries = (inquiries ?? []).filter(isHandled)
   const respondedCount = respondedInquiries.length + respondedSuggestions.length
   // Clients who replied AFTER our reply — the ball is back with us.
   const clientWroteBackCount = respondedSuggestions.filter((r) => r.clientRepliedSince).length
@@ -565,7 +589,9 @@ export function NewInboundColumn({
                     | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
                   const merged: RespondedItem[] = [
                     ...respondedInquiries.map((row) => ({
-                      kind: 'persistent' as const, row, sortKey: row.respondedAt ?? row.createdAt,
+                      kind: 'persistent' as const,
+                      row,
+                      sortKey: row.respondedAt ?? row.handledInHq?.sentAt ?? row.createdAt,
                     })),
                     ...respondedSuggestions.map((row) => ({
                       kind: 'suggestion' as const, row, sortKey: row.repliedAt ?? row.sentAt,
@@ -851,9 +877,12 @@ function PersistentCard({
   const portalAddOn = isPortalAddOnMeta(inquiry.sourceMetadata)
     ? inquiry.sourceMetadata
     : null
+  const handled = inquiry.handledInHq
   // An inquiry past the first-response SLA — a client wrote in and
   // nobody has replied on any tracked channel. Red ring + wait badge.
-  const overdue = inquiryPastResponseSla(inquiry)
+  // A lead that is already a quoted order is answered, whatever the
+  // thread says, so it never wears the overdue ring.
+  const overdue = !handled && inquiryPastResponseSla(inquiry)
   const waitHours = inquiryWaitHours(inquiry)
 
   return (
@@ -908,6 +937,25 @@ function PersistentCard({
           {repliedAtLabel(inquiry.respondedAt)}
         </div>
       )}
+      {/* Already worked in HQ. Names the order rather than claiming a reply:
+          nobody wrote back on this thread, the lead just became an order. */}
+      {handled && (
+        <a
+          href={`/orders/${handled.orderId}`}
+          className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 hover:underline underline-offset-2"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Already in HQ · {handled.orderNumber}
+            {handled.jobName ? ` · ${handled.jobName}` : ''} · sent{' '}
+            {repliedAtLabel(handled.sentAt)}
+            {/* A cancelled order still means someone worked this lead — but
+                the rep needs to know it fell through, or "already in HQ"
+                reads as done when the client is back in play. */}
+            {handled.orderStatus === 'CANCELLED' ? ' · order cancelled' : ''}
+          </span>
+        </a>
+      )}
       {value && (
         <div className="mt-1 text-[11px] text-gray-500">Est. value {value}</div>
       )}
@@ -923,13 +971,25 @@ function PersistentCard({
       )}
 
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-        <button
-          onClick={onCapture}
-          disabled={busy}
-          className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
-        >
-          {busy ? '…' : 'Capture & Quote →'}
-        </button>
+        {/* Capture & Quote opens a NEW job. On a lead that is already an
+            order, that is the one thing not to offer first — the rep wants
+            the order that exists, and then to clear the card. */}
+        {handled ? (
+          <a
+            href={`/orders/${handled.orderId}`}
+            className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg"
+          >
+            Open {handled.orderNumber} →
+          </a>
+        ) : (
+          <button
+            onClick={onCapture}
+            disabled={busy}
+            className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+          >
+            {busy ? '…' : 'Capture & Quote →'}
+          </button>
+        )}
         <button
           onClick={onAddOn}
           disabled={busy}

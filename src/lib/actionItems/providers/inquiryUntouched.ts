@@ -27,6 +27,7 @@ import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { ActionItem, ActionItemProvider } from '@/lib/actionItems/types'
 import { INQUIRY_RESPONSE_SLA_HOURS, inquiryWaitHours } from '@/lib/sales/inquirySla'
+import { resolveInquiriesHandledInHq } from '@/lib/sales/inquiryHandledInHq'
 
 const OWNER: UserRole[] = ['AGENT', 'ADMIN', 'MANAGER']
 
@@ -54,11 +55,19 @@ export const inquiryUntouchedProvider: ActionItemProvider = {
         title: true,
         source: true,
         createdAt: true,
+        sourceMetadata: true,
+        person: { select: { email: true } },
         assignedTo: { select: { name: true, email: true } },
       },
     })
 
-    return rows.map((r) => {
+    // respondedAt is null on a lead that HQ answered with a QUOTE rather
+    // than a reply — the quote goes out on its own thread, so the stamp
+    // never fires (Wes 2026-09-10, D&B Doomsday). Escalating a job that is
+    // already booked is how this list stops being read.
+    const handled = await resolveInquiriesHandledInHq(rows)
+
+    return rows.filter((r) => !handled.has(r.id)).map((r) => {
       const hours = inquiryWaitHours(r)
       const wait = hours >= 48 ? `${Math.floor(hours / 24)}d` : `${hours}h`
       const who = r.assignedTo?.name || r.assignedTo?.email

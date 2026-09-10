@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { resolveInquiriesHandledInHq } from '@/lib/sales/inquiryHandledInHq'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, calloutBox } from '@/lib/email/templates/shell'
 
@@ -60,16 +61,25 @@ export async function GET(req: NextRequest) {
   const now = new Date()
   const cutoff = new Date(now.getTime() - STALE_HOURS * 3_600_000)
 
-  const candidates = await prisma.inquiry.findMany({
+  const rawCandidates = await prisma.inquiry.findMany({
     where: { source: 'WEB_FORM', status: 'NEW', createdAt: { lt: cutoff } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
       title: true,
       createdAt: true,
+      sourceMetadata: true,
+      person: { select: { email: true } },
       assignedTo: { select: { name: true, email: true } },
     },
   })
+
+  // A lead HQ answered with a QUOTE is not untouched. The inquiry stays NEW
+  // (nobody closes it by hand) and respondedAt never fires, because the
+  // quote goes out on its own Resend thread — so without this the digest
+  // chases orders that are already booked. See lib/sales/inquiryHandledInHq.
+  const handled = await resolveInquiriesHandledInHq(rawCandidates)
+  const candidates = rawCandidates.filter((c) => !handled.has(c.id))
 
   const newlyAlerted: StaleRow[] = []
   let alreadyOpen = 0

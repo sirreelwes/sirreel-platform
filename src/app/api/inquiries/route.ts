@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { resolveDataScope, inquiryScopeWhere } from '@/lib/auth/scope'
 import { prisma } from '@/lib/prisma'
+import { resolveInquiriesHandledInHq } from '@/lib/sales/inquiryHandledInHq'
 import type { InquiryStatus, InquirySource } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -34,10 +35,20 @@ export async function GET(req: NextRequest) {
     take: 100,
   })
 
+  // Already an order in HQ? An inquiry answered by a quote (or any other
+  // order-linked send) never gets Inquiry.respondedAt stamped — that only
+  // fires for a staff message on the inquiry's own email thread, and the
+  // quote goes out through Resend on a thread of its own. Derived on read so
+  // it can't drift and needs no backfill. See lib/sales/inquiryHandledInHq.
+  const handled = await resolveInquiriesHandledInHq(
+    inquiries.filter((i) => i.status === 'NEW'),
+  )
+
   return NextResponse.json({
     inquiries: inquiries.map((i) => ({
       ...i,
       estimatedValue: i.estimatedValue == null ? null : Number(i.estimatedValue),
+      handledInHq: handled.get(i.id) ?? null,
     })),
   })
 }
