@@ -12,6 +12,12 @@
  * The estimate carries LIST rates only — our negotiated discount is never in
  * the payload. See src/lib/sub-rentals/estimateEmail.ts.
  *
+ * Who pays the driver is asked here too (Wes 2026-09-09). On a union job the
+ * production carries the partner's driver on their own payroll, so the driver
+ * row prints "On production payroll" instead of a rate — and the answer is
+ * written onto the booking this send creates, so the partner's page, the order
+ * and the client's estimate cannot disagree about it later.
+ *
  * Job + dates drive the PARTNER side. With both set, sending also creates a
  * "potential" sub-rental on that job and tells the unit's owner we've quoted
  * their dates (see lib/sub-rentals/potentialSubRental.ts). They're optional —
@@ -54,6 +60,7 @@ export default function SendEstimateModal({
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [job, setJob] = useState<ResolvedJob | null>(null)
+  const [driverPayroll, setDriverPayroll] = useState(false)
   const [resolverOpen, setResolverOpen] = useState(false)
   const [composed, setComposed] = useState<Composed | null>(null)
   const [loading, setLoading] = useState(true)
@@ -69,6 +76,7 @@ export default function SendEstimateModal({
       const qs = new URLSearchParams()
       if (message.trim()) qs.set('message', message)
       if (firstName.trim()) qs.set('firstName', firstName)
+      if (driverPayroll) qs.set('driverPayroll', '1')
       const r = await fetch(`/api/sub-rentals/vehicles/${vehicleId}/estimate?${qs}`, { cache: 'no-store' })
       const j = await r.json()
       if (!r.ok) { setError(j.error ?? 'Could not build the estimate.'); setComposed(null); return }
@@ -77,7 +85,7 @@ export default function SendEstimateModal({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'request failed')
     } finally { setLoading(false) }
-  }, [vehicleId, message, firstName])
+  }, [vehicleId, message, firstName, driverPayroll])
 
   // Re-render the preview as the rep types, debounced so every keystroke
   // isn't a round trip.
@@ -130,6 +138,7 @@ export default function SendEstimateModal({
           jobId: job?.id ?? null,
           startDate: startDate || null,
           endDate: endDate || null,
+          driverOnProductionPayroll: driverPayroll,
         }),
       })
       const j = await r.json()
@@ -238,6 +247,28 @@ export default function SendEstimateModal({
                     ? 'On send: a potential sub-rental is created on this job, and the unit’s owner is told we quoted these dates. It holds nothing.'
                     : 'Set a job and both dates to create a potential sub-rental and notify the unit’s owner. Without them the estimate still sends.'}
                 </p>
+
+                {/* Who pays the driver. Sits with the job because it is a fact
+                    about the SHOW, not about the unit — the same coach is union
+                    one week and not the next. */}
+                <label className="mt-3 flex items-start gap-2.5 cursor-pointer border-t border-gray-200 pt-3">
+                  <input
+                    type="checkbox"
+                    checked={driverPayroll}
+                    onChange={(e) => setDriverPayroll(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-amber-600"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900">
+                      Driver goes on the production&rsquo;s payroll
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Union jobs, usually. The estimate prints the driver line as
+                      &ldquo;On production payroll&rdquo; instead of a rate, and we don&rsquo;t bill
+                      for it{willNotifyVendor ? ' — saved on the booking, so the partner sees it too.' : '.'}
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div className="md:col-span-2">

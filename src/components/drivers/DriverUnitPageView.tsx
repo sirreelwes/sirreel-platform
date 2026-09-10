@@ -47,6 +47,7 @@ interface View {
   ack: { at: string; note: string | null; stale: boolean } | null
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
+  onProductionPayroll?: boolean
   closed: boolean
 }
 
@@ -265,6 +266,21 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
             )}
             {ackDone && <p className="mt-3 text-[13px] text-emerald-300">{ackDone}</p>}
           </Section>
+        )}
+
+        {/* Why we still want hours on a job we aren't billing for: the
+            production is paying this driver, and it is their timecard that
+            those hours settle (Wes 2026-09-09). Without saying so, "log your
+            hours" from the company not paying you reads as a mistake. */}
+        {data.onProductionPayroll && !data.closed && (
+          <div className="mt-6 rounded-xl border border-teal-800 bg-teal-950/60 px-4 py-3.5">
+            <div className="text-[15px] font-bold text-teal-200">You&rsquo;re on the production&rsquo;s payroll for this job</div>
+            <p className="mt-1 text-[14px] leading-relaxed text-teal-100/80">
+              The production is paying you directly for this one, not {data.vendorName} through
+              SirReel. Log your hours below exactly as always — they&rsquo;re what your payroll is
+              settled from.
+            </p>
+          </div>
         )}
 
         <DriverHoursCard

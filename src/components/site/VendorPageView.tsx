@@ -145,6 +145,25 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             </div>
           )}
 
+          {/* Who is paying the driver. The partner has to know BEFORE they
+              invoice us: on a union job the production carries the driver on
+              their own payroll, so the driver day is not ours to be billed for
+              (Wes 2026-09-09). Only shown when it's true — the ordinary case
+              needs no announcement. */}
+          {v.driverOnProductionPayroll && v.receiveMethod !== 'DELIVERY' && (
+            <div className="mt-6 rounded-[14px] border border-[#cbdde3] bg-[#f2f8fa] px-4 py-3.5">
+              <div className="text-[14px] font-semibold text-[#0c0c0d]">
+                Driver is on the production&rsquo;s payroll for this booking
+              </div>
+              <p className="mt-1 text-[13px] text-[#5a554c] leading-relaxed">
+                The production is carrying the driver themselves, so please don&rsquo;t invoice
+                SirReel for driver labor on this job. Everything else — the unit, mileage,
+                generator and supplies — is unchanged. Still name your driver below and have
+                them log their hours: the production needs those hours for their own payroll.
+              </p>
+            </div>
+          )}
+
           {/* A delivered unit (restroom trailer) has no driver on set — the
               partner gives us a name and a mobile instead (Wes 2026-09-07). */}
           {v.receiveMethod === 'DELIVERY' ? (

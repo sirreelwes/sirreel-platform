@@ -52,6 +52,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     message: url.searchParams.get('message'),
     clientFirstName: url.searchParams.get('firstName'),
     agentName: user.name ?? 'SirReel',
+    driverOnProductionPayroll: url.searchParams.get('driverPayroll') === '1',
   })
   if (!composed.ok) {
     return NextResponse.json({ error: composed.error }, { status: composed.status })
@@ -81,6 +82,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const jobId = typeof body.jobId === 'string' && body.jobId ? body.jobId : null
   const startDate = typeof body.startDate === 'string' && body.startDate ? body.startDate : null
   const endDate = typeof body.endDate === 'string' && body.endDate ? body.endDate : null
+  // Union job: the production carries the driver. It changes what the client
+  // reads AND what the booking records, so it is read once here and passed to
+  // both — the estimate cannot promise one thing while the booking says another.
+  const driverOnProductionPayroll = body.driverOnProductionPayroll === true
   if (!EMAIL_RE.test(to)) {
     return NextResponse.json({ error: 'A valid recipient email is required.' }, { status: 400 })
   }
@@ -90,6 +95,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     message: typeof body.message === 'string' ? body.message : null,
     clientFirstName: typeof body.firstName === 'string' ? body.firstName : null,
     agentName: user.name ?? 'SirReel',
+    driverOnProductionPayroll,
   })
   if (!composed.ok) {
     return NextResponse.json({ error: composed.error }, { status: composed.status })
@@ -117,7 +123,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       entityType: 'SubcontractedVehicle',
       entityId: params.id,
       userId: user.id,
-      newValues: { to, cc: teamCc, vehicleName: composed.vehicle.name, resendMessageId: result.id },
+      newValues: {
+        to, cc: teamCc, vehicleName: composed.vehicle.name, resendMessageId: result.id,
+        driverOnProductionPayroll,
+      },
     },
   })
 
@@ -138,6 +147,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       startDate,
       endDate,
       createdByUserId: user.id,
+      driverOnProductionPayroll,
     })
     if ('error' in potential) {
       vendorNotice.warning = `Estimate sent, but the sub-rental record failed: ${potential.error}`

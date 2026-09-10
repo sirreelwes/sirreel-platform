@@ -34,6 +34,12 @@ export interface DriverUnitView {
   ack: { at: string; note: string | null; stale: boolean } | null
   hours: HoursView
   hoursPromptOpen: boolean
+  /**
+   * The production is carrying this driver on their own payroll (union job).
+   * Told to them because it changes who is paying them, and because it is the
+   * obvious question once they see us asking for hours we aren't billing.
+   */
+  onProductionPayroll: boolean
   closed: boolean
 }
 
@@ -56,6 +62,7 @@ export async function buildDriverUnitView(row: ConduitRow, today: string): Promi
       : null,
     hours: await listHours({ subRentalId: row.id }),
     hoursPromptOpen: hoursPromptOpen({ startDate, endDate }, today),
+    onProductionPayroll: row.driverOnProductionPayroll,
     closed: row.status === 'CANCELLED' || row.status === 'RETURNED',
   }
 }

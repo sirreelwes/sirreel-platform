@@ -60,6 +60,7 @@
     "test:coi-checks": "tsx tests/coi/checks.test.ts",
     "test:coi-scope": "tsx tests/coi/vehicle-scope.test.ts",
     "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
+    "test:driver-payroll": "tsx tests/sub-rentals/driver-payroll.test.ts",
     "test:sub-rental-hold": "tsx tests/sub-rentals/hold-state.test.ts",
     "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
     "test:measure-tokens": "tsx tests/sales/measure-tokens.test.ts",
@@ -75,7 +76,8 @@
     "test:payroll-clock": "tsx tests/payroll/clock.test.ts",
     "test:booking-terms": "tsx tests/sales/booking-terms.test.ts",
     "test:conduit": "tsx tests/sub-rentals/conduit.test.ts",
-    "test:auto-reply": "tsx tests/email/auto-reply.test.ts"
+    "test:auto-reply": "tsx tests/email/auto-reply.test.ts",
+    "rw:status": "tsx scripts/rw-sync-status.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

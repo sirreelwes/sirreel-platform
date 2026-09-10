@@ -13,9 +13,17 @@
  * are the only inputs, because they are the only numbers nobody knows yet.
  * Leaving one blank omits the line rather than adding it at $0: a zero on a
  * quote reads as "included", which is the opposite of what it means.
+ *
+ * The one other question is WHO PAYS THE DRIVER (Wes 2026-09-09): on a union
+ * job the driver goes on the production's payroll, so the driver charge is not
+ * ours to bill. The checkbox reflects the booking and writes back to it, and
+ * the driver rows stay VISIBLE — struck through, priced at nothing — because a
+ * charge that silently disappears is how a $550/day line goes missing without
+ * anyone deciding it should.
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { PAYROLL_DRIVER_NOTE } from '@/lib/sub-rentals/vehicles'
 
 interface Candidate {
   id: string
@@ -39,6 +47,8 @@ interface Fee {
   coversHours: string | null
   metered: boolean
   usageNoun: string
+  /** The driver charge — the one a union production absorbs itself. */
+  driverLabor: boolean
 }
 
 const money = (n: number) =>
@@ -62,6 +72,8 @@ export default function PartnerFeesModal({
   const [days, setDays] = useState(1)
   const [estimates, setEstimates] = useState<Record<string, string>>({})
   const [reported, setReported] = useState<{ days: number; hours: number; miles: number; generatorHours: number; daysWithSupplies: number } | null>(null)
+  const [onPayroll, setOnPayroll] = useState(false)
+  const [hasBooking, setHasBooking] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +118,10 @@ export default function PartnerFeesModal({
       setDays(j.days ?? 1)
       setVehicleName(j.vehicleName ?? '')
       setReported(j.reported ?? null)
+      // The booking's answer, not a remembered checkbox: switching units
+      // switches jobs' worth of context with it.
+      setOnPayroll(!!j.driverOnProductionPayroll)
+      setHasBooking(!!j.hasBooking)
       // The driver's daily report fills the metered estimates: miles for a
       // per-mile fee, generator hours for a per-hour one. The rep can still
       // overtype — but after the job these are the actuals, not a guess.
@@ -136,8 +152,12 @@ export default function PartnerFeesModal({
 
   const dayFees = fees.filter((f) => !f.metered)
   const meteredFees = fees.filter((f) => f.metered)
+  /** Dropped by the payroll switch — nothing is billed for these. */
+  const onProduction = (f: Fee) => onPayroll && f.driverLabor
+  const driverFees = fees.filter((f) => f.driverLabor)
 
   const lineTotal = (f: Fee) => {
+    if (onProduction(f)) return 0
     const amt = Number(f.amount)
     if (f.metered) {
       const q = Number(estimates[f.id] ?? 0)
@@ -154,7 +174,7 @@ export default function PartnerFeesModal({
    * right default (a $0 line reads as "included"), but it has to be a visible
    * choice rather than an invisible one.
    */
-  const omitted = meteredFees.filter((f) => !(Number(estimates[f.id]) > 0))
+  const omitted = meteredFees.filter((f) => !onProduction(f) && !(Number(estimates[f.id]) > 0))
 
   async function submit() {
     setSaving(true)
@@ -162,13 +182,19 @@ export default function PartnerFeesModal({
     try {
       const payload: Record<string, number> = {}
       for (const f of meteredFees) {
+        if (onProduction(f)) continue
         const n = Number(estimates[f.id])
         if (Number.isFinite(n) && n > 0) payload[f.id] = n
       }
       const r = await fetch(`/api/orders/${orderId}/partner-fees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vehicleId, parentLineItemId: parentId, estimates: payload }),
+        body: JSON.stringify({
+          vehicleId,
+          parentLineItemId: parentId,
+          estimates: payload,
+          driverOnProductionPayroll: onPayroll,
+        }),
       })
       const j = await r.json()
       if (!r.ok) { setError(j.error ?? 'Could not add the fees.'); return }
@@ -236,6 +262,32 @@ export default function PartnerFeesModal({
                 </div>
               )}
 
+              {driverFees.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={onPayroll}
+                      onChange={(e) => setOnPayroll(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-amber-600"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-gray-900">
+                        Driver goes on the production&rsquo;s payroll
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        Union jobs, usually. {driverFees.map((f) => f.label).join(', ')}{' '}
+                        {driverFees.length === 1 ? 'is' : 'are'} left off the order entirely — we
+                        don&rsquo;t bill it and the partner doesn&rsquo;t invoice us for it.
+                        {hasBooking
+                          ? ' Saved on the booking, so the partner’s page says the same.'
+                          : ' No booking record for this unit on the job yet, so this applies to these lines only.'}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
+
               {alreadyAdded && (
                 <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   {parent?.description} already has fees. Remove those lines before re-adding, so
@@ -251,16 +303,20 @@ export default function PartnerFeesModal({
                   <div className="space-y-1.5">
                     {dayFees.map((f) => (
                       <div key={f.id} className="flex items-baseline justify-between gap-3 text-sm">
-                        <span className="text-gray-900">
+                        <span className={onProduction(f) ? 'text-gray-400 line-through' : 'text-gray-900'}>
                           {f.label}
                           {f.coversHours && (
                             <span className="text-xs text-gray-500"> (covers {Number(f.coversHours)} hrs)</span>
                           )}
                         </span>
-                        <span className="text-gray-500 text-xs">
-                          {money(Number(f.amount))}{f.unit === 'PER_DAY' ? ' / day' : ''} ·{' '}
-                          <span className="text-gray-900 font-semibold">{money(lineTotal(f))}</span>
-                        </span>
+                        {onProduction(f) ? (
+                          <span className="text-xs text-gray-500 shrink-0">On production payroll — not billed</span>
+                        ) : (
+                          <span className="text-gray-500 text-xs">
+                            {money(Number(f.amount))}{f.unit === 'PER_DAY' ? ' / day' : ''} ·{' '}
+                            <span className="text-gray-900 font-semibold">{money(lineTotal(f))}</span>
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -290,21 +346,27 @@ export default function PartnerFeesModal({
                   <div className="space-y-2">
                     {meteredFees.map((f) => (
                       <div key={f.id} className="flex items-center gap-3">
-                        <span className="text-sm text-gray-900 flex-1 min-w-0">
+                        <span className={`text-sm flex-1 min-w-0 ${onProduction(f) ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                           {f.label}
                           <span className="text-xs text-gray-500"> · {money(Number(f.amount))} / {f.usageNoun.replace(/s$/, '')}</span>
                         </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={estimates[f.id] ?? ''}
-                          placeholder={f.usageNoun}
-                          onChange={(e) => setEstimates((p) => ({ ...p, [f.id]: e.target.value }))}
-                          className="w-24 text-sm border border-gray-300 rounded-lg px-2 py-1.5 text-right"
-                        />
-                        <span className="text-xs text-gray-900 font-semibold w-20 text-right">
-                          {money(lineTotal(f))}
-                        </span>
+                        {onProduction(f) ? (
+                          <span className="text-xs text-gray-500">On production payroll — not billed</span>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              min={0}
+                              value={estimates[f.id] ?? ''}
+                              placeholder={f.usageNoun}
+                              onChange={(e) => setEstimates((p) => ({ ...p, [f.id]: e.target.value }))}
+                              className="w-24 text-sm border border-gray-300 rounded-lg px-2 py-1.5 text-right"
+                            />
+                            <span className="text-xs text-gray-900 font-semibold w-20 text-right">
+                              {money(lineTotal(f))}
+                            </span>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -317,6 +379,13 @@ export default function PartnerFeesModal({
                   {omitted.map((f) => f.label).join(', ')}. With no estimate the charge is left off
                   entirely, so the client won&apos;t know it&apos;s billable. Leave blank only if it
                   genuinely doesn&apos;t apply to this job.
+                </div>
+              )}
+
+              {onPayroll && driverFees.length > 0 && (
+                <div className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+                  {PAYROLL_DRIVER_NOTE} The driver still logs their hours — the production needs
+                  them for payroll.
                 </div>
               )}
 

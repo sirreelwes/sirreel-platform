@@ -22,6 +22,7 @@ import {
   coversHoursNote,
   feeNetAmount,
   fmtMoney,
+  isDriverLaborFee,
   type SubFeeUnit,
   type SubFeeUnionScope,
 } from '@/lib/sub-rentals/vehicles'
@@ -35,6 +36,8 @@ interface Fee {
   coversHours: string | null
   unionScope: SubFeeUnionScope
   discountApplies: boolean
+  /** null = decided by the label; see isDriverLaborFee. */
+  isDriverLabor: boolean | null
   notes: string | null
   isActive: boolean
 }
@@ -53,6 +56,8 @@ interface FormState {
   coversHours: string
   unionScope: SubFeeUnionScope
   discountApplies: boolean
+  /** '' = let the label decide, 'yes' / 'no' = an explicit override. */
+  driverLabor: '' | 'yes' | 'no'
   scopeAllVehicles: boolean
   notes: string
 }
@@ -64,6 +69,7 @@ const EMPTY_FORM: FormState = {
   coversHours: '',
   unionScope: 'ALL',
   discountApplies: false,
+  driverLabor: '',
   scopeAllVehicles: true,
   notes: '',
 }
@@ -103,6 +109,7 @@ export default function VehicleFeesCard({ vehicleId, vendorId, vendorName, disco
     coversHours: f.coversHours.trim() || null,
     unionScope: f.unionScope,
     discountApplies: f.discountApplies,
+    isDriverLabor: f.driverLabor === '' ? null : f.driverLabor === 'yes',
     notes: f.notes.trim() || null,
   })
 
@@ -179,6 +186,7 @@ export default function VehicleFeesCard({ vehicleId, vendorId, vendorName, disco
       coversHours: f.coversHours ?? '',
       unionScope: f.unionScope,
       discountApplies: f.discountApplies,
+      driverLabor: f.isDriverLabor == null ? '' : f.isDriverLabor ? 'yes' : 'no',
       scopeAllVehicles: f.vehicleId == null,
       notes: f.notes ?? '',
     })
@@ -244,6 +252,29 @@ export default function VehicleFeesCard({ vehicleId, vendorId, vendorName, disco
             Our discount applies
           </label>
         </div>
+      </div>
+
+      {/* Driver labor, because a union job takes the driver onto the
+          production's payroll and this row then has to come off the quote.
+          Default reads the label, which is right for "Driver" and wrong for
+          "Teamster" — hence the override rather than a guess nobody can fix. */}
+      <div>
+        <label className={labelCls}>Driver labor?</label>
+        <select
+          value={f.driverLabor}
+          onChange={(e) => set({ ...f, driverLabor: e.target.value as FormState['driverLabor'] })}
+          className={field}
+        >
+          <option value="">
+            Decide from the name ({isDriverLaborFee({ label: f.label }) ? 'reads as driver labor' : 'not driver labor'})
+          </option>
+          <option value="yes">Yes — drop it when the production carries the driver</option>
+          <option value="no">No — always billed</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          Rows marked as driver labor are left off the order and off the estimate when a booking
+          says the driver is on the production&rsquo;s payroll.
+        </p>
       </div>
 
       <div>
@@ -329,6 +360,14 @@ export default function VehicleFeesCard({ vehicleId, vendorId, vendorName, disco
                           : 'bg-zinc-100 text-zinc-600'}`}>
                           {UNION_SCOPE_LABEL[f.unionScope]}
                         </span>
+                        {isDriverLaborFee(f) && (
+                          <span
+                            title={f.isDriverLabor == null ? 'From the fee name' : 'Set by hand'}
+                            className="ml-1.5 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-100 text-teal-800"
+                          >
+                            Driver labor
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-xs text-gray-600">
                         {f.vehicleId ? 'This vehicle' : `All ${vendorName}`}
