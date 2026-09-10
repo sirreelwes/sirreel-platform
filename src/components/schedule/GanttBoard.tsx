@@ -25,6 +25,7 @@ import {
   TODAY_HEADER_CLASS,
   UNIT_NA_COLOR,
   ART_DEPT_TAG_CHIP,
+  readinessLabelClass,
   readinessMeterStyle,
   readinessMeterTitle,
 } from '@/lib/scheduling/statusTokens';
@@ -378,10 +379,10 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
           const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
-          // Paperwork meter along the bottom edge. Absent for a job with no
+          // Paperwork wash across the bar. Absent for a job with no
           // unfinished bar (the server only ships those) and for job-less
-          // call-in holds — draw nothing rather than an empty 0-of-5 rail,
-          // which would read as a deficiency where there is no job to chase.
+          // call-in holds — draw nothing rather than an empty meter, which
+          // would read as a deficiency where there is no job to chase.
           const rdy = b.jobId ? readiness[b.jobId] : undefined
           const meter = rdy
             ? readinessMeterStyle(rdy.done, rdy.total, { light: b.status === 'inquiry' || b.status === 'cancelled' })
@@ -407,7 +408,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
               {b.attachedOrder
                 ? <OrderBadge order={b.attachedOrder} unitLevel />
                 : b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
-              <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+              <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy)} truncate whitespace-nowrap`}>
                 {(b.tags || []).includes('ART_DEPT') && (
                   <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                 )}
@@ -1934,7 +1935,7 @@ export function GanttBoard() {
                             // Gear step is the one that is definitionally
                             // unmet, which is the point of the row.
                             const rdy = t.jobId ? readiness[t.jobId] : undefined
-                            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, compact: true }) : undefined
+                            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true }) : undefined
                             return (
                               <div
                                 key={`uh-${k}`}
@@ -2029,7 +2030,7 @@ export function GanttBoard() {
                         >
                           <IncompleteBadge gaps={job.infoGaps} />
                           {job.hasOrder && <OrderBadge order={job.orders?.[0]} rwOrderNumber={job.rwOrderNumbers?.[0]} jobId={job.jobId} />}
-                          <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                          <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy)} truncate whitespace-nowrap`}>
                             {(job.tags || []).includes('ART_DEPT') && (
                               <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                             )}
