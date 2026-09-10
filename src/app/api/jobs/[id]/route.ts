@@ -249,6 +249,11 @@ export async function GET(
                     endDate: true,
                     status: true,
                     asset: { select: { id: true, unitName: true } },
+                    // Which ORDER this unit goes out on — the yard's
+                    // "Order attached" link, and what the Reserved
+                    // assets tile shows beside "+ Warehouse order".
+                    orderId: true,
+                    order: { select: { id: true, orderNumber: true, status: true } },
                     // Who's been named to drive this unit. Licence state
                     // rides along so the job page can show a rep whether
                     // the vehicle can actually leave — booleans only, no

@@ -42,7 +42,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 
-export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE'
+export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | 'SUB_VEHICLE'
 
 export interface CatalogHitPackageMember {
   inventoryItemId: string
@@ -73,6 +73,13 @@ export interface CatalogHit {
    *  server-side from the rental agreement's exclusions so the picker
    *  and the order page cannot disagree about what is coverable. */
   lcdwEligible?: boolean
+  /** Present only when type === 'SUB_VEHICLE' — the partner who supplies it.
+   *  STAFF-FACING: shown here whether or not that partner has permitted being
+   *  named to clients (partnerAttribution.ts governs client surfaces only), so
+   *  a rep always knows whose unit they are putting on a quote. */
+  vendorName?: string
+  /** Present only when type === 'SUB_VEHICLE'. "Towable studio generator". */
+  unitType?: string | null
   /** Present only when type === 'PACKAGE'. Lists the inventory
    *  members that should be inserted as $0 child rows under the
    *  header. */
@@ -448,6 +455,18 @@ function LineItemDescriptionComboboxInner(
                       PKG
                     </span>
                   )}
+                  {/* A partner's unit, not ours. Marked at the moment of
+                      choosing because everything downstream differs — we don't
+                      own it, we can't waive damage on it, and picking it books
+                      somebody else's calendar. */}
+                  {r.type === 'SUB_VEHICLE' && (
+                    <span
+                      title={r.vendorName ? `Supplied by ${r.vendorName} — picking this books their unit` : undefined}
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200"
+                    >
+                      PARTNER
+                    </span>
+                  )}
                   <div className="text-lt-fg font-medium whitespace-normal break-words">{r.name}</div>
                   {/* Wes, 2026-08-29: the waiver should be "suggested as
                       an option when adding any eligible vehicle." Marking
@@ -468,6 +487,11 @@ function LineItemDescriptionComboboxInner(
                 <div className="text-[11px] text-lt-fg3 whitespace-normal">
                   {r.department.replace(/_/g, ' ')}
                   {r.type === 'ASSET_CATEGORY' && <span className="ml-1 text-amber-700">· category</span>}
+                  {r.type === 'SUB_VEHICLE' && (
+                    <span className="ml-1 text-teal-700">
+                      · {r.unitType ? `${r.unitType} · ` : ''}{r.vendorName}
+                    </span>
+                  )}
                   {r.type === 'PACKAGE' && r.items && (
                     <span className="ml-1 text-violet-700">· {r.items.length} item{r.items.length === 1 ? '' : 's'}</span>
                   )}

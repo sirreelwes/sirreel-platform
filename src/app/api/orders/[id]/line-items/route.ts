@@ -14,6 +14,7 @@ import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync"
 import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, resolveFeeLineRate, resolveRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { assignUnitsForLine, parseUnitAssignment, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -58,6 +59,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       // the dollar base for PERCENT-unit fees.
       feeItemId,
       percentBase,
+      // Which TRUCK goes on a vehicle line (Wes 2026-09-10). Default is
+      // "next available"; `{ mode: 'named', assetIds }` binds the units
+      // the rep picked; `{ mode: 'none' }` leaves the hold at class
+      // level (the Make Reservation modal ranks first, then binds).
+      unitAssignment,
     } = body;
 
     // Fee adds derive type/description/rate from the FeeItem — only the
@@ -625,6 +631,23 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // The UNIT, right after the class (Wes 2026-09-10: "assigning next
+    // available unit but agent could reassign the vehicle later"). A hold
+    // is a category line that shows on no unit row; this binds a truck to
+    // it so the reservation is real on the board the moment the line
+    // exists. Vehicles only — a stage hold's rooms are picked on the
+    // stage side. Non-fatal: the line and the hold stand either way.
+    let unitOutcome: UnitAssignmentOutcome | null = null;
+    if (wantsHoldSync && assetCategoryId && resolvedDepartment === 'VEHICLES') {
+      unitOutcome = await assignUnitsForLine({
+        orderId,
+        categoryId: assetCategoryId,
+        quantity: Number(quantity),
+        request: parseUnitAssignment(unitAssignment),
+        categoryLabel: effectiveDescription,
+      });
+    }
+
     // Included accessories. Adding 12 walkies owes a charging bank and
     // spare batteries whether the rep typed the line by hand or the AI
     // parsed it off an email — before this ran here, only the parsed
@@ -731,6 +754,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       // add. The UI announces them — a $0 line the rep did not type
       // reads as a bug when it shows up unannounced.
       kit: kitSync.noop ? null : kitSync,
+      // Which unit(s) the line landed on, or why none did. Null when the
+      // line is not a held vehicle. The UI says it out loud — a truck
+      // bound without a word is how the rep double-checks on the board.
+      unitAssignment: unitOutcome,
       // (#2 Phase 2) Holds outcome — null when not hold-tracked or no
       // Booking. coTenancy is informational only — the rep saw who
       // they share the category with but didn't need to confirm

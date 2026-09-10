@@ -68,6 +68,7 @@ import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, resolveFeeLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 import { holdOnQuoteSend, reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { assignNextAvailableForOrder, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 
 
@@ -673,10 +674,16 @@ export async function POST(req: NextRequest) {
     // board is how it gets promised twice. Outside the transaction and
     // non-fatal: the order is committed and a hold hiccup must not
     // roll it back.
+    let unitAssignments: UnitAssignmentOutcome[] = []
     try {
       const raised = await holdOnQuoteSend(result.orderId)
       if (raised.error) console.error('[orders/from-parse] immediate hold failed:', raised.error)
-      else await reconcileHoldFirmness(result.orderId)
+      else {
+        await reconcileHoldFirmness(result.orderId)
+        // And the TRUCKS (Wes 2026-09-10): a parsed order's vehicles bind
+        // next-available the same as a hand-added line does. Non-fatal.
+        unitAssignments = await assignNextAvailableForOrder(result.orderId)
+      }
     } catch (err) {
       console.error('[orders/from-parse] immediate hold threw:', err)
     }
@@ -684,7 +691,7 @@ export async function POST(req: NextRequest) {
     await syncOrderWindowSafe(result.orderId)
 
     return NextResponse.json(
-      { orderId: result.orderId, warnings: result.warnings },
+      { orderId: result.orderId, warnings: result.warnings, unitAssignments },
       { status: 201 },
     )
   } catch (err) {

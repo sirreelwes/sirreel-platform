@@ -2194,6 +2194,28 @@ export function GanttBoard() {
               />
             )}
 
+            {/* Write the warehouse order FROM the reservation (Wes
+                2026-09-10): opens the order builder against this job and
+                attaches the saved order to THIS unit, so the pull sheet
+                and the yard both know which truck it loads on. A unit
+                bar only — a job-view bar spans several trucks. Needs a
+                job: a call-in hold resolves one in the panel above first. */}
+            {selected.isUnit && selected.assignmentId && canMakeOrders && (
+              <div className="mb-3">
+                {selected.jobId ? (
+                  <Link
+                    href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}&loadOnAssignmentId=${encodeURIComponent(selected.assignmentId)}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600 bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-500"
+                    title={`Start an order that goes out on ${selected.unitName}`}
+                  >
+                    + Warehouse order on {selected.unitName}
+                  </Link>
+                ) : (
+                  <span className="text-[11px] text-gray-500">Resolve the job above to write a warehouse order on this unit.</span>
+                )}
+              </div>
+            )}
+
             {/* Booking notes — what the agent wrote when the hold was
                 created, including supplies asked for on the vehicle. */}
             {resContext?.notes && (

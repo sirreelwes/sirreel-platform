@@ -37,11 +37,18 @@ export async function GET(_req: NextRequest, { params }: Params) {
           // "Reserved units" card on the order detail page.
           items: {
             select: {
+              // id / categoryId / holdRank so a VEHICLE line can find ITS
+              // hold and open the unit picker on it (Wes 2026-09-10).
+              id: true,
+              categoryId: true,
+              holdRank: true,
               quantity: true,
               status: true,
               category: { select: { name: true } },
               assignments: {
                 select: {
+                  id: true,
+                  orderId: true,
                   startDate: true,
                   endDate: true,
                   status: true,
@@ -106,11 +113,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
               bookingNumber: true,
               items: {
                 select: {
+                  id: true,
+                  categoryId: true,
+                  holdRank: true,
                   quantity: true,
                   status: true,
                   category: { select: { name: true } },
                   assignments: {
                     select: {
+                      id: true,
+                      orderId: true,
                       startDate: true,
                       endDate: true,
                       status: true,
@@ -125,7 +137,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
       lineItems: {
         include: {
-          inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true, slug: true, trackingMode: true, isSpecialtyVehicle: true } },
+          inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true, slug: true, trackingMode: true, isSpecialtyVehicle: true, legacyAssetCategoryId: true } },
           // Existence only — a partner-fulfilled line bills straight daily,
           // never the weekly cap (Wes 2026-09-07). Vendor, cost, PO stay out.
           subRentals: { select: { id: true } },
@@ -199,7 +211,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
     job: order.job,
   });
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale });
+  // The units this order is going out ON — BookingAssignment.orderId,
+  // the yard's "Order attached" link. A warehouse order written from a
+  // reservation carries no vehicle line of its own, so this is the only
+  // way the order page can say "loads on Cube 12".
+  const loadsOn = await prisma.bookingAssignment.findMany({
+    where: { orderId: id, status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
+    select: {
+      id: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      asset: { select: { id: true, unitName: true } },
+      bookingItem: { select: { id: true, category: { select: { name: true } }, booking: { select: { id: true, bookingNumber: true } } } },
+    },
+    orderBy: { startDate: 'asc' },
+  });
+
+  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

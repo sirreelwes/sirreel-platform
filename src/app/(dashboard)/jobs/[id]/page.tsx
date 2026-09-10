@@ -69,6 +69,9 @@ import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/st
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, Check, User } from 'lucide-react'
+import { useSession } from 'next-auth/react';
+import { canCreateOrders } from '@/lib/permissions';
+import type { UserRole } from '@prisma/client';
 
 /**
  * Job status, honestly split.
@@ -503,6 +506,13 @@ export default function JobDetailPage() {
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
+  // Who may write an order from a reserved unit — same gate as the
+  // hero's "+ New quote" (sales + admin; the yard reads, never writes).
+  const { data: session } = useSession();
+  const canWriteOrders = (() => {
+    const u = session?.user as { role?: UserRole; salesOnly?: boolean; email?: string } | undefined;
+    return u?.role ? canCreateOrders({ role: u.role, salesOnly: !!u.salesOnly, email: u.email }) : false;
+  })();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1262,7 +1272,7 @@ const driverTone = (d: any): string => {
 }
 
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; attachedOrder: { id: string; orderNumber: string } | null; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -1280,6 +1290,8 @@ const driverTone = (d: any): string => {
               assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
               startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
               bookingAssignmentId: a.id,
+              // The order this unit goes out ON (BookingAssignment.orderId).
+              attachedOrder: (a as any).order ? { id: (a as any).order.id, orderNumber: (a as any).order.orderNumber } : null,
               drivers: (a as any).driverAssignments ?? [],
               currentDriverId: (a as any).checkoutRecords?.[0]?.driverId ?? null,
               unitReturned: !!(a as any).checkoutRecords?.[0]?.returnTime,
@@ -2788,11 +2800,14 @@ const driverTone = (d: any): string => {
         ) : (
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {reservedAssets.map((a) => (
-              <Link
+              <div
                 key={a.assetId}
+                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+              >
+              <Link
                 href={`/gantt?date=${a.startDate.slice(0, 10)}`}
                 title="Open this reservation on the calendar"
-                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                className="block"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0">
@@ -2853,6 +2868,34 @@ const driverTone = (d: any): string => {
                 </div>
                 <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
+              {/* The order this truck goes out on, and the way to write
+                  one from here (Wes 2026-09-10: "when we open a
+                  reservation we should be able to add a warehouse order
+                  there"). The builder opens against this job and attaches
+                  the saved order to THIS unit. */}
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200 pt-2 text-[11px]">
+                {a.attachedOrder ? (
+                  <Link
+                    href={`/orders/${a.attachedOrder.id}`}
+                    className="inline-flex items-center gap-1 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 font-mono font-semibold text-violet-700 hover:bg-violet-100"
+                    title="This unit goes out on this order"
+                  >
+                    {a.attachedOrder.orderNumber}
+                  </Link>
+                ) : (
+                  <span className="text-zinc-500">No order on this unit</span>
+                )}
+                {canWriteOrders && (
+                  <Link
+                    href={`/orders/new?jobId=${encodeURIComponent(job.id)}&loadOnAssignmentId=${encodeURIComponent(a.bookingAssignmentId)}`}
+                    className="shrink-0 font-semibold text-amber-700 hover:text-amber-800 hover:underline"
+                    title={`Start a warehouse order that loads on ${a.unitName}`}
+                  >
+                    + Warehouse order
+                  </Link>
+                )}
+              </div>
+              </div>
             ))}
             {/* Category-level holds with no unit picked yet. These are
                 REAL reservations (the quote-send soft hold lands here) —

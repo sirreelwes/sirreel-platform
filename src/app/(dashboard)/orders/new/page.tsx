@@ -345,6 +345,45 @@ function NewQuotePageInner() {
   // Deep-link from the Job detail "+ New quote" action (canonical-Job
   // consolidation) — the Job decision arrives already made.
   const jobIdFromUrl = search.get('jobId');
+  // Deep-link from a RESERVATION (Wes 2026-09-10: "when we open a
+  // reservation we should be able to add a warehouse order there, which
+  // will open the order fill-out and assign it to be loaded on that
+  // vehicle"). The order is written normally; once it exists it is
+  // attached to this unit (BookingAssignment.orderId — the yard's
+  // "Order attached" indicator) so the warehouse knows which truck it
+  // goes out on.
+  const loadOnAssignmentId = search.get('loadOnAssignmentId');
+  const [loadOn, setLoadOn] = useState<{
+    id: string;
+    unit: { id: string; unitName: string };
+    category: { id: string; name: string } | null;
+    booking: { id: string; bookingNumber: string };
+    startDate: string;
+    endDate: string;
+    job: { id: string; jobCode: string; name: string; company: { id: string; name: string } | null } | null;
+    order: { id: string; orderNumber: string } | null;
+  } | null>(null);
+  const [loadOnError, setLoadOnError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!loadOnAssignmentId) return;
+    fetch(`/api/scheduling/assignments/${loadOnAssignmentId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.ok && d.assignment) setLoadOn(d.assignment);
+        else setLoadOnError(d?.error || 'That reservation could not be read.');
+      })
+      .catch(() => setLoadOnError('That reservation could not be read.'));
+  }, [loadOnAssignmentId]);
+  // The reservation's dates are the order's dates unless the parse says
+  // otherwise — a warehouse order goes out and comes back with the truck.
+  useEffect(() => {
+    if (!loadOn) return;
+    setEditing((prev) => ({
+      ...prev,
+      startDate: prev.startDate || loadOn.startDate,
+      endDate: prev.endDate || loadOn.endDate,
+    }));
+  }, [loadOn]);
 
   // Job decision is deferred until AFTER AI parse — see candidateJobs
   // fetch + JobPicker render below. Default mode is `searching` so
@@ -1951,6 +1990,25 @@ function NewQuotePageInner() {
       // jobId for downstream inquiry-PATCH — always the resolved Job.
       const jobId: string = existingJobId;
 
+      // Written from a reservation: this order goes out ON that unit.
+      // Non-fatal — the order exists either way, and the job page can
+      // attach it by hand if this misses.
+      if (loadOnAssignmentId) {
+        try {
+          const r = await fetch(`/api/scheduling/assignments/${loadOnAssignmentId}/order`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+          });
+          if (!r.ok) {
+            const e = await r.json().catch(() => ({}));
+            console.warn('[orders/new] could not attach the order to the unit:', e?.reason || e?.error || r.status);
+          }
+        } catch (err) {
+          console.warn('[orders/new] attach-to-unit failed (non-fatal):', err);
+        }
+      }
+
       // Draft discounts POST through unchanged — same shape as OrderDiscount,
       // so what the draft previewed is what the saved order holds. Sequential
       // rather than parallel: the order-scope one is computed against the
@@ -2055,11 +2113,29 @@ function NewQuotePageInner() {
           &larr; Back to Orders
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-lt-fg">New Quote</h1>
+          <h1 className="text-2xl font-semibold text-lt-fg">{loadOn ? 'New Warehouse Order' : 'New Quote'}</h1>
           <p className="text-sm text-lt-fg2 mt-1">
             Paste an email or upload a PDF. AI extracts line items + matches them against the catalog.
           </p>
         </div>
+        {(loadOn || loadOnError) && (
+          <div className={`rounded-xl border p-3 text-[12px] ${loadOnError ? 'bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30' : 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30'}`}>
+            {loadOnError ? (
+              <span>{loadOnError} The order will still be created; attach it to the unit from the job page.</span>
+            ) : loadOn && (
+              <span>
+                <span className="font-semibold">Loads on {loadOn.unit.unitName}</span>
+                {loadOn.category ? ` (${loadOn.category.name})` : ''} · {loadOn.booking.bookingNumber} · {loadOn.startDate} – {loadOn.endDate}
+                {loadOn.job ? ` · ${loadOn.job.jobCode} ${loadOn.job.name}` : ''}
+                {loadOn.order ? (
+                  <span className="ml-1 font-semibold">— already carries {loadOn.order.orderNumber}; saving here re-points the unit to the new order.</span>
+                ) : (
+                  <span className="ml-1">— this order will be attached to that vehicle when it is saved.</span>
+                )}
+              </span>
+            )}
+          </div>
+        )}
 
         {inquiry && (
           <div className="bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30 rounded-xl p-3 text-[12px] flex items-center justify-between gap-3">
@@ -2213,11 +2289,29 @@ function NewQuotePageInner() {
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-lt-fg">Review Quote</h1>
+        <h1 className="text-2xl font-semibold text-lt-fg">{loadOn ? 'Review Warehouse Order' : 'Review Quote'}</h1>
         <p className="text-sm text-lt-fg2 mt-1">
           Adjust each line item. Departments, rates, and rate-types are editable per row.
         </p>
       </div>
+        {(loadOn || loadOnError) && (
+        <div className={`rounded-xl border p-3 text-[12px] ${loadOnError ? 'bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30' : 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30'}`}>
+          {loadOnError ? (
+            <span>{loadOnError} The order will still be created; attach it to the unit from the job page.</span>
+          ) : loadOn && (
+            <span>
+              <span className="font-semibold">Loads on {loadOn.unit.unitName}</span>
+              {loadOn.category ? ` (${loadOn.category.name})` : ''} · {loadOn.booking.bookingNumber} · {loadOn.startDate} – {loadOn.endDate}
+              {loadOn.job ? ` · ${loadOn.job.jobCode} ${loadOn.job.name}` : ''}
+              {loadOn.order ? (
+                <span className="ml-1 font-semibold">— already carries {loadOn.order.orderNumber}; saving here re-points the unit to the new order.</span>
+              ) : (
+                <span className="ml-1">— this order will be attached to that vehicle when it is saved.</span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Recognized lead (STEP 1A) — promotes the inbound sender from
           the secondary contacts list to the form anchor. Three states

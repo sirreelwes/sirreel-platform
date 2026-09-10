@@ -739,6 +739,11 @@ export function MakeReservationModal({
             pickupDate: start,
             returnDate: end,
             ...(confirmedNow[r.key] ? { confirmConflict: true } : {}),
+            // The route binds next-available on its own since 2026-09-10.
+            // This flow ranks the hold FIRST (a 2nd Hold must take no
+            // unit) and then binds the named or next unit itself below,
+            // so it asks the route to leave the truck alone.
+            unitAssignment: { mode: 'none' },
           }),
         })
         const line = await lineRes.json().catch(() => ({}))

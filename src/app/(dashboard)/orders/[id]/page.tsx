@@ -27,7 +27,7 @@ import { billsAsSpecialtyVehicle, specialtyShape, SPECIALTY_DAILY_NOTE } from "@
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { SendToWarehouseModal, type SendToWarehouseResult } from "@/components/orders/SendToWarehouseModal";
-import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
+import { LineItemDescriptionCombobox, type CatalogHitType } from '@/components/orders/LineItemDescriptionCombobox';
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
@@ -48,6 +48,7 @@ import {
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -105,7 +106,30 @@ type LineItem = {
     internalFlags: string[];
     slug: string | null;
     trackingMode: string;
+    /** The AssetCategory a unit-tracked catalog row holds against — how a
+     *  VEHICLE line finds ITS hold on the booking. */
+    legacyAssetCategoryId?: string | null;
   } | null;
+};
+
+/** A hold on the job's booking — a CATEGORY line with a quantity — and
+ *  the units bound to it. Shared by the order's own booking and the
+ *  job's bookings; the order page reads them the same way. */
+type HoldItem = {
+  id: string;
+  categoryId: string;
+  holdRank: number;
+  quantity: number;
+  status: string;
+  category: { name: string } | null;
+  assignments: Array<{
+    id: string;
+    orderId: string | null;
+    startDate: string;
+    endDate: string;
+    status: string;
+    asset: { id: string; unitName: string };
+  }>;
 };
 
 type JobContactRow = {
@@ -136,18 +160,20 @@ type Order = {
     productionName: string | null;
     _count: { paperworkRequests: number };
     // Reserved units — which assets this order is loaded onto.
-    items?: Array<{
-      quantity: number;
-      status: string;
-      category: { name: string } | null;
-      assignments: Array<{
-        startDate: string;
-        endDate: string;
-        status: string;
-        asset: { id: string; unitName: string };
-      }>;
-    }>;
+    items?: HoldItem[];
   } | null;
+  /** The units this order is going out ON (BookingAssignment.orderId) —
+   *  the yard's "Order attached" link. Set by the unit binding when a
+   *  vehicle line is added here, or by writing a warehouse order from a
+   *  reservation. */
+  loadsOn?: Array<{
+    id: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    asset: { id: string; unitName: string };
+    bookingItem: { id: string; category: { name: string } | null; booking: { id: string; bookingNumber: string } };
+  }>;
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
   job: {
     id: string;
@@ -170,17 +196,7 @@ type Order = {
     bookings?: Array<{
       id: string;
       bookingNumber: string;
-      items: Array<{
-        quantity: number;
-        status: string;
-        category: { name: string } | null;
-        assignments: Array<{
-          startDate: string;
-          endDate: string;
-          status: string;
-          asset: { id: string; unitName: string };
-        }>;
-      }>;
+      items: HoldItem[];
     }>;
   } | null;
   lineItems: LineItem[];
@@ -501,6 +517,23 @@ export default function OrderDetailPage() {
   const [liDesc, setLiDesc] = useState("");
   const [liAssetCatId, setLiAssetCatId] = useState("");
   const [liInvItemId, setLiInvItemId] = useState("");
+  // A partner unit picked from the catalog box. Posted alongside the line so
+  // the server creates the SubRental ALREADY LINKED to it — see the
+  // line-items route. An unlinked partner unit reads as a SirReel vehicle
+  // and gets offered a damage waiver on a coach we do not own.
+  const [liSubVehicle, setLiSubVehicle] = useState<{ id: string; department: string } | null>(null);
+  // WHICH TRUCK goes on a vehicle line (Wes 2026-09-10: "assigning next
+  // available unit but agent could reassign the vehicle later. If we could
+  // choose the unit too that would be ideal"). Default is next-available;
+  // the picker lists the class's units for the line's window so the rep
+  // can name one instead. 'none' holds the class and binds nothing.
+  const [liUnitMode, setLiUnitMode] = useState<'next' | 'named' | 'none'>('next');
+  const [liUnitIds, setLiUnitIds] = useState<string[]>([]);
+  const [liUnitOptions, setLiUnitOptions] = useState<{ assetId: string; unitName: string; tier: string; state: 'free' | 'buffer' | 'booked' }[] | null>(null);
+  // The hold a "Change unit…" click opens the picker on.
+  const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
+  const [unitNotice, setUnitNotice] = useState<string | null>(null);
+
   const [liStartDate, setLiStartDate] = useState("");
   const [liEndDate, setLiEndDate] = useState("");
   // Custom-dates toggle on the Add form. OFF by default — new rows
@@ -1767,7 +1800,8 @@ export default function OrderDetailPage() {
   };
 
   const resetForm = () => {
-    setLiType("EQUIPMENT"); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId("");
+    setLiType("EQUIPMENT"); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setLiSubVehicle(null);
+    setLiUnitMode('next'); setLiUnitIds([]); setLiUnitOptions(null);
     // Custom dates default OFF — the API inherits from the parent
     // Order. Per-line override is opt-in via the toggle on the form.
     setLiStartDate("");
@@ -1817,6 +1851,46 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liPercentBase, liFeeId]);
 
+  // Candidate units for the add form, read for the line's window (custom
+  // dates when set, else the order's). Same availability engine the picker
+  // modal uses; buffer-state units are listed but marked, booked ones are
+  // disabled.
+  useEffect(() => {
+    if (liType !== 'VEHICLE' || !liAssetCatId || liSubVehicle) { setLiUnitOptions(null); return; }
+    const start = (liCustomDates && liStartDate) ? liStartDate : (order?.startDate ?? '').slice(0, 10);
+    const end = (liCustomDates && liEndDate) ? liEndDate : (order?.endDate ?? '').slice(0, 10);
+    if (!start || !end) { setLiUnitOptions([]); return; }
+    let cancelled = false;
+    setLiUnitOptions(null);
+    fetch(`/api/scheduling/availability?categoryId=${encodeURIComponent(liAssetCatId)}&start=${start}&end=${end}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const units = Array.isArray(d?.units) ? d.units : [];
+        const tier: Record<string, number> = { PREMIUM: 0, STANDARD: 1, ECONOMY: 2 };
+        units.sort((a: { tier: string; unitName: string }, b: { tier: string; unitName: string }) =>
+          ((tier[a.tier] ?? 9) - (tier[b.tier] ?? 9)) || a.unitName.localeCompare(b.unitName, undefined, { numeric: true }));
+        setLiUnitOptions(units);
+      })
+      .catch(() => { if (!cancelled) setLiUnitOptions([]); });
+    return () => { cancelled = true; };
+  }, [liType, liAssetCatId, liSubVehicle, liCustomDates, liStartDate, liEndDate, order?.startDate, order?.endDate]);
+
+  /** The hold a VEHICLE line raised, if any — matched the way the hold was
+   *  created: the line's category, directly or through its catalog row. */
+  const holdForLine = (li: LineItem): HoldItem | null => {
+    if (li.department !== 'VEHICLES') return null;
+    const catId = (li as unknown as { assetCategoryId?: string | null }).assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null;
+    if (!catId) return null;
+    const pools: HoldItem[] = [
+      ...(order?.booking?.items ?? []),
+      ...(order?.job?.bookings ?? []).flatMap((b) => b.items),
+    ];
+    const live = pools.filter((it) => it.categoryId === catId && (it.status === 'REQUESTED' || it.status === 'ASSIGNED'));
+    live.sort((a, b) => a.holdRank - b.holdRank);
+    return live[0] ?? null;
+  };
+
   const addLineItem = async () => {
     if (!liDesc || !liRate) return;
     if (liType === "FEE" && liFeeId && selectedFee?.unit === "PERCENT" && !(parseFloat(liPercentBase) > 0)) return;
@@ -1830,9 +1904,16 @@ export default function OrderDetailPage() {
       description: liDesc,
       inventoryItemId: liInvItemId || null,
       assetCategoryId: liAssetCatId || null,
+      subcontractedVehicleId: liSubVehicle?.id ?? null,
+      // A partner unit has no catalog FK for the server to lift a department
+      // from, so it travels with the line.
+      ...(liSubVehicle ? { department: liSubVehicle.department } : {}),
       rateType: liRateType,
       rate: parseFloat(liRate),
       quantity: parseInt(liQty) || 1,
+      // Which truck. Ignored by the server for anything but a held
+      // vehicle line.
+      unitAssignment: liUnitMode === 'named' ? { mode: 'named', assetIds: liUnitIds } : { mode: liUnitMode },
     };
     // Fee-catalog add: server prices from FeeItem (rate above is an
     // override request only when it differs from the catalog amount).
@@ -1886,6 +1967,20 @@ export default function OrderDetailPage() {
       setAdding(false);
       return;
     }
+    // Say which truck the line landed on — or why none did. A unit bound
+    // without a word is how the rep ends up double-checking on the board.
+    try {
+      const data = await res.json();
+      const ua = data?.unitAssignment as { assigned?: { unitName: string }[]; note?: string | null } | null | undefined;
+      if (ua) {
+        const names = (ua.assigned ?? []).map((a) => a.unitName);
+        setUnitNotice(
+          names.length > 0
+            ? `${names.join(', ')} assigned to this order.${ua.note ? ' ' + ua.note : ''}`
+            : ua.note ?? null,
+        );
+      }
+    } catch { /* payload already consumed or not JSON — the add succeeded either way */ }
     resetForm(); setAdding(false); fetchOrder();
   };
 
@@ -1944,9 +2039,16 @@ export default function OrderDetailPage() {
   // Package hits aren't supported inline (would need row expansion);
   // we scope them out via the combobox's `types` prop too, this is
   // just defense.
-  const applyEditMatch = (hit: { id: string; type: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE'; name: string; department: string; dailyRate: number; weeklyRate: number }) => {
+  const applyEditMatch = (hit: { id: string; type: CatalogHitType; name: string; department: string; dailyRate: number; weeklyRate: number }) => {
     if (hit.type === 'PACKAGE') {
       alert('Packages can\u2019t be applied via the inline editor — delete this line and add the package from the catalog.');
+      return;
+    }
+    // Re-linking an existing line to a PARTNER unit would have to create the
+    // sub-rental behind it, which is what the add-line path does. The dropdown
+    // below scopes SUB_VEHICLE out, so this is a guard, not a route.
+    if (hit.type === 'SUB_VEHICLE') {
+      alert('Add a partner unit as a new line — re-linking an existing line to one isn\u2019t supported.');
       return;
     }
     setEditDesc(hit.name);
@@ -2364,6 +2466,45 @@ export default function OrderDetailPage() {
     ) : (
       <td className="px-4 py-3 text-lt-fg">
         {li.description}
+        {(() => {
+          // WHICH truck this vehicle line is on (Wes 2026-09-10). The unit
+          // lives on the hold, never on the line and never on the quote —
+          // this is the staff-side readout, with the picker one click away
+          // so the agent can reassign. A held line with no unit says so.
+          if (li.parentLineItemId || li.type === 'FEE' || li.type === 'DISCOUNT') return null;
+          const hold = holdForLine(li);
+          if (!hold) return null;
+          const units = hold.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT');
+          const remaining = Math.max(0, hold.quantity - units.length);
+          return (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+              {units.map((a) => (
+                <span
+                  key={a.id}
+                  title={a.orderId && a.orderId !== orderId ? 'Reserved on this job, attached to another order' : 'Reserved on this order — internal only, never on the quote'}
+                  className="inline-flex items-center gap-1 rounded bg-lt-inner border border-lt-hairline px-1.5 py-0.5 font-semibold text-lt-fg"
+                >
+                  {a.asset.unitName}
+                </span>
+              ))}
+              {remaining > 0 && (
+                <span className="rounded border border-dashed border-chip-warn-fg/40 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg">
+                  {hold.holdRank > 1 ? `${hold.holdRank === 2 ? '2nd' : '3rd'} hold · no unit` : `Held · ${units.length > 0 ? `${remaining} more ` : ''}no unit`}
+                </span>
+              )}
+              {canManageSubRentals && (
+                <button
+                  type="button"
+                  onClick={() => setAssignHoldId(hold.id)}
+                  className="text-lt-fg3 hover:text-amber-800 hover:underline underline-offset-2"
+                  title="Pick or change the unit on this line — the class stays held either way"
+                >
+                  {units.length > 0 ? 'Change unit…' : 'Assign a unit…'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
         {(() => {
           // Hours are the point of a driver line — say them plainly on the
           // row, with the full estimate underneath (Wes 2026-09-07:
@@ -2879,6 +3020,23 @@ export default function OrderDetailPage() {
                 a Booking id to /jobs/[id], which 404s. */}
             {order.booking ? <a href="/gantt" title="View on the schedule" className="text-lt-fg hover:text-black hover:underline underline-offset-2">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
           </p>
+          {(order.loadsOn ?? []).length > 0 && (
+            <div className="mt-1.5">
+              <span className="text-lt-fg3 text-xs">Loads on</span>
+              <span className="flex flex-wrap gap-1 mt-0.5">
+                {(order.loadsOn ?? []).map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/gantt?date=${a.startDate.slice(0, 10)}`}
+                    title={`${a.bookingItem.category?.name ?? 'Unit'} · ${a.bookingItem.booking.bookingNumber} — this order goes out on this vehicle`}
+                    className="text-xs px-2 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-500 font-semibold"
+                  >
+                    {a.asset.unitName}
+                  </Link>
+                ))}
+              </span>
+            </div>
+          )}
           {(() => {
             // Reserved units via the Job join (orders hang off Jobs; the
             // Job's bookings carry asset assignments), unioned with any
@@ -3340,7 +3498,7 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Type</label>
-                <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
+                <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setLiSubVehicle(null); setInvSearch(""); }}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                   {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -3407,6 +3565,20 @@ export default function OrderDetailPage() {
                           selectAssetCategory(cat)
                           setInvSearch(cat.name)
                         }
+                        return
+                      }
+                      if (hit.type === 'SUB_VEHICLE') {
+                        // A partner's unit. Bill it at their list rate — that
+                        // is what the production pays either way, and our share
+                        // comes out of their side (partnerShare.ts). No catalog
+                        // FK: it isn't in our catalog.
+                        setLiType(hit.department === 'VEHICLES' ? 'VEHICLE' : 'EQUIPMENT')
+                        setLiDesc(hit.name)
+                        setLiInvItemId('')
+                        setLiAssetCatId('')
+                        setLiSubVehicle({ id: hit.id, department: hit.department })
+                        setLiRate(String(hit.dailyRate ?? 0))
+                        setInvSearch(hit.name)
                         return
                       }
                       if (hit.type === 'PACKAGE') {
@@ -3480,6 +3652,66 @@ export default function OrderDetailPage() {
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
             </div>
+            {/* Which truck (Wes 2026-09-10). Adding a vehicle holds the
+                class and binds the next free unit; the rep can name one
+                here instead. The unit number stays off the quote — it is
+                a reservation fact, not a line-item fact. */}
+            {liType === 'VEHICLE' && liAssetCatId && !liSubVehicle && (
+              <div className="mb-3 rounded-lg border border-lt-hairline bg-lt-inner/60 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="font-semibold text-lt-fg">Unit</span>
+                  <label className="inline-flex items-center gap-1.5 text-lt-fg2 cursor-pointer">
+                    <input type="radio" name="li-unit-mode" checked={liUnitMode === 'next'} onChange={() => { setLiUnitMode('next'); setLiUnitIds([]); }} />
+                    Next available
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 text-lt-fg2 cursor-pointer">
+                    <input type="radio" name="li-unit-mode" checked={liUnitMode === 'named'} onChange={() => setLiUnitMode('named')} />
+                    Choose
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 text-lt-fg2 cursor-pointer">
+                    <input type="radio" name="li-unit-mode" checked={liUnitMode === 'none'} onChange={() => { setLiUnitMode('none'); setLiUnitIds([]); }} />
+                    Hold the class only
+                  </label>
+                  <span className="text-lt-fg3">Internal — never on the quote.</span>
+                </div>
+                {liUnitMode === 'named' && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {liUnitOptions === null && <span className="text-xs text-lt-fg3">Reading the board…</span>}
+                    {liUnitOptions !== null && liUnitOptions.length === 0 && <span className="text-xs text-lt-fg3">No units in this class for those dates.</span>}
+                    {(liUnitOptions ?? []).map((u) => {
+                      const picked = liUnitIds.includes(u.assetId);
+                      const max = Math.max(1, parseInt(liQty) || 1);
+                      const disabled = u.state === 'booked' || (!picked && liUnitIds.length >= max);
+                      return (
+                        <button
+                          key={u.assetId}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setLiUnitIds((ids) => picked ? ids.filter((x) => x !== u.assetId) : [...ids, u.assetId])}
+                          title={u.state === 'booked' ? 'Booked for these dates' : u.state === 'buffer' ? 'Tight — inside another rental\u2019s turnaround buffer' : 'Free for these dates'}
+                          className={`rounded border px-2 py-0.5 text-xs font-semibold transition-colors ${
+                            picked
+                              ? 'border-amber-600 bg-amber-600 text-white'
+                              : u.state === 'booked'
+                                ? 'border-lt-hairline bg-lt-inner text-lt-fg3 line-through cursor-not-allowed'
+                                : u.state === 'buffer'
+                                  ? 'border-chip-warn-fg/40 bg-chip-warn-bg text-chip-warn-fg hover:border-amber-600'
+                                  : 'border-lt-hairline bg-lt-card text-lt-fg hover:border-amber-600'
+                          } disabled:opacity-60`}
+                        >
+                          {u.unitName}{u.state === 'buffer' ? ' · tight' : ''}
+                        </button>
+                      );
+                    })}
+                    {liUnitOptions && liUnitOptions.length > 0 && (
+                      <span className="self-center text-[11px] text-lt-fg3">
+                        {liUnitIds.length} of {Math.max(1, parseInt(liQty) || 1)} named — the rest go next-available.
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {/* Custom-dates toggle. Default OFF: new rows inherit the
                 order's pickup/return + billable days (matches original
                 quote items). When ON, the Start/End inputs reveal so a
@@ -3701,6 +3933,20 @@ export default function OrderDetailPage() {
         {canSeeMoney && (
           <div className="px-6 pb-4">
             <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+            {unitNotice && (
+              <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs text-lt-fg">
+                <span>{unitNotice}</span>
+                <button type="button" onClick={() => setUnitNotice(null)} className="text-lt-fg3 hover:text-lt-fg">Dismiss</button>
+              </div>
+            )}
+            {assignHoldId && (
+              <AssignUnitsModal
+                bookingItemId={assignHoldId}
+                bufferDays={1}
+                onClose={() => setAssignHoldId(null)}
+                onChanged={fetchOrder}
+              />
+            )}
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
