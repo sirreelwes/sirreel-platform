@@ -159,8 +159,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - **COI review desk** (`CoiReviewModal` + `/api/coi/review/[id]`) — a COI could
   previously only be signed off at upload time, so client-drop certificates sat
   PENDING forever. Approve/reject/re-run AI, plus the fixes: change the
-  production company (`PATCH /api/jobs/[id]/company`, job + orders move
-  together) and re-issue an agreement signed under the wrong one
+  production company (`PATCH /api/jobs/[id]/company`, job + orders + bookings + job-scoped COIs/contract
+  reviews move together — bookings and COIs were left behind until
+  2026-09-10, so the client paperwork chain, PaperworkRequest → Booking →
+  Company, kept showing the old company) and re-issue an agreement signed under the wrong one
   (`POST /api/orders/[id]/agreement/reissue`). The superseded signature is
   snapshotted to `sr_agreement_reissues` — SignedAgreement is unique on
   (orderId, contractType), so re-releasing overwrites it.
