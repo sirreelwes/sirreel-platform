@@ -33,6 +33,7 @@
     "test:job-stage": "tsx tests/jobs/stage.test.ts",
     "test:hold-release": "tsx tests/jobs/hold-release.test.ts",
     "test:release-plan": "tsx tests/scheduling/hold-release-plan.test.ts",
+    "test:peak-hold": "tsx tests/orders/peak-concurrent-hold.test.ts",
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
     "test:job-name-match": "tsx tests/jobs/job-name-match.test.ts",
     "test:paged-sync": "tsx tests/sync/paged-sync.test.ts",

@@ -31,7 +31,9 @@
  * Idempotent per category: the quantity a quote asks for is recomputed
  * from the order on every send and SET on one BookingItem, so re-sending
  * neither stacks duplicates nor loses a second line for the same
- * category.
+ * category. That quantity is the PEAK CONCURRENT need across the lines'
+ * windows, not their sum — one van quoted for three separate weeks is
+ * one van (see lib/orders/peakConcurrentHold).
  *
  * NON-FATAL by contract. The caller sends the email first; a hold failure
  * must never make a delivered quote look like it failed.
@@ -44,6 +46,7 @@ import { coiScopeGap } from '@/lib/coi/coiState'
 import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { createAgentDirectBooking } from '@/lib/paperwork/ensurePaperworkBooking'
+import { peakConcurrent, type HoldWindow } from '@/lib/orders/peakConcurrentHold'
 
 export interface HoldOnQuoteResult {
   created: number
@@ -260,20 +263,37 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
       await prisma.order.update({ where: { id: order.id }, data: { bookingId } })
     }
 
-    // Hold the TOTAL the quote asks for per category, not the first line
-    // that mentions it. The old loop skipped any category it had already
-    // seen on this booking, so S260903-002's two Cargo Vans — different
-    // lines, different windows (09-23→09-26 and 09-22→09-25) — produced
-    // ONE hold. Half the vans on a live quote read as free on the board,
-    // which is the exact over-commit this module exists to prevent.
+    // Hold what the quote needs AT ONCE per category, not the first line
+    // that mentions it and not the sum of all of them.
     //
-    // Summing rather than one-row-per-line keeps re-sends idempotent
-    // without a per-line FK: the desired quantity is recomputed from the
-    // order every time and SET, so editing a quote down releases the
-    // difference instead of stacking.
-    const wantByCategory = new Map<string, number>()
+    // Not the first line: the old loop skipped any category it had
+    // already seen on this booking, so S260903-002's two Cargo Vans —
+    // different lines, overlapping windows (09-23→09-26 and 09-22→09-25)
+    // — produced ONE hold. Half the vans on a live quote read as free on
+    // the board, which is the exact over-commit this module exists to
+    // prevent.
+    //
+    // Not the sum either: summing assumes the lines run together. USC
+    // Short Film Production (S260910-002) quoted ONE cargo van for three
+    // separate four-day blocks and got a 3-van hold spanning eighteen
+    // days, two slots of which nothing could ever fill. `peakConcurrent`
+    // is the honest number for both shapes — concurrent lines still add
+    // up, sequential ones do not (see lib/orders/peakConcurrentHold).
+    //
+    // One row per category rather than per line keeps re-sends
+    // idempotent without a per-line FK: the desired quantity is
+    // recomputed from the order every time and SET, so editing a quote
+    // down releases the difference instead of stacking.
+    const windowsByCategory = new Map<string, HoldWindow[]>()
     for (const { li, categoryId } of holdable) {
-      wantByCategory.set(categoryId!, (wantByCategory.get(categoryId!) ?? 0) + (li.quantity || 1))
+      const w: HoldWindow = { start: li.pickupDate!, end: li.returnDate!, quantity: li.quantity || 1 }
+      const list = windowsByCategory.get(categoryId!)
+      if (list) list.push(w)
+      else windowsByCategory.set(categoryId!, [w])
+    }
+    const wantByCategory = new Map<string, number>()
+    for (const [categoryId, windows] of windowsByCategory) {
+      wantByCategory.set(categoryId, peakConcurrent(windows))
     }
 
     for (const [categoryId, want] of wantByCategory) {
