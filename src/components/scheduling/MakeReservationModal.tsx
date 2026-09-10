@@ -111,14 +111,29 @@
  * existed. Non-fatal: an order with holds and a still-open inquiry is
  * a duplicate-work risk, not a data loss.
  *
+ * READ THE REQUEST BEFORE YOU HOLD (Wes 2026-09-10: "we need to be able
+ * to open a drawer to read the email here to get our eyes on it as a
+ * safeguard"). The summary line above the form is parsed — it shows the
+ * trucks and the window and nothing else, so a delivery address, a phone
+ * number, a role, or a question the client typed into Notes ("do you
+ * offer overnight parking for the truck?") never reaches the eye of the
+ * person about to commit a unit. The panel opens InquirySourceDrawer —
+ * the same read-only slide-over the new-quote review step uses, over the
+ * form, closing back onto unsaved state. It is not a triage surface:
+ * capture / dismiss / attach-to-job stay on the inbound card and the
+ * inquiry page. These requests are WEB_FORM and carry no email row, so
+ * what it renders is the submission as captured; the drawer falls back to
+ * it on its own and the wording says "request", not "email".
+ *
  * Nothing here emails anybody. Creating an order + holds is internal
  * work; the client-facing sends live behind Send quote / Book it, and
  * adding a job contact deliberately sends no portal invite.
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Check, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Mail, Plus, Trash2, X } from 'lucide-react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
+import { InquirySourceDrawer } from '@/components/inquiries/InquirySourceDrawer'
 import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 
@@ -306,6 +321,8 @@ export function MakeReservationModal({
    *  inquiry closes against a different column for each. */
   const [jobCreated, setJobCreated] = useState(false)
   const [resolverOpen, setResolverOpen] = useState(false)
+  /** The read-the-request drawer — see the header. */
+  const [sourceOpen, setSourceOpen] = useState(false)
   const [assignNext, setAssignNext] = useState(true)
   /** Which lines have the unit picker open. A line that has named a
    *  unit is open regardless — the picks have to stay visible. */
@@ -1285,8 +1302,18 @@ export function MakeReservationModal({
                   whether the form below still matches it. */}
               {prefill && (
                 <div className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-[12px] text-lt-fg2 space-y-1">
-                  <div className="text-[10px] uppercase tracking-wide text-lt-fg3">
-                    From the request
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-wide text-lt-fg3">
+                      From the request
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSourceOpen(true)}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 hover:text-amber-600 underline underline-offset-2"
+                    >
+                      <Mail className="w-3 h-3" />
+                      Read the request
+                    </button>
                   </div>
                   <div>
                     {prefill.vehicles
@@ -1856,6 +1883,14 @@ export function MakeReservationModal({
           onClose={() => setResolverOpen(false)}
         />
       )}
+
+      {/* Rendered AFTER the modal's own overlay so it paints above it —
+          both are fixed at z-50 and DOM order breaks the tie. */}
+      <InquirySourceDrawer
+        inquiryId={sourceOpen && prefill ? prefill.inquiryId : null}
+        title={prefill?.jobName ?? prefill?.companyName ?? null}
+        onClose={() => setSourceOpen(false)}
+      />
     </>
   )
 }
