@@ -17,11 +17,27 @@
  * genuine two-van rental. Grouped by BOOKING, with its origin named, the
  * duplicate is obvious — and removable.
  *
- * Native is primary through the cutover, so a suspected pair is described
- * from that side: the native booking is the keeper, the Planyo one is what
- * it matches. Nothing is removed automatically; a same-dates,
- * same-category pair is strong evidence but a production really can take
- * two identical vans, and only a human knows which.
+ * ORIGIN-AGNOSTIC since 2026-09-10 (Wes). Two assumptions in the first
+ * version stopped being true:
+ *
+ *   · Only a native-vs-import pair counts. Lego Playball (SR-JOB-0332)
+ *     was held twice by TWO Planyo carts — the client booked again under
+ *     a second contact — and the detector had nothing to say about it.
+ *   · A booking with a cart id is an import. The importer ADOPTS a cart
+ *     onto a matching native booking rather than duplicating it
+ *     (lib/sync/planyo/adoptNativeBooking), so the native SR-Q row ends
+ *     up carrying a cart id too. That made the native invisible AS a
+ *     native — it read "Planyo" on the row and counted as an import in
+ *     the pairing, which is why SR-JOB-0332 showed two Planyo chips and
+ *     no warning.
+ *
+ * So: any two LIVE bookings on the job covering the same dates with the
+ * same equipment are a suspected duplicate, whatever raised them.
+ * `Booking.source` — not the cart id — is what names an origin now.
+ *
+ * Nothing is removed automatically; a same-dates, same-category pair is
+ * strong evidence but a production really can take two identical vans,
+ * and only a human knows which.
  */
 
 import { useCallback, useState } from 'react'
@@ -42,9 +58,24 @@ export interface JobBooking {
   status: string
   startDate: string
   endDate: string
-  /** Non-null ⇒ created by the Planyo import from that cart. */
+  /**
+   * The cart this booking is LINKED to — set by the import for a booking
+   * it created, and also by adoption for a native booking it recognised.
+   * So it answers "which Planyo cart is this?", never "who made this?".
+   */
   planyoCartId: string | null
+  /** Booking.source — PLANYO_BACKFILL, AGENT_DIRECT, … The origin. */
+  source?: string | null
   items: Item[]
+}
+
+/** Did the Planyo import create this booking, or did HQ? */
+export function isPlanyoOrigin(b: JobBooking): boolean {
+  // source is authoritative; fall back to the cart id for a payload that
+  // predates it (adoption makes that fallback imprecise, never wrong for
+  // rows the importer actually created).
+  if (b.source) return b.source === 'PLANYO_BACKFILL'
+  return Boolean(b.planyoCartId)
 }
 
 /** Terminal states the rest of the app filters out — shown greyed, not hidden. */
@@ -68,35 +99,51 @@ function categoryKey(b: JobBooking): string {
   return [...new Set(b.items.map((i) => i.category?.name).filter(Boolean))].sort().join('|')
 }
 
+/** The window + equipment two bookings must share to be suspected twins. */
+function twinKey(b: JobBooking): string | null {
+  const cats = categoryKey(b)
+  if (cats === '') return null // no equipment — nothing to compare
+  return `${b.startDate.slice(0, 10)}|${b.endDate.slice(0, 10)}|${cats}`
+}
+
 /**
- * Pair each live NATIVE booking with a live PLANYO one describing the same
- * rental: identical dates and the same category set. Deliberately strict —
- * a near-miss should read as two real reservations, not be quietly merged
- * in the operator's head.
+ * Group the job's LIVE bookings by identical window + equipment.
+ * Deliberately strict — a near-miss should read as two real
+ * reservations, not be quietly merged in the operator's head.
+ *
+ * Returns id → the OTHER booking it duplicates. In a group the KEEPER is
+ * the first HQ-native row (the system of record through the cutover),
+ * falling back to the first row given; every other member points at it,
+ * and it points back at the first of them. A group of three trucks for
+ * one rental therefore surfaces as one warning, not three.
  */
-export function findPlanyoTwins(bookings: JobBooking[]): Map<string, JobBooking> {
+export function findDuplicateGroups(bookings: JobBooking[]): JobBooking[][] {
   const live = bookings.filter((b) => !DEAD.includes(b.status))
-  const natives = live.filter((b) => !b.planyoCartId)
-  const imported = live.filter((b) => b.planyoCartId)
+  const byKey = new Map<string, JobBooking[]>()
+  for (const b of live) {
+    const key = twinKey(b)
+    if (!key) continue
+    const g = byKey.get(key)
+    if (g) g.push(b)
+    else byKey.set(key, [b])
+  }
+  return [...byKey.values()].filter((g) => g.length > 1)
+}
+
+/** id → the other booking it duplicates. One entry per member of a group. */
+export function findDuplicateHolds(bookings: JobBooking[]): Map<string, JobBooking> {
   const pairs = new Map<string, JobBooking>()
-  const taken = new Set<string>()
-  for (const n of natives) {
-    const match = imported.find(
-      (p) =>
-        !taken.has(p.id) &&
-        p.startDate.slice(0, 10) === n.startDate.slice(0, 10) &&
-        p.endDate.slice(0, 10) === n.endDate.slice(0, 10) &&
-        categoryKey(p) === categoryKey(n) &&
-        categoryKey(n) !== '',
-    )
-    if (match) {
-      taken.add(match.id)
-      pairs.set(n.id, match)
-      pairs.set(match.id, n)
-    }
+  for (const group of findDuplicateGroups(bookings)) {
+    const keeper = group.find((b) => !isPlanyoOrigin(b)) ?? group[0]
+    const others = group.filter((b) => b.id !== keeper.id)
+    pairs.set(keeper.id, others[0])
+    for (const o of others) pairs.set(o.id, keeper)
   }
   return pairs
 }
+
+/** @deprecated name kept for callers/tests that predate the widening. */
+export const findPlanyoTwins = findDuplicateHolds
 
 export function JobBookingsSection({
   bookings,
@@ -146,11 +193,10 @@ export function JobBookingsSection({
   )
 
   if (bookings.length === 0) return null
-  const twins = findPlanyoTwins(bookings)
+  const twins = findDuplicateHolds(bookings)
   const liveCount = bookings.filter((b) => !DEAD.includes(b.status)).length
-  const dupCount = [...twins.keys()].filter((id) =>
-    bookings.some((b) => b.id === id && !b.planyoCartId),
-  ).length
+  // One warning per RENTAL held twice, not per booking involved.
+  const dupCount = findDuplicateGroups(bookings).length
 
   return (
     <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
@@ -168,9 +214,8 @@ export function JobBookingsSection({
           <strong className="font-semibold">
             {dupCount === 1 ? 'This job holds the same rental twice.' : `${dupCount} rentals are held twice here.`}
           </strong>{' '}
-          A native reservation and a Planyo import cover identical dates and equipment, so the job is
-          holding double the vehicles. Keep the native one and remove the import — unless the
-          production genuinely takes both.
+          Two reservations cover identical dates and equipment, so the job is holding double the
+          vehicles. Keep one and remove the other — unless the production genuinely takes both.
         </div>
       )}
       {msg && (
@@ -203,17 +248,22 @@ export function JobBookingsSection({
                     <span className="font-mono text-[12px] text-zinc-900">{b.bookingNumber}</span>
                     <span
                       title={
-                        b.planyoCartId
+                        isPlanyoOrigin(b)
                           ? `Imported from Planyo cart ${b.planyoCartId}`
-                          : 'Entered in HQ — the system of record through the cutover'
+                          : b.planyoCartId
+                            ? `Entered in HQ — the system of record through the cutover. Linked to Planyo cart ${b.planyoCartId}, which the import matched to this booking instead of duplicating it.`
+                            : 'Entered in HQ — the system of record through the cutover'
                       }
                       className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                        b.planyoCartId
+                        isPlanyoOrigin(b)
                           ? 'bg-sky-50 text-sky-700 border-sky-200'
                           : 'bg-zinc-100 text-zinc-700 border-zinc-300'
                       }`}
                     >
-                      {b.planyoCartId ? 'Planyo' : 'HQ'}
+                      {/* An ADOPTED native carries a cart id but is still HQ's
+                          row — labelling it "Planyo" hid the one native on the
+                          job behind a chip that said otherwise. */}
+                      {isPlanyoOrigin(b) ? 'Planyo' : b.planyoCartId ? 'HQ · cart' : 'HQ'}
                     </span>
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
@@ -234,7 +284,7 @@ export function JobBookingsSection({
                     <div className="mt-1.5 text-[11px] text-amber-700">
                       Same dates and equipment as{' '}
                       <span className="font-mono">{twin.bookingNumber}</span>
-                      {twin.planyoCartId ? ' (Planyo import)' : ' (entered in HQ)'} — likely the same rental.
+                      {isPlanyoOrigin(twin) ? ' (Planyo import)' : ' (entered in HQ)'} — likely the same rental.
                     </div>
                   )}
                 </div>
