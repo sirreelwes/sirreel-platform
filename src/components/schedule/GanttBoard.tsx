@@ -1057,6 +1057,17 @@ export function GanttBoard() {
     }
   }
 
+  // Release THIS bar's truck, not the whole category line. A BookingItem
+  // is "2× Motorhome", and a bar is one of the two — releasing by item id
+  // alone swapped the sibling's assignment as well, so the other
+  // production's truck fell off the board with no warning (Wes
+  // 2026-09-10). Passing the bar's assetId makes the server hand back
+  // exactly this unit and drop the line's quantity by one; a one-truck
+  // line still comes down whole, which is the old behaviour.
+  //
+  // A category-lane bar (a REQUESTED hold with no unit picked) has no
+  // assetId, so it keeps releasing the line — there is nothing narrower
+  // to name.
   async function handleRelease() {
     if (!selected) return
     const bookingItemId: string | undefined = selected.bookingItemId ?? selected.reservationId
@@ -1064,11 +1075,16 @@ export function GanttBoard() {
       setActionError('Missing bookingItemId on the selected bar — refresh and retry.')
       return
     }
+    const assetId: string | undefined = selected.isUnit ? selected.assetId : undefined
     setActionPending('release')
     setActionError(null)
     setActionSuccess(null)
     try {
-      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/release`, { method: 'POST' })
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/release`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(assetId ? { assetId } : {}),
+      })
       const json = await res.json()
       if (!res.ok || !json.ok) {
         throw new Error(json.reason || json.error || `release failed (${res.status})`)
@@ -1334,13 +1350,16 @@ export function GanttBoard() {
     }
   }, [doReassign])
 
+  // assetId rides along because a bar is ONE TRUCK, while bookingItemId is
+  // the whole category line — releasing off the bar without it took the
+  // sibling trucks on a 2× line down too (Wes 2026-09-10).
   const onBarClick = useCallback((b: any, unit: any) => {
     if (suppressBarClick.current) { suppressBarClick.current = false; return }
-    setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: 1 })
+    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: 1 })
   }, [])
 
   const onBackupClick = useCallback((b: any, unit: any, rank: number) => {
-    setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
+    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
   }, [])
 
   // "Other units on this job" chip click — switch the open pop-up to
@@ -1362,6 +1381,7 @@ export function GanttBoard() {
           setSelected({
             ...b,
             unitName: u.unitName,
+            assetId: b.assetId ?? u.assetId,
             categoryId: b.categoryId ?? u.categoryId,
             isUnit: true,
             holdRank: rank,
@@ -2364,9 +2384,18 @@ export function GanttBoard() {
                             <button
                               onClick={handleRelease}
                               disabled={!!actionPending}
+                              title={
+                                selected.isUnit && selected.assetId
+                                  ? `Hands ${selected.unitName} back off this hold. Any other unit on the same line stays held.`
+                                  : 'Hands this hold back.'
+                              }
                               className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
                             >
-                              {actionPending === 'release' ? 'Releasing…' : 'Release backup'}
+                              {actionPending === 'release'
+                                ? 'Releasing…'
+                                : selected.isUnit && selected.assetId
+                                  ? `Release ${selected.unitName}`
+                                  : 'Release backup'}
                             </button>
                             <span className="text-[10px] text-gray-400 ml-auto">
                               Promote re-ranks the queue; Book becomes available after.
@@ -2411,13 +2440,24 @@ export function GanttBoard() {
                             <button
                               onClick={handleRelease}
                               disabled={!!actionPending}
+                              title={
+                                selected.isUnit && selected.assetId
+                                  ? `Hands ${selected.unitName} back off this hold. Any other unit on the same line stays held.`
+                                  : 'Hands this hold back.'
+                              }
                               className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
                             >
-                              {actionPending === 'release' ? 'Releasing…' : 'Release'}
+                              {actionPending === 'release'
+                                ? 'Releasing…'
+                                : selected.isUnit && selected.assetId
+                                  ? `Release ${selected.unitName}`
+                                  : 'Release'}
                             </button>
                           )}
                           <span className="text-[10px] text-gray-400 ml-auto">
-                            Backups (if any) stay queued — no auto-promote.
+                            {selected.isUnit && selected.assetId
+                              ? 'Releases this unit only; others on the line stay held. Backups stay queued.'
+                              : 'Backups (if any) stay queued — no auto-promote.'}
                           </span>
                         </>
                       )}

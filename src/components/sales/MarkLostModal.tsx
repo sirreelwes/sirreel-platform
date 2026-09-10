@@ -36,7 +36,17 @@ interface MarkLostJob {
 
 interface HeldUnit {
   kind: 'OURS' | 'PARTNER';
+  /**
+   * A hold ROW id, not always a whole BookingItem: a line holding two
+   * assigned trucks arrives as one row PER TRUCK, so a rep can hand back
+   * the one the production dropped and keep the other (Wes 2026-09-10 —
+   * ticking one used to release both). Posted back verbatim; the server
+   * parses it.
+   */
   id: string;
+  bookingItemId?: string | null;
+  /** Set when the row names one specific unit. */
+  assetId?: string | null;
   label: string;
   quantity: number;
   startDate: string | null;
@@ -244,7 +254,10 @@ export function MarkLostModal({ job, onClose, onMarked, mode = 'lost' }: MarkLos
                       {h.quantity > 1 ? `${h.quantity}× ` : ''}{h.label}
                     </span>
                     {h.vendorName ? ` · ${h.vendorName}` : ''} · {fmtRange(h.startDate, h.endDate)}
-                    {h.assignedUnits.length > 0 && (
+                    {/* A unit row already NAMES its truck in the label —
+                        repeating it as "frees Cube 10" reads like a second
+                        thing going back. Only a whole line needs the list. */}
+                    {!h.assetId && h.assignedUnits.length > 0 && (
                       <span className="text-lt-fg3"> · frees {h.assignedUnits.join(', ')}</span>
                     )}
                   </li>

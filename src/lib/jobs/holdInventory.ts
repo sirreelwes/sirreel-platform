@@ -30,6 +30,12 @@
 
 import { prisma } from '@/lib/prisma'
 import { holdRankLabel } from '@/lib/scheduling/holdRanks'
+import { releaseBookingItem } from '@/lib/scheduling/releaseBookingItem'
+// A hold row is not always a whole BookingItem — a line holding two
+// assigned trucks lists one row per truck, so releasing one leaves the
+// other alone (Wes 2026-09-10). `holdRowId` / `parseHoldRowId` are the
+// two ends of that addressing.
+import { holdRowId, parseHoldRowId } from '@/lib/scheduling/holdRelease'
 import {
   cancelSubRentalsById,
   jobLifecycleContext,
@@ -53,8 +59,18 @@ const CANCELLABLE_BOOKING_STATUSES = ['REQUEST', 'AI_REVIEW', 'PENDING_APPROVAL'
 export interface HeldUnit {
   /** OURS = a unit off our own fleet. PARTNER = a sub-rented unit. */
   kind: 'OURS' | 'PARTNER'
-  /** BookingItem id (OURS) or SubRental id (PARTNER). */
+  /**
+   * The id to hand back to POST /holds. For a PARTNER row it is the
+   * SubRental id. For an OURS row it is a HOLD ROW id, which is NOT
+   * always a bare BookingItem id — see `holdRowId`: a line holding two
+   * assigned trucks emits one row per truck, so releasing one leaves the
+   * other alone (Wes 2026-09-10).
+   */
   id: string
+  /** OURS: the BookingItem this row belongs to. */
+  bookingItemId: string | null
+  /** OURS: the specific unit this row releases, when it names one. */
+  assetId: string | null
   label: string
   quantity: number
   startDate: string | null
@@ -115,38 +131,90 @@ export async function getJobHoldInventory(jobId: string): Promise<JobHoldInvento
       booking: { select: { bookingNumber: true, startDate: true, endDate: true } },
       assignments: {
         where: { status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
-        select: { startDate: true, endDate: true, asset: { select: { unitName: true } } },
+        select: {
+          startDate: true,
+          endDate: true,
+          assetId: true,
+          asset: { select: { id: true, unitName: true } },
+        },
       },
     },
     orderBy: { holdRank: 'asc' },
   })
 
-  const ours: HeldUnit[] = items.map((it) => {
-    const assignedUnits = it.assignments.map(
-      (a) => a.asset?.unitName || 'unnamed unit',
-    )
-    // Assignment dates are the precise window a unit is committed for;
-    // the booking envelope is the fallback for an unassigned hold.
-    const starts = it.assignments.map((a) => a.startDate).filter(Boolean) as Date[]
-    const ends = it.assignments.map((a) => a.endDate).filter(Boolean) as Date[]
-    const firm = it.holdRank === 1 || assignedUnits.length > 0
-    return {
+  // ONE ROW PER THING A HUMAN CAN HAND BACK — not one row per database
+  // line. A "2× Motorhome" item with Cube 10 and Cube 12 picked used to
+  // be a single tick that released both; the rep who only wanted Cube 12
+  // back had no way to say so, and the sibling truck came off the board
+  // with it (Wes 2026-09-10). So an item with units picked emits one row
+  // per unit, plus a pooled row for any slots still unassigned. An item
+  // with nothing picked stays exactly one row, keyed by the item id.
+  const ours: HeldUnit[] = items.flatMap((it) => {
+    const lineLabel =
+      it.category?.name ?? it.catalogItem?.description ?? it.catalogItem?.code ?? 'Unnamed category'
+    const rankNote =
+      it.holdRank === 1 ? null : `${holdRankLabel(it.holdRank)} Hold — queued behind another production`
+
+    const unitRows: HeldUnit[] = it.assignments.map((a) => ({
       kind: 'OURS' as const,
-      id: it.id,
-      label: it.category?.name ?? it.catalogItem?.description ?? it.catalogItem?.code ?? 'Unnamed category',
-      quantity: it.quantity,
-      startDate: iso(starts.length ? starts.reduce((a, b) => (a < b ? a : b)) : it.booking.startDate),
-      endDate: iso(ends.length ? ends.reduce((a, b) => (a > b ? a : b)) : it.booking.endDate),
-      firm,
-      detail: assignedUnits.length
-        ? `Assigned · ${assignedUnits.join(', ')}`
-        : it.holdRank === 1
-          ? 'Hold, no unit assigned yet'
-          : `${holdRankLabel(it.holdRank)} Hold — queued behind another production`,
-      assignedUnits,
+      id: holdRowId(it.id, { assetId: a.assetId }),
+      bookingItemId: it.id,
+      assetId: a.assetId,
+      label: `${a.asset?.unitName || 'unnamed unit'} · ${lineLabel}`,
+      quantity: 1,
+      // The assignment's own window is the truth for a picked unit; the
+      // booking envelope only answers for a slot nobody has picked yet.
+      startDate: iso(a.startDate ?? it.booking.startDate),
+      endDate: iso(a.endDate ?? it.booking.endDate),
+      // A truck with someone's name on it is committed, whatever the rank.
+      firm: true,
+      detail: rankNote ? `Assigned · ${rankNote}` : 'Assigned to this job',
+      assignedUnits: [a.asset?.unitName || 'unnamed unit'],
       vendorName: null,
       notifiesVendor: false,
+    }))
+
+    const pooledSlots = Math.max(0, it.quantity - it.assignments.length)
+    if (unitRows.length === 0) {
+      // Nothing picked — the whole line IS the row, and its id stays the
+      // bare BookingItem id so older callers keep hitting the same thing.
+      return [
+        {
+          kind: 'OURS' as const,
+          id: it.id,
+          bookingItemId: it.id,
+          assetId: null,
+          label: lineLabel,
+          quantity: it.quantity,
+          startDate: iso(it.booking.startDate),
+          endDate: iso(it.booking.endDate),
+          firm: it.holdRank === 1,
+          detail: rankNote ?? 'Hold, no unit assigned yet',
+          assignedUnits: [],
+          vendorName: null,
+          notifiesVendor: false,
+        },
+      ]
     }
+    if (pooledSlots === 0) return unitRows
+    return [
+      ...unitRows,
+      {
+        kind: 'OURS' as const,
+        id: holdRowId(it.id, 'pool'),
+        bookingItemId: it.id,
+        assetId: null,
+        label: lineLabel,
+        quantity: pooledSlots,
+        startDate: iso(it.booking.startDate),
+        endDate: iso(it.booking.endDate),
+        firm: it.holdRank === 1,
+        detail: rankNote ?? 'Still held, no unit picked yet',
+        assignedUnits: [],
+        vendorName: null,
+        notifiesVendor: false,
+      },
+    ]
   })
 
   const subs = await prisma.subRental.findMany({
@@ -175,6 +243,8 @@ export async function getJobHoldInventory(jobId: string): Promise<JobHoldInvento
     return {
       kind: 'PARTNER' as const,
       id: s.id,
+      bookingItemId: null,
+      assetId: null,
       label: s.subcontractedVehicle?.name ?? s.itemDescription,
       quantity: s.quantity,
       startDate: iso(s.startDate),
@@ -223,11 +293,17 @@ export interface ReleaseResult {
  * that does not resolve within the job is skipped and reported rather
  * than acted on.
  *
- * Our own units use the canonical release recipe (active assignments →
- * SWAPPED, item → UNFULFILLED) in one transaction per item — the same
- * pair as /api/scheduling/booking-items/[id]/release. Partner units go
+ * Our own units go through `releaseBookingItem` — the same function
+ * /api/scheduling/booking-items/[id]/release and the Planyo auto-release
+ * cron call, so there is one recipe rather than three. Partner units go
  * through cancelSubRentalsById so the release, the partner's email and
  * the audit row stay identical to the order-cancellation path.
+ *
+ * PER-UNIT (Wes 2026-09-10): an id may name a whole line, one assigned
+ * unit, or a line's unassigned remainder — see `holdRowId`. Ids for the
+ * same BookingItem are gathered first, so ticking both trucks on a
+ * 2× line resolves to ONE whole-line release rather than two partials
+ * racing each other on the same row.
  *
  * NON-FATAL on the partner side: the sub-rental status flip is durable
  * whatever the mail does, and a failed send comes back as a warning the
@@ -242,36 +318,81 @@ export async function releaseJobHolds(
     releasedOurs: 0, unitsFreed: 0, bookingsCancelled: 0,
     releasedPartner: 0, partnerOutcomes: [], skipped: [], error: null,
   }
-  const wantItems = Array.from(new Set(selection.bookingItemIds ?? []))
+  const wantRows = Array.from(new Set(selection.bookingItemIds ?? []))
   const wantSubs = Array.from(new Set(selection.subRentalIds ?? []))
-  if (wantItems.length === 0 && wantSubs.length === 0) return out
+  if (wantRows.length === 0 && wantSubs.length === 0) return out
+
+  // Gather the ticked rows back onto the BookingItems they came from.
+  // Two unit rows on the same line have to be decided together — released
+  // one at a time they would each re-read a quantity the other just
+  // changed.
+  const byItem = new Map<
+    string,
+    { wholeLine: boolean; assetIds: Set<string>; pooled: boolean; rowIds: string[] }
+  >()
+  for (const rowId of wantRows) {
+    const parsed = parseHoldRowId(rowId)
+    const entry = byItem.get(parsed.bookingItemId) ?? {
+      wholeLine: false, assetIds: new Set<string>(), pooled: false, rowIds: [],
+    }
+    entry.rowIds.push(rowId)
+    if (parsed.wholeLine) entry.wholeLine = true
+    if (parsed.pooled) entry.pooled = true
+    if (parsed.assetId) entry.assetIds.add(parsed.assetId)
+    byItem.set(parsed.bookingItemId, entry)
+  }
 
   try {
     // ── Ours ────────────────────────────────────────────────────────────
-    const items = wantItems.length
+    const items = byItem.size
       ? await prisma.bookingItem.findMany({
           where: {
-            id: { in: wantItems },
+            id: { in: Array.from(byItem.keys()) },
             status: { in: [...LIVE_ITEM_STATUSES] },
             booking: { jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
           },
-          select: { id: true, status: true, holdRank: true, bookingId: true },
+          select: {
+            id: true, status: true, holdRank: true, bookingId: true, quantity: true,
+            assignments: {
+              where: { status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
+              select: { assetId: true },
+            },
+          },
         })
       : []
     const foundItemIds = new Set(items.map((i) => i.id))
-    out.skipped.push(...wantItems.filter((id) => !foundItemIds.has(id)))
+    for (const [itemId, sel] of byItem) {
+      if (!foundItemIds.has(itemId)) out.skipped.push(...sel.rowIds)
+    }
 
     const touchedBookings = new Set<string>()
     for (const item of items) {
-      const [swapped] = await prisma.$transaction([
-        prisma.bookingAssignment.updateMany({
-          where: { bookingItemId: item.id, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
-          data: { status: 'SWAPPED' },
-        }),
-        prisma.bookingItem.update({ where: { id: item.id }, data: { status: 'UNFULFILLED' } }),
-      ])
-      out.releasedOurs++
-      out.unitsFreed += swapped.count
+      const sel = byItem.get(item.id)!
+      const assignedIds = item.assignments.map((a) => a.assetId)
+      // A unit row whose truck is no longer on this line (someone else
+      // released or reassigned it while the modal sat open) is skipped and
+      // named — never widened into "release the line".
+      const stale = Array.from(sel.assetIds).filter((id) => !assignedIds.includes(id))
+      out.skipped.push(...stale.map((assetId) => holdRowId(item.id, { assetId })))
+      const liveAssetIds = Array.from(sel.assetIds).filter((id) => assignedIds.includes(id))
+      const pooledSlots = sel.pooled ? Math.max(0, item.quantity - assignedIds.length) : 0
+      const namedOnly = !sel.wholeLine && (liveAssetIds.length > 0 || pooledSlots > 0)
+      if (!sel.wholeLine && !namedOnly) continue // every row on it was stale
+
+      const outcome = await releaseBookingItem(
+        item.id,
+        namedOnly ? { assetIds: liveAssetIds, pooledSlots } : {},
+      )
+      if (!outcome.ok) {
+        out.skipped.push(...sel.rowIds)
+        continue
+      }
+      // Count what the HUMAN ticked and we acted on, not database rows —
+      // "2 holds released" beside two ticked trucks is the honest number.
+      out.releasedOurs += sel.wholeLine
+        ? 1
+        : liveAssetIds.length + (pooledSlots > 0 ? 1 : 0)
+      out.unitsFreed += outcome.swappedAssignmentCount
       touchedBookings.add(item.bookingId)
       await prisma.auditLog.create({
         data: {
@@ -279,8 +400,15 @@ export async function releaseJobHolds(
           entityType: 'BookingItem',
           entityId: item.id,
           userId: actorId,
-          oldValues: { status: item.status, holdRank: item.holdRank },
-          newValues: { status: 'UNFULFILLED', assignmentsSwapped: swapped.count, jobId },
+          oldValues: { status: item.status, holdRank: item.holdRank, quantity: item.quantity },
+          newValues: {
+            status: outcome.status,
+            quantity: outcome.quantity,
+            mode: outcome.mode,
+            releasedAssetIds: namedOnly ? liveAssetIds : assignedIds,
+            assignmentsSwapped: outcome.swappedAssignmentCount,
+            jobId,
+          },
         },
       }).catch(() => {})
     }
