@@ -23,6 +23,8 @@ scripts/*
 !scripts/generate-canonical-agreement-pdf.ts
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
+!scripts/onboard-battery-partners.ts
+!scripts/battery-partner-candidates.ts
 !scripts/backfill-coi-named-insured.ts
 !scripts/import-annual-agreements.ts
 !scripts/create-annual-agreement-companies.ts

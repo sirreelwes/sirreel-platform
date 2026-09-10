@@ -204,6 +204,27 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
   agreement variant and welcome-email wording.
 
+## Battery-power partner candidates (2026-09-10 — queued, NOT yet in the DB)
+- Wes asked for an LA battery-generator outfit that rents to productions,
+  with a partner portal queued. Four candidates, ranked, live in
+  `scripts/battery-partner-candidates.ts` (plain data): **Saniset Fleet**
+  (Van Nuys, CleanGEN J250 250 kWh — lead), **Pig Pen Rentals** (LA County,
+  battery is a side line of a toilet/fence renter), **GreenLite Trailers**
+  (Agua Dulce, Moxion 600/75 530 kWh — also rents star trailers, so part
+  competitor), **Greenwave Rentals** (Voltstack fleet, Vancouver HQ with an
+  LA service area — not LA-based). Each carries the research, the fit and
+  the caveat; emails are seeded only where quotable (a guessed email sends
+  the introduction to nobody).
+- `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
+  --all [--dry] [--email slug=… --phone slug=…]` is the PowerTrip onboarding
+  generalised over that registry: upsert Vendor (EQUIPMENT, Power &
+  Generators), seed a rate-less delivered unlisted roster, mint the account
+  link, journal ids. Then /crm/portals#vendor: deal → introduction (Wes) →
+  standard Partner Equipment Agreement → email the link. The session that
+  wrote it had no DATABASE_URL, so nothing has been run yet.
+- `npm run test:battery-candidates` guards the registry (unique names,
+  real sections, no rates, delivered not driven, well-formed emails).
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation
