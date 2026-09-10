@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### Partner portal: a second partner, and the first one that rents equipment
 
-`cb0f6d0` partners: PowerTrip Rentals — an equipment partner, with the words, sections and agreement to match
+`3cda068` partners: PowerTrip Rentals — an equipment partner, with the words, sections and agreement to match
 
 Wes: "start building a partner portal for Power Trip Rentals. Evan Crawford is the owner… We will feature their equipment on our website." The partner system built for King Kong (2026-09-05/06) already did most of it — account page, per-unit conduit, drivers, deal, agreement, public listing — but every surface was VEHICLE-shaped, and PowerTrip rents generators, distro, HVAC, lifts, temporary lighting and carts that are delivered and set up, never driven. So the change is a KIND on the partner, and the surfaces read it:
 
