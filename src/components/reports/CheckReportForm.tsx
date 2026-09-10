@@ -100,7 +100,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
     /** What filing this sheet settled in the yard. */
-    gear: { pickListAdvanced: boolean; jobReturned: boolean } | null
+    gear: { pickListAdvanced: boolean; jobReturned: boolean; orderOut: boolean } | null
     /** The sheet covered only part of the order. */
     partial: boolean
     offSheet: number
@@ -412,6 +412,15 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {done.gear?.jobReturned && (
             <p className="mt-3 text-[14px] text-chip-good-fg">
               Everything on this job is back — it&rsquo;s marked returned.
+            </p>
+          )}
+          {/* The outbound answer to the same question. Jose filed this
+              sheet and then asked what else had to happen; nothing does,
+              and the screen should say so rather than leave him hunting
+              for a button. */}
+          {done.gear?.orderOut && (
+            <p className="mt-3 text-[14px] text-chip-good-fg">
+              The gear is marked out — the job reads <b>On rental</b> now. Nothing else to do.
             </p>
           )}
 

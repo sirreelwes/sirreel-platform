@@ -27,7 +27,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireYardAccess } from '@/lib/yard/requireYardAccess'
 import {
-  reportDraft, settleGearAfterReport, submitCheckReport, type SubmitLineInput,
+  reportDraft, settleGearAfterReport, submitCheckReport,
+  type GearSettleResult, type SubmitLineInput,
 } from '@/lib/orders/checkReports'
 import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
 
@@ -132,13 +133,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     sheetPhotoUrl: typeof body.sheetPhotoUrl === 'string' ? body.sheetPhotoUrl : null,
   })
 
-  // The sheet is also the gear lane's status. Advancing the pick list
-  // here is what lets a paper check-IN close the job out — without it
-  // the list sits at DRAFT forever and Job.returnedAt is never stamped,
-  // so a job whose gear is physically back reads "Not returned". Same
-  // non-fatal treatment as the re-send: the transcription is filed
-  // either way. See settleGearAfterReport for the full why.
-  let gear: { pickListAdvanced: boolean; jobReturned: boolean } | null = null
+  // The sheet is also the gear lane's status, on BOTH edges. Advancing
+  // the pick list here is what lets a paper check-IN close the job out —
+  // without it the list sits at DRAFT forever and Job.returnedAt is
+  // never stamped, so a job whose gear is physically back reads "Not
+  // returned". Outbound it is what puts the order out: lines LOADED,
+  // then LOADED_READY, then ON_JOB, so the job reads "On rental"
+  // instead of still picking. Same non-fatal treatment as the re-send:
+  // the transcription is filed either way. See settleGearAfterReport.
+  let gear: GearSettleResult | null = null
   try {
     gear = await settleGearAfterReport(id, edge, auth.userId, result.partial)
   } catch (err) {
