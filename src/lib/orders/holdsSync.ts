@@ -195,7 +195,7 @@ export async function syncHoldOnLineAdd(
 ): Promise<{ bookingItemId: string; quantityBefore: number; quantityAfter: number; created: boolean }> {
   const existing = await tx.bookingItem.findFirst({
     where: { bookingId: args.bookingId, categoryId: args.categoryId, holdRank: 1 },
-    select: { id: true, quantity: true, notes: true },
+    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
   })
 
   if (existing) {
@@ -203,9 +203,13 @@ export async function syncHoldOnLineAdd(
     const notes = args.conflictOverrideNote
       ? appendNote(existing.notes, args.conflictOverrideNote)
       : existing.notes
+    // A fully-assigned item that grows has an open slot again. Only
+    // REQUESTED demand counts in availability and on the needs-a-unit
+    // lane, so left ASSIGNED the new slot is invisible (SR-JOB-0347).
+    const reopen = existing.status === 'ASSIGNED' && next > existing._count.assignments
     await tx.bookingItem.update({
       where: { id: existing.id },
-      data: { quantity: next, notes },
+      data: { quantity: next, notes, ...(reopen ? { status: 'REQUESTED' } : {}) },
     })
     return {
       bookingItemId: existing.id,
@@ -284,7 +288,7 @@ export async function syncHoldOnLineUpdate(
 
   const existing = await tx.bookingItem.findFirst({
     where: { bookingId: args.bookingId, categoryId: args.categoryId, holdRank: 1 },
-    select: { id: true, quantity: true, notes: true },
+    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
   })
   if (!existing) {
     // No hold to adjust. For positive delta, treat as an add.
@@ -319,9 +323,10 @@ export async function syncHoldOnLineUpdate(
   const notes = args.conflictOverrideNote
     ? appendNote(existing.notes, args.conflictOverrideNote)
     : existing.notes
+  const reopen = existing.status === 'ASSIGNED' && next > existing._count.assignments
   await tx.bookingItem.update({
     where: { id: existing.id },
-    data: { quantity: next, notes },
+    data: { quantity: next, notes, ...(reopen ? { status: 'REQUESTED' } : {}) },
   })
   return {
     bookingItemId: existing.id,

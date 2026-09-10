@@ -3983,14 +3983,7 @@ export default function OrderDetailPage() {
                 <button type="button" onClick={() => setUnitNotice(null)} className="text-lt-fg3 hover:text-lt-fg">Dismiss</button>
               </div>
             )}
-            {assignHoldId && (
-              <AssignUnitsModal
-                bookingItemId={assignHoldId}
-                bufferDays={1}
-                onClose={() => setAssignHoldId(null)}
-                onChanged={fetchOrder}
-              />
-            )}
+
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
@@ -5358,6 +5351,17 @@ export default function OrderDetailPage() {
 
       <LineItemUndoToast toast={lineItemUndoToast} />
 
+      {/* Unit picker for a vehicle line's hold. Rendered at the page
+          root, outside every money/section gate, so "Change unit…"
+          opens for anyone who can see the link. */}
+      {assignHoldId && (
+        <AssignUnitsModal
+          bookingItemId={assignHoldId}
+          bufferDays={1}
+          onClose={() => setAssignHoldId(null)}
+          onChanged={fetchOrder}
+        />
+      )}
       {subRentalLine && (
         <SubRentalModal
           line={subRentalLine}
