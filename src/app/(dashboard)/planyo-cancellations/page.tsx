@@ -62,7 +62,16 @@ export default function PlanyoCancellationsPage() {
     if (!c.bookingItemId) return
     setBusy(c.planyoReservationId ?? ''); setErr(null)
     try {
-      const res = await fetch(`/api/scheduling/booking-items/${c.bookingItemId}/release`, { method: 'POST' })
+      // Pass the reservation so the release also RECORDS that Planyo's
+      // cancellation was actioned. Without it the row re-appeared in this
+      // queue every morning and, worse, counted against the auto-release
+      // cap — so clearing the list by hand kept the nightly cron from
+      // releasing anything at all.
+      const res = await fetch(`/api/scheduling/booking-items/${c.bookingItemId}/release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planyoReservationId: c.planyoReservationId }),
+      })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(j.error || j.reason || 'Release failed')
       setDone((d) => ({ ...d, [c.planyoReservationId ?? '']: j.alreadyReleased ? 'Already released' : 'Released' }))

@@ -248,9 +248,12 @@ async function sendSyncAlert(
   lines.push(
     `*Counts:* create=${counts.create}, updateDates=${counts.updateDates}, release=${counts.release}, *releaseCandidate=${counts.releaseCandidate}*, unmapped=${counts.unmapped}, conflict=${counts.conflict}, absent=${counts.absent}, noChange=${counts.noChange}`,
     autoRelease.abortedOverCap
-      ? `:rotating_light: *AUTO-RELEASE ABORTED* — ${autoRelease.attempted} candidates exceeds the cap of ${autoRelease.cap}. Nothing was released. An unusually large batch usually means Planyo changed something, not that ${autoRelease.attempted} holds were cancelled. Review at /planyo-cancellations.`
+      ? `:rotating_light: *AUTO-RELEASE ABORTED* — ${autoRelease.attempted} units would come down, exceeding the cap of ${autoRelease.cap}. Nothing was released. An unusually large batch usually means Planyo changed something, not that ${autoRelease.attempted} holds were cancelled. Review at /planyo-cancellations.` +
+        (autoRelease.settledZombies
+          ? `\n  (${autoRelease.settledZombies} already-released row${autoRelease.settledZombies === 1 ? '' : 's'} still got recorded as settled and will stop re-flagging.)`
+          : '')
       : autoRelease.enabled
-        ? `*Auto-release:* released=${autoRelease.released}, alreadyReleased=${autoRelease.alreadyReleased}, skipped(unresolved)=${autoRelease.skippedUnresolved}, skipped(weak match)=${autoRelease.skippedWeakMatch}, failed=${autoRelease.failed.length}` +
+        ? `*Auto-release:* released=${autoRelease.released}, alreadyReleased=${autoRelease.alreadyReleased}, settled(already down)=${autoRelease.settledZombies}, skipped(unresolved)=${autoRelease.skippedUnresolved}, skipped(weak match)=${autoRelease.skippedWeakMatch}, failed=${autoRelease.failed.length}` +
           (autoRelease.releasedDetail.length
             ? '\n  ' + autoRelease.releasedDetail.map((d) => `${d.unitName} (planyo #${d.planyoReservationId})`).join(', ')
             : '')
@@ -348,7 +351,7 @@ async function sendSyncAlert(
 
   lines.push('')
   lines.push(
-    `_Auto-release OFF; cancellations stay flag-only. New-cart pass: ${newCarts.candidatesConsidered} considered, ${newCarts.skippedCancelled} cancelled-skipped, ${newCarts.skippedPastOnly} past-only-skipped, ${newCarts.durationMs}ms._`,
+    `_Auto-release ${autoRelease.enabled ? 'ON' : 'OFF'}. New-cart pass: ${newCarts.candidatesConsidered} considered, ${newCarts.skippedCancelled} cancelled-skipped, ${newCarts.skippedPastOnly} past-only-skipped, ${newCarts.durationMs}ms._`,
   )
 
   return slackPost(lines.join('\n'))

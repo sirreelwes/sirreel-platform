@@ -1,6 +1,7 @@
 /**
  * POST /api/scheduling/booking-items/[id]/release
- *   body (all optional): { assetId?: string, assetIds?: string[], pooledSlots?: number }
+ *   body (all optional): { assetId?: string, assetIds?: string[],
+ *                          pooledSlots?: number, planyoReservationId?: string }
  *
  * Release a hold at any active state.
  *
@@ -37,6 +38,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
 import { releaseBookingItem } from '@/lib/scheduling/releaseBookingItem'
+import { settlePlanyoCancellation } from '@/lib/sync/planyo/settleCancellation'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +65,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // cancellations) POST with none at all, and must keep meaning "the
   // whole line".
   const body = (await req.json().catch(() => null)) as
-    | { assetId?: unknown; assetIds?: unknown; pooledSlots?: unknown }
+    | {
+        assetId?: unknown
+        assetIds?: unknown
+        pooledSlots?: unknown
+        planyoReservationId?: unknown
+      }
     | null
   const namedAssets = [
     ...(typeof body?.assetId === 'string' ? [body.assetId] : []),
@@ -73,6 +80,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     typeof body?.pooledSlots === 'number' && Number.isFinite(body.pooledSlots)
       ? Math.max(0, Math.trunc(body.pooledSlots))
       : 0
+  // /planyo-cancellations passes the reservation it is clearing, so the
+  // release can also RECORD that Planyo's cancellation has been actioned.
+  // Without it the Reservation stayed at HOLD, the daily sync re-probed
+  // it, Planyo still said cancelled, and the row came back as a
+  // RELEASE_CANDIDATE the next morning — every morning. That backlog is
+  // what kept the auto-release circuit breaker tripped (see
+  // src/lib/sync/planyo/settleCancellation.ts). Optional, so every other
+  // caller of this one release path is unchanged.
+  const planyoReservationId =
+    typeof body?.planyoReservationId === 'string' && body.planyoReservationId
+      ? body.planyoReservationId
+      : null
 
   const item = await prisma.bookingItem.findUnique({
     where: { id: params.id },
@@ -91,9 +110,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     )
   }
 
+  // Only meaningful when the WHOLE line came down. A per-unit release
+  // off a multi-truck line leaves the category line still holding, so
+  // the Planyo row is not settled yet.
+  let planyoSettled = false
+  if (planyoReservationId && outcome.status === 'UNFULFILLED') {
+    const settled = await settlePlanyoCancellation(planyoReservationId)
+    planyoSettled = settled.settled || settled.alreadySettled
+  }
+
   return NextResponse.json({
     ok: true,
     alreadyReleased: outcome.alreadyReleased,
+    planyoSettled,
     bookingItemId: outcome.bookingItemId,
     bookingItem: { id: outcome.bookingItemId, status: outcome.status, quantity: outcome.quantity, holdRank: item.holdRank },
     booking: item.booking,
