@@ -101,7 +101,7 @@ export async function GET() {
   const emergencyContacts = await prisma.user.findMany({
     where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
-    select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true },
+    select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true, phone: true },
   })
 
   return NextResponse.json({
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string }
+    | { action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string }
     | null
   if (!body?.action) return NextResponse.json({ error: 'action required' }, { status: 400 })
 
@@ -224,6 +224,18 @@ export async function POST(req: NextRequest) {
     if (typeof body.isEmergencyContact === 'boolean') data.isEmergencyContact = body.isEmergencyContact
     if (typeof body.emergencyPhone === 'string') data.emergencyPhone = body.emergencyPhone.trim().slice(0, 30) || null
     await prisma.user.update({ where: { id: userId }, data })
+    return NextResponse.json({ ok: true })
+  }
+
+  // The staff member's own mobile — the number AHA recognises as staff by
+  // text (src/lib/assistant/senderIdentity.ts). Wes 2026-09-10: Jose, Dani,
+  // Wes, Oliver, Hugo, Albert. Emergency phone counts too, so an on-call
+  // number does not need entering twice.
+  if (body.action === 'set-staff-phone') {
+    const userId = typeof body.userId === 'string' ? body.userId : ''
+    if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
+    if (typeof body.phone !== 'string') return NextResponse.json({ error: 'phone required' }, { status: 400 })
+    await prisma.user.update({ where: { id: userId }, data: { phone: body.phone.trim().slice(0, 30) || null } })
     return NextResponse.json({ ok: true })
   }
 

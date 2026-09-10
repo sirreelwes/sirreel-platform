@@ -195,6 +195,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
   to the live assignment — a number on another job unlocks nothing. Web
   chat never passes a number; the job-code paths are unchanged.
+- **AHA knows who is texting, by number, server-side**
+  (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
+  active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as
+  staff)") or `emergencyPhone` matches → `staff_lookup_unit` / `staff_lookup_job`
+  (who is on Cube 27, has a job come back, drivers + numbers). PRODUCTION
+  CONTACT on a CURRENT job (JobContact or booking requester, ±7 days) →
+  `my_job_info` + free use of file_callback_request ("wide leeway", Wes).
+  Lookups in `src/lib/assistant/lookups.ts`, read-only, never codes or
+  pricing. Web chat gets none of this — there is no number to match.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal

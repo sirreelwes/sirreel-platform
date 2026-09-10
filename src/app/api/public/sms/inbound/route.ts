@@ -31,6 +31,7 @@ import {
   recordInbound, recordOutbound, turnsForModel,
 } from '@/lib/sms/threads'
 import { prisma } from '@/lib/prisma'
+import { identifySender } from '@/lib/assistant/senderIdentity'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     return twiml(reply)
   }
 
-  const who = await identifyNumber(thread.phone)
+  const [who, sender] = await Promise.all([identifyNumber(thread.phone), identifySender(thread.phone).catch(() => null)])
   if (who.personId !== thread.personId || who.subRentalId !== thread.subRentalId) {
     await prisma.smsThread.update({ where: { id: thread.id }, data: { personId: who.personId, subRentalId: who.subRentalId } }).catch(() => {})
   }
@@ -110,12 +111,12 @@ export async function POST(req: NextRequest) {
   const turns = await turnsForModel(thread.id)
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') turns.push({ role: 'user', content: body })
 
-  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone })
+  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone, sender: sender ?? undefined })
   const reply = replyRaw.length > 1500 ? `${replyRaw.slice(0, 1480)}…` : replyRaw
   await recordOutbound({ threadId: thread.id, body: reply, source: 'assistant', status: 'twiml', subRentalId: who.subRentalId })
   if (toolsUsed.length) {
     await prisma.auditLog.create({
-      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4) } },
+      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4), staff: sender?.staff?.name ?? null, contactJobs: sender?.contactJobs.map((j) => j.jobCode) ?? [] } },
     }).catch(() => {})
   }
   return twiml(reply)

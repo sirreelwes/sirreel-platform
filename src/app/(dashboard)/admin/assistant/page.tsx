@@ -25,6 +25,7 @@ type EmergencyContact = {
   role: string
   isEmergencyContact: boolean
   emergencyPhone: string | null
+  phone: string | null
 }
 type Usage = {
   totals: { attempts: number; released: number; denied: number; escalations: number; lockoutRate: number | null }
@@ -566,6 +567,19 @@ export default function AssistantAdminPage() {
                       <div className="text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</div>
                     )}
                   </div>
+                  <input
+                    defaultValue={u.phone ?? ''}
+                    placeholder="Mobile (texts AHA as staff)"
+                    title="Texts from this number are recognised as staff: AHA answers fleet and job questions for it"
+                    onBlur={(e) =>
+                      fetch('/api/admin/assistant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'set-staff-phone', userId: u.id, phone: e.target.value }),
+                      })
+                    }
+                    className="w-44 rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm font-mono text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                  />
                   <input
                     defaultValue={u.emergencyPhone ?? ''}
                     placeholder="Emergency phone"

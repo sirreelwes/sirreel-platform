@@ -25,6 +25,8 @@ import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 import { ASSISTANT_EXPANSION, ASSISTANT_NAME, ASSISTANT_SMS_INTRO } from '@/lib/assistant/identity'
+import { NO_IDENTITY, describeSender, type SenderIdentity } from '@/lib/assistant/senderIdentity'
+import { contactJobInfo, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
 
 
 // Native fetch — the SDK 0.39 node-fetch shim read-ETIMEDOUTs on
@@ -150,6 +152,48 @@ const SMS_FIRST_REPLY = `
 
 This is the FIRST reply of this text conversation: open with exactly "${ASSISTANT_SMS_INTRO}" and then answer. Do not repeat the introduction in later replies.`
 
+/**
+ * Tools offered ONLY when the server has matched the sender's number
+ * (src/lib/assistant/senderIdentity.ts). The model never sees them
+ * otherwise, and each lookup re-checks the identity itself.
+ */
+const STAFF_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'staff_lookup_unit',
+    description: "For SirReel staff only. Who is on a vehicle right now: the job, dates, the checked-out driver's name and phone, the requester, delivery address. Use for questions like \"who's on Cube 27?\"",
+    input_schema: {
+      type: 'object',
+      properties: { unit: { type: 'string', description: 'Vehicle unit, e.g. "Cube 27" or "27"' } },
+      required: ['unit'],
+    },
+  },
+  {
+    name: 'staff_lookup_job',
+    description: 'For SirReel staff only. A job by code, name or production company: status, whether it has come back, its orders and bookings with dates, every unit with its driver, and the contacts with phone numbers.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Job code (SR-JOB-0231), job name, or company name' } },
+      required: ['query'],
+    },
+  },
+]
+
+const CONTACT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'my_job_info',
+    description: "For a verified production contact. Their own current job(s): the bookings and orders with dates, each unit with its status and driver, delivery address and time, and their SirReel agent's name and email. Never includes codes or pricing.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+]
+
+const STAFF_MODE = `
+
+YOU ARE TALKING TO SIRREEL STAFF (their number is on file for an HQ user). Answer their fleet and job questions directly with staff_lookup_unit and staff_lookup_job — who is on a unit, the driver's name and number, whether a job has come back, dates, contacts. You may share names, phone numbers and addresses from those results with staff. Codes still go through verify_and_release_code. Be terse: they are working.`
+
+const CONTACT_MODE = `
+
+YOU ARE TALKING TO A PRODUCTION CONTACT on a current job (their number is on file for that job). Give them wide leeway: answer questions about their booking from my_job_info (units, dates, pickup and return, delivery address and time, who their agent is, whether a unit is out or back), help with gear setup, and relay any request — an extension, a change of dates or address, an extra unit, a question for their agent — with file_callback_request; for them it is NOT reserved for emergencies, and you may say their agent will follow up. Never quote pricing or availability; say the agent will confirm. Codes still go through verify_and_release_code (by text the job code is optional for them).`
+
 export type AssistantChannel = 'web' | 'sms'
 
 export interface AssistantTurn {
@@ -168,14 +212,25 @@ export async function runAssistant(args: {
   /** Text channel only: the E.164 number the message came from, passed to
    *  verify_and_release_code as a factor. Never set from web chat. */
   senderPhone?: string | null
+  /** Server-decided identity of the sender (SMS only). Picks the extra tools. */
+  sender?: SenderIdentity
 }): Promise<{ reply: string; toolsUsed: string[] }> {
+  const sender = args.channel === 'sms' ? args.sender ?? NO_IDENTITY : NO_IDENTITY
+  const tools: Anthropic.Tool[] = [
+    ...TOOLS,
+    ...(sender.staff ? STAFF_TOOLS : []),
+    ...(!sender.staff && sender.contactJobs.length ? CONTACT_TOOLS : []),
+  ]
+  const senderLine = describeSender(sender)
   const ip = args.ip
   const messages: Anthropic.MessageParam[] = args.turns.map((t) => ({ role: t.role, content: t.content.slice(0, MAX_CHARS) }))
   const system =
     SYSTEM_PROMPT +
     (args.channel === 'sms' ? SMS_STYLE : '') +
     (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
-    (args.context ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
+    (sender.staff ? STAFF_MODE : sender.contactJobs.length ? CONTACT_MODE : '') +
+    (senderLine ? `\n\nWHO IS WRITING (decided by HQ from the sender's number): ${senderLine}` : '') +
+    (args.context && !senderLine ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
   const toolsUsed: string[] = []
   const fallback = `I'm having trouble right now — please call us at ${PUBLIC_CONTACT.phone} and an agent will help right away.`
 
@@ -197,7 +252,7 @@ export async function runAssistant(args: {
       model: ASSISTANT_MODEL,
       max_tokens: 700,
       system,
-      tools: TOOLS,
+      tools,
       messages,
     })
 
@@ -259,6 +314,14 @@ export async function runAssistant(args: {
             transcriptSummary: await getTranscriptSummary(),
             ip,
           })
+        } else if (block.name === 'staff_lookup_unit') {
+          const inp = block.input as { unit?: string }
+          resultPayload = await staffLookupUnit(sender, inp.unit ? String(inp.unit).slice(0, 60) : '')
+        } else if (block.name === 'staff_lookup_job') {
+          const inp = block.input as { query?: string }
+          resultPayload = await staffLookupJob(sender, inp.query ? String(inp.query).slice(0, 120) : '')
+        } else if (block.name === 'my_job_info') {
+          resultPayload = await contactJobInfo(sender)
         } else {
           resultPayload = { error: 'unknown tool' }
         }
@@ -274,7 +337,7 @@ export async function runAssistant(args: {
         model: ASSISTANT_MODEL,
         max_tokens: 700,
         system,
-        tools: TOOLS,
+        tools,
         messages,
       })
     }
