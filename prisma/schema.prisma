@@ -5808,6 +5808,42 @@ model TeamMember {
 // JOB FEATURE — added by recover-and-add-jobs.js
 // ============================================================
 
+/**
+ * A market SirReel sells into — a commercial territory, not a geography.
+ *
+ * "Napa Valley" rather than "NORCAL" (Wes, 2026-09-10). Markets are the
+ * unit of expansion, and the plan is to open them on partner equipment, so
+ * this is a table: adding one is a row, not a migration plus a careful
+ * two-stage deploy.
+ *
+ * What it deliberately does NOT do: nothing filters availability by market.
+ * `src/lib/scheduling/` is location-blind, and separation between markets
+ * still comes from market-scoped CATEGORIES (`DLUX (NorCal)` is its own
+ * AssetCategory and therefore cannot pool with LA). That remains
+ * load-bearing. This table is the demand-side vocabulary the rest needs
+ * before any of it can be built.
+ */
+model Market {
+  id        String   @id @default(uuid())
+  /// Display name, as the business says it: "Los Angeles", "Napa Valley".
+  name      String   @unique
+  /// URL/key form: "los-angeles", "napa-valley".
+  slug      String   @unique
+  /// Retire a market without deleting it — jobs keep pointing at history.
+  isActive  Boolean  @default(true) @map("is_active")
+  /// Hand-ordered for pickers; home market first.
+  sortOrder Int      @default(0) @map("sort_order")
+  notes     String?  @db.Text
+
+  jobs      Job[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, sortOrder])
+  @@map("sr_markets")
+}
+
 model Job {
   id                      String         @id @default(uuid())
   jobCode                 String         @unique @map("job_code")
@@ -5829,28 +5865,29 @@ model Job {
   // over writers and deprecate the enum.
   productionTypeProfileId String?        @map("production_type_profile_id")
   status                  JobStatus      @default(QUOTED)
-  /// Which MARKET this production is served from.
-  ///
-  /// Typed `Region` deliberately — LA / NORCAL / UTAH already exist as a
-  /// vocabulary on AssetCategory, and a second enum saying the same three
-  /// things is how the two drift apart. This is the DEMAND side of that
-  /// vocabulary: AssetCategory.region says where a product lives, this says
-  /// where the work is.
-  ///
-  /// Default LA rather than nullable: every owned bookable unit sat at
-  /// Lankershim until 2026-09-10 (the Napa DLUX), so LA is the true answer
-  /// for every historical row, and a nullable column would push a
-  /// null-check into every read site to express a fact nobody doubts.
-  ///
-  /// What this does NOT do yet: nothing filters availability by it.
-  /// `src/lib/scheduling/` is entirely location-blind — market separation
-  /// today comes from market-scoped CATEGORIES (`DLUX (NorCal)` is its own
-  /// category and therefore cannot pool with LA), which is load-bearing and
-  /// must not be "tidied" away without making availability location-aware
-  /// first. This field is the cheap prerequisite: once demand carries a
-  /// market, per-market reporting, partner routing ("who serves
-  /// Sacramento") and a cross-market quote guard all become expressible.
+  /// DEPRECATED — superseded by `marketId` below. Kept until the code that
+  /// reads it is off production; dropping a live column the deployed build
+  /// still selects is a 500, not a cleanup. Remove in the follow-up.
   market                  Region         @default(LA)
+  /// Which MARKET serves this production — FK to the Market table.
+  ///
+  /// A market is a COMMERCIAL TERRITORY, not a census region (Wes,
+  /// 2026-09-10: the Napa unit's market is "Napa Valley", not "NorCal").
+  /// That is why this is a table and not the `Region` enum it started as:
+  /// markets are the unit of expansion, so adding one must not require a
+  /// schema change and the enum-value deploy dance that goes with it — old
+  /// clients 500 on an enum value they were not generated with. A row can
+  /// be added from a seed the same afternoon a deal closes.
+  ///
+  /// Deliberately NOT the same field as `AssetCategory.region`. That says
+  /// where a PRODUCT lives and is coarse; this says where the WORK is and
+  /// is as fine as the business needs. Collapsing them was the first
+  /// attempt and it was wrong.
+  ///
+  /// Nullable so a job created before markets existed, or by a path that
+  /// does not yet ask, is honestly unknown rather than silently "LA".
+  marketId                String?        @map("market_id")
+  marketRef               Market?        @relation(fields: [marketId], references: [id])
   agentId                 String         @map("agent_id")
   planyoCartId            String?        @unique @map("planyo_cart_id")
   estimatedValue          Decimal?       @map("estimated_value") @db.Decimal(12, 2)
@@ -5995,6 +6032,7 @@ model Job {
   @@index([status])
   @@index([agentId])
   @@index([productionTypeProfileId])
+  @@index([marketId])
   @@map("sr_jobs")
 }
 

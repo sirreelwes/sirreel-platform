@@ -21,14 +21,6 @@ import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomp
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/annualCoverage'
 
-/**
- * Markets HQ serves. Same vocabulary as AssetCategory.region — this is the
- * DEMAND side of it (where the work is; the category says where a product
- * lives). Kept as a literal list so a bad value is a no-op rather than a
- * Prisma 500.
- */
-const MARKETS = ['LA', 'NORCAL', 'UTAH'] as const
-
 export const dynamic = 'force-dynamic'
 
 // GET /api/jobs/:id
@@ -58,6 +50,9 @@ export async function GET(
       include: {
         company: true,
         agent: { select: { id: true, name: true, email: true } },
+        // The market's NAME, not just the FK — every consumer wants to
+        // render it, and a second round trip for one string is silly.
+        marketRef: { select: { id: true, name: true, slug: true } },
         // Physical-return attribution (Job.returnedAt is a scalar and
         // flows through the spread; the relation needs the include).
         returnedBy: { select: { id: true, name: true } },
@@ -709,8 +704,27 @@ export async function PATCH(
       notes,
       estimatedValue,
       tags,
-      market,
+      marketId,
     } = body
+
+    // Resolve the market before writing. Explicit null means "clear it";
+    // any other value must name a real, active market.
+    let marketIdValid = false
+    if (marketId === null) {
+      marketIdValid = true
+    } else if (typeof marketId === 'string' && marketId) {
+      const m = await prisma.market.findFirst({
+        where: { id: marketId, isActive: true },
+        select: { id: true },
+      })
+      if (!m) {
+        return NextResponse.json(
+          { error: 'unknown market', reason: `no active market with id ${marketId}` },
+          { status: 400 },
+        )
+      }
+      marketIdValid = true
+    }
 
     const job = await prisma.job.update({
       where: { id: params.id },
@@ -729,10 +743,10 @@ export async function PATCH(
         }),
         ...(agentId !== undefined && { agentId }),
         ...(notes !== undefined && { notes }),
-        // Which market serves this production. Validated against the enum
-        // rather than passed through: an unknown string would 500 inside
-        // Prisma with a message no caller can act on.
-        ...(market !== undefined && MARKETS.includes(market) && { market }),
+        // Which market serves this production. Validated above against the
+        // live table — an unknown id would otherwise surface as a raw
+        // foreign-key violation, which no caller can act on. null clears it.
+        ...(marketIdValid && { marketId: marketId === null ? null : marketId }),
         // Job tags (e.g. 'ART_DEPT') — full-array replace, strings only.
         ...(Array.isArray(tags) && {
           tags: tags.filter((t: unknown): t is string => typeof t === 'string' && t.trim() !== ''),

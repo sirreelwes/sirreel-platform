@@ -289,16 +289,12 @@ interface DuplicateSignal {
 }
 
 /**
- * Markets HQ serves. Same three values as AssetCategory.region; this is the
- * demand side of that vocabulary. Nothing filters availability by it yet —
- * market separation still comes from market-scoped categories.
+ * A market is a commercial territory ("Napa Valley"), not a geography, and
+ * it comes from the sr_markets table rather than an enum — so this list is
+ * fetched, never hardcoded. Nothing filters availability by it yet; market
+ * separation still comes from market-scoped categories.
  */
-type Market = 'LA' | 'NORCAL' | 'UTAH';
-const MARKET_LABELS: Record<Market, string> = {
-  LA: 'Los Angeles',
-  NORCAL: 'Northern California',
-  UTAH: 'Utah',
-};
+interface MarketOption { id: string; name: string; slug: string }
 
 interface JobDetail {
   id: string;
@@ -309,8 +305,9 @@ interface JobDetail {
   status: JobStatus;
   productionType: string;
   productionTypeProfileId: string | null;
-  /** Which market serves this production — LA / NORCAL / UTAH. */
-  market: Market;
+  /** FK to sr_markets; null when nobody has said which market this is. */
+  marketId: string | null;
+  marketRef: { id: string; name: string; slug: string } | null;
   startDate: string | null;
   endDate: string | null;
   estimatedValue: number | null;
@@ -518,6 +515,7 @@ export default function JobDetailPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [marketSaving, setMarketSaving] = useState(false);
+  const [markets, setMarkets] = useState<MarketOption[]>([]);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
   // "Assign a unit" opens the picker HERE (Wes 2026-09-05, from his phone:
   // "there was never an opportunity to choose the specific truck"). The
@@ -774,20 +772,37 @@ export default function JobDetailPage() {
   // PATCH the Job's market. Optimistic like saveProfile: the row is one
   // select and a re-fetch of the whole job to change one enum reads as a
   // stall. Reverts on failure so the control never lies about what stuck.
-  const saveMarket = async (next: Market) => {
-    if (!job || next === job.market) return;
-    const prev = job.market;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/markets');
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled && Array.isArray(j.markets)) setMarkets(j.markets);
+      } catch {
+        // A missing market list degrades to "no picker", never a broken page.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const saveMarket = async (nextId: string) => {
+    if (!job || nextId === (job.marketId ?? '')) return;
+    const prevId = job.marketId;
+    const prevRef = job.marketRef;
+    const nextRef = markets.find((m) => m.id === nextId) ?? null;
     setMarketSaving(true);
-    setJob({ ...job, market: next });
+    setJob({ ...job, marketId: nextId || null, marketRef: nextRef });
     try {
       const res = await fetch(`/api/jobs/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ market: next }),
+        body: JSON.stringify({ marketId: nextId || null }),
       });
       if (!res.ok) throw new Error('Failed to save market');
     } catch {
-      setJob((j) => (j ? { ...j, market: prev } : j));
+      setJob((j) => (j ? { ...j, marketId: prevId, marketRef: prevRef } : j));
       flashToast('Could not change the market');
     } finally {
       setMarketSaving(false);
@@ -1811,13 +1826,16 @@ const driverTone = (d: any): string => {
               Market
             </span>
             <select
-              value={job.market}
-              onChange={(e) => { void saveMarket(e.target.value as Market); }}
-              disabled={marketSaving}
+              value={job.marketId ?? ''}
+              onChange={(e) => { void saveMarket(e.target.value); }}
+              disabled={marketSaving || markets.length === 0}
               className="text-[12px] rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-800 disabled:opacity-60"
             >
-              {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
-                <option key={m} value={m}>{MARKET_LABELS[m]}</option>
+              {/* Present only while genuinely unset, so it can't be picked
+                  back to "unknown" by accident once someone has answered. */}
+              {!job.marketId && <option value="">Not set</option>}
+              {markets.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
           </label>
