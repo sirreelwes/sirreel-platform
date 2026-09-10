@@ -1633,12 +1633,34 @@ function NewQuotePageInner() {
   const leadContactForResolver = contacts.find((c) => c.include && c.email) ?? null;
   const pendingActionRef = useRef<CreateAction>('draft');
   const pendingJobExtrasRef = useRef<Record<string, unknown> | null>(null);
+  // In-flight latch for the whole save. `creating` alone does NOT hold
+  // across the headless Job handoff below: that branch fires
+  // `void createQuote(...)` and returns, so this call's finally{} clears
+  // `creating` about two seconds in while the nested save is still
+  // writing the order, its lines, its hold and its quote PDF (~10s). The
+  // buttons read "Send quote →" again, a rep who sees nothing happen
+  // clicks a second time, and the second run takes the now-resolved-Job
+  // path and writes a SECOND order onto the same Job. That is exactly
+  // what produced the 2026-09-09 twins: SR-JOB-0332 (S260909-003/-004,
+  // 10s apart), SR-JOB-0334 (-008/-009, 6s), SR-JOB-0333 (-005/-006, 8s)
+  // — same lines, same totals, one of each an orphan draft.
+  //
+  // The ref survives the handoff. Only a re-entry that CARRIES a
+  // resolved Job (the handoff itself, and the resolver modal's
+  // onResolved) may pass it; a second click never can.
+  const savingRef = useRef(false);
 
   const createQuote = async (
     action: CreateAction = 'draft',
     resolvedJob?: { jobId: string; name: string; companyId: string | null; created: boolean },
   ) => {
     if (!canCreate) return;
+    if (savingRef.current && !resolvedJob) return;
+    savingRef.current = true;
+    // Set by the branch that hands this save off to a nested
+    // createQuote — the latch must stay CLOSED until that nested call
+    // finishes, so the finally{} below leaves both flags alone.
+    let handedOff = false;
     setCreating(true);
     try {
       // Empty-row prune. A row is "workspace" when it has neither a
@@ -1827,6 +1849,7 @@ function NewQuotePageInner() {
                     ? { id: createdCompanyId, name: created.company?.name || '' }
                     : job.company,
                 });
+                handedOff = true;
                 void createQuote(action, {
                   jobId: created.id,
                   name: created.name,
@@ -2000,7 +2023,13 @@ function NewQuotePageInner() {
 
       router.push(action === 'send' ? `/orders/${order.id}?send=1` : `/orders/${order.id}`);
     } finally {
-      setCreating(false);
+      // The handoff branch owns the latch until its nested call returns.
+      // Clearing it here would re-open the buttons mid-save — the whole
+      // bug this guards.
+      if (!handedOff) {
+        savingRef.current = false;
+        setCreating(false);
+      }
     }
   };
 
