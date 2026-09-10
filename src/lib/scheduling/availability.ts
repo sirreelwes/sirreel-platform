@@ -44,12 +44,83 @@
 
 import { prisma } from '@/lib/prisma'
 import type { AssetTier } from '@prisma/client'
+import { naSummary } from '@/lib/scheduling/naTitles'
 
 // Exported so downstream consumers (e.g. src/lib/fleet/utilization.ts) reuse
 // the scheduler's exact notion of "out of service" / "holds inventory"
 // instead of re-deriving their own status sets.
 export const SERVICEABLE_EXCLUDED_STATUSES = ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN', 'TOTALED'] as const
 export const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
+
+/**
+ * A unit is ALSO out of service while it carries an OPEN MaintenanceRecord
+ * overlapping the window — and that is the state the fleet and sales UI
+ * actually write.
+ *
+ * `POST /api/scheduling/assets/[assetId]/maintenance` ("refer to
+ * maintenance" from sales, "mark N/A" from fleet) deliberately reuses
+ * MaintenanceRecord instead of touching `Asset.status`: "reuses the existing
+ * model + the shipped N/A grey display; no schema change". The Gantt honours
+ * it, but this engine read `Asset.status` alone — so a truck greyed on the
+ * board still offered an Assign button in the unit picker, still counted in
+ * `serviceableCount`, and still fed the Quick Reply "we have N free" line.
+ * Wes 2026-09-10: "many units show available that i have marked unavailable
+ * or referred to maintenance" — Cube 8, 9 (out of service, fleet) and Cube
+ * 12, 17, 24 (sales referral) all read `available` in the SuperCube picker.
+ *
+ * Both open statuses count. A referral is precautionary and a fleet mark is
+ * confirmed, but neither is a truck we hand to a client, and the referral is
+ * the one sales raises BEFORE anyone has looked at it.
+ */
+export const OPEN_MAINTENANCE_STATUSES = ['SCHEDULED', 'IN_PROGRESS'] as const
+
+/** A unit held out of the fleet for the window, and why. */
+export interface OutOfServiceUnit {
+  assetId: string
+  unitName: string
+  tier: AssetTier
+  /** One line for a human — the symptom if one was typed, else the title. */
+  reason: string
+  /** When it went out. Open-ended records have no end. */
+  since: Date
+  endDate: Date | null
+}
+
+/**
+ * Which of `assetIds` are out of service for [windowStart, windowEnd], with
+ * the reason. Overlap is inclusive on both ends, and an OPEN-ENDED record
+ * (endDate null — every record the N/A route writes) covers everything from
+ * its start onward.
+ */
+export async function outOfServiceByAsset(
+  assetIds: string[],
+  windowStart: Date,
+  windowEnd: Date,
+): Promise<Map<string, { reason: string; since: Date; endDate: Date | null }>> {
+  const out = new Map<string, { reason: string; since: Date; endDate: Date | null }>()
+  if (assetIds.length === 0) return out
+  const records = await prisma.maintenanceRecord.findMany({
+    where: {
+      assetId: { in: assetIds },
+      status: { in: [...OPEN_MAINTENANCE_STATUSES] },
+      startDate: { lte: windowEnd },
+      OR: [{ endDate: null }, { endDate: { gte: windowStart } }],
+    },
+    select: { assetId: true, title: true, description: true, startDate: true, endDate: true },
+    orderBy: { startDate: 'asc' },
+  })
+  for (const r of records) {
+    // First (earliest) record wins the row — a unit with two open tickets is
+    // out for the older reason, which is the one that has been waiting.
+    if (out.has(r.assetId)) continue
+    out.set(r.assetId, {
+      reason: naSummary(r.title, r.description) ?? r.title,
+      since: r.startDate,
+      endDate: r.endDate,
+    })
+  }
+  return out
+}
 
 export type UnitState = 'free' | 'buffer' | 'booked'
 
@@ -81,6 +152,10 @@ export interface CategoryAvailability {
   bookedCount: number
   availableToHold: number
   units: AvailabilityUnit[]
+  /** Units dropped from the maths because they are in the shop for this
+   *  window. Returned rather than silently omitted so a picker can say
+   *  where the truck went instead of just not listing it. */
+  outOfService: OutOfServiceUnit[]
 }
 
 /**
@@ -180,7 +255,7 @@ export async function getCategoryAvailability(
         select: { id: true, name: true, slug: true, totalUnits: true },
       })
 
-  const assets = await prisma.asset.findMany({
+  const allAssets = await prisma.asset.findMany({
     where: {
       categoryId,
       isActive: true,
@@ -189,6 +264,28 @@ export async function getCategoryAvailability(
     select: { id: true, unitName: true, tier: true },
     orderBy: { unitName: 'asc' },
   })
+
+  // Second gate: an OPEN maintenance record for THIS window. `Asset.status`
+  // alone is not the fleet's answer — see OPEN_MAINTENANCE_STATUSES above.
+  // Dropping these here rather than at each call site means every consumer
+  // (unit picker, hold capacity, rank/promote, Quick Reply's "N free")
+  // stops counting a truck that is in the shop.
+  const oos = await outOfServiceByAsset(
+    allAssets.map((a) => a.id),
+    startDate,
+    endDate,
+  )
+  const assets = allAssets.filter((a) => !oos.has(a.id))
+  const outOfService: OutOfServiceUnit[] = allAssets
+    .filter((a) => oos.has(a.id))
+    .map((a) => ({
+      assetId: a.id,
+      unitName: a.unitName,
+      tier: a.tier,
+      reason: oos.get(a.id)!.reason,
+      since: oos.get(a.id)!.since,
+      endDate: oos.get(a.id)!.endDate,
+    }))
 
   // Pull a buffered query window so we catch adjacent assignments that
   // would trip the buffer rule. lookaround = bufferDays + 1 is enough
@@ -273,5 +370,6 @@ export async function getCategoryAvailability(
     bookedCount,
     availableToHold,
     units,
+    outOfService,
   }
 }

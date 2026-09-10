@@ -67,6 +67,15 @@ interface PickerData {
   candidateOrders?: CandidateOrder[]
   currentAssignments: CurrentAssignment[]
   candidates: Candidate[]
+  /** In the shop for these dates — listed, never assignable. */
+  outOfService?: {
+    assetId: string
+    unitName: string
+    tier: string
+    reason: string
+    since: string
+    endDate: string | null
+  }[]
   summary: {
     serviceableCount: number
     freeCount: number
@@ -490,6 +499,39 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                         </li>
                       )
                     })}
+                  </ul>
+                </section>
+              )}
+
+              {/* Units the fleet has taken out for these dates. They used to
+                  sit in the list above reading "available" with a live Assign
+                  button, because the engine only looked at Asset.status and
+                  the "refer to maintenance" / "mark N/A" actions write a
+                  MaintenanceRecord instead (Wes 2026-09-10). Shown rather than
+                  dropped: a missing truck reads as one we don't own. */}
+              {(data.outOfService?.length ?? 0) > 0 && (
+                <section>
+                  <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">
+                    Out of service · {data.outOfService!.length} unit{data.outOfService!.length === 1 ? '' : 's'}
+                  </div>
+                  <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded bg-zinc-50">
+                    {data.outOfService!.map((u) => (
+                      <li key={u.assetId} className="px-3 py-2 text-sm flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                            <span className="font-mono text-[15px] sm:text-sm text-zinc-500 line-through">{u.unitName}</span>
+                            <span className="text-xs text-zinc-400">{u.tier}</span>
+                            <span className="inline-block text-xs px-2 py-0.5 rounded border bg-white text-zinc-600 border-zinc-300">
+                              out of service
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-xs text-zinc-600">{u.reason}</div>
+                        </div>
+                        <span className="shrink-0 text-xs text-zinc-500 font-mono">
+                          since {String(u.since).slice(0, 10)}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 </section>
               )}

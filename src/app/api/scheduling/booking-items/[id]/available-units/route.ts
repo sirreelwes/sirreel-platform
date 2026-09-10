@@ -170,6 +170,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     }),
     currentAssignments,
     candidates,
+    // Units held out of the maths because they are in the shop for these
+    // dates. Listed separately so the picker SAYS where the truck went —
+    // silently omitting it reads as "we don't own one".
+    outOfService: availability.outOfService.map((u) => ({
+      assetId: u.assetId,
+      unitName: u.unitName,
+      tier: u.tier,
+      reason: u.reason,
+      since: u.since,
+      endDate: u.endDate,
+    })),
     summary: {
       serviceableCount: availability.serviceableCount,
       freeCount: availability.freeCount,

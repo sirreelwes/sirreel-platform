@@ -20,7 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
-import { computeUnitStates, type AssignmentWindow, type ServiceableAsset } from '@/lib/scheduling/availability'
+import { computeUnitStates, outOfServiceByAsset, type AssignmentWindow, type ServiceableAsset } from '@/lib/scheduling/availability'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +91,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   if (!asset.isActive || ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN', 'TOTALED'].includes(asset.status)) {
     return NextResponse.json({ error: 'asset is not serviceable', status: asset.status }, { status: 409 })
+  }
+  // Second serviceability gate, matching getCategoryAvailability: the "refer
+  // to maintenance" / "mark N/A" actions open a MaintenanceRecord and never
+  // touch Asset.status, so the check above passes a truck the fleet has
+  // greyed. The picker no longer offers one, but a stale modal, a deep link
+  // or any other caller still can — the refusal belongs on the write.
+  {
+    const oos = await outOfServiceByAsset([asset.id], bookingItem.booking.startDate, bookingItem.booking.endDate)
+    const entry = oos.get(asset.id)
+    if (entry) {
+      return NextResponse.json(
+        {
+          error: 'asset is out of service',
+          reason: `${asset.unitName} is out of service for these dates — ${entry.reason}. Clear it in maintenance first.`,
+          since: entry.since,
+        },
+        { status: 409 },
+      )
+    }
   }
 
   // Re-check conflict on this specific asset for the booking window.
