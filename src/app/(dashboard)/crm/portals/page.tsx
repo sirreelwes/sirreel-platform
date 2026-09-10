@@ -208,7 +208,8 @@ export default async function CompanyPortalsPage() {
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
-      partnerSharePercent: true, coiReceivedAt: true, coiExpiresAt: true,
+      partnerSharePercent: true, proposedSharePercent: true, shareProposedAt: true, shareProposalNote: true,
+      coiReceivedAt: true, coiExpiresAt: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
       agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
       subcontractedVehicles: {
@@ -349,6 +350,7 @@ export default async function CompanyPortalsPage() {
                         {va.agreements[0] && !va.agreements[0].signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">agreement unsigned</span>}
                         {va.agreements[0]?.signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg align-middle">agreement signed</span>}
                         {va.partnerSharePercent == null && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg align-middle">no deal set</span>}
+                        {va.shareProposedAt != null && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">split proposed</span>}
                       </div>
                       <div className="text-xs text-lt-fg2 truncate">
                         {va.partnerKind === 'EQUIPMENT' ? 'Equipment · ' : ''}{va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}{va.partnerSharePercent != null ? ` · ${Number(va.partnerSharePercent)}% to SirReel` : ''}
@@ -383,6 +385,9 @@ export default async function CompanyPortalsPage() {
                       contact={{ name: va.contactName, email: va.email, phone: va.phone, lotAddress: va.lotAddress }}
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
+                      shareProposal={va.shareProposedAt && va.proposedSharePercent != null
+                        ? { sirreelPercent: Number(va.proposedSharePercent), note: va.shareProposalNote }
+                        : null}
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                       kind={va.partnerKind}
                       section={va.catalogSection}

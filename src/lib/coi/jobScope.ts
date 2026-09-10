@@ -24,13 +24,24 @@ import {
   deriveVehicleScope,
   type VehicleScopeInput,
 } from './vehicleScope'
-import {
-  derivePartnerEquipmentScope,
-  type PartnerEquipmentScopeInput,
-} from './partnerEquipmentScope'
+import { derivePartnerEquipmentScope } from './partnerEquipmentScope'
 import type { CoiCheckContext } from './checks'
 
-export type CoiScopeInput = VehicleScopeInput & PartnerEquipmentScopeInput
+/**
+ * The merged input, spelled out rather than written as
+ * `VehicleScopeInput & PartnerEquipmentScopeInput`. An intersection of two
+ * types that BOTH declare `subRentals` with different element shapes gives a
+ * `subRentals` no object literal can satisfy — each side's excess-property
+ * check rejects the other side's keys — so a caller building one by hand
+ * (a test, a fixture) cannot write the row this module exists to read.
+ */
+export interface CoiScopeInput extends VehicleScopeInput {
+  subRentals?: ReadonlyArray<{
+    status?: string | null
+    subcontractedVehicleId?: string | null
+    vendor?: { partnerKind?: string | null; name?: string | null } | null
+  }> | null
+}
 
 /** Everything both derivers need, with `subRentals` merged rather than
  *  clobbered. Keep this the only place the two selects meet. */

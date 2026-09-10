@@ -4629,6 +4629,15 @@ model Vendor {
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
   partnerSharePercent Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
+  /// A split the PARTNER has asked for, awaiting HQ — the deal's mirror of
+  /// SubcontractedVehicle.proposedDailyRate. Wes 2026-09-10: Evan should be
+  /// able to come back with a different number rather than take 20% or walk.
+  /// Nothing about billing reads these; partnerSharePercent stays the deal
+  /// until someone accepts on /crm/portals#vendor, which is also when the
+  /// filed agreement has to be re-filed (its Terms box prints the split).
+  proposedSharePercent Decimal? @map("proposed_share_percent") @db.Decimal(5, 2)
+  shareProposedAt      DateTime? @map("share_proposed_at")
+  shareProposalNote    String?   @map("share_proposal_note") @db.Text
   /// The partner's certificate of insurance (agreement clause 4: their
   /// owner's auto liability + physical damage, SirReel additional insured).
   /// Wes 2026-09-06: not demanded up front — "I don't want it to hold up

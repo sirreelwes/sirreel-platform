@@ -17,6 +17,8 @@ import { fmtRange } from '@/lib/sub-rentals/conduit'
 import { VendorContactForm } from '@/components/site/VendorContactForm'
 import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
+import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
+import { ShareProposalForm } from '@/components/site/ShareProposalForm'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
 import { partnerSection } from '@/lib/site/partnerSections'
 
@@ -161,6 +163,16 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
               </div>
             )}
+            {/* Wes 2026-09-10: the split is a negotiation, not a notice. A
+                partner who cannot counter-offer on the page either signs a
+                number they dislike or stops replying. */}
+            <ShareProposalForm
+              token={token}
+              preview={preview}
+              currentSirReelPercent={v.sharePercent}
+              proposed={v.proposedShare}
+              rateNoun={words.rateNoun}
+            />
           </div>
           {v.sharePercent != null && (
             <div style={{ display: 'flex', gap: 14 }}>
@@ -179,7 +191,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
         {/* Fleet */}
         <h2 style={H2}>Your {words.many} with SirReel · {v.fleet.length}</h2>
         <p style={{ fontSize: 13, color: '#6b6560', margin: '0 0 10px', maxWidth: 640 }}>
-          What we can offer productions from your fleet, at the rates you&apos;ve given us. Propose a change any time; it takes effect once SirReel accepts.
+          What we can offer productions from your fleet, at the rates you&apos;ve given us. Propose a change any time; it takes effect once SirReel accepts. Add your own photos — they are what a production sees.
         </p>
         <div style={{ ...CARD, padding: 0 }}>
           {v.fleet.length === 0 && <div style={{ padding: 20, fontSize: 14, color: '#6b6560' }}>Nothing on file yet — reply to your welcome email with your list and rates, and it appears here.</div>}
@@ -192,6 +204,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 </div>
                 <UnitRateForm token={token} unitId={u.id} preview={preview} current={{ daily: u.daily, weekly: u.weekly, monthly: u.monthly }} proposed={u.proposed} />
                 <UnitMarketingToggle token={token} unitId={u.id} preview={preview} initial={u.listed} noun={words.one} />
+                <UnitPhotosForm token={token} unitId={u.id} unitName={u.name} preview={preview} noun={words.one} />
               </div>
               <div style={{ textAlign: 'right', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
                 <div><strong>{money(u.daily)}</strong> <span style={{ color: '#8a8272' }}>/day</span>{u.net.daily != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.daily)}</span>}</div>
