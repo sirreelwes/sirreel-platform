@@ -423,6 +423,9 @@ interface JobBooking {
     id: string;
     quantity: number;
     holdRank: number;
+    /** REQUESTED / ASSIGNED are live demand; UNFULFILLED is a released
+     *  hold and SUBSTITUTED a swapped-out one — both are history. */
+    status: 'REQUESTED' | 'ASSIGNED' | 'UNFULFILLED' | 'SUBSTITUTED';
     category: { id: string; name: string; slug: string };
     catalogItem: { id: string; slug: string | null } | null;
     assignments: Array<{
@@ -507,6 +510,14 @@ export default function JobDetailPage() {
   // renders the Agenda view — and the picker only lived on the timeline
   // board, so a phone never got the list of trucks at all.
   const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
+  // Releasing a category hold straight off the job page. Wes 2026-09-10:
+  // a duplicate draft quote had already put holds on the job, and
+  // deleting the draft left them behind — "drafts assigned units and now
+  // they are stuck on the job. Need a way to remove them from the job."
+  // The only exits were the Gantt board and cancelling the WHOLE
+  // reservation, which takes the good holds down with the stranded ones.
+  const [releasingHoldId, setReleasingHoldId] = useState<string | null>(null);
+  const [holdReleaseError, setHoldReleaseError] = useState<string | null>(null);
   // Which filed certificate is open in the review desk (approve/reject, AI
   // re-run, named-insured mismatch + its fixes).
   const [reviewCoiId, setReviewCoiId] = useState<string | null>(null);
@@ -639,6 +650,27 @@ export default function JobDetailPage() {
   // Skipped on the first read of a job (opening one changed nothing),
   // which is why the ref resets whenever the id does.
   const openedRef = useRef(false);
+
+  // Release ONE held category line. Same route the Gantt board's release
+  // uses, so the two cannot drift: the item goes UNFULFILLED and any
+  // assignment on it flips to SWAPPED. Nothing is deleted — the row stays
+  // readable in the record, it just stops holding the fleet.
+  const releaseHold = async (h: { bookingItemId: string; category: string; quantity: number }) => {
+    const what = h.quantity > 1 ? `${h.quantity} × ${h.category}` : h.category;
+    if (!window.confirm(`Remove the hold on ${what}?\n\nThe capacity is released back to the board. The reservation line stays in the record — this only stops it holding gear for this job.`)) return;
+    setReleasingHoldId(h.bookingItemId);
+    setHoldReleaseError(null);
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${h.bookingItemId}/release`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `Could not release it (${res.status})`);
+      load();
+    } catch (e) {
+      setHoldReleaseError(e instanceof Error ? e.message : 'Could not release it');
+    } finally {
+      setReleasingHoldId(null);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -1174,6 +1206,14 @@ const driverTone = (d: any): string => {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
         for (const a of it.assignments) {
+          // SWAPPED is a unit that was taken OFF this job — released, or
+          // replaced by another truck. It is terminal-but-auditable, kept
+          // so history reads back; it is not a reserved asset. Rendering
+          // it here put a released Cube 5 in E.L.F. Project Sooth's
+          // "1 unit" count with nothing to do about it (Wes 2026-09-10),
+          // and because this map is first-wins per asset it could also
+          // shadow the LIVE assignment for the same unit.
+          if (a.status === 'SWAPPED') continue
           if (!seen.has(a.asset.id)) {
             seen.set(a.asset.id, {
               assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
@@ -1207,6 +1247,12 @@ const driverTone = (d: any): string => {
       // not something anyone is going to name a driver onto.
       if (b.endDate && new Date(b.endDate) < todayStart) continue
       for (const it of b.items) {
+        // A released hold is not a held one. This used to key ONLY on
+        // "has no live assignment", so an item released to UNFULFILLED
+        // still rendered "Held · no unit" forever — E.L.F. Project Sooth
+        // (SR-JOB-0340) read "1 unit · 4 held" off two live items and two
+        // dead ones. SUBSTITUTED is terminal the same way.
+        if (it.status === 'UNFULFILLED' || it.status === 'SUBSTITUTED') continue
         const live = it.assignments.filter((a) => a.status !== 'SWAPPED')
         if (live.length === 0) {
           out.push({
@@ -2707,16 +2753,16 @@ const driverTone = (d: any): string => {
                 REAL reservations (the quote-send soft hold lands here) —
                 before this they only surfaced in the Drivers card, so a
                 held category read as "nothing reserved" on this panel. */}
+            {/* Two actions, so the tile is a div with buttons inside
+                rather than one big button: pick the unit, or take the
+                hold off the job entirely. */}
             {pendingHolds.map((h) => (
-              <button
+              <div
                 key={h.bookingItemId}
-                type="button"
-                onClick={() => setAssignHoldId(h.bookingItemId)}
-                title="Held at category level — pick the specific unit"
-                className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 transition-all duration-200"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">
+                  <span className="font-semibold text-zinc-900 truncate">
                     {h.category}
                     {h.quantity > 1 && <span className="ml-1.5 text-zinc-600 font-normal">× {h.quantity}</span>}
                   </span>
@@ -2729,10 +2775,32 @@ const driverTone = (d: any): string => {
                     {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
                   </div>
                 )}
-                <div className="mt-1.5 text-[11px] font-semibold text-amber-700">Assign a unit →</div>
-              </button>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignHoldId(h.bookingItemId)}
+                    title="Held at category level — pick the specific unit"
+                    disabled={releasingHoldId != null}
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 hover:underline disabled:opacity-40"
+                  >
+                    Assign a unit →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => releaseHold(h)}
+                    title="Release this hold — the capacity goes back to the board"
+                    disabled={releasingHoldId != null}
+                    className="shrink-0 rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-zinc-600 hover:border-rose-600 hover:text-rose-700 disabled:opacity-40"
+                  >
+                    {releasingHoldId === h.bookingItemId ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
+        )}
+        {holdReleaseError && (
+          <div className="mt-2 text-[12px] font-semibold text-rose-700">{holdReleaseError}</div>
         )}
       </div>
       )}

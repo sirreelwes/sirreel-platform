@@ -92,6 +92,11 @@ async function resolveClientJobVehicles(req: NextRequest) {
         // they never got and no longer need.
         endDate: { gte: today },
       },
+      // Live demand only. A released (UNFULFILLED) or swapped-out
+      // (SUBSTITUTED) line has no assignment either, so keying on the
+      // assignments alone told the client we were "still assigning" a
+      // vehicle whose hold had already been taken off the job.
+      status: { in: ['REQUESTED', 'ASSIGNED'] },
       assignments: { none: { status: { not: 'SWAPPED' } } },
     },
     select: {

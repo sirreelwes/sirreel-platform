@@ -476,9 +476,23 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   // Cascade is wired on the schema: Order.delete sweeps OrderLineItem
   // (2646), PickList (2790), PickListItem (via PickList 2812 + line
-  // 2813), OrderDiscount (2741), and Booking-side BookingItem rows
-  // ride their own Booking lifecycle (DRAFT orders never have a
-  // Booking attached). No bespoke teardown needed.
+  // 2813), OrderDiscount (2741).
+  //
+  // The Booking side does NOT come with it, and the note that used to
+  // sit here — "DRAFT orders never have a Booking attached" — is false.
+  // A draft picks one up within seconds: the /gantt reservation flow
+  // creates the order and then the hold, and holdOnQuoteSend attaches
+  // to the JOB's existing AGENT_DIRECT booking and APPENDS items to it.
+  // So the booking outlives the order, and its BookingItems keep
+  // holding fleet with nothing pointing at them (E.L.F. Project Sooth,
+  // SR-JOB-0340, 2026-09-10: two deleted drafts, four held lines left
+  // on the job).
+  //
+  // Nothing is released here on purpose: a BookingItem carries no link
+  // back to the order line that asked for it, and the booking is shared
+  // across the job's orders, so an automatic sweep would release holds
+  // that belong to the orders still standing. The job page's Reserved
+  // assets card carries a per-hold Remove for exactly this cleanup.
   await prisma.order.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }
