@@ -1,0 +1,92 @@
+{
+  "at": "2026-09-10T02:47:02.552Z",
+  "action": "confirm bookings that sit at REQUEST behind a booked-or-later order",
+  "via": "POST /api/scheduling/bookings/[id]/confirm",
+  "confirmed": [
+    {
+      "id": "f5dc69b8-999b-418c-8327-ce606602c120",
+      "number": "SR-Q-1788557398492",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0308",
+      "window": "2026-09-09→2026-09-09",
+      "orders": [
+        {
+          "number": "S260904-004",
+          "status": "BOOKED"
+        }
+      ]
+    },
+    {
+      "id": "01edb07b-ffec-4999-b123-888f814603df",
+      "number": "SR-Q-1788897015904",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0320",
+      "window": "2026-09-08→2026-09-08",
+      "orders": [
+        {
+          "number": "S260908-005",
+          "status": "BOOKED"
+        }
+      ]
+    },
+    {
+      "id": "0d45cbe1-58a8-4610-8602-9abd0d8ec2d3",
+      "number": "SR-Q-1788655839179",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0312",
+      "window": "2026-09-05→2026-09-08",
+      "orders": [
+        {
+          "number": "S260905-002",
+          "status": "INVOICED"
+        }
+      ]
+    },
+    {
+      "id": "7e732547-f689-4674-b157-ecc030482d72",
+      "number": "SR-Q-1788206084591",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0250",
+      "window": "2026-09-04→2026-09-09",
+      "orders": [
+        {
+          "number": "S260828-003",
+          "status": "BOOKED"
+        }
+      ]
+    },
+    {
+      "id": "fa6a0e97-fe11-4b57-a01e-b56d9acec655",
+      "number": "SR-Q-1788541665048",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0267",
+      "window": "2026-09-04→2026-09-04",
+      "orders": [
+        {
+          "number": "S260904-001",
+          "status": "BOOKED"
+        }
+      ]
+    },
+    {
+      "id": "9a5a0ac6-17fc-4a1a-8de6-54cd16ec2420",
+      "number": "SR-Q-1788228319359",
+      "statusBefore": "REQUEST",
+      "job": "SR-JOB-0268",
+      "window": "2026-09-03→2026-09-04",
+      "orders": [
+        {
+          "number": "S260831-009",
+          "status": "BOOKED"
+        }
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "booking": "SR-2026-0301",
+      "job": "SR-JOB-0294",
+      "why": "window disagrees: booking 2026-09-04→2026-09-05 vs S260902-008 2026-09-03→2026-09-09"
+    }
+  ]
+}
