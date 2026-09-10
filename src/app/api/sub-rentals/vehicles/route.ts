@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma'
 import { parseMoney } from '@/lib/pricing/resolveRate'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { parsePercent } from '@/lib/sub-rentals/vehicles'
+import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     // Units a partner keeps for themselves in their HQ workspace
     // (offeredToSirReel false) never reach the roster.
     where: { offeredToSirReel: true, ...(includeInactive ? {} : { isActive: true }) },
-    include: { vendor: { select: { id: true, name: true, contactName: true, phone: true, email: true, partnerSharePercent: true } } },
+    include: { vendor: { select: { id: true, name: true, contactName: true, phone: true, email: true, partnerSharePercent: true, partnerKind: true, catalogSection: true } } },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })
   return NextResponse.json({ vehicles })
@@ -49,12 +50,22 @@ export async function POST(req: NextRequest) {
     listMonthlyRate?: number | string | null
     rateNotes?: string | null
     discountPercent?: number | string | null
+    /** Public-catalog section override (null = the vendor's default). */
+    catalogSection?: string | null
+    /** PICKUP (driven to set) or DELIVERY (the partner brings it). */
+    defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | null
   } | null
   if (!body?.name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
   if (!body.vendorId && !body.vendorName?.trim()) {
     return NextResponse.json({ error: 'vendorId or vendorName is required' }, { status: 400 })
+  }
+  if (body.catalogSection != null && !isPartnerSectionKey(body.catalogSection)) {
+    return NextResponse.json({ error: 'unknown catalogSection' }, { status: 400 })
+  }
+  if (body.defaultReceiveMethod != null && body.defaultReceiveMethod !== 'PICKUP' && body.defaultReceiveMethod !== 'DELIVERY') {
+    return NextResponse.json({ error: 'defaultReceiveMethod must be PICKUP or DELIVERY' }, { status: 400 })
   }
 
   const vehicle = await prisma.$transaction(async (tx) => {
@@ -82,6 +93,8 @@ export async function POST(req: NextRequest) {
         listMonthlyRate: parseMoney(body.listMonthlyRate),
         rateNotes: body.rateNotes?.trim() || null,
         discountPercent: parsePercent(body.discountPercent),
+        catalogSection: isPartnerSectionKey(body.catalogSection) ? body.catalogSection : null,
+        defaultReceiveMethod: body.defaultReceiveMethod ?? null,
       },
       include: { vendor: { select: { id: true, name: true } } },
     })

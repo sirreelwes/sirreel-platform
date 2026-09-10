@@ -1,14 +1,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { WORDMARK_BLACK_DATA_URI } from './brandAssets'
-import {
-  VENDOR_AGREEMENT_TITLE,
-  VENDOR_AGREEMENT_VERSION,
-  VENDOR_AGREEMENT_SIRREEL,
-  VENDOR_AGREEMENT_OPENING,
-  VENDOR_AGREEMENT_CLAUSES,
-  vendorAgreementTerms,
-} from './vendorAgreementClauses'
+import { VENDOR_AGREEMENT_SIRREEL, vendorAgreementFor, type VendorAgreementKind } from './vendorAgreementClauses'
 
 /**
  * React-PDF render of the Partner Vehicle Agreement (vendorAgreementClauses.ts).
@@ -31,6 +24,9 @@ export interface VendorAgreementPartyForRender {
 
 export interface VendorAgreementDocumentProps {
   partner: VendorAgreementPartyForRender
+  /** VEHICLES (Partner Vehicle Agreement) or EQUIPMENT (Partner Equipment
+   *  Agreement). Defaults to VEHICLES so every existing caller is unchanged. */
+  kind?: VendorAgreementKind
   generatedAt?: Date
 }
 
@@ -76,11 +72,12 @@ function fmtToday(d: Date): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreementDocumentProps) {
+export function VendorAgreementDocument({ partner, kind, generatedAt }: VendorAgreementDocumentProps) {
   const today = generatedAt ?? new Date()
+  const doc = vendorAgreementFor(kind)
   const addressLines = (partner.address ?? '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
   return (
-    <Document title={`${VENDOR_AGREEMENT_TITLE} — ${partner.name}`} author={VENDOR_AGREEMENT_SIRREEL.legalName}>
+    <Document title={`${doc.title} — ${partner.name}`} author={VENDOR_AGREEMENT_SIRREEL.legalName}>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.brandRow}>
           <View>
@@ -89,8 +86,8 @@ export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreemen
             <Text style={styles.brandSub}>{VENDOR_AGREEMENT_SIRREEL.address}</Text>
           </View>
           <View style={styles.docMeta}>
-            <Text style={styles.docTitle}>{VENDOR_AGREEMENT_TITLE.toUpperCase()}</Text>
-            <Text style={styles.docDate}>Prepared {fmtToday(today)} · v{VENDOR_AGREEMENT_VERSION}</Text>
+            <Text style={styles.docTitle}>{doc.title.toUpperCase()}</Text>
+            <Text style={styles.docDate}>Prepared {fmtToday(today)} · v{doc.version}</Text>
           </View>
         </View>
 
@@ -112,7 +109,7 @@ export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreemen
 
         <View style={styles.terms}>
           <Text style={styles.termsTitle}>Terms</Text>
-          {vendorAgreementTerms(partner.sharePercent).map((r) => (
+          {doc.terms(partner.sharePercent).map((r) => (
             <View key={r.label} style={styles.termsRow}>
               <Text style={styles.termsLabel}>{r.label}</Text>
               <Text style={styles.termsValue}>{r.value}</Text>
@@ -120,9 +117,9 @@ export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreemen
           ))}
         </View>
 
-        <Text style={styles.opening}>{VENDOR_AGREEMENT_OPENING}</Text>
+        <Text style={styles.opening}>{doc.opening}</Text>
 
-        {VENDOR_AGREEMENT_CLAUSES.map((c) => (
+        {doc.clauses.map((c) => (
           <View key={c.ref} style={styles.clause} wrap={false}>
             <View style={styles.clauseHeader}>
               <Text style={styles.clauseRef}>{c.ref}.</Text>
@@ -150,7 +147,7 @@ export function VendorAgreementDocument({ partner, generatedAt }: VendorAgreemen
         </View>
 
         <Text style={styles.footer} fixed>
-          SirReel · {VENDOR_AGREEMENT_SIRREEL.address} · sirreel.com · {VENDOR_AGREEMENT_TITLE} v{VENDOR_AGREEMENT_VERSION}
+          SirReel · {VENDOR_AGREEMENT_SIRREEL.address} · sirreel.com · {doc.title} v{doc.version}
         </Text>
       </Page>
     </Document>

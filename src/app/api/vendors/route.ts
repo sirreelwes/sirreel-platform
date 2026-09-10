@@ -12,6 +12,8 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
+import { isPartnerKind } from '@/lib/sub-rentals/partnerKind'
+import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +60,10 @@ export async function POST(req: NextRequest) {
     poEmail?: string | null
     supplies?: string | null
     deliveryTerms?: string | null
+    /** VEHICLES | EQUIPMENT — what kind of partner (see PartnerKind). */
+    partnerKind?: string | null
+    /** Default public-catalog section for their listed units. */
+    catalogSection?: string | null
   } | null
 
   if (!body || !body.name || !body.name.trim()) {
@@ -78,9 +84,18 @@ export async function POST(req: NextRequest) {
     return t.length === 0 ? null : t
   }
 
+  if (body.partnerKind != null && !isPartnerKind(body.partnerKind)) {
+    return NextResponse.json({ error: 'partnerKind must be VEHICLES or EQUIPMENT' }, { status: 400 })
+  }
+  if (body.catalogSection != null && !isPartnerSectionKey(body.catalogSection)) {
+    return NextResponse.json({ error: 'unknown catalogSection' }, { status: 400 })
+  }
+
   const vendor = await prisma.vendor.create({
     data: {
       name: body.name.trim(),
+      ...(body.partnerKind ? { partnerKind: body.partnerKind } : {}),
+      ...(body.catalogSection ? { catalogSection: body.catalogSection } : {}),
       contactName: trimOrNull(body.contactName),
       email: trimOrNull(body.email),
       phone: trimOrNull(body.phone),

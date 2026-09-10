@@ -28,6 +28,7 @@ import { logisticsFor, type LogisticsView } from '@/lib/sub-rentals/conduit'
 import { isAckStale } from '@/lib/drivers/hoursEntry'
 import { listHours, type HoursView } from '@/lib/drivers/hoursStore'
 import { rosterForVendor, type RosterDriver } from '@/lib/sub-rentals/vendorDrivers'
+import { defaultReceiveMethodFor } from '@/lib/sub-rentals/partnerKind'
 
 const TOKEN_BYTES = 32
 
@@ -70,7 +71,8 @@ export async function createPotentialSubRental(
       name: true,
       listDailyRate: true,
       listWeeklyRate: true,
-      vendor: { select: { id: true, name: true, email: true, poEmail: true } },
+      defaultReceiveMethod: true,
+      vendor: { select: { id: true, name: true, email: true, poEmail: true, partnerKind: true } },
     },
   })
   if (!vehicle) return { error: 'vehicle not found' }
@@ -88,6 +90,9 @@ export async function createPotentialSubRental(
       status: 'ESTIMATED',
       itemDescription: vehicle.name,
       quantity: 1,
+      // A generator is delivered; a star wagon is driven. Decides whether
+      // the partner's booking page asks for a driver or a delivery contact.
+      receiveMethod: defaultReceiveMethodFor(vehicle, vehicle.vendor),
       startDate: start,
       endDate: end,
       // The client was quoted LIST, so that is the client-side number here.

@@ -60,6 +60,7 @@
     "test:coi-scope": "tsx tests/coi/vehicle-scope.test.ts",
     "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
     "test:sub-rental-hold": "tsx tests/sub-rentals/hold-state.test.ts",
+    "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
     "test:measure-tokens": "tsx tests/sales/measure-tokens.test.ts",
     "coi:rerun": "tsx scripts/rerun-coi-reviews.ts",
     "test:company-rate": "tsx tests/pricing/company-rate.test.ts",

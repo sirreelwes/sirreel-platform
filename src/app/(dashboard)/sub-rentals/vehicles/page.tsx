@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, netCost } from '@/lib/sub-rentals/vehicles'
+import { PARTNER_SECTIONS, partnerSection } from '@/lib/site/partnerSections'
 
 interface VehicleRow {
   id: string
@@ -27,10 +28,12 @@ interface VehicleRow {
   listWeeklyRate: string | null
   listMonthlyRate: string | null
   discountPercent: string | null
-  vendor: { id: string; name: string; partnerSharePercent: string | null }
+  catalogSection: string | null
+  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | null
+  vendor: { id: string; name: string; partnerSharePercent: string | null; partnerKind: 'VEHICLES' | 'EQUIPMENT'; catalogSection: string | null }
 }
 
-interface VendorOpt { id: string; name: string }
+interface VendorOpt { id: string; name: string; partnerKind?: 'VEHICLES' | 'EQUIPMENT'; catalogSection?: string | null }
 
 function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [vendors, setVendors] = useState<VendorOpt[]>([])
@@ -43,15 +46,22 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [monthly, setMonthly] = useState('')
   const [discount, setDiscount] = useState('')
   const [rateNotes, setRateNotes] = useState('')
+  // '' = the vendor's default section; a key = this unit's own.
+  const [section, setSection] = useState('')
+  // '' = decide per booking; PowerTrip's gear defaults to DELIVERY below.
+  const [receive, setReceive] = useState<'' | 'PICKUP' | 'DELIVERY'>('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/vendors', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((j) => setVendors((j.vendors ?? []).map((v: VendorOpt) => ({ id: v.id, name: v.name }))))
+      .then((j) => setVendors((j.vendors ?? []).map((v: VendorOpt) => ({ id: v.id, name: v.name, partnerKind: v.partnerKind, catalogSection: v.catalogSection }))))
       .catch(() => {})
   }, [])
+  const owner = vendors.find((v) => v.id === vendorId)
+  // An equipment partner's unit is delivered unless told otherwise.
+  useEffect(() => { setReceive(owner?.partnerKind === 'EQUIPMENT' ? 'DELIVERY' : '') }, [owner?.partnerKind])
 
   const submit = async () => {
     if (!name.trim()) { setError('Vehicle name is required.'); return }
@@ -72,6 +82,8 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
           listMonthlyRate: monthly.trim() || null,
           discountPercent: discount.trim() || null,
           rateNotes: rateNotes.trim() || null,
+          catalogSection: section || null,
+          defaultReceiveMethod: receive || null,
         }),
       })
       const j = await r.json()
@@ -153,6 +165,24 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Section on sirreel.com</label>
+              <select value={section} onChange={(e) => setSection(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">{owner ? `${owner.name}’s default (${partnerSection(owner.catalogSection).short})` : 'Owner’s default'}</option>
+                {PARTNER_SECTIONS.map((sec) => <option key={sec.key} value={sec.key}>{sec.title}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reaches set by</label>
+              <select value={receive} onChange={(e) => setReceive(e.target.value as '' | 'PICKUP' | 'DELIVERY')} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">Decide per booking</option>
+                <option value="PICKUP">Driver takes it (their roster)</option>
+                <option value="DELIVERY">They deliver &amp; collect it</option>
+              </select>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Rate structure notes</label>
             <textarea
@@ -219,10 +249,10 @@ export default function SubcontractedVehiclesPage() {
             <Link href="/sub-rentals" className="hover:underline">Sub-rentals</Link>
             {' / '}Vehicles
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Subcontracted Vehicles</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Partner Vehicles &amp; Equipment</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Partner-owned production vehicles we can quote out — their price structure and our
-            negotiated discount. Internal only, never on client-facing docs.
+            Partner-owned production vehicles and equipment we can quote out — their price
+            structure and our negotiated share. Internal only, never on client-facing docs.
           </p>
         </div>
         {!error && (

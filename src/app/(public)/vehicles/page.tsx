@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
-import { getPublicVehicles, PARTNER_SECTION, type PublicVehicle } from '@/lib/site/vehicleCatalog'
+import { getPublicVehicles, groupPartnerUnits, type PublicVehicle } from '@/lib/site/vehicleCatalog'
 import { getPageTitles } from '@/lib/site/siteSettings'
 import { SWatermark } from '@/components/site/SWatermark'
 
@@ -11,18 +11,21 @@ import { SWatermark } from '@/components/site/SWatermark'
  * to its detail page. Reads LIVE from the same rows the order form shows;
  * tiles use the primary gallery photo (legacy image fallback) via the proxy.
  *
- * Two sections: the owned fleet, then "Motorhomes & Location Trailers" —
- * partner-supplied units, every partner side by side, no vendor named. The
- * partner section exists only while at least one partner has signed and has
- * a listed unit (SUB_LISTED_WHERE), so it appears on its own the moment a
- * partner approves in their portal (Wes 2026-09-06).
+ * The owned fleet first, then one section per partner CATEGORY — motorhomes
+ * & location trailers, power & generators, HVAC, lifts, lighting… — each
+ * with every partner's units side by side and no vendor named. A section
+ * exists only while at least one partner has signed and has a listed unit
+ * in it (SUB_LISTED_WHERE), so it appears on its own the moment a partner
+ * approves in their portal (Wes 2026-09-06) and vanishes when the last unit
+ * is withdrawn. Sections are anchored (#power, #lifts…) so the nav and
+ * emails can point at one.
  */
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'SirReel · Production Vehicles',
   description:
-    'Cargo vans, supercubes, passenger vans, talent trailers and more — the SirReel production fleet.',
+    'Cargo vans, supercubes, passenger vans, talent trailers, motorhomes, generators and more — the SirReel production fleet and partner equipment.',
   alternates: { canonical: '/vehicles' },
 }
 
@@ -96,7 +99,11 @@ function Grid({ items }: { items: PublicVehicle[] }) {
 export default async function VehiclesIndexPage() {
   const [vehicles, titles] = await Promise.all([getPublicVehicles(), getPageTitles()])
   const fleet = vehicles.filter((v) => !v.partner)
-  const partners = vehicles.filter((v) => v.partner)
+  const partnerGroups = groupPartnerUnits(vehicles)
+  // The hero names what is actually listed, so a power partner going live
+  // changes the sentence on its own.
+  const alsoList = partnerGroups.map((g) => g.meta.title.toLowerCase())
+  const also = alsoList.length === 0 ? '' : alsoList.length === 1 ? `, plus ${alsoList[0]}` : `, plus ${alsoList.slice(0, -1).join(', ')} and ${alsoList[alsoList.length - 1]}`
 
   return (
     <>
@@ -111,7 +118,7 @@ export default async function VehiclesIndexPage() {
             {titles.vehicles}
           </h1>
           <p className="mt-4 max-w-[56ch] text-[#cfc9bd] text-base leading-relaxed">
-            Cargo vans, supercubes, passenger vans, talent trailers and honeywagons{partners.length > 0 ? ', plus motorhomes and location trailers' : ''}. Pick a vehicle
+            Cargo vans, supercubes, passenger vans, talent trailers and honeywagons{also}. Pick one
             to see specs and pricing — then add it to your reservation.
           </p>
         </div>
@@ -124,18 +131,24 @@ export default async function VehiclesIndexPage() {
         ) : (
           <>
             {fleet.length > 0 && <Grid items={fleet} />}
-            {partners.length > 0 && (
-              <div className={fleet.length > 0 ? 'mt-14 pt-10 border-t border-[#e4dfd4]' : ''} data-section="partner-vehicles">
+            {partnerGroups.map((g, i) => (
+              <div
+                key={g.meta.key}
+                id={g.meta.anchor}
+                className={fleet.length > 0 || i > 0 ? 'mt-14 pt-10 border-t border-[#e4dfd4] scroll-mt-6' : 'scroll-mt-6'}
+                data-section="partner-vehicles"
+                data-partner-section={g.meta.key}
+              >
                 <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#0F7A93] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
                   Also from SirReel
                 </div>
                 <h2 className="font-black tracking-tight text-[28px] sm:text-[36px] leading-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                  {PARTNER_SECTION.title}
+                  {g.meta.title}
                 </h2>
-                <p className="mt-2 mb-6 max-w-[60ch] text-[#8b857a] text-[15px] leading-relaxed">{PARTNER_SECTION.blurb}</p>
-                <Grid items={partners} />
+                <p className="mt-2 mb-6 max-w-[60ch] text-[#8b857a] text-[15px] leading-relaxed">{g.meta.blurb}</p>
+                <Grid items={g.items} />
               </div>
-            )}
+            ))}
           </>
         )}
       </section>

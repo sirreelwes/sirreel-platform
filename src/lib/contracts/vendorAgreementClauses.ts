@@ -146,5 +146,51 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
 /** Fixed pre-signature text the partner adopts on their sign page. Generic
  *  on purpose: the same sign page also executes a hand-uploaded PDF whose
  *  title may differ from this document's. */
+// ── Picking the variant ──────────────────────────────────────────────────
+// One partner contract, two bodies: VEHICLES (this file) and EQUIPMENT
+// (vendorAgreementEquipmentClauses.ts — PowerTrip, 2026-09-10). The renderer
+// and the standard-agreement route read the vendor's PartnerKind through
+// this, never the constants directly, so a second equipment partner needs
+// no new code.
+import {
+  VENDOR_EQUIPMENT_AGREEMENT_TITLE,
+  VENDOR_EQUIPMENT_AGREEMENT_VERSION,
+  VENDOR_EQUIPMENT_AGREEMENT_OPENING,
+  VENDOR_EQUIPMENT_AGREEMENT_CLAUSES,
+  vendorEquipmentAgreementTerms,
+} from './vendorAgreementEquipmentClauses'
+
+export type VendorAgreementKind = 'VEHICLES' | 'EQUIPMENT'
+
+export interface VendorAgreementText {
+  kind: VendorAgreementKind
+  title: string
+  version: string
+  opening: string
+  clauses: VendorAgreementClause[]
+  terms: (sharePercent: number | null) => { label: string; value: string }[]
+}
+
+export function vendorAgreementFor(kind: string | null | undefined): VendorAgreementText {
+  if (kind === 'EQUIPMENT') {
+    return {
+      kind: 'EQUIPMENT',
+      title: VENDOR_EQUIPMENT_AGREEMENT_TITLE,
+      version: VENDOR_EQUIPMENT_AGREEMENT_VERSION,
+      opening: VENDOR_EQUIPMENT_AGREEMENT_OPENING,
+      clauses: VENDOR_EQUIPMENT_AGREEMENT_CLAUSES,
+      terms: vendorEquipmentAgreementTerms,
+    }
+  }
+  return {
+    kind: 'VEHICLES',
+    title: VENDOR_AGREEMENT_TITLE,
+    version: VENDOR_AGREEMENT_VERSION,
+    opening: VENDOR_AGREEMENT_OPENING,
+    clauses: VENDOR_AGREEMENT_CLAUSES,
+    terms: vendorAgreementTerms,
+  }
+}
+
 export const VENDOR_AGREEMENT_ACK =
   'I have read the partner agreement above and agree to its terms on behalf of my company. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.'

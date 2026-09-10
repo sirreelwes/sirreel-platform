@@ -20,6 +20,7 @@ import { fmtMoney, netCost } from '@/lib/sub-rentals/vehicles'
 import VehicleFeesCard from '@/components/sub-rentals/VehicleFeesCard'
 import VehiclePhotosCard from '@/components/sub-rentals/VehiclePhotosCard'
 import ClientPageCard from '@/components/sub-rentals/ClientPageCard'
+import { PARTNER_SECTIONS, partnerSection } from '@/lib/site/partnerSections'
 
 interface Vehicle {
   id: string
@@ -41,6 +42,10 @@ interface Vehicle {
    *  unlisted link above. */
   publiclyListed: boolean
   publicSlug: string | null
+  /** Public-catalog section override; null = the vendor's default. */
+  catalogSection: string | null
+  /** How it reaches set; null = decided per booking. */
+  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | null
   updatedAt: string
   vendor: {
     id: string
@@ -52,6 +57,8 @@ interface Vehicle {
     address: string | null
     notes: string | null
     partnerSharePercent: string | null
+    partnerKind: 'VEHICLES' | 'EQUIPMENT'
+    catalogSection: string | null
   }
 }
 
@@ -66,6 +73,8 @@ interface Draft {
   listMonthlyRate: string
   rateNotes: string
   discountPercent: string
+  catalogSection: string
+  defaultReceiveMethod: string
 }
 
 function toDraft(v: Vehicle): Draft {
@@ -80,6 +89,8 @@ function toDraft(v: Vehicle): Draft {
     listMonthlyRate: v.listMonthlyRate ?? '',
     rateNotes: v.rateNotes ?? '',
     discountPercent: v.discountPercent ?? '',
+    catalogSection: v.catalogSection ?? '',
+    defaultReceiveMethod: v.defaultReceiveMethod ?? '',
   }
 }
 
@@ -154,6 +165,8 @@ export default function SubcontractedVehiclePage() {
       listMonthlyRate: draft.listMonthlyRate.trim() || null,
       rateNotes: draft.rateNotes,
       discountPercent: draft.discountPercent.trim() || null,
+      catalogSection: draft.catalogSection || null,
+      defaultReceiveMethod: draft.defaultReceiveMethod || null,
     })
   }
 
@@ -193,9 +206,10 @@ export default function SubcontractedVehiclePage() {
             )}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {vehicle.vehicleType ?? 'Subcontracted vehicle'} · owned by{' '}
+            {vehicle.vehicleType ?? (vehicle.vendor.partnerKind === 'EQUIPMENT' ? 'Partner equipment' : 'Subcontracted vehicle')} · owned by{' '}
             <span className="font-medium text-gray-700">{vehicle.vendor.name}</span>
             {' '}· subcontracted — not SirReel fleet
+            {' '}· {vehicle.defaultReceiveMethod === 'DELIVERY' ? 'they deliver' : vehicle.defaultReceiveMethod === 'PICKUP' ? 'driver takes it' : 'pickup/delivery decided per booking'}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -392,7 +406,25 @@ export default function SubcontractedVehiclePage() {
               </div>
               <div>
                 <label className={label}>Type</label>
-                <input value={d.vehicleType} onChange={(e) => setDraft({ ...d, vehicleType: e.target.value })} placeholder="e.g. Star Trailer" className={field} />
+                <input value={d.vehicleType} onChange={(e) => setDraft({ ...d, vehicleType: e.target.value })} placeholder={vehicle.vendor.partnerKind === 'EQUIPMENT' ? 'e.g. Towable generator' : 'e.g. Star Trailer'} className={field} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={label}>Section on sirreel.com</label>
+                <select value={d.catalogSection} onChange={(e) => setDraft({ ...d, catalogSection: e.target.value })} className={field}>
+                  <option value="">{vehicle.vendor.name}’s default ({partnerSection(vehicle.vendor.catalogSection).short})</option>
+                  {PARTNER_SECTIONS.map((sec) => <option key={sec.key} value={sec.key}>{sec.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={label}>Reaches set by</label>
+                <select value={d.defaultReceiveMethod} onChange={(e) => setDraft({ ...d, defaultReceiveMethod: e.target.value })} className={field}>
+                  <option value="">Decide per booking</option>
+                  <option value="PICKUP">Driver takes it (their roster)</option>
+                  <option value="DELIVERY">They deliver &amp; collect it</option>
+                </select>
+                <div className="text-[11px] text-gray-400 mt-1">Decides whether their booking page asks for a driver or a delivery contact.</div>
               </div>
             </div>
             <div>
@@ -428,6 +460,12 @@ export default function SubcontractedVehiclePage() {
               <div className={label}>Client description <span className="font-normal normal-case text-gray-400">— shown on the client page</span></div>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">
                 {vehicle.publicDescription ?? <span className="text-gray-400">None yet — the client page shows no blurb.</span>}
+              </p>
+            </div>
+            <div>
+              <div className={label}>On sirreel.com</div>
+              <p className="text-sm text-gray-700">
+                {vehicle.publiclyListed ? 'Listed' : 'Not listed'} · section “{partnerSection(vehicle.catalogSection ?? vehicle.vendor.catalogSection).title}”{vehicle.catalogSection ? '' : ` (${vehicle.vendor.name}’s default)`}
               </p>
             </div>
             <div>

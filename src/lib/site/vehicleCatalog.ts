@@ -13,6 +13,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
+import { PARTNER_SECTIONS, resolvePartnerSection, type PartnerCatalogSectionKey, type PartnerSectionMeta } from '@/lib/site/partnerSections'
 
 /**
  * Shared Prisma where-clause for "client-visible on the public site".
@@ -65,6 +66,8 @@ export interface PublicVehicle {
   /** True for a partner-supplied unit — decides which SECTION it renders in,
    *  and nothing else: the card carries no vendor and never will. */
   partner: boolean
+  /** Which partner section (null for the owned fleet). See partnerSections.ts. */
+  section: PartnerCatalogSectionKey | null
 }
 
 const SELECT: Prisma.VehicleCategorySelect = {
@@ -131,6 +134,7 @@ function shape(r: Row): PublicVehicle {
   const hasImage = photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
   return {
     partner: false,
+    section: null,
     id: r.id,
     name: r.name,
     slug: r.slug,
@@ -196,14 +200,30 @@ export const SUB_LISTED_WHERE: Prisma.SubcontractedVehicleWhereInput = {
 }
 
 /**
- * Where partner units sit on /vehicles. They render side by side in ONE
- * section regardless of which partner owns them — the client sees a SirReel
- * category, never a vendor. Owned categories keep the main grid.
+ * Where partner units sit on /vehicles: one section per CATEGORY (see
+ * partnerSections.ts), every partner side by side inside it — the client
+ * sees a SirReel category, never a vendor. Owned categories keep the main
+ * grid. Until PowerTrip (2026-09-10) there was one section, motorhomes &
+ * trailers; a generator partner made the section a property of the unit.
  */
-export const PARTNER_SECTION = {
-  title: 'Motorhomes & Location Trailers',
-  blurb: 'Talent motorhomes, star wagons and location trailers for when the cast needs a real room on set. Rates and availability on quote; pick one to see the gallery and specs.',
-} as const
+export interface PartnerCatalogGroup {
+  meta: PartnerSectionMeta
+  items: PublicVehicle[]
+}
+
+/** Partner units grouped into their sections, in page order, empties dropped. */
+export function groupPartnerUnits(items: PublicVehicle[]): PartnerCatalogGroup[] {
+  const by = new Map<PartnerCatalogSectionKey, PublicVehicle[]>()
+  for (const v of items) {
+    if (!v.partner) continue
+    const key = v.section ?? 'LOCATION_VEHICLES'
+    by.set(key, [...(by.get(key) ?? []), v])
+  }
+  return [...PARTNER_SECTIONS]
+    .sort((a, b) => a.order - b.order)
+    .filter((m) => (by.get(m.key)?.length ?? 0) > 0)
+    .map((m) => ({ meta: m, items: by.get(m.key)! }))
+}
 
 type SubRow = {
   id: string
@@ -213,6 +233,9 @@ type SubRow = {
   publicDescription: string | null
   specs: string | null
   listDailyRate: unknown
+  catalogSection: string | null
+  /** Only the section default is selected off the vendor — never its name. */
+  vendor: { catalogSection: string | null }
   photos: { id: string }[]
 }
 
@@ -225,6 +248,7 @@ function shapeSub(v: SubRow): PublicVehicle {
   }))
   return {
     partner: true,
+    section: resolvePartnerSection(v, v.vendor).key,
     id: v.id,
     name: v.name,
     slug: v.publicSlug!,
@@ -247,6 +271,10 @@ function shapeSub(v: SubRow): PublicVehicle {
 const SUB_SELECT: Prisma.SubcontractedVehicleSelect = {
   id: true, name: true, publicSlug: true, vehicleType: true,
   publicDescription: true, specs: true, listDailyRate: true,
+  catalogSection: true,
+  // The vendor's SECTION default only. Name, contact and money stay
+  // unselected — rule 1 above.
+  vendor: { select: { catalogSection: true } },
   photos: {
     select: { id: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
