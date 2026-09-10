@@ -19,6 +19,7 @@ import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { stageForJobs } from '@/lib/jobs/stageBatch'
 import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/annualCoverage'
 
@@ -542,6 +543,11 @@ export async function GET(
       ),
     )
 
+    // The job's stage color (src/lib/jobs/stage.ts) — the same batch
+    // gatherer the reservations board uses, so the header and the bar
+    // cannot disagree about which rung this job is on.
+    const stage = (await stageForJobs([job.id])).get(job.id) ?? 'hold'
+
     const coverage = job.companyId ? await findCompanyAnnualCoverage(job.companyId) : null
     const annualCoverage = coverage
       ? {
@@ -646,6 +652,7 @@ export async function GET(
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
         cadence,
+        stage,
         rwInvoicedTotal,
         rwOrderCount: rwLinks.length,
         orders: job.orders.map((o) => ({

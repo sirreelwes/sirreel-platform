@@ -30,7 +30,7 @@ import {
   readinessMeterTitle,
 } from '@/lib/scheduling/statusTokens';
 import type { JobReadiness } from '@/lib/jobs/readiness';
-import StatusLegend from '@/components/scheduling/StatusLegend';
+import StatusLegend, { TierKey } from '@/components/scheduling/StatusLegend';
 import { StageAreasPicker } from '@/components/scheduling/StageAreasPicker';
 import OutBackStrip from '@/components/scheduling/OutBackStrip';
 
@@ -378,15 +378,19 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
         {entry.primaryBookings.map((b: any, j: number) => {
           const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
-          const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
-          // Paperwork wash across the bar. Absent for a job with no
-          // unfinished bar (the server only ships those) and for job-less
-          // call-in holds — draw nothing rather than an empty meter, which
-          // would read as a deficiency where there is no job to chase.
+          // The bar wears the JOB'S stage color (Wes 2026-09-10) — the same
+          // hue as the tile rail on /jobs. `status` is still the booking's
+          // own lifecycle token; a job-less call-in hold has no stage and
+          // falls back to it.
+          const stage: string = b.stage ?? b.status
+          const sc = barColor(stage, { blindPickup: b.blindPickup })
+          // Paperwork wash across the bar, in the stage's hue. Absent for a
+          // job with no unfinished bar (the server only ships those) and for
+          // job-less call-in holds — draw nothing rather than an empty
+          // meter, which would read as a deficiency where there is no job
+          // to chase.
           const rdy = b.jobId ? readiness[b.jobId] : undefined
-          const meter = rdy
-            ? readinessMeterStyle(rdy.done, rdy.total, { light: b.status === 'inquiry' || b.status === 'cancelled' })
-            : undefined
+          const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
           return (
             <div
               key={`p-${j}`}
@@ -408,7 +412,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
               {b.attachedOrder
                 ? <OrderBadge order={b.attachedOrder} unitLevel />
                 : b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
-              <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy)} truncate whitespace-nowrap`}>
+              <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy, stage)} truncate whitespace-nowrap`}>
                 {(b.tags || []).includes('ART_DEPT') && (
                   <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                 )}
@@ -433,7 +437,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
             const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
             const rdy = b.jobId ? readiness[b.jobId] : undefined
-            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true }) : undefined
+            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, stage: b.stage ?? b.status }) : undefined
             return (
               <div
                 key={`b-${j}`}
@@ -1285,7 +1289,7 @@ export function GanttBoard() {
     if (inFlightReassigns.current.has(b.bookingItemId)) return
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-    const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
+    const sc = barColor(b.stage ?? b.status, { blindPickup: b.blindPickup })
     dragState.current = {
       bookingItemId: b.bookingItemId,
       fromAssetId: unit.assetId,
@@ -1673,7 +1677,7 @@ export function GanttBoard() {
       <OutBackStrip />
 
       {/* Legend — derived from statusTokens inside StatusLegend, cannot drift from the bars. */}
-      <StatusLegend showTiers>
+      <StatusLegend>
         {/* Unit-name cell color — on a job today vs idle. */}
         <span className="text-gray-300">|</span>
         <div className="flex items-center gap-1">
@@ -1733,7 +1737,8 @@ export function GanttBoard() {
             </div>
 
             {view === 'asset' ? (
-              rowEntries.map((entry, i) => {
+              <>
+              {rowEntries.map((entry, i) => {
                 if (entry.type === 'divider') {
                   const accentClass =
                     entry.accent === 'warn' ? 'bg-rose-50' : 'bg-gray-100'
@@ -1862,7 +1867,13 @@ export function GanttBoard() {
                     )}
                   </div>
                 )
-              })
+              })}
+              {/* Condition key — under the LAST unit, not the top (Wes
+                  2026-09-10: "not critical information to have at top").
+                  It lives in the sticky label column because the dots it
+                  explains sit beside the unit names. */}
+              <TierKey className="px-3 py-2 border-t border-gray-200 bg-white" />
+              </>
             ) : (
               filteredJobs.map((job, i) => (
                 <div
@@ -2036,11 +2047,10 @@ export function GanttBoard() {
                     {(() => {
                       const bar = getBar(job.startDate, job.endDate)
                       if (!bar) return null
-                      const sc = barColor(job.status, { blindPickup: job.blindPickup, hasOrder: job.hasOrder })
+                      const stage: string = job.stage ?? job.status
+                      const sc = barColor(stage, { blindPickup: job.blindPickup })
                       const rdy = job.jobId ? readiness[job.jobId] : undefined
-                      const meter = rdy
-                        ? readinessMeterStyle(rdy.done, rdy.total, { light: job.status === 'inquiry' || job.status === 'cancelled' })
-                        : undefined
+                      const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
                       return (
                         <div
                           title={rdy ? readinessMeterTitle(rdy) : undefined}
@@ -2050,7 +2060,7 @@ export function GanttBoard() {
                         >
                           <IncompleteBadge gaps={job.infoGaps} />
                           {job.hasOrder && <OrderBadge order={job.orders?.[0]} rwOrderNumber={job.rwOrderNumbers?.[0]} jobId={job.jobId} />}
-                          <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy)} truncate whitespace-nowrap`}>
+                          <span className={`text-[9px] font-bold ${readinessLabelClass(sc.text, rdy, stage)} truncate whitespace-nowrap`}>
                             {(job.tags || []).includes('ART_DEPT') && (
                               <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                             )}
@@ -2072,7 +2082,7 @@ export function GanttBoard() {
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelected(null)}>
           <div className="bg-white rounded-2xl w-[720px] max-w-[95vw] max-h-[88vh] overflow-y-auto p-5 shadow-2xl border border-gray-200 relative" onClick={e => e.stopPropagation()}>
             {/* Status ribbon — same palette as the bar the user clicked. */}
-            <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${barColor(selected.status, selected.blindPickup).bg}`} />
+            <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${barColor(selected.stage ?? selected.status, { blindPickup: selected.blindPickup }).bg}`} />
             <div className="flex justify-between items-start mb-4 pt-1">
               <div>
                 {selected.isUnit ? (

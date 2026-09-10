@@ -24,7 +24,8 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import { IncomingPill } from './IncomingPill'
 import { NewJobLauncher } from './NewJobLauncher'
-import { STATE, URGENCY } from '@/lib/jobs/listRow'
+import { STAGE_HINT, STAGE_ORDER, STAGE_SHORT } from '@/lib/jobs/stage'
+import { STAGE_RAIL } from '@/lib/scheduling/statusTokens'
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'All jobs' },
@@ -59,7 +60,7 @@ const SORT_OPTIONS: { id: Sort; label: string }[] = [
 
 export function JobsToolbar() {
   const {
-    rows, allRows, counts, loading, error,
+    rows, allRows, counts, stageCounts, loading, error,
     search, setSearch,
     status, setStatus,
     mine, setMine,
@@ -74,9 +75,10 @@ export function JobsToolbar() {
   const incomingPanel = searchParams?.get('panel') === 'incoming'
   const selected = !!selectedId || incomingPanel
 
-  // Only states actually present get a key entry — a legend full of
-  // zeroes is noise.
-  const keyStates = URGENCY.filter((s) => (counts.get(s) ?? 0) > 0)
+  // The legend is the STAGE ladder (Wes 2026-09-10) — the same colors the
+  // reservations board paints — and only rungs actually present get a
+  // key entry; a legend full of zeroes is noise.
+  const keyStages = STAGE_ORDER.filter((s) => (stageCounts.get(s) ?? 0) > 0)
   // The second axis — outbound rows the five-check rollup says can't go
   // out yet. Same chip pattern as the states; counts only the rows the
   // chip itself would show (readiness is omitted everywhere else).
@@ -197,23 +199,23 @@ export function JobsToolbar() {
         </div>
       </div>
 
-      {/* Row 2 — color key: legend for the rails, and a one-click narrow. */}
-      {keyStates.length > 0 && (
+      {/* Row 2 — color key: the stage ladder the rails wear, and a one-click narrow. */}
+      {keyStages.length > 0 && (
         <div className="flex items-center gap-x-2 gap-y-1 flex-wrap overflow-x-auto">
-          {keyStates.map((s) => {
-            const on = stateFilter === s
+          {keyStages.map((s) => {
+            const on = stateFilter === `stage:${s}`
             return (
               <button
                 key={s}
-                onClick={() => setStateFilter(on ? null : s)}
-                title={`${STATE[s].label} — click to show only these`}
+                onClick={() => setStateFilter(on ? null : `stage:${s}`)}
+                title={`${STAGE_HINT[s]} — click to show only these`}
                 className={`flex items-center gap-1 text-[11px] md:text-[10px] rounded px-1.5 md:px-1 py-1.5 md:py-0.5 whitespace-nowrap ${
                   on ? 'bg-zinc-900 text-white font-bold' : 'text-zinc-500 hover:bg-zinc-200'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-sm ${STATE[s].rail}`} />
-                {STATE[s].short}
-                <span className={on ? 'font-bold' : 'text-zinc-400'}>{counts.get(s)}</span>
+                <span className={`w-2 h-2 rounded-sm ${STAGE_RAIL[s].replace('border-r ', 'border ')}`} />
+                {STAGE_SHORT[s]}
+                <span className={on ? 'font-bold' : 'text-zinc-400'}>{stageCounts.get(s)}</span>
               </button>
             )
           })}

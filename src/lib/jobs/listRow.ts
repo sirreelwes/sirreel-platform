@@ -95,6 +95,10 @@ export interface JobRow {
   /** Five-check "can this job go out" rollup — src/lib/jobs/readiness.ts.
    *  Rendered ONLY on outbound rows (readinessApplies); shipped on all. */
   readiness?: import('./readiness').JobReadiness
+  /** The one color this job wears everywhere — src/lib/jobs/stage.ts.
+   *  inquiry → hold → booked → order (warehouse), or cancelled / lost.
+   *  The tile rail, the header chip and the gantt bar all read it. */
+  stage?: import('./stage').JobStage
   /** What's on the job, by category, across its live bookings — with the
    *  unit names already assigned. Empty for order-only legacy jobs. */
   gear?: { label: string; qty: number; units: string[] }[]
@@ -166,7 +170,8 @@ export type RowState =
 export interface StateMeta {
   label: string
   short: string
-  /** Saturated left rail — reads on any surface; this is the color code. */
+  /** Pill accent — kept on the meta for the pill; the tile RAIL is the
+   *  job's stage color since 2026-09-10 (STAGE_RAIL in statusTokens). */
   rail: string
   /** Pill text hue. */
   fg: string

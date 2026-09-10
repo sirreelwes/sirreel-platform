@@ -30,6 +30,7 @@
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:cadence": "tsx tests/jobs/cadence.test.ts",
+    "test:job-stage": "tsx tests/jobs/stage.test.ts",
     "test:hold-release": "tsx tests/jobs/hold-release.test.ts",
     "test:release-plan": "tsx tests/scheduling/hold-release-plan.test.ts",
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",

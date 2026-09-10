@@ -41,6 +41,8 @@ interface AgendaBooking {
   start: string
   end: string
   status: string
+  /** The job's stage color token (src/lib/jobs/stage.ts). */
+  stage?: string
   hasOrder?: boolean
   blindPickup?: boolean
 }
@@ -243,16 +245,17 @@ function AgendaRow({ r, direction }: { r: AgendaBooking; direction: keyof typeof
   const meta = DIRECTION_META[direction]
   // Same precedence the gantt bars use — blind pickup shouts over
   // order-attached, which shouts over plain booked.
+  // `stage` is the JOB'S color token (src/lib/jobs/stage.ts) — the same
+  // one the gantt bar and the /jobs tile rail wear.
+  const stage = r.stage ?? r.status
   const chip = r.blindPickup
     ? 'bg-violet-100 text-violet-800 border border-violet-200'
-    : r.status === 'booked' && r.hasOrder
-      ? 'bg-[#b04a5a]/10 text-[#93394a] border border-[#b04a5a]/30'
-      : STATUS_CHIPS[r.status] ?? STATUS_CHIPS.booked
+    : STATUS_CHIPS[stage] ?? STATUS_CHIPS.booked
   const statusLabel = r.blindPickup
     ? 'blind pickup'
-    : r.status === 'booked' && r.hasOrder
-      ? 'order attached'
-      : r.status
+    : stage === 'order'
+      ? 'warehouse order'
+      : stage
 
   const body = (
     <div className="flex items-start gap-2 px-3 py-2.5 min-h-[44px]">

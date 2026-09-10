@@ -24,8 +24,12 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 import { readinessApplies } from '@/lib/jobs/readiness'
+import { STAGE_ORDER, type JobStage } from '@/lib/jobs/stage'
 
-export type ListFilter = RowState | 'not-ready'
+/** A rail state, 'not-ready', or a stage rung (`stage:hold`) — the
+ *  legend chips filter by STAGE since 2026-09-10; the state names stay
+ *  valid for deep links like /orders' "N not returned". */
+export type ListFilter = RowState | 'not-ready' | `stage:${JobStage}`
 
 /** Outbound row with open blockers — what the "Not ready" chip shows. */
 export function rowNotReady(j: JobRow, state: RowState): boolean {
@@ -45,6 +49,8 @@ interface JobsListValue {
   rows: ListedRow[]          // filtered + sorted, what the list renders
   allRows: ListedRow[]       // before the color-key filter
   counts: Map<RowState, number>
+  /** Rows per stage rung, from the unfiltered set — the legend chips. */
+  stageCounts: Map<JobStage, number>
   loading: boolean
   error: string | null
   today: string
@@ -97,6 +103,10 @@ export function useJobsList(): JobsListValue {
 function readStateParam(raw: string | null | undefined): ListFilter | null {
   if (!raw) return null
   if (raw === 'not-ready') return 'not-ready'
+  if (raw.startsWith('stage:')) {
+    const st = raw.slice('stage:'.length)
+    return (STAGE_ORDER as string[]).includes(st) ? (raw as ListFilter) : null
+  }
   return raw in STATE ? (raw as RowState) : null
 }
 
@@ -213,13 +223,24 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
     return m
   }, [allRows])
 
+  const stageCounts = useMemo(() => {
+    const m = new Map<JobStage, number>()
+    for (const r of allRows) {
+      const st = r.job.stage ?? 'hold'
+      m.set(st, (m.get(st) ?? 0) + 1)
+    }
+    return m
+  }, [allRows])
+
   const rows = useMemo(
     () =>
       stateFilter === 'not-ready'
         ? allRows.filter((r) => rowNotReady(r.job, r.state))
-        : stateFilter
-          ? allRows.filter((r) => r.state === stateFilter)
-          : allRows,
+        : stateFilter?.startsWith('stage:')
+          ? allRows.filter((r) => `stage:${r.job.stage ?? 'hold'}` === stateFilter)
+          : stateFilter
+            ? allRows.filter((r) => r.state === stateFilter)
+            : allRows,
     [allRows, stateFilter],
   )
 
@@ -227,6 +248,7 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
     rows,
     allRows,
     counts,
+    stageCounts,
     loading,
     error,
     today,

@@ -58,6 +58,7 @@ function mapCategoryName(name: string | null | undefined): string {
 import { CAT_COLORS } from '@/lib/scheduling/statusTokens'
 import { bookingInfoGaps, companyLabel } from '@/lib/scheduling/infoGaps'
 import { naSummary } from '@/lib/scheduling/naTitles'
+import { stageForJobs } from '@/lib/jobs/stageBatch'
 
 // Match the existing endpoint's lifecycle map: convert a SirReel
 // BookingStatus into the timeline-display token the gantt cares
@@ -333,6 +334,19 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  // ── Job stage (Wes 2026-09-10): the bar's color is the JOB'S, not the
+  //    booking's. inquiry → hold → booked → warehouse order, derived once
+  //    per distinct job (src/lib/jobs/stageBatch.ts — the lean gatherer;
+  //    readinessForJobs is ~2s for this window and the bars cannot wait
+  //    on it). A cancelled booking is still struck whatever its job is
+  //    on; a job-less call-in hold keeps its booking-derived token. ──
+  const stageByJob = await stageForJobs(bookings.map((b) => b.job?.id).filter((id): id is string => !!id))
+  const stageOf = (bookingStatus: string, jobId: string | null | undefined): string => {
+    const own = mapStatus(bookingStatus)
+    if (own === 'cancelled') return own
+    return (jobId && stageByJob.get(jobId)) || own
+  }
+
   // ── Build jobs[] — one per Booking. ──
   const jobs = bookings.map((b) => {
     const items = b.items.map((it) => {
@@ -392,7 +406,10 @@ export async function GET(req: NextRequest) {
       contact: showClientContacts ? nameOfPerson(b.person) : null,
       agent: b.agent.name ?? '',
       status,
-      stage: status,
+      // The color token the bar wears — the job's stage. `status` above
+      // stays the booking's own lifecycle token (the status control and
+      // the filters read it).
+      stage: stageOf(b.status, b.job?.id),
       // Same source as hasOrder below — the job/booking order UNION. This
       // read `b.orders` (booking-linked only), and nothing sets
       // Order.bookingId, so the violet blind-pickup bar could never appear
@@ -548,6 +565,7 @@ export async function GET(req: NextRequest) {
       resourceName: a.asset.category?.name ?? '',
       cat,
       status: mapStatus(a.bookingItem.booking.status),
+      stage: stageOf(a.bookingItem.booking.status, a.bookingItem.booking.job?.id),
       bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
       // See the job-view branch: the union, not the booking's direct orders.
       blindPickup: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindPickup),

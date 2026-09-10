@@ -24,9 +24,23 @@
  * Planyo's "X - 2ND HOLD" placeholder hack).
  * · yellow is reserved for the ART DEPT job tag (Planyo's yellow),
  * which is a TAG, not a status.
+ *
+ * 2026-09-10 (Wes): the colors are now JOB-level. One stage per job —
+ * inquiry → hold → booked → warehouse order (src/lib/jobs/stage.ts) —
+ * and everything that belongs to the job wears it: the rail on the
+ * /jobs tile, the paperwork wash, the bar on the reservations board.
+ * The swatches below are the canonical set; the surfaces align to them.
  */
 
 export type BarColor = { bg: string; border: string; text: string }
+
+/**
+ * The stage tokens a bar / rail / chip can wear. `inquiry | hold | booked |
+ * order` is the job ladder (src/lib/jobs/stage.ts); `cancelled` and `lost`
+ * are the two ways off it. Booking-level status tokens from mapStatus()
+ * are a subset, so a job-less call-in hold still resolves here.
+ */
+export type StageToken = 'inquiry' | 'hold' | 'booked' | 'order' | 'cancelled' | 'lost'
 
 /**
  * Display-token → gantt bar color. Keys are the tokens mapStatus() in
@@ -41,18 +55,20 @@ export const STATUS_COLORS: Record<string, BarColor> = {
   hold: { bg: 'bg-blue-500', border: 'border-blue-600', text: 'text-white' },
   // CONFIRMED / ACTIVE / RETURNED / ARCHIVED.
   booked: { bg: 'bg-green-600', border: 'border-green-700', text: 'text-white' },
+  // Booked, and the job carries an order the WAREHOUSE has to pull —
+  // Planyo's "ORDER ATTACHED" dark red, the team's strongest color habit.
+  order: { bg: 'bg-[#b04a5a]', border: 'border-[#93394a]', text: 'text-white' },
   // Struck neutral OUTLINE — deliberately not grey-filled (grey is
   // maintenance-only). `line-through` rides in `text` because that class
   // lands on the bar's label span.
   cancelled: { bg: 'bg-transparent', border: 'border-gray-300', text: 'text-gray-400 line-through' },
+  // Job marked LOST. Same struck outline as cancelled — off the ladder,
+  // and grey-FILLED is still reserved for maintenance.
+  lost: { bg: 'bg-transparent', border: 'border-dashed border-gray-300', text: 'text-gray-400 line-through' },
 }
 
-/**
- * A BOOKED bar whose reservation has an Order attached — Planyo's
- * "ORDER ATTACHED" dark red, the team's strongest color habit. The
- * marker stays alongside; color makes it readable across the room.
- */
-export const ORDER_ATTACHED_COLOR: BarColor = { bg: 'bg-[#b04a5a]', border: 'border-[#93394a]', text: 'text-white' }
+/** Alias kept for older imports — the `order` stage IS the order-attached red. */
+export const ORDER_ATTACHED_COLOR: BarColor = STATUS_COLORS.order
 
 /** A BOOKED bar whose linked order is flagged blind pickup. Wins over order-attached red — it's the day-of-operations alert. */
 export const BLIND_PICKUP_COLOR: BarColor = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' }
@@ -61,13 +77,30 @@ export const BLIND_PICKUP_COLOR: BarColor = { bg: 'bg-violet-500', border: 'bord
 export const UNIT_NA_COLOR: BarColor = { bg: 'bg-gray-400', border: 'border-gray-500', text: 'text-white' }
 
 /**
- * Bar color resolver. Precedence on booked bars:
- * blind pickup (violet) > order attached (dark red) > plain booked green.
+ * Bar color resolver. `stage` is the JOB's stage token (or the booking's
+ * own status token for a job-less hold). Blind pickup (violet) wins over
+ * booked / order — it is the day-of-operations alert. The old `hasOrder`
+ * option is gone: order-attached red is now a stage the server derives
+ * (a WAREHOUSE-lane order on a booked job), not a per-bar flag.
  */
-export function barColor(status: string, opts?: { blindPickup?: boolean; hasOrder?: boolean }): BarColor {
-  if (status === 'booked' && opts?.blindPickup) return BLIND_PICKUP_COLOR
-  if (status === 'booked' && opts?.hasOrder) return ORDER_ATTACHED_COLOR
-  return STATUS_COLORS[status] || STATUS_COLORS.booked
+export function barColor(stage: string, opts?: { blindPickup?: boolean }): BarColor {
+  if ((stage === 'booked' || stage === 'order') && opts?.blindPickup) return BLIND_PICKUP_COLOR
+  return STATUS_COLORS[stage] || STATUS_COLORS.booked
+}
+
+/**
+ * The /jobs tile rail — a 6px strip in the stage's color. Static class
+ * strings so Tailwind's scanner sees them. Inquiry / cancelled / lost are
+ * outlines, matching their bars: "not real yet" and "off the ladder" must
+ * not read as a filled color.
+ */
+export const STAGE_RAIL: Record<StageToken, string> = {
+  inquiry: 'bg-transparent border-r border-dashed border-green-600',
+  hold: 'bg-blue-500',
+  booked: 'bg-green-600',
+  order: 'bg-[#b04a5a]',
+  cancelled: 'bg-transparent border-r border-gray-300',
+  lost: 'bg-transparent border-r border-dashed border-gray-300',
 }
 
 /**
@@ -79,8 +112,12 @@ export const STATUS_CHIPS: Record<string, string> = {
   inquiry: 'bg-transparent text-green-800 border border-dashed border-green-500',
   hold: 'bg-blue-100 text-blue-800 border border-blue-200',
   booked: 'bg-green-100 text-green-800 border border-green-200',
+  order: 'bg-[#b04a5a]/10 text-[#93394a] border border-[#b04a5a]/30',
   cancelled: 'bg-transparent text-gray-400 line-through border border-gray-300',
+  lost: 'bg-transparent text-gray-400 line-through border border-dashed border-gray-300',
 }
+/** Same chips, typed on the stage token — the /jobs tile and job header wear these. */
+export const STAGE_CHIP: Record<StageToken, string> = STATUS_CHIPS as Record<StageToken, string>
 
 /** ART DEPT job tag — Planyo's yellow, carried into HQ as a TAG (not a status). */
 export const ART_DEPT_TAG_CHIP = 'bg-yellow-300 text-yellow-950 border border-yellow-400'
@@ -154,9 +191,10 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
   { label: 'Inquiry', swatch: `${STATUS_COLORS.inquiry.bg} border ${STATUS_COLORS.inquiry.border}` },
   { label: 'Hold', swatch: `${STATUS_COLORS.hold.bg} border ${STATUS_COLORS.hold.border}` },
   { label: 'Booked', swatch: `${STATUS_COLORS.booked.bg} border ${STATUS_COLORS.booked.border}` },
-  { label: 'Booked · Order attached', swatch: `${ORDER_ATTACHED_COLOR.bg} border ${ORDER_ATTACHED_COLOR.border}` },
+  { label: 'Booked · Warehouse order', swatch: `${STATUS_COLORS.order.bg} border ${STATUS_COLORS.order.border}` },
   { label: 'Booked · Blind Pickup', swatch: `${BLIND_PICKUP_COLOR.bg} border ${BLIND_PICKUP_COLOR.border}` },
   { label: 'Cancelled', swatch: `${STATUS_COLORS.cancelled.bg} border ${STATUS_COLORS.cancelled.border}`, struck: true },
+  { label: 'Lost', swatch: `${STATUS_COLORS.lost.bg} border ${STATUS_COLORS.lost.border}`, struck: true },
   { label: 'Maintenance / Unit N/A', swatch: `${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border}` },
   { label: 'Backup (queued)', swatch: 'bg-blue-200/70 border border-dashed border-blue-400' },
 ]
@@ -203,6 +241,21 @@ import type { CSSProperties } from 'react'
  *  "needs a unit" chips) and, at these alphas, light enough to lift a
  *  solid bar without erasing it. */
 const METER_FILL = '134, 239, 172'
+/**
+ * 2026-09-10: the wash wears the JOB'S color. A hold fills with light
+ * blue, a booked job with light green, a warehouse-order job with light
+ * rose — so "how much paperwork is in" and "what stage is this" are one
+ * hue family, not green-on-everything. Inquiry keeps the green highlight
+ * (its outline is green). Cancelled / lost draw no wash at all.
+ */
+const METER_FILL_BY_STAGE: Record<string, string | null> = {
+  inquiry: METER_FILL,
+  hold: '147, 197, 253', // blue-300
+  booked: METER_FILL, // green-300
+  order: '253, 164, 175', // rose-300
+  cancelled: null,
+  lost: null,
+}
 /** The wash's opacity RAMPS with completion, and that is what makes both
  *  halves of Wes's sketch true at once. Part-way, the fill is translucent
  *  and the bar's own status colour reads through it — a half-papered hold
@@ -219,6 +272,14 @@ const METER_ALPHA_ON_LIGHT = 0.75
  *  green rather than plain black: it belongs to the fill's family and
  *  goes unnoticed on the unwashed part of the bar. */
 const METER_INK = 'text-[#0B2B17]'
+/** Ink per stage — the same family as each wash, so the label belongs to
+ *  the bar. Static strings for Tailwind's scanner. */
+const METER_INK_BY_STAGE: Record<string, string> = {
+  inquiry: METER_INK,
+  hold: 'text-[#0B1F3F]',
+  booked: METER_INK,
+  order: 'text-[#3A0F17]',
+}
 
 /**
  * The wash. Spread onto the bar's existing inline style — it paints over
@@ -236,15 +297,21 @@ const METER_INK = 'text-[#0B2B17]'
 export function readinessMeterStyle(
   done: number,
   total: number,
-  opts?: { light?: boolean },
+  opts?: { light?: boolean; stage?: string },
 ): CSSProperties {
   const steps = Math.max(1, total)
   const pct = Math.max(0, Math.min(1, done / steps)) * 100
   if (pct <= 0) return {}
+  const stage = opts?.stage ?? 'booked'
+  const rgb = stage in METER_FILL_BY_STAGE ? METER_FILL_BY_STAGE[stage] : METER_FILL
+  if (rgb === null) return {}
+  // Outline stages have no strong hue to preserve — the fill carries the
+  // whole signal against white grid, so it starts with more body.
+  const light = opts?.light ?? (stage === 'inquiry' || stage === 'cancelled' || stage === 'lost')
   const ratio = pct / 100
-  const base = opts?.light === true ? METER_ALPHA_ON_LIGHT : METER_ALPHA_ON_SOLID
+  const base = light ? METER_ALPHA_ON_LIGHT : METER_ALPHA_ON_SOLID
   const alpha = base + (1 - base) * ratio
-  const fill = `rgba(${METER_FILL}, ${alpha.toFixed(3)})`
+  const fill = `rgba(${rgb}, ${alpha.toFixed(3)})`
   return {
     backgroundImage: `linear-gradient(to right, ${fill} 0 ${pct}%, transparent ${pct}% 100%)`,
     backgroundSize: '100% 100%',
@@ -260,9 +327,10 @@ export function readinessMeterStyle(
  * text is already dark (inquiry green, backup blue, the rose chips) are
  * returned untouched.
  */
-export function readinessLabelClass(base: string, r?: { done: number } | null): string {
+export function readinessLabelClass(base: string, r?: { done: number } | null, stage?: string): string {
   if (!r || r.done <= 0) return base
-  return base.replace('text-white', METER_INK)
+  const ink = (stage && METER_INK_BY_STAGE[stage]) || METER_INK
+  return base.replace('text-white', ink)
 }
 
 /** Hover text — "Ready to go out" or "3 of 5 · missing COI, Card". */

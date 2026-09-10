@@ -64,6 +64,8 @@ import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
 import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
+import { STAGE_HINT, STAGE_LABEL, type JobStage } from '@/lib/jobs/stage';
+import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/statusTokens';
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, Check, User } from 'lucide-react'
@@ -363,6 +365,8 @@ interface JobDetail {
   reportToUpdatedAt: string | null;
   /** Derived operational position — same rollup the /jobs board renders. */
   cadence: CadenceRollup;
+  /** The one color this job wears everywhere — src/lib/jobs/stage.ts. */
+  stage?: JobStage;
   // Job-level card-on-file status. TWO stores answer this: the client's
   // portal authorization on the booking's paperwork row, and a card staff
   // keyed in from a signed off-portal CCA, which lives on the COMPANY.
@@ -964,6 +968,10 @@ export default function JobDetailPage() {
   // the fallback only covers a stale client that fetched before the API
   // started returning it.
   const cadenceState: CadenceState = job.cadence?.state ?? 'quoted';
+  // Stage color (Wes 2026-09-10) — the rail on this header, the chip
+  // beside the cadence pill, and the paperwork meter's hue all wear it,
+  // matching the /jobs tile and the reservations bar.
+  const stage: JobStage = job.stage ?? 'hold';
 
   // Who signs, and therefore who gets the link. PRODUCER first to match
   // buildStageContractProps — the contract names the Producer as the
@@ -1467,11 +1475,23 @@ const driverTone = (d: any): string => {
       </Link>
 
       {/* Header */}
-      <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+      <div className="relative overflow-hidden bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 pl-5 transition-colors duration-200 hover:border-zinc-400">
+        {/* Stage rail — the same strip the /jobs tile carries. */}
+        <span
+          className={`absolute left-0 top-0 bottom-0 w-1.5 ${STAGE_RAIL[stage]}`}
+          title={`${STAGE_LABEL[stage]} — ${STAGE_HINT[stage]}`}
+          aria-hidden="true"
+        />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[14px] font-mono font-bold tracking-wide text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${STAGE_CHIP[stage]}`}
+                title={STAGE_HINT[stage]}
+              >
+                {STAGE_LABEL[stage]}
+              </span>
               <span
                 className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
                 title={
@@ -1891,9 +1911,18 @@ const driverTone = (d: any): string => {
           <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
           <div className="flex items-center gap-3">
             {stripScored ? (
-              <span className="text-[12px] text-zinc-600">
-                {readiness.done} of {readiness.total} complete
-                {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
+              <span className="flex items-center gap-2 text-[12px] text-zinc-600">
+                {/* The progress bar, in the job's stage color — the same
+                    wash the reservations bar carries. */}
+                <span
+                  className="inline-block w-20 h-2 rounded-sm bg-zinc-200 border border-zinc-300"
+                  style={readinessMeterStyle(readiness.done, readiness.total, { stage, light: true })}
+                  aria-hidden="true"
+                />
+                <span>
+                  {readiness.done} of {readiness.total} complete
+                  {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
+                </span>
               </span>
             ) : (
               <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>

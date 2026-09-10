@@ -48,16 +48,31 @@ export default function StatusLegend({
       {showTiers && (
         <>
           <span className="text-gray-300">|</span>
-          <span className="text-gray-400 font-medium">Condition:</span>
-          {TIER_ORDER.map((t) => (
-            <div key={t} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full border border-black/5" style={{ background: TIER_COLORS[t] }} />
-              <span className="text-gray-500">{TIER_LABELS[t]}</span>
-            </div>
-          ))}
+          <TierKey />
         </>
       )}
       {children}
+    </div>
+  )
+}
+
+/**
+ * The condition-tier key (Best / Good / Workhorse dots). Wes 2026-09-10:
+ * "move the legend for vehicle condition to the very bottom of the
+ * vehicle list — this is not critical information to have at top." The
+ * gantt renders it under its last unit row; `showTiers` above stays for
+ * any surface that still wants it inline.
+ */
+export function TierKey({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex items-center gap-3 text-[10px] flex-wrap ${className}`}>
+      <span className="text-gray-400 font-medium">Condition:</span>
+      {TIER_ORDER.map((t) => (
+        <div key={t} className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full border border-black/5" style={{ background: TIER_COLORS[t] }} />
+          <span className="text-gray-500">{TIER_LABELS[t]}</span>
+        </div>
+      ))}
     </div>
   )
 }

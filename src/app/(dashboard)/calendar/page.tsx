@@ -58,7 +58,8 @@ export default function CalendarPage() {
           jobNum: j.rwOrderNumber ? '#' + j.rwOrderNumber : j.jobNum || '',
           contact: j.contact || '',
           agent: j.agent || '',
-          stage: j.status || 'booked',
+          // The job's stage color token — falls back to the booking's own status.
+          stage: j.stage || j.status || 'booked',
           items: (j.items || []).map((item: any) => ({
             cat: item.cat || 'cube',
             qty: item.qty || 1,

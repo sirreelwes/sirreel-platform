@@ -56,6 +56,8 @@ import {
 } from '@/lib/jobs/listRow'
 import { readinessApplies } from '@/lib/jobs/readiness'
 import type { BlockerTone } from '@/lib/jobs/readiness'
+import { STAGE_HINT, STAGE_SHORT } from '@/lib/jobs/stage'
+import { STAGE_CHIP, STAGE_RAIL } from '@/lib/scheduling/statusTokens'
 import { AlertTriangle, Check, EyeOff, Truck, User, UserCircle } from 'lucide-react'
 
 export function JobsSidebar() {
@@ -255,6 +257,9 @@ function JobTile({
   selected: boolean
 }) {
   const meta = STATE[state]
+  // Stage falls back to 'hold' for a row an older cached response served
+  // without it — the default rung for anything staff has touched.
+  const stage = j.stage ?? 'hold'
   const value = rowValue(j)
   const { refresh } = useJobsList()
   // One-click physical-return confirmation on Not-returned rows (Wes
@@ -365,8 +370,15 @@ function JobTile({
             : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/60'
       }`}
     >
-      {/* Rail — the old color code, kept as a second cue. */}
-      <span className={`w-1.5 flex-shrink-0 ${meta.rail}`} aria-hidden="true" />
+      {/* Rail — the JOB'S stage color (Wes 2026-09-10): the same hue this
+          job's bar wears on the reservations board. inquiry (dashed) →
+          hold (blue) → booked (green) → warehouse order (red). The
+          operational state stays in words in the pill. */}
+      <span
+        className={`w-1.5 flex-shrink-0 ${STAGE_RAIL[stage]}`}
+        title={`${STAGE_SHORT[stage]} — ${STAGE_HINT[stage]}`}
+        aria-hidden="true"
+      />
 
       <span className="flex-1 min-w-0 px-3 py-2.5 flex flex-col gap-1.5">
         {/* Row 1 — code + markers on the left, the state in words on the right. */}
@@ -427,6 +439,17 @@ function JobTile({
                 }
               >
                 Released
+              </span>
+            )}
+            {/* The stage in a word, in its color — the rail decoded. Omitted
+                when the state pill already says the same thing (Lost /
+                Cancelled) so the row does not say it twice. */}
+            {stage !== 'lost' && stage !== 'cancelled' && (
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap ${STAGE_CHIP[stage]}`}
+                title={STAGE_HINT[stage]}
+              >
+                {STAGE_SHORT[stage]}
               </span>
             )}
             <span

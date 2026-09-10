@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth'
 import type {
   JobStatus,
   OrderStatus,
+  BookingStatus,
   OrderQuoteStatus,
   LineItemDepartment,
   AgreementStatus,
@@ -23,6 +24,7 @@ import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
+import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
@@ -146,6 +148,10 @@ export async function GET(req: NextRequest) {
         // Physical-return attribution — RETURNED cards show who marked
         // the job back. returnedAt itself is a Job scalar (spread below).
         returnedBy: { select: { id: true, name: true } },
+        // Stage ladder (src/lib/jobs/stage.ts): a job converted from an
+        // inquiry nobody has answered is still an INQUIRY, whatever else
+        // sits on it.
+        fromInquiry: { select: { respondedAt: true } },
         jobContacts: {
           include: {
             person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
@@ -155,6 +161,9 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             subtotal: true,
+            // Stage ladder: a live order carrying a WAREHOUSE-department line
+            // paints the job red once it is booked. Counted, not hydrated.
+            _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS } } } } },
             // An archived order is a duplicate someone has already
             // dismissed — liveOrdersForRollup drops it before any
             // derived state reads it.
@@ -670,17 +679,19 @@ export async function GET(req: NextRequest) {
         (o) => (o as { status: OrderStatus }).status === 'APPROVED',
       ).length
 
+      const readinessCardOnFile =
+        liveBookings.some(
+          (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
+        ) || (!!j.companyId && walletCardCompanies.has(j.companyId))
+      const readinessCardRequested = liveBookings.some(
+        (b) => ((b as { _count?: { paperworkRequests: number } })._count?.paperworkRequests ?? 0) > 0,
+      )
       const readiness = computeReadiness({
         coi: paperwork.coi.state,
         rental: paperwork.rental.state,
         stage: paperwork.stage?.state ?? null,
-        cardOnFile:
-          liveBookings.some(
-            (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
-          ) || (!!j.companyId && walletCardCompanies.has(j.companyId)),
-        cardRequested: liveBookings.some(
-          (b) => ((b as { _count?: { paperworkRequests: number } })._count?.paperworkRequests ?? 0) > 0,
-        ),
+        cardOnFile: readinessCardOnFile,
+        cardRequested: readinessCardRequested,
         gear: {
           total: liveItems.length,
           assigned: liveItems.filter((it) => it.status === 'ASSIGNED').length,
@@ -696,6 +707,26 @@ export async function GET(req: NextRequest) {
       // travel as a fact — the list can't infer it from dates.
       const allBookingsCancelled =
         j.bookings.length > 0 && liveBookings.length === 0
+
+      // The one color this job wears everywhere (Wes 2026-09-10) — the
+      // tile rail, the job header, the reservations bar. Same rollup
+      // states readiness just consumed, so tile and board agree.
+      const stage = deriveJobStage({
+        jobStatus: j.status,
+        inquiry: j.fromInquiry ? { respondedAt: j.fromInquiry.respondedAt } : null,
+        liveOrders: liveOrders.map((o) => ({
+          status: (o as { status: OrderStatus }).status,
+          quoteSentAt: (o as { quoteSentAt?: Date | null }).quoteSentAt ?? null,
+          warehouseLines: (o as { _count?: { lineItems?: number } })._count?.lineItems ?? 0,
+        })),
+        liveBookings: liveBookings.map((b) => ({ status: (b as { status: BookingStatus }).status })),
+        allBookingsCancelled,
+        agreement: paperwork.rental.state,
+        stageAgreement: paperwork.stage?.state ?? null,
+        coi: paperwork.coi.state,
+        cardOnFile: readinessCardOnFile,
+        cardRequested: readinessCardRequested,
+      })
 
       // ── Released fleet (Wes 2026-09-08) ───────────────────────────
       // What this job WAS holding and gave back, and what it still
@@ -791,6 +822,7 @@ export async function GET(req: NextRequest) {
         paperwork,
         billing,
         readiness,
+        stage,
         gear,
         approvedUnbooked,
         redlinePending,
