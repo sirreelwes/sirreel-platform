@@ -82,6 +82,12 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
               {v.tagline || v.subtitle}
             </p>
           )}
+          {/* Partner attribution — permission-gated, see partnerAttribution.ts */}
+          {v.suppliedBy && (
+            <div className="mt-2 text-[14px] text-[#8b857a]">
+              Supplied by <span className="text-[#0C657A] font-semibold">{v.suppliedBy}</span> for SirReel
+            </div>
+          )}
 
           {/* Price */}
           <div className="mt-5 flex items-baseline gap-2" style={{ fontFamily: 'Archivo, sans-serif' }}>

@@ -32,6 +32,8 @@ interface DeliveryUnit {
   id: string
   unitName: string
   unitType: string | null
+  /** Whose unit it is, where that partner has permitted being named. */
+  suppliedBy?: string | null
   startDate: string | null
   endDate: string | null
   sameDay: boolean
@@ -386,6 +388,10 @@ export function PortalDeliveriesSection() {
                   )}
                 </div>
                 {u.unitType && <div className="text-xs text-gray-500 mt-0.5">{u.unitType}</div>}
+                {/* On the morning a generator is due, whose truck is arriving
+                    is a useful thing to know. Permission-gated — our own units
+                    and un-permissioned partners render nothing. */}
+                {u.suppliedBy && <div className="text-xs text-gray-500 mt-0.5">Supplied by {u.suppliedBy}</div>}
 
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="text-xs text-gray-600">

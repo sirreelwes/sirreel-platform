@@ -18,14 +18,25 @@
  * below is an allowlist, not a filter: it names the fields it emits and a new
  * column on SubRental cannot leak by being added.
  *
- * ── Why sourcing is invisible ───────────────────────────────────────────────
- * A sub-rented coach and one of our own trailers render identically — same
- * shape, same fields, same driver treatment. `vendorName` is never selected
- * here, and `source` is deliberately NOT returned to the client. If the two
- * kinds looked different, the client could tell which unit came from somebody
- * else's yard, which is the exact thing the conduit exists to prevent.
+ * ── Sourcing: invisible by default, named by permission ─────────────────────
+ * A sub-rented coach and one of our own trailers still render identically —
+ * same shape, same fields, same driver treatment — and `source` is still never
+ * returned. What changed on 2026-09-10 is `suppliedBy`: where a partner has
+ * given written permission to be named (agreement cl. 10, see
+ * partnerAttribution.ts), the client is told whose truck is arriving.
+ *
+ * That is a convenience call, not a leak. On the morning a generator is due,
+ * "PowerTrip Rentals, driver Marco, 6am" is a useful thing to know and an
+ * anonymous driver is not. It also costs nothing we were protecting: the
+ * partner's decal is on the machine, so the client learns it on delivery
+ * anyway — and going direct saves them nothing, because they pay the partner's
+ * list rate either way (partnerShare.ts).
+ *
+ * The reverse direction is untouched: the vendor still never learns who the
+ * client is, and driverEmail / driverPhone / relayTag still never leave HQ.
  */
 import { prisma } from '@/lib/prisma'
+import { PARTNER_ATTRIBUTION_SELECT, partnerAttribution } from '@/lib/sub-rentals/partnerAttribution'
 import { isAckStale, sumHours } from '@/lib/drivers/hoursEntry'
 
 /** Client-visible delivery row. Every field here is safe to render. */
@@ -35,6 +46,10 @@ export interface DeliveryUnit {
   unitName: string
   /** "Celebrity Motorhome", "2 Unit Restroom Trailer". Null for ad-hoc gear. */
   unitType: string | null
+  /** "PowerTrip Rentals" where that partner has permitted being named, else
+   *  null — which is also what our own units return, so an absent line still
+   *  tells the client nothing. */
+  suppliedBy: string | null
   startDate: string | null
   endDate: string | null
   /** Both dates equal — renders as "back same day" rather than a range. */
@@ -148,8 +163,11 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         driverAckedAt: true,
         driverAckNote: true,
         driverHours: { select: { hours: true } },
-        // NOTE: driverEmail / driverPhone / relayTag / driverToken / vendor are
-        // NOT selected. Keep it that way — see the header.
+        // NOTE: driverEmail / driverPhone / relayTag / driverToken are NOT
+        // selected. Keep it that way — see the header. The vendor is selected
+        // for its NAME AND PERMISSION ONLY (partnerAttribution.ts); nothing
+        // else off that row may be added here.
+        vendor: { select: PARTNER_ATTRIBUTION_SELECT },
         subcontractedVehicle: { select: { vehicleType: true } },
       },
     }),
@@ -179,6 +197,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
       id: `sub:${s.id}`,
       unitName: s.itemDescription,
       unitType: s.subcontractedVehicle?.vehicleType ?? null,
+      suppliedBy: partnerAttribution(s.vendor),
       startDate: ymd(s.startDate),
       endDate: ymd(s.endDate),
       sameDay: !!s.startDate && !!s.endDate && ymd(s.startDate) === ymd(s.endDate),
@@ -219,6 +238,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         id: `line:${li.id}`,
         unitName: li.description,
         unitType: null,
+        suppliedBy: null,
         startDate: ymd(o.startDate),
         endDate: ymd(o.endDate),
         sameDay: !!o.startDate && !!o.endDate && ymd(o.startDate) === ymd(o.endDate),

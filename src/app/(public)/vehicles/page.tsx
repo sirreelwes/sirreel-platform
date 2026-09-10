@@ -69,6 +69,14 @@ function VehicleCard({ v }: { v: PublicVehicle }) {
             {v.tagline || v.subtitle}
           </div>
         )}
+        {/* Named only where the partner gave written permission (agreement
+            cl. 10) — our own fleet and un-permissioned partners both render
+            nothing, so an absent line tells a client nothing. */}
+        {v.suppliedBy && (
+          <div className="text-[12px] text-[#8b857a] leading-snug">
+            Supplied by <span className="text-[#0C657A] font-semibold">{v.suppliedBy}</span>
+          </div>
+        )}
         <div className="mt-auto pt-2 flex items-center justify-between">
           <div className="font-semibold text-[13px] text-[#8b857a]" style={{ fontFamily: 'Archivo, sans-serif' }}>
             {priceOnQuote ? (

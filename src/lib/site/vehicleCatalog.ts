@@ -11,6 +11,7 @@
  * Everything else — including active rows — is hidden and 404s on its slug.
  */
 import { Prisma } from '@prisma/client'
+import { PARTNER_ATTRIBUTION_SELECT, partnerAttribution } from '@/lib/sub-rentals/partnerAttribution'
 import { prisma } from '@/lib/prisma'
 import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
 import { PARTNER_SECTIONS, resolvePartnerSection, type PartnerCatalogSectionKey, type PartnerSectionMeta } from '@/lib/site/partnerSections'
@@ -63,9 +64,12 @@ export interface PublicVehicle {
   /** Gallery photos, primary first then sortOrder asc. [] → legacy photoUrl only. */
   photos: PublicVehiclePhoto[]
   specs: PublicVehicleSpec
-  /** True for a partner-supplied unit — decides which SECTION it renders in,
-   *  and nothing else: the card carries no vendor and never will. */
+  /** True for a partner-supplied unit — decides which SECTION it renders in. */
   partner: boolean
+  /** "PowerTrip Rentals" when that partner has given written permission to be
+   *  named (agreement cl. 10), else null — including for our own fleet. Read
+   *  through partnerAttribution.ts; never derive it from `partner`. */
+  suppliedBy: string | null
   /** Which partner section (null for the owned fleet). See partnerSections.ts. */
   section: PartnerCatalogSectionKey | null
 }
@@ -134,6 +138,7 @@ function shape(r: Row): PublicVehicle {
   const hasImage = photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
   return {
     partner: false,
+    suppliedBy: null,
     section: null,
     id: r.id,
     name: r.name,
@@ -234,8 +239,9 @@ type SubRow = {
   specs: string | null
   listDailyRate: unknown
   catalogSection: string | null
-  /** Only the section default is selected off the vendor — never its name. */
-  vendor: { catalogSection: string | null }
+  /** The section default, plus the name AND the permission to use it — the
+   *  two travel together so a name can never be rendered without its flag. */
+  vendor: { catalogSection: string | null; name: string; nameClientFacing: boolean }
   photos: { id: string }[]
 }
 
@@ -248,6 +254,7 @@ function shapeSub(v: SubRow): PublicVehicle {
   }))
   return {
     partner: true,
+    suppliedBy: partnerAttribution(v.vendor),
     section: resolvePartnerSection(v, v.vendor).key,
     id: v.id,
     name: v.name,
@@ -274,7 +281,7 @@ const SUB_SELECT: Prisma.SubcontractedVehicleSelect = {
   catalogSection: true,
   // The vendor's SECTION default only. Name, contact and money stay
   // unselected — rule 1 above.
-  vendor: { select: { catalogSection: true } },
+  vendor: { select: { catalogSection: true, ...PARTNER_ATTRIBUTION_SELECT } },
   photos: {
     select: { id: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],

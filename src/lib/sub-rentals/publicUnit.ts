@@ -21,6 +21,7 @@
  */
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { PARTNER_ATTRIBUTION_SELECT, partnerAttribution } from '@/lib/sub-rentals/partnerAttribution'
 
 /** The URL is the credential — 32 bytes puts guessing out of reach. */
 const TOKEN_BYTES = 32
@@ -45,6 +46,10 @@ export interface PublicUnit {
    *  type kicker: `subtitle` on these rows is unreliable (DLUX's still reads
    *  "Premium production van"), so it must not masquerade as a category. */
   tagline: string | null
+  /** "Supplied by …" — the partner's name, only where they have permitted it
+   *  (agreement cl. 10). Null for our own units and for partners who haven't,
+   *  which is what keeps the two cases indistinguishable by default. */
+  suppliedBy: string | null
 }
 
 /**
@@ -68,6 +73,7 @@ export async function getPublicUnitByToken(token: string): Promise<PublicUnit | 
       vehicleType: true,
       publicDescription: true,
       specs: true,
+      vendor: { select: PARTNER_ATTRIBUTION_SELECT },
       photos: {
         select: { id: true, caption: true },
         orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -82,6 +88,7 @@ export async function getPublicUnitByToken(token: string): Promise<PublicUnit | 
     vehicleType: v.vehicleType,
     tagline: null,
     description: v.publicDescription,
+    suppliedBy: partnerAttribution(v.vendor),
     specs: (v.specs ?? '')
       .split('\n')
       .map((s) => s.trim())
@@ -92,9 +99,11 @@ export async function getPublicUnitByToken(token: string): Promise<PublicUnit | 
 
 /**
  * The same unlisted page, for a vehicle WE OWN that isn't in the public
- * catalog. Deliberately indistinguishable from the subcontracted case on the
- * rendered page: a client should not be able to tell which units are ours and
- * which we bring in, and that only holds if both go through one surface.
+ * catalog. Still one surface for both cases — and still indistinguishable
+ * EXCEPT where a partner has given written permission to be named, which since
+ * 2026-09-10 puts a "Supplied by …" line on their units (partnerAttribution.ts).
+ * An owned unit and an un-permissioned partner unit both render without one, so
+ * the absence of a line still tells a client nothing.
  *
  * Owned rows need no publicDescription — `description` on VehicleCategory is
  * already the catalog's client-facing copy, unlike the subcontracted
@@ -152,6 +161,7 @@ async function ownedUnitByToken(token: string): Promise<PublicUnit | null> {
     name: v.name,
     // No kicker for owned rows — see the tagline note on PublicUnit.
     vehicleType: null,
+    suppliedBy: null,
     tagline: v.tagline ?? null,
     description: v.description,
     specs,

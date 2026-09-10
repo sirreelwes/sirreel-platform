@@ -47,7 +47,7 @@ eq('vendor default when the unit has none', resolvePartnerSection({ catalogSecti
 yes('every section has a distinct anchor', new Set(PARTNER_SECTIONS.map((s) => s.anchor)).size === PARTNER_SECTIONS.length)
 
 const unit = (id: string, section: PublicVehicle['section'], partner = true): PublicVehicle => ({
-  partner, section, id, name: id, slug: id, subtitle: null, tagline: null, description: null, features: [], dailyRate: null, photoUrl: null, photos: [],
+  partner, section, id, name: id, slug: id, subtitle: null, tagline: null, description: null, features: [], dailyRate: null, photoUrl: null, photos: [], suppliedBy: null,
   specs: { baseVehicle: null, model: null, fuelType: null, lengthFt: null, heightClearance: null, interiorBoxHeight: null, liftGateSpec: null },
 })
 const groups = groupPartnerUnits([unit('cube', null, false), unit('gen100', 'POWER_GENERATORS'), unit('starwagon', 'LOCATION_VEHICLES'), unit('scissor', 'LIFTS'), unit('gen60', 'POWER_GENERATORS')])

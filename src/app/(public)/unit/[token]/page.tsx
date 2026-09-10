@@ -68,6 +68,11 @@ export default async function PublicUnitPage({ params }: { params: { token: stri
           >
             {unit.name}
           </h1>
+          {unit.suppliedBy && (
+            <p className="mt-3 text-[14px] text-[#8b857a]">
+              Supplied by <span className="text-[#0C657A] font-semibold">{unit.suppliedBy}</span> for SirReel
+            </p>
+          )}
           {unit.tagline && (
             <p className="mt-3 text-[17px] text-[#5a554c] leading-relaxed max-w-[46ch]">{unit.tagline}</p>
           )}

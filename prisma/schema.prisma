@@ -4653,6 +4653,27 @@ model Vendor {
   coiReceivedAt       DateTime? @map("coi_received_at")
   coiExpiresAt        DateTime? @map("coi_expires_at")
 
+  /// MAY WE NAME THEM TO CLIENTS? Agreement clause 10 says SirReel does not
+  /// use a partner's name, logo or trademarks in any client-facing material
+  /// without their written permission — so this is THEIR permission, recorded,
+  /// not our switch. Default false; never flip it without something in
+  /// writing, and put what they said in namePermissionNote.
+  ///
+  /// Wes 2026-09-10: hiding the partner was never going to hold — the decal is
+  /// on the machine and the client sees it the first day the unit is on set.
+  /// The thing that keeps a client is that going direct saves them nothing
+  /// (they pay the partner's LIST rate either way — see partnerShare.ts) and
+  /// costs them a second agreement, a second COI and a second invoice.
+  ///
+  /// Read through partnerAttribution.ts, never raw: three client-facing
+  /// surfaces honour it (the /vehicles card, the unlisted /unit/[token] page,
+  /// and the portal's arriving list) and they must not drift. The QUOTE stays
+  /// neutral on purpose — it is the one document a client reads while
+  /// comparing prices.
+  nameClientFacing   Boolean   @default(false) @map("name_client_facing")
+  namePermissionAt   DateTime? @map("name_permission_at")
+  namePermissionNote String?   @map("name_permission_note") @db.Text
+
   /// The partner's mark on their account page — same treatment as
   /// Company.logoUrl/logoSvg (private blob + inline SVG when vector).
   logoUrl        String?   @map("logo_url")

@@ -51,6 +51,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     supplies?: string | null
     deliveryTerms?: string | null
     isActive?: boolean
+    /** May we name them to clients? Agreement cl. 10 makes this THEIR
+     *  permission, so turning it on requires a note saying what they said. */
+    nameClientFacing?: boolean
+    namePermissionNote?: string | null
   }
 
   const data: Record<string, unknown> = {}
@@ -100,6 +104,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     coiPatch[k] = d
   }
   Object.assign(data, coiPatch)
+  if (typeof body.nameClientFacing === 'boolean') {
+    if (body.nameClientFacing) {
+      const note = typeof body.namePermissionNote === 'string' ? body.namePermissionNote.trim() : ''
+      // Clause 10 says we may not use a partner's name client-facing without
+      // their WRITTEN permission. Recording where that permission came from is
+      // the difference between a policy and a checkbox.
+      if (!note) {
+        return NextResponse.json(
+          { error: 'Say where their written permission came from before naming them to clients.' },
+          { status: 400 },
+        )
+      }
+      data.nameClientFacing = true
+      data.namePermissionAt = new Date()
+      data.namePermissionNote = note.slice(0, 1000)
+    } else {
+      // Withdrawing is immediate and needs no reason — same shape as the
+      // per-unit marketing withdrawal in vendorAccountActions.setUnitMarketing.
+      data.nameClientFacing = false
+      data.namePermissionAt = null
+      data.namePermissionNote = null
+    }
+  }
+
   if ('partnerSharePercent' in body) {
     // SirReel's share of the vehicle rental rate (the deal). Empty clears it.
     const raw = body.partnerSharePercent
