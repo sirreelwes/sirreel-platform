@@ -268,8 +268,12 @@ fallback was replaced by Job-as-root + JobResolverModal.)
 ## /jobs redesign (2026-08-28 — Wes's design session)
 - **JobsToolbar** (rendered by the jobs LAYOUT above the list|detail
   split) carries the page title + Incoming pill + search + status/sort
-  + Mine + the color-legend chips + "+ New Job" (the global shell
-  header row was DELETED — the launcher lives only here). The rail
+  + Mine + the color-legend chips + the two create buttons, **Make
+  Reservation** and **New Order** (`CreateLaunchers`; the global shell
+  header row was DELETED — the launchers live here and in the mobile top
+  bar). "+ New Job" was retired 2026-09-10 (Wes: "all jobs are triggered
+  by either Make Reservation or New Order") — both paths resolve the job
+  through JobResolverModal, so nothing creates a bare job. The rail
   (JobsSidebar) is JUST the list + a slim count strip.
 - Landing "Today" strip split into **Going out / Coming back** cards
   (Out/Back-strip vocabulary); the not-returned one-liner lives in

@@ -14,10 +14,10 @@
  * The two things that must not hide behind the hamburger:
  *   - the Action Items unhandled count — mirrored onto the hamburger
  *     as a badge, so the number is legible with the sheet shut;
- *   - "+ New Job" — the app's single create entry point, which as of
- *     2026-08-28 lives only in the /jobs toolbar. On a phone that
- *     toolbar yields the viewport whenever a job is selected, so the
- *     bar carries its own launcher.
+ *   - Make Reservation + New Order — the app's create entry points
+ *     ("+ New Job" retired 2026-09-10), which live in the /jobs
+ *     toolbar. On a phone that toolbar yields the viewport whenever a
+ *     job is selected, so the bar carries its own copy.
  *
  * Desktop is untouched: everything here is `md:hidden`.
  */
@@ -29,7 +29,7 @@ import { UserRole } from '@prisma/client';
 import type { NavSection } from '@/lib/permissions';
 import { NavList } from '@/components/shell/NavList';
 import { UserMenu } from '@/components/shell/UserMenu';
-import { NewJobLauncher } from '@/components/jobs/NewJobLauncher';
+import { CreateLaunchers } from '@/components/jobs/CreateLaunchers';
 
 export function MobileNav({
   sections,
@@ -92,7 +92,9 @@ export function MobileNav({
         </Link>
 
         {canCreateJob && (
-          <NewJobLauncher buttonClassName="ml-auto flex-shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-[12px] font-bold px-3 min-h-[38px] rounded-lg" />
+          <div className="ml-auto flex-shrink-0">
+            <CreateLaunchers size="mobile" />
+          </div>
         )}
       </header>
 

@@ -119,11 +119,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace(defaultLandingPath(permsUser));
   }
 
-  // "+ New Job" is the app's ONE create entry point and as of
-  // 2026-08-28 it lives only in the /jobs toolbar — which yields the
-  // viewport on a phone whenever a job is selected. The mobile bar
-  // carries its own launcher, gated on the same thing the nav is:
-  // whether this role has Jobs at all.
+  // Make Reservation + New Order are the app's create entry points
+  // ("+ New Job" retired 2026-09-10) and they live in the /jobs
+  // toolbar — which yields the viewport on a phone whenever a job is
+  // selected. The mobile bar carries its own copy, gated on the same
+  // thing the nav is: whether this role has Jobs at all.
   const canCreateJob = sections.some((s2) => s2.items.some((i) => i.id === 'jobs'));
 
   return (
@@ -178,10 +178,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* No global top bar on desktop (Wes 2026-08-28: "remove the new
             job row from all pages") — the h-12 header's only content was
-            "+ New Job", which now lives in the JobsToolbar on /jobs,
-            still the ONE create entry point (canonical-Job
-            consolidation, 2026-07-15: quotes and reservations are
-            created from INSIDE a Job — see JobQuickActions). StatBadge
+            the create launcher, which now lives in the JobsToolbar on
+            /jobs as Make Reservation + New Order ("+ New Job" retired
+            2026-09-10; a job is born from its first reservation or
+            order, and more are added from INSIDE the Job — see
+            JobQuickActions). StatBadge
             (below) stays for the someday-KPI use it was kept for. The
             PHONE does get a bar — see MobileNav above — because the
             /jobs toolbar isn't reachable from every surface there. */}

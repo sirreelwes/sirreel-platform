@@ -14,8 +14,9 @@
  * Two guides is not yet a docs system; if a fourth appears, generalise.
  *
  * Facts this page asserts, and where they live — keep them in lockstep:
- *   - "+ New Job" fields + the duplicate check → NewJobLauncher +
- *     JobResolverModal.
+ *   - "Make Reservation" / "New Order" + the duplicate check →
+ *     CreateLaunchers → MakeReservationModal / orders/new, both of
+ *     which open JobResolverModal before a job is created.
  *   - "Send quote →" opens the email review gate → orders/new
  *     createQuote('send') → orders/[id] ?send=1.
  *   - Client approval releases the agreement by itself →
@@ -92,37 +93,41 @@ export default function StartingAJobGuidePage() {
         </div>
 
         <section className="mb-10">
-          <h2 className="mb-1 text-xl font-semibold text-lt-fg">1 · Make the job</h2>
+          <h2 className="mb-1 text-xl font-semibold text-lt-fg">1 · Start with the rental — the job comes with it</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
-            The job is the show. Everything else — quotes, reservations, paperwork — hangs off it.
+            The job is the show. Everything else — quotes, reservations, paperwork — hangs off it. There is no
+            &ldquo;new job&rdquo; button: the job is made the first time you put something real on it.
           </p>
           <ol className="list-none border-b border-lt-hairline p-0">
-            <Step n={1} title="Go to Jobs and hit + New Job">
+            <Step n={1} title="Go to Jobs and pick one of the two buttons">
               <p>
                 Left nav → <Link href="/jobs" className="font-semibold underline underline-offset-2">Jobs</Link>.
-                The <strong>+ New Job</strong> button is at the top right, next to the search box.
+                Top right, next to the search box: <strong>Make Reservation</strong> when they have named trucks
+                and dates, <strong>New Order</strong> when you are pricing a quote first.
               </p>
             </Step>
             <Step n={2} title="Type what you know">
               <p>
-                <strong>Job name</strong> is the production or show. <strong>Production company</strong> searches
-                as you type — pick the company off the list if it is already there, and it links to the existing
-                one instead of making a duplicate. Only use &ldquo;Create new company&rdquo; when it genuinely is new.
+                <strong>Production company</strong> searches as you type — pick the company off the list if it
+                is already there, and it links to the existing one instead of making a duplicate. Only create a
+                new company when it genuinely is new. <strong>Job name</strong> is the production or show.
               </p>
               <p>
-                Contact name, phone and email are optional on this screen, but put the email in. That is the
-                person the portal link goes to.
+                Put the contact&rsquo;s email in. That is the person the portal link goes to, and a reservation
+                cannot hold a unit for a job with nobody on it.
               </p>
             </Step>
             <Step n={3} title="Let it check for an existing job">
               <p>
-                <strong>Continue — check for existing Jobs</strong> shows you any job that looks like a match
-                before it creates anything. If the show is already in HQ, pick it. A second job for the same
-                show splits the paperwork in half.
+                Before anything is created, you are shown any job that looks like a match. If the show is
+                already in HQ, pick it. A second job for the same show splits the paperwork in half.
               </p>
             </Step>
-            <Step n={4} title="You land on the job page">
-              <p>That page is home base for this show. Every step below happens there or one click away.</p>
+            <Step n={4} title="You land on the order">
+              <p>
+                The job page is home base for this show, and the order you just made is on it. Every step
+                below happens there or one click away.
+              </p>
             </Step>
           </ol>
         </section>
@@ -130,7 +135,8 @@ export default function StartingAJobGuidePage() {
         <section className="mb-10">
           <h2 className="mb-1 text-xl font-semibold text-lt-fg">2 · Put the rental on it</h2>
           <p className="mb-4 text-[14px] text-lt-fg3">
-            Both buttons are at the top of the job page, and both open with the job already filled in.
+            Adding more later: both buttons are at the top of the job page, and both open with the job already
+            filled in.
           </p>
           <ol className="list-none border-b border-lt-hairline p-0">
             <Step n={1} title="+ New quote — what they're being charged">

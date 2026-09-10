@@ -2,8 +2,10 @@
 
 /**
  * In-Job creation actions (canonical-Job consolidation, 2026-07-15).
- * The user path is: create Job (global "+ New Job") → open it → add a
- * quote or reservation HERE, with the Job already decided:
+ * The user path is: the Job is born from its first reservation or order
+ * (/jobs toolbar: Make Reservation / New Order — "+ New Job" retired
+ * 2026-09-10) → open it → add the NEXT quote or reservation HERE, with
+ * the Job already decided:
  *
  *   - "+ New quote"       → /orders/new?jobId=… (the page's
  *                           JobPicker opens pre-seeded to this Job).

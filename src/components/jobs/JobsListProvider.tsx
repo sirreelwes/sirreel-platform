@@ -78,7 +78,7 @@ interface JobsListValue {
  * It's a window event rather than a context call so that components
  * nested deep in the detail panel — order modals, the bookings
  * section — can signal without threading a callback down to them, and
- * so that callers OUTSIDE the provider (the global "+ New Job") work
+ * so that callers OUTSIDE the provider (the mobile bar's Make Reservation) work
  * too. Nothing listens when the list isn't mounted; that's fine.
  */
 export const JOBS_CHANGED_EVENT = 'sirreel:jobs-changed'

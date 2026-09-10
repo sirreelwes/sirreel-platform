@@ -23,7 +23,7 @@ import { X } from 'lucide-react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import { IncomingPill } from './IncomingPill'
-import { NewJobLauncher } from './NewJobLauncher'
+import { CreateLaunchers } from './CreateLaunchers'
 import { STAGE_HINT, STAGE_ORDER, STAGE_SHORT } from '@/lib/jobs/stage'
 import { STAGE_RAIL } from '@/lib/scheduling/statusTokens'
 
@@ -179,14 +179,15 @@ export function JobsToolbar() {
           Mine
         </label>
 
-        {/* The ONE create entry point — moved here from the (deleted)
-            global shell header (Wes 2026-08-28: "just have new job on
-            the jobs page"). */}
+        {/* The create entry points — Make Reservation + New Order (Wes
+            2026-09-10: "+ New Job" is gone; every job is born from one
+            of these two, which resolve the job themselves). Moved here
+            from the (deleted) global shell header on 2026-08-28. */}
         {/* Hidden on a phone: the shell's mobile top bar carries the same
-            launcher on every route, and two "+ New Job" buttons on one
-            screen is one too many. */}
+            two buttons on every route, and two copies on one screen is
+            one too many. */}
         {/* Findable on the first visit, ignorable on the hundredth —
-            the how-to sits next to the button it describes (same
+            the how-to sits next to the buttons it describes (same
             treatment Collections gives "How to collect"). */}
         <div className="ml-auto hidden md:flex items-center gap-2">
           <Link
@@ -195,7 +196,7 @@ export function JobsToolbar() {
           >
             How to start a job
           </Link>
-          <NewJobLauncher buttonClassName="bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
+          <CreateLaunchers />
         </div>
       </div>
 
