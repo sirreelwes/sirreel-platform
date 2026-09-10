@@ -118,11 +118,17 @@ const ROSTER: { name: string; vehicleType: string; section: Section; specs: stri
     publicDescription: 'An articulating boom lift for high rigging and exterior work, delivered to your location.',
   },
   {
-    name: 'Telehandler — 8,000 lb',
-    vehicleType: 'Telehandler / forklift',
+    // Renamed 2026-09-10 (Wes). It was seeded as a telehandler; PowerTrip's
+    // catalog lists no telehandler at this capacity — the 8,000 lb machine
+    // they actually own is a warehouse forklift, which is what their photo
+    // shows. Their reach forklifts start at 9,000 lb. This list is matched by
+    // NAME on re-run, so the old name here would create a second unit beside
+    // the renamed one.
+    name: 'Warehouse Forklift — 8,000 lb',
+    vehicleType: 'Warehouse forklift',
     section: 'LIFTS',
-    specs: ['8,000 lb capacity', 'Reach forklift', 'Delivered to the location'],
-    publicDescription: 'A reach forklift for set construction and unloading, delivered to your location.',
+    specs: ['8,000 lb capacity', 'Warehouse forklift', 'Delivered to the location'],
+    publicDescription: 'An 8,000 lb warehouse forklift for set construction and unloading, delivered to your location.',
   },
   {
     name: 'Light Tower — 4 × 1,000 W',

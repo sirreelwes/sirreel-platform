@@ -4629,12 +4629,18 @@ model Vendor {
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
   partnerSharePercent Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
-  /// A split the PARTNER has asked for, awaiting HQ — the deal's mirror of
-  /// SubcontractedVehicle.proposedDailyRate. Wes 2026-09-10: Evan should be
-  /// able to come back with a different number rather than take 20% or walk.
-  /// Nothing about billing reads these; partnerSharePercent stays the deal
-  /// until someone accepts on /crm/portals#vendor, which is also when the
-  /// filed agreement has to be re-filed (its Terms box prints the split).
+  /// UNUSED — nothing reads or writes these three.
+  ///
+  /// Added 2026-09-10 for a partner-side "propose a different split" form, and
+  /// retired the same day: Wes decided a partner should EMAIL him about the
+  /// split rather than type a number into a page, so the deal only ever
+  /// changes from the field on /crm/portals#vendor. The partner page carries a
+  /// mailto instead (VendorAccountView).
+  ///
+  /// Kept rather than dropped because the columns were live in production
+  /// before the code stopped reading them — dropping first would have 500'd
+  /// the partner page (same ordering rule as adding an enum value). Empty and
+  /// harmless; safe to drop in a later pass if anyone is tidying.
   proposedSharePercent Decimal? @map("proposed_share_percent") @db.Decimal(5, 2)
   shareProposedAt      DateTime? @map("share_proposed_at")
   shareProposalNote    String?   @map("share_proposal_note") @db.Text

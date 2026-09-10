@@ -18,7 +18,6 @@ import { VendorContactForm } from '@/components/site/VendorContactForm'
 import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
 import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
-import { ShareProposalForm } from '@/components/site/ShareProposalForm'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
 import { partnerSection } from '@/lib/site/partnerSections'
 
@@ -89,6 +88,18 @@ function JobCard({ job, preview, unitHref }: { job: VendorAccountJob; preview: b
 
 export function VendorAccountView({ v, token, preview = false }: { v: View; token: string; preview?: boolean }) {
   const unitHref = (id: string, url: string | null) => (preview ? `/crm/portals/preview/vendor/${id}` : url)
+
+  // Pre-filled so the reply lands with the partner and the current deal already
+  // named — Wes should not have to ask "who is this and what do you have now?".
+  const shareMailto = `mailto:wes@sirreel.com?subject=${encodeURIComponent(
+    `${v.vendorName} — our split with SirReel`,
+  )}&body=${encodeURIComponent(
+    `Hi Wes,\n\n${
+      v.sharePercent == null
+        ? 'We would like to agree the split for our units with SirReel.'
+        : `We currently receive ${Math.round((100 - v.sharePercent) * 100) / 100}% and SirReel keeps ${v.sharePercent}%. We would like to talk about changing that.`
+    }\n\n\n— ${v.contactName ?? v.vendorName}`,
+  )}`
   const logoSrc = preview ? `/api/vendors/${v.vendorId}/logo` : `/api/public/vendor-account/${token}/logo`
   const agreementHref = preview ? `/api/vendors/${v.vendorId}/agreement` : `/api/public/vendor-account/${token}/agreement/pdf`
   const signHref = preview ? '#' : `/vendor/account/${token}/sign`
@@ -163,16 +174,21 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
                 Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
               </div>
             )}
-            {/* Wes 2026-09-10: the split is a negotiation, not a notice. A
-                partner who cannot counter-offer on the page either signs a
-                number they dislike or stops replying. */}
-            <ShareProposalForm
-              token={token}
-              preview={preview}
-              currentSirReelPercent={v.sharePercent}
-              proposed={v.proposedShare}
-              rateNoun={words.rateNoun}
-            />
+            {/* Wes 2026-09-10, second pass: the split is a conversation he
+                wants to have himself, not a number typed into a form. A form
+                would record an ask and leave the partner waiting; an email
+                puts them straight in front of the person who decides. */}
+            <div style={{ fontSize: 13, color: '#6b6560', marginTop: 10 }}>
+              Want to talk about the split?{' '}
+              <a
+                href={preview ? undefined : shareMailto}
+                aria-disabled={preview}
+                style={{ color: '#0F7A93', fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid rgba(15,122,147,0.35)', pointerEvents: preview ? 'none' : 'auto', opacity: preview ? 0.5 : 1 }}
+              >
+                Email Wes Bailey
+              </a>{' '}
+              and he&apos;ll come back to you.
+            </div>
           </div>
           {v.sharePercent != null && (
             <div style={{ display: 'flex', gap: 14 }}>

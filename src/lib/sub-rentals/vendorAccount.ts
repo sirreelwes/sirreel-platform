@@ -140,9 +140,6 @@ export interface VendorAccountView {
   agreement: VendorAccountAgreement | null
   /** The deal: SirReel's share of the vehicle rental rate. Null until HQ sets it. */
   sharePercent: number | null
-  /** A split the PARTNER has asked for, awaiting HQ. Stored (and returned) as
-   *  SirReel's share, the same way sharePercent is — the form converts. */
-  proposedShare: { sirreelPercent: number; at: string; note: string | null } | null
   current: VendorAccountJob[]
   past: VendorAccountJob[]
   /**
@@ -173,7 +170,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, proposedSharePercent: true, shareProposedAt: true, shareProposalNote: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -188,7 +185,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, proposedSharePercent: true, shareProposedAt: true, shareProposalNote: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor, null)
@@ -204,9 +201,6 @@ async function buildVendorAccount(vendor: {
   logoUrl: string | null
   logoSvg: string | null
   partnerSharePercent: unknown
-  proposedSharePercent: unknown
-  shareProposedAt: Date | null
-  shareProposalNote: string | null
   partnerKind: PartnerKindKey
   catalogSection: string | null
 }, portalToken: string | null): Promise<VendorAccountView> {
@@ -261,14 +255,6 @@ async function buildVendorAccount(vendor: {
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))
   const sharePercent = num(vendor.partnerSharePercent)
-  const proposedShare =
-    vendor.shareProposedAt && vendor.proposedSharePercent != null
-      ? {
-          sirreelPercent: Number(vendor.proposedSharePercent as number),
-          at: vendor.shareProposedAt.toISOString(),
-          note: vendor.shareProposalNote,
-        }
-      : null
 
   const byJob = new Map<string, VendorAccountJob>()
   for (const r of rows) {
@@ -350,7 +336,6 @@ async function buildVendorAccount(vendor: {
       })(),
     })),
     sharePercent,
-    proposedShare,
     agreement: agreementRow
       ? { id: agreementRow.id, title: agreementRow.title, signedAt: agreementRow.signedAt?.toISOString() ?? null, signerName: agreementRow.signerName, expiryDate: agreementRow.expiryDate?.toISOString() ?? null }
       : null,
