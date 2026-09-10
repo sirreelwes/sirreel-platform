@@ -2,14 +2,59 @@
 
 Campaign `CMadf71a842a44855e507d1cfbb9436cb0` · use case ACCOUNT_NOTIFICATION ·
 Messaging Service `MGda3482bd81e2c26b45cc188de36124dc` · number (747) 335-1665.
+Brand `BN8ceaba8e959be179480ba5034eabe104` (APPROVED, STANDARD, VERIFIED).
 
-Rejected twice with **error 30909** (2026-09-07 and again 2026-09-08 after a
-resubmission that described all four paths): reviewers cannot open the portal,
-partner and driver forms, so those opt-in paths could not be verified. The
-third filing cites https://sirreel.com/sms-terms/opt-in-examples, where the
-three gated forms are shown as the person sees them. This file is the filing, field by field, and the source of truth for the keyword
-replies in `src/lib/sms/threads.ts` (`KEYWORD_REPLIES`) — change one, change
-the other.
+## APPROVED 2026-09-10
+
+Twilio's compliance email ("Your A2P 10DLC campaign is approved … registered
+with carriers") arrived 2026-09-10 after three 30909 rejections (log at the
+bottom). The fourth filing — the one citing
+https://sirreel.com/sms-terms/opt-in-examples with that page made crawlable
+and the footer link to the Text Message Terms — is what passed. Nothing in
+this file needs to change for the campaign; the rest of the document stays
+as the record of what is on file, and `KEYWORD_REPLIES` in
+`src/lib/sms/threads.ts` must keep matching it.
+
+### Go-live checklist (the approval is not the switch-on)
+
+The email's own condition: *"You can begin sending messages on this
+Campaign by adding phone numbers to the linked messaging service."*
+Carriers treat a text as registered only when it leaves THROUGH the
+messaging service. A text from a bare number that is not in the service is
+filtered as unregistered (error 30034 on the delivery receipt, nothing at
+send time), which would look exactly like "the campaign is approved but
+nobody gets our texts".
+
+1. **Console → Messaging → Services → the MG service → Sender Pool.** Confirm
+   (747) 335-1665 is listed; add it if not.
+2. **Vercel Production env: `TWILIO_MESSAGING_SERVICE_SID=MGda3482bd81e2c26b45cc188de36124dc`.**
+   `sendSms` then sends `MessagingServiceSid` and NO `From` — the service
+   picks its sender, and a number that is not in the service cannot be
+   picked, so step 1 being wrong fails at send time instead of silently.
+   `TWILIO_FROM_NUMBER` stays as the fallback for an environment without
+   the service. Redeploy after setting it (env changes need a build).
+3. **Console → the MG service → Integration.** Set "Send a webhook" to
+   `https://hq.sirreel.com/api/public/sms/inbound?key=<TWILIO_WEBHOOK_SECRET>`
+   — or leave "Defer to sender's webhook" and keep the webhook on the
+   number itself. Once sends go through the service, replies route by the
+   SERVICE's inbound setting, not only the number's. Same for the status
+   callback (`/api/public/sms/status`), which `sendTracked` passes per
+   message either way.
+4. **Console → the MG service → Opt-Out Management (Advanced Opt-Out).**
+   Paste the opt-out and help messages below as the custom replies, so what
+   the person receives matches what is filed (Twilio's defaults carry no
+   brand name).
+5. **Verify with `GET /api/admin/a2p-campaign`** (admin login,
+   production). Read three lines: `campaigns[0].status` should be
+   `VERIFIED`; `service.fromNumberInService` must be `true`;
+   `sendPath.mode` should be `messaging-service` with
+   `matchesQueriedService: true`. Then text START to (747) 335-1665 from a
+   staff phone and confirm the opt-in reply arrives, and send one job text
+   from a job page and watch its row reach `delivered` on the status
+   webhook.
+
+`npm run test:sms-config` pins the send-path shape (service SID → no From;
+no service → normalised From).
 
 Public pages reviewers read: https://sirreel.com/sms-terms (CTA at `#opt-in`)
 and https://sirreel.com/privacy. Both must stay reachable without login.
@@ -100,7 +145,7 @@ help reply carries no brand name or contact, which reviewers reject.
 | Direct lending / loan arrangement | No |
 | Affiliate marketing | No |
 
-## The campaign exists, but is DETACHED from the messaging service (2026-09-09)
+## The campaign exists, but is DETACHED from the messaging service (2026-09-09 — superseded by the approval above; kept as the record of how the Console and API disagree)
 
 Two sources disagreed, and the Console is the accurate one:
 
@@ -163,6 +208,7 @@ and `/privacy`, listed in the sitemap.
 | 1 | 2026-09-07 | Original flow: START keyword only | 30909 |
 | 2 | 2026-09-08 ~10:37 | Flow describing all four opt-in paths | 30909 |
 | 3 | 2026-09-08 (after the 3rd filing) | Flow citing /sms-terms/opt-in-examples | 30909 |
+| — | **2026-09-10 APPROVED** | Same flow, opt-in-examples page crawlable + footer link to the terms | — |
 
 The Twilio Console threw **React error #310** on the campaign edit form on
 both 9/8 attempts. That is a bug in Twilio's own app, not in the data — but

@@ -169,6 +169,20 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## Text messaging (Twilio) — A2P 10DLC campaign APPROVED 2026-09-10
+- Campaign `CMadf71a…` (ACCOUNT_NOTIFICATION) on Messaging Service
+  `MGda3482bd81e2c26b45cc188de36124dc`, number (747) 335-1665. Filing,
+  keyword replies and the go-live checklist: `docs/sms/twilio-a2p-campaign.md`.
+  `KEYWORD_REPLIES` in `src/lib/sms/threads.ts` must match that doc.
+- **Sends must go THROUGH the service to count as registered.** Set
+  `TWILIO_MESSAGING_SERVICE_SID` and `sendSms` sends `MessagingServiceSid`
+  with no `From`; `TWILIO_FROM_NUMBER` is only the fallback. A bare-number
+  send from a number outside the service is filtered by carriers (30034)
+  with no error at send time. `GET /api/admin/a2p-campaign` reports
+  `sendPath` and `service.fromNumberInService`. `npm run test:sms-config`.
+- Every outbound goes through `sendTracked()` (STOP honored, quiet hours
+  9pm–6am Pacific for automated sends, one `SmsMessage` row per text).
+
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
   Hill / Long Beach) is the second partner after King Kong, and rents
