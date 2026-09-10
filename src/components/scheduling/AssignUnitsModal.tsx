@@ -230,6 +230,48 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     }
   }
 
+  /**
+   * Hand back the slots nobody has picked a unit for — and ONLY those.
+   * The gantt's "No unit" row is the one place a stale hold slot is
+   * visible (a quote line that was 2× and became 1×, or a Planyo cart
+   * that duplicated a unit already held by hand), and clicking it
+   * landed here with nothing but a candidate list (Wes 2026-09-10).
+   * `pooledSlots` makes the release route drop the line's quantity by
+   * the unpicked count and leave every assigned truck where it is; a
+   * line with nothing picked comes down whole (UNFULFILLED), which is
+   * the same act. Releasing is a sales action — the route 403s anyone
+   * else with a readable reason.
+   */
+  const [releasing, setReleasing] = useState(false)
+  async function releaseUnpicked() {
+    if (!data) return
+    const remaining = data.bookingItem.remaining
+    if (remaining <= 0) return
+    setReleasing(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pooledSlots: remaining }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) {
+        setError(json.reason || json.error || `Request failed (${res.status})`)
+        return
+      }
+      onChanged?.()
+      // Whole line gone → nothing left to pick for; close. Otherwise the
+      // assigned units are still here to manage.
+      if (json.bookingItem?.status === 'UNFULFILLED') { onClose(); return }
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setReleasing(false)
+    }
+  }
+
   /** Re-point (or clear) the order on a unit already assigned. */
   async function setAssignmentOrder(assignmentId: string, orderId: string | null) {
     setError(null)
@@ -386,6 +428,35 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                   </span>
                 </div>
               </div>
+
+              {data.bookingItem.remaining > 0 && data.bookingItem.status !== 'UNFULFILLED' && (
+                <section className="rounded border border-rose-200 bg-rose-50 px-3 py-2 flex items-start gap-3 flex-wrap">
+                  <div className="text-xs text-rose-900 flex-1 min-w-[12rem]">
+                    <span className="font-semibold">
+                      {data.bookingItem.remaining === 1
+                        ? 'One slot on this line has no unit.'
+                        : `${data.bookingItem.remaining} slots on this line have no unit.`}
+                    </span>{' '}
+                    If the job doesn&rsquo;t need {data.bookingItem.remaining === 1 ? 'it' : 'them'}, release
+                    {data.bookingItem.remaining === 1 ? ' it' : ' them'} — the hold stops counting against
+                    availability and the &ldquo;No unit&rdquo; row goes away.
+                    {data.bookingItem.assignedCount > 0 && (
+                      <> {data.bookingItem.assignedCount === 1 ? 'The assigned unit stays' : 'Assigned units stay'} on the job.</>
+                    )}
+                  </div>
+                  <button
+                    onClick={releaseUnpicked}
+                    disabled={releasing || !!submitting}
+                    className="shrink-0 border border-rose-300 bg-white hover:bg-rose-100 disabled:opacity-40 text-rose-900 text-xs font-semibold px-3 py-1.5 rounded"
+                  >
+                    {releasing
+                      ? 'Releasing…'
+                      : data.bookingItem.assignedCount === 0
+                        ? 'Release this hold'
+                        : `Release ${data.bookingItem.remaining === 1 ? 'the unpicked slot' : `${data.bookingItem.remaining} unpicked slots`}`}
+                  </button>
+                </section>
+              )}
 
               {/* Which order the units here belong to. Only a question
                   when the job carries more than one live order — with
