@@ -34,6 +34,13 @@
  *     by the projection helper only when projection actually advances
  *     state — sign path already fired BOOKING_WELCOME, this path is
  *     internal/ops.
+ *
+ * What it DOES do as of 2026-09-09: confirm the order's booking. It used
+ * to leave Booking.status exactly where sales left it, so an order could
+ * be BOOKED — money snapshotted, lanes routed, client emailed — while its
+ * reservation still read REQUEST. That was 8 of the 16 booked-or-later
+ * orders carrying a booking link. See lib/bookings/confirmBooking.ts;
+ * it touches status and confirmedAt only, never the items.
  */
 
 import { Prisma } from '@prisma/client'
@@ -48,6 +55,7 @@ import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { notifySubRentalsBooked } from '@/lib/sub-rentals/lifecycleNotices'
 import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
+import { confirmBooking } from '@/lib/bookings/confirmBooking'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -121,6 +129,7 @@ export async function bookOrder(args: {
           sentAt: true,
           wonAt: true,
           lostAt: true,
+          bookingId: true,
           lineItems: { select: { id: true, department: true, type: true } },
         },
       })
@@ -245,6 +254,21 @@ export async function bookOrder(args: {
         }
       }
 
+      // The reservation catches up with the order. In the transaction on
+      // purpose, unlike the cadence/email/partner steps below: this is
+      // one guarded row in the same database, and the whole point is
+      // that a BOOKED order and a REQUEST booking can no longer coexist.
+      // Non-confirmable outcomes are recorded rather than thrown — an
+      // order with no booking, or one whose reservation was already
+      // confirmed by the Timeline, is normal and must still book.
+      let bookingConfirmed: string | null = null
+      if (order.bookingId) {
+        const res = await confirmBooking(tx, order.bookingId)
+        bookingConfirmed = res.ok
+          ? (res.changed ? `${res.previousStatus}→CONFIRMED` : 'already-confirmed')
+          : `skipped:${res.reason}`
+      }
+
       // AuditLog. action is `order.booked`; oldValues capture pre-book
       // state, newValues capture the snapshot + routing summary.
       await tx.auditLog.create({
@@ -268,6 +292,10 @@ export async function bookOrder(args: {
             bookedAt: bookedAt.toISOString(),
             laneCounts,
             pickListId,
+            // What happened to the reservation, so a booking that could
+            // not be confirmed leaves a trace instead of nothing.
+            bookingId: order.bookingId,
+            bookingConfirmed,
           },
         },
       })

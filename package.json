@@ -14,6 +14,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
+    "test:confirm-booking": "tsx tests/bookings/confirm-booking.test.ts",
     "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
     "test:clause-diff": "tsx tests/contracts/clause-diff.test.ts",
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",

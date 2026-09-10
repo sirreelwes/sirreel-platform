@@ -13,16 +13,19 @@
  * Terminal states (CANCELLED / ARCHIVED / RETURNED) and the
  * post-confirmation state ACTIVE all return 409 — they need
  * different action paths than a casual "book it" click.
+ *
+ * The rule itself now lives in lib/bookings/confirmBooking.ts, because
+ * bookOrder confirms the reservation too and the two must not drift on
+ * what confirming means. This route keeps the auth, the HTTP shapes and
+ * the status codes; the helper owns the transition.
  */
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
-import type { BookingStatus } from '@prisma/client'
+import { CONFIRMABLE_FROM, confirmBooking } from '@/lib/bookings/confirmBooking'
 
 export const dynamic = 'force-dynamic'
-
-const CONFIRMABLE_FROM: readonly BookingStatus[] = ['REQUEST', 'AI_REVIEW', 'PENDING_APPROVAL'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   // SALES action (2026-07 re-split): confirming a booking is reservation
@@ -42,44 +45,41 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       { status: 403 },
     )
   }
-  const booking = await prisma.booking.findUnique({
-    where: { id: params.id },
-    select: { id: true, bookingNumber: true, status: true, archivedAt: true },
-  })
-  if (!booking) return NextResponse.json({ error: 'booking not found' }, { status: 404 })
+  const result = await confirmBooking(prisma, params.id)
 
-  if (booking.archivedAt) {
-    return NextResponse.json(
-      { error: 'cannot confirm', reason: 'Booking is archived; restore it before confirming.' },
-      { status: 409 },
-    )
-  }
-
-  if (booking.status === 'CONFIRMED') {
-    return NextResponse.json({ ok: true, alreadyConfirmed: true, bookingId: booking.id, bookingNumber: booking.bookingNumber })
-  }
-
-  if (!CONFIRMABLE_FROM.includes(booking.status)) {
+  if (!result.ok) {
+    if (result.reason === 'not-found') {
+      return NextResponse.json({ error: 'booking not found' }, { status: 404 })
+    }
+    if (result.reason === 'archived') {
+      return NextResponse.json(
+        { error: 'cannot confirm', reason: 'Booking is archived; restore it before confirming.' },
+        { status: 409 },
+      )
+    }
     return NextResponse.json(
       {
         error: 'cannot confirm',
-        reason: `Booking is in status=${booking.status}; confirmable only from ${CONFIRMABLE_FROM.join(', ')}.`,
-        bookingId: booking.id,
-        currentStatus: booking.status,
+        reason: `Booking is in status=${result.booking.status}; confirmable only from ${CONFIRMABLE_FROM.join(', ')}.`,
+        bookingId: result.booking.id,
+        currentStatus: result.booking.status,
       },
       { status: 409 },
     )
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { status: 'CONFIRMED', confirmedAt: new Date() },
-    select: { id: true, bookingNumber: true, status: true, confirmedAt: true },
-  })
+  if (!result.changed) {
+    return NextResponse.json({
+      ok: true,
+      alreadyConfirmed: true,
+      bookingId: result.booking.id,
+      bookingNumber: result.booking.bookingNumber,
+    })
+  }
 
   return NextResponse.json({
     ok: true,
-    booking: updated,
-    previousStatus: booking.status,
+    booking: result.booking,
+    previousStatus: result.previousStatus,
   })
 }
