@@ -35,7 +35,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
-import { advanceOneOrderToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
+import { advanceOneOrderToOnJob, ordersCarriedByBooking, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
 
 /**
@@ -600,11 +600,15 @@ export type OutBlockedReason =
   /** Still in quote form. A sheet cannot book an order — booking
    *  snapshots money and routes lanes, and that is sales' work. */
   | 'not-booked'
-  /** A FLEET line with no vehicle behind it anywhere on the job. This is
-   *  the LW2 shape (S260908-004, 2026-09-08): one SuperCube line, the
-   *  truck physically gone, and no BookingAssignment for it — so HQ has
-   *  no record of WHICH truck left, no walk-around, and nothing for the
-   *  driver flow to fire on. Dispatch has to assign the unit. */
+  /** No truck that a check-out would route to THIS order. Either nothing
+   *  is assigned on the job at all, or something is but the link does not
+   *  reach here — which is the LW2 shape (S260908-004, 2026-09-09): the
+   *  SuperCube was assigned all along (Cube 18, on its own booking), but
+   *  Order.bookingId and BookingAssignment.orderId were both null, and
+   *  with TWO live orders on the job ordersCarriedByBooking's
+   *  one-live-order fallback could not guess. So a driver checking that
+   *  truck out would have advanced nothing. Either way dispatch owns it:
+   *  put a truck on the order, or link the one already holding it. */
   | 'fleet-no-vehicle-assigned'
   /** The truck is assigned but has not been checked out. That check-out
    *  — with its mileage and its 22-slot walk-around — is what closes
@@ -630,7 +634,7 @@ export async function settleGearAfterReport(
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, orderNumber: true, status: true, jobId: true, startDate: true },
+    select: { id: true, orderNumber: true, status: true, jobId: true, startDate: true, bookingId: true },
   })
 
   const list = await prisma.pickList.findUnique({
@@ -730,7 +734,7 @@ export async function settleGearAfterReport(
  * not price work. Same line the driver token respects.
  */
 async function settleOrderOut(
-  order: { id: string; orderNumber: string; status: OrderStatus; startDate: Date | null; jobId: string },
+  order: { id: string; orderNumber: string; status: OrderStatus; startDate: Date | null; jobId: string; bookingId: string | null },
   userId: string,
   linesLoaded: number,
 ): Promise<{ moved: boolean; blocked: OutBlockedReason | null }> {
@@ -790,17 +794,32 @@ async function whyNotOut(
 ): Promise<OutBlockedReason | null> {
   if (PRE_BOOKED_STATUSES.has(status)) return 'not-booked'
   if (!fleetPending) return null
+
   // A FLEET line is waiting on a truck. Which sentence to say depends on
-  // whether HQ knows about one: an assigned unit means somebody has to
-  // run the check-out, and no assigned unit at all means dispatch has to
-  // put a truck on the order before anyone can.
-  const assigned = await prisma.bookingAssignment.count({
+  // whether a truck would actually reach THIS order when it is checked
+  // out — so ask the same helper the check-out itself asks, rather than
+  // counting assignments across the job. Those are not the same question
+  // on a multi-order job: SR-JOB-0308 carried a Video Van for one order
+  // and a SuperCube for the other, and a job-wide count told the
+  // supervisor of the SuperCube order that "the truck still has to be
+  // checked out" on the strength of the Video Van.
+  //
+  // Reusing ordersCarriedByBooking is the point: it owns the bookingId
+  // match AND the one-live-order fallback for an orphaned link, so this
+  // message cannot drift from what a check-out will really do.
+  const assignments = await prisma.bookingAssignment.findMany({
     where: {
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       bookingItem: { booking: { jobId: order.jobId, status: { not: 'CANCELLED' } } },
     },
+    select: { bookingItem: { select: { bookingId: true } } },
   })
-  return assigned > 0 ? 'fleet-vehicle-not-checked-out' : 'fleet-no-vehicle-assigned'
+  const bookingIds = [...new Set(assignments.map((a) => a.bookingItem?.bookingId).filter((b): b is string => !!b))]
+  for (const bookingId of bookingIds) {
+    const carried = await ordersCarriedByBooking(prisma, order.jobId, bookingId)
+    if (carried.some((o) => o.id === order.id)) return 'fleet-vehicle-not-checked-out'
+  }
+  return 'fleet-no-vehicle-assigned'
 }
 
 /**

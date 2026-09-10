@@ -44,7 +44,7 @@ const OUT_BLOCKED_MESSAGE: Record<OutBlockedReason, string> = {
   'not-booked':
     'The gear is marked loaded, but the order is still a quote — sales has to book it before the job can read On rental.',
   'fleet-no-vehicle-assigned':
-    'There is a vehicle on this order and no truck assigned to it, so nothing can record which one left. Dispatch needs to assign the unit.',
+    'There is a vehicle on this order and no truck that reaches it — either none is assigned, or the one holding it is not linked to this order. Dispatch needs to sort that before a check-out can count.',
   'fleet-vehicle-not-checked-out':
     'The gear side is done. The truck still has to be checked out — that walk-around is what puts the job On rental.',
 }
