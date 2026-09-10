@@ -19,6 +19,7 @@ import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/annualCoverage'
 
 export const dynamic = 'force-dynamic'
@@ -125,6 +126,9 @@ export async function GET(
             status: true,
             subtotal: true,
             total: true,
+            // Dismissed duplicate — kept in the order list, dropped
+            // from every rollup by liveOrdersForRollup.
+            archivedAt: true,
             startDate: true,
             endDate: true,
             createdAt: true,
@@ -513,9 +517,10 @@ export async function GET(
     }
 
     // Rollup: prefer bookedTotal sum (locked-in dollars) and fall
-    // back to subtotal for un-booked orders; CANCELLED still excluded.
-    const orderTotal = job.orders
-      .filter((o) => o.status !== 'CANCELLED')
+    // back to subtotal for un-booked orders. CANCELLED and archived
+    // duplicates are both excluded — see liveOrdersForRollup.
+    const rollupOrders = liveOrdersForRollup(job.orders)
+    const orderTotal = rollupOrders
       .reduce(
         (sum, o) => sum + Number((o.bookedTotal ?? o.subtotal) || 0),
         0,
@@ -528,7 +533,7 @@ export async function GET(
     const { today, tomorrow } = cadenceDays()
     const cadence = rollupCadence(
       job.status,
-      job.orders.filter((o) => o.status !== 'CANCELLED'),
+      rollupOrders,
       today,
       tomorrow,
       // Checked-out vehicles count as out even when the order lags.

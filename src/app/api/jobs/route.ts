@@ -20,6 +20,7 @@ import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomp
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
@@ -154,6 +155,10 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             subtotal: true,
+            // An archived order is a duplicate someone has already
+            // dismissed — liveOrdersForRollup drops it before any
+            // derived state reads it.
+            archivedAt: true,
             // Released-fleet badge — the order-linked half of the job's
             // partner units (see the job-level subRentals select above).
             subRentals: { select: { status: true, endDate: true } },
@@ -474,7 +479,7 @@ export async function GET(req: NextRequest) {
       // Phase 7 — paperwork rollup. Per-Order SignedAgreement rows
       // aggregated to a single state per contractType across all
       // non-cancelled orders on the job. CoiCheck is per-Job.
-      const liveOrders = j.orders.filter((o) => o.status !== ('CANCELLED' as OrderStatus))
+      const liveOrders = liveOrdersForRollup(j.orders)
       const allAgreements = liveOrders.flatMap(
         (o) =>
           (o as {
