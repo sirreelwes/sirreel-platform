@@ -39,8 +39,13 @@
  *                 import lands an unbindable hold, which still subtracts
  *                 from `availableToHold` while reading as free on
  *                 /gantt (Wes, 2026-09-02).
- *   ambiguous     more than one primary slot for one HQ asset — pick
- *                 wrong and you block the wrong thing.
+ *   ambiguous     more than one primary slot for one HQ asset. Not
+ *                 always an error: Planyo lists the single ProScout/VTR
+ *                 van twice, as "Video Van (w/ MiFi)" and "Scout Van
+ *                 (No MiFi)", because the MiFi is the thing being
+ *                 chosen (Wes, 2026-09-10 — there is one vehicle). It
+ *                 still matters for writing, because blocking one slot
+ *                 leaves the other bookable on the same truck.
  *
  * Run:
  *   export DATABASE_URL=$(grep DATABASE_URL .env.local | grep -v PRISMA | cut -d'"' -f2)
@@ -52,10 +57,26 @@
 import { PrismaClient } from '@prisma/client'
 import { mkdirSync, writeFileSync } from 'fs'
 import { getResourceInfo, parseUnitNames } from '../src/lib/sync/planyo/planyoClient'
+import { SERVICEABLE_EXCLUDED_STATUSES } from '../src/lib/scheduling/availability'
 import { buildResourceCrosswalk } from '../src/lib/sync/planyo/resourceCrosswalk'
 import { resolvePlanyoUnitName } from '../src/lib/scheduling/planyoNameNormalizer'
 
 const prisma = new PrismaClient()
+
+/**
+ * The scheduler's own definition of a bookable unit
+ * (`availability.ts` — `isActive: true` PLUS a serviceable status).
+ * Using anything looser reports phantoms as real gaps: an earlier run of
+ * this script filtered on `status` alone and listed "ProScout 1" as a
+ * fleet unit missing from Planyo. It is a soft-retired duplicate of
+ * "Video Van" — the same physical Sprinter, merged by
+ * scripts/merge-proscout-vtr-dup.ts — and the scheduler had already
+ * stopped counting it. Match the engine, don't approximate it.
+ */
+const BOOKABLE = {
+  isActive: true,
+  status: { notIn: [...SERVICEABLE_EXCLUDED_STATUSES] },
+}
 
 /**
  * Queue placeholders that name no physical unit. These are EXPECTED in
@@ -102,7 +123,7 @@ async function main() {
         continue
       }
       const asset = await prisma.asset.findFirst({
-        where: { unitName: resolved.lookupName },
+        where: { unitName: resolved.lookupName, ...BOOKABLE },
         select: { unitName: true },
       })
       if (!asset) {
@@ -121,7 +142,7 @@ async function main() {
   }
 
   const assets = await prisma.asset.findMany({
-    where: { status: { not: 'RETIRED' } },
+    where: BOOKABLE,
     select: { unitName: true, category: { select: { name: true } } },
     orderBy: { unitName: 'asc' },
   })
@@ -161,7 +182,7 @@ async function main() {
 
   say()
   say('=== HQ → PLANYO ===')
-  say(`  HQ assets (non-retired)      : ${assets.length}`)
+  say(`  HQ bookable assets           : ${assets.length}`)
   say(`  addressable (one primary)    : ${addressable.length}`)
   say(`  ambiguous                    : ${ambiguous.length}`)
   say(`  absent from every roster     : ${absent.length}`)
@@ -201,7 +222,7 @@ async function main() {
   }
 
   say()
-  say(`Addressable coverage: ${addressable.length}/${assets.length} HQ assets have exactly one primary Planyo slot.`)
+  say(`Addressable coverage: ${addressable.length}/${assets.length} bookable HQ assets have exactly one primary Planyo slot.`)
   if (ambiguous.length || absent.length || orphanReal.length) {
     say('Alignment is INCOMPLETE — see the three sections above before trusting any unit-level write.')
   } else {
