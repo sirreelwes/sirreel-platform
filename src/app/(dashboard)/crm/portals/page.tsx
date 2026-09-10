@@ -19,6 +19,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
+import { canSendPartnerWelcome } from '@/lib/sub-rentals/welcomeSender'
 import { Building2, Eye, Link2, Send, Truck, Users } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -56,6 +57,9 @@ export default async function CompanyPortalsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) redirect('/login')
   const canEdit = canEditCompanyTerms(session.user.email)
+  // Wes only — the compose card isn't even rendered for anyone else, and the
+  // route refuses independently (welcomeSender.ts).
+  const canSendWelcome = canSendPartnerWelcome(session.user.email)
   const now = new Date()
 
   const companies = await prisma.company.findMany({
@@ -209,6 +213,7 @@ export default async function CompanyPortalsPage() {
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
       partnerSharePercent: true, nameClientFacing: true, namePermissionNote: true,
+      welcomeSentAt: true, welcomeSentTo: true,
       coiReceivedAt: true, coiExpiresAt: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
       agreements: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true, signedAt: true, signerName: true, createdAt: true } },
@@ -385,6 +390,9 @@ export default async function CompanyPortalsPage() {
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
                       naming={{ allowed: va.nameClientFacing, note: va.namePermissionNote }}
+                      vendorName={va.name}
+                      welcomeSent={va.welcomeSentAt ? { at: va.welcomeSentAt.toISOString(), to: va.welcomeSentTo } : null}
+                      canSendWelcome={canSendWelcome}
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                       kind={va.partnerKind}
                       section={va.catalogSection}

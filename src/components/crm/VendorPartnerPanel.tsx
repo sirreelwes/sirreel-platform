@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Tag, Trash2, Upload, X } from 'lucide-react'
 import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
+import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
 
 export interface RateProposalRow {
   unitId: string
@@ -15,7 +16,7 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES' }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES' }: {
   vendorId: string
   hasLogo: boolean
   /** What they rent us — picks the words everywhere and the agreement body. */
@@ -24,6 +25,13 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   section?: PartnerCatalogSectionKey
   /** Last time HQ emailed the account link, and to whom. */
   invited: { at: string; to: string } | null
+  /** For the introduction's subject line and confirm dialog. */
+  vendorName?: string
+  /** When the INTRODUCTION went. Null = the account link stays locked. */
+  welcomeSent?: { at: string; to: string | null } | null
+  /** Is the viewer the one person who may send the introduction? Server-gated
+   *  too — this decides whether the compose card is even rendered. */
+  canSendWelcome?: boolean
   /** SirReel's share of the vehicle rental rate — the deal. Null = not set. */
   sharePercent: number | null
   /** Clause 10 permission to name them to clients, and what they said. */
@@ -43,6 +51,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [agFile, setAgFile] = useState<File | null>(null)
   const [ag, setAg] = useState(agreement)
   const [inv, setInv] = useState(invited)
+  const [welcome, setWelcome] = useState(welcomeSent)
   const [share, setShare] = useState<number | null>(sharePercent)
   const [coiState, setCoiState] = useState(coi)
   const [coiExpiry, setCoiExpiry] = useState(coi.expiresAt ? coi.expiresAt.slice(0, 10) : '')
@@ -271,15 +280,25 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
         </div>
       </div>
 
+      {/* The introduction — Wes only. Sits ABOVE the account link because it
+          comes first, and the link below is disabled until it has gone. */}
+      {canSendWelcome && (
+        <PartnerWelcomeCard
+          vendorId={vendorId}
+          vendorName={vendorName}
+          onSent={(at: string, to: string) => setWelcome({ at, to })}
+        />
+      )}
+
       {/* Invite */}
       <div className="border border-lt-hairline rounded-lg p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Send className="w-4 h-4 text-lt-fg3" /> Account link</div>
         <div className="text-xs text-lt-fg2 mt-1">
-          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, {words.many} &amp; rates, {words.drivers ? 'drivers, lot address' : 'delivery contacts, yard address'}).</span>}
+          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : !welcome ? <span className="text-chip-warn-fg">Locked until the introduction goes out{canSendWelcome ? ' — send it above' : ' (Wes sends that)'}.</span> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, {words.many} &amp; rates, {words.drivers ? 'drivers, lot address' : 'delivery contacts, yard address'}).</span>}
         </div>
         <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
           <input value={invTo} onChange={(e) => setInvTo(e.target.value)} placeholder="partner@example.com" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg sm:w-64" />
-          <button onClick={sendInvite} disabled={!invTo.trim() || busy === 'invite'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
+          <button onClick={sendInvite} disabled={!invTo.trim() || busy === 'invite' || !welcome} title={welcome ? undefined : 'The introduction has to go first.'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
             {busy === 'invite' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} {inv ? 'Send again' : 'Email the account link'}
           </button>
         </div>

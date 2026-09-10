@@ -14,6 +14,7 @@ import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/te
 import { ensureVendorPortalToken, vendorAccountUrl } from './vendorAccount'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
 import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import { canSendPartnerWelcome, buildIntroDraft, type IntroDraft } from '@/lib/sub-rentals/welcomeSender'
 
 /** Partner mail wears the Utliiz turquoise, not SirReel gold — a foreshadow
  *  of the workspace the partner page points them to. */
@@ -149,12 +150,112 @@ export function buildPartnerWelcome(a: {
   return { subject, html, text }
 }
 
+/**
+ * Render the introduction. ONE renderer for the preview and the send, so what
+ * Wes approves on screen is byte-for-byte what leaves — a preview built by a
+ * second code path is a preview of something else.
+ */
+export function renderPartnerWelcome(a: { vendorName: string; subject: string; body: string }): { html: string; text: string } {
+  // His paragraphs, his line breaks — escaped, never interpreted as HTML.
+  const paragraphs = a.body.trim().split(/\n{2,}/).map((para) => p(esc(para).replace(/\n/g, '<br />')))
+  return {
+    html: renderEmailShell({
+      eyebrow: 'An introduction',
+      heading: `SirReel & ${a.vendorName}`,
+      preheader: a.subject,
+      bodyHtml: paragraphs.join(''),
+      accent: PARTNER_ACCENT,
+    }),
+    text: renderEmailText(a.body.trim().split('\n')),
+  }
+}
+
+/**
+ * THE INTRODUCTION — sent before the account link, by Wes, in his own words.
+ *
+ * Wes 2026-09-10: "I don't want to send a portal link without the initial
+ * welcome email." A cold link to a page full of rates and agreements, from a
+ * company you have not agreed to work with, reads as a mistake. This is the
+ * mail that makes it make sense, so sendVendorInvite below refuses until it
+ * has gone.
+ *
+ * The BODY IS HIS. `buildIntroDraft` offers a starting point; whatever he
+ * actually typed is what sends, wrapped in the partner shell so it looks like
+ * every other partner-facing mail. No account link here on purpose — the link
+ * is the second conversation.
+ */
+export async function sendPartnerWelcome(args: {
+  vendorId: string
+  to: string
+  subject: string
+  body: string
+  sender: { email: string; name: string | null }
+}): Promise<{ ok: boolean; reason?: string }> {
+  if (!canSendPartnerWelcome(args.sender.email)) {
+    throw Object.assign(new Error('Only Wes sends the partner introduction.'), { status: 403 })
+  }
+  const v = await prisma.vendor.findUnique({
+    where: { id: args.vendorId },
+    select: { id: true, name: true, isActive: true, welcomeSentAt: true },
+  })
+  if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
+
+  const to = args.to.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw Object.assign(new Error('Enter a valid email address.'), { status: 400 })
+  const subject = args.subject.trim()
+  const body = args.body.trim()
+  if (!subject) throw Object.assign(new Error('The subject is empty.'), { status: 400 })
+  if (!body) throw Object.assign(new Error('The message is empty.'), { status: 400 })
+
+  const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body })
+
+  // CC'd like every other partner-facing send, and replies go to him.
+  const cc = (await channelRecipients('sub-rental-conduit-cc')).filter(
+    (e) => e && e.toLowerCase() !== to && e.toLowerCase() !== args.sender.email.toLowerCase(),
+  )
+  const res = await sendAgreementEmail({
+    to: [to],
+    cc: cc.length ? cc : undefined,
+    replyTo: args.sender.email,
+    subject,
+    html,
+    text,
+    label: 'partner-welcome',
+  }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : 'send threw' }))
+  if (!res.ok) return { ok: false, reason: 'reason' in res ? res.reason : 'not sent' }
+
+  await prisma.vendor.update({
+    where: { id: v.id },
+    data: { welcomeSentAt: new Date(), welcomeSentTo: to, welcomeSubject: subject.slice(0, 300) },
+  })
+  return { ok: true }
+}
+
+/** The draft the compose box opens with. */
+export async function partnerIntroDraft(vendorId: string, senderName: string): Promise<IntroDraft> {
+  const v = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    select: { name: true, contactName: true, partnerKind: true },
+  })
+  if (!v) throw Object.assign(new Error('Vendor not found'), { status: 404 })
+  return buildIntroDraft({ vendorName: v.name, contactName: v.contactName, kind: v.partnerKind, senderName })
+}
+
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
   const v = await prisma.vendor.findUnique({
     where: { id: args.vendorId },
-    select: { id: true, name: true, contactName: true, isActive: true, partnerSharePercent: true, partnerKind: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
+    select: { id: true, name: true, contactName: true, isActive: true, welcomeSentAt: true, partnerSharePercent: true, partnerKind: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
   })
   if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
+  // The introduction comes first (Wes 2026-09-10). A link to a page of rates
+  // and agreements, from a company they have not agreed to work with, reads as
+  // a mistake — sendPartnerWelcome is what makes it make sense.
+  if (!v.welcomeSentAt) {
+    throw Object.assign(
+      new Error('Send the introduction first — this link only makes sense to someone who has already heard from us.'),
+      { status: 409 },
+    )
+  }
   const to = args.to.trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw Object.assign(new Error('Enter a valid email address.'), { status: 400 })
   const token = await ensureVendorPortalToken(v.id)

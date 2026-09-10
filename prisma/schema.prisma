@@ -4639,6 +4639,19 @@ model Vendor {
   /// yet opened" instead of the misleading "link minted".
   portalInvitedAt     DateTime? @map("portal_invited_at")
   portalInvitedTo     String?   @map("portal_invited_to")
+  /// THE INTRODUCTION — "SirReel wants to partner with PowerTrip!" — sent
+  /// before the account link ever goes out. Wes 2026-09-10: "I don't want to
+  /// send a portal link without the initial welcome email." A cold link to a
+  /// page full of rates and agreements, from a company you have not agreed to
+  /// work with, reads as a mistake; the introduction is what makes it make
+  /// sense. sendVendorInvite REFUSES while welcomeSentAt is null.
+  ///
+  /// Composed and sent only by Wes (src/lib/sub-rentals/welcomeSender.ts) —
+  /// it is a personal approach from the owner, not a system notification, and
+  /// the draft is his to edit before it goes.
+  welcomeSentAt       DateTime? @map("welcome_sent_at")
+  welcomeSentTo       String?   @map("welcome_sent_to")
+  welcomeSubject      String?   @map("welcome_subject")
   /// THE DEAL (Wes 2026-09-06, King Kong: "20% of vehicle rental rate goes
   /// to SirReel"). SirReel's share of the vehicle rental rate, in percent.
   /// The partner's listed rate is what the production pays; the partner
