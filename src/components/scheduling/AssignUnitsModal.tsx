@@ -12,6 +12,14 @@
  *
  * Buffer-state picks hit the soft-warn path on submit; the modal
  * surfaces the warning and the agent can choose to "Override & assign".
+ *
+ * That confirmation, and any refusal from the server, render INLINE
+ * under the row that was clicked. They used to sit at the bottom of the
+ * modal, below a list that runs to twenty-odd trucks plus the
+ * out-of-service section — so clicking Assign on a "tight" unit halfway
+ * down looked like nothing happened at all, and the unit read as
+ * un-assignable (Wes 2026-09-10, Cube 26 on OBB x Cybmiotika). A
+ * decision the operator has to make belongs where they are looking.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -141,6 +149,8 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null) // assetId mid-submit
   const [error, setError] = useState<string | null>(null)
+  /** Set when the error came from acting on one candidate row, so it can render there. */
+  const [errorAssetId, setErrorAssetId] = useState<string | null>(null)
   const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string } | null>(null)
   /**
    * Which order the NEXT unit assigned here goes out on. Empty means
@@ -296,6 +306,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   async function assign(asset: Candidate, bufferOverride: boolean) {
     setSubmitting(asset.assetId)
     setError(null)
+    setErrorAssetId(null)
     try {
       const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
         method: 'POST',
@@ -321,8 +332,10 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
         return
       }
       setError(json.reason || json.error || `Request failed (${res.status})`)
+      setErrorAssetId(asset.assetId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      setErrorAssetId(asset.assetId)
     } finally {
       setSubmitting(null)
     }
@@ -551,22 +564,58 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                     {data.candidates.map((c) => {
                       const isBooked = c.state === 'booked'
                       const isPendingThis = submitting === c.assetId
+                      const confirmHere = pendingBuffer?.asset.assetId === c.assetId ? pendingBuffer : null
+                      const errorHere = errorAssetId === c.assetId ? error : null
                       return (
-                        <li key={c.assetId} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
-                            <span className="font-mono text-[15px] sm:text-sm text-zinc-900">{c.unitName}</span>
-                            <span className="text-xs text-zinc-500">{c.tier}</span>
-                            <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
-                              {STATE_LABEL[c.state] ?? c.state}
-                            </span>
+                        <li key={c.assetId} className="px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
+                              <span className="font-mono text-[15px] sm:text-sm text-zinc-900">{c.unitName}</span>
+                              <span className="text-xs text-zinc-500">{c.tier}</span>
+                              <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
+                                {STATE_LABEL[c.state] ?? c.state}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => assign(c, false)}
+                              disabled={isBooked || !!submitting}
+                              className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
+                            >
+                              {isPendingThis ? 'Assigning…' : 'Assign'}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => assign(c, false)}
-                            disabled={isBooked || !!submitting}
-                            className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
-                          >
-                            {isPendingThis ? 'Assigning…' : 'Assign'}
-                          </button>
+
+                          {/* The decision lands under the truck it is about. A
+                              "tight" unit is assignable — it just needs the
+                              operator to say so. */}
+                          {confirmHere && (
+                            <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2">
+                              <div className="font-medium text-amber-900 text-[13px]">
+                                {c.unitName} is tight on these dates
+                              </div>
+                              <div className="text-amber-800 text-[13px] mt-0.5">{confirmHere.reason}</div>
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  onClick={() => assign(confirmHere.asset, true)}
+                                  disabled={!!submitting}
+                                  className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
+                                >
+                                  {isPendingThis ? 'Assigning…' : `Assign ${c.unitName} anyway`}
+                                </button>
+                                <button
+                                  onClick={() => setPendingBuffer(null)}
+                                  className="text-xs text-zinc-700 hover:text-zinc-900 px-2 py-1"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {errorHere && (
+                            <div className="mt-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
+                              {errorHere}
+                            </div>
+                          )}
                         </li>
                       )
                     })}
@@ -607,17 +656,20 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 </section>
               )}
 
-              {pendingBuffer && (
+              {/* Fallbacks: a pending confirm whose row is no longer in the
+                  list (a refresh moved it), and errors from the
+                  non-candidate actions — unassign, backup promotion, DOT. */}
+              {pendingBuffer && !data.candidates.some((c) => c.assetId === pendingBuffer.asset.assetId) && (
                 <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-                  <div className="font-medium text-amber-900">Buffer encroachment on {pendingBuffer.asset.unitName}</div>
+                  <div className="font-medium text-amber-900">{pendingBuffer.asset.unitName} is tight on these dates</div>
                   <div className="text-amber-800 mt-0.5">{pendingBuffer.reason}</div>
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => assign(pendingBuffer.asset, true)}
                       disabled={!!submitting}
-                      className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-medium px-3 py-1 rounded"
+                      className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
                     >
-                      {submitting ? 'Forcing…' : 'Override buffer & assign'}
+                      {submitting ? 'Assigning…' : `Assign ${pendingBuffer.asset.unitName} anyway`}
                     </button>
                     <button
                       onClick={() => setPendingBuffer(null)}
@@ -629,7 +681,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 </div>
               )}
 
-              {error && (
+              {error && !errorAssetId && (
                 <div className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</div>
               )}
 
