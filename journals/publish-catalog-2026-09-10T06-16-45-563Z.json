@@ -1,0 +1,47 @@
+{
+  "at": "2026-09-10T06:16:45.565Z",
+  "action": "catalog.publish",
+  "requestedBy": "Wes — \"publish the c-stands, apple boxes and walkies\"",
+  "rows": [
+    {
+      "id": "977af935-8930-44b1-9c57-2bc5efb9983d",
+      "name": "C-Stand 40\"",
+      "was": false
+    },
+    {
+      "id": "13686eac-e044-426e-b413-da341969398d",
+      "name": "APPLE BOX - HALF",
+      "was": false
+    },
+    {
+      "id": "7e3e2544-3c26-4ce4-9cef-d8ca9a1441be",
+      "name": "APPLE BOX - QUARTER",
+      "was": false
+    },
+    {
+      "id": "02485604-bdaa-4e17-9611-3769aa97edbf",
+      "name": "APPLE BOX - PANCAKE",
+      "was": false
+    },
+    {
+      "id": "aecf69e2-f801-4bc1-a4be-4a0737f0d25c",
+      "name": "APPLE BOX - FULL (CHROMA GREEN)",
+      "was": false
+    },
+    {
+      "id": "1dfbd218-754e-4fcf-8917-7090ea52997e",
+      "name": "APPLE BOX - FULL",
+      "was": false
+    },
+    {
+      "id": "06dcbe81-8edf-4899-a3d7-9cb5a87964c6",
+      "name": "Low C-Stand 20\"",
+      "was": false
+    },
+    {
+      "id": "61954d15-9592-453d-9d29-8f06a40cf5c8",
+      "name": "Motorola CP200  UHF Radio (Analog)",
+      "was": false
+    }
+  ]
+}
