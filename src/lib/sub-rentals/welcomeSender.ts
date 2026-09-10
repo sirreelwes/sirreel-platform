@@ -49,10 +49,20 @@ export interface IntroDraft {
 /**
  * The opening draft.
  *
- * Deliberately short and specific: what we do, why we want THEM, and what
- * happens next. It does not carry the account link — the link goes in the
- * second mail, once they have said yes, which is the whole point of splitting
- * the two.
+ * ── It follows a phone call ─────────────────────────────────────────────────
+ * Wes 2026-09-10: "I am going to reach out by phone before I send this email,
+ * so no need to introduce myself. Let's jump into the meat." So this does NOT
+ * explain who SirReel is or what we do — a man who just spoke to the owner does
+ * not need telling. It is the written version of the conversation: the split,
+ * what it costs their customer (nothing), what they get, and the two things we
+ * need back.
+ *
+ * It carries the NUMBERS when the deal is set, because a term nobody wrote down
+ * is a term that gets re-negotiated later. When it isn't set, the sentence says
+ * so plainly rather than inventing a percentage.
+ *
+ * Still NO account link — that is the second mail, once they say yes. The lock
+ * in sendVendorInvite depends on this one having gone.
  *
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
@@ -62,19 +72,35 @@ export function buildIntroDraft(a: {
   contactName: string | null
   kind?: PartnerKindKey
   senderName: string
+  /** SirReel's share, when the deal is set. Their share is the remainder. */
+  sharePercent?: number | null
 }): IntroDraft {
   const words = partnerVocab(a.kind ?? 'VEHICLES')
   const first = a.contactName?.trim().split(/\s+/)[0] || null
   const greeting = first ? `Hi ${first},` : `Hello,`
 
+  const share = a.sharePercent
+  const theirs = share == null ? null : Math.round((100 - share) * 100) / 100
+  const splitLine =
+    share == null
+      ? `Your listed rate is what the production pays. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing. I'll confirm the exact split with you before anything is booked.`
+      : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, invoiced to us after each booking comes back and paid within 30 days. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing, and there is no version of this where they save money by going around me.`
+
+  const ancillaries = words.drivers
+    ? `Delivery, mileage, generator hours and driver time bill on top at the rates you set, and those are yours in full.`
+    : `Delivery and collection, fuel, cable and technician time bill on top at the rates you set, and those are yours in full.`
+
   return {
     subject: `SirReel wants to partner with ${a.vendorName}!`,
     body: [
       greeting,
-      `I run SirReel — we rent production vehicles, stages and gear to film, television and commercial productions around Los Angeles. Our clients keep asking us for ${words.many} we don't own, and rather than send them elsewhere I'd rather send them to you.`,
-      `Here's what I have in mind. You keep your rates and your calendar; we bring you the work and handle the production side — one agreement, one certificate of insurance, one invoice, so the client never has to set you up as a new vendor. Your listed rate is what the production pays, and our share comes out of our side of it, so working through us costs your customer nothing.`,
-      `If that sounds worth a conversation, reply and I'll send you a link to your own partner page — your ${words.many}, your rates, and every booking we put your way, all in one place.`,
-      `Either way, glad to know you.`,
+      `Good speaking with you. Here is what I described, in writing, so you have it in front of you.`,
+      splitLine,
+      ancillaries,
+      `The reason productions like this: they sign one agreement with us, send us one certificate of insurance and get one invoice. They never have to set you up as a new vendor, and your ${words.many} are covered under the same agreement and the same insurance as ours.`,
+      `You'd get your own page with us — your ${words.many} and your rates, which stay yours to change any time, your own photos, delivery contacts, and every booking we send your way in one place. Nothing goes out to a client without your rate on it.`,
+      `Two things I need from you: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on that page.`,
+      `Say the word and I'll send you the link.`,
       `— ${a.senderName}\nSirReel`,
     ].join('\n\n'),
   }

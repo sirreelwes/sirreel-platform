@@ -2,6 +2,7 @@
  * /api/vendors/[id]/welcome — the partner INTRODUCTION.
  *
  *   GET                 → the opening draft { subject, body } + its rendered html
+ *   POST { prompt }     → rewrite the draft from ONE LINE of instruction (AI)
  *   POST { preview }    → re-render whatever Wes has typed, WITHOUT sending
  *   POST                → send it, and stamp the vendor
  *
@@ -19,6 +20,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSendPartnerWelcome } from '@/lib/sub-rentals/welcomeSender'
 import { partnerIntroDraft, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
+import { draftFromPrompt } from '@/lib/sub-rentals/welcomeAiDraft'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,11 +65,28 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function POST(req: NextRequest, { params }: Params) {
   const g = await wes(); if ('error' in g) return g.error
   const { id } = await params
-  const b = (await req.json().catch(() => ({}))) as { to?: string; subject?: string; body?: string; preview?: boolean }
+  const b = (await req.json().catch(() => ({}))) as {
+    to?: string; subject?: string; body?: string; preview?: boolean; prompt?: string
+  }
   const subject = typeof b.subject === 'string' ? b.subject : ''
   const body = typeof b.body === 'string' ? b.body : ''
 
   try {
+    // ── Write it from one line ──────────────────────────────────────────
+    // Steers the draft rather than replacing it: "shorter", "mention we can
+    // start with two generators next week", "warmer". The model is handed the
+    // REAL deal terms so it cannot invent a split, and whatever comes back
+    // lands in the box for Wes to edit and preview like anything else.
+    // Nothing is sent and nothing is stamped on this path.
+    if (typeof b.prompt === 'string' && b.prompt.trim()) {
+      const out = await draftFromPrompt({
+        vendorId: id,
+        prompt: b.prompt.trim(),
+        current: { subject, body },
+        senderName: g.name?.trim() || 'Wes Bailey',
+      })
+      return NextResponse.json({ draft: out })
+    }
     if (b.preview) {
       const v = await prisma.vendor.findUnique({ where: { id }, select: { name: true } })
       if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })

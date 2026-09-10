@@ -235,10 +235,18 @@ export async function sendPartnerWelcome(args: {
 export async function partnerIntroDraft(vendorId: string, senderName: string): Promise<IntroDraft> {
   const v = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { name: true, contactName: true, partnerKind: true },
+    select: { name: true, contactName: true, partnerKind: true, partnerSharePercent: true },
   })
   if (!v) throw Object.assign(new Error('Vendor not found'), { status: 404 })
-  return buildIntroDraft({ vendorName: v.name, contactName: v.contactName, kind: v.partnerKind, senderName })
+  return buildIntroDraft({
+    vendorName: v.name,
+    contactName: v.contactName,
+    kind: v.partnerKind,
+    senderName,
+    // The numbers go IN the mail when the deal is set — a term nobody wrote
+    // down is a term that gets re-negotiated later.
+    sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
+  })
 }
 
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
