@@ -13,6 +13,7 @@ import { channelRecipients } from '@/lib/email/notificationChannels'
 import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/templates/shell'
 import { ensureVendorPortalToken, vendorAccountUrl } from './vendorAccount'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 
 /** Partner mail wears the Utliiz turquoise, not SirReel gold — a foreshadow
  *  of the workspace the partner page points them to. */
@@ -34,7 +35,11 @@ export function buildPartnerWelcome(a: {
   senderName: string
   /** SirReel's share of the vehicle rental rate, when the deal is set. */
   sharePercent: number | null
+  /** VEHICLES (drivers, hours, mileage) or EQUIPMENT (delivered and set up).
+   *  Picks the nouns and swaps the driver ask for a delivery-contact ask. */
+  kind?: PartnerKindKey
 }): { subject: string; html: string; text: string } {
+  const w = partnerVocab(a.kind)
   const first = (a.contactName ?? '').split(/\s+/)[0] || ''
   const greet = first ? `Hi ${esc(first)},` : 'Hi,'
   const greetText = first ? `Hi ${first},` : 'Hi,'
@@ -43,27 +48,46 @@ export function buildPartnerWelcome(a: {
   const keep = a.sharePercent == null ? null : Math.round((100 - a.sharePercent) * 100) / 100
   const deal = a.sharePercent == null
     ? null
-    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the vehicle rental rate and you receive ${keep}%, invoiced to SirReel after each booking returns. Each vehicle on your page shows what that comes to per day.`
+    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the ${w.rateNoun} and you receive ${keep}%, invoiced to SirReel after each booking returns. Each ${w.one} on your page shows what that comes to per day.`
 
   // Plain-text bullets are the source; HTML wraps them. Kept as data so the
   // two versions of the email cannot drift.
-  const gives: string[] = [
-    'Every SirReel job that has one of your vehicles on it, with the dates, the vehicle, the driver, and anything still missing. You see our job reference and the dates, never the production’s name. That is deliberate: the production is our client and we keep the two sides apart, the same way we never give a production your details.',
-    'A booking page for each vehicle on each job. That is where you confirm you are holding it, see the pickup location and call time once the production sets them, and name the driver.',
-    'Your rates on file, and a way to propose a change. A change comes to us to accept and never touches a booking that is already confirmed.',
-    'A switch on every vehicle for whether SirReel may offer it to productions. It is yours to turn off at any time, no notice and no reason needed; bookings already confirmed are not affected.',
-    'Our agreement to read and sign, and the signed copy afterward.',
-  ]
+  const gives: string[] = w.drivers
+    ? [
+        'Every SirReel job that has one of your vehicles on it, with the dates, the vehicle, the driver, and anything still missing. You see our job reference and the dates, never the production’s name. That is deliberate: the production is our client and we keep the two sides apart, the same way we never give a production your details.',
+        'A booking page for each vehicle on each job. That is where you confirm you are holding it, see the pickup location and call time once the production sets them, and name the driver.',
+        'Your rates on file, and a way to propose a change. A change comes to us to accept and never touches a booking that is already confirmed.',
+        'A switch on every vehicle for whether SirReel may offer it to productions. It is yours to turn off at any time, no notice and no reason needed; bookings already confirmed are not affected.',
+        'Our agreement to read and sign, and the signed copy afterward.',
+      ]
+    : [
+        'Every SirReel job that has one of your units on it, with the dates, the unit, your delivery contact, and anything still missing. You see our job reference and the dates, never the production’s name. That is deliberate: the production is our client and we keep the two sides apart, the same way we never give a production your details.',
+        'A booking page for each unit on each job. That is where you confirm you are holding it, see the delivery location and call time once the production sets them, and tell us who is bringing it.',
+        'Your rates on file, and a way to propose a change. A change comes to us to accept and never touches a booking that is already confirmed.',
+        'A switch on every unit for whether SirReel may offer it to productions — on sirreel.com and in our quotes, presented as SirReel equipment. It is yours to turn off at any time, no notice and no reason needed; bookings already confirmed are not affected.',
+        'Our agreement to read and sign, and the signed copy afterward.',
+      ]
   const needs: string[] = []
-  if (a.agreementWaiting) needs.push(`Read and sign the Partner Vehicle Agreement. It is short and in plain English: the rental agreement between ${a.vendorName} and SirReel, and what puts your vehicles under our client contract and our insurance while they are on a SirReel job. It protects both sides the same way (each of us covers our own conduct) and it says in writing that what you let us market is yours to withdraw at any time. Sign here: ${signUrl}`)
+  if (a.agreementWaiting) {
+    needs.push(w.drivers
+      ? `Read and sign the Partner Vehicle Agreement. It is short and in plain English: the rental agreement between ${a.vendorName} and SirReel, and what puts your vehicles under our client contract and our insurance while they are on a SirReel job. It protects both sides the same way (each of us covers our own conduct) and it says in writing that what you let us market is yours to withdraw at any time. Sign here: ${signUrl}`
+      : `Read and sign the Partner Equipment Agreement. It is short and in plain English: the rental agreement between ${a.vendorName} and SirReel, and what puts your equipment under our client contract and our insurance while it is on a SirReel job. It protects both sides the same way (each of us covers our own conduct) and it says in writing that what you let us market is yours to withdraw at any time. Sign here: ${signUrl}`)
+  }
+  const listWhat = w.drivers ? 'vehicle' : 'unit'
   needs.push(a.unitCount === 0
-    ? 'Send us your vehicle list. Reply to this email with every vehicle you want SirReel to be able to book, with a daily and weekly rate for each (monthly too if you have one). We add them and they show up on your page.'
-    : `Send us your vehicle list. Right now we have ${a.unitCount} of your vehicle${a.unitCount === 1 ? '' : 's'} on the page. Reply to this email with the rest, with a daily and weekly rate for each (monthly too if you have one). We add them and they show up on your page.`)
+    ? `Send us your ${w.drivers ? 'vehicle' : 'equipment'} list. Reply to this email with every ${listWhat} you want SirReel to be able to book, with a daily and weekly rate for each (monthly too if you have one)${w.drivers ? '' : ', plus your delivery, fuel and technician charges'}. We add them and they show up on your page.`
+    : `Send us your ${w.drivers ? 'vehicle' : 'equipment'} list. Right now we have ${a.unitCount} of your ${a.unitCount === 1 ? listWhat : `${listWhat}s`} on the page. Reply to this email with the rest, with a daily and weekly rate for each (monthly too if you have one)${w.drivers ? '' : ', plus your delivery, fuel and technician charges'}. We add them and they show up on your page.`)
   // No COI ask here — Wes 2026-09-06: "I don't want it to hold up this week's
   // rental." The partner-coi-missing action item follows up after signing.
-  needs.push('Check your contact details and lot address on the page. Your lot is the point of origin for every booking, so driver hours and mileage count from there.')
-  needs.push('When we book a vehicle with a driver, name the driver on that booking page. You enter each driver’s email once, they fill in their own profile and license, and after that you just pick from the list. Each driver gets their own page with the location and call time, so nobody has to relay it by text.')
-  const booking = 'We quote one of your vehicles to a production. You get an email saying we have pitched it for those dates, which holds nothing. If the production accepts, you get a “please hold” email and confirm on the booking page. When the production books, you get an “it’s a go” email with your rate for the booking. Location and call time land on the booking page as the production sets them. After the vehicle comes back, you invoice SirReel for your share, referencing our booking number, and we pay within 30 days. You never invoice the production.'
+  needs.push(w.drivers
+    ? 'Check your contact details and lot address on the page. Your lot is the point of origin for every booking, so driver hours and mileage count from there.'
+    : 'Check your contact details and yard address on the page. Your yard is the point of origin for every booking, so delivery counts from there.')
+  needs.push(w.drivers
+    ? 'When we book a vehicle with a driver, name the driver on that booking page. You enter each driver’s email once, they fill in their own profile and license, and after that you just pick from the list. Each driver gets their own page with the location and call time, so nobody has to relay it by text.'
+    : 'When we book a unit, put a delivery contact on that booking page — a name and a mobile — so we can reach whoever is on the truck if the address or the timing moves on the day.')
+  const booking = w.drivers
+    ? 'We quote one of your vehicles to a production. You get an email saying we have pitched it for those dates, which holds nothing. If the production accepts, you get a “please hold” email and confirm on the booking page. When the production books, you get an “it’s a go” email with your rate for the booking. Location and call time land on the booking page as the production sets them. After the vehicle comes back, you invoice SirReel for your share, referencing our booking number, and we pay within 30 days. You never invoice the production.'
+    : 'We quote one of your units to a production. You get an email saying we have pitched it for those dates, which holds nothing. If the production accepts, you get a “please hold” email and confirm on the booking page. When the production books, you get an “it’s a go” email with your rate for the booking. The delivery address and the time they need it land on the booking page as the production sets them. After the unit is collected, you invoice SirReel for your share plus delivery, fuel and any technician time, referencing our booking number, and we pay within 30 days. You never invoice the production.'
 
   // Same block sans as the CTA button, explicitly — without a font-family
   // the label inherited the client's default serif (Wes 2026-09-06).
@@ -77,7 +101,9 @@ export function buildPartnerWelcome(a: {
     preheader: 'What your partner page does, and the few things we need from you',
     bodyHtml: [
       p(`${greet}`),
-      p(`We have moved our partner vehicles onto one page per partner, and ${esc(a.vendorName)}’s is ready. Everything about your vehicles on SirReel jobs now runs through it: your vehicle list and rates, our agreement, your drivers, and every booking.`),
+      p(w.drivers
+        ? `We have moved our partner vehicles onto one page per partner, and ${esc(a.vendorName)}’s is ready. Everything about your vehicles on SirReel jobs now runs through it: your vehicle list and rates, our agreement, your drivers, and every booking.`
+        : `SirReel runs one page per partner, and ${esc(a.vendorName)}’s is ready. Everything about your equipment on SirReel jobs runs through it: your equipment list and rates, our agreement, and every booking.`),
       p(`Your account page: <a href="${esc(a.accountUrl)}" style="color:#111;">${esc(a.accountUrl)}</a>`),
       calloutBox('That link is your login. There is no password. It does not expire, so bookmark it — and do not forward it outside your company, because anyone with it can act for you on it.', PARTNER_ACCENT),
       ...(deal ? [h3('Our deal'), p(esc(deal))] : []),
@@ -96,7 +122,9 @@ export function buildPartnerWelcome(a: {
   const text = renderEmailText([
     greetText,
     '',
-    `We have moved our partner vehicles onto one page per partner, and ${a.vendorName}’s is ready. Everything about your vehicles on SirReel jobs now runs through it: your vehicle list and rates, our agreement, your drivers, and every booking.`,
+    w.drivers
+      ? `We have moved our partner vehicles onto one page per partner, and ${a.vendorName}’s is ready. Everything about your vehicles on SirReel jobs now runs through it: your vehicle list and rates, our agreement, your drivers, and every booking.`
+      : `SirReel runs one page per partner, and ${a.vendorName}’s is ready. Everything about your equipment on SirReel jobs runs through it: your equipment list and rates, our agreement, and every booking.`,
     '',
     'Your account page:',
     a.accountUrl,
@@ -124,7 +152,7 @@ export function buildPartnerWelcome(a: {
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
   const v = await prisma.vendor.findUnique({
     where: { id: args.vendorId },
-    select: { id: true, name: true, contactName: true, isActive: true, partnerSharePercent: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
+    select: { id: true, name: true, contactName: true, isActive: true, partnerSharePercent: true, partnerKind: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
   })
   if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
   const to = args.to.trim().toLowerCase()
@@ -140,6 +168,7 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
     agreementWaiting: v.agreements.length > 0 && !v.agreements[0].signedAt,
     senderName,
     sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
+    kind: v.partnerKind,
   })
   // Only the recipient is deduped out of the CC list. The sender stays
   // when the channel names them: this mail leaves through Resend, not

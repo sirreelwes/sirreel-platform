@@ -4538,6 +4538,32 @@ model Payment {
   @@map("sr_payments")
 }
 
+/// What KIND of partner a vendor is, when they are one — the difference
+/// between King Kong (driven production vehicles: drivers, hours, mileage)
+/// and PowerTrip Rentals (generators, distro, HVAC, lifts, lighting: delivered
+/// and set up, no driver on set). Drives the words on every partner-facing
+/// surface (portal, welcome email, agreement variant) and the defaults on
+/// new roster units. Reorder-only vendors (Amazon, Home Depot) never read it.
+enum PartnerKind {
+  VEHICLES
+  EQUIPMENT
+}
+
+/// Where a partner's listed units sit on the public /vehicles catalog. One
+/// section per category, every partner side by side, no vendor named — the
+/// client sees a SirReel category. The vendor's value is the default for
+/// their roster; a unit can override it (PowerTrip lists generators AND
+/// lifts). Titles and blurbs live in src/lib/site/partnerSections.ts.
+enum PartnerCatalogSection {
+  LOCATION_VEHICLES
+  POWER_GENERATORS
+  CABLES_DISTRO
+  HVAC
+  LIFTS
+  LIGHTING
+  CARTS
+}
+
 model Vendor {
   id          String  @id @default(uuid())
   name        String  @unique
@@ -4569,6 +4595,12 @@ model Vendor {
   // read by the driver page ("leaving from") and the mileage fee later.
   // Distinct from `address`, which is where mail and POs go.
   lotAddress    String? @map("lot_address") @db.Text
+
+  /// See PartnerKind. VEHICLES keeps every row that existed before PowerTrip
+  /// meaning what it meant.
+  partnerKind    PartnerKind           @default(VEHICLES) @map("partner_kind")
+  /// Default public-catalog section for this partner's listed units.
+  catalogSection PartnerCatalogSection @default(LOCATION_VEHICLES) @map("catalog_section")
 
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
@@ -5052,6 +5084,16 @@ model SubcontractedVehicle {
   /// Default true so every row that existed before the workspace shipped
   /// keeps meaning what it meant: a unit we can rent.
   offeredToSirReel Boolean @default(true) @map("offered_to_sirreel")
+
+  /// Per-unit override of Vendor.catalogSection (null = the vendor's). A
+  /// power partner's scissor lift belongs under Lifts, not Generators.
+  catalogSection PartnerCatalogSection? @map("catalog_section")
+  /// How this unit normally reaches set: PICKUP = a driver takes it (King
+  /// Kong star wagon), DELIVERY = the partner delivers and collects it
+  /// (a towable generator, a restroom trailer). Seeds SubRental.receiveMethod
+  /// when a booking is created off this unit, which is what decides whether
+  /// the partner is asked for a DRIVER or a DELIVERY CONTACT. Null = ask.
+  defaultReceiveMethod ReceiveMethod? @map("default_receive_method")
 
   vendor            Vendor                      @relation(fields: [vendorId], references: [id])
   fees              SubcontractedFee[]

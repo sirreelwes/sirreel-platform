@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
+import { isPartnerKind } from '@/lib/sub-rentals/partnerKind'
+import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,6 +79,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const deliveryTerms = nullableTrim(body.deliveryTerms)
   if (deliveryTerms !== undefined) data.deliveryTerms = deliveryTerms
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive
+  // What kind of partner, and where their listed units sit on sirreel.com.
+  if ('partnerKind' in body) {
+    const k = (body as Record<string, unknown>).partnerKind
+    if (!isPartnerKind(k)) return NextResponse.json({ error: 'partnerKind must be VEHICLES or EQUIPMENT' }, { status: 400 })
+    data.partnerKind = k
+  }
+  if ('catalogSection' in body) {
+    const k = (body as Record<string, unknown>).catalogSection
+    if (!isPartnerSectionKey(k)) return NextResponse.json({ error: 'unknown catalogSection' }, { status: 400 })
+    data.catalogSection = k
+  }
   const coiPatch: { coiReceivedAt?: Date | null; coiExpiresAt?: Date | null } = {}
   for (const k of ['coiReceivedAt', 'coiExpiresAt'] as const) {
     if (!(k in body)) continue

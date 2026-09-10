@@ -167,6 +167,41 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
+- **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
+  Hill / Long Beach) is the second partner after King Kong, and rents
+  generators, distro, HVAC, lifts, temporary lighting and carts — delivered
+  and set up, no driver on set. The whole partner system was vehicle-shaped
+  (drivers, hours, "Partner Vehicle Agreement", one "Motorhomes & Location
+  Trailers" section), so it now carries a KIND:
+  - `Vendor.partnerKind` (VEHICLES | EQUIPMENT, default VEHICLES) picks the
+    words on the partner page, the welcome email and the agreement body.
+    Read it through `partnerVocab()` in `src/lib/sub-rentals/partnerKind.ts`.
+  - `Vendor.catalogSection` + `SubcontractedVehicle.catalogSection` (override)
+    put listed units under a category section on /vehicles — registry in
+    `src/lib/site/partnerSections.ts`, anchors `#power`, `#lifts`, `#hvac`…
+    A section renders only while a signed partner has a listed unit in it.
+  - `SubcontractedVehicle.defaultReceiveMethod` (PICKUP | DELIVERY) seeds
+    `SubRental.receiveMethod` when a unit is quoted, which is what decides
+    whether the partner's booking page asks for a DRIVER or a DELIVERY
+    CONTACT (the delivery-contact card already existed for restroom
+    trailers). The account page's alerts follow it (no "driver needed" on a
+    delivered generator).
+  - The standard agreement route files `vendorAgreementFor(kind)`: the
+    Partner Equipment Agreement (`vendorAgreementEquipmentClauses.ts`) keeps
+    the vehicle document's structure and numbers; clause 4 is GL +
+    inland-marine instead of auto, clause 7 is Delivery/Setup/Service
+    instead of Drivers. Wes to read once before it goes to Evan.
+- **Onboarding:** `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]`
+  (after `prisma db push`) upserts the vendor, seeds a placeholder roster
+  across their categories (rates EMPTY — Evan proposes from his page;
+  unlisted until photos + signature), mints the account link, journals ids.
+  Then on /crm/portals#vendor: set the deal, file the standard agreement,
+  email the link. The Portals partner list now includes partners with roster
+  units or a minted link, not only ones with bookings.
+- `npm run test:partner-kind` guards the vocabulary, section grouping,
+  agreement variant and welcome-email wording.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

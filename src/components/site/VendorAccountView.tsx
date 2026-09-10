@@ -17,6 +17,8 @@ import { fmtRange } from '@/lib/sub-rentals/conduit'
 import { VendorContactForm } from '@/components/site/VendorContactForm'
 import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
+import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
+import { partnerSection } from '@/lib/site/partnerSections'
 
 const STATUS: Record<string, { label: string; tone: string; bg: string }> = {
   ESTIMATED: { label: 'Quoted', tone: '#8a6d1f', bg: '#fbf3df' },
@@ -30,6 +32,7 @@ const STATUS: Record<string, { label: string; tone: string; bg: string }> = {
 const ALERT: Record<UnitAlert, string> = {
   confirm: 'Please confirm',
   driver: 'Driver needed',
+  'delivery-contact': 'Delivery contact needed',
   'driver-ack': 'Driver hasn’t confirmed',
   'call-time': 'Call time needed',
 }
@@ -87,6 +90,8 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
   const logoSrc = preview ? `/api/vendors/${v.vendorId}/logo` : `/api/public/vendor-account/${token}/logo`
   const agreementHref = preview ? `/api/vendors/${v.vendorId}/agreement` : `/api/public/vendor-account/${token}/agreement/pdf`
   const signHref = preview ? '#' : `/vendor/account/${token}/sign`
+  // "Your vehicles" to King Kong, "your equipment" to PowerTrip.
+  const words = partnerVocab(v.kind)
 
   return (
     <div style={{ fontFamily: FONT, background: '#f6f4ef', minHeight: '100vh' }}>
@@ -153,7 +158,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
               <div style={{ fontSize: 14, color: '#6b6560' }}>SirReel hasn&apos;t set the split yet. It will show here, and on every booking, once it is.</div>
             ) : (
               <div style={{ fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>
-                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the vehicle rental rate and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
+                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
               </div>
             )}
           </div>
@@ -172,21 +177,21 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
         </section>
 
         {/* Fleet */}
-        <h2 style={H2}>Your units with SirReel · {v.fleet.length}</h2>
+        <h2 style={H2}>Your {words.many} with SirReel · {v.fleet.length}</h2>
         <p style={{ fontSize: 13, color: '#6b6560', margin: '0 0 10px', maxWidth: 640 }}>
           What we can offer productions from your fleet, at the rates you&apos;ve given us. Propose a change any time; it takes effect once SirReel accepts.
         </p>
         <div style={{ ...CARD, padding: 0 }}>
-          {v.fleet.length === 0 && <div style={{ padding: 20, fontSize: 14, color: '#6b6560' }}>No units on file yet.</div>}
+          {v.fleet.length === 0 && <div style={{ padding: 20, fontSize: 14, color: '#6b6560' }}>Nothing on file yet — reply to your welcome email with your list and rates, and it appears here.</div>}
           {v.fleet.map((u, i) => (
             <div key={u.id} style={{ padding: '14px 20px', borderTop: i ? '1px solid #eeece6' : 'none', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start', opacity: u.active ? 1 : 0.55 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{u.name}{u.vehicleType ? <span style={{ fontWeight: 400, color: '#6b6560' }}> · {u.vehicleType}</span> : null}</div>
                 <div style={{ fontSize: 12, color: '#6b6560', marginTop: 2 }}>
-                  {u.listed ? 'Offered to productions' : 'Not offered'}{!u.active ? ' · inactive' : ''}
+                  {u.listed ? `Offered to productions · under ${partnerSection(u.section).title} on sirreel.com` : 'Not offered'}{u.receiveMethod === 'DELIVERY' ? ' · you deliver' : u.receiveMethod === 'PICKUP' ? ' · driven to set' : ''}{!u.active ? ' · inactive' : ''}
                 </div>
                 <UnitRateForm token={token} unitId={u.id} preview={preview} current={{ daily: u.daily, weekly: u.weekly, monthly: u.monthly }} proposed={u.proposed} />
-                <UnitMarketingToggle token={token} unitId={u.id} preview={preview} initial={u.listed} />
+                <UnitMarketingToggle token={token} unitId={u.id} preview={preview} initial={u.listed} noun={words.one} />
               </div>
               <div style={{ textAlign: 'right', fontSize: 13, color: '#111', lineHeight: 1.6 }}>
                 <div><strong>{money(u.daily)}</strong> <span style={{ color: '#8a8272' }}>/day</span>{u.net.daily != null && <span style={{ color: '#2f7d5d', marginLeft: 8 }}>you receive {money(u.net.daily)}</span>}</div>

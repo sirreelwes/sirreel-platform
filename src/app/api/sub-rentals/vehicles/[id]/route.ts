@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client'
 import { parseMoney } from '@/lib/pricing/resolveRate'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { parsePercent } from '@/lib/sub-rentals/vehicles'
+import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,7 @@ const VENDOR_SELECT = {
   select: {
     id: true, name: true, contactName: true, email: true, phone: true,
     website: true, address: true, notes: true, partnerSharePercent: true,
+    partnerKind: true, catalogSection: true,
   },
 } as const
 
@@ -64,6 +66,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const raw = typeof body.publicSlug === 'string' ? body.publicSlug : ''
     const slug = raw.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
     data.publicSlug = slug || null
+  }
+  // Public-catalog section: an explicit key, or null to fall back to the
+  // vendor's default. Anything else is a 400, not a silent default.
+  if ('catalogSection' in body) {
+    if (body.catalogSection === null || body.catalogSection === '') data.catalogSection = null
+    else if (isPartnerSectionKey(body.catalogSection)) data.catalogSection = body.catalogSection
+    else return NextResponse.json({ error: 'unknown catalogSection' }, { status: 400 })
+  }
+  if ('defaultReceiveMethod' in body) {
+    const m = body.defaultReceiveMethod
+    if (m === null || m === '') data.defaultReceiveMethod = null
+    else if (m === 'PICKUP' || m === 'DELIVERY') data.defaultReceiveMethod = m
+    else return NextResponse.json({ error: 'defaultReceiveMethod must be PICKUP or DELIVERY' }, { status: 400 })
   }
   if ('rateNotes' in body) data.rateNotes = typeof body.rateNotes === 'string' && body.rateNotes.trim() ? body.rateNotes.trim() : null
   if ('listDailyRate' in body) data.listDailyRate = parseMoney(body.listDailyRate)

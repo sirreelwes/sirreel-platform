@@ -2,7 +2,9 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Tag, Trash2, Upload, X } from 'lucide-react'
+import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 
 export interface RateProposalRow {
   unitId: string
@@ -13,9 +15,13 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, coi }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES' }: {
   vendorId: string
   hasLogo: boolean
+  /** What they rent us — picks the words everywhere and the agreement body. */
+  kind?: PartnerKindKey
+  /** Where their listed units sit on /vehicles by default. */
+  section?: PartnerCatalogSectionKey
   /** Last time HQ emailed the account link, and to whom. */
   invited: { at: string; to: string } | null
   /** SirReel's share of the vehicle rental rate — the deal. Null = not set. */
@@ -40,6 +46,9 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [coiExpiry, setCoiExpiry] = useState(coi.expiresAt ? coi.expiresAt.slice(0, 10) : '')
   const [shareDraft, setShareDraft] = useState(sharePercent == null ? '' : String(sharePercent))
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
+  const [kind, setKind] = useState<PartnerKindKey>(kindInitial)
+  const [section, setSection] = useState<PartnerCatalogSectionKey>(sectionInitial)
+  const words = partnerVocab(kind)
   const money = (n: number | null) => (n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
 
   async function uploadLogo(f: File) {
@@ -74,6 +83,20 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     setBusy('share'); setMsg(null)
     const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerSharePercent: n }) })
     if (r.ok) { setShare(n); setMsg(n == null ? 'Deal cleared.' : `Deal saved — SirReel keeps ${n}% of the vehicle rental rate. New bookings and the agreement use it; re-file the agreement so the PDF says so.`) }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+    setBusy(null)
+  }
+  async function saveKind(next: PartnerKindKey) {
+    setBusy('kind'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerKind: next }) })
+    if (r.ok) { setKind(next); setMsg(next === 'EQUIPMENT' ? 'Equipment partner. Their page, welcome email and the standard agreement now say so — re-file the agreement if one is already filed.' : 'Vehicle partner. Their page, welcome email and the standard agreement now say so — re-file the agreement if one is already filed.') }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+    setBusy(null)
+  }
+  async function saveSection(next: PartnerCatalogSectionKey) {
+    setBusy('section'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ catalogSection: next }) })
+    if (r.ok) { setSection(next); setMsg(`Listed units now sit under “${partnerSection(next).title}” on sirreel.com unless a unit says otherwise.`) }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
@@ -136,13 +159,36 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
         </div>
       </div>
 
+      {/* What they rent us — decides the words on every partner surface and
+          which agreement body is filed. PowerTrip (generators, lifts) made
+          this a setting; King Kong stays VEHICLES. */}
+      <div className="border border-lt-hairline rounded-lg p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Tag className="w-4 h-4 text-lt-fg3" /> What they rent us</div>
+        <div className="mt-2 grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] text-lt-fg2 mb-1">Kind of partner</label>
+            <select value={kind} onChange={(e) => saveKind(e.target.value as PartnerKindKey)} disabled={busy === 'kind'} className="w-full text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg">
+              {PARTNER_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
+            </select>
+            <div className="text-[11px] text-lt-fg3 mt-1">{words.hint}</div>
+          </div>
+          <div>
+            <label className="block text-[11px] text-lt-fg2 mb-1">Section on sirreel.com</label>
+            <select value={section} onChange={(e) => saveSection(e.target.value as PartnerCatalogSectionKey)} disabled={busy === 'section'} className="w-full text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg">
+              {PARTNER_SECTIONS.map((sec) => <option key={sec.key} value={sec.key}>{sec.title}</option>)}
+            </select>
+            <div className="text-[11px] text-lt-fg3 mt-1">Where their listed units appear under “Also from SirReel”. A unit can pick its own section on its roster page.</div>
+          </div>
+        </div>
+      </div>
+
       {/* The deal */}
       <div className={`border rounded-lg p-3 ${share == null ? 'border-chip-bad-fg/40' : 'border-lt-hairline'}`}>
         <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Percent className="w-4 h-4 text-lt-fg3" /> The deal</div>
         <div className="text-xs text-lt-fg2 mt-1">
           {share == null
             ? <span className="text-chip-bad-fg">Not set. Until it is, their units quote with no cost to us on the books and their page shows no split.</span>
-            : <>SirReel keeps <span className="text-lt-fg font-semibold">{share}%</span> of the vehicle rental rate; they receive {Math.round((100 - share) * 100) / 100}%. Their listed rate is what the production pays. A unit can override this on its roster page.</>}
+            : <>SirReel keeps <span className="text-lt-fg font-semibold">{share}%</span> of the {words.rateNoun}; they receive {Math.round((100 - share) * 100) / 100}%. Their listed rate is what the production pays. A unit can override this on its roster page.</>}
         </div>
         <div className="mt-2 flex items-center gap-2">
           <input value={shareDraft} onChange={(e) => setShareDraft(e.target.value)} inputMode="decimal" placeholder="20" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg w-20 text-right" />
@@ -175,7 +221,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
       <div className="border border-lt-hairline rounded-lg p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Send className="w-4 h-4 text-lt-fg3" /> Account link</div>
         <div className="text-xs text-lt-fg2 mt-1">
-          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, vehicles &amp; rates, drivers, lot address).</span>}
+          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, {words.many} &amp; rates, {words.drivers ? 'drivers, lot address' : 'delivery contacts, yard address'}).</span>}
         </div>
         <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
           <input value={invTo} onChange={(e) => setInvTo(e.target.value)} placeholder="partner@example.com" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg sm:w-64" />
@@ -200,7 +246,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
           <button onClick={fileStandard} disabled={busy === 'standard'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
             {busy === 'standard' ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} {ag ? 'Re-file SirReel\u2019s standard agreement' : 'File SirReel\u2019s standard agreement'}
           </button>
-          <span className="ml-2 text-[11px] text-lt-fg3">Partner Vehicle Agreement, pre-filled with their name and address.</span>
+          <span className="ml-2 text-[11px] text-lt-fg3">{kind === 'EQUIPMENT' ? 'Partner Equipment Agreement' : 'Partner Vehicle Agreement'}, pre-filled with their name and address.</span>
         </div>
         <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
           <span className="text-[11px] text-lt-fg3 sm:w-auto">Or upload your own:</span>

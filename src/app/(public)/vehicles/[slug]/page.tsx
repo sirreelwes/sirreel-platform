@@ -2,6 +2,8 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublicVehicleBySlug } from '@/lib/site/vehicleCatalog'
+import { partnerSection } from '@/lib/site/partnerSections'
+import { contactPrefillHref } from '@/lib/site/publicNav'
 import VehicleGallery from '@/components/site/VehicleGallery'
 
 /**
@@ -37,6 +39,9 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
   if (!v) notFound()
 
   const priceOnQuote = v.dailyRate == null || v.dailyRate === 0
+  // A partner generator is not a "vehicle" to the client reading the button.
+  const noun = v.partner ? partnerSection(v.section).noun : 'vehicle'
+  const backHref = v.partner ? `/vehicles#${partnerSection(v.section).anchor}` : '/vehicles'
 
   // Spec rows — omit any line with no value (graceful fallback).
   const specRows: { label: string; value: string }[] = [
@@ -52,11 +57,11 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
   return (
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
       <Link
-        href="/vehicles"
+        href={backHref}
         className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8b857a] hover:text-[#0c0c0d] transition-colors"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
-        ← All vehicles
+        ← {v.partner ? partnerSection(v.section).title : 'All vehicles'}
       </Link>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
@@ -92,17 +97,35 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
 
           {/* Order CTA */}
           <div className="mt-5">
-            {/* Carries the vehicle through. Without the slug this dropped the
-                client on a generic order form with the vehicle rail far below
-                the fold — they had just told us exactly what they wanted and
-                then had to go find it. */}
-            <Link
-              href={`/order/supplies?vehicle=${encodeURIComponent(params.slug)}`}
-              className="inline-flex items-center gap-2 rounded-full bg-amber-600 hover:bg-amber-500 text-white px-6 py-3 text-[15px] font-bold transition-colors"
-              style={{ fontFamily: 'Archivo, sans-serif' }}
-            >
-              Reserve this vehicle →
-            </Link>
+            {v.partner ? (
+              // A partner unit is quoted by a rep (the sub-rental conduit holds
+              // the partner's dates and confirms the hold), and the self-serve
+              // order form's vehicle rail carries only the owned fleet — so
+              // "Reserve" would have dropped the client on a form without it.
+              // Same door as the unlisted /unit page: a prefilled request.
+              <>
+                <Link
+                  href={contactPrefillHref(`Availability request: ${v.name}`)}
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-600 hover:bg-amber-500 text-white px-6 py-3 text-[15px] font-bold transition-colors"
+                  style={{ fontFamily: 'Archivo, sans-serif' }}
+                >
+                  Check availability for this {noun} →
+                </Link>
+                <p className="mt-2.5 text-[13px] text-[#8b857a]">Tell us your dates and location — your SirReel rep confirms the hold and sends a written estimate, usually the same day.</p>
+              </>
+            ) : (
+              // Carries the vehicle through. Without the slug this dropped the
+              // client on a generic order form with the vehicle rail far below
+              // the fold — they had just told us exactly what they wanted and
+              // then had to go find it.
+              <Link
+                href={`/order/supplies?vehicle=${encodeURIComponent(params.slug)}`}
+                className="inline-flex items-center gap-2 rounded-full bg-amber-600 hover:bg-amber-500 text-white px-6 py-3 text-[15px] font-bold transition-colors"
+                style={{ fontFamily: 'Archivo, sans-serif' }}
+              >
+                Reserve this {noun} →
+              </Link>
+            )}
           </div>
 
           {/* Description */}

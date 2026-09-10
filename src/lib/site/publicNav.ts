@@ -102,6 +102,10 @@ export const PUBLIC_NAV: NavEntry[] = [
         heading: 'Request a quote →',
         items: [
           { label: 'Lighting & Electric', href: contactPrefillHref('Equipment quote: Lighting & Electric'), mode: 'quote' },
+          // Partner-supplied power (PowerTrip Rentals, 2026-09-10). A quote
+          // request, not a catalog link: the /vehicles#power section only
+          // exists once the partner has signed and listed a unit.
+          { label: 'Generators & Power', href: contactPrefillHref('Equipment quote: Generators & Power'), mode: 'quote' },
           { label: 'Grip Package — 1 Ton', href: contactPrefillHref('Equipment quote: Grip Package (1 Ton)'), mode: 'quote' },
           { label: 'Grip Package — 3 Ton', href: contactPrefillHref('Equipment quote: Grip Package (3 Ton)'), mode: 'quote' },
           { label: 'Grip Package — 5 Ton', href: contactPrefillHref('Equipment quote: Grip Package (5 Ton)'), mode: 'quote' },

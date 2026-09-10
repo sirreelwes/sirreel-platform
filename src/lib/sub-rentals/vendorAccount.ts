@@ -28,6 +28,8 @@ import { unitNameOf } from '@/lib/sub-rentals/conduit'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
 import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
 import { effectiveSharePercent, partnerNet } from '@/lib/sub-rentals/partnerShare'
+import type { PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import { resolvePartnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 
 export function vendorAccountPath(token: string): string {
   return `/vendor/account/${token}`
@@ -90,13 +92,19 @@ export interface VendorAccountJob {
   alertCount: number
 }
 
-/** Things the partner still owes on a unit — surfaced as chips. */
-export type UnitAlert = 'confirm' | 'driver' | 'driver-ack' | 'call-time'
+/** Things the partner still owes on a unit — surfaced as chips. A DELIVERED
+ *  unit (a generator, a restroom trailer) asks for a delivery contact, never a
+ *  driver, and has no driver acknowledgement to chase. */
+export type UnitAlert = 'confirm' | 'driver' | 'delivery-contact' | 'driver-ack' | 'call-time'
 
 export interface VendorAccountFleetUnit {
   id: string
   name: string
   vehicleType: string | null
+  /** Where it sits on sirreel.com when listed. */
+  section: PartnerCatalogSectionKey
+  /** How it normally reaches set; null = decided per booking. */
+  receiveMethod: 'PICKUP' | 'DELIVERY' | null
   listed: boolean
   active: boolean
   daily: number | null
@@ -119,6 +127,8 @@ export interface VendorAccountAgreement {
 export interface VendorAccountView {
   vendorId: string
   vendorName: string
+  /** VEHICLES (King Kong) or EQUIPMENT (PowerTrip) — picks the words. */
+  kind: PartnerKindKey
   contactName: string | null
   contactEmail: string | null
   contactPhone: string | null
@@ -160,7 +170,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -175,7 +185,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor, null)
@@ -191,6 +201,8 @@ async function buildVendorAccount(vendor: {
   logoUrl: string | null
   logoSvg: string | null
   partnerSharePercent: unknown
+  partnerKind: PartnerKindKey
+  catalogSection: string | null
 }, portalToken: string | null): Promise<VendorAccountView> {
   const [rows, rosterCount, fleetRows, agreementRow, hqWorkspace] = await Promise.all([
     prisma.subRental.findMany({
@@ -209,6 +221,7 @@ async function buildVendorAccount(vendor: {
         vendorConfirmedAt: true,
         vendorDeclinedAt: true,
         callTime: true,
+        receiveMethod: true,
         vendorToken: true,
         subcontractedVehicle: { select: { name: true } },
         job: { select: { id: true, jobCode: true, name: true } },
@@ -228,6 +241,7 @@ async function buildVendorAccount(vendor: {
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       select: {
         id: true, name: true, vehicleType: true, publiclyListed: true, isActive: true,
+        catalogSection: true, defaultReceiveMethod: true,
         listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true, discountPercent: true,
         proposedDailyRate: true, proposedWeeklyRate: true, proposedMonthlyRate: true, rateProposedAt: true, rateProposalNote: true,
       },
@@ -262,9 +276,12 @@ async function buildVendorAccount(vendor: {
     if (s && (!entry.startDate || s < entry.startDate)) entry.startDate = s
     if (e && (!entry.endDate || e > entry.endDate)) entry.endDate = e
     const alerts: UnitAlert[] = []
+    const delivered = r.receiveMethod === 'DELIVERY'
     if (r.status === 'REQUESTED' && !r.vendorConfirmedAt && !r.vendorDeclinedAt) alerts.push('confirm')
-    if ((r.status === 'REQUESTED' || r.status === 'CONFIRMED') && !r.driverName) alerts.push('driver')
-    if ((r.status === 'CONFIRMED' || r.status === 'PICKED_UP') && r.driverName && !r.driverAckedAt) alerts.push('driver-ack')
+    // driverName doubles as the delivery contact on a delivered unit (the
+    // conduit's delivery-contact card writes the same column).
+    if ((r.status === 'REQUESTED' || r.status === 'CONFIRMED') && !r.driverName) alerts.push(delivered ? 'delivery-contact' : 'driver')
+    if (!delivered && (r.status === 'CONFIRMED' || r.status === 'PICKED_UP') && r.driverName && !r.driverAckedAt) alerts.push('driver-ack')
     if (r.status === 'CONFIRMED' && !r.callTime) alerts.push('call-time')
     entry.units.push({
       subRentalId: r.id,
@@ -292,6 +309,7 @@ async function buildVendorAccount(vendor: {
   return {
     vendorId: vendor.id,
     vendorName: vendor.name,
+    kind: vendor.partnerKind,
     contactName: vendor.contactName,
     contactEmail: vendor.email,
     contactPhone: vendor.phone,
@@ -302,6 +320,8 @@ async function buildVendorAccount(vendor: {
       id: u.id,
       name: u.name,
       vehicleType: u.vehicleType,
+      section: resolvePartnerSection(u, vendor).key,
+      receiveMethod: u.defaultReceiveMethod ?? null,
       listed: u.publiclyListed,
       active: u.isActive,
       daily: num(u.listDailyRate),

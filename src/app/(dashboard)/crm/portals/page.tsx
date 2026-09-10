@@ -195,12 +195,16 @@ export default async function CompanyPortalsPage() {
   }
   const clientPeople = [...peopleMap.values()]
 
-  // Vendor ACCOUNTS: one row per partner with anything on the books.
+  // Vendor ACCOUNTS: one row per PARTNER — a vendor with a booking, a unit on
+  // the roster, or an account link. Until 2026-09-10 this needed a booking,
+  // so a partner being onboarded (PowerTrip: roster seeded, nothing booked
+  // yet) had no row to invite from. Reorder-only vendors (Amazon) match none.
   const vendorAccounts = await prisma.vendor.findMany({
-    where: { isActive: true, subRentals: { some: {} } },
+    where: { isActive: true, OR: [{ subRentals: { some: {} } }, { subcontractedVehicles: { some: {} } }, { portalToken: { not: null } }] },
     orderBy: { name: 'asc' },
     select: {
       id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true,
+      partnerKind: true, catalogSection: true,
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
@@ -347,7 +351,7 @@ export default async function CompanyPortalsPage() {
                         {va.partnerSharePercent == null && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg align-middle">no deal set</span>}
                       </div>
                       <div className="text-xs text-lt-fg2 truncate">
-                        {va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}{va.partnerSharePercent != null ? ` · ${Number(va.partnerSharePercent)}% to SirReel` : ''}
+                        {va.partnerKind === 'EQUIPMENT' ? 'Equipment · ' : ''}{va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}{va.partnerSharePercent != null ? ` · ${Number(va.partnerSharePercent)}% to SirReel` : ''}
                         {va.contactName ? ` · ${va.contactName}` : ''}
                       </div>
                     </div>
@@ -380,6 +384,8 @@ export default async function CompanyPortalsPage() {
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
+                      kind={va.partnerKind}
+                      section={va.catalogSection}
                     />
                   </div>
                   </details>
