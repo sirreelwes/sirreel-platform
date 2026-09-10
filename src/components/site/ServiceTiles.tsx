@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { HomeTile } from '@/lib/site/homeTiles'
 import { SwipeableMobileTile } from '@/components/site/SwipeableMobileTile'
+import { SiteSearch } from '@/components/site/SiteSearch'
 
 /**
  * Home diagonal service-nav — 5 tessellating bands.
@@ -91,6 +92,10 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
       }}
     >
       {/* ── Desktop: diagonal bands ─────────────────────────────── */}
+      {/* The band row keeps its own overflow-hidden; the search pill is a
+          SIBLING inside this relative box so its results list can escape
+          that clip and open over the tiles. */}
+      <div className="hidden md:block relative" style={{ height: SECTION_H }}>
       <div
         // Left/right gutters (4% each) push the diagonal bands toward the
         // middle and leave dark breathing room on both edges — so a tilted
@@ -98,8 +103,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
         // a sliver on hover) can extend into the gutter instead of getting
         // clipped at the page edge. overflow-hidden still clips at the page
         // edge, but the label never reaches it.
-        className="hidden md:flex w-full overflow-hidden bg-[#0c0c0d] px-[4%]"
-        style={{ height: SECTION_H }}
+        className="flex w-full h-full overflow-hidden bg-[#0c0c0d] px-[4%]"
       >
         {tiles.map((t, i) => {
           // Every full-cover layer spans the parallelogram's BOUNDING BOX
@@ -239,6 +243,20 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
         })}
       </div>
 
+        {/* Master search — centred over the bottom of the bands, spanning
+            roughly three tiles. Deliberately the ONE thing sitting above
+            the diagonal nav: the tiles answer "what do you rent", this
+            answers "do you have X", which is the faster question as the
+            catalog grows. Its box is only as wide as the pill, so the
+            bands on either side keep their hover-grow. */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[7vh] z-20 w-[min(660px,52vw)]">
+          <SiteSearch dropUp />
+          <div className="mt-2.5 text-center text-[11px] uppercase tracking-[0.16em] text-white/45 [text-shadow:0_1px_6px_rgba(0,0,0,0.8)]">
+            Search the whole catalog
+          </div>
+        </div>
+      </div>
+
       {/* ── Mobile: vertical tap stack ──────────────────────────── */}
       <div className="md:hidden bg-[#0c0c0d]">
         {/* Branded band — mobile home landing only. Order form lives on the
@@ -258,6 +276,12 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           >
             Always on the job.
           </div>
+        </div>
+        {/* Same field, above the stack — on a phone the tiles are a scroll,
+            so searching is the fastest route to a specific item. Drops
+            DOWN here (unlike the hero) since there's room below. */}
+        <div className="px-5 py-3.5 border-b border-white/10">
+          <SiteSearch size="sm" placeholder="Search equipment, vehicles…" />
         </div>
         {tiles.map((t, i) => {
           const inner = (

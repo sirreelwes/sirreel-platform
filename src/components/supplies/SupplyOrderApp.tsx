@@ -243,7 +243,18 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   useEffect(() => {
     if (deepLinkReadRef.current) return
     deepLinkReadRef.current = true
-    const slug = new URLSearchParams(window.location.search).get('category')
+    const sp = new URLSearchParams(window.location.search)
+    // `?q=` — where the site-wide search (Home hero pill) lands. It WINS
+    // over `?category=`: the visitor already named the thing they want, so
+    // open on the ranked result list rather than a browse section. The
+    // 200ms debounce below picks it up on the next tick.
+    const q = sp.get('q')?.trim()
+    if (q) {
+      setQuery(q)
+      deepLinkScrollPendingRef.current = true
+      return
+    }
+    const slug = sp.get('category')
     if (!slug) return
     const label = sectionLabelForSlug(slug)
     if (!label) return // unknown slug → default view, no error
