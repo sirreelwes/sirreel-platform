@@ -1,0 +1,17 @@
+{
+  "at": "2026-09-10T02:43:02.644Z",
+  "action": "confirm booking to match its booked order",
+  "via": "POST /api/scheduling/bookings/[id]/confirm",
+  "booking": {
+    "id": "611b2228-3d6b-40d1-984f-6823dd6d96a7",
+    "number": "SR-2026-0318",
+    "statusBefore": "REQUEST",
+    "confirmedAtBefore": null
+  },
+  "orders": [
+    {
+      "number": "S260908-004",
+      "status": "BOOKED"
+    }
+  ]
+}
