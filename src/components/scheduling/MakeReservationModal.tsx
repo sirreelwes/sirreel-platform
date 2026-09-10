@@ -10,25 +10,46 @@
  * whatever row you happened to click on the gantt, and the Order was a
  * separate trip through /orders/new. This is that screen.
  *
+ * ONE ORDER, AS MANY VEHICLES AS THE SHOW NEEDS (Wes 2026-09-09:
+ * "when adding multiple reservations, it's adding new orders for each.
+ * It would be better to be able to simply create multiple reservations
+ * in one window and all add to one order"). The window shipped taking a
+ * single type + quantity, so a production wanting a cube, a cargo van
+ * and a passenger van meant three passes and three draft orders on one
+ * job — SR-JOB-0340 collected S260909-022 and -023 that way. The form
+ * now carries a LIST of lines. They share the order's window, company,
+ * job and contact, because that is what makes them one order.
+ *
+ * All the lines land on one Booking, too: holdOnQuoteSend keeps one
+ * Booking per order and the envelope spans every held line, so three
+ * types read as one reservation on the board rather than three that
+ * happen to share a name.
+ *
  * ORDER-FIRST, and that ordering is load-bearing. The obvious build is
  * "create the hold, then create the order" — it double-books. A hold
  * created through POST /api/scheduling/holds lands as a rank-1
  * BookingItem with quantity N; adding the matching order line then
  * runs `syncHoldOnLineAdd`, which ACCUMULATES (`quantity + addedQty`)
  * and leaves the category reserved 2N. So this flow never posts a
- * hold. It creates the Order, POSTs the vehicle line, and lets the
- * line-items route mint the Booking + hold the way every other quoted
+ * hold. It creates the Order, POSTs each vehicle line, and lets the
+ * line-items route mint the Booking + holds the way every other quoted
  * vehicle gets one ("a vehicle is held the moment it is quoted" —
- * holdOnQuoteSend, SET-not-accumulate, idempotent). One reservation,
- * priced by the client's own rate card, and no second write path to
- * keep in sync.
+ * holdOnQuoteSend for the first line, which SETs, then
+ * syncHoldOnLineAdd for the rest, which adds a category that isn't on
+ * the booking yet). Lines are priced by the client's own rate card, and
+ * there is no second write path to keep in sync.
  *
- * That also means the hold arrives at whatever rank the paperwork
- * rules say (`reconcileHoldFirmness`) — this modal deliberately does
- * NOT firm it. A hold firmed by flipping holdRank is undone by the
- * next sweep; the staff override for a client who said yes on the
- * phone is the job page's "Client said yes" button, which is a
- * different decision than booking a truck.
+ * ONE LINE PER TYPE, for the same reason: posting two Cargo Van lines
+ * in a row makes the second one's capacity check trip over the hold the
+ * first one just took, and the desk gets a conflict against itself.
+ * Two of a type is a quantity, not two lines.
+ *
+ * That also means the holds arrive at whatever rank the paperwork rules
+ * say (`reconcileHoldFirmness`) — this modal deliberately does NOT firm
+ * them. A hold firmed by flipping holdRank is undone by the next sweep;
+ * the staff override for a client who said yes on the phone is the job
+ * page's "Client said yes" button, which is a different decision than
+ * booking a truck.
  *
  * A CONTACT is required ONLY when the job has nobody on it, and that
  * is not paperwork for its own sake:
@@ -44,13 +65,20 @@
  * both the Person and the JobContact, so naming someone twice is a
  * no-op.
  *
- * Nothing here emails anybody. Creating an order + hold is internal
+ * A SECOND PASS NEVER CREATES A SECOND ORDER. Anything that stops the
+ * run mid-way — a capacity conflict on line 3, a failed assign — keeps
+ * the order it already made and the lines it already wrote, and the
+ * retry resumes from the first line that has not landed. (Before the
+ * list existed, the conflict override re-ran the whole submit and left
+ * the first, empty order stranded.)
+ *
+ * Nothing here emails anybody. Creating an order + holds is internal
  * work; the client-facing sends live behind Send quote / Book it, and
  * adding a job contact deliberately sends no portal invite.
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Check, Loader2, X } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
@@ -86,22 +114,47 @@ interface StackEntry {
 /** What the desk chose to do about a category at capacity. */
 type QueueChoice = 'none' | 'second' | 'take-first'
 
+/** One vehicle line on the reservation. */
+interface Row {
+  /** Stable across re-orders and removals — also the key the submit
+   *  loop records progress against, so a retry can skip what landed. */
+  key: string
+  categoryId: string
+  quantity: number
+  queueChoice: QueueChoice
+}
+
+/** Capacity + queue for one category over the reservation's window. */
+interface Preflight {
+  loading: boolean
+  avail: { availableToHold: number; serviceableCount: number } | null
+  stack: StackEntry[]
+}
+
+/** What one line ended up as, once it landed. */
+interface RowResult {
+  key: string
+  label: string
+  bookingNumber: string | null
+  holdRank?: number
+  demoted?: { bookingNumber: string; from: number; to: number }[]
+  assigned: string[]
+  note: string | null
+}
+
 interface Result {
   orderId: string
   orderNumber: string
-  bookingNumber: string | null
-  /** null when nothing was assigned — either not asked for, or no unit was free. */
-  assigned: { unitName: string }[]
-  assignNote: string | null
-  /** Where this reservation landed in the queue, when it was stacked. */
-  holdRank?: number
-  demoted?: { bookingNumber: string; from: number; to: number }[]
+  rows: RowResult[]
 }
 
 /** One line of the submit progress list. */
 type StepState = 'pending' | 'running' | 'done' | 'skipped' | 'failed'
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+let rowSeq = 0
+const newRow = (): Row => ({ key: `r${++rowSeq}`, categoryId: '', quantity: 1, queueChoice: 'none' })
 
 export function MakeReservationModal({
   defaultStart,
@@ -121,8 +174,7 @@ export function MakeReservationModal({
   onCreated: () => void
 }) {
   const [categories, setCategories] = useState<Category[]>([])
-  const [categoryId, setCategoryId] = useState('')
-  const [quantity, setQuantity] = useState(1)
+  const [rows, setRows] = useState<Row[]>(() => [newRow()])
   const [start, setStart] = useState(defaultStart || today())
   const [end, setEnd] = useState(defaultEnd || defaultStart || today())
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null)
@@ -147,16 +199,22 @@ export function MakeReservationModal({
   const [companyError, setCompanyError] = useState<string | null>(null)
   const [companyNearMatch, setCompanyNearMatch] = useState<{ id: string; name: string; message: string } | null>(null)
 
-  // Capacity for the chosen category+window, and who is already in the
-  // queue for it. Both refresh whenever the type or the dates move.
-  const [avail, setAvail] = useState<{ availableToHold: number; serviceableCount: number } | null>(null)
-  const [stack, setStack] = useState<StackEntry[]>([])
-  const [availLoading, setAvailLoading] = useState(false)
-  const [queueChoice, setQueueChoice] = useState<QueueChoice>('none')
+  // Capacity for each chosen category over the window, and who is
+  // already in the queue for it. Keyed by CATEGORY, not by row: two
+  // rows can never share a type (see the header), and the fetch should
+  // not run twice for one answer.
+  const [pre, setPre] = useState<Record<string, Preflight>>({})
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [conflicts, setConflicts] = useState<Conflict[] | null>(null)
+  /** The line that tripped a capacity conflict, and who it steps on. */
+  const [conflict, setConflict] = useState<{ rowKey: string; conflicts: Conflict[] } | null>(null)
+  /** Lines the desk has explicitly overridden a conflict on. */
+  const [confirmed, setConfirmed] = useState<Record<string, true>>({})
+  /** The order this run created, kept so a retry appends to it. */
+  const [createdOrder, setCreatedOrder] = useState<{ id: string; orderNumber: string } | null>(null)
+  /** Lines that have already landed — a retry skips them. */
+  const [landed, setLanded] = useState<Record<string, RowResult>>({})
   const [steps, setSteps] = useState<Record<string, StepState>>({})
   const [result, setResult] = useState<Result | null>(null)
 
@@ -197,62 +255,89 @@ export function MakeReservationModal({
     }
   }, [job])
 
-  const category = useMemo(
-    () => categories.find((c) => c.id === categoryId) ?? null,
-    [categories, categoryId],
-  )
-
-  // Preflight: is there anything left for these dates, and who is
-  // holding it if not? This is what turns "Create reservation" into the
-  // 2nd-Hold choice rather than a silent over-commit.
-  useEffect(() => {
-    if (!categoryId || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) {
-      setAvail(null)
-      setStack([])
-      return
-    }
-    let cancelled = false
-    setAvailLoading(true)
-    Promise.all([
-      fetch(`/api/scheduling/availability?categoryId=${categoryId}&start=${start}&end=${end}`).then((r) => r.json()),
-      fetch(`/api/scheduling/stacked-holds?categoryId=${categoryId}&start=${start}&end=${end}`).then((r) => r.json()),
-    ])
-      .then(([a, st]) => {
-        if (cancelled) return
-        setAvail(
-          typeof a?.availableToHold === 'number'
-            ? { availableToHold: a.availableToHold, serviceableCount: a.serviceableCount ?? 0 }
-            : null,
-        )
-        // `rows` — the stacked-holds route's key, already ordered rank
-        // then oldest-first within a rank.
-        setStack(Array.isArray(st?.rows) ? st.rows : [])
-        setQueueChoice('none')
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvail(null)
-          setStack([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAvailLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [categoryId, start, end])
+  const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const rowCat = (r: Row) => catById.get(r.categoryId) ?? null
 
   const datesValid =
     /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && end >= start
 
+  // Preflight: is there anything left for these dates, and who is
+  // holding it if not? This is what turns "Create reservation" into the
+  // 2nd-Hold choice rather than a silent over-commit. Runs per distinct
+  // category on the form; the dependency is the category LIST as a
+  // string so adding a line refetches only what changed.
+  const catKey = useMemo(
+    () => [...new Set(rows.map((r) => r.categoryId).filter(Boolean))].sort().join(','),
+    [rows],
+  )
+  useEffect(() => {
+    const ids = catKey ? catKey.split(',') : []
+    if (ids.length === 0 || !datesValid) {
+      setPre({})
+      return
+    }
+    let cancelled = false
+    setPre((p) =>
+      Object.fromEntries(
+        ids.map((id) => [id, { avail: p[id]?.avail ?? null, stack: p[id]?.stack ?? [], loading: true }]),
+      ),
+    )
+    Promise.all(
+      ids.map(async (id) => {
+        const [a, st] = await Promise.all([
+          fetch(`/api/scheduling/availability?categoryId=${id}&start=${start}&end=${end}`).then((r) => r.json()),
+          fetch(`/api/scheduling/stacked-holds?categoryId=${id}&start=${start}&end=${end}`).then((r) => r.json()),
+        ])
+        const entry: Preflight = {
+          loading: false,
+          avail:
+            typeof a?.availableToHold === 'number'
+              ? { availableToHold: a.availableToHold, serviceableCount: a.serviceableCount ?? 0 }
+              : null,
+          // `rows` — the stacked-holds route's key, already ordered rank
+          // then oldest-first within a rank.
+          stack: Array.isArray(st?.rows) ? st.rows : [],
+        }
+        return [id, entry] as const
+      }),
+    )
+      .then((entries) => {
+        if (cancelled) return
+        setPre(Object.fromEntries(entries))
+        // The window moved under the queue choices — they were answers
+        // to a different question.
+        setRows((rs) => rs.map((r) => ({ ...r, queueChoice: 'none' })))
+      })
+      .catch(() => {
+        if (!cancelled) setPre({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [catKey, start, end, datesValid])
+
+  const preflightLoading = Object.values(pre).some((p) => p.loading)
+
   /** Nothing left for these dates — the moment the queue matters. */
-  const atCapacity = !!avail && avail.availableToHold < quantity
-  const incumbents = stack.filter((h) => h.holdRank === 1)
-  const deepest = stack.reduce((m, h) => Math.max(m, h.holdRank), 0)
-  /** Where a "2nd Hold" would actually land (2, or 3 behind a 2nd). */
-  const nextFreeRank = Math.max(2, deepest + 1)
-  const stackFull = nextFreeRank > MAX_HOLD_RANK
+  function rowAtCapacity(r: Row): boolean {
+    const p = pre[r.categoryId]
+    return !!p?.avail && p.avail.availableToHold < r.quantity
+  }
+  /** The queue as it stands for one line's category. */
+  function rowQueue(r: Row) {
+    const stack = pre[r.categoryId]?.stack ?? []
+    const incumbents = stack.filter((h) => h.holdRank === 1)
+    const deepest = stack.reduce((m, h) => Math.max(m, h.holdRank), 0)
+    /** Where a "2nd Hold" would actually land (2, or 3 behind a 2nd). */
+    const nextFreeRank = Math.max(2, deepest + 1)
+    return { stack, incumbents, nextFreeRank, stackFull: nextFreeRank > MAX_HOLD_RANK }
+  }
+
+  /** The lines that would actually be written. */
+  const liveRows = rows.filter((r) => r.categoryId)
+  const dupTypes = liveRows
+    .map((r) => r.categoryId)
+    .filter((id, i, all) => all.indexOf(id) !== i)
 
   // First/last/email as THREE labelled fields. They used to be two
   // side-by-side boxes — "name" and "email" — which read as First and
@@ -271,20 +356,28 @@ export function MakeReservationModal({
    * email box. Never render the disabled state without this list.
    */
   const blockers: string[] = []
-  if (!category) blockers.push('pick a vehicle type')
+  if (liveRows.length === 0) blockers.push('pick a vehicle type')
+  if (dupTypes.length > 0) blockers.push('one line per type — use the quantity')
   if (!datesValid) blockers.push('check the dates')
-  if (quantity < 1) blockers.push('how many?')
+  if (liveRows.some((r) => r.quantity < 1)) blockers.push('how many?')
   if (!company) blockers.push('pick a company')
   if (!job) blockers.push('pick a job')
   if (!contactReady && !contactsLoading) {
     if (!contactFirst.trim() || !contactLast.trim()) blockers.push("the contact's first and last name")
     if (!/\S+@\S+\.\S+/.test(contactEmail.trim())) blockers.push("the contact's email")
   }
-  if (atCapacity && queueChoice === 'none' && !stackFull) {
+  if (
+    liveRows.some(
+      (r) => rowAtCapacity(r) && r.queueChoice === 'none' && !rowQueue(r).stackFull,
+    )
+  ) {
     blockers.push('choose 2nd Hold or take the 1st')
   }
 
-  const canSubmit = blockers.length === 0 && !contactsLoading && !availLoading && !submitting
+  const canSubmit = blockers.length === 0 && !contactsLoading && !preflightLoading && !submitting
+
+  const patchRow = (key: string, patch: Partial<Row>) =>
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
 
   function onJobResolved(r: ResolvedJob) {
     setJob({ id: r.id, jobCode: r.jobCode, name: r.name })
@@ -334,244 +427,273 @@ export function MakeReservationModal({
   /**
    * The write. Steps are reported individually because a partial
    * failure here is a real state the agent has to see: the Order can
-   * exist while the line (and therefore the hold) does not.
+   * exist while some of its lines (and therefore their holds) do not.
+   *
+   * It RESUMES. The order it created and the lines that landed are
+   * held in state, so the conflict override — and any second press —
+   * appends to the same order instead of minting another one.
    */
-  async function submit(confirmConflict: boolean) {
-    if (!category || !company || !job) return
+  async function submit(confirmRowKey?: string) {
+    if (!company || !job || liveRows.length === 0) return
     setSubmitting(true)
     setError(null)
-    if (!confirmConflict) setConflicts(null)
+    setConflict(null)
+    const confirmedNow: Record<string, true> = confirmRowKey
+      ? { ...confirmed, [confirmRowKey]: true }
+      : confirmed
+    if (confirmRowKey) setConfirmed(confirmedNow)
     const mark = (k: string, v: StepState) => setSteps((s) => ({ ...s, [k]: v }))
+    const done: Record<string, RowResult> = { ...landed }
 
     try {
-      // 0 — the contact, onto the Job. This is what makes the hold
+      // 0 — the contact, onto the Job. This is what makes the holds
       // possible two steps later; a failure here is fatal to the flow
       // BY DESIGN, because continuing would produce the exact silent
-      // no-hold order this step exists to prevent.
-      if (jobHasContact && !contactTyped) {
+      // no-hold order this step exists to prevent. On a resumed run the
+      // contact is already on the job.
+      if (createdOrder || (jobHasContact && !contactTyped)) {
         // Nothing to add — the job's existing contact is what the
         // Booking will attach to.
         mark('contact', 'skipped')
       } else {
-      mark('contact', 'running')
-      const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: contactEmail.trim(),
-          firstName: contactFirst.trim(),
-          lastName: contactLast.trim(),
-          role: 'PRODUCER',
-        }),
-      })
-      if (!cRes.ok) {
-        const cj = await cRes.json().catch(() => ({}))
-        mark('contact', 'failed')
-        setError(
-          `${cj?.error || `Could not attach the contact (${cRes.status}).`} ` +
-            'Nothing was created — a reservation with no contact on the job cannot hold a unit.',
-        )
-        setSubmitting(false)
-        return
-      }
-      mark('contact', 'done')
-      }
-
-      // 1 — the Order. Job-as-root: jobId is required and never created here.
-      mark('order', 'running')
-      const orderRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyId: company.id,
-          jobId: job.id,
-          startDate: start,
-          endDate: end,
-          description: notes.trim() || null,
-        }),
-      })
-      const order = await orderRes.json().catch(() => ({}))
-      if (!orderRes.ok || !order?.id) {
-        mark('order', 'failed')
-        setError(order?.error || `Could not create the order (${orderRes.status}).`)
-        setSubmitting(false)
-        return
-      }
-      mark('order', 'done')
-
-      // 2 — the vehicle line. This is what mints the Booking + hold.
-      // The rate is the catalog list price; the route re-resolves it
-      // against the client's rate card, so this is a display value,
-      // not the price of record.
-      mark('line', 'running')
-      const lineBody = {
-        type: 'VEHICLE',
-        description: category.name,
-        assetCategoryId: category.id,
-        department: category.department,
-        rateType: 'DAILY',
-        rate: category.dailyRate ?? 0,
-        quantity,
-        pickupDate: start,
-        returnDate: end,
-        ...(confirmConflict ? { confirmConflict: true } : {}),
-      }
-      const lineRes = await fetch(`/api/orders/${order.id}/line-items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(lineBody),
-      })
-      const line = await lineRes.json().catch(() => ({}))
-
-      // Capacity conflict — the route names the bookings this would
-      // step on. Warn-with-override, never a hard block: at pickup the
-      // truck goes out regardless of what the system thinks.
-      if (lineRes.status === 409 && line?.requiresConfirmation && Array.isArray(line.conflicts)) {
-        mark('line', 'pending')
-        setConflicts(line.conflicts)
-        setResult({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          bookingNumber: null,
-          assigned: [],
-          assignNote: null,
-        })
-        setSubmitting(false)
-        return
-      }
-      if (!lineRes.ok) {
-        mark('line', 'failed')
-        setError(
-          `${line?.error || `Could not add the ${category.name} line (${lineRes.status}).`} ` +
-            `Order ${order.orderNumber} was created and is empty — open it to finish or delete it.`,
-        )
-        setSubmitting(false)
-        return
-      }
-      mark('line', 'done')
-
-      // 3 — find the hold the line just caused, so we can assign into it.
-      mark('hold', 'running')
-      const holdRes = await fetch(
-        `/api/scheduling/order-hold?orderId=${order.id}&categoryId=${category.id}`,
-      )
-      const hold = await holdRes.json().catch(() => ({}))
-      const bookingItemId: string | null = hold?.bookingItem?.id ?? null
-      mark('hold', bookingItemId ? 'done' : 'failed')
-
-      // 3b — the queue decision, when the desk made one. The hold the
-      // line-items route minted carries an AUTOMATIC rank; this stamps
-      // the human one over it and locks it so the firmness sweep leaves
-      // it alone. Done before assignment so a 2nd Hold never grabs a
-      // unit out from under the 1st.
-      let placedRank: number | undefined
-      let demoted: { bookingNumber: string; from: number; to: number }[] = []
-      if (bookingItemId) {
-        mark('rank', 'running')
-        // 1st Hold unless the agent explicitly queued behind somebody
-        // (Wes 2026-09-09: "ranking should always default to 1 and only
-        // present other options when there is a conflict").
-        //
-        // Without this the reservation kept whatever rank
-        // holdOnQuoteSend minted — SOFT, i.e. 2 — so an uncontested
-        // booking on a free van came out labelled a 2nd Hold behind
-        // nobody. The rank is LOCKED, which is the same principle as
-        // the queue choices: a rank a human set is not the firmness
-        // sweep's to move. The cost is that this hold no longer
-        // self-demotes when paperwork lapses; the gaps still surface on
-        // the job and in reconcile's `missing`.
-        const wantRank = queueChoice === 'second' ? nextFreeRank : 1
-        const rankRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/rank`, {
+        mark('contact', 'running')
+        const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            rank: wantRank,
-            demoteOthers: queueChoice === 'take-first',
-            reason: notes.trim() || null,
+            email: contactEmail.trim(),
+            firstName: contactFirst.trim(),
+            lastName: contactLast.trim(),
+            role: 'PRODUCER',
           }),
         })
-        const rankJson = await rankRes.json().catch(() => ({}))
-        if (!rankRes.ok) {
-          mark('rank', 'failed')
+        if (!cRes.ok) {
+          const cj = await cRes.json().catch(() => ({}))
+          mark('contact', 'failed')
           setError(
-            `${rankJson?.reason || rankJson?.error || `Could not place the hold in the queue (${rankRes.status}).`} ` +
-              `Order ${order.orderNumber} exists and the units are held — open it to sort the queue out.`,
+            `${cj?.error || `Could not attach the contact (${cRes.status}).`} ` +
+              'Nothing was created — a reservation with no contact on the job cannot hold a unit.',
           )
           setSubmitting(false)
           return
         }
-        placedRank = rankJson.holdRank
-        demoted = rankJson.demoted || []
-        mark('rank', 'done')
+        mark('contact', 'done')
       }
 
-      // 4 — optional: bind the next free unit(s).
-      const assigned: { unitName: string }[] = []
-      let assignNote: string | null = null
-      // A queued hold gets NO unit. The whole point of a 2nd Hold is
-      // that the truck is somebody else's until they release it;
-      // assigning one here would double-book the asset for real.
-      const queuedBehind = (placedRank ?? 1) > 1
-      if (queuedBehind) {
-        mark('assign', 'skipped')
-        assignNote = `Queued as the ${holdRankLabel(placedRank!)} Hold — no unit is assigned until the hold ahead releases.`
-      } else if (assignNext && canBindUnit && bookingItemId) {
-        mark('assign', 'running')
-        for (let i = 0; i < quantity; i++) {
-          const availRes = await fetch(
-            `/api/scheduling/booking-items/${bookingItemId}/available-units`,
-          )
-          const avail = await availRes.json().catch(() => ({}))
-          // `candidates` — NOT `units`. The route returns the pooled
-          // counts under `summary` and the pickable rows under
-          // `candidates`, already sorted nicest-tier-then-unit-number.
-          const units: { assetId: string; unitName: string; state: string }[] =
-            avail?.candidates || []
-          // "Next available" is the first FREE unit in the list the
-          // server already sorted (nicest tier first, then unit number).
-          // Buffer-state units are deliberately not auto-picked — they
-          // need the human override, not a silent one.
-          const next = units.find((u) => u.state === 'free')
-          if (!next) {
-            assignNote =
-              i === 0
-                ? 'No unit was free for those dates — the reservation holds the category and shows in the needs-a-unit lane.'
-                : `Only ${assigned.length} of ${quantity} could be assigned — no other unit is free for those dates.`
-            break
-          }
-          const assignRes = await fetch(
-            `/api/scheduling/booking-items/${bookingItemId}/assign`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ assetId: next.assetId, orderId: order.id }),
-            },
-          )
-          if (!assignRes.ok) {
-            const aj = await assignRes.json().catch(() => ({}))
-            assignNote = `${next.unitName} could not be assigned (${aj?.error || assignRes.status}). The reservation still holds the category.`
-            break
-          }
-          assigned.push({ unitName: next.unitName })
+      // 1 — the Order, once. Job-as-root: jobId is required and never
+      // created here. A resumed run reuses the one it already made.
+      let order = createdOrder
+      if (order) {
+        mark('order', 'done')
+      } else {
+        mark('order', 'running')
+        const orderRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            companyId: company.id,
+            jobId: job.id,
+            startDate: start,
+            endDate: end,
+            description: notes.trim() || null,
+          }),
+        })
+        const created = await orderRes.json().catch(() => ({}))
+        if (!orderRes.ok || !created?.id) {
+          mark('order', 'failed')
+          setError(created?.error || `Could not create the order (${orderRes.status}).`)
+          setSubmitting(false)
+          return
         }
-        mark('assign', assigned.length ? 'done' : 'failed')
-      } else if (!assignNext) {
-        mark('assign', 'skipped')
-      } else if (!canBindUnit) {
-        mark('assign', 'skipped')
-        assignNote = 'Units are assigned by dispatch — the reservation holds the category.'
+        order = { id: created.id, orderNumber: created.orderNumber }
+        setCreatedOrder(order)
+        mark('order', 'done')
+      }
+
+      // 2 — every line, in turn. Each one mints or extends the order's
+      // single Booking; the first also creates it.
+      for (const r of liveRows) {
+        const stepKey = `row:${r.key}`
+        if (done[r.key]) {
+          mark(stepKey, 'done')
+          continue
+        }
+        const category = rowCat(r)
+        if (!category) continue
+        const label = `${category.name} × ${r.quantity}`
+        mark(stepKey, 'running')
+
+        // The rate is the catalog list price; the route re-resolves it
+        // against the client's rate card, so this is a display value,
+        // not the price of record.
+        const lineRes = await fetch(`/api/orders/${order.id}/line-items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'VEHICLE',
+            description: category.name,
+            assetCategoryId: category.id,
+            department: category.department,
+            rateType: 'DAILY',
+            rate: category.dailyRate ?? 0,
+            quantity: r.quantity,
+            pickupDate: start,
+            returnDate: end,
+            ...(confirmedNow[r.key] ? { confirmConflict: true } : {}),
+          }),
+        })
+        const line = await lineRes.json().catch(() => ({}))
+
+        // Capacity conflict — the route names the bookings this would
+        // step on. Warn-with-override, never a hard block: at pickup the
+        // truck goes out regardless of what the system thinks. The lines
+        // already written stay written; answering the conflict resumes
+        // this run from here.
+        if (lineRes.status === 409 && line?.requiresConfirmation && Array.isArray(line.conflicts)) {
+          mark(stepKey, 'pending')
+          setConflict({ rowKey: r.key, conflicts: line.conflicts })
+          setLanded(done)
+          setSubmitting(false)
+          return
+        }
+        if (!lineRes.ok) {
+          mark(stepKey, 'failed')
+          const n = Object.keys(done).length
+          setError(
+            `${line?.error || `Could not add the ${category.name} line (${lineRes.status}).`} ` +
+              `Order ${order.orderNumber} exists with ${n} of ${liveRows.length} line${
+                liveRows.length === 1 ? '' : 's'
+              } on it — open it to finish, or delete it.`,
+          )
+          setLanded(done)
+          setSubmitting(false)
+          return
+        }
+
+        // 2b — find the hold this line just caused, so we can rank and
+        // assign into it.
+        const holdRes = await fetch(
+          `/api/scheduling/order-hold?orderId=${order.id}&categoryId=${category.id}`,
+        )
+        const hold = await holdRes.json().catch(() => ({}))
+        const bookingItemId: string | null = hold?.bookingItem?.id ?? null
+
+        // 2c — the queue decision, when the desk made one. The hold the
+        // line-items route minted carries an AUTOMATIC rank; this stamps
+        // the human one over it and locks it so the firmness sweep leaves
+        // it alone. Done before assignment so a 2nd Hold never grabs a
+        // unit out from under the 1st.
+        let placedRank: number | undefined
+        let demoted: { bookingNumber: string; from: number; to: number }[] = []
+        if (bookingItemId) {
+          // 1st Hold unless the agent explicitly queued behind somebody
+          // (Wes 2026-09-09: "ranking should always default to 1 and only
+          // present other options when there is a conflict").
+          //
+          // Without this the reservation kept whatever rank
+          // holdOnQuoteSend minted — SOFT, i.e. 2 — so an uncontested
+          // booking on a free van came out labelled a 2nd Hold behind
+          // nobody. The rank is LOCKED, which is the same principle as
+          // the queue choices: a rank a human set is not the firmness
+          // sweep's to move. The cost is that this hold no longer
+          // self-demotes when paperwork lapses; the gaps still surface on
+          // the job and in reconcile's `missing`.
+          const wantRank = r.queueChoice === 'second' ? rowQueue(r).nextFreeRank : 1
+          const rankRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/rank`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rank: wantRank,
+              demoteOthers: r.queueChoice === 'take-first',
+              reason: notes.trim() || null,
+            }),
+          })
+          const rankJson = await rankRes.json().catch(() => ({}))
+          if (!rankRes.ok) {
+            mark(stepKey, 'failed')
+            setError(
+              `${rankJson?.reason || rankJson?.error || `Could not place the ${category.name} hold in the queue (${rankRes.status}).`} ` +
+                `Order ${order.orderNumber} exists and the units are held — open it to sort the queue out.`,
+            )
+            setLanded(done)
+            setSubmitting(false)
+            return
+          }
+          placedRank = rankJson.holdRank
+          demoted = rankJson.demoted || []
+        }
+
+        // 2d — optional: bind the next free unit(s) for this line.
+        const assigned: string[] = []
+        let note: string | null = null
+        // A queued hold gets NO unit. The whole point of a 2nd Hold is
+        // that the truck is somebody else's until they release it;
+        // assigning one here would double-book the asset for real.
+        const queuedBehind = (placedRank ?? 1) > 1
+        if (!bookingItemId) {
+          note = `The ${category.name} line was added but its hold could not be read back — check the order.`
+        } else if (queuedBehind) {
+          note = `${category.name}: queued as the ${holdRankLabel(placedRank!)} Hold — no unit until the hold ahead releases.`
+        } else if (assignNext && canBindUnit) {
+          for (let i = 0; i < r.quantity; i++) {
+            const availRes = await fetch(
+              `/api/scheduling/booking-items/${bookingItemId}/available-units`,
+            )
+            const av = await availRes.json().catch(() => ({}))
+            // `candidates` — NOT `units`. The route returns the pooled
+            // counts under `summary` and the pickable rows under
+            // `candidates`, already sorted nicest-tier-then-unit-number.
+            const units: { assetId: string; unitName: string; state: string }[] = av?.candidates || []
+            // "Next available" is the first FREE unit in the list the
+            // server already sorted (nicest tier first, then unit number).
+            // Buffer-state units are deliberately not auto-picked — they
+            // need the human override, not a silent one.
+            const next = units.find((u) => u.state === 'free')
+            if (!next) {
+              note =
+                i === 0
+                  ? `${category.name}: no unit was free for those dates — it holds the category and shows in the needs-a-unit lane.`
+                  : `${category.name}: only ${assigned.length} of ${r.quantity} could be assigned — no other unit is free.`
+              break
+            }
+            const assignRes = await fetch(
+              `/api/scheduling/booking-items/${bookingItemId}/assign`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assetId: next.assetId, orderId: order.id }),
+              },
+            )
+            if (!assignRes.ok) {
+              const aj = await assignRes.json().catch(() => ({}))
+              note = `${next.unitName} could not be assigned (${aj?.error || assignRes.status}). The reservation still holds the category.`
+              break
+            }
+            assigned.push(next.unitName)
+          }
+        } else if (!canBindUnit) {
+          note = 'Units are assigned by dispatch — the reservation holds the category.'
+        }
+
+        done[r.key] = {
+          key: r.key,
+          label,
+          bookingNumber: hold?.booking?.bookingNumber ?? null,
+          holdRank: placedRank,
+          demoted,
+          assigned,
+          note,
+        }
+        setLanded({ ...done })
+        mark(stepKey, 'done')
       }
 
       setResult({
         orderId: order.id,
         orderNumber: order.orderNumber,
-        bookingNumber: hold?.booking?.bookingNumber ?? null,
-        assigned,
-        assignNote,
-        holdRank: placedRank,
-        demoted,
+        rows: liveRows.map((r) => done[r.key]).filter(Boolean),
       })
-      setConflicts(null)
+      setConflict(null)
       onCreated()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong creating the reservation.')
@@ -599,6 +721,77 @@ export function MakeReservationModal({
     )
   }
 
+  /** The 2nd-Hold moment, for one line's category. */
+  const queueBlock = (r: Row) => {
+    const category = rowCat(r)
+    const { stack, incumbents, nextFreeRank, stackFull } = rowQueue(r)
+    const p = pre[r.categoryId]
+    return (
+      <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg px-3 py-2.5 space-y-2.5">
+        <div className="text-[12px] font-semibold text-chip-warn-fg">
+          No {category?.name ?? 'unit'} free {start === end ? `on ${start}` : `${start} – ${end}`}
+          {p?.avail ? ` — ${p.avail.availableToHold} of ${p.avail.serviceableCount} available` : ''}
+        </div>
+        {incumbents.length > 0 && (
+          <div className="text-[11px] text-chip-warn-fg/90 space-y-0.5">
+            {stack.slice(0, 4).map((h) => (
+              <div key={h.bookingItemId}>
+                {holdRankLabel(h.holdRank)} Hold · {h.jobName || h.bookingNumber}
+                {h.quantity > 1 ? ` · ${h.quantity} units` : ''}
+              </div>
+            ))}
+          </div>
+        )}
+        {stackFull ? (
+          <div className="text-[11px] text-chip-warn-fg">
+            This category already has {MAX_HOLD_RANK} holds on those dates. Release one that
+            isn&apos;t live, or sub-rent the unit — holds go 1st, 2nd, 3rd.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => patchRow(r.key, { queueChoice: 'second' })}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                r.queueChoice === 'second'
+                  ? 'bg-lt-fg text-white border-lt-fg'
+                  : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
+              }`}
+            >
+              {holdRankLabel(nextFreeRank)} Hold
+            </button>
+            <button
+              type="button"
+              onClick={() => patchRow(r.key, { queueChoice: 'take-first' })}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                r.queueChoice === 'take-first'
+                  ? 'bg-lt-fg text-white border-lt-fg'
+                  : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
+              }`}
+            >
+              Make 1st Hold and demote other
+            </button>
+          </div>
+        )}
+        {r.queueChoice === 'second' && (
+          <div className="text-[11px] text-chip-warn-fg">
+            Queues behind {incumbents.length === 1 ? 'them' : 'the holds above'}. No unit is assigned
+            until the hold ahead releases, and this costs them nothing — a backup doesn&apos;t
+            consume capacity.
+          </div>
+        )}
+        {r.queueChoice === 'take-first' && (
+          <div className="text-[11px] text-chip-warn-fg">
+            {incumbents.length > 0
+              ? `${incumbents.map((i) => i.jobName || i.bookingNumber).join(', ')} drops to ${holdRankLabel(2)} Hold.`
+              : 'Takes the front of the queue.'}{' '}
+            Recorded against your name on the reservation. Nobody is emailed.
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-10 px-4">
@@ -614,51 +807,49 @@ export function MakeReservationModal({
             </button>
           </div>
 
-          {result && !conflicts ? (
+          {result && !conflict ? (
             /* ── Done ─────────────────────────────────────────────── */
             <div className="px-5 py-4 space-y-3">
               <div className="flex items-center gap-2 text-[13px] font-semibold text-lt-fg">
                 <Check size={15} className="text-chip-good-fg" aria-hidden />
-                Reservation created
+                {result.rows.length === 1
+                  ? 'Reservation created'
+                  : `${result.rows.length} vehicles reserved on one order`}
               </div>
               <div className="rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 text-[12px] text-lt-fg2 space-y-1">
                 <div>
                   Order <span className="font-semibold text-lt-fg">{result.orderNumber}</span>
-                  {result.bookingNumber && (
-                    <> · reservation <span className="font-semibold text-lt-fg">{result.bookingNumber}</span></>
+                  {result.rows[0]?.bookingNumber && (
+                    <> · reservation <span className="font-semibold text-lt-fg">{result.rows[0].bookingNumber}</span></>
                   )}
+                  {' · '}
+                  {start} – {end}
                 </div>
-                <div>
-                  {category?.name} × {quantity} · {start} – {end}
-                </div>
-                {result.holdRank != null && (
-                  <div>
-                    {result.holdRank > 1 ? 'Queued as the ' : 'Placed as the '}
-                    <span className="font-semibold text-lt-fg">
-                      {holdRankLabel(result.holdRank)} Hold
-                    </span>
+                {result.rows.map((rr) => (
+                  <div key={rr.key}>
+                    <span className="font-semibold text-lt-fg">{rr.label}</span>
+                    {rr.holdRank != null && rr.holdRank > 1 && (
+                      <> · queued as the {holdRankLabel(rr.holdRank)} Hold</>
+                    )}
+                    {rr.assigned.length > 0 && (
+                      <> · <span className="font-semibold text-lt-fg">{rr.assigned.join(', ')}</span></>
+                    )}
+                    {rr.demoted && rr.demoted.length > 0 && (
+                      <>
+                        {' '}· demoted{' '}
+                        {rr.demoted.map((d) => `${d.bookingNumber} → ${holdRankLabel(d.to)}`).join(', ')}
+                      </>
+                    )}
                   </div>
-                )}
-                {result.demoted && result.demoted.length > 0 && (
-                  <div>
-                    Demoted:{' '}
-                    <span className="font-semibold text-lt-fg">
-                      {result.demoted.map((d) => `${d.bookingNumber} → ${holdRankLabel(d.to)}`).join(', ')}
-                    </span>
-                  </div>
-                )}
-                {result.assigned.length > 0 && (
-                  <div>
-                    Assigned:{' '}
-                    <span className="font-semibold text-lt-fg">
-                      {result.assigned.map((a) => a.unitName).join(', ')}
-                    </span>
-                  </div>
-                )}
+                ))}
               </div>
-              {result.assignNote && (
-                <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px]">
-                  {result.assignNote}
+              {result.rows.some((rr) => rr.note) && (
+                <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px] space-y-1">
+                  {result.rows
+                    .filter((rr) => rr.note)
+                    .map((rr) => (
+                      <div key={rr.key}>{rr.note}</div>
+                    ))}
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-1">
@@ -679,57 +870,133 @@ export function MakeReservationModal({
           ) : (
             /* ── Form ─────────────────────────────────────────────── */
             <div className="px-5 py-4 space-y-4">
-              {/* Vehicle type */}
-              <div>
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label
-                      htmlFor="reservation-type"
-                      className="block text-[11px] font-semibold text-lt-fg2 mb-1"
-                    >
-                      Vehicle type
-                    </label>
-                  <select
-                    id="reservation-type"
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
-                  >
-                    <option value="">Select a type…</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.totalUnits})
-                      </option>
-                    ))}
-                  </select>
-                  </div>
-                  <div className="shrink-0">
-                    <label
-                      htmlFor="reservation-qty"
-                      className="block text-[11px] font-semibold text-lt-fg2 mb-1"
-                    >
-                      How many
-                    </label>
-                    <input
-                      id="reservation-qty"
-                      type="number"
-                      min={1}
-                      value={quantity}
-                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
-                    />
-                  </div>
+              {/* The lines. One per vehicle type; quantity carries the
+                  count. They all land on this one order. */}
+              <div className="space-y-2">
+                <div className="flex items-end justify-between">
+                  <label className="block text-[11px] font-semibold text-lt-fg2">
+                    Vehicles on this reservation
+                  </label>
+                  {liveRows.length > 0 && (
+                    <span className="text-[11px] text-lt-fg3">
+                      {liveRows.reduce((n, r) => n + r.quantity, 0)} unit
+                      {liveRows.reduce((n, r) => n + r.quantity, 0) === 1 ? '' : 's'} · one order
+                    </span>
+                  )}
                 </div>
-                {category && !availLoading && avail && !atCapacity && (
-                  <p className="mt-1 text-[11px] text-chip-good-fg">
-                    {avail.availableToHold} of {avail.serviceableCount} available for these dates
-                  </p>
-                )}
-                {category?.dailyRate != null && (
-                  <p className="mt-1 text-[11px] text-lt-fg3">
-                    ${category.dailyRate}/day list — the client&apos;s own rate card is applied when the line is priced.
-                  </p>
-                )}
+
+                {rows.map((r) => {
+                  const category = rowCat(r)
+                  const p = pre[r.categoryId]
+                  const dup = !!r.categoryId && dupTypes.includes(r.categoryId)
+                  const atCap = rowAtCapacity(r)
+                  const written = !!landed[r.key]
+                  return (
+                    <div
+                      key={r.key}
+                      className={`rounded-lg border px-2.5 py-2 space-y-1.5 ${
+                        written ? 'border-chip-good-fg/40 bg-chip-good-bg/40' : 'border-lt-hairline'
+                      }`}
+                    >
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1 min-w-0">
+                          <label
+                            htmlFor={`reservation-type-${r.key}`}
+                            className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5"
+                          >
+                            Vehicle type
+                          </label>
+                          <select
+                            id={`reservation-type-${r.key}`}
+                            value={r.categoryId}
+                            disabled={written}
+                            onChange={(e) => patchRow(r.key, { categoryId: e.target.value, queueChoice: 'none' })}
+                            className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
+                          >
+                            <option value="">Select a type…</option>
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} ({c.totalUnits})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="shrink-0">
+                          <label
+                            htmlFor={`reservation-qty-${r.key}`}
+                            className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5"
+                          >
+                            How many
+                          </label>
+                          <input
+                            id={`reservation-qty-${r.key}`}
+                            type="number"
+                            min={1}
+                            value={r.quantity}
+                            disabled={written}
+                            onChange={(e) =>
+                              patchRow(r.key, {
+                                quantity: Math.max(1, parseInt(e.target.value) || 1),
+                                queueChoice: 'none',
+                              })
+                            }
+                            className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
+                          />
+                        </div>
+                        {rows.length > 1 && !written && (
+                          <button
+                            type="button"
+                            onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+                            title="Remove this vehicle"
+                            aria-label="Remove this vehicle"
+                            className="shrink-0 mb-1 p-1.5 rounded-lg border border-lt-hairline text-lt-fg3 hover:text-chip-bad-fg hover:border-chip-bad-fg/40"
+                          >
+                            <Trash2 size={13} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+
+                      {written && (
+                        <p className="text-[11px] text-chip-good-fg font-semibold">
+                          Already on order {createdOrder?.orderNumber} — this line is written.
+                        </p>
+                      )}
+                      {dup && !written && (
+                        <p className="text-[11px] text-chip-bad-fg">
+                          That type is already on this reservation — raise its quantity instead.
+                        </p>
+                      )}
+                      {category && !dup && !written && p && !p.loading && p.avail && !atCap && (
+                        <p className="text-[11px] text-chip-good-fg">
+                          {p.avail.availableToHold} of {p.avail.serviceableCount} available for these
+                          dates
+                        </p>
+                      )}
+                      {category?.dailyRate != null && !written && (
+                        <p className="text-[11px] text-lt-fg3">
+                          ${category.dailyRate}/day list — the client&apos;s own rate card is applied
+                          when the line is priced.
+                        </p>
+                      )}
+                      {/* Zero availability — the 2nd Hold moment (Wes
+                          2026-09-09). A category at capacity with no
+                          replacement unit is a queue decision, not an
+                          error, so the two real answers are offered by
+                          name. Backups never consume capacity, so a 2nd
+                          Hold costs the production ahead nothing. */}
+                      {atCap && !written && queueBlock(r)}
+                    </div>
+                  )
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setRows((rs) => [...rs, newRow()])}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg disabled:opacity-40"
+                >
+                  <Plus size={12} aria-hidden /> Add another vehicle
+                </button>
               </div>
 
               {/* Dates */}
@@ -757,6 +1024,10 @@ export function MakeReservationModal({
                   />
                 </div>
               </div>
+              <p className="-mt-2 text-[11px] text-lt-fg3">
+                One window for the whole order. A vehicle that needs different dates is its own
+                reservation.
+              </p>
 
               {/* Company */}
               <div>
@@ -948,92 +1219,23 @@ export function MakeReservationModal({
                   <span>
                     Assign the next available unit
                     <span className="block text-[11px] text-lt-fg3">
-                      Takes the first free unit for these dates, nicest tier first. Units in the
-                      turnaround buffer are left for a human to override.
+                      Takes the first free unit for these dates, nicest tier first, for every line.
+                      Units in the turnaround buffer are left for a human to override.
                     </span>
                   </span>
                 </label>
               )}
 
-              {/* Zero availability — the 2nd Hold moment (Wes 2026-09-09).
-                  A category at capacity with no replacement unit is a
-                  queue decision, not an error, so the two real answers
-                  are offered by name. Backups never consume capacity,
-                  so a 2nd Hold costs the production ahead nothing. */}
-              {atCapacity && (
-                <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg px-3 py-2.5 space-y-2.5">
-                  <div className="text-[12px] font-semibold text-chip-warn-fg">
-                    No {category?.name ?? 'unit'} free {start === end ? `on ${start}` : `${start} – ${end}`}
-                    {avail ? ` — 0 of ${avail.serviceableCount} available` : ''}
-                  </div>
-                  {incumbents.length > 0 && (
-                    <div className="text-[11px] text-chip-warn-fg/90 space-y-0.5">
-                      {stack.slice(0, 4).map((h) => (
-                        <div key={h.bookingItemId}>
-                          {holdRankLabel(h.holdRank)} Hold · {h.jobName || h.bookingNumber}
-                          {h.quantity > 1 ? ` · ${h.quantity} units` : ''}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {stackFull ? (
-                    <div className="text-[11px] text-chip-warn-fg">
-                      This category already has {MAX_HOLD_RANK} holds on those dates. Release one
-                      that isn&apos;t live, or sub-rent the unit — holds go 1st, 2nd, 3rd.
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setQueueChoice('second')}
-                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
-                          queueChoice === 'second'
-                            ? 'bg-lt-fg text-white border-lt-fg'
-                            : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
-                        }`}
-                      >
-                        {holdRankLabel(nextFreeRank)} Hold
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQueueChoice('take-first')}
-                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
-                          queueChoice === 'take-first'
-                            ? 'bg-lt-fg text-white border-lt-fg'
-                            : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
-                        }`}
-                      >
-                        Make 1st Hold and demote other
-                      </button>
-                    </div>
-                  )}
-                  {queueChoice === 'second' && (
-                    <div className="text-[11px] text-chip-warn-fg">
-                      Queues behind {incumbents.length === 1 ? 'them' : 'the holds above'}. No unit is
-                      assigned until the hold ahead releases, and this costs them nothing — a
-                      backup doesn&apos;t consume capacity.
-                    </div>
-                  )}
-                  {queueChoice === 'take-first' && (
-                    <div className="text-[11px] text-chip-warn-fg">
-                      {incumbents.length > 0
-                        ? `${incumbents.map((i) => i.jobName || i.bookingNumber).join(', ')} drops to ${holdRankLabel(2)} Hold.`
-                        : 'Takes the front of the queue.'}{' '}
-                      Recorded against your name on the reservation. Nobody is emailed.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Conflict override */}
-              {conflicts && (
+              {/* Conflict override — for the one line that tripped it. */}
+              {conflict && (
                 <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px] space-y-2">
                   <div className="font-semibold">
-                    That would step on {conflicts.length} other reservation
-                    {conflicts.length === 1 ? '' : 's'}:
+                    {rowCat(rows.find((r) => r.key === conflict.rowKey) ?? rows[0])?.name ?? 'That line'}{' '}
+                    would step on {conflict.conflicts.length} other reservation
+                    {conflict.conflicts.length === 1 ? '' : 's'}:
                   </div>
                   <ul className="space-y-0.5">
-                    {conflicts.map((c, i) => (
+                    {conflict.conflicts.map((c, i) => (
                       <li key={i}>
                         · {c.bookingNumber}
                         {c.jobName ? ` · ${c.jobName}` : ''} · {c.startDate}–{c.endDate} · qty{' '}
@@ -1041,23 +1243,43 @@ export function MakeReservationModal({
                       </li>
                     ))}
                   </ul>
-                  <button
-                    onClick={() => submit(true)}
-                    disabled={submitting || (atCapacity && queueChoice === 'none')}
-                    className="px-3 py-1.5 rounded-lg bg-lt-card border border-lt-hairline text-[12px] font-semibold text-lt-fg disabled:opacity-50"
-                  >
-                    {atCapacity && queueChoice === 'second'
-                      ? `Reserve as ${holdRankLabel(nextFreeRank)} Hold`
-                      : atCapacity && queueChoice === 'take-first'
-                        ? 'Take the 1st Hold'
-                        : 'Reserve anyway'}
-                  </button>
+                  {createdOrder && (
+                    <div className="text-[11px]">
+                      Order {createdOrder.orderNumber} is already created — answering this adds the
+                      rest of the lines to it.
+                    </div>
+                  )}
+                  {(() => {
+                    const r = rows.find((x) => x.key === conflict.rowKey)
+                    const atCap = r ? rowAtCapacity(r) : false
+                    return (
+                      <button
+                        onClick={() => submit(conflict.rowKey)}
+                        disabled={submitting || (atCap && r?.queueChoice === 'none')}
+                        className="px-3 py-1.5 rounded-lg bg-lt-card border border-lt-hairline text-[12px] font-semibold text-lt-fg disabled:opacity-50"
+                      >
+                        {atCap && r?.queueChoice === 'second'
+                          ? `Reserve as ${holdRankLabel(rowQueue(r).nextFreeRank)} Hold`
+                          : atCap && r?.queueChoice === 'take-first'
+                            ? 'Take the 1st Hold'
+                            : 'Reserve anyway'}
+                      </button>
+                    )
+                  })()}
                 </div>
               )}
 
               {error && (
-                <div className="rounded-lg bg-chip-bad-bg text-chip-bad-fg px-3 py-2 text-[12px]">
-                  {error}
+                <div className="rounded-lg bg-chip-bad-bg text-chip-bad-fg px-3 py-2 text-[12px] space-y-2">
+                  <div>{error}</div>
+                  {createdOrder && (
+                    <a
+                      href={`/orders/${createdOrder.id}`}
+                      className="inline-block px-2 py-1 rounded bg-lt-card border border-lt-hairline text-[11px] font-semibold text-lt-fg"
+                    >
+                      Open {createdOrder.orderNumber}
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -1065,15 +1287,15 @@ export function MakeReservationModal({
                 <div className="rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 space-y-1">
                   {stepRow('contact', 'Attaching the contact')}
                   {stepRow('order', 'Creating the order')}
-                  {stepRow('line', `Adding ${category?.name ?? 'the vehicle'} × ${quantity}`)}
-                  {stepRow('hold', 'Reserving the category')}
-                  {stepRow(
-                    'rank',
-                    queueChoice === 'second'
-                      ? `Queueing as the ${holdRankLabel(nextFreeRank)} Hold`
-                      : 'Placing the 1st Hold',
+                  {liveRows.map((r) =>
+                    stepRow(
+                      `row:${r.key}`,
+                      `Reserving ${rowCat(r)?.name ?? 'the vehicle'} × ${r.quantity}` +
+                        (r.queueChoice === 'second'
+                          ? ` as the ${holdRankLabel(rowQueue(r).nextFreeRank)} Hold`
+                          : ''),
+                    ),
                   )}
-                  {stepRow('assign', 'Assigning a unit')}
                 </div>
               )}
 
@@ -1091,16 +1313,16 @@ export function MakeReservationModal({
                   Cancel
                 </button>
                 <button
-                  onClick={() => submit(false)}
+                  onClick={() => submit()}
                   disabled={!canSubmit}
                   className="mt-3 px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-[12px] font-semibold"
                 >
                   {submitting
                     ? 'Working…'
-                    : atCapacity && queueChoice === 'second'
-                      ? `Create ${holdRankLabel(nextFreeRank)} Hold`
-                      : atCapacity && queueChoice === 'take-first'
-                        ? 'Create and demote other'
+                    : createdOrder
+                      ? `Add the rest to ${createdOrder.orderNumber}`
+                      : liveRows.length > 1
+                        ? `Create ${liveRows.length} reservations on one order`
                         : 'Create reservation'}
                 </button>
               </div>

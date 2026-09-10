@@ -1,0 +1,71 @@
+{
+  "at": "2026-09-10T02:01:04.247Z",
+  "orderId": "f00f21e8-c20f-4100-b762-9a817a17402f",
+  "orderNumber": "S260905-002",
+  "statusBefore": "RETURNED",
+  "invoice": {
+    "id": "42d6543e-060d-4cb9-9a13-04203c361346",
+    "number": "SR-INV-30009",
+    "status": "SENT",
+    "sentAt": "2026-09-09T18:47:53.412Z",
+    "total": "630",
+    "balanceDue": "630"
+  },
+  "deletedAuditRows": [
+    {
+      "id": "60a590e0-2056-437a-b3f7-fe162de39736",
+      "userId": "6b1d11bd-96ef-4e3c-86d3-adf37792e2eb",
+      "action": "order.check_in_report",
+      "entityType": "Order",
+      "entityId": "f00f21e8-c20f-4100-b762-9a817a17402f",
+      "createdAt": "2026-09-10T01:42:36.316Z",
+      "oldValues": {},
+      "newValues": {
+        "changes": [],
+        "partial": false,
+        "offSheet": 0,
+        "reportId": "e01ef172-e7d4-49fa-83b2-8f5c562e34fe",
+        "lineCount": 5,
+        "preppedBy": null,
+        "changedOrder": false
+      }
+    },
+    {
+      "id": "d0893264-5df0-41ff-8573-e1ca45aa1efa",
+      "userId": "6b1d11bd-96ef-4e3c-86d3-adf37792e2eb",
+      "action": "order.check_in_report",
+      "entityType": "Order",
+      "entityId": "f00f21e8-c20f-4100-b762-9a817a17402f",
+      "createdAt": "2026-09-10T01:42:38.065Z",
+      "oldValues": {},
+      "newValues": {
+        "changes": [],
+        "partial": false,
+        "offSheet": 0,
+        "reportId": "e01ef172-e7d4-49fa-83b2-8f5c562e34fe",
+        "lineCount": 5,
+        "preppedBy": null,
+        "changedOrder": false
+      }
+    },
+    {
+      "id": "1e09860e-f756-4c4c-a4fb-ecc383ece062",
+      "userId": "6b1d11bd-96ef-4e3c-86d3-adf37792e2eb",
+      "action": "order.check_in_report",
+      "entityType": "Order",
+      "entityId": "f00f21e8-c20f-4100-b762-9a817a17402f",
+      "createdAt": "2026-09-10T01:43:25.955Z",
+      "oldValues": {},
+      "newValues": {
+        "changes": [],
+        "partial": false,
+        "offSheet": 0,
+        "reportId": "e01ef172-e7d4-49fa-83b2-8f5c562e34fe",
+        "lineCount": 5,
+        "preppedBy": null,
+        "changedOrder": false
+      }
+    }
+  ],
+  "dryRun": false
+}

@@ -36,6 +36,7 @@ import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { advanceOneOrderToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
+import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
 
 /**
  * Orders a check report can be filed against.
@@ -569,7 +570,46 @@ export interface GearSettleResult {
   /** Whether this sheet is what advanced the ORDER to ON_JOB — i.e.
    *  whether the job now reads "On rental" because of it. */
   orderOut: boolean
+  /** Whether this sheet is what advanced the ORDER to RETURNED — the
+   *  inbound mirror, and what unblocks the money arc behind it
+   *  (sendInvoice advances only from RETURNED). */
+  orderReturned: boolean
+  /** Why a complete OUTBOUND sheet did not put the order out, when it
+   *  didn't. Null on the inbound edge, and null when it did.
+   *
+   *  Jose filed a sheet and asked what else had to happen; on a
+   *  warehouse-only order the answer is now "nothing". On one with a
+   *  truck on it there IS something, and the screen has to say what —
+   *  otherwise the supervisor is back to hunting for a button. The
+   *  fleet reasons deliberately do NOT offer to settle the lane from
+   *  here: a vehicle leaves through the driver check-out and its
+   *  walk-around, and a typed sheet is not a substitute for that
+   *  (Wes, 2026-09-09). They name who can actually close it. */
+  outBlocked: OutBlockedReason | null
 }
+
+/**
+ * The reasons a complete outbound sheet stops short of ON_JOB. Each one
+ * is a sentence the supervisor's screen can say, and each names the next
+ * person or step rather than just reporting a failed guard.
+ */
+export type OutBlockedReason =
+  /** Sheet is for a start day still ahead — a prep document, not a
+   *  departure. The lanes moved; the order waits for the day. */
+  | 'prep-for-a-later-day'
+  /** Still in quote form. A sheet cannot book an order — booking
+   *  snapshots money and routes lanes, and that is sales' work. */
+  | 'not-booked'
+  /** A FLEET line with no vehicle behind it anywhere on the job. This is
+   *  the LW2 shape (S260908-004, 2026-09-08): one SuperCube line, the
+   *  truck physically gone, and no BookingAssignment for it — so HQ has
+   *  no record of WHICH truck left, no walk-around, and nothing for the
+   *  driver flow to fire on. Dispatch has to assign the unit. */
+  | 'fleet-no-vehicle-assigned'
+  /** The truck is assigned but has not been checked out. That check-out
+   *  — with its mileage and its 22-slot walk-around — is what closes
+   *  the fleet lane. */
+  | 'fleet-vehicle-not-checked-out'
 
 export async function settleGearAfterReport(
   orderId: string,
@@ -581,7 +621,12 @@ export async function settleGearAfterReport(
    *  returned while cases are still out. */
   partial = false,
 ): Promise<GearSettleResult> {
-  if (partial) return { pickListAdvanced: false, jobReturned: false, orderOut: false }
+  if (partial) {
+    return {
+      pickListAdvanced: false, jobReturned: false, orderOut: false,
+      orderReturned: false, outBlocked: null,
+    }
+  }
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -649,9 +694,18 @@ export async function settleGearAfterReport(
     ? await settleJobReturnSafe(order?.jobId ?? null, userId)
     : { stamped: false }
 
-  const orderOut = edge === 'OUT' && order ? await settleOrderOut(order, userId, outLines.count) : false
+  const out = edge === 'OUT' && order
+    ? await settleOrderOut(order, userId, outLines.count)
+    : { moved: false, blocked: null }
+  const orderReturned = edge === 'IN' && order ? await settleOrderIn(order, userId) : false
 
-  return { pickListAdvanced: advanced.count > 0, jobReturned: settled.stamped, orderOut }
+  return {
+    pickListAdvanced: advanced.count > 0,
+    jobReturned: settled.stamped,
+    orderOut: out.moved,
+    orderReturned,
+    outBlocked: out.blocked,
+  }
 }
 
 /**
@@ -676,18 +730,22 @@ export async function settleGearAfterReport(
  * not price work. Same line the driver token respects.
  */
 async function settleOrderOut(
-  order: { id: string; orderNumber: string; status: OrderStatus; startDate: Date | null },
+  order: { id: string; orderNumber: string; status: OrderStatus; startDate: Date | null; jobId: string },
   userId: string,
   linesLoaded: number,
-): Promise<boolean> {
+): Promise<{ moved: boolean; blocked: OutBlockedReason | null }> {
   // Warehouse lane just went terminal, so re-run the rollup the picking
   // floor would have run. Idempotent, and a no-op when the fleet lane is
   // still pending — a truck that has not been stamped ready still gates
   // the order, exactly as it does from /warehouse/pick.
   let status = order.status
+  let fleetPending = false
   try {
     const rollup = await recomputeAndMaybeAdvanceLoadReady(order.id)
     if (rollup.advanced) status = 'LOADED_READY'
+    // The rollup already knows which lane is holding it up. Keep its
+    // answer rather than re-deriving one that could disagree.
+    else fleetPending = rollup.reason === 'fleet-pending' || rollup.reason === 'both-lanes-pending'
   } catch (err) {
     console.error('[check-report] LOADED_READY rollup failed:', err)
   }
@@ -701,7 +759,7 @@ async function settleOrderOut(
   // line dates (syncOrderWindow) and is what the list matched on to put
   // this sheet on screen — @db.Date, so read the UTC calendar day.
   const startYmd = order.startDate ? order.startDate.toISOString().slice(0, 10) : null
-  if (startYmd && startYmd > pacificYmd(0)) return false
+  if (startYmd && startYmd > pacificYmd(0)) return { moved: false, blocked: 'prep-for-a-later-day' }
 
   const moved = await advanceOneOrderToOnJob(
     prisma, { ...order, status }, userId, 'gear-check-out-sheet', { linesLoaded: String(linesLoaded) },
@@ -710,6 +768,70 @@ async function settleOrderOut(
   // which drops the LOADED_AND_READY the rollup just scheduled — and that
   // is the right way round: that email tells a client their gear is ready
   // to collect, and this sheet says it already left.
-  if (moved) await projectOnJob([order.id])
+  if (moved) {
+    await projectOnJob([order.id])
+    return { moved: true, blocked: null }
+  }
+  return { moved: false, blocked: await whyNotOut(order, status, fleetPending) }
+}
+
+/**
+ * What is actually holding the order back, in terms of who can move it.
+ *
+ * Only called when the sheet was complete and the order still did not go
+ * out, so every branch here is something a supervisor is entitled to be
+ * told. A status past LOADED_READY returns null: the order is already
+ * out (or beyond), and there is nothing to report.
+ */
+async function whyNotOut(
+  order: { id: string; jobId: string },
+  status: OrderStatus,
+  fleetPending: boolean,
+): Promise<OutBlockedReason | null> {
+  if (PRE_BOOKED_STATUSES.has(status)) return 'not-booked'
+  if (!fleetPending) return null
+  // A FLEET line is waiting on a truck. Which sentence to say depends on
+  // whether HQ knows about one: an assigned unit means somebody has to
+  // run the check-out, and no assigned unit at all means dispatch has to
+  // put a truck on the order before anyone can.
+  const assigned = await prisma.bookingAssignment.count({
+    where: {
+      status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
+      bookingItem: { booking: { jobId: order.jobId, status: { not: 'CANCELLED' } } },
+    },
+  })
+  return assigned > 0 ? 'fleet-vehicle-not-checked-out' : 'fleet-no-vehicle-assigned'
+}
+
+/**
+ * The inbound half: whatever the order was, it is RETURNED now.
+ *
+ * The mirror of settleOrderOut, and the reason it exists is the same one
+ * — the ORDER is what everything downstream reads, and until this the
+ * inbound sheet advanced the pick list and Job.returnedAt while leaving
+ * the order exactly where it was. S260905-002 was invoiced $630, sent to
+ * the client, and still said BOOKED. See returnedFromCheckIn.ts for why
+ * RETURNED (not LD_CHECK), and why a SHORT line still counts.
+ *
+ * No day gate here, deliberately — unlike the outbound edge. That one
+ * waits for the start day because a sheet filed for tomorrow is a PREP
+ * document and prepping a pull the day before is real, everyday work.
+ * There is no equivalent for counting gear back: you cannot check in
+ * cases that are not in front of you, and gear routinely comes home
+ * early. The pick list and Job.returnedAt already move on any complete
+ * inbound sheet with no date check, so gating only the status would make
+ * the order disagree with its own job.
+ */
+async function settleOrderIn(
+  order: { id: string; orderNumber: string; status: OrderStatus },
+  userId: string,
+): Promise<boolean> {
+  const moved = await advanceOneOrderToReturned(
+    prisma, order, userId, 'gear-check-in-sheet', { orderNumber: order.orderNumber },
+  )
+  // RETURNED on the cadence ladder plus the thank-you suggestion — the
+  // same two things the manual status change on the order page does.
+  // Sends nothing to the client; see projectReturned.
+  if (moved) await projectReturned([order.id])
   return moved
 }
