@@ -109,7 +109,10 @@ export function computeReadiness(i: ReadinessInputs): JobReadiness {
   if (!signOk) failing.push(blocker('sign', describeAgreement(i)))
   if (!i.cardOnFile) {
     failing.push(
-      blocker('card', i.cardRequested ? ['Card on file — link sent, nothing back', 'missing'] : ['Card on file', 'missing']),
+      // "Card authorization" — the panel tile's own heading. Never "Card on
+      // file": on a chip that names what is STILL NEEDED it reads as a
+      // status, and Wes read it as "a card is on file" (2026-09-09).
+      blocker('card', i.cardRequested ? ['Card authorization — link sent, nothing back', 'missing'] : ['Card authorization', 'missing']),
     )
   }
   if (!driverOk) {
