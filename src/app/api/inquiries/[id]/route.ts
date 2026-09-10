@@ -43,7 +43,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // Enrich the order-form cart so the new-quote prefill can bind each line to a
   // real catalog target (additive — other consumers ignore the extra fields):
   //   - VEHICLE lines carry only a VehicleCategory id; resolve the linked
-  //     merged catalog id (quotes bind vehicles as catalogType=INVENTORY).
+  //     merged catalog id (quotes bind vehicles as catalogType=INVENTORY)
+  //     AND the fleet AssetCategory, which is what a HOLD is taken against.
+  //     Two different ids for the same truck: `assetCategoryId` here is
+  //     historically the CATALOG row (the quote's target) and is left
+  //     alone; `fleetCategoryId` is the scheduling one (the reservation's
+  //     target, the id /api/scheduling/categories returns).
   //   - SUPPLY lines resolve the InventoryItem's department (the cart snapshot
   //     only stores the display category name, not the line department).
   // Covers BOTH metadata kinds ('production-order' written by the form today,
@@ -56,17 +61,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const supplyIds = cart.filter((l) => l.itemKind === 'SUPPLY').map((l) => String(l.itemId))
     const [vehicles, supplies] = await Promise.all([
       vehicleIds.length
-        ? prisma.vehicleCategory.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, catalogItemId: true } })
+        ? prisma.vehicleCategory.findMany({
+            where: { id: { in: vehicleIds } },
+            select: { id: true, catalogItemId: true, assetCategoryId: true },
+          })
         : Promise.resolve([]),
       supplyIds.length
         ? prisma.inventoryItem.findMany({ where: { id: { in: supplyIds } }, select: { id: true, department: true } })
         : Promise.resolve([]),
     ])
     const acById = new Map(vehicles.map((v) => [v.id, v.catalogItemId]))
+    const fleetById = new Map(vehicles.map((v) => [v.id, v.assetCategoryId]))
     const deptById = new Map(supplies.map((s) => [s.id, s.department]))
     const enrichedCart = cart.map((l) =>
       l.itemKind === 'VEHICLE'
-        ? { ...l, assetCategoryId: acById.get(String(l.itemId)) ?? null }
+        ? {
+            ...l,
+            assetCategoryId: acById.get(String(l.itemId)) ?? null,
+            fleetCategoryId: fleetById.get(String(l.itemId)) ?? null,
+          }
         : { ...l, department: deptById.get(String(l.itemId)) ?? null },
     )
     sourceMetadata = { ...sourceMetadata, cart: enrichedCart }

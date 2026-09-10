@@ -25,6 +25,14 @@
  *             to /orders/new?inquiryId=…
  *             for persistent rows: redirect directly to
  *             /orders/new?inquiryId=…
+ *   - Reserve & Quote → offered only when the request itself names
+ *             vehicles (a web-form cart). Opens the reservation desk
+ *             pre-loaded with those trucks, the window, the company
+ *             and the contact; the order it creates is where the quote
+ *             gets written. Wes 2026-09-10: on a request that already
+ *             names trucks and dates, the truck is the scarce thing —
+ *             hold it first, price it second. Capture & Quote stays,
+ *             demoted to the secondary action on those cards.
  *   - Dismiss → for suggestions: existing POST
  *             /api/sales/suggested-inquiries/dismiss (records the
  *             decision against the email so it stops surfacing).
@@ -49,6 +57,15 @@ import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/compon
 import { JobResolverModal } from '@/components/shared/JobResolverModal'
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
 import { inquiryPastResponseSla, inquiryWaitHours } from '@/lib/sales/inquirySla'
+import {
+  foldByCategory,
+  readVehicleRequest,
+  vehicleLineCount,
+} from '@/lib/sales/inquiryVehicleRequest'
+import {
+  MakeReservationModal,
+  type ReservationPrefill,
+} from '@/components/scheduling/MakeReservationModal'
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -222,6 +239,8 @@ export function NewInboundColumn({
   // order. Phase 1b: persistent inquiries only — suggestion cards
   // would need a 2-step capture-then-pick flow that's out of scope.
   const [addOnInquiry, setAddOnInquiry] = useState<PersistentInquiry | null>(null)
+  /** The reservation desk, pre-loaded from a request. Null = closed. */
+  const [reservePrefill, setReservePrefill] = useState<ReservationPrefill | null>(null)
   // Quick Respond — write back to whoever sent the inquiry without
   // committing to a quote (Wes 2026-08-25: "some are just inquiries").
   // Same two-step the detail page runs: resolve the Job, then compose.
@@ -293,7 +312,13 @@ export function NewInboundColumn({
   // open modal/drawer or a row action mid-flight. A ref (not a dep) lets the
   // interval/focus handlers read the latest value without re-subscribing.
   const blockRefreshRef = useRef(false)
-  blockRefreshRef.current = !!(busyId || drawerEmailId || quickReplyEmailId || addOnInquiry)
+  blockRefreshRef.current = !!(
+    busyId ||
+    drawerEmailId ||
+    quickReplyEmailId ||
+    addOnInquiry ||
+    reservePrefill
+  )
 
   // Auto-refresh: poll every 60s + refetch when the tab regains focus /
   // becomes visible, so an open or backgrounded tab self-updates as new
@@ -326,6 +351,60 @@ export function NewInboundColumn({
     // Persistent inquiry already has an Inquiry row; no API call
     // needed — go straight to new-quote with the inquiryId.
     router.push(`/orders/new?inquiryId=${encodeURIComponent(inquiryId)}`)
+  }
+
+  /**
+   * Reservation-first. The LIST payload carries the raw cart, which is
+   * enough to know vehicles are on the request but not to hold one —
+   * the cart names public catalog rows, and a hold binds to a fleet
+   * category. GET /api/inquiries/[id] is what resolves the two, so the
+   * detail read happens here, on the click, rather than on every card.
+   */
+  const openReservation = async (inquiry: PersistentInquiry) => {
+    setBusyId(inquiry.id)
+    try {
+      const res = await fetch(`/api/inquiries/${encodeURIComponent(inquiry.id)}`)
+      const data = await res.json().catch(() => ({}))
+      const meta = data?.inquiry?.sourceMetadata ?? null
+      const request = readVehicleRequest(meta, {
+        start: inquiry.preferredStartDate,
+        end: inquiry.preferredEndDate,
+      })
+      if (!request) {
+        alert(
+          'No vehicles resolved off this request — use Capture & Quote and build the order there.',
+        )
+        return
+      }
+      setReservePrefill({
+        inquiryId: inquiry.id,
+        // One line per type: the shop lets a client add the same van
+        // twice, and the reservation desk refuses two lines of one
+        // category (the second one's capacity check trips over the
+        // first one's hold).
+        vehicles: foldByCategory(request.vehicles),
+        supplies: request.supplies,
+        start: request.start,
+        end: request.end,
+        company: inquiry.company,
+        companyName: request.companyName,
+        jobName: request.jobName,
+        contact:
+          request.contact ??
+          (inquiry.person
+            ? {
+                firstName: inquiry.person.firstName,
+                lastName: inquiry.person.lastName,
+                email: inquiry.person.email,
+              }
+            : null),
+        notes: request.notes,
+      })
+    } catch (err) {
+      alert(`Could not read the request: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const captureSuggestion = async (emailId: string) => {
@@ -533,6 +612,7 @@ export function NewInboundColumn({
                     detailReply={detailReplies[item.row.id] ?? null}
                     onDetailReplyResolved={load}
                     onCapture={() => capturePersistent(item.row.id)}
+                    onReserve={() => openReservation(item.row)}
                     onAddOn={() => setAddOnInquiry(item.row)}
                     onQuickRespond={() => openQuickRespond(item.row)}
                     onDismiss={() => dismissPersistent(item.row.id)}
@@ -606,6 +686,7 @@ export function NewInboundColumn({
                         detailReply={detailReplies[item.row.id] ?? null}
                         onDetailReplyResolved={load}
                         onCapture={() => capturePersistent(item.row.id)}
+                        onReserve={() => openReservation(item.row)}
                         onAddOn={() => setAddOnInquiry(item.row)}
                         onQuickRespond={() => openQuickRespond(item.row)}
                         onDismiss={() => dismissPersistent(item.row.id)}
@@ -650,6 +731,20 @@ export function NewInboundColumn({
           emailId={quickReplyEmailId}
           onClose={() => setQuickReplyEmailId(null)}
           onSent={() => { setQuickReplyEmailId(null); load() }}
+        />
+      )}
+
+      {/* Reservation-first intake. The modal creates the Order, takes
+          the holds, adds the rest of the request's lines and closes the
+          inquiry; the quote is written on the order it hands back. */}
+      {reservePrefill && (
+        <MakeReservationModal
+          prefill={reservePrefill}
+          onClose={() => setReservePrefill(null)}
+          onCreated={() => {
+            load()
+            onChange?.()
+          }}
         />
       )}
 
@@ -854,6 +949,7 @@ function PersistentCard({
   detailReply,
   onDetailReplyResolved,
   onCapture,
+  onReserve,
   onAddOn,
   onQuickRespond,
   onDismiss,
@@ -866,6 +962,8 @@ function PersistentCard({
   detailReply?: ClientDetailReply | null
   onDetailReplyResolved?: () => void
   onCapture: () => void
+  /** Only ever called on a request that names vehicles. */
+  onReserve: () => void
   onAddOn: () => void
   onQuickRespond: () => void
   onDismiss: () => void
@@ -878,6 +976,10 @@ function PersistentCard({
     ? inquiry.sourceMetadata
     : null
   const handled = inquiry.handledInHq
+  // Vehicles on the request itself — a web-form cart, not a guess off
+  // the prose. Non-zero flips the card reservation-first: hold the
+  // trucks, write the quote on the order that comes back.
+  const vehicleUnits = vehicleLineCount(inquiry.sourceMetadata)
   // An inquiry past the first-response SLA — a client wrote in and
   // nobody has replied on any tracked channel. Red ring + wait badge.
   // A lead that is already a quoted order is answered, whatever the
@@ -981,6 +1083,28 @@ function PersistentCard({
           >
             Open {handled.orderNumber} →
           </a>
+        ) : vehicleUnits > 0 ? (
+          /* The request names trucks. Those are the scarce thing, so
+             they lead: hold them, then price. Capture & Quote is still
+             right here for a request the desk wants to build by hand. */
+          <>
+            <button
+              onClick={onReserve}
+              disabled={busy}
+              title={`Hold the ${vehicleUnits} vehicle${vehicleUnits === 1 ? '' : 's'} on this request, then quote`}
+              className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+            >
+              {busy ? '…' : `Reserve & Quote · ${vehicleUnits} →`}
+            </button>
+            <button
+              onClick={onCapture}
+              disabled={busy}
+              title="Build the quote first; the hold follows when it is sent"
+              className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-gray-500 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+            >
+              Capture & Quote
+            </button>
+          </>
         ) : (
           <button
             onClick={onCapture}

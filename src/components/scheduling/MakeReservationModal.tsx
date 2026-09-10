@@ -89,6 +89,28 @@
  * already booked over the window is not offered at all — that is a
  * queue decision, and the queue lives above.
  *
+ * PRE-LOADED FROM AN INBOUND REQUEST (Wes 2026-09-10: "we need to add
+ * the workflow of starting with making a reservation and quote
+ * following if vehicles are on the request"). Capture & Quote builds
+ * the quote first and lets the hold fall out of it at the end. On a
+ * web-form request that already names trucks and dates, that is
+ * backwards — the truck is the scarce thing and the money is the easy
+ * part. `prefill` arrives from the New inbound card carrying the
+ * request's vehicles, window, company, contact and notes; the desk
+ * confirms the queue, picks the job, and the order it creates is where
+ * the quote gets written.
+ *
+ * The request's NON-vehicle lines ride along onto the same order. They
+ * can't be held and they aren't what this window is for, but the
+ * client asked for them, and an order that silently drops half a
+ * request is worse than one that carries lines the desk has to price.
+ *
+ * The inquiry is closed CONVERTED on the way out, the same two ways
+ * Capture & Quote closes it — convertedJobId for a job created here,
+ * convertedOrderId when the reservation went onto a job that already
+ * existed. Non-fatal: an order with holds and a still-open inquiry is
+ * a duplicate-work risk, not a data loss.
+ *
  * Nothing here emails anybody. Creating an order + holds is internal
  * work; the client-facing sends live behind Send quote / Book it, and
  * adding a job contact deliberately sends no portal invite.
@@ -145,6 +167,11 @@ interface Row {
   /** Units the agent named, by asset id. Empty = let "next available"
    *  decide. Never longer than `quantity`; trimmed when it shrinks. */
   unitIds: string[]
+  /** This line came off an inbound request. An unresolved one BLOCKS
+   *  the submit: liveRows quietly skips a row with no type, which on a
+   *  hand-built form is forgiving and on a client's request is losing
+   *  half of what they asked for. */
+  fromRequest?: boolean
 }
 
 /** One unit of a category, with its state over the reservation window. */
@@ -180,6 +207,9 @@ interface Result {
   orderId: string
   orderNumber: string
   rows: RowResult[]
+  /** How many of the request's non-vehicle lines made it onto the
+   *  order, and what went wrong for any that didn't. */
+  supplies?: { added: number; total: number; note: string | null }
 }
 
 /** One line of the submit progress list. */
@@ -200,10 +230,40 @@ const newRow = (): Row => ({
   unitIds: [],
 })
 
+/** A non-vehicle line from the same inbound request. */
+export interface PrefillSupply {
+  inventoryItemId: string
+  name: string
+  quantity: number
+  /** LineItemType off the catalog row — EQUIPMENT, EXPENDABLE, … */
+  type: string
+  flat: boolean
+  department: string | null
+  rate: number
+  pickupDate: string | null
+  returnDate: string | null
+}
+
+/** Everything an inbound request hands the desk. See the header. */
+export interface ReservationPrefill {
+  /** The inquiry this came from — closed CONVERTED once it lands. */
+  inquiryId: string
+  vehicles: { fleetCategoryId: string | null; name: string; quantity: number }[]
+  supplies: PrefillSupply[]
+  start: string | null
+  end: string | null
+  company: { id: string; name: string } | null
+  companyName: string | null
+  jobName: string | null
+  contact: { firstName: string; lastName: string; email: string } | null
+  notes: string | null
+}
+
 export function MakeReservationModal({
   defaultStart,
   defaultEnd,
   canBindUnit = true,
+  prefill,
   onClose,
   onCreated,
 }: {
@@ -214,26 +274,48 @@ export function MakeReservationModal({
    *  When false the "assign next available" option is not offered — the
    *  reservation still holds the category. */
   canBindUnit?: boolean
+  /** Opens the window already loaded from an inbound request. */
+  prefill?: ReservationPrefill
   onClose: () => void
   onCreated: () => void
 }) {
   const [categories, setCategories] = useState<Category[]>([])
-  const [rows, setRows] = useState<Row[]>(() => [newRow()])
-  const [start, setStart] = useState(defaultStart || today())
-  const [end, setEnd] = useState(defaultEnd || defaultStart || today())
-  const [company, setCompany] = useState<{ id: string; name: string } | null>(null)
+  // One row per requested vehicle when the window opened from an
+  // inbound request; a type the catalog can't fleet-link comes through
+  // as an EMPTY row, which the blockers then insist the desk fills in.
+  // Dropping it would lose the ask silently.
+  const [rows, setRows] = useState<Row[]>(() =>
+    prefill && prefill.vehicles.length > 0
+      ? prefill.vehicles.map((v) => ({
+          ...newRow(),
+          categoryId: v.fleetCategoryId ?? '',
+          quantity: v.quantity,
+          fromRequest: true,
+        }))
+      : [newRow()],
+  )
+  const [start, setStart] = useState(prefill?.start || defaultStart || today())
+  const [end, setEnd] = useState(
+    prefill?.end || prefill?.start || defaultEnd || defaultStart || today(),
+  )
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(
+    prefill?.company ?? null,
+  )
   const [job, setJob] = useState<{ id: string; jobCode: string; name: string } | null>(null)
+  /** Did the agent CREATE the job, or attach to one that existed? The
+   *  inquiry closes against a different column for each. */
+  const [jobCreated, setJobCreated] = useState(false)
   const [resolverOpen, setResolverOpen] = useState(false)
   const [assignNext, setAssignNext] = useState(true)
   /** Which lines have the unit picker open. A line that has named a
    *  unit is open regardless — the picks have to stay visible. */
   const [openPickers, setOpenPickers] = useState<Record<string, boolean>>({})
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(prefill?.notes ?? '')
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
-  const [contactFirst, setContactFirst] = useState('')
-  const [contactLast, setContactLast] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
+  const [contactFirst, setContactFirst] = useState(prefill?.contact?.firstName ?? '')
+  const [contactLast, setContactLast] = useState(prefill?.contact?.lastName ?? '')
+  const [contactEmail, setContactEmail] = useState(prefill?.contact?.email ?? '')
   const [jobContacts, setJobContacts] = useState<{ name: string; email: string; role: string }[] | null>(null)
   const [contactsLoading, setContactsLoading] = useState(false)
 
@@ -241,7 +323,11 @@ export function MakeReservationModal({
   // modal uses: the agent picks "use existing" or "create anyway",
   // never an auto-merge.
   const [creatingCompany, setCreatingCompany] = useState(false)
-  const [newCompanyName, setNewCompanyName] = useState('')
+  // A request that named a company with no row of its own opens the
+  // inline create with the client's own words already typed.
+  const [newCompanyName, setNewCompanyName] = useState(
+    prefill?.company ? '' : (prefill?.companyName ?? ''),
+  )
   const [companyBusy, setCompanyBusy] = useState(false)
   const [companyError, setCompanyError] = useState<string | null>(null)
   const [companyNearMatch, setCompanyNearMatch] = useState<{ id: string; name: string; message: string } | null>(null)
@@ -262,6 +348,9 @@ export function MakeReservationModal({
   const [createdOrder, setCreatedOrder] = useState<{ id: string; orderNumber: string } | null>(null)
   /** Lines that have already landed — a retry skips them. */
   const [landed, setLanded] = useState<Record<string, RowResult>>({})
+  /** The request's non-vehicle lines, once written. A retry must not
+   *  post them twice — the order would carry the gear in duplicate. */
+  const [suppliesLanded, setSuppliesLanded] = useState(false)
   const [steps, setSteps] = useState<Record<string, StepState>>({})
   const [result, setResult] = useState<Result | null>(null)
 
@@ -433,6 +522,9 @@ export function MakeReservationModal({
    */
   const blockers: string[] = []
   if (liveRows.length === 0) blockers.push('pick a vehicle type')
+  if (rows.some((r) => r.fromRequest && !r.categoryId)) {
+    blockers.push('name a fleet type for every vehicle on the request, or remove the line')
+  }
   if (dupTypes.length > 0) blockers.push('one line per type — use the quantity')
   if (!datesValid) blockers.push('check the dates')
   if (liveRows.some((r) => r.quantity < 1)) blockers.push('how many?')
@@ -470,6 +562,7 @@ export function MakeReservationModal({
 
   function onJobResolved(r: ResolvedJob) {
     setJob({ id: r.id, jobCode: r.jobCode, name: r.name })
+    setJobCreated(r.created)
     // The Job is the root object: if its company differs from the one
     // picked here, follow the Job. An order whose company disagrees
     // with its job's is a data bug nobody looks for later.
@@ -812,10 +905,77 @@ export function MakeReservationModal({
         mark(stepKey, 'done')
       }
 
+      // 3 — the rest of the request. Gear, expendables, whatever else
+      // was in the client's cart: not reservable, not what this window
+      // is for, but asked for. A failure here is reported, never fatal
+      // — the trucks are held and the order exists either way.
+      let supplySummary: Result['supplies']
+      const wanted = prefill?.supplies ?? []
+      if (wanted.length > 0) {
+        if (suppliesLanded) {
+          mark('supplies', 'skipped')
+        } else {
+          mark('supplies', 'running')
+          let added = 0
+          let supplyNote: string | null = null
+          for (const sup of wanted) {
+            const res = await fetch(`/api/orders/${order.id}/line-items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                // The snapshot's own type is InventoryItem.type, which
+                // IS a LineItemType — pass it through so an expendable
+                // doesn't land as equipment.
+                type: sup.type,
+                description: sup.name,
+                inventoryItemId: sup.inventoryItemId,
+                ...(sup.department ? { department: sup.department } : {}),
+                // EXPENDABLE bills flat (qty × rate) — a consumable has
+                // no rental days. Everything else is daily over the
+                // order's window.
+                rateType: sup.flat ? 'FLAT' : 'DAILY',
+                rate: sup.rate,
+                quantity: sup.quantity,
+                ...(sup.flat ? {} : { pickupDate: sup.pickupDate ?? start, returnDate: sup.returnDate ?? end }),
+              }),
+            })
+            if (!res.ok) {
+              const sj = await res.json().catch(() => ({}))
+              supplyNote = `${sup.name} could not be added (${sj?.reason || sj?.error || res.status}) — add it on the order.`
+              break
+            }
+            added++
+          }
+          if (added > 0) setSuppliesLanded(true)
+          supplySummary = { added, total: wanted.length, note: supplyNote }
+          mark('supplies', supplyNote ? 'failed' : 'done')
+        }
+      }
+
+      // 4 — close the inquiry, the same two ways Capture & Quote does.
+      // Non-fatal: a still-open inquiry over a live order is duplicate
+      // work waiting to happen, not lost data.
+      if (prefill?.inquiryId) {
+        try {
+          await fetch(`/api/inquiries/${encodeURIComponent(prefill.inquiryId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+              jobCreated
+                ? { status: 'CONVERTED', convertedJobId: job.id }
+                : { status: 'CONVERTED', convertedOrderId: order.id },
+            ),
+          })
+        } catch {
+          // Non-fatal — see above.
+        }
+      }
+
       setResult({
         orderId: order.id,
         orderNumber: order.orderNumber,
         rows: liveRows.map((r) => done[r.key]).filter(Boolean),
+        supplies: supplySummary,
       })
       setConflict(null)
       onCreated()
@@ -1032,7 +1192,9 @@ export function MakeReservationModal({
       <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-10 px-4">
         <div className="bg-lt-card w-full max-w-xl rounded-xl shadow-xl border border-lt-hairline">
           <div className="flex items-center justify-between px-5 py-3 border-b border-lt-hairline">
-            <h2 className="text-sm font-bold text-lt-fg">Make a reservation</h2>
+            <h2 className="text-sm font-bold text-lt-fg">
+              {prefill ? 'Reserve the request' : 'Make a reservation'}
+            </h2>
             <button
               onClick={onClose}
               className="text-lt-fg3 hover:text-lt-fg"
@@ -1078,13 +1240,26 @@ export function MakeReservationModal({
                   </div>
                 ))}
               </div>
-              {result.rows.some((rr) => rr.note) && (
+              {result.supplies && (
+                <div className="text-[12px] text-lt-fg2">
+                  {result.supplies.added} of {result.supplies.total} other requested line
+                  {result.supplies.total === 1 ? '' : 's'} added to the order.
+                </div>
+              )}
+              {prefill && (
+                <div className="text-[11px] text-lt-fg3">
+                  The inquiry is closed — the trucks are held, and the quote is written on{' '}
+                  {result.orderNumber}. Nobody has been emailed.
+                </div>
+              )}
+              {(result.supplies?.note || result.rows.some((rr) => rr.note)) && (
                 <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px] space-y-1">
                   {result.rows
                     .filter((rr) => rr.note)
                     .map((rr) => (
                       <div key={rr.key}>{rr.note}</div>
                     ))}
+                  {result.supplies?.note && <div>{result.supplies.note}</div>}
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-1">
@@ -1098,13 +1273,55 @@ export function MakeReservationModal({
                   href={`/orders/${result.orderId}`}
                   className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[12px] font-semibold"
                 >
-                  Open the order
+                  {prefill ? 'Price the quote →' : 'Open the order'}
                 </a>
               </div>
             </div>
           ) : (
             /* ── Form ─────────────────────────────────────────────── */
             <div className="px-5 py-4 space-y-4">
+              {/* Opened from an inbound request: say what was asked for,
+                  in the client's terms, so the desk can see at a glance
+                  whether the form below still matches it. */}
+              {prefill && (
+                <div className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-[12px] text-lt-fg2 space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-lt-fg3">
+                    From the request
+                  </div>
+                  <div>
+                    {prefill.vehicles
+                      .map((v) => `${v.quantity}× ${v.name}`)
+                      .join(' · ')}
+                    {prefill.start && (
+                      <>
+                        {' · '}
+                        {prefill.start === prefill.end
+                          ? prefill.start
+                          : `${prefill.start} – ${prefill.end}`}
+                      </>
+                    )}
+                  </div>
+                  {prefill.supplies.length > 0 && (
+                    <div className="text-[11px] text-lt-fg3">
+                      Plus {prefill.supplies.length} non-vehicle line
+                      {prefill.supplies.length === 1 ? '' : 's'} — added to the same order, priced on
+                      the quote.
+                    </div>
+                  )}
+                  {prefill.vehicles.some((v) => !v.fleetCategoryId) && (
+                    <div className="rounded bg-chip-warn-bg text-chip-warn-fg px-2 py-1 text-[11px]">
+                      No fleet type is linked to{' '}
+                      {prefill.vehicles
+                        .filter((v) => !v.fleetCategoryId)
+                        .map((v) => v.name)
+                        .join(', ')}{' '}
+                      — pick what it should hold below, or drop the line and quote it as a
+                      sub-rental.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* The lines. One per vehicle type; quantity carries the
                   count. They all land on this one order. */}
               <div className="space-y-2">
@@ -1225,6 +1442,12 @@ export function MakeReservationModal({
                         )}
                       </div>
 
+                      {r.fromRequest && !r.categoryId && !written && (
+                        <p className="text-[11px] text-chip-warn-fg">
+                          On the request, with no fleet type behind it. Pick what holds it, or
+                          remove the line and quote it as a sub-rental.
+                        </p>
+                      )}
                       {written && (
                         <p className="text-[11px] text-chip-good-fg font-semibold">
                           Already on order {createdOrder?.orderNumber} — this line is written.
@@ -1572,6 +1795,13 @@ export function MakeReservationModal({
                           : ''),
                     ),
                   )}
+                  {(prefill?.supplies.length ?? 0) > 0 &&
+                    stepRow(
+                      'supplies',
+                      `Adding ${prefill!.supplies.length} more line${
+                        prefill!.supplies.length === 1 ? '' : 's'
+                      } from the request`,
+                    )}
                 </div>
               )}
 
@@ -1611,8 +1841,16 @@ export function MakeReservationModal({
         <JobResolverModal
           context={{
             companyId: company?.id ?? null,
-            companyName: company?.name ?? null,
+            companyName: company?.name ?? prefill?.companyName ?? null,
             dates: datesValid ? { start, end } : null,
+            // The request already named the production and who is
+            // asking — the resolver ranks on both, so withholding them
+            // would make it re-ask what the client already typed.
+            jobNameHint: prefill?.jobName ?? null,
+            contactName: prefill?.contact
+              ? `${prefill.contact.firstName} ${prefill.contact.lastName}`
+              : null,
+            contactEmail: prefill?.contact?.email ?? null,
           }}
           onResolved={onJobResolved}
           onClose={() => setResolverOpen(false)}
