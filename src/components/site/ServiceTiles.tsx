@@ -243,17 +243,27 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
         })}
       </div>
 
-        {/* Master search — centred over the bottom of the bands, spanning
+        {/* Master search — centred across the TOP of the bands, spanning
             roughly three tiles. Deliberately the ONE thing sitting above
             the diagonal nav: the tiles answer "what do you rent", this
             answers "do you have X", which is the faster question as the
             catalog grows. Its box is only as wide as the pill, so the
-            bands on either side keep their hover-grow. */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[7vh] z-20 w-[min(660px,52vw)]">
-          <SiteSearch dropUp />
-          <div className="mt-2.5 text-center text-[11px] uppercase tracking-[0.16em] text-white/45 [text-shadow:0_1px_6px_rgba(0,0,0,0.8)]">
+            bands on either side keep their hover-grow.
+
+            TOP, not bottom: the tilted tile titles are vertically CENTRED
+            in each band and the hover label/tagline sits at the bottom —
+            a pill low in the hero landed on top of both and cut the
+            titles in half. The band tops are empty at every tile count,
+            so the pill only ever covers the leaning top edges. Being at
+            the top also means the results list drops DOWN (no `dropUp`)
+            with the whole hero below it to open into, and the caption
+            becomes an eyebrow ABOVE the field so the list never opens
+            over it. */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-[5vh] z-20 w-[min(660px,52vw)]">
+          <div className="mb-2.5 text-center text-[11px] uppercase tracking-[0.16em] text-white/45 [text-shadow:0_1px_6px_rgba(0,0,0,0.8)]">
             Search the whole catalog
           </div>
+          <SiteSearch />
         </div>
       </div>
 

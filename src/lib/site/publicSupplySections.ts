@@ -17,6 +17,8 @@
  * Internal surfaces (builder, typeahead, admin) never read this file.
  */
 
+import { placement, queryVariants } from '@/lib/site/publicTextMatch'
+
 export interface PublicSupplySection {
   label: string
   slugs: string[]
@@ -198,8 +200,6 @@ export function mapCatalogToSections<T extends { id: string; name: string; categ
     .filter((s) => s.items.length > 0)
 }
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
 /**
  * Rank search results across the FULL publicVisible catalog — search
  * ignores section mapping (typing intent beats browse curation), so
@@ -209,11 +209,15 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * outranks weaker matches; the API has already alias/code/category-
  * filtered the set, so a non-name hit means "matched via alias/code/
  * category only"):
- *   0 — name starts with the query        ("Table…" for "table")
- *   1 — query at a word boundary in name  ("Folding Table")
- *   2 — query as a substring in name      ("Turntable")
+ *   0 — name starts with the token        ("Table…" for "table")
+ *   1 — token at a word boundary in name  ("Folding Table")
+ *   2 — token as a substring in name      ("Turntable")
  *   3 — name doesn't contain it           (alias/code/category match)
- * Alphabetical within each tier.
+ * Scored PER TOKEN and summed, in the same singular/plural variants the
+ * API filtered on — ranking on the raw string would drop every plural
+ * query ("walkies") to tier 3 and hand back an alphabetical list with
+ * the actual walkies buried in it.
+ * Alphabetical within each score.
  */
 export function rankSearchResults<T extends { id: string; name: string }>(
   items: T[],
@@ -221,18 +225,13 @@ export function rankSearchResults<T extends { id: string; name: string }>(
 ): T[] {
   const q = query.trim().toLowerCase()
   if (!q) return items
-  const word = new RegExp(`\\b${escapeRegExp(q)}`, 'i')
-  const tier = (name: string): number => {
-    const n = name.toLowerCase()
-    if (n.startsWith(q)) return 0
-    if (word.test(name)) return 1
-    if (n.includes(q)) return 2
-    return 3
-  }
+  const variants = queryVariants(q)
+  const score = (name: string): number =>
+    variants.reduce((sum, vs) => sum + placement(name, vs), 0)
   const seen = new Set<string>()
   return items
     .filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)))
-    .map((it) => ({ it, t: tier(it.name) }))
+    .map((it) => ({ it, t: score(it.name) }))
     .sort((a, b) => a.t - b.t || a.it.name.localeCompare(b.it.name))
     .map((x) => x.it)
 }

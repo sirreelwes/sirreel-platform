@@ -25,7 +25,7 @@
 import { prisma } from '@/lib/prisma'
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
-import { mergeMeasureTokens, tokenVariants } from '@/lib/sales/catalogMatcher'
+import { haystack as buildHaystack, matchesQuery, placement, queryVariants } from '@/lib/site/publicTextMatch'
 import type { PublicSearchHit, PublicSearchKind } from '@/lib/site/publicSearchTypes'
 
 export type { PublicSearchKind, PublicSearchHit } from '@/lib/site/publicSearchTypes'
@@ -57,9 +57,7 @@ const STATIC_PAGES: Array<{ label: string; href: string; keywords: string }> = [
 const INDEX_TTL_MS = 60_000
 let cache: { at: number; entries: IndexEntry[] } | null = null
 
-function norm(...parts: (string | null | undefined)[]): string {
-  return parts.filter(Boolean).join(' ').toLowerCase()
-}
+const norm = buildHaystack
 
 async function buildIndex(): Promise<IndexEntry[]> {
   const [items, vehicles, spaces] = await Promise.all([
@@ -159,41 +157,15 @@ async function getIndex(): Promise<IndexEntry[]> {
   return entries
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/**
- * Placement score for ONE token inside a label, best (0) first. Scored per
- * TOKEN, not per whole query — "cargo van" has to rank "Cargo Van" above a
- * page that merely lists both words in its keywords, and whole-string
- * matching can't see that.
- *   0 label starts with it   1 it starts a word in the label
- *   2 it appears mid-word    3 not in the label at all (matched on an
- *                              alias, category or page keyword)
- */
-function placement(label: string, variants: string[]): number {
-  const n = label.toLowerCase()
-  let best = 3
-  for (const v of variants) {
-    if (!v) continue
-    if (n.startsWith(v)) return 0
-    if (new RegExp(`\\b${escapeRegExp(v)}`, 'i').test(label)) best = Math.min(best, 1)
-    else if (n.includes(v)) best = Math.min(best, 2)
-  }
-  return best
-}
-
 export async function searchPublicSite(query: string, limit = 8): Promise<PublicSearchHit[]> {
   const q = query.trim().toLowerCase()
   if (!q) return []
   const entries = await getIndex()
-  const tokens = mergeMeasureTokens(q.split(/\s+/).filter(Boolean))
-  const variants = tokens.map(tokenVariants)
+  // Tokenized + plural-tolerant, shared with the order form's own field
+  // so both public search boxes answer a query identically.
+  const variants = queryVariants(q)
 
-  const matched = entries.filter((e) =>
-    variants.every((vs) => vs.some((v) => e.haystack.includes(v))),
-  )
+  const matched = entries.filter((e) => matchesQuery(e.haystack, variants))
 
   // Kind is a tie-breaker only, so "cargo van" still puts the vehicle above
   // an expendable that merely mentions it.

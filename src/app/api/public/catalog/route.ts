@@ -16,16 +16,20 @@
  *   replacementCost, imageUrl (could be exposed later as
  *   thumbnailUrl with a transform, but not now).
  *
- * Optional `?q=` filter — case-insensitive match against:
- *   - description (substring)
- *   - code (substring)
- *   - aliases[] (exact element match against lowercased q;
- *     synonyms in the catalog seed are curated for this — e.g.
- *     "genny" → generators, "pop up" → caravan canopies).
+ * Optional `?q=` filter — tokenized, plural-tolerant, case-insensitive
+ * match across description + code + category name + aliases[], via the
+ * shared src/lib/site/publicTextMatch.ts. The Home hero pill
+ * (/api/public/search) matches through the SAME helper, so a query that
+ * finds a thing there finds it here too — which is the whole promise of
+ * the hero field, since it lands the client on this route.
  *
- * Same alias-aware pattern as /api/catalog/search so a query
- * surfacing items in the quote-builder also surfaces them here
- * (shared underlying aliases[] column on InventoryItem).
+ * It used to substring-match the WHOLE raw query against each field, and
+ * that quietly failed every plural: the catalog names things in the
+ * singular ("Walkie, Digital") and the alias seed deliberately keeps only
+ * the singular forms (scripts/seed-catalog-aliases.ts strips "walkies"
+ * and "radios" so a bare walkie resolves to the digital row). "walkies"
+ * — what a crew actually types — matched nothing at all and the form
+ * said we don't rent them.
  *
  * Categories with zero qualifying items are omitted from the
  * response — naturally drops the legacy empty categories
@@ -34,6 +38,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { haystack, matchesQuery, queryVariants } from '@/lib/site/publicTextMatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,18 +78,19 @@ export async function GET(req: NextRequest) {
     ],
   })
 
-  // Case-insensitive PARTIAL (substring) match across name + aliases +
-  // category. Filtered in-process because Postgres/Prisma can't substring-
-  // match an element inside a String[] (`has` is exact-element only); the
-  // client catalog is ~194 rows so this is trivial. No query → return all.
-  const ql = q.toLowerCase()
+  // Every typed token must hit the row somewhere, in any of its
+  // singular/plural/measure spellings — so "walkies" finds "Walkie,
+  // Digital" and "6 tables" finds "Table, 6' Folding". Filtered
+  // in-process because Postgres/Prisma can't substring-match an element
+  // inside a String[] (`has` is exact-element only); the client catalog
+  // is ~194 rows so this is trivial. No query → return all.
+  const variants = queryVariants(q)
   const items = q
-    ? rows.filter(
-        (it) =>
-          (it.description ?? '').toLowerCase().includes(ql) ||
-          (it.code ?? '').toLowerCase().includes(ql) ||
-          (it.category?.name ?? '').toLowerCase().includes(ql) ||
-          it.aliases.some((a) => a.toLowerCase().includes(ql)),
+    ? rows.filter((it) =>
+        matchesQuery(
+          haystack(it.description, it.code, it.category?.name, it.aliases.join(' ')),
+          variants,
+        ),
       )
     : rows
 

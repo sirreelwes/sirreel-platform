@@ -16,9 +16,10 @@
  * (/order/supplies?q=…) — which means the field still works if the API
  * is down or the catalog is mid-deploy.
  *
- * `dropUp` renders the results ABOVE the field: on the Home hero the pill
- * sits near the bottom of the viewport, where a downward list would open
- * off-screen.
+ * `dropUp` renders the results ABOVE the field, for a placement near the
+ * bottom of the viewport where a downward list would open off-screen. The
+ * Home hero no longer needs it — the pill moved to the top of the tile
+ * band, so its list drops down over the tiles.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
