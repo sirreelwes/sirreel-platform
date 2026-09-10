@@ -238,8 +238,13 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // NOT lock the filter — the user can change it freely afterwards. It
   // is independent of the cookie-based reorder session, so both apply.
   const supplyGridRef = useRef<HTMLDivElement>(null)
+  // The browse grid unmounts while a query is active, so a `?q=` landing
+  // has to scroll to something that's always mounted — the search bar,
+  // with the ranked results directly under it.
+  const searchBarRef = useRef<HTMLDivElement>(null)
   const deepLinkReadRef = useRef(false)
   const deepLinkScrollPendingRef = useRef(false)
+  const deepLinkQueryRef = useRef<string | null>(null)
   useEffect(() => {
     if (deepLinkReadRef.current) return
     deepLinkReadRef.current = true
@@ -251,6 +256,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     const q = sp.get('q')?.trim()
     if (q) {
       setQuery(q)
+      deepLinkQueryRef.current = q
       deepLinkScrollPendingRef.current = true
       return
     }
@@ -267,11 +273,17 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // later data refetches (search) don't re-scroll.
   useEffect(() => {
     if (!deepLinkScrollPendingRef.current || !data) return
+    const q = deepLinkQueryRef.current
+    // A `?q=` landing must not scroll on the FIRST (unfiltered) payload —
+    // that lands the visitor on the whole catalog a beat before their
+    // results replace it. Wait until the debounce has caught up.
+    if (q && debouncedQuery !== q) return
     deepLinkScrollPendingRef.current = false
+    const target = q ? searchBarRef.current : supplyGridRef.current
     requestAnimationFrame(() =>
-      supplyGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     )
-  }, [data])
+  }, [data, debouncedQuery])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim()), 200)
@@ -984,7 +996,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 </Link>
               </div>
             )}
-            <div className={`sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3 ${focusHideMobile}`}>
+            <div ref={searchBarRef} className={`sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3 scroll-mt-[76px] ${focusHideMobile}`}>
               <div className="relative">
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b857a" strokeWidth={2.2} strokeLinecap="round" className="absolute left-4 top-1/2 -translate-y-1/2">
                   <circle cx={11} cy={11} r={7} />
