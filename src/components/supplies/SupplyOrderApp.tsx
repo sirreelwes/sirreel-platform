@@ -280,15 +280,24 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     if (q && debouncedQuery !== q) return
     deepLinkScrollPendingRef.current = false
     const target = q ? searchBarRef.current : supplyGridRef.current
-    // INSTANT, not 'smooth'. A smooth scroll here never arrives: the
-    // catalog grid is still painting (thumbnails, sticky bar) and Chrome
-    // cancels the animation, leaving the visitor at the top of the page —
-    // measured on the production build, and the reason the `?category=`
-    // deep link had quietly stopped scrolling too. Instant is also the
-    // right feel for a landing: you arrive already on your results.
-    requestAnimationFrame(() =>
-      target?.scrollIntoView({ behavior: 'auto', block: 'start' }),
-    )
+    if (!target) return
+    // Two things had to change for this to actually land — measured on the
+    // production build, where `?category=` had quietly stopped scrolling
+    // long before `?q=` existed:
+    //
+    // 1. INSTANT, not 'smooth'. The grid is still painting (thumbnails,
+    //    sticky bar) when the animation starts and Chrome cancels it.
+    // 2. RE-ASSERT after paint. A scroll issued during hydration is undone
+    //    when the document finishes loading — the page snaps back to 0. So
+    //    fire again on a later frame, and only while the visitor is still
+    //    at the top (if they've already scrolled, that's their scroll and
+    //    we leave it alone).
+    const jump = () => target.scrollIntoView({ behavior: 'auto', block: 'start' })
+    requestAnimationFrame(jump)
+    const settle = setTimeout(() => {
+      if (window.scrollY < 8) jump()
+    }, 250)
+    return () => clearTimeout(settle)
   }, [data, debouncedQuery])
 
   useEffect(() => {
