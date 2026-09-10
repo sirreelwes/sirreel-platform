@@ -288,6 +288,18 @@ interface DuplicateSignal {
   others: { jobId: string; jobCode: string; name: string }[];
 }
 
+/**
+ * Markets HQ serves. Same three values as AssetCategory.region; this is the
+ * demand side of that vocabulary. Nothing filters availability by it yet —
+ * market separation still comes from market-scoped categories.
+ */
+type Market = 'LA' | 'NORCAL' | 'UTAH';
+const MARKET_LABELS: Record<Market, string> = {
+  LA: 'Los Angeles',
+  NORCAL: 'Northern California',
+  UTAH: 'Utah',
+};
+
 interface JobDetail {
   id: string;
   jobCode: string;
@@ -297,6 +309,8 @@ interface JobDetail {
   status: JobStatus;
   productionType: string;
   productionTypeProfileId: string | null;
+  /** Which market serves this production — LA / NORCAL / UTAH. */
+  market: Market;
   startDate: string | null;
   endDate: string | null;
   estimatedValue: number | null;
@@ -503,6 +517,7 @@ export default function JobDetailPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [marketSaving, setMarketSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
   // "Assign a unit" opens the picker HERE (Wes 2026-09-05, from his phone:
   // "there was never an opportunity to choose the specific truck"). The
@@ -753,6 +768,29 @@ export default function JobDetailPage() {
       alert(e instanceof Error ? e.message : 'Failed to save profile');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  // PATCH the Job's market. Optimistic like saveProfile: the row is one
+  // select and a re-fetch of the whole job to change one enum reads as a
+  // stall. Reverts on failure so the control never lies about what stuck.
+  const saveMarket = async (next: Market) => {
+    if (!job || next === job.market) return;
+    const prev = job.market;
+    setMarketSaving(true);
+    setJob({ ...job, market: next });
+    try {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market: next }),
+      });
+      if (!res.ok) throw new Error('Failed to save market');
+    } catch {
+      setJob((j) => (j ? { ...j, market: prev } : j));
+      flashToast('Could not change the market');
+    } finally {
+      setMarketSaving(false);
     }
   };
 
@@ -1765,6 +1803,25 @@ const driverTone = (d: any): string => {
             />
           </div>
           {profileSaving && <span className="text-[11px] text-zinc-600">Saving…</span>}
+          {/* Which market serves this production. Recorded on the job, not
+              derived: the fleet is location-blind, so nothing else in the
+              system can infer it. */}
+          <label className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
+              Market
+            </span>
+            <select
+              value={job.market}
+              onChange={(e) => { void saveMarket(e.target.value as Market); }}
+              disabled={marketSaving}
+              className="text-[12px] rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-800 disabled:opacity-60"
+            >
+              {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
+                <option key={m} value={m}>{MARKET_LABELS[m]}</option>
+              ))}
+            </select>
+          </label>
+          {marketSaving && <span className="text-[11px] text-zinc-600">Saving…</span>}
           <div className="ml-auto text-[11px] text-zinc-600">
             Created {fmtDate(job.createdAt)} · Updated {relativeAge(job.updatedAt)}
           </div>

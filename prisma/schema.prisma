@@ -5829,6 +5829,28 @@ model Job {
   // over writers and deprecate the enum.
   productionTypeProfileId String?        @map("production_type_profile_id")
   status                  JobStatus      @default(QUOTED)
+  /// Which MARKET this production is served from.
+  ///
+  /// Typed `Region` deliberately — LA / NORCAL / UTAH already exist as a
+  /// vocabulary on AssetCategory, and a second enum saying the same three
+  /// things is how the two drift apart. This is the DEMAND side of that
+  /// vocabulary: AssetCategory.region says where a product lives, this says
+  /// where the work is.
+  ///
+  /// Default LA rather than nullable: every owned bookable unit sat at
+  /// Lankershim until 2026-09-10 (the Napa DLUX), so LA is the true answer
+  /// for every historical row, and a nullable column would push a
+  /// null-check into every read site to express a fact nobody doubts.
+  ///
+  /// What this does NOT do yet: nothing filters availability by it.
+  /// `src/lib/scheduling/` is entirely location-blind — market separation
+  /// today comes from market-scoped CATEGORIES (`DLUX (NorCal)` is its own
+  /// category and therefore cannot pool with LA), which is load-bearing and
+  /// must not be "tidied" away without making availability location-aware
+  /// first. This field is the cheap prerequisite: once demand carries a
+  /// market, per-market reporting, partner routing ("who serves
+  /// Sacramento") and a cross-market quote guard all become expressible.
+  market                  Region         @default(LA)
   agentId                 String         @map("agent_id")
   planyoCartId            String?        @unique @map("planyo_cart_id")
   estimatedValue          Decimal?       @map("estimated_value") @db.Decimal(12, 2)

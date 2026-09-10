@@ -21,6 +21,14 @@ import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomp
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { findCompanyAnnualCoverage, annualCoverageTitle } from '@/lib/orders/annualCoverage'
 
+/**
+ * Markets HQ serves. Same vocabulary as AssetCategory.region — this is the
+ * DEMAND side of it (where the work is; the category says where a product
+ * lives). Kept as a literal list so a bad value is a no-op rather than a
+ * Prisma 500.
+ */
+const MARKETS = ['LA', 'NORCAL', 'UTAH'] as const
+
 export const dynamic = 'force-dynamic'
 
 // GET /api/jobs/:id
@@ -701,6 +709,7 @@ export async function PATCH(
       notes,
       estimatedValue,
       tags,
+      market,
     } = body
 
     const job = await prisma.job.update({
@@ -720,6 +729,10 @@ export async function PATCH(
         }),
         ...(agentId !== undefined && { agentId }),
         ...(notes !== undefined && { notes }),
+        // Which market serves this production. Validated against the enum
+        // rather than passed through: an unknown string would 500 inside
+        // Prisma with a message no caller can act on.
+        ...(market !== undefined && MARKETS.includes(market) && { market }),
         // Job tags (e.g. 'ART_DEPT') — full-array replace, strings only.
         ...(Array.isArray(tags) && {
           tags: tags.filter((t: unknown): t is string => typeof t === 'string' && t.trim() !== ''),
