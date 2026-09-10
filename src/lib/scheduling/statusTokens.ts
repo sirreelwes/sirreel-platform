@@ -221,10 +221,9 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
  *     words for anyone who wants the count.
  *  2. Bar labels are 9px white-on-colour, and white on a light-green
  *     wash is the 2026-09-04 check in/out screen all over again. So a
- *     bar that has any fill draws its label in INK instead of white
- *     (readinessLabelClass). Ink is the more legible choice on every
- *     solid bar we paint — 4.7:1 on the blue hold against white's 3.7 —
- *     and it stays legible where the wash lands.
+ *     bar that has any fill sets its label on a translucent white plate
+ *     (readinessLabelClass) — legible over the wash AND over the solid
+ *     half the wash has not reached yet.
  *
  * It is a background-image, not a child element, so it needs no z-index
  * against the label and no DOM on 300+ bars.
@@ -268,18 +267,17 @@ const METER_FILL_BY_STAGE: Record<string, string | null> = {
 const METER_ALPHA_ON_SOLID = 0.5
 const METER_ALPHA_ON_LIGHT = 0.75
 
-/** Label ink for a bar carrying fill — see note 2 above. A near-black
- *  green rather than plain black: it belongs to the fill's family and
- *  goes unnoticed on the unwashed part of the bar. */
-const METER_INK = 'text-[#0B2B17]'
-/** Ink per stage — the same family as each wash, so the label belongs to
- *  the bar. Static strings for Tailwind's scanner. */
-const METER_INK_BY_STAGE: Record<string, string> = {
-  inquiry: METER_INK,
-  hold: 'text-[#0B1F3F]',
-  booked: METER_INK,
-  order: 'text-[#3A0F17]',
-}
+/**
+ * Label plate for a bar carrying fill. A bar with a partial wash is TWO
+ * surfaces — light fill on the left, the stage's saturated color on the
+ * right — and one label crosses both. Dark ink read on the wash and died
+ * on the solid half (dark red, dark blue: Wes 2026-09-10, "the text inside
+ * the asset reservation bar is hard to read"); white did the reverse. So
+ * the label sits on its own translucent white plate, which is legible
+ * over any fill at any completion, and the bar's colors stay intact
+ * around it.
+ */
+const METER_PLATE = 'bg-white/85 text-zinc-900 px-1 rounded-sm'
 
 /**
  * The wash. Spread onto the bar's existing inline style — it paints over
@@ -327,10 +325,12 @@ export function readinessMeterStyle(
  * text is already dark (inquiry green, backup blue, the rose chips) are
  * returned untouched.
  */
-export function readinessLabelClass(base: string, r?: { done: number } | null, stage?: string): string {
+export function readinessLabelClass(base: string, r?: { done: number } | null, _stage?: string): string {
   if (!r || r.done <= 0) return base
-  const ink = (stage && METER_INK_BY_STAGE[stage]) || METER_INK
-  return base.replace('text-white', ink)
+  // Only white-on-color labels need the plate; a dark-ink token (dashed
+  // inquiry green, the struck greys) already reads on its pale wash.
+  if (!base.includes('text-white')) return base
+  return `${base.replace('text-white', '').trim()} ${METER_PLATE}`
 }
 
 /** Hover text — "Ready to go out" or "3 of 5 · missing COI, Card". */

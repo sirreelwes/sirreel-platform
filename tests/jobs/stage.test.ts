@@ -10,7 +10,7 @@
  * the ladder.
  */
 import { deriveJobStage, type JobStageInputs } from '../../src/lib/jobs/stage'
-import { STAGE_RAIL, STAGE_CHIP, STATUS_COLORS, LEGEND_ITEMS, barColor, readinessMeterStyle } from '../../src/lib/scheduling/statusTokens'
+import { STAGE_RAIL, STAGE_CHIP, STATUS_COLORS, LEGEND_ITEMS, barColor, readinessMeterStyle, readinessLabelClass } from '../../src/lib/scheduling/statusTokens'
 
 const failures: string[] = []
 function eq(got: unknown, want: unknown, why: string): void {
@@ -77,6 +77,9 @@ eq(LEGEND_ITEMS.some((l) => l.label === 'Booked · Warehouse order'), true, 'leg
 eq(readinessMeterStyle(3, 5, { stage: 'hold' }).backgroundImage?.includes('147, 197, 253'), true, 'a hold washes blue')
 eq(readinessMeterStyle(3, 5, { stage: 'order' }).backgroundImage?.includes('253, 164, 175'), true, 'a warehouse-order job washes rose')
 eq(readinessMeterStyle(3, 5, { stage: 'cancelled' }), {}, 'a cancelled bar draws no wash')
+eq(readinessLabelClass('text-white', { done: 3 }, 'order').includes('bg-white/85'), true, 'a washed label sits on a white plate, not dark ink on dark red')
+eq(readinessLabelClass('text-white', { done: 0 }, 'order'), 'text-white', 'no wash, no plate — white on the solid bar as before')
+eq(readinessLabelClass('text-green-800', { done: 3 }, 'inquiry'), 'text-green-800', 'dark-ink tokens keep their ink')
 
 console.log('')
 if (failures.length) { console.log(`${failures.length} failure(s)`); process.exit(1) }
