@@ -237,11 +237,17 @@ export function SiteSearch({
                       <span className="block truncate text-[14.5px] font-medium text-white">
                         {r.label}
                       </span>
-                      {r.sublabel && (
-                        <span className="block truncate text-[12px] text-white/55">
-                          {r.sublabel}
-                        </span>
-                      )}
+                      <span className="block truncate text-[12px] text-white/55">
+                        {r.sublabel}
+                        {/* Say what the click does. Search covers gear that
+                            isn't on the order form, and a row that looks
+                            orderable but isn't is worse than no row. */}
+                        {r.action === 'ask' && r.kind === 'supply' && (
+                          <span className="text-white/45">
+                            {r.sublabel ? ' · ' : ''}ask us about it
+                          </span>
+                        )}
+                      </span>
                     </span>
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${

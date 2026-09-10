@@ -23,10 +23,11 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
+import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 import { haystack as buildHaystack, matchesQuery, placement, queryVariants } from '@/lib/site/publicTextMatch'
-import { PUBLIC_CATALOG_VISIBLE_WHERE, hasPublicPrice } from '@/lib/catalog/publicVisibility'
+import { PUBLISHABLE_CANDIDATE_WHERE, hasPublicPrice } from '@/lib/catalog/publicVisibility'
+import { contactPrefillHref } from '@/lib/site/publicNav'
 import type { PublicSearchHit, PublicSearchKind } from '@/lib/site/publicSearchTypes'
 
 export type { PublicSearchKind, PublicSearchHit } from '@/lib/site/publicSearchTypes'
@@ -35,6 +36,8 @@ export { KIND_LABEL } from '@/lib/site/publicSearchTypes'
 interface IndexEntry extends PublicSearchHit {
   /** Lowercased name + category + aliases + code, matched as a substring. */
   haystack: string
+  /** Rank input only — never returned to the client. */
+  inStock: boolean
 }
 
 /**
@@ -62,25 +65,36 @@ const norm = buildHaystack
 
 async function buildIndex(): Promise<IndexEntry[]> {
   const [items, vehicles, spaces] = await Promise.all([
-    // The shared gate — same predicate /api/public/catalog and the
-    // publish desk read, so what search finds is exactly what the order
-    // form shows.
+    // EVERY category we actually rent — not just the self-serve subset.
+    // Search's job is "do you have X", and the answer is yes long before
+    // someone gets round to publishing X to the order form (2026-09-09:
+    // walkies and C-Stands were unfindable for exactly that reason).
+    // `publicVisible` still decides what a hit can DO, below.
+    //
+    // The floor stays the rest of the shared gate: archived, uncategorised
+    // and un-priced rows are never searchable, because there is nothing
+    // truthful to say about them.
     prisma.inventoryItem.findMany({
-      where: PUBLIC_CATALOG_VISIBLE_WHERE,
+      where: {
+        ...PUBLISHABLE_CANDIDATE_WHERE,
+        // Unit-tracked rows ARE the vehicles and stages, carried in the
+        // catalog since the AssetCategory merge. They reach search through
+        // their own loaders below, with their own pages; indexing them here
+        // too listed "Cargo Van w/ Liftgate" twice, once pointing at a
+        // contact form.
+        trackingMode: 'QUANTITY',
+      },
       select: {
         id: true, code: true, description: true, aliases: true, imageUrl: true,
-        dailyRate: true, includedFree: true,
+        dailyRate: true, includedFree: true, publicVisible: true, qtyOwned: true,
         category: { select: { slug: true, name: true } },
       },
     }),
-    prisma.vehicleCategory.findMany({
-      where: PUBLIC_VEHICLE_VISIBLE_WHERE,
-      select: {
-        id: true, name: true, slug: true, subtitle: true, photoUrl: true,
-        catalogItem: { select: { imageUrl: true } },
-        photos: { select: { id: true }, take: 1 },
-      },
-    }),
+    // Owned categories AND listed partner units, from the same loader
+    // /vehicles renders — so a partner unit is as findable as our own, and
+    // still never names its vendor. Querying vehicleCategory directly (as
+    // this did) missed every partner unit.
+    getPublicVehicles(),
     prisma.space.findMany({
       where: PUBLIC_SPACE_VISIBLE_WHERE,
       select: {
@@ -93,32 +107,42 @@ async function buildIndex(): Promise<IndexEntry[]> {
   const entries: IndexEntry[] = []
 
   for (const it of items) {
-    // $0 without includedFree = missing price → hidden everywhere public.
+    // $0 without includedFree = missing price → nothing truthful to show.
     if (!hasPublicPrice(it)) continue
     const name = it.description ?? ''
     if (!name) continue
+    const orderable = it.publicVisible
     entries.push({
       id: `supply:${it.id}`,
       kind: 'supply',
       label: name,
       sublabel: it.category?.name ?? null,
-      // Lands on the order form already filtered to this item, so the
-      // next click is "Add" — not another search.
-      href: `/order/supplies?q=${encodeURIComponent(name)}`,
+      // Orderable → the form, already filtered, so the next click is "Add".
+      // Otherwise → a request naming the item, which is the honest next
+      // step for gear we rent but don't sell self-serve.
+      href: orderable
+        ? `/order/supplies?q=${encodeURIComponent(name)}`
+        : contactPrefillHref(`Availability: ${name}`),
       image: it.imageUrl ? `/api/public/catalog-image/supply/${it.id}` : null,
+      action: orderable ? 'order' : 'ask',
+      // Ranking inputs only — never rendered.
+      inStock: it.qtyOwned > 0,
       haystack: norm(name, it.code, it.category?.name, it.aliases.join(' ')),
     })
   }
 
   for (const v of vehicles) {
-    const hasImage = v.photos.length > 0 || !!(v.photoUrl || v.catalogItem?.imageUrl)
     entries.push({
       id: `vehicle:${v.id}`,
       kind: 'vehicle',
       label: v.name,
       sublabel: v.subtitle || 'Production vehicle',
       href: `/vehicles/${v.slug}`,
-      image: hasImage ? `/api/public/catalog-image/vehicle/${v.id}` : null,
+      image: v.photoUrl,
+      // Every vehicle is a conversation, owned or partner — the /vehicles
+      // page is where that starts.
+      action: 'ask',
+      inStock: true,
       haystack: norm(v.name, v.slug.replace(/-/g, ' '), v.subtitle, 'vehicle truck van'),
     })
   }
@@ -132,6 +156,8 @@ async function buildIndex(): Promise<IndexEntry[]> {
       sublabel: kind === 'standing-set' ? 'Standing set' : 'Stage',
       href: kind === 'standing-set' ? '/standing-sets' : '/stages',
       image: s.photos[0] ? `/api/public/catalog-image/space-photo/${s.photos[0].id}` : null,
+      action: 'ask',
+      inStock: true,
       haystack: norm(s.name, s.description, kind === 'standing-set' ? 'standing set' : 'stage soundstage'),
     })
   }
@@ -144,6 +170,8 @@ async function buildIndex(): Promise<IndexEntry[]> {
       sublabel: null,
       href: p.href,
       image: null,
+      action: 'order',
+      inStock: true,
       haystack: norm(p.label, p.keywords),
     })
   }
@@ -157,6 +185,11 @@ async function getIndex(): Promise<IndexEntry[]> {
   const entries = await buildIndex()
   cache = { at: now, entries }
   return entries
+}
+
+/** Lower is better: orderable and on the shelf first, phone-call last. */
+function readiness(e: IndexEntry): number {
+  return (e.action === 'order' ? 0 : 2) + (e.inStock ? 0 : 1)
 }
 
 export async function searchPublicSite(query: string, limit = 8): Promise<PublicSearchHit[]> {
@@ -185,6 +218,10 @@ export async function searchPublicSite(query: string, limit = 8): Promise<Public
     .sort(
       (a, b) =>
         a.score - b.score ||
+        // Coverage without noise: now that search spans the whole catalog,
+        // the thing you can order right now, that we have on the shelf,
+        // outranks the equally-named row that needs a phone call.
+        readiness(a.e) - readiness(b.e) ||
         // Shorter name = less padding around the match = the more precise
         // hit ("Work Light w/stand" over "Standard 1 Line - Table Lamp").
         a.e.label.length - b.e.label.length ||
@@ -193,7 +230,7 @@ export async function searchPublicSite(query: string, limit = 8): Promise<Public
     )
     .slice(0, limit)
     .map(({ e }) => {
-      const { haystack: _haystack, ...hit } = e
+      const { haystack: _haystack, inStock: _inStock, ...hit } = e
       return hit
     })
 }

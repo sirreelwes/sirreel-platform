@@ -21,6 +21,17 @@ export interface PublicSearchHit {
   href: string
   /** Public image-proxy path, or null. */
   image: string | null
+  /**
+   * What a click DOES. 'order' = it's on the order form, the next click is
+   * Add. 'ask' = we rent it but it isn't self-serve, so the click opens a
+   * request prefilled with the item.
+   *
+   * Search covers the whole rentable catalog, not just the self-serve
+   * subset — a client searching "walkie" must find the walkie even when
+   * nobody has published it to the form yet. This field is what keeps that
+   * honest: it never implies you can add something you can't.
+   */
+  action: 'order' | 'ask'
 }
 
 /** Human label for the kind chip on each result row. */
