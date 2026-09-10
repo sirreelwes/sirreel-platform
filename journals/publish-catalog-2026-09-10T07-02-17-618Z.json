@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-10T07:02:17.619Z",
+  "action": "catalog.publish",
+  "requestedBy": "Wes — \"publish the headsets too\"",
+  "rows": [
+    {
+      "id": "63f0e166-21e8-4f85-a55d-f1b04fc59eff",
+      "name": "Headset w/ Boom Mic",
+      "was": false
+    }
+  ]
+}
