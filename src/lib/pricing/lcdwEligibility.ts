@@ -28,6 +28,8 @@
  * two exclusions map to exactly one row each.
  */
 
+import { matchesSpecialtyName } from './specialtyVehicles'
+
 /** Per-vehicle, per-day. Mirrors the LCDW FeeItem and the addendum. */
 export const LCDW_FEE_CODE = 'LCDW'
 
@@ -114,6 +116,14 @@ export interface LcdwCandidate {
    * would only discover that after an accident.
    */
   isPartnerVehicle?: boolean
+  /**
+   * `InventoryItem.isSpecialtyVehicle` for this line's catalog row (Wes
+   * 2026-09-10). The code list below is still the rule for the vehicles
+   * it names; this is what lets a NEW specialty vehicle be excluded by
+   * flagging the catalog row instead of by someone remembering to add a
+   * constant and ship it. See src/lib/pricing/specialtyVehicles.ts.
+   */
+  catalogIsSpecialty?: boolean
 }
 
 export interface LcdwLineVerdict {
@@ -143,6 +153,9 @@ export function judgeLcdwLine(line: LcdwCandidate): LcdwLineVerdict {
   if (line.isPartnerVehicle) {
     return { id: line.id, description: line.description, eligible: false, reason: 'partner-vehicle', vehicleDays }
   }
+  if (line.catalogIsSpecialty) {
+    return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
+  }
   if (line.code && LCDW_EXCLUDED_CODES.has(line.code)) {
     return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
   }
@@ -163,7 +176,7 @@ export function judgeLcdwLine(line: LcdwCandidate): LcdwLineVerdict {
   // never include more. A false positive costs a waiver we decline to sell;
   // a false negative costs a client money for coverage that does not exist.
   // The contract wins, and the contract excludes these vehicles by name.
-  if (!line.code && matchesExcludedName(line.description)) {
+  if (!line.code && (matchesExcludedName(line.description) || matchesSpecialtyName(line.description))) {
     return { id: line.id, description: line.description, eligible: false, reason: 'specialty-vehicle', vehicleDays }
   }
   return { id: line.id, description: line.description, eligible: true, vehicleDays }

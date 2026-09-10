@@ -206,7 +206,7 @@ export async function GET(req: NextRequest) {
             // cost or PO can reach a client-facing render through it.
             department: true,
             subRentals: { select: { id: true } },
-            inventoryItem: { select: { code: true, rwICode: true, description: true, trackingMode: true } },
+            inventoryItem: { select: { code: true, rwICode: true, description: true, trackingMode: true, isSpecialtyVehicle: true } },
           },
           orderBy: { sortOrder: 'asc' },
         },
@@ -581,6 +581,7 @@ export async function GET(req: NextRequest) {
           description: li.description,
           code: li.inventoryItem?.code ?? null,
           isPartnerVehicle: li.subRentals.length > 0,
+          catalogIsSpecialty: li.inventoryItem?.isSpecialtyVehicle ?? false,
         })),
     }),
     afterHoursLine: AFTER_HOURS_LINE,

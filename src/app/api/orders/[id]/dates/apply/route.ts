@@ -32,7 +32,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { isPartnerFulfilled } from '@/lib/orders/partnerDaily'
+import { billsAsSpecialtyVehicle, specialtyShape } from '@/lib/pricing/specialtyVehicles'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { computePushDatesPreview, type CustomItemAction, type PreviewLineItem } from '@/lib/orders/datePushPreview'
@@ -104,6 +104,10 @@ export async function POST(req: NextRequest, { params }: Params) {
           lineTotal: true,
           parentLineItemId: true,
           subRentals: { select: { id: true } },
+          // Specialty Vehicles bill calendar days. The catalog flag and the
+          // line's own age answer it — see lib/pricing/specialtyVehicles.ts.
+          createdAt: true,
+          inventoryItem: { select: { code: true, isSpecialtyVehicle: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const items: PreviewLineItem[] = order.lineItems.map((li) => ({
-    partnerDaily: isPartnerFulfilled(li, order.lineItems),
+    partnerDaily: billsAsSpecialtyVehicle(specialtyShape(li), order.lineItems.map(specialtyShape)),
     id: li.id,
     description: li.description,
     department: li.department,

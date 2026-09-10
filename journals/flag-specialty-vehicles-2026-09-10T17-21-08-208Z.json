@@ -1,0 +1,52 @@
+{
+  "ranAt": "2026-09-10T17:21:08.208Z",
+  "reason": "Wes 2026-09-10 — motorhomes and wardrobe/makeup trailers into Specialty Vehicles",
+  "vehicleCategories": [
+    {
+      "id": "3d2fff1c-3590-4a3a-862e-4e4a3e37d2b3",
+      "slug": "production-trailer",
+      "was": false
+    },
+    {
+      "id": "f401ddff-4982-46f7-96c3-79a83b5d3b2f",
+      "slug": "honeywagon",
+      "was": false
+    },
+    {
+      "id": "482d296e-03fb-4b27-8eba-56d3b6f15237",
+      "slug": "star-talent-trailer",
+      "was": false
+    },
+    {
+      "id": "fba10c66-a9be-43fc-b6e3-6b235b64d181",
+      "slug": "hair-makeup-trailer",
+      "was": false
+    },
+    {
+      "id": "e8ae9b02-45bd-4565-84c1-b09a9398f88e",
+      "slug": "wardrobe-trailer",
+      "was": false
+    },
+    {
+      "id": "8b8de375-509c-4b48-afcc-28dafe7ba9af",
+      "slug": "dlux",
+      "was": false
+    }
+  ],
+  "inventoryItems": [
+    {
+      "id": "416d9bd6-5c14-468f-9dc5-9cfae943cfbf",
+      "code": "CAT_DLUX",
+      "was": false
+    },
+    {
+      "id": "3d2f7041-23fd-44e7-9a9a-c2d9c9897dfd",
+      "code": "CAT_DLUX_NORCAL",
+      "was": false
+    }
+  ],
+  "notFound": {
+    "categorySlugs": [],
+    "catalogCodes": []
+  }
+}

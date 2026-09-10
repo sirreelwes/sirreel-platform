@@ -11,14 +11,22 @@ import { SWatermark } from '@/components/site/SWatermark'
  * to its detail page. Reads LIVE from the same rows the order form shows;
  * tiles use the primary gallery photo (legacy image fallback) via the proxy.
  *
- * The owned fleet first, then one section per partner CATEGORY — motorhomes
- * & location trailers, power & generators, HVAC, lifts, lighting… — each
- * with every partner's units side by side and no vendor named. A section
+ * The everyday fleet first, then one section per CATEGORY — Specialty
+ * Vehicles, power & generators, HVAC, lifts, lighting… — each with every
+ * partner's units side by side and no vendor named. A partner section
  * exists only while at least one partner has signed and has a listed unit
  * in it (SUB_LISTED_WHERE), so it appears on its own the moment a partner
  * approves in their portal (Wes 2026-09-06) and vanishes when the last unit
- * is withdrawn. Sections are anchored (#power, #lifts…) so the nav and
- * emails can point at one.
+ * is withdrawn. Sections are anchored (#specialty-vehicles, #power, #lifts…)
+ * so the nav and emails can point at one.
+ *
+ * Specialty Vehicles is the one section that is NOT partners-only (Wes
+ * 2026-09-10: "motorhomes and wardrobe makeup trailers are all going to be
+ * in the Specialty Vehicles category"). Our own restroom trailers sit in it
+ * beside King Kong's coaches, because to a client they are one kind of
+ * thing — and because the class is what the signed agreement bills
+ * differently. Membership is `VehicleCategory.isSpecialtyVehicle`; the
+ * money side is src/lib/pricing/specialtyVehicles.ts.
  */
 export const dynamic = 'force-dynamic'
 
@@ -106,7 +114,10 @@ function Grid({ items }: { items: PublicVehicle[] }) {
 
 export default async function VehiclesIndexPage() {
   const [vehicles, titles] = await Promise.all([getPublicVehicles(), getPageTitles()])
-  const fleet = vehicles.filter((v) => !v.partner)
+  // The flat grid is what has NO section — an owned Specialty Vehicle
+  // moved out of it on 2026-09-10 and now renders under that heading with
+  // the partner coaches.
+  const fleet = vehicles.filter((v) => !v.section)
   const partnerGroups = groupPartnerUnits(vehicles)
   // The hero names what is actually listed, so a power partner going live
   // changes the sentence on its own.

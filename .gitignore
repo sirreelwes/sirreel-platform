@@ -43,6 +43,7 @@ scripts/*
 !scripts/rollupCompanySpend.ts
 !scripts/sync-company-coi-expiry.ts
 !scripts/archive-dormant-jobs.ts
+!scripts/flag-specialty-vehicles.ts
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
 !scripts/reextract-pipeline-window.ts

@@ -149,7 +149,7 @@ export async function summarizeJobLcdwCoverage(jobId: string) {
           type: true,
           pickupDate: true,
           returnDate: true,
-          inventoryItem: { select: { code: true } },
+          inventoryItem: { select: { code: true, isSpecialtyVehicle: true } },
           subRentals: { select: { id: true }, take: 1 },
         },
       },
@@ -170,6 +170,7 @@ export async function summarizeJobLcdwCoverage(jobId: string) {
         quantity: l.quantity,
         billableDays: l.billableDays,
         isPartnerVehicle: l.subRentals.length > 0,
+        catalogIsSpecialty: l.inventoryItem?.isSpecialtyVehicle ?? false,
       })),
   )
 

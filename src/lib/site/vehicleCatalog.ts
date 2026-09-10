@@ -64,13 +64,19 @@ export interface PublicVehicle {
   /** Gallery photos, primary first then sortOrder asc. [] → legacy photoUrl only. */
   photos: PublicVehiclePhoto[]
   specs: PublicVehicleSpec
-  /** True for a partner-supplied unit — decides which SECTION it renders in. */
+  /** True for a partner-supplied unit. Together with `section` it decides
+   *  which block the card renders in; it is NOT the section test on its own
+   *  any more — an OWNED specialty vehicle sits in a section too. */
   partner: boolean
   /** "PowerTrip Rentals" when that partner has given written permission to be
    *  named (agreement cl. 10), else null — including for our own fleet. Read
    *  through partnerAttribution.ts; never derive it from `partner`. */
   suppliedBy: string | null
-  /** Which partner section (null for the owned fleet). See partnerSections.ts. */
+  /** Which catalog section this card belongs to, or null for the owned
+   *  fleet grid. See partnerSections.ts. Owned rows flagged
+   *  `isSpecialtyVehicle` carry LOCATION_VEHICLES — the Specialty Vehicles
+   *  section — because a restroom trailer and a partner's coach are the
+   *  same thing to a client, whoever's name is on the title. */
   section: PartnerCatalogSectionKey | null
 }
 
@@ -91,6 +97,7 @@ const SELECT: Prisma.VehicleCategorySelect = {
   heightClearance: true,
   interiorBoxHeight: true,
   liftGateSpec: true,
+  isSpecialtyVehicle: true,
   catalogItem: { select: { dailyRate: true, imageUrl: true } },
   photos: {
     select: { id: true, isPrimary: true },
@@ -117,6 +124,7 @@ type Row = {
   liftGateSpec: string | null
   catalogItem: { dailyRate: unknown; imageUrl: string | null } | null
   photos: { id: string; isPrimary: boolean }[]
+  isSpecialtyVehicle: boolean
 }
 
 /** Newline-separated features column → trimmed bullet lines. */
@@ -139,7 +147,9 @@ function shape(r: Row): PublicVehicle {
   return {
     partner: false,
     suppliedBy: null,
-    section: null,
+    // Owned, but a Specialty Vehicle (Wes 2026-09-10) — it leaves the
+    // fleet grid and joins the coaches and trailers under one heading.
+    section: r.isSpecialtyVehicle ? 'LOCATION_VEHICLES' : null,
     id: r.id,
     name: r.name,
     slug: r.slug,
@@ -216,13 +226,20 @@ export interface PartnerCatalogGroup {
   items: PublicVehicle[]
 }
 
-/** Partner units grouped into their sections, in page order, empties dropped. */
+/**
+ * Sectioned units grouped in page order, empties dropped.
+ *
+ * Membership is `section`, not `partner` (2026-09-10): an owned restroom
+ * trailer and a partner's motorhome are both Specialty Vehicles, and a
+ * client reading the page has no reason to care which one we own. The two
+ * catalog rules the sections have always had still hold — no vendor named,
+ * list rate only — and they hold for the owned rows trivially.
+ */
 export function groupPartnerUnits(items: PublicVehicle[]): PartnerCatalogGroup[] {
   const by = new Map<PartnerCatalogSectionKey, PublicVehicle[]>()
   for (const v of items) {
-    if (!v.partner) continue
-    const key = v.section ?? 'LOCATION_VEHICLES'
-    by.set(key, [...(by.get(key) ?? []), v])
+    if (!v.section) continue
+    by.set(v.section, [...(by.get(v.section) ?? []), v])
   }
   return [...PARTNER_SECTIONS]
     .sort((a, b) => a.order - b.order)

@@ -76,7 +76,7 @@ export async function loadLcdwCoverage(orderId: string): Promise<LcdwCoverageCon
           id: true, description: true, department: true, quantity: true,
           billableDays: true, type: true, feeItemId: true,
           pickupDate: true, returnDate: true,
-          inventoryItem: { select: { code: true } },
+          inventoryItem: { select: { code: true, isSpecialtyVehicle: true } },
           // A line fulfilled by a partner's unit is not ours to waive.
           subRentals: { select: { id: true }, take: 1 },
         },
@@ -96,6 +96,7 @@ export async function loadLcdwCoverage(orderId: string): Promise<LcdwCoverageCon
       quantity: l.quantity,
       billableDays: l.billableDays,
       isPartnerVehicle: l.subRentals.length > 0,
+      catalogIsSpecialty: l.inventoryItem?.isSpecialtyVehicle ?? false,
     }))
 
   const fee = await prisma.feeItem.findFirst({

@@ -332,6 +332,13 @@ model VehicleCategory {
   features            String?
   // Link to the operational Fleet Pricing category (owned vehicles). NULL for
   // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
+  /// Renders under "Specialty Vehicles" on /vehicles instead of in the
+  /// owned-fleet grid — motorhomes, star wagons, honeywagons, wardrobe,
+  /// hair/makeup, production and restroom trailers. A DIFFERENT question
+  /// from InventoryItem.isSpecialtyVehicle (which is how a LINE bills):
+  /// most of these rows have no catalog item at all, so neither field can
+  /// be derived from the other.
+  isSpecialtyVehicle  Boolean                @default(false) @map("is_specialty_vehicle")
   assetCategoryId     String?                @map("asset_category_id")
   assetCategory       AssetCategory?         @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
   // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
@@ -3043,6 +3050,16 @@ model InventoryItem {
   // EXPENDABLE for unit=ea consumables. The new-quote createQuote
   // path may still re-derive at create time for legacy callers.
   type              LineItemType       @default(EQUIPMENT)
+  /// SPECIALTY VEHICLE — a billing class, not a label (Wes 2026-09-10:
+  /// "motorhomes and wardrobe makeup trailers are all going to be in the
+  /// Specialty Vehicles category"). The signed rental agreement has named
+  /// this class since launch; nothing in the system could answer it from a
+  /// line, so three surfaces each guessed differently. True means: no
+  /// LCDW, mileage per mile from the first mile, and calendar days with no
+  /// weekly cap. Read it through `src/lib/pricing/specialtyVehicles.ts`,
+  /// never this column alone — a partner's coach and a free-typed trailer
+  /// are specialty too and have no catalog row to carry a flag.
+  isSpecialtyVehicle Boolean           @default(false) @map("is_specialty_vehicle")
   // RentalWorks enrichment (May 2026 spike). The first four columns are
   // populated from RW Items grouped by InventoryId. needsReview flags
   // auto-created rows where Wes hasn't yet picked an InventoryCategory /

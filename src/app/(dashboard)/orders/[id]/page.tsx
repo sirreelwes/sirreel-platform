@@ -23,7 +23,7 @@ import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
 import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence, clock12 } from "@/lib/orders/driverEstimate";
 import { driverPayBreakdown } from "@/lib/orders/driverRate";
-import { isPartnerFulfilled, PARTNER_DAILY_NOTE } from "@/lib/orders/partnerDaily";
+import { billsAsSpecialtyVehicle, specialtyShape, SPECIALTY_DAILY_NOTE } from "@/lib/pricing/specialtyVehicles";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { SendToWarehouseModal, type SendToWarehouseResult } from "@/components/orders/SendToWarehouseModal";
@@ -2446,12 +2446,15 @@ export default function OrderDetailPage() {
               vehicles included): each button re-suggests billable days
               from the line's own calendar range at that cap. The input
               stays authoritative. */}
-          {/* Partner specialty units and their fees bill straight daily —
-              never the weekly cap (Wes 2026-09-07). No chips; say why. */}
-          {isPartnerFulfilled(li, order?.lineItems ?? []) && li.pickupDate && li.returnDate && (
-            <div className="mt-1 text-center text-[10px] text-lt-fg3">{PARTNER_DAILY_NOTE}</div>
+          {/* Specialty Vehicles and their fees bill straight daily — never
+              the weekly cap (Wes 2026-09-07, widened to the whole class
+              2026-09-10). No chips; say why. Mirrors the server rule in
+              bulk-days and dates/apply, including its cutover date, so the
+              chips never offer a cap the write would refuse. */}
+          {billsAsSpecialtyVehicle(specialtyShape(li), (order?.lineItems ?? []).map(specialtyShape)) && li.pickupDate && li.returnDate && (
+            <div className="mt-1 text-center text-[10px] text-lt-fg3">{SPECIALTY_DAILY_NOTE}</div>
           )}
-          {!isPartnerFulfilled(li, order?.lineItems ?? []) && weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
+          {!billsAsSpecialtyVehicle(specialtyShape(li), (order?.lineItems ?? []).map(specialtyShape)) && weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
             <div className="mt-1 flex flex-wrap justify-center gap-0.5">
               {weekCapChoices(editDept as any).map((cap) => {
                 const suggested = computeBillableDays(

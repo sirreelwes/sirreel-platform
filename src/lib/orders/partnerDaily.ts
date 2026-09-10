@@ -14,6 +14,20 @@
  * Detection is structural (the SubRental relation, or the parent's), not a
  * name match, so a partner cube truck is exempt too and a SirReel-owned
  * motorhome is not.
+ *
+ * SUPERSEDED 2026-09-10 for the week-cap question. Wes: "motorhomes and
+ * wardrobe makeup trailers are all going to be in the Specialty Vehicles
+ * category," and the class is what bills daily — not the fact that a
+ * partner happens to fulfil it. Our own restroom trailers are in it and
+ * have no SubRental, so this file could never see them. Every week-cap
+ * caller now reads `billsAsSpecialtyVehicle` from
+ * src/lib/pricing/specialtyVehicles.ts, which keeps this structural rule
+ * as one of its three tests.
+ *
+ * `isPartnerFulfilled` stays because "is this the partner's money" is
+ * still a real and different question (it decides whose rate a fee is at
+ * — see partnerShare.ts). Do NOT reach for it to answer "is this a
+ * specialty vehicle" again.
  */
 
 export interface PartnerDailyLine {

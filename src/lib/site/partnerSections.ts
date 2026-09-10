@@ -13,6 +13,18 @@
  * side by side inside it, and no vendor is ever named — the client sees a
  * SirReel category.
  *
+ * RENAMED 2026-09-10 (Wes: "motorhomes and wardrobe makeup trailers are all
+ * going to be in the Specialty Vehicles category"). The section had been
+ * named after its contents — motorhomes and location trailers — while the
+ * signed rental agreement and the quote's own mileage term had always called
+ * the class Specialty Vehicles. Two names for one thing, one of them on the
+ * contract. The contract's name wins, and the section now holds the wardrobe,
+ * hair/makeup, honeywagon and restroom trailers with the coaches.
+ *
+ * The class is also a BILLING class, not just a heading: no LCDW, mileage per
+ * mile from the first mile, calendar days with no weekly cap. That side lives
+ * in `src/lib/pricing/specialtyVehicles.ts` — keep the two in step.
+ *
  * Plain module on purpose (no Prisma import): the roster page's <select>
  * and the partner panel are client components and read the same list.
  */
@@ -44,11 +56,15 @@ export interface PartnerSectionMeta {
 
 export const PARTNER_SECTIONS: readonly PartnerSectionMeta[] = [
   {
+    // The ENUM KEY stays LOCATION_VEHICLES on purpose. It is a Postgres
+    // enum with rows pointing at it; renaming the value costs a two-deploy
+    // dance (code first, then data) to change a heading. The title is what
+    // anyone reads — see the header note on the rename.
     key: 'LOCATION_VEHICLES',
-    title: 'Motorhomes & Location Trailers',
-    short: 'Motorhomes & trailers',
-    blurb: 'Talent motorhomes, star wagons and location trailers for when the cast needs a real room on set. Rates and availability on quote; pick one to see the gallery and specs.',
-    anchor: 'motorhomes-trailers',
+    title: 'Specialty Vehicles',
+    short: 'Specialty vehicles',
+    blurb: 'Talent motorhomes, star wagons, honeywagons, wardrobe and hair/makeup trailers, production trailers and restroom trailers — the units that give cast and crew a real room on location. Delivered, set and serviced; rates and availability on quote.',
+    anchor: 'specialty-vehicles',
     noun: 'vehicle',
     order: 10,
   },

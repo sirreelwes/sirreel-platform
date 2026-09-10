@@ -73,6 +73,7 @@ import {
 } from '@/lib/contracts/fees'
 import { YARD_HOURS_ONE_LINE } from '@/lib/site/yardHours'
 import { quoteLcdw, type LcdwCandidate } from '@/lib/pricing/lcdwEligibility'
+import { matchesSpecialtyName } from '@/lib/pricing/specialtyVehicles'
 import { DRIVER_RATE_TERMS } from '@/lib/orders/driverRate'
 
 /**
@@ -137,6 +138,11 @@ export interface BookingVehicleLine {
   code: string | null
   /** Fulfilled by a partner's unit (a SubRental). Never LCDW-eligible. */
   isPartnerVehicle?: boolean
+  /** `InventoryItem.isSpecialtyVehicle` for this line's catalog row. An
+   *  OWNED specialty vehicle — our restroom trailers — is in the same
+   *  billing class as a partner's coach, which nothing could say before
+   *  2026-09-10. See src/lib/pricing/specialtyVehicles.ts. */
+  catalogIsSpecialty?: boolean
 }
 
 export interface BookingTermsInput {
@@ -306,7 +312,18 @@ export function buildBookingTerms(input: BookingTermsInput): BookingTerm[] {
     // allowance made the quote contradict its own mileage line — a client
     // reading "the first 100 miles are included" would fairly ask why they
     // were being charged from mile one (Wes 2026-09-08).
-    const specialty = vehicles.filter((v) => v.isPartnerVehicle).map((v) => v.description)
+    // The class, not the ownership. A partner's coach and our own
+    // restroom trailer bill the same way; listing only the partner ones
+    // left an owned specialty vehicle reading as if the standard
+    // allowance applied to it, on the same page that charges it per mile.
+    const specialty = vehicles
+      .filter(
+        (v) =>
+          v.isPartnerVehicle ||
+          v.catalogIsSpecialty ||
+          (!v.code && matchesSpecialtyName(v.description)),
+      )
+      .map((v) => v.description)
     terms.push({
       key: 'mileage',
       title: 'Mileage',
@@ -402,6 +419,7 @@ function lcdwTerm(vehicles: BookingVehicleLine[]): BookingTerm | null {
     quantity: 1,
     billableDays: 1,
     isPartnerVehicle: v.isPartnerVehicle,
+    catalogIsSpecialty: v.catalogIsSpecialty,
   }))
   const q = quoteLcdw(candidates)
   if (q.eligible.length === 0 && q.excluded.length === 0) return null

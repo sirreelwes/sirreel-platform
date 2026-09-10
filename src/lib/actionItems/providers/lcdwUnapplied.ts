@@ -100,7 +100,7 @@ export async function findLcdwMismatches(opts?: {
           billableDays: true,
           type: true,
           feeItem: { select: { code: true } },
-          inventoryItem: { select: { code: true } },
+          inventoryItem: { select: { code: true, isSpecialtyVehicle: true } },
           subRentals: { select: { id: true }, take: 1 },
         },
       },
@@ -141,6 +141,7 @@ export async function findLcdwMismatches(opts?: {
         quantity: l.quantity,
         billableDays: l.billableDays,
         isPartnerVehicle: l.subRentals.length > 0,
+        catalogIsSpecialty: l.inventoryItem?.isSpecialtyVehicle ?? false,
       }))
     const q = quoteLcdw(candidates)
 

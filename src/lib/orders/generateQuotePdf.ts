@@ -41,7 +41,7 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
       jobContact: true,
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true, rwICode: true, trackingMode: true } },
+          inventoryItem: { select: { code: true, rwICode: true, trackingMode: true, isSpecialtyVehicle: true } },
           // Booking-details input ONLY — see the bookingTerms block below.
           // A line with any sub-rental is fulfilled by a partner's unit and
           // can never carry LCDW. `select: { id: true }` deliberately: this
@@ -122,6 +122,7 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
         description: li.description,
         code: li.inventoryItem?.code ?? null,
         isPartnerVehicle: li.subRentals.length > 0,
+        catalogIsSpecialty: li.inventoryItem?.isSpecialtyVehicle ?? false,
       })),
     // A driver line is the "Driver (covers N hrs)" fee that rides under a
     // vehicle, or any LABOR line that names a driver.
