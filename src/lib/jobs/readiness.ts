@@ -31,10 +31,28 @@ import type { AgreementRollupState, CoiRollupState, RowState } from './listRow'
 
 export type BlockerKey = 'coi' | 'sign' | 'card' | 'driver' | 'gear'
 
+export type BlockerTone =
+  /** Nothing is on file — somebody has to be asked. Rose. */
+  | 'missing'
+  /** Something IS in motion (a cert awaiting HQ approval, an agreement
+   *  out for signature, units waiting on Julian) — chase, don't request. Amber. */
+  | 'waiting'
+
 export interface ReadinessBlocker {
   key: BlockerKey
   /** Chip word — one short label, capitalized ("COI", "Sign", "Card"…). */
   label: string
+  /**
+   * The state, in words, for surfaces with room for a sentence — the
+   * /jobs tile. "COI awaiting HQ approval" is a different chase from
+   * "COI": the first is Wes's desk, the second is the client's broker.
+   * Derived HERE, from the same inputs as the verdict, so the tile and
+   * the detail page's paperwork strip cannot tell two stories about one
+   * certificate (SR-JOB-0337, 2026-09-09: tile "Missing: COI", strip
+   * "Pending · coverage reads OK — awaiting HQ approval").
+   */
+  detail: string
+  tone: BlockerTone
 }
 
 export interface JobReadiness {
@@ -55,6 +73,10 @@ export interface ReadinessInputs {
    *  A check/wire client still counts: their card is on file as
    *  security, which is what this check is about. */
   cardOnFile: boolean
+  /** A card-authorization link went out and nothing came back. Does not
+   *  change the verdict — only the words (a sent link is a chase, not a
+   *  request). Optional: callers that cannot cheaply know say nothing. */
+  cardRequested?: boolean
   /** LIVE booking items (non-cancelled bookings, item not UNFULFILLED /
    *  SUBSTITUTED) vs those with a unit ASSIGNED. */
   gear: { total: number; assigned: number }
@@ -82,18 +104,73 @@ export function computeReadiness(i: ReadinessInputs): JobReadiness {
   const coiOk = i.coi === 'VERIFIED'
   const signOk = i.rental === 'SIGNED' && (i.stage === null || i.stage === 'SIGNED')
 
-  const failing: BlockerKey[] = []
-  if (!coiOk) failing.push('coi')
-  if (!signOk) failing.push('sign')
-  if (!i.cardOnFile) failing.push('card')
-  if (!driverOk) failing.push('driver')
-  if (!gearOk) failing.push('gear')
+  const failing: ReadinessBlocker[] = []
+  if (!coiOk) failing.push(blocker('coi', describeCoi(i.coi)))
+  if (!signOk) failing.push(blocker('sign', describeAgreement(i)))
+  if (!i.cardOnFile) {
+    failing.push(
+      blocker('card', i.cardRequested ? ['Card on file — link sent, nothing back', 'missing'] : ['Card on file', 'missing']),
+    )
+  }
+  if (!driverOk) {
+    failing.push(
+      blocker('driver', [
+        i.drivers.units > 1 ? `Driver (${i.drivers.named} of ${i.drivers.units} named)` : 'Driver',
+        'waiting',
+      ]),
+    )
+  }
+  if (!gearOk) {
+    failing.push(
+      blocker('gear', [
+        i.gear.total > 1 ? `Units (${i.gear.assigned} of ${i.gear.total} picked)` : 'Units to pick',
+        'waiting',
+      ]),
+    )
+  }
 
   return {
     ready: failing.length === 0,
     done: 5 - failing.length,
     total: 5,
-    blockers: failing.map((key) => ({ key, label: LABEL[key] })),
+    blockers: failing,
+  }
+}
+
+function blocker(key: BlockerKey, [detail, tone]: [string, BlockerTone]): ReadinessBlocker {
+  return { key, label: LABEL[key], detail, tone }
+}
+
+/** Mirrors the detail page's COI tile: Pending is on file and waiting on
+ *  a person here; Rejected and Expired need a new certificate. */
+function describeCoi(state: CoiRollupState): [string, BlockerTone] {
+  switch (state) {
+    case 'PENDING':
+      return ['COI awaiting HQ approval', 'waiting']
+    case 'EXPIRED':
+      return ['COI expired', 'missing']
+    case 'ISSUE':
+      return ['COI rejected — needs a corrected one', 'missing']
+    default:
+      return ['COI', 'missing']
+  }
+}
+
+/** Rental first; the stage contract is named only once the rental is
+ *  papered, so the chip carries one chase at a time. */
+function describeAgreement(i: ReadinessInputs): [string, BlockerTone] {
+  const rentalOk = i.rental === 'SIGNED'
+  const what = rentalOk ? 'Stage contract' : 'Agreement'
+  const state = rentalOk ? i.stage : i.rental
+  switch (state) {
+    case 'SENT':
+      return [`${what} out for signature`, 'waiting']
+    case 'PARTIAL':
+      return [`${what} signed on some orders, not all`, 'waiting']
+    case 'DRAFT':
+      return [`${what} not sent yet`, 'missing']
+    default:
+      return [what, 'missing']
   }
 }
 

@@ -55,7 +55,7 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 import { readinessApplies } from '@/lib/jobs/readiness'
-import type { BlockerKey } from '@/lib/jobs/readiness'
+import type { BlockerTone } from '@/lib/jobs/readiness'
 import { AlertTriangle, Check, EyeOff, Truck, User, UserCircle } from 'lucide-react'
 
 export function JobsSidebar() {
@@ -199,13 +199,13 @@ export function JobsSidebar() {
 
 // ─── The tile's vocabulary ───────────────────────────────────────
 
-/** The readiness chip says "Sign"; the tile has room to say "Agreement". */
-const BLOCKER_FULL: Record<BlockerKey, string> = {
-  coi: 'COI',
-  sign: 'Agreement',
-  card: 'Card on file',
-  driver: 'Driver',
-  gear: 'Units',
+/** The blocker's state colour — the SAME split the detail page's
+ *  paperwork strip draws: rose when nothing is on file, amber when
+ *  something is in motion and waiting on a person. The words come from
+ *  computeReadiness (blocker.detail), not from here. */
+const BLOCKER_TONE: Record<BlockerTone, string> = {
+  missing: 'border-rose-300 text-rose-700 bg-white',
+  waiting: 'border-amber-300 text-amber-700 bg-white',
 }
 
 /** One sentence under the state pill — what the state MEANS for the
@@ -528,13 +528,19 @@ function JobTile({
                 className="inline-flex items-center gap-1 flex-wrap text-[10.5px]"
                 title={`${readiness.done} of ${readiness.total} checks clear`}
               >
-                <span className="font-semibold text-rose-700">Missing:</span>
+                {/* "Still needed", not "Missing" — a COI awaiting HQ
+                    approval or an agreement out for signature is on file
+                    and in motion; calling it missing sent agents to chase
+                    the client for paperwork we already had. */}
+                <span className={`font-semibold ${readiness.blockers.some((b) => b.tone === 'missing') ? 'text-rose-700' : 'text-amber-700'}`}>
+                  Still needed:
+                </span>
                 {readiness.blockers.map((b) => (
                   <span
                     key={b.key}
-                    className="font-semibold px-1.5 py-0.5 rounded border border-rose-300 text-rose-700 bg-white"
+                    className={`font-semibold px-1.5 py-0.5 rounded border ${BLOCKER_TONE[b.tone]}`}
                   >
-                    {BLOCKER_FULL[b.key]}
+                    {b.detail}
                   </span>
                 ))}
               </span>

@@ -1282,6 +1282,7 @@ const driverTone = (d: any): string => {
     rental: agreementStatus === 'signed' ? 'SIGNED' : agreementStatus === 'pending' ? 'SENT' : 'NONE',
     stage: null,
     cardOnFile: !!cardOnFile,
+    cardRequested: !!job.cardAuth?.requestSentAt,
     gear: {
       total: liveHoldItems.length,
       assigned: liveHoldItems.filter((i: any) => i.status === 'ASSIGNED').length,
