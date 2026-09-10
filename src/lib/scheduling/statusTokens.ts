@@ -163,21 +163,30 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
 
 /* ────────────────────────────────────────────────────────────────────
  * Readiness meter (Wes 2026-09-09) — "could holds start out as an
- * outline when quoted, then slowly fill as items are done: client
- * accepts, COI, RA, CCA, driver info… and turn full green when all
- * necessary items are met?"
+ * outline when quoted, then slowly fill as different items are done —
+ * client accepts, COI, RA, CCA, driver info — and turn full green when
+ * all necessary items are met?", and then, on seeing the first cut:
+ * "I was picturing a partial fill of the entire cell growing left to
+ * right in a lighter green highlight color."
  *
- * Rendered as a 5px SEGMENTED rail along the bar's bottom edge, not as a
- * wash across the bar body, for two reasons that both bit on the mockup:
+ * So it is exactly that: a highlighter stroke across the WHOLE cell,
+ * left edge to `done / total`, full bar height. It shipped first as a
+ * 5px segmented rail on the bottom edge; that reading is now retired.
  *
- *  1. The gantt's horizontal axis is TIME. A bar filled 60% from the left
- *     reads as "confirmed through Wednesday, tentative after" — a real
- *     misread on a board people scan against the date header. Hard
- *     notches at every step boundary are what defuse it: five ticked
- *     boxes are a count, a smooth fill is a position.
- *  2. Bar labels are 9px white-on-colour. A light-green wash across the
- *     body puts white text on mint and the client name stops being
- *     readable — the same failure as the 2026-09-04 check in/out screen.
+ * Two things the rail was protecting, and how the wash keeps them:
+ *
+ *  1. The gantt's horizontal axis is TIME, so a bar washed 60% from the
+ *     left can be misread as "confirmed through Wednesday". The fill is
+ *     translucent rather than opaque — the bar's own status colour still
+ *     shows through it, so the wash reads as a highlighter laid OVER one
+ *     bar, not as two date ranges. The hover title says "3 of 5" in
+ *     words for anyone who wants the count.
+ *  2. Bar labels are 9px white-on-colour, and white on a light-green
+ *     wash is the 2026-09-04 check in/out screen all over again. So a
+ *     bar that has any fill draws its label in INK instead of white
+ *     (readinessLabelClass). Ink is the more legible choice on every
+ *     solid bar we paint — 4.7:1 on the blue hold against white's 3.7 —
+ *     and it stays legible where the wash lands.
  *
  * It is a background-image, not a child element, so it needs no z-index
  * against the label and no DOM on 300+ bars.
@@ -189,53 +198,71 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
  */
 import type { CSSProperties } from 'react'
 
-/** Filled step. Two greens, and the split is not cosmetic: green-500 on a
- *  BOOKED bar is green-on-green and disappears — which is the one bar where
- *  an unmet check matters most (booked, no COI, out on Thursday). The light
- *  green reads on every solid bar we paint: blue hold, booked green, the
- *  order-attached red, the blind-pickup violet. */
-const METER_FILL_ON_DARK = '#86efac'
-const METER_FILL_ON_LIGHT = '#16a34a'
-/** Unfilled track. Dark on solid bars so the empty steps read as a groove
- *  cut into the bar rather than as more bar. */
-const METER_TRACK_ON_DARK = 'rgba(0,0,0,0.30)'
-const METER_TRACK_ON_LIGHT = 'rgba(0,0,0,0.13)'
-const METER_NOTCH_ON_DARK = 'rgba(0,0,0,0.55)'
-const METER_NOTCH_ON_LIGHT = 'rgba(255,255,255,0.85)'
-/** Rail height. 5px of a 24px bar — a strong horizontal line at desk
- *  distance without taking room from the 9px label. The compact variant is
- *  for the 18px "needs a unit" chips, where 5px is a quarter of the chip. */
-const METER_HEIGHT = '5px'
-const METER_HEIGHT_COMPACT = '3px'
+/** The highlighter. green-300 — light enough to read as a highlight on
+ *  the pale bars (dashed inquiry, the blue backup sub-lane, the rose
+ *  "needs a unit" chips) and, at these alphas, light enough to lift a
+ *  solid bar without erasing it. */
+const METER_FILL = '134, 239, 172'
+/** The wash's opacity RAMPS with completion, and that is what makes both
+ *  halves of Wes's sketch true at once. Part-way, the fill is translucent
+ *  and the bar's own status colour reads through it — a half-papered hold
+ *  is still visibly blue, an order-attached bar still visibly red — so the
+ *  meter never impersonates another status. At 5 of 5 it reaches full
+ *  opacity and every ready bar, whatever it started as, is the same light
+ *  green: "turn full green when all necessary items are met."
+ *  Pale bars start higher — there is no strong hue under them to preserve,
+ *  and the fill has to carry the whole signal against white grid. */
+const METER_ALPHA_ON_SOLID = 0.5
+const METER_ALPHA_ON_LIGHT = 0.75
+
+/** Label ink for a bar carrying fill — see note 2 above. A near-black
+ *  green rather than plain black: it belongs to the fill's family and
+ *  goes unnoticed on the unwashed part of the bar. */
+const METER_INK = 'text-[#0B2B17]'
 
 /**
- * Style for the bottom rail. Spread onto the bar's existing inline style.
+ * The wash. Spread onto the bar's existing inline style — it paints over
+ * the bar's own background colour, so the bar keeps its status border and
+ * its hue underneath.
+ *
  * `light` for bars whose own surface is pale or transparent (backup
- * sub-lane, dashed inquiry outline) so the empty track stays visible;
- * `compact` for the short "needs a unit" chips.
+ * sub-lane, dashed inquiry outline, "needs a unit" chips), where the fill
+ * needs more body to read at all.
+ *
+ * done = 0 returns no image at all: an untouched job is Wes's outline,
+ * and a 0% gradient is one more thing for the browser to composite on
+ * 300+ bars.
  */
 export function readinessMeterStyle(
   done: number,
   total: number,
-  opts?: { light?: boolean; compact?: boolean },
+  opts?: { light?: boolean },
 ): CSSProperties {
   const steps = Math.max(1, total)
   const pct = Math.max(0, Math.min(1, done / steps)) * 100
-  const step = 100 / steps
-  const light = opts?.light === true
-  const track = light ? METER_TRACK_ON_LIGHT : METER_TRACK_ON_DARK
-  const fill = light ? METER_FILL_ON_LIGHT : METER_FILL_ON_DARK
-  const notch = light ? METER_NOTCH_ON_LIGHT : METER_NOTCH_ON_DARK
+  if (pct <= 0) return {}
+  const ratio = pct / 100
+  const base = opts?.light === true ? METER_ALPHA_ON_LIGHT : METER_ALPHA_ON_SOLID
+  const alpha = base + (1 - base) * ratio
+  const fill = `rgba(${METER_FILL}, ${alpha.toFixed(3)})`
   return {
-    backgroundImage: [
-      // Notches first so they paint ON TOP of the fill.
-      `repeating-linear-gradient(to right, transparent 0 calc(${step}% - 1px), ${notch} calc(${step}% - 1px) ${step}%)`,
-      `linear-gradient(to right, ${fill} 0 ${pct}%, ${track} ${pct}% 100%)`,
-    ].join(', '),
-    backgroundSize: `100% ${opts?.compact ? METER_HEIGHT_COMPACT : METER_HEIGHT}`,
-    backgroundPosition: 'left bottom',
+    backgroundImage: `linear-gradient(to right, ${fill} 0 ${pct}%, transparent ${pct}% 100%)`,
+    backgroundSize: '100% 100%',
+    backgroundPosition: 'left top',
     backgroundRepeat: 'no-repeat',
   }
+}
+
+/**
+ * The label class for a bar that may be carrying fill. White text is what
+ * the status tokens ask for on a solid bar, and it is what the wash makes
+ * unreadable — so any bar with fill swaps white for ink. Bars whose token
+ * text is already dark (inquiry green, backup blue, the rose chips) are
+ * returned untouched.
+ */
+export function readinessLabelClass(base: string, r?: { done: number } | null): string {
+  if (!r || r.done <= 0) return base
+  return base.replace('text-white', METER_INK)
 }
 
 /** Hover text — "Ready to go out" or "3 of 5 · missing COI, Card". */

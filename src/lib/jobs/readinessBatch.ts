@@ -121,6 +121,9 @@ export async function readinessForJobs(
             take: 1,
             select: { id: true },
           },
+          // Any request at all = the card link went out. Only the WORDS
+          // depend on it (computeReadiness.cardRequested).
+          _count: { select: { paperworkRequests: true } },
         },
       },
     },
@@ -257,6 +260,7 @@ export async function readinessForJobs(
         cardOnFile:
           liveBookings.some((b) => b.paperworkRequests.length > 0) ||
           (!!j.companyId && walletCardCompanies.has(j.companyId)),
+        cardRequested: liveBookings.some((b) => b._count.paperworkRequests > 0),
         gear: {
           total: liveItems.length,
           assigned: liveItems.filter((it) => it.status === 'ASSIGNED').length,

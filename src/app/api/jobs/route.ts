@@ -298,6 +298,9 @@ export async function GET(req: NextRequest) {
               take: 1,
               select: { id: true },
             },
+            // Any request at all = the card link went out. Only the
+            // tile's WORDS depend on it (computeReadiness.cardRequested).
+            _count: { select: { paperworkRequests: true } },
           },
         },
       },
@@ -670,6 +673,9 @@ export async function GET(req: NextRequest) {
           liveBookings.some(
             (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
           ) || (!!j.companyId && walletCardCompanies.has(j.companyId)),
+        cardRequested: liveBookings.some(
+          (b) => ((b as { _count?: { paperworkRequests: number } })._count?.paperworkRequests ?? 0) > 0,
+        ),
         gear: {
           total: liveItems.length,
           assigned: liveItems.filter((it) => it.status === 'ASSIGNED').length,
