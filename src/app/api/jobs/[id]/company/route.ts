@@ -94,15 +94,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const previousName = job.company?.name ?? null
 
-  // Job and its orders move together — an order billing a different company
-  // than the job it belongs to is the drift this whole change exists to
-  // prevent. One transaction so a partial move can't happen.
+  // Job, orders, bookings and job-scoped paperwork move together — a row
+  // billing or papering a different company than the job it belongs to is
+  // the drift this whole change exists to prevent. One transaction so a
+  // partial move can't happen.
+  //
+  // Bookings and CoiChecks were NOT moved until 2026-09-10. The client's
+  // paperwork link hangs off the BOOKING (PaperworkRequest → Booking →
+  // Company), so after MNX moved Folio Studios → Chaotic Neutral LTD the
+  // portal, the contract download, the driver invite and the COI review
+  // email all still said Folio — and the COI's named insured, which was
+  // correct, was flagged as a mismatch against the ghost (Wes 2026-09-10).
+  // CoiChecks and ContractReviews move only when they sat under the OLD
+  // company (or none): a certificate deliberately filed under a third
+  // company is not this job's drift to fix.
   const orderIds = job.orders.map((o) => o.id)
-  await prisma.$transaction([
+  const priorCompanyScope = job.companyId
+    ? { OR: [{ companyId: job.companyId }, { companyId: null }] }
+    : { companyId: null }
+  const [, , bookingsMoved, coisMoved] = await prisma.$transaction([
     prisma.job.update({ where: { id: job.id }, data: { companyId: target.id } }),
-    ...(orderIds.length
-      ? [prisma.order.updateMany({ where: { id: { in: orderIds } }, data: { companyId: target.id } })]
-      : []),
+    prisma.order.updateMany({ where: { id: { in: orderIds } }, data: { companyId: target.id } }),
+    prisma.booking.updateMany({ where: { jobId: job.id }, data: { companyId: target.id } }),
+    prisma.coiCheck.updateMany({
+      where: { jobId: job.id, ...priorCompanyScope },
+      data: { companyId: target.id },
+    }),
+    prisma.contractReview.updateMany({
+      where: { jobId: job.id, ...priorCompanyScope },
+      data: { companyId: target.id },
+    }),
   ])
 
   // What the move just invalidated: any agreement a client already signed
@@ -125,6 +146,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     company: target,
     previousCompanyName: previousName,
     ordersMoved: orderIds.length,
+    bookingsMoved: bookingsMoved.count,
+    coisMoved: coisMoved.count,
     staleAgreements,
   })
 }

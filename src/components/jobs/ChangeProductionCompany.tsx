@@ -86,9 +86,12 @@ export function ChangeProductionCompany({
       setReissueReason(
         `The agreement was signed under ${d.previousCompanyName || 'the previous company'}; this rental is under ${d.company.name}.`,
       );
-      setFlash(
-        `Moved to ${d.company.name}${d.ordersMoved ? ` · ${d.ordersMoved} order${d.ordersMoved === 1 ? '' : 's'} re-pointed` : ''}.`,
-      );
+      const moved = [
+        d.ordersMoved ? `${d.ordersMoved} order${d.ordersMoved === 1 ? '' : 's'}` : '',
+        d.bookingsMoved ? `${d.bookingsMoved} booking${d.bookingsMoved === 1 ? '' : 's'}` : '',
+        d.coisMoved ? `${d.coisMoved} certificate${d.coisMoved === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      setFlash(`Moved to ${d.company.name}${moved.length ? ` · ${moved.join(', ')} re-pointed` : ''}.`);
       onChanged?.();
     } catch {
       setError('Could not change the production company.');
