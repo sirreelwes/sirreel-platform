@@ -350,7 +350,7 @@ export default function AssistantAdminPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-semibold text-lt-fg">After-Hours Assistant</h1>
+      <h1 className="text-2xl font-semibold text-lt-fg">AHA — After Hours Assistant</h1>
       <p className="mt-1 text-sm text-lt-fg2">
         Manage the standing lot gate code, the per-job access codes clients use to verify after
         hours, and review the release log.

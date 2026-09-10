@@ -24,6 +24,7 @@ import {
 import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
+import { ASSISTANT_EXPANSION, ASSISTANT_NAME, ASSISTANT_SMS_INTRO } from '@/lib/assistant/identity'
 
 
 // Native fetch — the SDK 0.39 node-fetch shim read-ETIMEDOUTs on
@@ -51,7 +52,7 @@ const GEAR_GUIDES_BLOCK = SETUP_GUIDES.map(
     `${g.assistantBrief}\n- Full guide (send them this link): ${PUBLIC_SITE_URL}/help/${g.slug} — has the same steps plus a printable one-page PDF. It has no photos; don't claim it does.`,
 ).join('\n\n')
 
-const SYSTEM_PROMPT = `You are the SirReel Studio Services after-hours assistant on sirreel.com. SirReel rents production vehicles (cube trucks, cargo vans, passenger vans), stages, production supplies, and satellite internet units to film/TV productions in Los Angeles.
+const SYSTEM_PROMPT = `You are ${ASSISTANT_NAME} (${ASSISTANT_EXPANSION}), the automated assistant for SirReel Studio Services on sirreel.com and by text. Your name is ${ASSISTANT_NAME}; use it when you introduce yourself or when someone asks who they are talking to, and say plainly that you are an automated assistant, not a member of staff — never claim to be a person or to speak for a specific employee. SirReel rents production vehicles (cube trucks, cargo vans, passenger vans), stages, production supplies, and satellite internet units to film/TV productions in Los Angeles.
 
 FACTS YOU MAY STATE:
 - Phone (24/7 line): ${PUBLIC_CONTACT.phone}
@@ -140,7 +141,14 @@ const TOOLS: Anthropic.Tool[] = [
 
 const SMS_STYLE = `
 
-CHANNEL: SMS. The person is reading on a phone. Keep replies to two or three short sentences, no headings, no bullet lists, no markdown. Ask one thing at a time. Links must be full URLs on their own. Never include a gate or lockbox code in the same message as any other detail — state the code plainly, once.`
+CHANNEL: SMS. The person is reading on a phone. Keep replies to two or three short sentences, no headings, no bullet lists, no markdown. Ask one thing at a time. Links must be full URLs on their own. Never include a gate or lockbox code in the same message as any other detail — state the code plainly, once.
+
+BY TEXT THE JOB CODE IS OPTIONAL. verify_and_release_code automatically checks the number this text came from against the drivers and contacts on file for current jobs. This covers the production team too: a producer, PM, coordinator or transpo contact on the job may be texting on behalf of a driver on their job, and that is fine — the number on file for the job is the factor, not who is holding the truck. So start by asking which unit (or the VIN last 4) and call the tool with just that; if they say they're asking for their driver, still ask which unit. Ask for the job code and a corroborating detail only if it comes back NOT_VERIFIED.`
+
+/** The first reply of a text conversation names the company (carrier-filed) and the assistant. */
+const SMS_FIRST_REPLY = `
+
+This is the FIRST reply of this text conversation: open with exactly "${ASSISTANT_SMS_INTRO}" and then answer. Do not repeat the introduction in later replies.`
 
 export type AssistantChannel = 'web' | 'sms'
 
@@ -157,12 +165,16 @@ export async function runAssistant(args: {
   /** Who HQ thinks this is, when the channel can tell (SMS from a known
    *  driver). Names and job codes only — never a code or a secret. */
   context?: string | null
+  /** Text channel only: the E.164 number the message came from, passed to
+   *  verify_and_release_code as a factor. Never set from web chat. */
+  senderPhone?: string | null
 }): Promise<{ reply: string; toolsUsed: string[] }> {
   const ip = args.ip
   const messages: Anthropic.MessageParam[] = args.turns.map((t) => ({ role: t.role, content: t.content.slice(0, MAX_CHARS) }))
   const system =
     SYSTEM_PROMPT +
     (args.channel === 'sms' ? SMS_STYLE : '') +
+    (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
     (args.context ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
   const toolsUsed: string[] = []
   const fallback = `I'm having trouble right now — please call us at ${PUBLIC_CONTACT.phone} and an agent will help right away.`
@@ -208,6 +220,7 @@ export async function runAssistant(args: {
             driverName: inp.driverName ? String(inp.driverName).slice(0, 200) : null,
             vehicleNumber: inp.vehicleNumber ? String(inp.vehicleNumber).slice(0, 60) : null,
             vinLast4: inp.vinLast4 ? String(inp.vinLast4).slice(0, 20) : null,
+            senderPhone: args.channel === 'sms' ? args.senderPhone ?? null : null,
             ip,
           })
         } else if (block.name === 'file_callback_request') {

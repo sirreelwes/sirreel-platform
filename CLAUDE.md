@@ -182,6 +182,19 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `sendPath` and `service.fromNumberInService`. `npm run test:sms-config`.
 - Every outbound goes through `sendTracked()` (STOP honored, quiet hours
   9pm–6am Pacific for automated sends, one `SmsMessage` row per text).
+- **The assistant is named AHA** (SirReel After Hours Assistant — Wes,
+  2026-09-10). Name, expansion, greeting and SMS intro live in
+  `src/lib/assistant/identity.ts`; the prompt, the chat widget, /help, the
+  admin page and the nav all import from there. It always says it is
+  automated, and texts still name SirReel Studio Services (carrier-filed).
+  The keyword replies stay exactly as filed — no name in them.
+- **Sender number is a release factor by text** (Wes, 2026-09-10): the
+  number a text came from, when on file for a driver OR a production
+  contact on a CURRENT job, plus the unit number or VIN last 4, releases
+  that job's truck without the job code (`verifyAndRelease.senderPhone`,
+  `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
+  to the live assignment — a number on another job unlocks nothing. Web
+  chat never passes a number; the job-code paths are unchanged.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal

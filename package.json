@@ -55,6 +55,7 @@
     "test:unsubscribe-token": "tsx tests/outreach/unsubscribe-token.test.ts",
     "test:send-guard": "tsx tests/outreach/send-guard.test.ts",
     "test:sms-config": "tsx tests/sms/send-config.test.ts",
+    "test:phone-factor": "tsx tests/assistant/phone-factor.test.ts",
     "test:bounce-event": "tsx tests/email/bounce-event.test.ts",
     "test:lcdw": "tsx tests/pricing/lcdw-eligibility.test.ts",
     "test:merge-fields": "tsx tests/outreach/merge-fields.test.ts",

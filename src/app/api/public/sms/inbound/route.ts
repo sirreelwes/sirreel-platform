@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
   const turns = await turnsForModel(thread.id)
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') turns.push({ role: 'user', content: body })
 
-  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context })
+  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone })
   const reply = replyRaw.length > 1500 ? `${replyRaw.slice(0, 1480)}…` : replyRaw
   await recordOutbound({ threadId: thread.id, body: reply, source: 'assistant', status: 'twiml', subRentalId: who.subRentalId })
   if (toolsUsed.length) {
