@@ -91,6 +91,9 @@ interface Category {
   totalUnits: number
   department: 'VEHICLES' | 'STAGES'
   dailyRate: number | null
+  /** Units reserved over the API's trailing demand window (see
+   *  /api/scheduling/categories). Drives the order of the type picker. */
+  recentDemand?: number
 }
 
 /** A hold's co-tenants, as the line-items route reports them on a 409. */
@@ -256,6 +259,22 @@ export function MakeReservationModal({
   }, [job])
 
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+
+  // The type picker leads with what the yard actually rents (Wes
+  // 2026-09-10). Alphabetical put "2 Unit Restroom Trailer" above the
+  // cargo vans and SuperCubes that are most of the book, so every
+  // reservation started with a scroll. Busiest first, ties A–Z; the
+  // never-booked tail keeps its own group so a rare type is still
+  // findable instead of buried mid-list.
+  const [busyCats, quietCats] = useMemo(() => {
+    const byDemand = [...categories].sort(
+      (a, b) => (b.recentDemand ?? 0) - (a.recentDemand ?? 0) || a.name.localeCompare(b.name),
+    )
+    return [
+      byDemand.filter((c) => (c.recentDemand ?? 0) > 0),
+      byDemand.filter((c) => (c.recentDemand ?? 0) === 0),
+    ]
+  }, [categories])
   const rowCat = (r: Row) => catById.get(r.categoryId) ?? null
 
   const datesValid =
@@ -914,11 +933,32 @@ export function MakeReservationModal({
                             className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
                           >
                             <option value="">Select a type…</option>
-                            {categories.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name} ({c.totalUnits})
-                              </option>
-                            ))}
+                            {quietCats.length === 0 ? (
+                              busyCats.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name} ({c.totalUnits})
+                                </option>
+                              ))
+                            ) : (
+                              <>
+                                {busyCats.length > 0 && (
+                                  <optgroup label="Most booked">
+                                    {busyCats.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.name} ({c.totalUnits})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                <optgroup label={busyCats.length > 0 ? 'Rarely booked' : 'All types'}>
+                                  {quietCats.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name} ({c.totalUnits})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              </>
+                            )}
                           </select>
                         </div>
                         <div className="shrink-0">

@@ -16,11 +16,19 @@
  *     drop out automatically.
  */
 import { NextResponse } from 'next/server'
-import { LineItemDepartment } from '@prisma/client'
+import { BookingItemStatus, BookingStatus, LineItemDepartment } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * How far back the demand count looks. There is no upper bound — a
+ * booking that STARTS next month is demand too, and the picker should
+ * float a type that is busy right now, not only one that was busy in
+ * the spring.
+ */
+const DEMAND_WINDOW_DAYS = 180
 
 export async function GET() {
   const denied = await requireReadSession()
@@ -54,6 +62,28 @@ export async function GET() {
     },
     orderBy: { description: 'asc' },
   })
+  // Demand per category: units reserved (sum of BookingItem.quantity, not
+  // a row count — one line for 4 cargo vans is 4 vans out the door) across
+  // every non-cancelled booking whose window starts inside the trailing
+  // window or later. Unfulfilled items never left the yard, so they don't
+  // count. The join lives on Booking (BookingItem carries no dates), which
+  // groupBy can't filter across — hence the pluck-and-tally.
+  const since = new Date(Date.now() - DEMAND_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+  const reserved = await prisma.bookingItem.findMany({
+    where: {
+      status: { not: BookingItemStatus.UNFULFILLED },
+      booking: {
+        startDate: { gte: since },
+        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.ARCHIVED] },
+      },
+    },
+    select: { categoryId: true, quantity: true },
+  })
+  const demand = new Map<string, number>()
+  for (const item of reserved) {
+    demand.set(item.categoryId, (demand.get(item.categoryId) ?? 0) + (item.quantity || 1))
+  }
+
   const categories = rows.map((r) => ({
     id: r.legacyAssetCategoryId as string,
     name: r.description || r.code,
@@ -63,6 +93,10 @@ export async function GET() {
     planyoResourceId: r.planyoResourceId,
     department: r.department,
     dailyRate: r.dailyRate == null ? null : Number(r.dailyRate),
+    /// Units reserved over DEMAND_WINDOW_DAYS — see above. Consumers that
+    /// want the busiest types first sort on this; the array itself stays
+    /// alphabetical so the pickers that have always been A–Z still are.
+    recentDemand: demand.get(r.legacyAssetCategoryId as string) ?? 0,
   }))
   return NextResponse.json({ ok: true, categories })
 }
