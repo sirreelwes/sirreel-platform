@@ -1,7 +1,19 @@
 /**
- * Canonical clause text for SirReel's rental agreement, mirroring
- * public/contracts/sirreel-rental-agreement.pdf. If the canonical PDF changes,
- * update this file too. Keep clause numbering and substance in lockstep.
+ * Canonical clause text for SirReel's rental agreement. THIS FILE IS THE
+ * SOURCE; public/contracts/sirreel-rental-agreement.pdf is derived from it.
+ *
+ * Two consumers read that PDF rather than this array, so it has to be
+ * regenerated whenever the clauses below change or they drift silently:
+ *   - runReview.ts loads it as the BASELINE the AI diffs a client's redlined
+ *     upload against (a stale baseline reads our own new clause as the
+ *     client's edit)
+ *   - the client-facing download at /api/public/rental-agreement/pdf does NOT
+ *     — it re-renders from this array on every request, so it is never stale
+ *
+ * Regenerate with:  npx tsx scripts/generate-canonical-agreement-pdf.ts
+ *
+ * Clause refs are APPEND-ONLY. Stored ContractReview / ReviewChangeDecision
+ * rows carry clauseRef as text; renumbering repoints them at the wrong clause.
  */
 
 import { LCDW_DAILY_RATE, LCDW_WAIVED_DAMAGE_LIMIT, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from './fees'
@@ -49,7 +61,7 @@ export const CANONICAL_CLAUSES: CanonicalClause[] = [
   {
     ref: '3',
     title: 'Protection of Others',
-    body: 'You will take reasonable precautions in regard to the use of the Equipment to protect all persons and property from injury or damage. The Equipment shall be used only by your employees or agents qualified to use the Equipment.',
+    body: 'You will take reasonable precautions in regard to the use of the Equipment to protect all persons and property from injury or damage. The Equipment shall be used only by your employees or agents qualified to use the Equipment. Aerial lifts, scissor lifts, boom lifts and powered material-handling equipment shall be operated only by persons you have trained, evaluated and authorized to operate equipment of that type as required by Cal/OSHA, and you will produce that documentation on request.',
   },
   {
     ref: '4',
@@ -69,7 +81,7 @@ export const CANONICAL_CLAUSES: CanonicalClause[] = [
   {
     ref: '7',
     title: 'Liability Insurance',
-    body: 'You shall, at your own expense, maintain commercial general liability insurance ("Liability Insurance"), including coverage for the operations of independent contractors and standard contractual liability coverage. The Liability Insurance shall name us as an additional insured and provide that said insurance is primary & Non-Contributory coverage. Such insurance shall remain in effect during the course of this Agreement, and shall include, without limitation, the following coverages: standard contractual liability, personal injury liability, completed operations, and product liability. The Liability Insurance shall provide general liability aggregate limits of not less than $2,000,000 (including the coverage specified above) and not less than $1,000,000 per occurrence.',
+    body: 'You shall, at your own expense, maintain commercial general liability insurance ("Liability Insurance"), including coverage for the operations of independent contractors and standard contractual liability coverage. The Liability Insurance shall name us as an additional insured and provide that said insurance is primary & Non-Contributory coverage. Such insurance shall remain in effect during the course of this Agreement, and shall include, without limitation, the following coverages: standard contractual liability, personal injury liability, completed operations, and product liability. The Liability Insurance shall provide general liability aggregate limits of not less than $2,000,000 (including the coverage specified above) and not less than $1,000,000 per occurrence. Where the rental includes generators or other fuel-burning equipment, the Liability Insurance shall also include coverage for pollution, spill and contamination arising from that equipment, its fueling, and its operation.',
   },
   {
     ref: '8',
@@ -181,6 +193,28 @@ export const CANONICAL_CLAUSES: CanonicalClause[] = [
     title: 'Non-smoking policy',
     body: `All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the vehicles. A ${usd(SMOKING_FEE_PER_DAY)} per day fee may be charged lessee in addition to the cost to repair any damaged items if the smoking policy is not observed.`,
   },
+  // Added 2026-09-09. Some Equipment on an order is a partner's, not ours —
+  // King Kong's vehicles, PowerTrip's generators — and two clauses above go
+  // FALSE the moment one ships: 16 warrants we are "at all times the sole
+  // owner", and 4 warrants we tested the Equipment, which we never touch on a
+  // yard-to-location delivery. This clause scopes both rather than editing
+  // them, so stored ContractReview decisions keyed on refs 4 and 16 still
+  // point at the text they were run against.
+  //
+  // The last sentence is the one that earns its keep in the other direction:
+  // clause 1 already extends the client's indemnity to our "suppliers,
+  // sub-lessors and sub-renters", so naming the owner as a beneficiary makes
+  // enforceable what the partner agreement (vendorAgreementClauses.ts §3, §11)
+  // already assumes — and reduces what SirReel has to backstop itself.
+  //
+  // APPENDED, not inserted. ReviewChangeDecision is unique on
+  // (reviewId, changeIndex) but clauseRef is stored text; renumbering 1–29
+  // would silently repoint every stored review at the wrong clause.
+  {
+    ref: '30',
+    title: 'Third-Party Equipment',
+    body: 'Some Equipment supplied under this Agreement is owned by third parties from whom we rent it, and is supplied to you on the same terms as Equipment we own. Where such Equipment is delivered to you directly by its owner rather than from our premises, the owner’s pre-delivery inspection and delivery record stand in place of our testing under Section 4, and Section 16 is read as our right to rent, possess and re-rent that Equipment rather than to own it. Every obligation you owe us under this Agreement with respect to Equipment — including the insurance required by Sections 5 through 11, your responsibility for loss under Section 2, and your indemnity under Section 1 — applies to that Equipment identically, and each owner of such Equipment is an additional beneficiary of your indemnity under Section 1 and an additional insured and loss payee under the insurance required above, to the same extent we are.',
+  },
 ]
 
 export const FLEET_AGREEMENT = {
@@ -211,7 +245,7 @@ export const LCDW_ADDENDUM = {
   coverage:
     `By accepting the Limited Collision Damage Waiver (LCDW), Lessee agrees to pay ${usd2(LCDW_DAILY_RATE)}/day/vehicle and to pay all costs above ${usd(LCDW_WAIVED_DAMAGE_LIMIT)}. In exchange, SirReel waives its claim to the first ${usd(LCDW_WAIVED_DAMAGE_LIMIT)} in loss of or damage to the vehicle caused by collision with another vehicle or property, including loss of use, towing, storage, impound, and administrative charges. LCDW IS NOT INSURANCE.`,
   exclusions:
-    'This waiver does NOT apply to: intentional acts; damage due to insufficient height or clearance (including roof and overhead-clearance damage); improper loading; abusive handling; towing or pushing without SirReel\u2019s written permission; operation by an unlicensed driver or a driver whose license is suspended or revoked; use of the vehicle in any manner prohibited by this Agreement; or theft of the vehicle or any of its components.',
+    'This waiver does NOT apply to: intentional acts; damage due to insufficient height or clearance (including roof and overhead-clearance damage); improper loading; abusive handling; towing or pushing without SirReel’s written permission; operation by an unlicensed driver or a driver whose license is suspended or revoked; use of the vehicle in any manner prohibited by this Agreement; or theft of the vehicle or any of its components.',
   scope:
     'The Limited Collision Damage Waiver is ONLY available for fleet rental vehicles such as: Vehicles (Cubes, Vans, Stakebeds, Location Trailers, Trucks & Motorhomes).',
   note: 'Acceptance/decline of LCDW must be confirmed in writing per fleet vehicle rental.',

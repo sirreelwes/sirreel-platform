@@ -4,7 +4,7 @@ import { verifyCoiToken } from '@/lib/coi/coiUploadToken'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
-import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
+import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
@@ -104,8 +104,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // carries no job — then the auto checks stay required, which is the safe
   // direction (src/lib/coi/vehicleScope.ts).
   const dropVehicleScope = jobId
-    ? deriveVehicleScope(
-        (await prisma.job.findUnique({ where: { id: jobId }, select: VEHICLE_SCOPE_SELECT })) ?? {},
+    ? deriveCoiScope(
+        (await prisma.job.findUnique({ where: { id: jobId }, select: COI_SCOPE_SELECT })) ?? {},
       ).hasVehicles
     : null
 

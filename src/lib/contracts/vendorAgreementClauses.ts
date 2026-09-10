@@ -28,6 +28,47 @@
  * one day's rate on a late cancel, 30 days' notice on insurance changes,
  * California law, and — Wes 2026-09-05 — SirReel never supplies drivers, for
  * a partner's unit any more than for its own (client clause 12).
+ *
+ * ── 2026-09-10b: the liability revision ─────────────────────────────────
+ * Nothing was signed yet, so the words were still free. Four clauses moved,
+ * all in the same direction — SirReel sits in the middle of this chain and
+ * was absorbing every mismatch between the two ends of it:
+ *
+ *   §4  The partner now owes what SirReel demands of every production:
+ *       stated limits, primary & non-contributory, and — the one that
+ *       actually pays for itself — a WAIVER OF SUBROGATION. Without it the
+ *       partner's carrier pays the partner, then subrogates against SirReel,
+ *       which is the §5 exposure arriving by a second route. Plus workers'
+ *       comp with a certificate, since SirReel books and pays for the crew
+ *       whose comp §7 assigns to the partner.
+ *   §5  "SirReel remains responsible if those sources do not pay" was a
+ *       GUARANTEE of the client's insurance, not a pass-through of it — a
+ *       denied claim, a deductible, a deficient COI or a folded production
+ *       and SirReel wrote the check. Now capped at actual cash value, with
+ *       damage caused by the partner's own unit or crew carved out, the
+ *       production's deductibles left where the Rental Agreement §9 puts
+ *       them, and a 3-business-day window so claims stop staying open
+ *       forever on a unit SirReel no longer controls.
+ *   §11 SirReel's side of the mutual indemnity reached third-party bodily
+ *       injury caused by a PRODUCTION driver, uncapped, defence included,
+ *       and "may satisfy this through the production's indemnity" is
+ *       permission, not a condition. Now capped in aggregate per booking,
+ *       gross negligence and willful misconduct excepted.
+ *   §15 The client agreement arbitrates (JAMS); this one litigates. One
+ *       damaged unit involving all three parties therefore ran in two
+ *       forums with SirReel — the only party in both contracts — funding
+ *       both. SirReel can now compel joinder.
+ *
+ * The chain itself (§3's sublease) was and is the right mechanism; these
+ * protect it rather than replace it. See also the new Third-Party Equipment
+ * clause (contractClauses.ts §30), which fixes the client-side half: §16
+ * warranted SirReel was "at all times the sole owner" and §4 warranted
+ * SirReel had tested the Equipment — both false the moment a partner unit
+ * ships — and it makes the partner an express beneficiary of the client's
+ * indemnity, which is what lets §5 and §11 be capped here at all.
+ *
+ * Commercial read of SirReel's own documents, not legal advice. Wes to have
+ * counsel read the §5 and §11 caps specifically before either goes out.
  */
 
 export interface VendorAgreementClause {
@@ -37,7 +78,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-06b'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-10b'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -79,12 +120,12 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '4',
     title: 'Insurance',
-    body: 'Production’s insurance. The SirReel Rental Agreement requires every production to carry commercial auto liability and hired-vehicle physical damage insurance covering owned, non-owned, hired and rented vehicles, naming SirReel as additional insured and loss payee, on a primary and non-contributory basis, and to indemnify SirReel for loss of or damage to Equipment. Because your Vehicle is Equipment during the booking, that coverage and indemnity extend to it, and SirReel will pursue them first for any loss that occurs on a booking. SirReel’s insurance. SirReel maintains commercial auto liability insurance, including hired and non-owned coverage, and physical damage coverage for vehicles in its care, custody and control, and will provide you a certificate on request. Your insurance. As the registered owner you keep your own auto liability and physical damage insurance on each Vehicle at all times, with SirReel Production Vehicles, Inc. named as additional insured on liability. The parties intend your coverage to sit behind the production’s and SirReel’s coverage for a loss during a booking, to the extent your policy allows. You will give SirReel a certificate of insurance when you sign this Agreement and each time a policy renews, and at least 30 days’ written notice of any cancellation or material change.',
+    body: 'Production’s insurance. The SirReel Rental Agreement requires every production to carry commercial auto liability and hired-vehicle physical damage insurance covering owned, non-owned, hired and rented vehicles, naming SirReel as additional insured and loss payee, on a primary and non-contributory basis, and to indemnify SirReel for loss of or damage to Equipment. Because your Vehicle is Equipment during the booking, that coverage and indemnity extend to it, and SirReel will pursue them first for any loss that occurs on a booking. SirReel’s insurance. SirReel maintains commercial auto liability insurance, including hired and non-owned coverage, and physical damage coverage for vehicles in its care, custody and control, and will provide you a certificate on request. Your insurance. As the registered owner you keep your own auto liability and physical damage insurance on each Vehicle at all times, with limits not less than $1,000,000 combined single limit for auto liability and not less than $1,000,000 per occurrence and $2,000,000 aggregate for general liability, naming SirReel Production Vehicles, Inc. and its production clients as additional insureds on a primary and non-contributory basis, and including a waiver of subrogation in favor of SirReel and its production clients. Where you supply drivers or other personnel under Section 7, you also maintain workers’ compensation and employer’s liability insurance with limits not less than $1,000,000, likewise with a waiver of subrogation in SirReel’s favor, and you will furnish a certificate for it before those personnel perform any booking. The parties intend your coverage to sit behind the production’s and SirReel’s coverage for a loss during a booking, to the extent your policy allows. You will give SirReel a certificate of insurance when you sign this Agreement and each time a policy renews, and at least 30 days’ written notice of any cancellation or material change.',
   },
   {
     ref: '5',
     title: 'Loss or Damage',
-    body: 'SirReel is responsible to you for loss of or damage to a Vehicle from the time it leaves your lot until it is returned, ordinary wear and tear excepted. Damage is valued at the reasonable cost of repair, not to exceed the Vehicle’s actual cash value immediately before the loss; a total loss or theft is valued at actual cash value. Loss of use is paid at the booked daily rate for the reasonable repair period, up to ten days. SirReel satisfies this responsibility first through the insurance and indemnity in Section 4 and you agree to cooperate with those claims, including making the Vehicle available for inspection and providing repair estimates and title documents; SirReel remains responsible if those sources do not pay. SirReel’s condition report at check-out is the baseline for the Vehicle’s condition, and you may attend the check-out to review it.',
+    body: 'SirReel is responsible to you for loss of or damage to a Vehicle from the time it leaves your lot until it is returned, ordinary wear and tear excepted. Damage is valued at the reasonable cost of repair, not to exceed the Vehicle’s actual cash value immediately before the loss; a total loss or theft is valued at actual cash value. Loss of use is paid at the booked daily rate for the reasonable repair period, up to ten days. SirReel satisfies this responsibility through the insurance and indemnity in Section 4 and through its own coverage, and you agree to cooperate with those claims, including making the Vehicle available for inspection and providing repair estimates and title documents. Where those sources do not pay in full, SirReel’s remaining liability for any one occurrence is limited to the Vehicle’s actual cash value, and SirReel is not responsible for loss of or damage to a Vehicle caused by the condition of the Vehicle, by your breach of Section 6, or by the acts or omissions of drivers or personnel you supply; you will look to your own coverage for those. Deductibles and self-insured retentions under the production’s policies are the production’s own responsibility under the SirReel Rental Agreement, and SirReel’s payment to you under this Section is net of amounts SirReel has not yet recovered from the production or its insurers, which SirReel will pursue in good faith and remit to you on receipt. You will inspect each Vehicle on return and note any damage on the return record then, or within three business days for damage not reasonably discoverable at return; damage not noted within that period is deemed accepted. SirReel’s condition report at check-out is the baseline for the Vehicle’s condition, and you may attend the check-out to review it.',
   },
   {
     ref: '6',
@@ -114,7 +155,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '11',
     title: 'Mutual Indemnity',
-    body: 'Each party protects the other. You will defend and indemnify SirReel, its officers, employees, agents and clients against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the title, registration or mechanical condition of a Vehicle, from your breach of this Agreement, or from the acts or omissions of drivers and personnel you supply. SirReel will defend and indemnify you, your officers, employees and agents against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the use or operation of a Vehicle during a booking, from SirReel’s breach of this Agreement, or from the acts or omissions of SirReel’s personnel and clients, and SirReel may satisfy this through the production’s indemnity and insurance under the SirReel Rental Agreement. Where a claim arises from both parties’ conduct, each bears its proportionate share. Neither party is liable to the other for lost profits or consequential damages except for the loss-of-use amount in Section 5 and the indemnities in this Section.',
+    body: 'Each party protects the other. You will defend and indemnify SirReel, its officers, employees, agents and clients against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the title, registration or mechanical condition of a Vehicle, from your breach of this Agreement, or from the acts or omissions of drivers and personnel you supply. SirReel will defend and indemnify you, your officers, employees and agents against claims, damages, fines and costs, including reasonable attorneys’ fees, to the extent they arise from the use or operation of a Vehicle during a booking, from SirReel’s breach of this Agreement, or from the acts or omissions of SirReel’s personnel and clients, and SirReel may satisfy this through the production’s indemnity and insurance under the SirReel Rental Agreement. Where a claim arises from both parties’ conduct, each bears its proportionate share. Except for a claim arising from SirReel’s gross negligence or willful misconduct, SirReel’s aggregate liability to you arising out of any single booking, under this Section and Section 5 together, will not exceed the sum of the amounts actually recovered from the production or its insurers for that booking and the Vehicle’s actual cash value. Neither party is liable to the other for lost profits or consequential damages except for the loss-of-use amount in Section 5 and the indemnities in this Section.',
   },
   {
     ref: '12',
@@ -134,7 +175,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '15',
     title: 'Governing Law and Disputes',
-    body: 'This Agreement is governed by the laws of the State of California. Any dispute the parties cannot resolve between themselves will be brought in the state or federal courts located in Los Angeles County, California, and the prevailing party recovers its reasonable attorneys’ fees and costs.',
+    body: 'This Agreement is governed by the laws of the State of California. Any dispute the parties cannot resolve between themselves will be brought in the state or federal courts located in Los Angeles County, California, and the prevailing party recovers its reasonable attorneys’ fees and costs. Where a dispute under this Agreement arises out of the same booking as a dispute between SirReel and a production under the SirReel Rental Agreement, SirReel may require that it be resolved in the same proceeding as, and under the rules governing, that dispute, and you consent to joinder in that proceeding.',
   },
   {
     ref: '16',

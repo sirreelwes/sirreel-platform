@@ -61,6 +61,18 @@ export interface CoiCheckContext {
    * truck. See src/lib/coi/vehicleScope.ts.
    */
   vehiclesOnJob?: boolean | null
+  /**
+   * Is an EQUIPMENT partner's unit going out on this job? `true` promotes
+   * Entertainment / Rented Equipment from ALERT to CRITICAL, because on a
+   * partner unit that coverage is not a nice-to-have — it is the chain the
+   * Partner Equipment Agreement §4 promises the partner in writing, and the
+   * only thing behind it if it is absent is SirReel's own balance sheet.
+   * Undefined or false leaves the check where it has always been. See
+   * src/lib/coi/partnerEquipmentScope.ts.
+   */
+  partnerEquipmentOnJob?: boolean | null
+  /** Whose equipment, for the reviewer-facing note. */
+  partnerEquipmentNote?: string | null
 }
 
 /** The requirements that exist only because a client is driving our truck. */
@@ -139,6 +151,25 @@ export function coiChecklist(
         status: 'NA',
         found: item ? str(item.found) : null,
         note: NO_VEHICLE_NOTE,
+      }
+    }
+    // A partner's generator on the job makes the equipment floater load-
+    // bearing rather than advisory: Partner Equipment Agreement §4 tells the
+    // partner this coverage reaches their Unit, and §5 leaves SirReel paying
+    // its actual cash value when it doesn't. Promoted BEFORE the stored
+    // verdict is read, like the auto scoping above — the review prompt is
+    // job-blind and tiers every certificate the same way.
+    if (key === 'entertainmentPackage' && ctx?.partnerEquipmentOnJob === true) {
+      const promotedNote = ctx.partnerEquipmentNote
+        ? `Required on this job — ${ctx.partnerEquipmentNote}.`
+        : 'Required on this job — a partner’s equipment is going out on it.'
+      return {
+        key,
+        label: COI_CHECK_LABELS[key] || key,
+        tier: 'CRITICAL',
+        status: statusOf(key, ai),
+        found: item ? str(item.found) : null,
+        note: [str(item?.note), promotedNote].filter(Boolean).join(' '),
       }
     }
     // Workers' Comp satisfied by a SEPARATE certificate on the job

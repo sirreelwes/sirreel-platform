@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
 // reads through the shared one now.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
-import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
+import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
@@ -146,7 +146,7 @@ export async function POST(
             agent: true,
             // Vehicle scope: the auto checks are NA on a job that rents no
             // truck (src/lib/coi/vehicleScope.ts).
-            job: { select: { id: true, name: true, ...VEHICLE_SCOPE_SELECT } },
+            job: { select: { id: true, name: true, ...COI_SCOPE_SELECT } },
           },
         },
       }
@@ -192,8 +192,8 @@ export async function POST(
           }
         : undefined
 
-    const vehiclesOnJob = deriveVehicleScope(request.booking?.job ?? {}).hasVehicles
-    const ctx = { ...(wcCtx ?? {}), vehiclesOnJob }
+    const scope = deriveCoiScope(request.booking?.job ?? {})
+    const ctx = { ...(wcCtx ?? {}), ...scope.ctx }
 
     const flags = coiFlags(review, ctx)
     if (wcCtx) {

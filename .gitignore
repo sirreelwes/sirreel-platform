@@ -20,6 +20,7 @@ next-env.d.ts
 scripts/*
 # Reusable scripts (re-runnable, ship with repo) — exempt from the
 # blanket scripts/ ignore.
+!scripts/generate-canonical-agreement-pdf.ts
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
 !scripts/backfill-coi-named-insured.ts

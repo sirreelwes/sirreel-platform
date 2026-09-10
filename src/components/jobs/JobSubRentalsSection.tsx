@@ -174,13 +174,34 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
       setErr(null)
       setMsg(null)
       try {
-        const r = await fetch(`/api/sub-rentals/${s.id}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ status }),
-        })
-        const j = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(j.error || `Could not update it (${r.status})`)
+        const send = (coiOverrideReason?: string) =>
+          fetch(`/api/sub-rentals/${s.id}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(coiOverrideReason ? { status, coiOverrideReason } : { status }),
+          })
+
+        let r = await send()
+        let j = await r.json().catch(() => ({}))
+
+        // The job's COI hasn't cleared and this status commits the partner's
+        // unit to it. The route says why in plain words; the reason typed here
+        // is what lands in the audit log, so ask for it rather than burying
+        // the refusal in an error string.
+        if (r.status === 409 && j.error === 'coi_not_cleared') {
+          const reason = window.prompt(
+            `${j.message}\n\nTo send it out anyway, say why — this is recorded against your name.`,
+            '',
+          )
+          if (!reason?.trim()) {
+            setErr(j.message || 'The job’s certificate of insurance has not cleared.')
+            return
+          }
+          r = await send(reason.trim())
+          j = await r.json().catch(() => ({}))
+        }
+
+        if (!r.ok) throw new Error(j.message || j.error || `Could not update it (${r.status})`)
         setMsg(`${s.vehicleName} → ${STATUS_LABEL[status] ?? status}.`)
         await load()
       } catch (e) {

@@ -12,7 +12,7 @@ import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
 // One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
-import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
+import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           // Vehicle scope — the two auto checks are NA on a job that rents
           // no truck, so they must not sink "coverage verified" either
           // (src/lib/coi/vehicleScope.ts).
-          ...VEHICLE_SCOPE_SELECT,
+          ...COI_SCOPE_SELECT,
         },
       },
       jobContact: { select: { email: true } },
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       // The CRITICAL checks are what "coverage verified" means; an alert-only
       // gap (no umbrella, no waiver) is for a human to judge, not a blocker.
       coverageVerified: coiFlags(aiResponse, {
-        vehiclesOnJob: deriveVehicleScope(order.job ?? {}).hasVehicles,
+        ...deriveCoiScope(order.job ?? {}).ctx,
       }).criticalPass,
     },
     select: {

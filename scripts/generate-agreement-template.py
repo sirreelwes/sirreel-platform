@@ -122,7 +122,7 @@ def main() -> None:
     add_heading(doc, "Terms and Conditions", level=2)
     add_paragraph(
         doc,
-        "Replace this paragraph with the canonical numbered clauses (1–29) "
+        "Replace this paragraph with the canonical numbered clauses (1–30) "
         "plus the Fleet Agreement and LCDW addendum from the post-corrections "
         "rental agreement. Keep this section's placeholders ({{companyName}}, "
         "{{contactEmail}}, etc.) where the canonical PDF uses them so a filled "

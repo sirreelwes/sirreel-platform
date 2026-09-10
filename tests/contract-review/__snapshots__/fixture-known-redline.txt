@@ -41,13 +41,13 @@ Long-term projects (where the first and last day of rental spans more than 14 da
 Clients with accounts that have existing payment terms require a 50% deposit prior to the first day for long-term projects. Rentals used
 for any type of 'event' must be paid in full before the first day of rental.
 
--- 1 of 8 --
+-- 1 of 9 --
 
 SirReel Production Vehicles, Inc.
 Rental Agreement — Counter Proposal
 Generated May 7, 2026
 
--- 2 of 8 --
+-- 2 of 9 --
 
 SirReel Production Vehicles, Inc.
 Rental Agreement — Counter Proposal
@@ -70,14 +70,23 @@ You are responsible for loss, damage or destruction of the Equipment, including 
 while loading and unloading, while at any and all locations, while in storage and while on your premises, except that you
 are not responsible for damage to or loss of the Equipment caused by our sole negligence or willful misconduct.
 3. Protection of Others
-You will take reasonable precautions in regard to the use of the Equipment to protect all persons and property from injury
-or damage. The Equipment shall be used only by your employees or agents qualified to use the Equipment.
+You will take reasonable precautions in regard to the use of the Equipment to protect all persons and property from injury or
+damage. The Equipment shall be used only by your employees or agents qualified to use the Equipment. Aerial lifts, scissor
+lifts, boom lifts and powered material-handling equipment shall be operated only by persons you have trained, evaluated
+and authorized to operate equipment of that type as required by Cal/OSHA, and you will produce that documentation on
+request.
 4. Equipment in Working Order
 We have tested the Equipment in accordance with reasonable industry standards and found it to be in working order
 immediately prior to the inception of this Agreement, and to the extent you have disclosed to us all of the intended uses of
 the Equipment, it is fit for its intended purpose. Other than what is set forth herein, you acknowledge that the Equipment
 is rented/leased without warranty, or guarantee, except as required by law or otherwise agreed upon by the parties at the
 inception of this Agreement.
+
+-- 3 of 9 --
+
+SirReel Production Vehicles, Inc.
+Rental Agreement — Counter Proposal
+Generated May 7, 2026
 5. Property Insurance
 You shall, at your own expense, maintain at all times during the term of this Agreement, all risk perils property insurance
 ("Property Insurance") covering the Equipment from all sources (Equipment Rental Floater or Production Package Policy)
@@ -89,12 +98,6 @@ basis shall name us as an additional insured and as the loss payee with respect 
 risks of loss of, or damage or destruction to the Equipment. The Property Insurance coverage shall be sufficient to cover
 the Equipment at its replacement value but shall, in no event, be less than $1,000,000. The Property Insurance shall be
 primary & Non-Contributory coverage.
-
--- 3 of 8 --
-
-SirReel Production Vehicles, Inc.
-Rental Agreement — Counter Proposal
-Generated May 7, 2026
 6. Workers Compensation & Employers Liability Insurance COUNTERED
 Lessee shall maintain workers compensation/employers liability insurance with minimum limits of $1,000,000, includ-
 ing coverage for any volunteers, interns, or independent contractors working on Lessee's behalf and under Lessee's
@@ -106,7 +109,8 @@ us as an additional insured and provide that said insurance is primary & Non-Con
 remain in effect during the course of this Agreement, and shall include, without limitation, the following coverages: standard
 contractual liability, personal injury liability, completed operations, and product liability. The Liability Insurance shall provide
 general liability aggregate limits of not less than $2,000,000 (including the coverage specified above) and not less than
-$1,000,000 per occurrence.
+$1,000,000 per occurrence. Where the rental includes generators or other fuel-burning equipment, the Liability Insurance
+shall also include coverage for pollution, spill and contamination arising from that equipment, its fueling, and its operation.
 8. Vehicle Insurance
 You shall, at your own expense, maintain business motor vehicle liability insurance ("Vehicle Insurance"), including cover-
 age for loading and unloading Equipment and hired motor vehicle physical damage insurance, covering owned, non-owned,
@@ -117,6 +121,12 @@ caused by any vehicles. The Vehicle Insurance shall provide not less than $1,000
 coverage and include replacement cost for physical damage and shall provide that said insurance is primary coverage &
 Non-Contributory with respect to all insureds, the limits of which must be exhausted before any obligation arises under our
 insurance.
+
+-- 4 of 9 --
+
+SirReel Production Vehicles, Inc.
+Rental Agreement — Counter Proposal
+Generated May 7, 2026
 9. Insurance Generally
 All insurance maintained by you pursuant to the foregoing provisions shall contain a waiver of subrogation rights in respect
 of any liability imposed by this Agreement on you as against us. You shall hold us harmless and indemnify us from and
@@ -134,12 +144,6 @@ not affect your obligation to procure insurance on our behalf, or otherwise affe
 10. Cancellation of Insurance
 You and your insurance company shall provide us with not less than 30 days written notice prior to the effective date of
 any cancellation or material change to any insurance maintained by you pursuant to the foregoing provisions.
-
--- 4 of 8 --
-
-SirReel Production Vehicles, Inc.
-Rental Agreement — Counter Proposal
-Generated May 7, 2026
 11. Certificates of Insurance
 Before obtaining possession of the Equipment you shall provide to us Certificates of Insurance confirming the coverages
 specified above. All certificates shall be signed by an authorized agent or representative of the insurance carrier.
@@ -158,6 +162,12 @@ obtain all necessary permits; and (iii) keep all required logs and records. You 
 and against any and all fines, levies, penalties, taxes and seizures by any governmental authority in connection with or as a
 result of your possession or use of the Equipment including, without limitation, the full replacement value of the Equipment
 in the event of seizure or impound, including our reasonable costs and attorney's fees.
+
+-- 5 of 9 --
+
+SirReel Production Vehicles, Inc.
+Rental Agreement — Counter Proposal
+Generated May 7, 2026
 14. Valuation of Loss / Our Liability is Limited ORIGINAL RETAINED
 Unless otherwise agreed in writing, you shall be responsible to us for the replacement cost value or repair cost of the
 Equipment (if the Equipment can be restored, by repair, to its pre-loss condition) whichever is less. If there is a reason to
@@ -171,12 +181,6 @@ You hereby agree that we shall be allowed to subrogated for any recovery rights 
 This agreement constitutes an Agreement or bailment of the Equipment and is not a sale or the creation of a security
 interest. You will not have, or at any time acquire, any right, title, or interest in the Equipment, except the right to possession
 and use as provided for in this Agreement. We will at all times be the sole owner of the Equipment.
-
--- 5 of 8 --
-
-SirReel Production Vehicles, Inc.
-Rental Agreement — Counter Proposal
-Generated May 7, 2026
 17. Condition of Equipment
 You assume all obligation and liability with respect to the possession of Equipment, and for its use, condition and storage
 during the term of this Agreement except as otherwise set forth herein. You will, at your own expense, maintain the Equip-
@@ -200,6 +204,12 @@ necessary accident reports, including those required by law and those required a
 and agents will cooperate fully with us and all insurers providing insurance under this Agreement in the investigation and
 defense of any claims. You will promptly deliver to us any documents served or delivered to you, your employees, or your
 agents in connection with any claim or proceeding at law or in equity begun or threatened against you, us, or both of us.
+
+-- 6 of 9 --
+
+SirReel Production Vehicles, Inc.
+Rental Agreement — Counter Proposal
+Generated May 7, 2026
 21. Default
 If you fail to pay any portion or installment of the total fees payable hereunder you otherwise materially breach this Agree-
 ment, then such failure or breach shall constitute a default ("Default"). Upon the occurrence of any such Default, and in
@@ -210,12 +220,6 @@ cease such performance at any time so long as such Default has not been cured.
 22. Return
 Upon the expiration date of this Agreement with respect to any or all Equipment, you will return the property to us, together
 with all accessories, free from all damage and in the same condition and appearance as when received by you.
-
--- 6 of 8 --
-
-SirReel Production Vehicles, Inc.
-Rental Agreement — Counter Proposal
-Generated May 7, 2026
 23. Additional Equipment
 Additional Equipment may from time to time be added as the subject matter of this Agreement as agreed on by the parties.
 Any additional property will be added in an amendment describing the property, the monthly rental, security deposit, and
@@ -243,12 +247,27 @@ stances, will remain valid and in full force and effect.
 28. Facsimile Signature
 This Agreement may be executed by facsimile signature and such signature shall be deemed a valid and binding original
 signature.
+
+-- 7 of 9 --
+
+SirReel Production Vehicles, Inc.
+Rental Agreement — Counter Proposal
+Generated May 7, 2026
 29. Non-smoking policy ACCEPTED
 All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the
 vehicles. A $200 per day fee may be charged lessee in addition to the cost to repair any damaged items if the smoking
 policy is not observed.
+30. Third-Party Equipment
+Some Equipment supplied under this Agreement is owned by third parties from whom we rent it, and is supplied to you on
+the same terms as Equipment we own. Where such Equipment is delivered to you directly by its owner rather than from
+our premises, the owner’s pre-delivery inspection and delivery record stand in place of our testing under Section 4, and
+Section 16 is read as our right to rent, possess and re-rent that Equipment rather than to own it. Every obligation you owe
+us under this Agreement with respect to Equipment — including the insurance required by Sections 5 through 11, your
+responsibility for loss under Section 2, and your indemnity under Section 1 — applies to that Equipment identically, and
+each owner of such Equipment is an additional beneficiary of your indemnity under Section 1 and an additional insured
+and loss payee under the insurance required above, to the same extent we are.
 
--- 7 of 8 --
+-- 8 of 9 --
 
 SirReel Production Vehicles, Inc.
 Rental Agreement — Counter Proposal
@@ -274,5 +293,5 @@ Acceptance/decline of LCDW must be confirmed in writing per fleet vehicle rental
 This document reflects SirReel's negotiation position based on per-clause review of the client's redlined agreement. It is a proposal for discussion and
 does not itself constitute an executed contract.
 
--- 8 of 8 --
+-- 9 of 9 --
 

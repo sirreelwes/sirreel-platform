@@ -7,7 +7,7 @@ import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { coiChecklist, coiFlags, type CoiCheckContext } from '@/lib/coi/checks'
 import { COI_SCOPE_GAP_NOTE, coiScopeGap } from '@/lib/coi/coiState'
-import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
+import { deriveCoiScope } from '@/lib/coi/jobScope'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiUploadUrl } from '@/lib/portal/portalUrl'
@@ -163,10 +163,13 @@ function serialize(coi: NonNullable<CoiRow>) {
     return r?.pass === true && r?.expired !== true
   })
 
-  // Does this job put one of our vehicles in the client's hands? If not, the
-  // two auto checks are NA and must never reach the client's broker — the
-  // MITU NGL Starlink order is why (src/lib/coi/vehicleScope.ts).
-  const scope = deriveVehicleScope(coi.job ?? {})
+  // What is actually going out on this job, which scopes the checklist in
+  // both directions: no truck and the two auto checks go NA (the MITU NGL
+  // Starlink order is why — src/lib/coi/vehicleScope.ts); a partner's unit
+  // and the equipment floater is promoted to critical, because on that unit
+  // it is the chain we promised the partner in writing
+  // (src/lib/coi/partnerEquipmentScope.ts).
+  const scope = deriveCoiScope(coi.job ?? {})
 
   const ctx: CoiCheckContext = {
     ...(passingWc
@@ -175,7 +178,7 @@ function serialize(coi: NonNullable<CoiRow>) {
           workersCompNote: `Covered by ${passingWc.wcOriginalFilename || 'a separate Workers Comp certificate'} filed on this job`,
         }
       : {}),
-    vehiclesOnJob: scope.hasVehicles,
+    ...scope.ctx,
   }
 
   const flags = coiFlags(ai as never, ctx)
@@ -307,7 +310,11 @@ function serialize(coi: NonNullable<CoiRow>) {
     fixDraft,
     /** null = we could not see the job; the auto checks stay required. */
     vehiclesOnJob: scope.hasVehicles,
-    vehicleReasons: scope.reasons,
+    vehicleReasons: scope.vehicleReasons,
+    /** A partner's unit on the job makes the equipment floater a CRITICAL
+     *  check rather than an alert (src/lib/coi/partnerEquipmentScope.ts). */
+    partnerEquipmentOnJob: scope.hasPartnerEquipment,
+    partnerEquipmentReasons: scope.partnerEquipmentReasons,
     decidedWithVehicles: coi.decidedWithVehicles,
     scopeGap,
     scopeGapNote: scopeGap ? COI_SCOPE_GAP_NOTE : null,
@@ -436,7 +443,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // looking at. `null` when we cannot tell (a COI attached to a company or an
   // inquiry rather than a job) — an unknown scope raises nothing later, which
   // is the right default for a certificate with no job to gain a truck.
-  const decidedScope = deriveVehicleScope(existing.job ?? {}).hasVehicles
+  const decidedScope = deriveCoiScope(existing.job ?? {}).hasVehicles
 
   let policyExpiryDate: Date | null | undefined
   if (typeof body.policyExpiryDate === 'string') {

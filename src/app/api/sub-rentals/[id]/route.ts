@@ -10,6 +10,12 @@
  *            (a job goes union late), and the partner reads the answer on
  *            their page. Re-derives client* when quantity changes and
  *            orderLineItemId is set.
+ *
+ *   Moving a sub-rental to CONFIRMED / PICKED_UP / ON_RENT is GATED on the
+ *   job's certificate of insurance (lib/sub-rentals/coiGate.ts) — 409
+ *   coi_not_cleared unless the caller sends a written coiOverrideReason,
+ *   which is audit-logged. ESTIMATED and REQUESTED are not gated.
+ *
  *   DELETE → soft "cancel" via status=CANCELLED (no row removal —
  *            we keep the audit trail).
  *
@@ -22,6 +28,7 @@ import { Prisma, ReceiveMethod, SubRentalStatus } from '@prisma/client'
 import { parseMoney } from '@/lib/pricing/resolveRate'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
+import { checkSubRentalCoi, isCoiGatedSubRentalStatus } from '@/lib/sub-rentals/coiGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +75,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     notes?: string | null
     status?: SubRentalStatus
     driverOnProductionPayroll?: boolean
+    /** Written reason to commit a partner's unit onto a job whose COI has
+     *  not cleared. Refused without one — see lib/sub-rentals/coiGate.ts. */
+    coiOverrideReason?: string
   } | null
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 })
 
@@ -76,6 +86,33 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
   if (body.status && !Object.values(SubRentalStatus).includes(body.status)) {
     return NextResponse.json({ error: 'invalid status' }, { status: 400 })
+  }
+
+  // Committing a partner's unit to a job is the moment the production's
+  // insurance has to be real: the partner agreements promise the partner that
+  // coverage by name (§3, §4) and cap what SirReel owes when it isn't there
+  // (§5). Refuse, and say why, unless someone writes down a reason.
+  let coiOverride: { reason: string; state: string | null } | null = null
+  if (isCoiGatedSubRentalStatus(body.status)) {
+    const verdict = await checkSubRentalCoi(params.id)
+    if (!verdict.ok) {
+      const reason = body.coiOverrideReason?.trim()
+      if (!reason) {
+        return NextResponse.json(
+          {
+            error: 'coi_not_cleared',
+            message: verdict.reason,
+            coiState: verdict.state,
+            jobId: verdict.jobId,
+            // The client shows this, collects a reason, and re-POSTs with
+            // coiOverrideReason set.
+            overridable: true,
+          },
+          { status: 409 },
+        )
+      }
+      coiOverride = { reason: reason.slice(0, 500), state: verdict.state }
+    }
   }
 
   // If quantity is changing and we're linked to a line, re-clamp +
@@ -147,6 +184,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         userId: gate.user.id,
         oldValues: { driverOnProductionPayroll: existing.driverOnProductionPayroll },
         newValues: { driverOnProductionPayroll: body.driverOnProductionPayroll, via: 'sub_rental.patch' },
+      },
+    })
+  }
+
+  // An override is the whole point of letting the gate be passed: the row says
+  // who decided a partner's unit could go out uninsured, and why.
+  if (coiOverride) {
+    await prisma.auditLog.create({
+      data: {
+        action: 'sub_rental.coi_gate_override',
+        entityType: 'SubRental',
+        entityId: params.id,
+        userId: gate.user.id,
+        oldValues: { coiState: coiOverride.state },
+        newValues: { status: body.status, reason: coiOverride.reason, via: 'sub_rental.patch' },
       },
     })
   }
