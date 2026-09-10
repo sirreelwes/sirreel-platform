@@ -80,7 +80,8 @@
     "test:booking-terms": "tsx tests/sales/booking-terms.test.ts",
     "test:conduit": "tsx tests/sub-rentals/conduit.test.ts",
     "test:auto-reply": "tsx tests/email/auto-reply.test.ts",
-    "rw:status": "tsx scripts/rw-sync-status.ts"
+    "rw:status": "tsx scripts/rw-sync-status.ts",
+    "planyo:alignment": "tsx scripts/planyo-unit-alignment.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

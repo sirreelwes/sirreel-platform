@@ -150,3 +150,48 @@ export async function getReservationData(
     return { ok: false, detail: (e as Error).message }
   }
 }
+
+export interface PlanyoResourceInfo {
+  name?: string
+  quantity?: string | number
+  /** Comma-separated unit roster, e.g. "1,8,3,5,9,23 (A),Waitlist A01".
+   *  This is Planyo's AUTHORITATIVE list of the units on a resource —
+   *  it does not depend on anything having been booked on them, which
+   *  is what makes it the right basis for a HQ→Planyo address map.
+   *  `list_reservations` only ever shows units that carry a booking. */
+  unit_names?: string
+  is_published?: string | number
+  is_listed?: string | number
+}
+
+export interface ResourceInfoResult {
+  ok: true
+  data: PlanyoResourceInfo
+}
+
+/**
+ * Read one resource's configuration, including its unit roster.
+ * Read-only — this client has no write methods, deliberately (there is
+ * no HQ→Planyo write-back; see CLAUDE.md).
+ */
+export async function getResourceInfo(
+  resourceId: string | number,
+): Promise<ResourceInfoResult | ReservationDetailError> {
+  try {
+    const raw = (await call('get_resource_info', {
+      resource_id: String(resourceId),
+    })) as { response_code?: number; response_message?: string; data?: PlanyoResourceInfo }
+    if (raw.response_code !== 0) {
+      return { ok: false, detail: raw.response_message ?? 'unknown' }
+    }
+    return { ok: true, data: raw.data ?? {} }
+  } catch (e) {
+    return { ok: false, detail: (e as Error).message }
+  }
+}
+
+/** Split a resource's `unit_names` roster into trimmed unit strings. */
+export function parseUnitNames(roster: string | undefined | null): string[] {
+  if (!roster) return []
+  return roster.split(',').map((s) => s.trim()).filter(Boolean)
+}
