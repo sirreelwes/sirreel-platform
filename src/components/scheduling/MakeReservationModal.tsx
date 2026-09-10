@@ -72,6 +72,23 @@
  * list existed, the conflict override re-ran the whole submit and left
  * the first, empty order stranded.)
  *
+ * WHICH TRUCK, not just which type (Wes 2026-09-10). Most
+ * reservations don't care — "a cargo van" is the whole request, and
+ * "assign the next available unit" answers it. But a production that
+ * asked for the van they had last week, or the cube with the lift
+ * gate, had no way to say so here: the desk created the order, closed
+ * this window, found the hold on the board and re-assigned it. Each
+ * line now carries an optional list of NAMED units, offered from the
+ * same per-window availability this form already fetches for its
+ * capacity read. Naming fewer units than the quantity is legal — the
+ * named ones are bound and "next available" covers the remainder.
+ *
+ * A named unit is ALSO the human override the turnaround buffer asks
+ * for, so a buffer unit may be picked here (`bufferOverride`) while
+ * "next available" still refuses to take one on its own. A unit
+ * already booked over the window is not offered at all — that is a
+ * queue decision, and the queue lives above.
+ *
  * Nothing here emails anybody. Creating an order + holds is internal
  * work; the client-facing sends live behind Send quote / Book it, and
  * adding a job contact deliberately sends no portal invite.
@@ -125,6 +142,17 @@ interface Row {
   categoryId: string
   quantity: number
   queueChoice: QueueChoice
+  /** Units the agent named, by asset id. Empty = let "next available"
+   *  decide. Never longer than `quantity`; trimmed when it shrinks. */
+  unitIds: string[]
+}
+
+/** One unit of a category, with its state over the reservation window. */
+interface UnitOption {
+  assetId: string
+  unitName: string
+  tier: AssetTier
+  state: 'free' | 'buffer' | 'booked'
 }
 
 /** Capacity + queue for one category over the reservation's window. */
@@ -132,6 +160,9 @@ interface Preflight {
   loading: boolean
   avail: { availableToHold: number; serviceableCount: number } | null
   stack: StackEntry[]
+  /** Every serviceable unit of the category over the window, nicest
+   *  tier first — the source for the "which unit" picker. */
+  units: UnitOption[]
 }
 
 /** What one line ended up as, once it landed. */
@@ -156,8 +187,18 @@ type StepState = 'pending' | 'running' | 'done' | 'skipped' | 'failed'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+type AssetTier = 'PREMIUM' | 'STANDARD' | 'ECONOMY'
+/** Same order the assignment picker uses — nicest tier first. */
+const TIER_ORDER: Record<AssetTier, number> = { PREMIUM: 0, STANDARD: 1, ECONOMY: 2 }
+
 let rowSeq = 0
-const newRow = (): Row => ({ key: `r${++rowSeq}`, categoryId: '', quantity: 1, queueChoice: 'none' })
+const newRow = (): Row => ({
+  key: `r${++rowSeq}`,
+  categoryId: '',
+  quantity: 1,
+  queueChoice: 'none',
+  unitIds: [],
+})
 
 export function MakeReservationModal({
   defaultStart,
@@ -184,6 +225,9 @@ export function MakeReservationModal({
   const [job, setJob] = useState<{ id: string; jobCode: string; name: string } | null>(null)
   const [resolverOpen, setResolverOpen] = useState(false)
   const [assignNext, setAssignNext] = useState(true)
+  /** Which lines have the unit picker open. A line that has named a
+   *  unit is open regardless — the picks have to stay visible. */
+  const [openPickers, setOpenPickers] = useState<Record<string, boolean>>({})
   const [notes, setNotes] = useState('')
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
@@ -298,7 +342,10 @@ export function MakeReservationModal({
     let cancelled = false
     setPre((p) =>
       Object.fromEntries(
-        ids.map((id) => [id, { avail: p[id]?.avail ?? null, stack: p[id]?.stack ?? [], loading: true }]),
+        ids.map((id) => [
+          id,
+          { avail: p[id]?.avail ?? null, stack: p[id]?.stack ?? [], units: p[id]?.units ?? [], loading: true },
+        ]),
       ),
     )
     Promise.all(
@@ -316,6 +363,15 @@ export function MakeReservationModal({
           // `rows` — the stacked-holds route's key, already ordered rank
           // then oldest-first within a rank.
           stack: Array.isArray(st?.rows) ? st.rows : [],
+          // The availability read already names every serviceable unit
+          // and its state for the window, so the picker costs no extra
+          // request. Out-of-service units are absent by construction —
+          // the engine leaves them out — which is what we want here.
+          units: (Array.isArray(a?.units) ? (a.units as UnitOption[]) : []).slice().sort(
+            (u, v) =>
+              TIER_ORDER[u.tier] - TIER_ORDER[v.tier] ||
+              u.unitName.localeCompare(v.unitName, undefined, { numeric: true }),
+          ),
         }
         return [id, entry] as const
       }),
@@ -323,9 +379,10 @@ export function MakeReservationModal({
       .then((entries) => {
         if (cancelled) return
         setPre(Object.fromEntries(entries))
-        // The window moved under the queue choices — they were answers
-        // to a different question.
-        setRows((rs) => rs.map((r) => ({ ...r, queueChoice: 'none' })))
+        // The window moved under the queue choices AND the named units —
+        // both were answers to a different question, and a unit that was
+        // free last week may not be free now.
+        setRows((rs) => rs.map((r) => ({ ...r, queueChoice: 'none', unitIds: [] })))
       })
       .catch(() => {
         if (!cancelled) setPre({})
@@ -397,6 +454,19 @@ export function MakeReservationModal({
 
   const patchRow = (key: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+
+  /** Name a unit, or take the name back. Capped at the line's quantity
+   *  — the cap is what stops "pick a specific van" from quietly
+   *  becoming "pick four", since the assign route would refuse the
+   *  extras anyway and the desk would only find out mid-write. */
+  const toggleUnit = (r: Row, assetId: string) =>
+    patchRow(r.key, {
+      unitIds: r.unitIds.includes(assetId)
+        ? r.unitIds.filter((id) => id !== assetId)
+        : r.unitIds.length >= r.quantity
+          ? r.unitIds
+          : [...r.unitIds, assetId],
+    })
 
   function onJobResolved(r: ResolvedJob) {
     setJob({ id: r.id, jobCode: r.jobCode, name: r.name })
@@ -653,42 +723,77 @@ export function MakeReservationModal({
           note = `The ${category.name} line was added but its hold could not be read back — check the order.`
         } else if (queuedBehind) {
           note = `${category.name}: queued as the ${holdRankLabel(placedRank!)} Hold — no unit until the hold ahead releases.`
-        } else if (assignNext && canBindUnit) {
-          for (let i = 0; i < r.quantity; i++) {
-            const availRes = await fetch(
-              `/api/scheduling/booking-items/${bookingItemId}/available-units`,
-            )
-            const av = await availRes.json().catch(() => ({}))
-            // `candidates` — NOT `units`. The route returns the pooled
-            // counts under `summary` and the pickable rows under
-            // `candidates`, already sorted nicest-tier-then-unit-number.
-            const units: { assetId: string; unitName: string; state: string }[] = av?.candidates || []
-            // "Next available" is the first FREE unit in the list the
-            // server already sorted (nicest tier first, then unit number).
-            // Buffer-state units are deliberately not auto-picked — they
-            // need the human override, not a silent one.
-            const next = units.find((u) => u.state === 'free')
-            if (!next) {
-              note =
-                i === 0
-                  ? `${category.name}: no unit was free for those dates — it holds the category and shows in the needs-a-unit lane.`
-                  : `${category.name}: only ${assigned.length} of ${r.quantity} could be assigned — no other unit is free.`
-              break
-            }
+        } else if (canBindUnit && (assignNext || r.unitIds.length > 0)) {
+          // The units the agent NAMED go on first, in the order they
+          // were picked. A named unit is a deliberate human choice, so
+          // it carries the buffer override the "next available" pass
+          // below deliberately withholds.
+          const picked = r.unitIds.slice(0, r.quantity)
+          for (const assetId of picked) {
+            const u = pre[category.id]?.units.find((x) => x.assetId === assetId)
             const assignRes = await fetch(
               `/api/scheduling/booking-items/${bookingItemId}/assign`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assetId: next.assetId, orderId: order.id }),
+                body: JSON.stringify({
+                  assetId,
+                  orderId: order.id,
+                  ...(u?.state === 'buffer' ? { bufferOverride: true } : {}),
+                }),
               },
             )
             if (!assignRes.ok) {
               const aj = await assignRes.json().catch(() => ({}))
-              note = `${next.unitName} could not be assigned (${aj?.error || assignRes.status}). The reservation still holds the category.`
+              note = `${u?.unitName ?? 'That unit'} could not be assigned (${aj?.reason || aj?.error || assignRes.status}). The reservation still holds the category.`
               break
             }
-            assigned.push(next.unitName)
+            assigned.push(u?.unitName ?? 'unit')
+          }
+
+          // Whatever the names didn't cover — the whole line when none
+          // were named — falls to "next available", if it's ticked.
+          if (!note && assignNext) {
+            for (let i = assigned.length; i < r.quantity; i++) {
+              const availRes = await fetch(
+                `/api/scheduling/booking-items/${bookingItemId}/available-units`,
+              )
+              const av = await availRes.json().catch(() => ({}))
+              // `candidates` — NOT `units`. The route returns the pooled
+              // counts under `summary` and the pickable rows under
+              // `candidates`, already sorted nicest-tier-then-unit-number.
+              const units: { assetId: string; unitName: string; state: string }[] = av?.candidates || []
+              // "Next available" is the first FREE unit in the list the
+              // server already sorted (nicest tier first, then unit number).
+              // Buffer-state units are deliberately not auto-picked — they
+              // need the human override, not a silent one.
+              const next = units.find((u) => u.state === 'free')
+              if (!next) {
+                note =
+                  assigned.length === 0
+                    ? `${category.name}: no unit was free for those dates — it holds the category and shows in the needs-a-unit lane.`
+                    : `${category.name}: only ${assigned.length} of ${r.quantity} could be assigned — no other unit is free.`
+                break
+              }
+              const assignRes = await fetch(
+                `/api/scheduling/booking-items/${bookingItemId}/assign`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ assetId: next.assetId, orderId: order.id }),
+                },
+              )
+              if (!assignRes.ok) {
+                const aj = await assignRes.json().catch(() => ({}))
+                note = `${next.unitName} could not be assigned (${aj?.reason || aj?.error || assignRes.status}). The reservation still holds the category.`
+                break
+              }
+              assigned.push(next.unitName)
+            }
+          } else if (!note && assigned.length < r.quantity) {
+            // Named some, but "next available" is off — say so rather
+            // than leaving a half-covered hold looking finished.
+            note = `${category.name}: ${assigned.length} of ${r.quantity} named — the rest hold the category with no unit yet.`
           }
         } else if (!canBindUnit) {
           note = 'Units are assigned by dispatch — the reservation holds the category.'
@@ -740,6 +845,117 @@ export function MakeReservationModal({
     )
   }
 
+  /**
+   * WHICH UNIT, for one line (Wes 2026-09-10). Closed by default —
+   * "next available" is the right answer for most reservations and an
+   * always-open grid of unit chips would bury the rest of the form.
+   * Open, it is the same list the assignment picker shows: every
+   * serviceable unit for the window, nicest tier first, each labelled
+   * with what it is doing on those dates.
+   */
+  const unitPicker = (r: Row) => {
+    const p = pre[r.categoryId]
+    if (!p || p.loading) {
+      return <p className="text-[11px] text-lt-fg3">Checking which units are free…</p>
+    }
+    const units = p.units
+    if (units.length === 0) return null
+    const chosen = r.unitIds
+    const open = chosen.length > 0 || !!openPickers[r.key]
+
+    if (!open) {
+      return (
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="text-lt-fg3">
+            Unit: {assignNext ? 'next available' : 'assigned later'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpenPickers((o) => ({ ...o, [r.key]: true }))}
+            className="font-semibold text-lt-fg2 hover:text-lt-fg underline underline-offset-2"
+          >
+            Pick {r.quantity > 1 ? 'specific units' : 'a specific unit'}
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="rounded-lg border border-lt-hairline bg-lt-inner px-2.5 py-2 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-lt-fg3">
+            Which {r.quantity > 1 ? 'units' : 'unit'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenPickers((o) => ({ ...o, [r.key]: false }))
+              patchRow(r.key, { unitIds: [] })
+            }}
+            className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg"
+          >
+            Any unit
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {units.map((u) => {
+            const picked = chosen.includes(u.assetId)
+            const full = !picked && chosen.length >= r.quantity
+            const disabled = u.state === 'booked' || full
+            return (
+              <button
+                key={u.assetId}
+                type="button"
+                disabled={disabled}
+                onClick={() => toggleUnit(r, u.assetId)}
+                aria-pressed={picked}
+                title={
+                  u.state === 'booked'
+                    ? 'Booked over these dates — the queue above is the way in'
+                    : full
+                      ? `Only ${r.quantity} needed — unpick one, or raise the quantity`
+                      : u.state === 'buffer'
+                        ? 'In the turnaround buffer for these dates — picking it is the override'
+                        : undefined
+                }
+                className={`px-2 py-1 rounded-lg text-[12px] font-semibold border ${
+                  picked
+                    ? 'bg-lt-fg text-white border-lt-fg'
+                    : u.state === 'booked'
+                      ? 'bg-lt-card text-lt-fg3 border-lt-hairline line-through cursor-not-allowed'
+                      : full
+                        ? 'bg-lt-card text-lt-fg3 border-lt-hairline cursor-not-allowed'
+                        : u.state === 'buffer'
+                          ? 'bg-chip-warn-bg text-chip-warn-fg border-chip-warn-fg/30 hover:border-chip-warn-fg/60'
+                          : 'bg-lt-card text-lt-fg border-lt-hairline hover:border-lt-fg3'
+                }`}
+              >
+                {u.unitName}
+                {u.state === 'buffer' && (
+                  <span className="ml-1 font-normal opacity-80">turnaround</span>
+                )}
+                {u.state === 'booked' && (
+                  <span className="ml-1 font-normal no-underline opacity-80">booked</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-lt-fg3">
+          {chosen.length === 0
+            ? assignNext
+              ? 'Nothing named — the next free unit is taken.'
+              : 'Nothing named — the reservation holds the category only.'
+            : chosen.length < r.quantity
+              ? `${chosen.length} of ${r.quantity} named${
+                  assignNext ? ' — the rest take the next free unit' : ' — the rest hold the category only'
+                }.`
+              : `Bound to ${chosen.length === 1 ? 'this unit' : 'these units'}.`}
+        </p>
+      </div>
+    )
+  }
+
   /** The 2nd-Hold moment, for one line's category. */
   const queueBlock = (r: Row) => {
     const category = rowCat(r)
@@ -770,7 +986,7 @@ export function MakeReservationModal({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => patchRow(r.key, { queueChoice: 'second' })}
+              onClick={() => patchRow(r.key, { queueChoice: 'second', unitIds: [] })}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
                 r.queueChoice === 'second'
                   ? 'bg-lt-fg text-white border-lt-fg'
@@ -929,7 +1145,13 @@ export function MakeReservationModal({
                             id={`reservation-type-${r.key}`}
                             value={r.categoryId}
                             disabled={written}
-                            onChange={(e) => patchRow(r.key, { categoryId: e.target.value, queueChoice: 'none' })}
+                            onChange={(e) =>
+                              patchRow(r.key, {
+                                categoryId: e.target.value,
+                                queueChoice: 'none',
+                                unitIds: [],
+                              })
+                            }
                             className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
                           >
                             <option value="">Select a type…</option>
@@ -974,12 +1196,19 @@ export function MakeReservationModal({
                             min={1}
                             value={r.quantity}
                             disabled={written}
-                            onChange={(e) =>
-                              patchRow(r.key, {
-                                quantity: Math.max(1, parseInt(e.target.value) || 1),
-                                queueChoice: 'none',
-                              })
-                            }
+                            onChange={(e) => {
+                              const q = Math.max(1, parseInt(e.target.value) || 1)
+                              // Dropping the quantity drops the named
+                              // units past it — the assign route would
+                              // refuse them anyway, mid-write.
+                              setRows((rs) =>
+                                rs.map((x) =>
+                                  x.key === r.key
+                                    ? { ...x, quantity: q, queueChoice: 'none', unitIds: x.unitIds.slice(0, q) }
+                                    : x,
+                                ),
+                              )
+                            }}
                             className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
                           />
                         </div>
@@ -1018,6 +1247,12 @@ export function MakeReservationModal({
                           when the line is priced.
                         </p>
                       )}
+                      {/* Which truck, not just which type. Hidden for a
+                          queued hold: a 2nd Hold gets no unit at all, so
+                          naming one would be a promise the write can't
+                          keep. */}
+                      {canBindUnit && category && !dup && !written && r.queueChoice !== 'second' &&
+                        unitPicker(r)}
                       {/* Zero availability — the 2nd Hold moment (Wes
                           2026-09-09). A category at capacity with no
                           replacement unit is a queue decision, not an
@@ -1259,8 +1494,9 @@ export function MakeReservationModal({
                   <span>
                     Assign the next available unit
                     <span className="block text-[11px] text-lt-fg3">
-                      Takes the first free unit for these dates, nicest tier first, for every line.
-                      Units in the turnaround buffer are left for a human to override.
+                      Takes the first free unit for these dates, nicest tier first, for every line
+                      you didn&apos;t name a unit on. Units in the turnaround buffer are left for a
+                      human to override — pick one by name above to do that.
                     </span>
                   </span>
                 </label>
