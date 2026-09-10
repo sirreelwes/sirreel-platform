@@ -26,8 +26,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
-import type { ReportDraft, DraftLine } from '@/lib/orders/checkReports'
+import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+
+/**
+ * What to tell the supervisor when a complete outbound sheet did not put
+ * the order out. Each line names the next step, because "still Booked"
+ * on its own is what sent Jose hunting for a button that wasn't there.
+ *
+ * The two fleet sentences deliberately do not offer to settle the lane
+ * from this screen — a truck leaves through the driver check-out and its
+ * walk-around, and a typed sheet is not a stand-in for that.
+ */
+const OUT_BLOCKED_MESSAGE: Record<OutBlockedReason, string> = {
+  'prep-for-a-later-day':
+    'The gear is marked loaded. This sheet is for a later day, so the job stays as it is until the pickup day itself.',
+  'not-booked':
+    'The gear is marked loaded, but the order is still a quote — sales has to book it before the job can read On rental.',
+  'fleet-no-vehicle-assigned':
+    'There is a vehicle on this order and no truck assigned to it, so nothing can record which one left. Dispatch needs to assign the unit.',
+  'fleet-vehicle-not-checked-out':
+    'The gear side is done. The truck still has to be checked out — that walk-around is what puts the job On rental.',
+}
 
 type Row = DraftLine & { open: boolean }
 type Extra = {
@@ -100,7 +120,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
     /** What filing this sheet settled in the yard. */
-    gear: { pickListAdvanced: boolean; jobReturned: boolean; orderOut: boolean } | null
+    gear: {
+      pickListAdvanced: boolean
+      jobReturned: boolean
+      orderOut: boolean
+      orderReturned: boolean
+      outBlocked: OutBlockedReason | null
+    } | null
     /** The sheet covered only part of the order. */
     partial: boolean
     offSheet: number
@@ -421,6 +447,22 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {done.gear?.orderOut && (
             <p className="mt-3 text-[14px] text-chip-good-fg">
               The gear is marked out — the job reads <b>On rental</b> now. Nothing else to do.
+            </p>
+          )}
+          {/* And the honest version when it did NOT: say what is still
+              holding the order, and who closes it. A sheet that settles
+              nothing and says nothing is the dead end Jose hit on a
+              fleet-only order. */}
+          {done.gear?.outBlocked && (
+            <p className="mt-3 text-[14px] text-pill-quoted-fg">
+              {OUT_BLOCKED_MESSAGE[done.gear.outBlocked]}
+            </p>
+          )}
+          {/* The inbound mirror. Reaching RETURNED is also what lets the
+              order be invoiced, so it is worth saying plainly. */}
+          {done.gear?.orderReturned && (
+            <p className="mt-3 text-[14px] text-chip-good-fg">
+              The order is marked <b>Returned</b> — it&rsquo;s ready to invoice. Nothing else to do.
             </p>
           )}
 

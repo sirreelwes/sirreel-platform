@@ -30,10 +30,13 @@
  *     api/orders/[id]/check-report/photo (12MB, JPEG/PNG/WebP, and the
  *     wrong-order refusal).
  *   - Check-OUT writes counts onto the order + flags the agent + re-sends
- *     a quote; check-IN never changes the order → lib/orders/checkReports.ts
- *     (submitCheckReport's header states the why).
- *   - Filing settles the gear lane: OUT → LOADED, IN → CHECKED_IN and
- *     Job.returnedAt → settleGearAfterReport.
+ *     a quote; check-IN never rewrites the order's LINES →
+ *     lib/orders/checkReports.ts (submitCheckReport's header states the
+ *     why). Both edges move the order's STATUS — that is settle, not
+ *     submit, and the two are deliberately separate.
+ *   - Filing settles the gear lane: OUT → LOADED + ON_JOB, IN →
+ *     CHECKED_IN + RETURNED + Job.returnedAt → settleGearAfterReport
+ *     (settleOrderOut / settleOrderIn).
  *   - Filing is yard-gated; anyone signed in can print the sheet →
  *     api/orders/[id]/check-report vs pick-list-pdf.
  */
@@ -310,17 +313,24 @@ export default function PullSheetsGuidePage() {
             </Step>
             <Step n={3} title="File it">
               <p>
-                Filing the check-in stamps the gear <strong>Checked in</strong>, and when everything on
-                the job is back it marks the <strong>job returned</strong>. That is what clears a job off
-                the board — a job whose gear is physically back but never checked in reads{' '}
-                <em>Not returned</em> forever.
+                Filing the check-in stamps the gear <strong>Checked in</strong>, moves the order to{' '}
+                <strong>Returned</strong>, and when everything on the job is back it marks the{' '}
+                <strong>job returned</strong>. That is what clears a job off the board — a job whose gear
+                is physically back but never checked in reads <em>Not returned</em> forever.
+              </p>
+              <p>
+                Reaching <strong>Returned</strong> is also what lets the order be invoiced. An order that
+                never got there can be billed and paid and still read <em>Booked</em>, which is how a
+                finished job ends up looking like one that hasn&rsquo;t gone out yet.
               </p>
             </Step>
           </ol>
           <Note tone="stop" label="A check-in never changes what was rented">
             Short counts here are recorded and flagged to the agent — the order is not reduced. Cutting a
             booked line because a case didn&rsquo;t come back would credit the client for losing our
-            equipment. What a shortfall costs is the agent&rsquo;s call, not the sheet&rsquo;s.
+            equipment. What a shortfall costs is the agent&rsquo;s call, not the sheet&rsquo;s. A short
+            sheet still marks the order returned: short means it came back short, not that it is still
+            out.
           </Note>
         </section>
 
