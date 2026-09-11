@@ -47,6 +47,8 @@ import { PORTAL } from '@/lib/brand/portalTokens'
 import { ShareWithTeamsButton } from '@/components/portal/company/ShareWithTeamsButton'
 import { NotificationSettings, type NotificationPrefs } from '@/components/portal/company/NotificationSettings'
 import { PeopleWithAccess } from '@/components/portal/company/PeopleWithAccess'
+import { CardsOnFile } from '@/components/portal/company/CardsOnFile'
+import type { ClientCardRow } from '@/lib/portal/companyPortalCards'
 
 export interface CompanyPortalViewer {
   personName: string
@@ -62,6 +64,8 @@ export interface CompanyPortalViewProps {
   services: Awaited<ReturnType<typeof buildServiceCatalog>>
   prefs: NotificationPrefs
   people: CompanyPortalPersonRow[]
+  /** Wallet cards, display fields only (companyPortalCards.ts). */
+  cards: ClientCardRow[]
   preview?: boolean
 }
 
@@ -194,6 +198,7 @@ export function CompanyPortalView({
   services,
   prefs,
   people,
+  cards,
   preview = false,
 }: CompanyPortalViewProps) {
   const { terms, active, past, totals } = overview
@@ -654,6 +659,23 @@ export function CompanyPortalView({
               </a>
             ))}
           </div>
+        </section>
+
+        {/* ── Cards on file ────────────────────────────────────────────
+            Wes 2026-09-11: the person who sends the card is rarely the
+            production contact — an accounting seat puts it down once here
+            and every show on the account reads it (jobCardOnFile.ts). */}
+        <section id="cards">
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
+            Cards on file
+          </h2>
+          <CardsOnFile
+            companyId={companyId}
+            companyName={overview.companyName}
+            viewerName={viewer.personName}
+            initial={cards}
+            preview={preview}
+          />
         </section>
 
         {/* ── People with access ───────────────────────────────────────

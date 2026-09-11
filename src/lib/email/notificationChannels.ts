@@ -48,6 +48,7 @@ export type NotificationChannelKey =
   | 'eod-unassigned-units'
   | 'portal-opens'
   | 'portal-people'
+  | 'portal-cards'
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
   | 'driver-checkouts'
@@ -110,6 +111,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     label: 'Client-added portal access',
     description:
       'One email when a client adds a colleague to their own company portal from inside it (Wes 2026-09-06: "if she wants to add people she can do so in her portal"). Says who added whom, so the desk knows a new name is looking at the account before that person ever writes in. Defaults to the hq@ feed.',
+    defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'portal-cards',
+    label: 'Client-added cards on file',
+    description:
+      'One email when a production company puts a card on file from its own account portal, or their bank refuses the verification while they try (Wes 2026-09-11: an accounting seat should be able to put a card down once for every show). Names the company, the person and the last four. Defaults to the hq@ feed.',
     defaults: () => [hqNotifyInbox()],
   },
   {

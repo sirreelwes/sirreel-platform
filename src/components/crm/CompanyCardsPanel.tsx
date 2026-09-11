@@ -233,6 +233,13 @@ export function CompanyCardsPanel({
                         Keyed by staff · authorization: {c.authorizationRef || 'not recorded'}
                       </div>
                     )}
+                    {/* Added by the client in their ACCOUNT portal (2026-09-11):
+                        the signed authorization is the audit row the ref names. */}
+                    {c.source === 'COMPANY_PORTAL' && (
+                      <div className="text-[11px] text-lt-fg3 mt-0.5">
+                        Added in the account portal · {c.authorizationRef || 'authorization not recorded'}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 text-[11px]">

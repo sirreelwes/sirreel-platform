@@ -389,6 +389,84 @@ export async function mirrorPaperworkCardToWallet(
 }
 
 /**
+ * A card the CLIENT authorized in their own account portal
+ * (/portal/company/[id]) — company-scoped from the start, not mirrored off a
+ * job's paperwork row. Wes 2026-09-11: "an accounting login for production
+ * companies" — the person who holds the card is rarely the production
+ * contact, and they should put it down once for every show.
+ *
+ * Same trust boundary as the portal capture: the PAN was tokenized in
+ * CardSecure's iframe (`?mode=card-on-file`, CVV-free) and only the token
+ * reaches us. The signed authorization is the AuditLog row the route writes
+ * (signature + acknowledgment text), and `authorizationRef` points at it so
+ * the wallet can still answer "who agreed to this" without a Person FK.
+ *
+ * The $0 validation must have APPROVED — like the staff-keyed path, and
+ * unlike the job paperwork capture: nothing else is in flight here, and a
+ * wallet card that declines is a charge that fails later in front of the
+ * client. Idempotent on (companyId, cardToken).
+ */
+export async function addClientCompanyCard(input: {
+  companyId: string
+  cardToken: string
+  expiry: string
+  billingPostal: string
+  cardholderName: string
+  authorizationRef: string
+  paymentPreference?: string | null
+  auth: {
+    retref: string | null
+    respcode: string | null
+    respstat: string | null
+    resptext: string | null
+    validatedAt: Date | null
+  }
+  last4: string | null
+  cardType: string | null
+}): Promise<{ cardId: string; created: boolean }> {
+  const fields = {
+    last4: input.last4,
+    cardType: input.cardType,
+    expiry: input.expiry,
+    billingPostal: input.billingPostal,
+    cardholderName: input.cardholderName,
+    paymentPreference: normalizePaymentPreference(input.paymentPreference ?? null),
+    authRetref: input.auth.retref,
+    authRespCode: input.auth.respcode,
+    authRespStat: input.auth.respstat,
+    authRespText: input.auth.resptext,
+    authValidatedAt: input.auth.validatedAt,
+    authorizationRef: input.authorizationRef,
+    source: 'COMPANY_PORTAL',
+    addedById: null,
+  }
+  const existing = await prisma.companyCard.findUnique({
+    where: { companyId_cardToken: { companyId: input.companyId, cardToken: input.cardToken } },
+    select: { id: true },
+  })
+  if (existing) {
+    await prisma.companyCard.update({
+      where: { id: existing.id },
+      data: { ...fields, removedAt: null, removedById: null },
+    })
+    return { cardId: existing.id, created: false }
+  }
+  const liveCount = await prisma.companyCard.count({
+    where: { companyId: input.companyId, removedAt: null },
+  })
+  const created = await prisma.companyCard.create({
+    data: {
+      companyId: input.companyId,
+      cardToken: input.cardToken,
+      isDefault: liveCount === 0,
+      ...fields,
+    },
+    select: { id: true },
+  })
+  return { cardId: created.id, created: true }
+}
+
+/**
  * Put a card on file that STAFF keyed in from an authorization the client
  * signed elsewhere — a Cognito CCA, a PDF a production emailed over.
  *
