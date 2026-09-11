@@ -62,6 +62,16 @@ export async function GET(req: NextRequest) {
         error: 'not_released',
         message:
           'After-hours access has not been set up for this project yet. Ask your SirReel rep to send it over — it takes them one click.',
+        // The page still wears the company while it says so.
+        projectName: job.name,
+        jobCode: job.jobCode ?? order?.orderNumber ?? null,
+        company: order?.company
+          ? { name: order.company.name, hasLogo: !!(order.company.logoSvg || order.company.logoUrl) }
+          : null,
+        contact: resolved.contact
+          ? { firstName: resolved.contact.firstName, lastName: resolved.contact.lastName, email: resolved.contact.email }
+          : null,
+        agent: job.agent ? { name: job.agent.name, email: job.agent.email, phone: job.agent.phone } : null,
       },
       { status: 403 },
     )

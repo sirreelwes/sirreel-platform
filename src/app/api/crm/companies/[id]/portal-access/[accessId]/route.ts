@@ -19,10 +19,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { renderCompanyPortalInvite } from '@/lib/email/templates/companyPortal'
-import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
-import { findPendingAnnual } from '@/lib/portal/companyAnnual'
-import { listOtherAccessHolders } from '@/lib/portal/grantCompanyAccess'
+import { composeCompanyPortalInvite } from '@/lib/portal/composeCompanyInvite'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,45 +63,33 @@ export async function PATCH(
     title?: unknown
     role?: unknown
     sendInvite?: unknown
+    customBody?: unknown
   }
 
   if (body.sendInvite === true) {
-    if (access.revokedAt) {
-      return NextResponse.json(
-        { error: 'That access is revoked — restore it before sending an invite.' },
-        { status: 400 },
-      )
-    }
-    const [annual, pending, others] = await Promise.all([
-      findCompanyAnnualCoverage(access.company.id),
-      findPendingAnnual(access.company.id),
-      listOtherAccessHolders(access.company.id, access.id),
-    ])
-    const rep = access.company.defaultAgent
-    const base = portalBase(req)
-    const { subject, html, text } = renderCompanyPortalInvite({
-      firstName: access.person.firstName,
-      companyName: access.company.name,
-      portalUrl: `${base}/portal/company/${access.company.id}`,
-      repName: rep?.name || user.name || 'Your SirReel rep',
-      repEmail: rep?.email || user.email || null,
-      annualAgreementTitle: annual ? annual.title || annual.originalFilename : null,
-      // A signed annual outranks a pending one — the pending offer is
-      // hidden on the portal too once coverage is live.
-      pendingAnnual:
-        !annual && pending
-          ? { title: pending.title, signUrl: `${base}/portal/company/${access.company.id}/sign/annual` }
-          : null,
-      otherPeople: others,
+    // Composed by the same function the preview modal renders from
+    // (composeCompanyInvite.ts), so what the rep read is what goes.
+    // `customBody` is the prose they edited; the shell stays.
+    const customBody =
+      typeof body.customBody === 'string' && body.customBody.trim()
+        ? body.customBody.trim().slice(0, 5000)
+        : null
+    const composition = await composeCompanyPortalInvite({
+      companyId: access.company.id,
+      accessId: access.id,
+      base: portalBase(req),
+      fallbackRep: { name: user.name ?? null, email: user.email ?? null },
+      customBody,
     })
+    if (!composition.ok) {
+      return NextResponse.json({ error: composition.error }, { status: composition.status })
+    }
     const result = await sendAgreementEmail({
-      to: [access.person.email],
-      // Replies go to the rep who owns the account, falling back to the
-      // person who clicked send — never to a no-reply.
-      replyTo: rep?.email || user.email || undefined,
-      subject,
-      html,
-      text,
+      to: [composition.to.email],
+      replyTo: composition.replyTo || undefined,
+      subject: composition.subject,
+      html: composition.html,
+      text: composition.text,
       label: 'company-portal-invite',
     })
     if (!result.ok) {
@@ -114,6 +99,17 @@ export async function PATCH(
       where: { id: access.id },
       data: { invitedAt: new Date() },
     })
+    await prisma.auditLog
+      .create({
+        data: {
+          action: 'company_portal.invite_sent',
+          entityType: 'company',
+          entityId: access.company.id,
+          userId: user.id,
+          newValues: { accessId: access.id, to: composition.to.email, customBody: !!customBody },
+        },
+      })
+      .catch(() => null)
     return NextResponse.json({ ok: true, invited: true })
   }
 

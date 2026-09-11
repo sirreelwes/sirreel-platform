@@ -34,6 +34,7 @@ export default function AfterHoursPage() {
   const [data, setData] = useState<AfterHoursViewData | null>(null);
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [chromeFacts, setChromeFacts] = useState<Partial<AfterHoursViewData> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +56,10 @@ export default function AfterHoursPage() {
         }
         const res = await fetch('/api/portal/job/after-hours');
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { message?: string };
+          const body = (await res.json().catch(() => ({}))) as { message?: string } & Partial<AfterHoursViewData>;
+          // Not released yet: the route still names the company and the
+          // person, so the shared masthead is theirs even on the refusal.
+          if (!cancelled && body.company) setChromeFacts(body as Partial<AfterHoursViewData>);
           if (!cancelled)
             setError(
               body.message ||
@@ -82,14 +86,15 @@ export default function AfterHoursPage() {
 
   // The route carries the chrome facts (company, contact, code) so this
   // page shares the job portal's masthead without a second data call.
-  const chrome: JobPortalChromeData | null = data
+  const facts = data ?? chromeFacts;
+  const chrome: JobPortalChromeData | null = facts
     ? {
-        company: { name: data.company?.name ?? '', hasLogo: !!data.company?.hasLogo },
-        contact: data.contact ?? null,
-        headline: data.projectName,
-        code: data.jobCode ?? '',
-        rep: data.agent?.email ? { name: data.agent.name || data.agent.email, email: data.agent.email } : null,
-        afterHoursLine: data.support?.phone ?? '(888) 477-7335',
+        company: { name: facts.company?.name ?? '', hasLogo: !!facts.company?.hasLogo },
+        contact: facts.contact ?? null,
+        headline: facts.projectName ?? '',
+        code: facts.jobCode ?? '',
+        rep: facts.agent?.email ? { name: facts.agent.name || facts.agent.email, email: facts.agent.email } : null,
+        afterHoursLine: facts.support?.phone ?? '(888) 477-7335',
       }
     : null;
 

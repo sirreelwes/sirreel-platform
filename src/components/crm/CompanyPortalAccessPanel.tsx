@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Eye, FileSignature, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
+import { CompanyInviteReviewModal } from '@/components/crm/CompanyInviteReviewModal'
 
 const ROLES: { value: string; label: string }[] = [
   { value: 'EXECUTIVE', label: 'Executive' },
@@ -76,6 +77,8 @@ export function CompanyPortalAccessPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Access row whose invite is open in the review modal. */
+  const [inviteFor, setInviteFor] = useState<string | null>(null)
 
   // Logo state. `logoVersion` busts the <img> cache after an upload —
   // the URL is stable, so without it the browser shows the old mark.
@@ -145,25 +148,13 @@ export function CompanyPortalAccessPanel({
     }
   }
 
-  async function sendInvite(accessId: string) {
-    setBusy(true)
+  // The invite is reviewed before it goes (CompanyInviteReviewModal) —
+  // Wes 2026-09-11: "preview and modify the invite email to Nancy and
+  // people like her". The modal sends; this just opens it.
+  function sendInvite(accessId: string) {
     setError(null)
     setNotice(null)
-    try {
-      const res = await fetch(`/api/crm/companies/${companyId}/portal-access/${accessId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sendInvite: true }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'Send failed')
-      setNotice('Invite sent.')
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Send failed')
-    } finally {
-      setBusy(false)
-    }
+    setInviteFor(accessId)
   }
 
   async function offerAnnual() {
@@ -471,7 +462,7 @@ export function CompanyPortalAccessPanel({
                     className="inline-flex items-center gap-1 text-xs font-semibold border border-lt-hairline rounded-lg px-2.5 py-1.5 text-lt-fg hover:text-black"
                   >
                     {r.invitedAt ? <Check className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
-                    {r.invitedAt ? 'Re-send' : 'Send invite'}
+                    {r.invitedAt ? 'Re-send' : 'Review & send invite'}
                   </button>
                   <button
                     onClick={() => revoke(r.id)}
@@ -503,6 +494,18 @@ export function CompanyPortalAccessPanel({
             ))}
           </div>
         </details>
+      )}
+      {inviteFor && (
+        <CompanyInviteReviewModal
+          companyId={companyId}
+          accessId={inviteFor}
+          onClose={() => setInviteFor(null)}
+          onSent={({ email }) => {
+            setInviteFor(null)
+            setNotice(`Invite sent to ${email}.`)
+            void load()
+          }}
+        />
       )}
     </div>
   )

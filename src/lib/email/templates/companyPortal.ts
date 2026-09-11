@@ -63,12 +63,50 @@ export interface CompanyPortalInviteInput {
    * person, and it answers "why am I getting this" in the first line.
    */
   addedByName?: string | null
+  /**
+   * The rep's own words (2026-09-11 — "preview and modify the invite").
+   * Replaces the greeting, the opener, the who-has-access line and the
+   * updates line; the annual-agreement callout, the portal button and the
+   * sign-off stay, because those are facts about the account. Seeded from
+   * defaultCompanyPortalInviteBody so an edit starts from the real copy.
+   */
+  customBody?: string | null
 }
 
 function joinNames(people: { name: string; title: string | null }[]): string {
   const bits = people.map((p) => (p.title ? `${p.name} (${p.title})` : p.name))
   if (bits.length <= 1) return bits.join('')
   return `${bits.slice(0, -1).join(', ')} and ${bits[bits.length - 1]}`
+}
+
+/** The templated prose as plain text — what the compose box is seeded with,
+ *  and what `customBody` replaces when the rep edits it. */
+export function defaultCompanyPortalInviteBody(i: CompanyPortalInviteInput): string {
+  const others = i.otherPeople ?? []
+  const opener = i.addedByName
+    ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
+    : `You now have account-level access to SirReel for ${i.companyName} — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
+  const accessLine =
+    others.length === 0
+      ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. If you'd like colleagues to see it too, add them under People with access in your portal and they'll get an email like this one.`
+      : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${joinNames(others)}. To add colleagues, use People with access in your portal and they'll get an email like this one.`
+  return [
+    `${i.firstName},`,
+    ``,
+    opener,
+    ``,
+    accessLine,
+    ``,
+    `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
+  ].join('\n')
+}
+
+/** Rep-written prose → escaped paragraphs, blank lines preserved. */
+function proseHtml(prose: string): string {
+  return prose
+    .split(/\n{2,}/)
+    .map((para) => p(esc(para).replace(/\n/g, '<br />')))
+    .join('')
 }
 
 export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
@@ -78,6 +116,7 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
 } {
   const subject = `Your ${i.companyName} account portal at SirReel`
   const others = i.otherPeople ?? []
+  const custom = (i.customBody ?? '').trim()
 
   const opener = i.addedByName
     ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
@@ -88,9 +127,7 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
       ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. If you'd like colleagues to see it too, add them under <strong>People with access</strong> in your portal and they'll get an email like this one.`
       : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${esc(joinNames(others))}. To add colleagues, use <strong>People with access</strong> in your portal and they'll get an email like this one.`
 
-  const body = [
-    p(`${esc(i.firstName)},`),
-    p(opener),
+  const annualCallout =
     i.pendingAnnual
       ? calloutBox(
           `Your <strong>${esc(i.pendingAnnual.title)}</strong> is ready for your signature in the portal. Once signed, it runs every show your company books; each job is then confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show. You'll choose the damage-waiver (LCDW) election for the account as part of signing. <a href="${esc(i.pendingAnnual.signUrl)}" style="color:#0c0c0d;font-weight:700;">Sign the annual agreement</a>`,
@@ -99,12 +136,18 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
         ? calloutBox(
             `Your annual agreement, <strong>${esc(i.annualAgreementTitle)}</strong>, runs every show your company books. Each job is confirmed with a one-page addendum that logs it under the annual, so nobody re-signs the full agreement per show.`,
           )
-        : '',
-    p(accessLine),
-    p(
-      `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
-    ),
-  ].join('')
+        : ''
+  const body = custom
+    ? [proseHtml(custom), annualCallout].join('')
+    : [
+        p(`${esc(i.firstName)},`),
+        p(opener),
+        annualCallout,
+        p(accessLine),
+        p(
+          `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
+        ),
+      ].join('')
 
   const html = renderEmailShell({
     heading: 'Your account portal',
@@ -118,11 +161,15 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
   })
 
   const text = renderEmailText([
-    `${i.firstName},`,
-    '',
-    i.addedByName
-      ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
-      : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
+    ...(custom
+      ? [custom]
+      : [
+          `${i.firstName},`,
+          '',
+          i.addedByName
+            ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
+            : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
+        ]),
     '',
     `Open your account portal: ${i.portalUrl}`,
     '',
@@ -133,9 +180,13 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
           '',
         ]
       : []),
-    others.length === 0
-      ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. To add colleagues, use "People with access" in your portal.`
-      : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${joinNames(others)}. To add colleagues, use "People with access" in your portal.`,
+    ...(custom
+      ? []
+      : [
+          others.length === 0
+            ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. To add colleagues, use "People with access" in your portal.`
+            : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${joinNames(others)}. To add colleagues, use "People with access" in your portal.`,
+        ]),
     i.repEmail ? `\nQuestions? ${i.repName} — ${i.repEmail}` : '',
   ])
 
