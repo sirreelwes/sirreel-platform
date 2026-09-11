@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { CalendarCheck, Loader2 } from 'lucide-react';
 
 /**
- * "Client said yes" — record an off-portal approval and book the order in
- * one click, from the job page.
+ * "Record client approval" — record an off-portal approval and book the
+ * order in one click, from the job page. (Was "Client said yes" until
+ * 2026-09-11 — Wes read it as a status that had already landed, and
+ * asked whether the client had actually said yes.)
  *
  * Wes 2026-09-09: "When the client approves a quote, the units reserved
  * should show booked as should the order. If they tell us this verbally or
@@ -100,7 +102,7 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
           : `Record that the client approved ${orderNumber} verbally or by email, and book it`}
       >
         <CalendarCheck className="w-3.5 h-3.5" />
-        Client said yes
+        Record client approval
       </button>
     );
   }
