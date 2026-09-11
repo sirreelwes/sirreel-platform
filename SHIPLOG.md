@@ -24,6 +24,17 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-11
 
+### An account certificate awaiting review is "awaiting HQ approval" on the tile, not "missing"
+
+`948f0424` COI: an account certificate nobody has reviewed reads "awaiting HQ approval", not "missing"
+
+Wes: "Also fix the COI chip, Echobend has an annual COI on file." It was — harvested from email on 09-02, named insured ECHOBEND PICTURES, LLC, good through 2027-03-08 — and nobody had approved it. The carry-forward is APPROVED-only (rule 1 of `lib/coi/companyCoi`, and it stays that way), so every Echobend tile said COI missing and the job page offered nothing to review.
+
+- **`pickCarriedCoi()`** in `src/lib/coi/companyCoi.ts` is now the one picker for the /jobs list, `readinessForJobs` and the job detail. APPROVED first; then, only for staff surfaces that opt in (`includeAwaitingReview`), a PENDING / COUNTERED cert flagged `awaitingReview`. `rollupCoiState` reads it PENDING → the tile says "COI awaiting HQ approval" in the waiting tone, the job page lists it as Pending with the Review button, and the carried sentence says approve it and it covers the job. Client-facing and gating callers (portal, sub-rental COI gate, paperwork summary) never opt in, so nothing reads it as coverage.
+- Among unreviewed certs the one that insures THIS company beats a longer-dated one for another entity — the harvest had filed a CMP Film & Design Burbank cert under Echobend, and expiry-desc would have carried it with a mismatch flag on every job.
+- `npm run test:coi-carry`.
+- **Still open for Wes:** approve Echobend's certificate (Review on the RIPS job page, or /admin/paperwork) — that flips the chip to verified. The CMP cert filed under Echobend wants a look: wrong company, or a sibling production.
+
 ### Partner photos: live at once, and HQ gets the glance it owes them
 
 `efdb601` partners: a partner's photos go live at once, and HQ is told
