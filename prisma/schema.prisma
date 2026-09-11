@@ -4545,6 +4545,10 @@ enum PaymentMethod {
   CARDPOINTE
   CASH
   OTHER
+  // Ana, 2026-09-11 — Zelle arrives outside the gateway like a wire, and
+  // "how was it paid" has to be able to say so. Last, matching the live
+  // ALTER TYPE ... ADD VALUE.
+  ZELLE
 }
 
 // Phase 6 commit 1 — payment lifecycle. Pre-Phase-6 operator payments

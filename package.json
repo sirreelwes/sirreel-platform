@@ -51,6 +51,7 @@
     "test:check-report": "tsx tests/orders/check-report-classify.test.ts",
     "test:annual-coverage": "tsx tests/agreements/annual-coverage.test.ts",
     "test:card-expiry": "tsx tests/payments/company-card-expiry.test.ts",
+    "test:manual-payment": "tsx tests/payments/manual-received-at.test.ts",
     "test:role-mapping": "tsx tests/crm/role-mapping.test.ts",
     "test:cluster-classify": "tsx tests/crm/cluster-classify.test.ts",
     "test:booking-status": "tsx tests/bookings/status.test.ts",

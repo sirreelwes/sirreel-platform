@@ -118,7 +118,7 @@ export interface EodFigures {
   quotesCreated: EodFigure
   /** Context for the note — things worth a sentence, not money fields. */
   context: {
-    /** Cleared non-card receipts (check / wire / cash / other). */
+    /** Cleared non-card receipts (check / wire / ACH / Zelle / cash / other). */
     otherReceipts: number
     /** ACH originated but not yet cleared — Ana's "straggling ACH's". */
     achPending: number

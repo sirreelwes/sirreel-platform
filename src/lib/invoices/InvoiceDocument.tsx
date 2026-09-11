@@ -120,8 +120,9 @@ export interface InvoiceDocumentProps {
    *  ask for money. Ana, 2026-09-10: "Is there a PAID stamp for paid
    *  invoices? Like the ones we have in RentalWorks." Rendered on demand
    *  from the stored snapshot (see renderPaidInvoice), never stored: the
-   *  blob stays the document the client was billed on. */
-  paid?: { paidAt: Date | null } | null
+   *  blob stays the document the client was billed on. `via` says how
+   *  ("Zelle", "Wire + Card") — Ana, 2026-09-11. */
+  paid?: { paidAt: Date | null; via?: string | null } | null
   orderNumber: string
   issuedAt: Date
   dueDate: Date | null
@@ -636,7 +637,7 @@ export function InvoiceDocument({
             )}
             {isPaid && (
               <Text style={styles.paidNote}>
-                Paid in full{paid?.paidAt ? ` · ${fmtDate(paid.paidAt)}` : ''}
+                Paid in full{paid?.via ? ` by ${paid.via}` : ''}{paid?.paidAt ? ` · ${fmtDate(paid.paidAt)}` : ''}
               </Text>
             )}
           </View>

@@ -239,6 +239,15 @@ export default function CollectingGuidePage() {
                 <strong>PAID</strong> with the date. There is no reason to charge an HQ invoice through
                 the CardPointe terminal any more — a charge taken there records nothing here.
               </p>
+              <p>
+                When an HQ invoice is paid by <strong>Zelle, wire, ACH</strong> or check instead, use{' '}
+                <strong>Mark paid</strong> on the same row once the money is in the bank. Pick how it was
+                paid — there is no default, on purpose — then the amount (less than the balance records a
+                part-payment), the day it arrived and the confirmation or trace number. The invoice turns
+                partial or paid exactly as a charge does, the row says how it was paid, and so does the
+                stamped PDF. Picked the wrong one? <strong>Undo</strong> sits in the confirmation; after
+                that, void the payment on the order.
+              </p>
             </Step>
             <Step n={4} title="Mark collected when money arrives outside HQ">
               <p>

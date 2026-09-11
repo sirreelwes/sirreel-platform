@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
+import { paymentMethodLabel } from '@/lib/invoices/paymentMethods';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -308,7 +309,7 @@ type InvoiceRow = {
 type PaymentRow = {
   id: string;
   amount: string;
-  method: 'CHECK' | 'WIRE' | 'ACH' | 'CREDIT_CARD' | 'CARDPOINTE' | 'CASH' | 'OTHER';
+  method: 'CHECK' | 'WIRE' | 'ACH' | 'CREDIT_CARD' | 'CARDPOINTE' | 'CASH' | 'ZELLE' | 'OTHER';
   reference: string | null;
   receivedAt: string;
   notes: string | null;
@@ -323,6 +324,7 @@ const PAYMENT_METHODS = [
   'CHECK',
   'WIRE',
   'ACH',
+  'ZELLE',
   'CREDIT_CARD',
   'CARDPOINTE',
   'CASH',
@@ -5939,7 +5941,7 @@ function PaymentsPanel({
                   <span className="font-semibold">
                     ${Number(p.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{p.method}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{paymentMethodLabel(p.method)}</span>
                   {p.reference && <span className="text-[11px] text-lt-fg2">ref {p.reference}</span>}
                   <span className="text-[11px] text-lt-fg3">
                     Received {new Date(p.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -5993,7 +5995,7 @@ function PaymentsPanel({
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             >
               {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                <option key={m} value={m}>{paymentMethodLabel(m)}</option>
               ))}
             </select>
           </label>
@@ -6012,7 +6014,7 @@ function PaymentsPanel({
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="Check #, wire id…"
+              placeholder="Check #, wire ref, Zelle confirmation…"
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>

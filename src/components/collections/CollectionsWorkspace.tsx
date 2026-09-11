@@ -1647,6 +1647,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
               alreadyCharged: { count: 0, total: hi.amountPaid, last: null },
             })
           }}
+          onRecorded={(invoiceId) => {
+            // A payment marked by hand (or undone) moved this invoice's
+            // balance. If the same invoice is armed in the charge panel, that
+            // panel is quoting the old figure — drop it rather than leave a
+            // stale amount one click from the card.
+            if (hqPick?.id === invoiceId) {
+              setHqPick(null)
+              setInvoice(null)
+              setAmount('')
+            }
+          }}
         />
 
         {/* Recent charges + reversal. Without this the history was

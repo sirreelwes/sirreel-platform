@@ -26,6 +26,7 @@ import React from 'react'
 import { prisma } from '@/lib/prisma'
 import { InvoiceDocument, type InvoiceLineSnapshotEntry } from '@/lib/invoices/InvoiceDocument'
 import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
+import { paidViaLabel } from '@/lib/invoices/paymentMethods'
 
 export async function renderPaidInvoice(invoiceId: string): Promise<Buffer | null> {
   const invoice = await prisma.invoice.findUnique({
@@ -45,6 +46,12 @@ export async function renderPaidInvoice(invoiceId: string): Promise<Buffer | nul
       createdAt: true,
       lineSnapshot: true,
       discountSnapshot: true,
+      // How it was paid, for the note under the title (Ana, 2026-09-11).
+      payments: {
+        where: { voidedAt: null, status: 'CLEARED' },
+        orderBy: { receivedAt: 'asc' },
+        select: { method: true },
+      },
       order: {
         select: {
           orderNumber: true,
@@ -89,7 +96,7 @@ export async function renderPaidInvoice(invoiceId: string): Promise<Buffer | nul
     })
 
     const element = React.createElement(InvoiceDocument, {
-      paid: { paidAt: invoice.paidAt },
+      paid: { paidAt: invoice.paidAt, via: paidViaLabel(invoice.payments.map((p) => p.method)) },
       invoiceNumber: invoice.invoiceNumber,
       invoiceType: invoice.type as 'RENTAL' | 'LD',
       orderNumber: o.orderNumber,

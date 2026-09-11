@@ -136,6 +136,13 @@ export async function GET(req: NextRequest) {
       preSentAt: true,
       clientApprovedAt: true,
       clientChangeRequestedAt: true,
+      // How it was paid (Ana, 2026-09-11). Only money that counts — a voided
+      // or still-pending payment is not how an invoice was settled.
+      payments: {
+        where: { voidedAt: null, status: 'CLEARED' as const },
+        orderBy: { receivedAt: 'asc' as const },
+        select: { method: true, reference: true, receivedAt: true, amount: true },
+      },
       order: {
         select: {
           id: true,
@@ -188,6 +195,12 @@ export async function GET(req: NextRequest) {
       jobId: i.order.job?.id ?? null,
       jobName: i.order.job?.name ?? null,
       jobCode: i.order.job?.jobCode ?? null,
+      payments: i.payments.map((p) => ({
+        method: p.method,
+        reference: p.reference,
+        receivedAt: p.receivedAt.toISOString(),
+        amount: Number(p.amount),
+      })),
     })),
   })
 }

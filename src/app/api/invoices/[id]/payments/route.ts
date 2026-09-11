@@ -12,7 +12,7 @@
  *   {
  *     amount: number,         // required, > 0
  *     method: PaymentMethod,  // required
- *     receivedAt?: 'YYYY-MM-DD',  // optional, defaults to today
+ *     receivedAt?: 'YYYY-MM-DD',  // optional; a Pacific day, defaults to now
  *     reference?: string,     // check #, wire id, etc.
  *     notes?: string,
  *     allowOverpay?: boolean  // default false
@@ -24,6 +24,7 @@ import { getServerSession } from 'next-auth'
 import type { PaymentMethod } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recordPayment } from '@/lib/invoices/recordPayment'
+import { manualReceivedAt } from '@/lib/invoices/manualReceivedAt'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,7 @@ const VALID_METHODS: PaymentMethod[] = [
   'CREDIT_CARD',
   'CARDPOINTE',
   'CASH',
+  'ZELLE',
   'OTHER',
 ]
 
@@ -73,10 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 400 },
     )
   }
-  const receivedAt =
-    typeof body.receivedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.receivedAt)
-      ? new Date(`${body.receivedAt}T00:00:00.000Z`)
-      : new Date()
+  // A calendar day, placed inside that PACIFIC day — see manualReceivedAt.
+  // Stored as UTC midnight it read as the afternoon before, and that is the
+  // day the EOD report and the order page then showed.
+  const received = manualReceivedAt(body.receivedAt)
+  if (!received.ok) {
+    return NextResponse.json({ ok: false, error: received.error }, { status: 400 })
+  }
+  const receivedAt = received.at
   const reference =
     typeof body.reference === 'string' && body.reference.trim().length > 0
       ? body.reference.trim().slice(0, 200)
@@ -86,6 +92,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ? body.notes.trim().slice(0, 5000)
       : null
   const allowOverpay = body.allowOverpay === true
+
+  // "How was it paid" is the point of recording by hand (Ana, 2026-09-11).
+  // Every other method names itself; Other says nothing unless someone does.
+  if (method === 'OTHER' && !reference && !notes) {
+    return NextResponse.json(
+      { ok: false, error: 'say how it was paid — Other needs a reference or a note' },
+      { status: 400 },
+    )
+  }
 
   const result = await recordPayment({
     invoiceId: params.id,
