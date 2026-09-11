@@ -2018,7 +2018,9 @@ function CartSidebar({
 
             const renderLine = (l: CartLine) => {
               const isRental = isRentalLine(l)
-              const days = isRental ? l.claimedDays ?? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
+              // Calendar days, never the shoot-days claim — the claim
+              // prices nothing the client sees (Wes 2026-09-11).
+              const days = isRental ? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
               return (
                 <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
                   <div className="flex-1 min-w-0">
@@ -2220,7 +2222,7 @@ function ReviewRow({
 }) {
   const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
   const computedDays = rentalDaysBetween(line.pickupDate, line.returnDate)
-  const days = isRental ? line.claimedDays ?? computedDays : 1
+  const days = isRental ? computedDays : 1
   return (
     <div className="py-3 border-b border-[#e4dfd4]">
       <div className="flex items-center gap-3">
@@ -2304,7 +2306,8 @@ function ReviewRow({
               authoritative once set. Don't promise a reduction here. */}
           <div className="text-[10.5px] text-[#8b857a] mt-1 leading-snug">
             Rentals bill by calendar day (24-hour periods), including days you&rsquo;re not
-            shooting. Tell us your shoot days and your agent will review.
+            shooting. Tell us your shoot days and your agent will review &mdash; the estimate
+            above stays at the full rental period either way.
           </div>
         </div>
       )}

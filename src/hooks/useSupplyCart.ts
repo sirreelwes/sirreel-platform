@@ -73,9 +73,9 @@ export interface CartLine extends CartLineDisplayInfo {
   associatedOrderIds?: string[]
   modifiedByUser?: boolean
   /** Shoot-days CLAIM (Wes ruling B) — the client's requested working-day
-   *  count for gear/vehicle rentals. A REQUEST the agent confirms in HQ;
-   *  shown-provisional only, never a price by itself. undefined/null =
-   *  no claim (bill the full rental period). */
+   *  count for gear/vehicle rentals. A REQUEST the agent confirms in HQ.
+   *  It prices NOTHING the client sees, not even provisionally (Wes
+   *  2026-09-11) — see `lineEstimate`. undefined/null = no claim. */
   claimedDays?: number | null
 }
 
@@ -363,14 +363,25 @@ export function rentalDaysBetween(pickup: string, returnD: string): number {
 
 /** Per-line $ estimate — matches the server snapshot math in
  *  /api/public/supply-request. Vehicles and EQUIPMENT supplies are
- *  rentals (× days); everything else is a flat per-unit charge.
- *  price=0 → price-on-quote, returns 0. */
+ *  rentals (× CALENDAR days); everything else is a flat per-unit charge.
+ *  price=0 → price-on-quote, returns 0.
+ *
+ *  The shoot-days CLAIM is deliberately absent from this math. Wes
+ *  2026-09-11: "The client shouldn't be able to select 1d 2d or 3d, that
+ *  is a sirreel decision."
+ *
+ *  It used to be here, as a "provisional" showing of the request, and
+ *  the effect was that the client chose their own billing basis: type 1
+ *  shoot day on a six-day rental and the line, its group subtotal and
+ *  the cart's Estimated total all fell to a sixth. Nothing else in the
+ *  system agreed with that number — the server's own request snapshot
+ *  has always priced `rentalDaysBetween` (route.ts) and billableDays is
+ *  SirReel's to set (lib/orders/days.ts) — so the one figure the client
+ *  anchored on was the one figure nobody had approved. The shorter week
+ *  is a concession an agent gives; it is not a checkbox on the store. */
 export function lineEstimate(line: CartLine): number {
   if (line.price === 0) return 0
   const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
-  // PROVISIONAL: a shoot-days claim shows its effect in the estimate so
-  // the client sees what they're requesting — the server never prices
-  // from this; the agent confirms in HQ.
-  const days = isRental ? line.claimedDays ?? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
+  const days = isRental ? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
   return line.price * line.qty * days
 }
