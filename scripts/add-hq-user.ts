@@ -4,13 +4,14 @@
  * the users table (src/app/api/auth/[...nextauth]/route.ts denies unknown
  * emails). There is no user-creation page.
  *
- *   npx tsx scripts/add-hq-user.ts --name "Greyson Bailey" --email greyson@sirreel.com --role ADMIN --phone "(818) 555-0100" [--title "Backup CEO"]
+ *   npx tsx scripts/add-hq-user.ts --name "Full Name" --email who@sirreel.com --role ADMIN --phone "(818) 555-0100" [--title "Operations"]
  *
  * Needs DATABASE_URL in the shell (see CLAUDE.md "Before Prisma migrations").
  * Idempotent on email: re-running updates name / role / phone / title.
  *
- * Wes 2026-09-11: Greyson Bailey is backup CEO — "access to everything
- * that I have access to". ADMIN is that: every HQ permission, and the AHA
+ * Wes 2026-09-11, on a backup CEO (never name them here — who it is stays
+ * private): "access to everything that I have access to". ADMIN is that:
+ * every HQ permission, and the AHA
  * admin level (platform memory + recent activity) by text from the phone
  * given here and in the signed-in chat on /admin/assistant.
  */
@@ -29,7 +30,7 @@ async function main() {
   const phone = arg('phone')
   const title = arg('title')
   if (!name || !email) {
-    console.error('usage: --name "Full Name" --email who@sirreel.com [--role ADMIN|MANAGER|AGENT|BILLING] [--phone "(818) 555-0100"] [--title "Backup CEO"]')
+    console.error('usage: --name "Full Name" --email who@sirreel.com [--role ADMIN|MANAGER|AGENT|BILLING] [--phone "(818) 555-0100"] [--title "Operations"]')
     process.exit(1)
   }
   if (!['ADMIN', 'MANAGER', 'AGENT', 'BILLING'].includes(role)) {

@@ -19,7 +19,7 @@
 ## Admin level adds continuity
 - Platform memory: "how do reservations and Planyo relate", "what is the collections panel" — answered from CLAUDE.md, SHIPLOG.md and docs, credential-looking lines redacted
 - Recent activity: what the admins have been doing, from the audit log — counts and latest entries, never old/new values
-- Built for continuity (Greyson Bailey as backup CEO): a plain-words walkthrough of anything in HQ, one thing at a time
+- Built for continuity: a plain-words walkthrough of anything in HQ for whoever has to step in, one thing at a time
 
 ## What AHA does for callers, so you don't have to
 - Releases the lot gate code and a truck's lockbox code after hours on a job code + one corroborator, or a unit + driver name, or (by text) a number on file for the job + the unit or VIN last 4

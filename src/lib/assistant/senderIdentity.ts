@@ -24,6 +24,7 @@ import { prisma } from '@/lib/prisma'
 import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
 import { firstNameOf } from '@/lib/assistant/greeting'
 import { atLeast, levelFromGrant, resolveLevel, type AhaLevel } from '@/lib/assistant/access'
+import { isOwnerEmail } from '@/lib/assistant/owners'
 
 /** Days either side of today an order/booking window may sit and still count as current. */
 const CURRENT_GRACE_DAYS = 7
@@ -38,12 +39,14 @@ export interface SenderIdentity {
   level: AhaLevel
   /** The hand-made grant that set the level, when one did. */
   grant: { id: string; name: string; level: AhaLevel; note: string | null } | null
+  /** Admin level AND an email on AHA_OWNER_EMAILS: may read docs/owners/ (src/lib/assistant/owners.ts). */
+  owner: boolean
 }
 
-export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [], firstName: null, level: 'public', grant: null }
+export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [], firstName: null, level: 'public', grant: null, owner: false }
 
 /** Identity for a signed-in HQ user (the authenticated chat on /admin/assistant). Level follows the role. */
-export function identityForUser(user: { id: string; name: string; role: string }): SenderIdentity {
+export function identityForUser(user: { id: string; name: string; role: string; email?: string | null }): SenderIdentity {
   const level = resolveLevel({ userRole: user.role })
   return {
     staff: atLeast(level, 'staff') ? { userId: user.id, name: user.name, role: String(user.role) } : null,
@@ -51,6 +54,7 @@ export function identityForUser(user: { id: string; name: string; role: string }
     firstName: firstNameOf(user.name),
     level,
     grant: null,
+    owner: level === 'admin' && isOwnerEmail(user.email),
   }
 }
 
@@ -97,14 +101,14 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
   const grant = await activeGrant(tail)
   // Blocked is decided before anything else is even looked up.
   if (grant?.level === 'blocked') {
-    return { staff: null, contactJobs: [], firstName: firstNameOf(grant.name), level: 'blocked', grant: { id: grant.id, name: grant.name, level: 'blocked', note: grant.note } }
+    return { staff: null, contactJobs: [], firstName: firstNameOf(grant.name), level: 'blocked', grant: { id: grant.id, name: grant.name, level: 'blocked', note: grant.note }, owner: false }
   }
 
   // Staff: the fleet is small enough to scan in memory; the phone columns
   // are free-text and a suffix match is not indexable anyway.
   const users = await prisma.user.findMany({
     where: { isActive: true, OR: [{ phone: { not: null } }, { emergencyPhone: { not: null } }] },
-    select: { id: true, name: true, role: true, phone: true, emergencyPhone: true },
+    select: { id: true, name: true, role: true, email: true, phone: true, emergencyPhone: true },
   })
   const staffHit = users.find((u) => phoneOnFile(tail, [u.phone, u.emergencyPhone])) ?? null
 
@@ -160,13 +164,17 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
     firstName: firstNameOf(staffHit?.name) ?? firstNameOf(grant?.name) ?? contactFirstName,
     level,
     grant: grant ? { id: grant.id, name: grant.name, level: grant.level, note: grant.note } : null,
+    // Owner needs BOTH: the admin level (an HQ ADMIN, not a hand-made grant
+    // standing in for one) and the email on the list. A CONTACT grant that
+    // demotes an admin takes the owners' notes away with the rest.
+    owner: level === 'admin' && Boolean(staffHit) && isOwnerEmail(staffHit?.email),
   }
 }
 
 /** The one-line hint the prompt gets. Names and roles only. */
 export function describeSender(id: SenderIdentity): string | null {
   if (id.level === 'blocked') return null
-  if (id.staff) return `SirReel STAFF at ${id.level.toUpperCase()} level: ${id.staff.name} (${id.staff.role}).`
+  if (id.staff) return `SirReel STAFF at ${id.level.toUpperCase()} level${id.owner ? ' (an OWNER)' : ''}: ${id.staff.name} (${id.staff.role}).`
   if (id.contactJobs.length) {
     const list = id.contactJobs.slice(0, 3).map((j) => `${j.name} (${j.jobCode}, ${j.role ?? 'contact'})`).join('; ')
     return `A PRODUCTION CONTACT on a current job: ${list}.`

@@ -2,9 +2,10 @@
  * Platform memory — what AHA can tell an ADMIN about how SirReel HQ works
  * and what has been happening.
  *
- * Wes 2026-09-11: Greyson Bailey is backup CEO. "If anything ever happens
- * to me, AHA can explain to him everything that I've been doing to the
- * extent that it can and walk him through anything he doesn't understand."
+ * Wes 2026-09-11, on the backup CEO (who that is stays private — do not
+ * name them anywhere in the repo): "If anything ever happens to me, AHA
+ * can explain to them everything that I've been doing to the extent that
+ * it can and walk them through anything they don't understand."
  *
  * This is NOT a hidden door. It is an explicit capability of the admin
  * level, listed on /admin/assistant, offered only to a number or login
@@ -13,7 +14,9 @@
  *   platform_memory(query) — the written record: CLAUDE.md (how the
  *     platform is built and why), SHIPLOG.md (every shipped change, newest
  *     first, with the reasoning), and the markdown under docs/ (runbooks,
- *     the SMS filing, specs). Split into sections at headings, ranked by
+ *     the SMS filing, specs). docs/owners/ is the exception: it is read
+ *     ONLY for an owner (src/lib/assistant/owners.ts) — the succession
+ *     notes are for the owners, not for every admin. Split into sections at headings, ranked by
  *     term overlap, top sections returned trimmed. Lines that look like a
  *     credential are redacted before anything leaves this module.
  *
@@ -28,6 +31,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
+import { isOwnersPath } from '@/lib/assistant/owners'
 
 export interface MemorySection {
   source: string
@@ -114,7 +118,7 @@ export function rankSections(
     .slice(0, topN)
 }
 
-async function readCorpus(): Promise<Array<Pick<MemorySection, 'source' | 'heading' | 'text'>>> {
+async function readCorpus(includeOwners: boolean): Promise<Array<Pick<MemorySection, 'source' | 'heading' | 'text'>>> {
   const root = process.cwd()
   const files: string[] = []
   for (const f of CORPUS_FILES) files.push(path.join(root, f))
@@ -123,6 +127,7 @@ async function readCorpus(): Promise<Array<Pick<MemorySection, 'source' | 'headi
       const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
       for (const e of entries) {
         const p = path.join(dir, e.name)
+        if (!includeOwners && isOwnersPath(path.relative(root, p))) continue
         if (e.isDirectory()) await walk(p)
         else if (e.isFile() && e.name.endsWith('.md')) files.push(p)
       }
@@ -140,10 +145,11 @@ async function readCorpus(): Promise<Array<Pick<MemorySection, 'source' | 'headi
 
 export async function platformMemory(
   query: string,
+  opts: { owner?: boolean } = {},
 ): Promise<{ query: string; sections: Array<{ source: string; heading: string; text: string }>; note?: string }> {
   const q = query.trim().slice(0, 300)
   if (!q) return { query: q, sections: [], note: 'ask a question' }
-  const corpus = await readCorpus()
+  const corpus = await readCorpus(Boolean(opts.owner))
   if (corpus.length === 0) {
     return { query: q, sections: [], note: 'The written record is not available in this deployment (markdown not traced into the bundle).' }
   }

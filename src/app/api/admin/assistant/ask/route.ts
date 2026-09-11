@@ -5,8 +5,9 @@
  * caller's identity taken from their HQ session instead of a phone number.
  * The level follows the HQ role (src/lib/assistant/access.ts): an ADMIN gets
  * the platform memory and recent-activity tools here, which is the
- * continuity path Wes asked for on 2026-09-11 — a backup CEO signs in and
- * asks AHA to explain what has been going on.
+ * continuity path Wes asked for on 2026-09-11 — whoever steps in signs in
+ * and asks AHA to explain what has been going on. An admin whose email is
+ * on AHA_OWNER_EMAILS also gets the owners' notes (docs/owners/).
  *
  * Session-authenticated, so this is the STRONGER of the two ways to reach
  * the admin tools (a text is only as good as possession of the phone).
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'say something first' }, { status: 400 })
   }
 
-  const sender = identityForUser({ id: user.id, name: user.name, role: String(user.role) })
+  const sender = identityForUser({ id: user.id, name: user.name, role: String(user.role), email: user.email })
   const { reply, toolsUsed } = await runAssistant({ turns, ip: `hq:${user.id}`, channel: 'hq', sender, firstName: sender.firstName })
   if (toolsUsed.length) {
     await prisma.auditLog

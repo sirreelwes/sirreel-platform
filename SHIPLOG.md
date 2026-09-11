@@ -22,6 +22,22 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-11
+
+### AHA: owners-only notes, and the one-pagers
+
+`8a101ab` aha: owners' tier for the succession notes + three audience one-pagers
+
+Wes: "No one should know that Greyson is the backup CEO. That is for him and me to know." Then: "These are internal notes for owners and not for anyone on the staff other than Tamara, Greyson and Wes to have access to the knowledge." The 2026-09-11 continuity work had written the backup CEO's name into CLAUDE.md, two code comments, the add-user script and the new staff one-pager — and `platform_memory` hands CLAUDE.md + docs/ to EVERY admin, so any ADMIN could have asked AHA who steps in. Fixed two ways: the names are gone from everything indexed for admins, and the knowledge now has a place only the owners can reach.
+
+- **Owners' tier** (`src/lib/assistant/owners.ts`): `AHA_OWNER_EMAILS` (Vercel env, comma-separated, unset = wes@ alone) names who counts; `SenderIdentity.owner` is true only for an HQ ADMIN (by text from their mobile on file, or signed in on /admin/assistant) whose email is on it. A hand-made grant never makes an owner; a CONTACT grant on an admin takes it away with the rest. The list is env, not code, so the names are never in git.
+- **`docs/owners/`** is the one folder `platformMemory()` reads only when `owner` is true — every other admin's search skips it in the walk, not after ranking. `docs/owners/succession.md` holds who steps in and where they start; `README.md` there says the rule. Nothing in the folder is rendered anywhere on HQ. `next.config.js` already traces `docs/**/*.md`, so no tracing change.
+- **Prompt:** an owner gets one extra block telling AHA the owners' notes are in play and to answer from them plainly; `describeSender` marks the identity "(an OWNER)".
+- **Scrubbed:** CLAUDE.md, `memory.ts`, `runAssistant.ts`, `scripts/add-hq-user.ts` (usage example + "Backup CEO" title suggestion — on HQ a backup CEO is simply an ADMIN user) and `docs/aha/aha-for-staff.md` no longer carry a name.
+- **One-pagers** (`docs/aha/aha-for-{clients,staff,partners}.md`): bullet-only, one page per audience, written from the live tools, levels and escalation paths. Indexed by `platform_memory` like the rest of docs/.
+- Second backup CEO added to the owners' notes; her HQ user still needs `scripts/add-hq-user.ts` run against the live DB and `AHA_OWNER_EMAILS` set in Vercel (both need credentials this session did not have).
+- `npm run test:aha-owners` (allowlist parsing, folder match, signed-in identity both ways); `test:memory-search`, `test:aha-access`, `test:greeting` still green.
+
 ## 2026-09-10
 
 ### Partner portal: a second partner, and the first one that rents equipment

@@ -59,6 +59,7 @@
     "test:greeting": "tsx tests/assistant/greeting.test.ts",
     "test:aha-access": "tsx tests/assistant/access.test.ts",
     "test:memory-search": "tsx tests/assistant/memory-search.test.ts",
+    "test:aha-owners": "tsx tests/assistant/owners.test.ts",
     "test:phone-factor": "tsx tests/assistant/phone-factor.test.ts",
     "test:vehicle-pickup": "tsx tests/afterHours/vehicle-pickup-email.test.ts",
     "test:bounce-event": "tsx tests/email/bounce-event.test.ts",

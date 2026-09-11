@@ -248,8 +248,18 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `npx prisma db push` (additive: one enum + one table) — until then the
   grant reads fail soft and only the derived tiers apply.**
   `npm run test:aha-access`.
-- **ADMIN level = continuity** (Wes: Greyson Bailey is backup CEO; "if
-  anything happens to me, AHA can explain everything I've been doing").
+- **ADMIN level = continuity** (Wes: "if anything happens to me, AHA can
+  explain everything I've been doing" to whoever steps in). **Who the
+  backup CEOs are is owners-only knowledge** (Wes 2026-09-11: "internal
+  notes for owners and not for anyone on the staff other than Tamara,
+  Greyson and Wes"). It lives in `docs/owners/` — the ONE folder
+  `platform_memory` reads only for an OWNER: an HQ ADMIN whose email is on
+  `AHA_OWNER_EMAILS` (Vercel env, comma-separated, unset = wes@ alone;
+  `src/lib/assistant/owners.ts`, `SenderIdentity.owner`). Never write those
+  names in this file, SHIPLOG, the rest of docs/, code comments or the
+  one-pagers — every ADMIN can read those through AHA. On HQ a backup CEO
+  is simply an ADMIN user; no "Backup CEO" `displayTitle`.
+  `npm run test:aha-owners`.
   NOT a hidden door — an explicit, audited capability of the admin level:
   `platform_memory(query)` searches CLAUDE.md + SHIPLOG.md + docs/**/*.md
   by section (`src/lib/assistant/memory.ts`, credential-looking lines

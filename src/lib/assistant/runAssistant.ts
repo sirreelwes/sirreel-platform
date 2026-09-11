@@ -194,9 +194,10 @@ const STAFF_MODE = `
 YOU ARE TALKING TO SIRREEL STAFF (their number is on file for an HQ user). Answer their fleet and job questions directly with staff_lookup_unit and staff_lookup_job — who is on a unit, the driver's name and number, whether a job has come back, dates, contacts. You may share names, phone numbers and addresses from those results with staff. Codes still go through verify_and_release_code. Be terse: they are working.`
 
 /**
- * Admin-only: the platform's memory. Wes 2026-09-11 — Greyson Bailey is
- * backup CEO; if anything happens to Wes, AHA explains what he has been
- * doing and walks Greyson through anything he does not understand. This is
+ * Admin-only: the platform's memory. Wes 2026-09-11 — if anything happens
+ * to Wes, AHA explains what he has been doing to whoever steps in as CEO
+ * and walks them through anything they do not understand (who that is
+ * stays private; never name them in the repo). This is
  * an explicit capability of the ADMIN level (HQ role or a hand-made ADMIN
  * grant), listed on /admin/assistant, and every use is audited.
  */
@@ -226,6 +227,10 @@ const ADMIN_TOOLS: Anthropic.Tool[] = [
 const ADMIN_MODE = `
 
 YOU ARE TALKING TO A SIRREEL ADMIN — an owner, or a backup CEO standing in for one. Beyond the staff lookups, you are the continuity of the business: you may explain how SirReel HQ works, what has been built and why, and what has been happening, using platform_memory (the written record) and recent_activity (the audit log). Walk them through anything they do not understand, patiently and in plain words, one thing at a time; offer to go deeper. Quote the record's reasoning when it helps ("this was done because…"). When the record does not cover something, say so plainly rather than guess. Never state a credential, key, code or password even if a document seems to contain one.`
+
+const OWNER_MODE = `
+
+YOU ARE TALKING TO AN OWNER OF SIRREEL (their email is on the owners list). platform_memory also returns the owners' notes (source paths under docs/owners/): succession — who steps in as CEO and what they need to know. Only owners are ever shown those notes, so answer from them plainly; do not add warnings about their sensitivity.`
 
 const HQ_STYLE = `
 
@@ -278,7 +283,7 @@ export async function runAssistant(args: {
     (args.channel === 'sms' ? SMS_STYLE : args.channel === 'hq' ? HQ_STYLE : '') +
     (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
     (args.channel === 'sms' ? greetingInstruction(args.greeting ?? 'none', args.firstName ?? null) : '') +
-    (level === 'admin' ? STAFF_MODE + ADMIN_MODE : level === 'staff' ? STAFF_MODE : level === 'contact' && sender.contactJobs.length ? CONTACT_MODE : '') +
+    (level === 'admin' ? STAFF_MODE + ADMIN_MODE + (sender.owner ? OWNER_MODE : '') : level === 'staff' ? STAFF_MODE : level === 'contact' && sender.contactJobs.length ? CONTACT_MODE : '') +
     (senderLine ? `\n\nWHO IS WRITING (decided by HQ from the sender's number): ${senderLine}` : '') +
     (args.context && !senderLine ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
   const toolsUsed: string[] = []
@@ -374,7 +379,7 @@ export async function runAssistant(args: {
           resultPayload = await contactJobInfo(sender)
         } else if (block.name === 'platform_memory') {
           const inp = block.input as { query?: string }
-          resultPayload = level === 'admin' ? await platformMemory(inp.query ? String(inp.query) : '') : { error: 'not authorized' }
+          resultPayload = level === 'admin' ? await platformMemory(inp.query ? String(inp.query) : '', { owner: sender.owner }) : { error: 'not authorized' }
         } else if (block.name === 'recent_activity') {
           const inp = block.input as { days?: number }
           resultPayload = level === 'admin' ? await recentActivity(Number(inp.days) || 14) : { error: 'not authorized' }
