@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { quoteLcdw, LCDW_FEE_CODE } from '@/lib/pricing/lcdwEligibility';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
@@ -1292,6 +1293,13 @@ function NewQuotePageInner() {
   const [feeSelections, setFeeSelections] = useState<
     Record<string, { on: boolean; rate: number; quantity: number }>
   >({});
+  // Damage waiver (LCDW) — ON by default (Wes 2026-09-10: "better if they
+  // have to remove it"). The rep can untick it here; the client can decline
+  // it in the portal, and a signed refusal takes the line off. Priced by
+  // the server (applyLcdwToOrder, the one pricer) after the order exists;
+  // this only carries the decision and shows an estimate.
+  const [lcdwOn, setLcdwOn] = useState(true);
+  const [lcdwFee, setLcdwFee] = useState<{ id: string; amount: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1307,6 +1315,8 @@ function NewQuotePageInner() {
             : null;
         }).filter(Boolean) as BuilderFee[];
         setFeeCatalog(picked);
+        const lf = all.find((x) => x.code === LCDW_FEE_CODE);
+        setLcdwFee(lf ? { id: lf.id, amount: Number(lf.amount) } : null);
         setFeeSelections((prev) => {
           const next = { ...prev };
           for (const f of picked) {
@@ -1339,6 +1349,23 @@ function NewQuotePageInner() {
     () => activeFees.reduce((sum, f) => sum + f.quantity * f.rate, 0),
     [activeFees],
   );
+  // Client-side ESTIMATE of the waiver — the builder's lines carry no
+  // catalog code, so a specialty vehicle is caught by name here and by
+  // the catalog row on the server. The server's answer is the one that
+  // prices; this is what the checkbox reads.
+  const lcdwEstimate = useMemo(() => {
+    const q = quoteLcdw(
+      items.map((it, i) => ({
+        id: String(i),
+        description: it.description,
+        code: null,
+        department: String(it.department),
+        quantity: it.quantity,
+        billableDays: it.billableDays ?? null,
+      })),
+    );
+    return { vehicleDays: q.vehicleDays, eligible: q.eligible.length, excluded: q.excluded.length, allExcluded: q.allExcluded };
+  }, [items]);
 
   /** Section-level week cap (Wes 2026-08-31: "selectable by section and
    *  applied to whole section"): reprice EVERY dated line in the
@@ -2006,6 +2033,22 @@ function NewQuotePageInner() {
           }
         } catch (err) {
           console.warn('[orders/new] attach-to-unit failed (non-fatal):', err);
+        }
+      }
+
+      // Damage waiver — applied by the server's one pricer, which judges
+      // eligibility off the saved lines and recalcs totals, so the quote
+      // PDF generated below already carries it. Non-fatal: the order
+      // exists, and the order page's LCDW prompt can add it by hand.
+      if (lcdwOn && lcdwFee) {
+        try {
+          const r = await fetch(`/api/orders/${orderId}/lcdw`, { method: 'POST' });
+          if (!r.ok) {
+            const e = await r.json().catch(() => ({}));
+            console.warn('[orders/new] LCDW not applied:', e?.error || r.status);
+          }
+        } catch (err) {
+          console.warn('[orders/new] LCDW apply failed (non-fatal):', err);
         }
       }
 
@@ -2799,6 +2842,38 @@ function NewQuotePageInner() {
           (Wes 2026-08-31). Catalog-driven: the amount comes from
           /admin/fees and is editable here as an override the server
           re-resolves and audits. */}
+      {/* Damage waiver — on the quote unless the rep takes it off (Wes
+          2026-09-10). Shown whenever the fee exists in the catalog and the
+          quote has a vehicle line; the server decides eligibility per
+          vehicle when the order is saved. */}
+      {lcdwFee && lcdwEstimate.vehicleDays + lcdwEstimate.excluded > 0 && (
+        <div className={`border rounded-xl p-4 ${lcdwOn ? 'bg-chip-good-bg border-chip-good-fg/30' : 'bg-lt-card border-lt-hairline'}`}>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={lcdwOn}
+              onChange={(e) => setLcdwOn(e.target.checked)}
+              className="accent-amber-600 mt-1"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-lt-fg">
+                Damage waiver (LCDW) · {fmtMoney(lcdwFee.amount)}/day per vehicle
+                {lcdwOn && lcdwEstimate.vehicleDays > 0 && (
+                  <span className="ml-2 font-mono text-xs text-lt-fg2">est. +{fmtMoney(lcdwFee.amount * lcdwEstimate.vehicleDays)}</span>
+                )}
+              </span>
+              <span className="block text-[12px] text-lt-fg2 mt-0.5">
+                {lcdwEstimate.allExcluded
+                  ? 'None of the vehicles on this quote are eligible — nothing will be added.'
+                  : lcdwOn
+                    ? `Goes on the quote for ${lcdwEstimate.eligible} eligible vehicle line${lcdwEstimate.eligible === 1 ? '' : 's'} (${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'}). The client can decline it in the portal; untick to leave it off.`
+                    : 'Left off the quote. The order page can add it later.'}
+                {lcdwEstimate.excluded > 0 && !lcdwEstimate.allExcluded && ` ${lcdwEstimate.excluded} vehicle line${lcdwEstimate.excluded === 1 ? ' is' : 's are'} not eligible and won\u2019t be charged.`}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
       {feeCatalog && feeCatalog.length > 0 && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
