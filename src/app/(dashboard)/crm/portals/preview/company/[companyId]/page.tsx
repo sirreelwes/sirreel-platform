@@ -12,6 +12,7 @@ import { buildServiceCatalog } from '@/lib/portal/companyServices'
 import { buildCompanyPreviewContext, requireStaff } from '@/lib/portal/companyPreview'
 import { CompanyPortalView } from '@/components/portal/company/CompanyPortalView'
 import { listClientCards } from '@/lib/portal/companyPortalCards'
+import { listClientCois } from '@/lib/portal/companyPortalCois'
 import { CompanyPreviewBanner } from '@/components/crm/CompanyPreviewBanner'
 
 export const dynamic = 'force-dynamic'
@@ -27,10 +28,11 @@ export default async function CompanyPortalPreviewPage({
   const ctx = await buildCompanyPreviewContext(params.companyId, searchParams.as ?? null)
   if (!ctx) notFound()
 
-  const [overview, services, cards] = await Promise.all([
+  const [overview, services, cards, cois] = await Promise.all([
     buildCompanyOverview(ctx.companyId),
     buildServiceCatalog(),
     listClientCards(ctx.companyId),
+    listClientCois(ctx.companyId),
   ])
 
   return (
@@ -50,6 +52,7 @@ export default async function CompanyPortalPreviewPage({
           prefs={ctx.persona.prefs}
           people={ctx.people}
           cards={cards}
+          cois={cois}
           preview
         />
       </div>

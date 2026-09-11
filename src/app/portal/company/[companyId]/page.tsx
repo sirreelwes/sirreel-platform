@@ -17,6 +17,7 @@ import { buildCompanyOverview } from '@/lib/portal/companyOverview'
 import { buildServiceCatalog } from '@/lib/portal/companyServices'
 import { listCompanyPortalPeople } from '@/lib/portal/grantCompanyAccess'
 import { listClientCards } from '@/lib/portal/companyPortalCards'
+import { listClientCois } from '@/lib/portal/companyPortalCois'
 import { prisma } from '@/lib/prisma'
 import { CompanyPortalView } from '@/components/portal/company/CompanyPortalView'
 
@@ -36,7 +37,7 @@ export default async function CompanyPortalPage({
   // company leaks either way: every miss redirects identically.
   if (!session) redirect(`/portal/company?next=${encodeURIComponent(`/portal/company/${params.companyId}`)}`)
 
-  const [overview, services, access, people, cards] = await Promise.all([
+  const [overview, services, access, people, cards, cois] = await Promise.all([
     buildCompanyOverview(params.companyId),
     buildServiceCatalog(),
     prisma.companyPortalAccess.findUnique({
@@ -51,6 +52,7 @@ export default async function CompanyPortalPage({
     }),
     listCompanyPortalPeople(params.companyId, session.accessId),
     listClientCards(params.companyId),
+    listClientCois(params.companyId),
   ])
 
   return (
@@ -73,6 +75,7 @@ export default async function CompanyPortalPage({
       }}
       people={people}
       cards={cards}
+      cois={cois}
     />
   )
 }

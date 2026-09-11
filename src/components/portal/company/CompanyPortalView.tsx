@@ -49,6 +49,8 @@ import { NotificationSettings, type NotificationPrefs } from '@/components/porta
 import { PeopleWithAccess } from '@/components/portal/company/PeopleWithAccess'
 import { CardsOnFile } from '@/components/portal/company/CardsOnFile'
 import type { ClientCardRow } from '@/lib/portal/companyPortalCards'
+import { AccountCoiUpload } from '@/components/portal/company/AccountCoiUpload'
+import { accountCoiSummary, type ClientCoiRow } from '@/lib/portal/companyPortalCois'
 
 export interface CompanyPortalViewer {
   personName: string
@@ -66,6 +68,8 @@ export interface CompanyPortalViewProps {
   people: CompanyPortalPersonRow[]
   /** Wallet cards, display fields only (companyPortalCards.ts). */
   cards: ClientCardRow[]
+  /** The account's certificates, client-safe fields only (companyPortalCois.ts). */
+  cois: ClientCoiRow[]
   preview?: boolean
 }
 
@@ -199,10 +203,12 @@ export function CompanyPortalView({
   prefs,
   people,
   cards,
+  cois,
   preview = false,
 }: CompanyPortalViewProps) {
   const { terms, active, past, totals } = overview
   const L = companyPortalLinks(companyId, preview)
+  const coiSummary = accountCoiSummary(cois)
   const inert = preview ? { 'aria-disabled': true, title: 'Disabled in preview' } : {}
 
   return (
@@ -537,12 +543,20 @@ export function CompanyPortalView({
               <Fact label="Active shows" value={String(totals.activeJobs)} />
               <Fact
                 label="Insurance on file"
+                href="#insurance"
                 value={
-                  terms.coiOnFile
-                    ? terms.coiExpiry
-                      ? `Through ${fmtDay(terms.coiExpiry)}`
-                      : 'Yes'
-                    : 'Per job'
+                  // An accepted certificate first — Company.coiOnFile /
+                  // coiExpiry are a hand-typed cache nothing writes, and
+                  // this figure sat beside a list of the real certificates.
+                  coiSummary && 'through' in coiSummary
+                    ? `Through ${fmtDay(coiSummary.through)}`
+                    : terms.coiOnFile
+                      ? terms.coiExpiry
+                        ? `Through ${fmtDay(terms.coiExpiry)}`
+                        : 'Yes'
+                      : coiSummary
+                        ? 'In review'
+                        : 'Per job'
                 }
               />
               <Fact
@@ -582,6 +596,18 @@ export function CompanyPortalView({
               </div>
             </details>
           )}
+        </section>
+
+        {/* ── Insurance ────────────────────────────────────────────────
+            Wes 2026-09-11: "a way for them to upload COI. This should
+            always be an option for them — 'Upload a COI for your teams'."
+            Right under the terms: an account certificate IS a standing
+            term — once accepted it carries to every show (companyCoi.ts). */}
+        <section id="insurance">
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">
+            Certificate of insurance
+          </h2>
+          <AccountCoiUpload companyId={companyId} initial={cois} preview={preview} />
         </section>
 
         {/* ── Shows ────────────────────────────────────────────────────── */}

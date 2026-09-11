@@ -74,6 +74,7 @@
     "test:coi-checks": "tsx tests/coi/checks.test.ts",
     "test:coi-scope": "tsx tests/coi/vehicle-scope.test.ts",
     "test:coi-carry": "tsx tests/coi/carry-forward.test.ts",
+    "test:account-coi": "tsx tests/portal/account-coi.test.ts",
     "test:partner-equipment-scope": "tsx tests/coi/partner-equipment-scope.test.ts",
     "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
     "test:driver-payroll": "tsx tests/sub-rentals/driver-payroll.test.ts",
