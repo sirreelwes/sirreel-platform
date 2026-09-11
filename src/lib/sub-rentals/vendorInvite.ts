@@ -232,7 +232,7 @@ export async function sendPartnerWelcome(args: {
 }
 
 /** The draft the compose box opens with. */
-export async function partnerIntroDraft(vendorId: string, sender: { name: string; email?: string | null; phone?: string | null }): Promise<IntroDraft> {
+export async function partnerIntroDraft(vendorId: string, sender: { name: string; email?: string | null; phone?: string | null; title?: string | null }): Promise<IntroDraft> {
   const v = await prisma.vendor.findUnique({
     where: { id: vendorId },
     select: { name: true, contactName: true, partnerKind: true, partnerSharePercent: true },
@@ -245,6 +245,7 @@ export async function partnerIntroDraft(vendorId: string, sender: { name: string
     senderName: sender.name,
     senderPhone: sender.phone ?? null,
     senderEmail: sender.email ?? null,
+    senderTitle: sender.title ?? null,
     // The numbers go IN the mail when the deal is set — a term nobody wrote
     // down is a term that gets re-negotiated later.
     sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),

@@ -81,14 +81,39 @@ export interface IntroDraft {
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
  */
-/** "Wes Bailey / Cell 760-… · wes@sirreel.com" — his name, then whichever of
- *  the two contacts are known on one line. No dash, no company line under
- *  the name (Wes 2026-09-11: "Remove SirReel from below my name as well as
- *  the pre dash") — the shell's footer already says SirReel. */
-export function signOff(name: string, phone?: string | null, email?: string | null): string {
-  const contact = [phone?.trim() ? `Cell ${phone.trim()}` : null, email?.trim() || null].filter(Boolean).join(' · ')
-  return [name, contact || null].filter(Boolean).join('\n')
+/** Stacked like his real email signature (Wes 2026-09-11, screenshot):
+ *
+ *    Wes Bailey
+ *    Founder & CEO | SirReel Studio Services
+ *    M: 760.672.5522
+ *    E: wes@sirreel.com
+ *
+ *  No dash before the name and no bare "SirReel" line (Wes, earlier the
+ *  same day) — the title line is the signature's own. Address, office line,
+ *  hours and the link row stay out: the shell's footer carries the address
+ *  and office number, and the rest is signature furniture, not a letter's.
+ *  Whichever of the contacts are known are printed; a missing one is
+ *  skipped rather than printed blank. */
+export function signOff(name: string, phone?: string | null, email?: string | null, title?: string | null): string {
+  return [
+    name,
+    title?.trim() || null,
+    phone?.trim() ? `M: ${signaturePhone(phone)}` : null,
+    email?.trim() ? `E: ${email.trim()}` : null,
+  ].filter(Boolean).join('\n')
 }
+
+/** 760-672-5522 / (760) 672-5522 / 7606725522 → 760.672.5522, the way his
+ *  signature writes it; anything that is not ten digits passes through. */
+export function signaturePhone(raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  const ten = d.length === 11 && d.startsWith('1') ? d.slice(1) : d
+  return ten.length === 10 ? `${ten.slice(0, 3)}.${ten.slice(3, 6)}.${ten.slice(6)}` : raw.trim()
+}
+
+/** The title line under his name, as his signature has it. Only the owner
+ *  sends this mail (the allowlist above), so the one title lives here. */
+export const WES_SIGNATURE_TITLE = 'Founder & CEO | SirReel Studio Services'
 
 export function buildIntroDraft(a: {
   vendorName: string
@@ -101,6 +126,8 @@ export function buildIntroDraft(a: {
    *  not set the sign-off carries the email alone rather than a blank. */
   senderPhone?: string | null
   senderEmail?: string | null
+  /** The line under his name ("Founder & CEO | SirReel Studio Services"). */
+  senderTitle?: string | null
   /** SirReel's share, when the deal is set. Their share is the remainder. */
   sharePercent?: number | null
 }): IntroDraft {
@@ -120,7 +147,7 @@ export function buildIntroDraft(a: {
       `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
       `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
       `I'd love to show you how I think this could be a win/win!`,
-      signOff(a.senderName, a.senderPhone, a.senderEmail),
+      signOff(a.senderName, a.senderPhone, a.senderEmail, a.senderTitle),
     ].join('\n\n'),
   }
 }

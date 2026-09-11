@@ -28,7 +28,7 @@ import { prisma } from '@/lib/prisma'
 import { EMAIL_SUGGEST_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
-import type { IntroDraft } from '@/lib/sub-rentals/welcomeSender'
+import { signaturePhone, type IntroDraft } from '@/lib/sub-rentals/welcomeSender'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -48,6 +48,7 @@ export async function draftFromPrompt(a: {
   senderName: string
   senderPhone?: string | null
   senderEmail?: string | null
+  senderTitle?: string | null
 }): Promise<IntroDraft> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw Object.assign(new Error('AI drafting is not configured on this environment.'), { status: 503 })
@@ -84,7 +85,7 @@ export async function draftFromPrompt(a: {
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
     `The sender: ${a.senderName}, who owns SirReel — a Los Angeles company that has rented production vehicles to film and TV for 30 years.`,
-    `The sender's contact, for the line under his name in the sign-off: ${[a.senderPhone?.trim() ? `cell ${a.senderPhone.trim()}` : null, a.senderEmail?.trim() ? `email ${a.senderEmail.trim()}` : null].filter(Boolean).join(', ') || 'none on file — sign off with his name and SirReel only'}. Keep it in the sign-off exactly as given; an email address is not a link. The sign-off is his name on one line and the contact on the next — no dash before his name and no company line under it.`,
+    `The sign-off, exactly, one item per line, skipping any that is missing: his name; ${a.senderTitle?.trim() ? `the title line "${a.senderTitle.trim()}"` : 'no title line'}; ${a.senderPhone?.trim() ? `"M: ${signaturePhone(a.senderPhone)}"` : 'no mobile line'}; ${a.senderEmail?.trim() ? `"E: ${a.senderEmail.trim()}"` : 'no email line'}. No dash before his name, no bare company line, and an email address is not a link.`,
   ].join('\n')
 
   const system = [
