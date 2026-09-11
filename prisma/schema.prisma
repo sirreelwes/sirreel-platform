@@ -2157,6 +2157,7 @@ model EmailMessage {
   // InquiryCapture verdict row — one per evaluated INBOUND message on
   // info@/jose@/oliver@. Drives the CRM capture-review widget.
   inquiryCapture InquiryCapture?
+  jobSignals     JobEmailSignal[]
 
   @@index([rfc822MessageId])
   @@index([duplicateOfId])
@@ -6061,6 +6062,7 @@ model Job {
   bookings              Booking[]
   dispatchTasks         DispatchTask[]
   jobContacts           JobContact[]
+  emailSignals          JobEmailSignal[]
   contractReviews       ContractReview[]
   coiChecks             CoiCheck[]
   agreementAddenda      JobAgreementAddendum[]
@@ -9861,4 +9863,55 @@ model SmsMessage {
   @@index([threadId, createdAt])
   @@index([jobId])
   @@map("sr_sms_messages")
+}
+
+// ── Job email signals ─────────────────────────────────────────────────
+// A client email that READS like a change of plan on a live job — a
+// cancellation, a hold, moved dates, an extension, an early return.
+// Written by src/lib/email/jobChangeSignals.ts at ingest; NEVER applied
+// to the job by the system. Wes 2026-09-11: "there can be nuance in a
+// client's cancelling or changing of a job — any changes to HQ are gated
+// with a confirmation or suggestion." A row is the suggestion; a human
+// confirms (and makes the change through the existing controls) or
+// dismisses it. One row per (job, message).
+
+enum JobEmailSignalKind {
+  CANCEL
+  HOLD
+  DATE_CHANGE
+  EXTEND
+  RETURN_EARLY
+}
+
+enum JobEmailSignalStatus {
+  OPEN
+  CONFIRMED
+  DISMISSED
+}
+
+model JobEmailSignal {
+  id             String               @id @default(uuid())
+  jobId          String               @map("job_id")
+  emailMessageId String               @map("email_message_id")
+  kind           JobEmailSignalKind
+  status         JobEmailSignalStatus @default(OPEN)
+  /// The phrase / classifier verdict / extractor nature that raised it —
+  /// shown verbatim so the reader can judge the nuance themselves.
+  evidence       String[]             @default([])
+  /// How the message was tied to this job: thread / contact / domain / subject.
+  linkedBy       String[]             @default([]) @map("linked_by")
+  /// One-line AI summary of the message when one exists.
+  summary        String?              @db.Text
+  resolvedById   String?              @map("resolved_by_id")
+  resolvedAt     DateTime?            @map("resolved_at")
+  resolutionNote String?              @map("resolution_note") @db.Text
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  job     Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  message EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, emailMessageId])
+  @@index([status, createdAt])
+  @@index([jobId, status])
+  @@map("sr_job_email_signals")
 }

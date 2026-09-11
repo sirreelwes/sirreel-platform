@@ -413,5 +413,15 @@ export async function runMessageExtractionForId(emailMessageId: string): Promise
       console.warn('[messageExtractor] captureFromEmail follow-up failed:', email.id, err instanceof Error ? err.message : err),
     )
 
+  // Second look for a change-of-plan suggestion now that messageNature is
+  // known ("rejection" raises a CANCEL signal the words alone may have
+  // missed). Suggestion only — never applied to the job. Idempotent per
+  // (job, message), so the pubsub pass and this one never double up.
+  void import('@/lib/email/jobChangeSignals')
+    .then(({ detectJobChangeSignals }) => detectJobChangeSignals(email.id))
+    .catch((err) =>
+      console.warn('[messageExtractor] job change signal failed:', email.id, err instanceof Error ? err.message : err),
+    )
+
   return true
 }

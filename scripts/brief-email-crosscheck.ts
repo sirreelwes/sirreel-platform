@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Cross-check the jobs in a "Today at SirReel" brief against the client
- * email that came in around it.
+ * email that came in around it. READ-ONLY — the live counterpart is the
+ * JobEmailSignal suggestion raised at ingest; neither changes a job.
  *
  * Wes, 2026-09-11: "Search specifically the jobs referenced in the today at
  * SirReel email that went out and see if the client interactions via email
@@ -29,12 +30,10 @@
  *   subject    subject names the job or one of its order numbers
  *
  * ── What "affects" means ───────────────────────────────────────────
- * A message is flagged when any of:
- *   - the reply classifier said EXPLICIT_REJECTION (any confidence — a low
- *     confidence rejection is still worth a human's eyes here)
- *   - the extractor's messageNature is "rejection"
- *   - the body/subject carries change-of-plan vocabulary: cancel, postpone,
- *     push, reschedule, pull out, no longer need, on hold, date change, …
+ * A message is flagged when classifyChangeSignal() (the shared read in
+ * src/lib/email/jobChangeSignals.ts) names a kind — CANCEL / HOLD /
+ * DATE_CHANGE / EXTEND / RETURN_EARLY — from the client's own words, the
+ * reply classifier's EXPLICIT_REJECTION, or the extractor's "rejection".
  * Everything else that matched is listed as routine so the picture is
  * complete ("they wrote, it was just a COI") rather than only the alarms.
  *
@@ -51,7 +50,8 @@
 import './_loadProdEnv'
 import { prisma } from '@/lib/prisma'
 import { buildDailyBrief, type BriefEdition } from '@/lib/email/dailyBrief'
-import { domainOf, isMatchableDomain } from '@/lib/crm/domainCompanyMatch'
+import { domainOf } from '@/lib/crm/domainCompanyMatch'
+import { classifyChangeSignal, websiteDomain } from '@/lib/email/jobChangeSignals'
 
 // ── args ─────────────────────────────────────────────────────────────
 
@@ -71,12 +71,10 @@ if (Number.isNaN(asOf.getTime())) {
   process.exit(1)
 }
 
-// ── change-of-plan vocabulary ───────────────────────────────────────
-// Deliberately broad; the output tells you which phrase hit so a false
-// positive costs one glance. "push" alone is too common ("push the quote
-// through"), so it is bound to dates.
-const CHANGE_RE =
-  /\b(cancel(?:l?ed|l?ing|lation)?|postpon(?:e|ed|ing)|resched(?:ule|uled|uling)|push(?:ed|ing)? (?:the |our )?(?:dates?|shoot|pickup|pick-up|start|job|rental)|pull(?:ing|ed)? out|no longer (?:need|require|going)|not (?:going to|gonna) need|on hold|put (?:it |this |the job )?on hold|date change|change (?:of|the|our) dates?|mov(?:e|ed|ing) (?:the |our )?(?:dates?|shoot|pickup|pick-up)|shoot (?:got |was |has been |is )?(?:cancel|postpon|pushed|moved)|scrap(?:ped)?|call(?:ed)? off|fell through|didn'?t get (?:the )?(?:job|green ?light)|not moving forward|won'?t be (?:moving forward|needing)|extend(?:ed|ing)? (?:the |our )?(?:rental|dates?|return)|return(?:ing)? (?:it |them |the (?:truck|van|cube|trailer) )?early|keep (?:it|them|the (?:truck|van|cube|trailer)) (?:an extra|another|longer)|add(?:ing)? (?:a |another |one more )?(?:day|week))\b/i
+// What counts as a change of plan is decided ONCE, in
+// src/lib/email/jobChangeSignals.ts — the same read the ingest path uses to
+// raise a JobEmailSignal suggestion. This script and the live suggestion
+// can therefore never disagree about a message.
 
 // Extraction JSON shape — only the field this script reads.
 type Extracted = { messageNature?: string; summary?: string } | null
@@ -117,17 +115,6 @@ interface JobReport {
 function bareAddress(a: string): string {
   const m = a.match(/<([^>]+)>/)
   return (m ? m[1] : a).trim().toLowerCase()
-}
-
-function websiteDomain(website: string | null | undefined): string | null {
-  if (!website) return null
-  const d = website
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .split(/[/?#]/)[0]
-  return d && isMatchableDomain(d) ? d : null
 }
 
 function esc(s: string): string {
@@ -249,18 +236,18 @@ async function main() {
 
       const extracted = (m.extractedData ?? null) as Extracted
       const nature = extracted?.messageNature ?? null
-      const flags: string[] = []
-      if (m.replyClassification === 'EXPLICIT_REJECTION') {
-        flags.push(`classifier: EXPLICIT_REJECTION @ ${(m.replyClassificationConfidence ?? 0).toFixed(2)}`)
-      }
-      if (nature === 'rejection') flags.push('extractor: rejection')
-      const text = `${m.subject}\n${m.bodyText ?? m.snippet ?? ''}`
-      const phrase = text.match(CHANGE_RE)
-      if (phrase) flags.push(`says "${phrase[0]}"`)
       // Change-of-plan words in OUR outbound matter too (a rep confirming
       // "cancelled as requested" is the strongest signal of all), but an
       // autoresponder never does.
-      if (m.autoReply) flags.length = 0
+      const signal = m.autoReply
+        ? null
+        : classifyChangeSignal({
+            subject: m.subject,
+            bodyText: m.bodyText ?? m.snippet,
+            replyClassification: m.replyClassification,
+            messageNature: nature,
+          })
+      const flags = signal ? [`${signal.kind}: ${signal.evidence.join('; ')}`] : []
 
       hits.push({
         messageId: m.id,
