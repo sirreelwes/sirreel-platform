@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { VISIT_GAP_MINUTES } from '@/lib/assistant/usageSummary'
 import { LEVEL_CAPABILITIES } from '@/lib/assistant/access'
 import { HqAssistantPanel } from '@/components/admin/HqAssistantPanel'
@@ -79,6 +80,28 @@ type Data = {
   emergencyContacts: EmergencyContact[]
   recognized?: RecognizedNumber[]
   me?: Me
+}
+
+/**
+ * Every section on this page is a disclosure. Wes (2026-09-10): "I don't
+ * need all the AHA data in a window" — the recognised-numbers table alone
+ * ran to several screens. Only the codes open by default; everything else
+ * shows its count in the header and opens on demand. Native <details>, so
+ * nothing is remembered between visits (no browser storage in components).
+ */
+function Panel({ title, summary, defaultOpen, children }: { title: string; summary?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
+  return (
+    <details open={defaultOpen} className="group mt-4 rounded-xl border border-zinc-700 bg-zinc-900 text-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          <ChevronRight size={14} className="shrink-0 transition-transform group-open:rotate-90" aria-hidden />
+          {title}
+        </span>
+        {summary != null && <span className="text-right text-xs text-zinc-500">{summary}</span>}
+      </summary>
+      <div className="border-t border-zinc-800 px-5 pb-5 pt-3">{children}</div>
+    </details>
+  )
 }
 
 function fmt(d: string | null): string {
@@ -234,32 +257,32 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
   const distinct = new Set(rows.map((r) => r.tail)).size
 
   return (
-    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Who AHA recognises</h2>
-          <p className="mt-1 max-w-3xl text-xs text-zinc-500">
-            Every number AHA treats as more than the public, right now, its level, and why. HQ users get the level
-            of their HQ role; contacts and drivers follow their job; anyone else is Public. To change a person’s
-            level or take them off, add a row by hand below — it wins over the automatic ones. STOP only stops our
-            texts to a number; Blocked here is what stops AHA answering it.
-          </p>
-        </div>
-        <div className="text-right text-xs text-zinc-500">
-          <span className="text-zinc-300">{distinct}</span> number{distinct === 1 ? '' : 's'} · {rows.length} row{rows.length === 1 ? '' : 's'}
-        </div>
-      </div>
+    <Panel
+      title="Who AHA recognises"
+      summary={`${distinct} number${distinct === 1 ? '' : 's'}${counts.blocked ? ` · ${counts.blocked} blocked` : ''}`}
+    >
+      <p className="max-w-3xl text-xs text-zinc-500">
+        Every number AHA treats as more than the public, right now, its level, and why. HQ users get the level
+        of their HQ role; contacts and drivers follow their job; anyone else is Public. To change a person’s
+        level or take them off, add a row by hand below — it wins over the automatic ones. STOP only stops our
+        texts to a number; Blocked here is what stops AHA answering it.
+      </p>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-5">
-        {(['admin', 'staff', 'contact', 'public', 'blocked'] as const).map((l) => (
-          <div key={l} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
-            <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[l]}`}>{LEVEL_CAPABILITIES[l].label}</span>
-            <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-400">
-              {LEVEL_CAPABILITIES[l].can.map((c) => <li key={c}>· {c}</li>)}
-            </ul>
-          </div>
-        ))}
-      </div>
+      {/* The per-level capability legend used to be five always-on cards AND a
+          "Can ask for" column repeating the same text on every row. */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">What each level can ask for</summary>
+        <div className="mt-2 grid gap-2 md:grid-cols-5">
+          {(['admin', 'staff', 'contact', 'public', 'blocked'] as const).map((l) => (
+            <div key={l} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
+              <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[l]}`}>{LEVEL_CAPABILITIES[l].label}</span>
+              <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-400">
+                {LEVEL_CAPABILITIES[l].can.map((c) => <li key={c}>· {c}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
 
       {isAdmin ? <AddNumberForm onDone={() => { setPreset(null); onChanged() }} preset={preset} /> : (
         <div className="mt-3 text-[11px] text-zinc-600">Only an admin can add or remove people here.</div>
@@ -284,59 +307,58 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
         />
       </div>
 
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
-              <th className="py-2 pr-3 font-medium">Number</th>
-              <th className="py-2 pr-3 font-medium">Who</th>
-              <th className="py-2 pr-3 font-medium">Level</th>
-              <th className="py-2 pr-3 font-medium">How</th>
-              <th className="py-2 pr-3 font-medium">Why AHA knows it</th>
-              <th className="py-2 pr-3 font-medium">Can ask for</th>
-              <th className="py-2 pr-3 font-medium">Until</th>
-              <th className="py-2 pr-3 font-medium">Change it</th>
+      {/* One line per row, scrolling inside a capped box. The level chip
+          carries the words; the tier (how AHA knows the number) is a short
+          note next to the reason — it used to be a second chip that read
+          identically to the first on every contact row. */}
+      <div className="mt-3 max-h-[26rem] overflow-y-auto rounded-lg border border-zinc-800">
+        <table className="w-full table-fixed text-sm">
+          <thead className="sticky top-0 bg-zinc-900">
+            <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
+              <th className="w-[7.5rem] px-2 py-1.5 font-medium">Number</th>
+              <th className="px-2 py-1.5 font-medium">Who</th>
+              <th className="w-[8.5rem] px-2 py-1.5 font-medium">Level</th>
+              <th className="w-[30%] px-2 py-1.5 font-medium">Why AHA knows it</th>
+              <th className="w-[4.5rem] px-2 py-1.5 font-medium">Until</th>
+              <th className="w-[11rem] px-2 py-1.5 font-medium">Change it</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((r, i) => (
-              <tr key={`${r.tier}:${r.tail}:${r.jobCode ?? ''}:${r.unit ?? ''}:${i}`} className="border-t border-zinc-800 align-top">
-                <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-zinc-200" title={r.phone}>{fmtTail(r.tail)}</td>
-                <td className="py-2 pr-3 text-zinc-100">
+              <tr key={`${r.tier}:${r.tail}:${r.jobCode ?? ''}:${r.unit ?? ''}:${i}`} className="border-t border-zinc-800 align-middle">
+                <td className="px-2 py-1.5 whitespace-nowrap font-mono text-xs text-zinc-200" title={r.phone}>{fmtTail(r.tail)}</td>
+                <td className="truncate px-2 py-1.5 text-zinc-100" title={`${r.name}${r.jobCode ? ` · ${r.jobCode}` : ''}${r.jobName ? ` · ${r.jobName}` : ''}`}>
                   {r.name}
-                  {r.jobCode && <div className="text-[11px] text-zinc-500">{r.jobCode}{r.jobName ? ` · ${r.jobName}` : ''}</div>}
+                  {r.jobCode && <span className="ml-2 text-[11px] text-zinc-500">{r.jobCode}</span>}
                 </td>
-                <td className="py-2 pr-3 whitespace-nowrap">
+                <td className="px-2 py-1.5 whitespace-nowrap">
                   <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[r.level]}`}>{LEVEL_CAPABILITIES[r.level].label}</span>
                 </td>
-                <td className="py-2 pr-3 whitespace-nowrap">
-                  <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${TIER_LABEL[r.tier].chip}`}>{TIER_LABEL[r.tier].label}</span>
-                </td>
-                <td className="py-2 pr-3 text-zinc-300">
+                <td className="truncate px-2 py-1.5 text-xs text-zinc-300" title={`${TIER_LABEL[r.tier].label} — ${r.reason}${r.note ? ` · “${r.note}”` : ''} · Can ask for: ${r.grants}`}>
+                  {r.tier !== 'contact' && <span className="mr-1.5 text-zinc-500">{TIER_LABEL[r.tier].label} ·</span>}
                   {r.reason}
-                  {r.note && <div className="text-[11px] text-zinc-500">“{r.note}”</div>}
+                  {r.note && <span className="ml-1.5 text-zinc-500">“{r.note}”</span>}
                 </td>
-                <td className="py-2 pr-3 text-xs text-zinc-400">{r.grants}</td>
-                <td className="py-2 pr-3 whitespace-nowrap text-zinc-400" title={r.until ? 'Lapses on its own after this date' : 'Until removed'}>
-                  {r.until ? fmtDay(r.until) : 'Until removed'}
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-zinc-400" title={r.until ? 'Lapses on its own after this date' : 'Until removed'}>
+                  {r.until ? fmtDay(r.until) : '—'}
                 </td>
-                <td className="py-2 pr-3 whitespace-nowrap">
+                <td className="truncate px-2 py-1.5 text-xs">
                   {r.grantId && isAdmin ? (
-                    <button onClick={() => void revoke(r.grantId!)} className="text-xs font-semibold text-red-300 hover:text-red-200">Remove</button>
+                    <button onClick={() => void revoke(r.grantId!)} className="font-semibold text-red-300 hover:text-red-200">Remove</button>
                   ) : (
-                    <span className="flex flex-col gap-0.5">
-                      <a href={r.manageHref} className="text-xs font-semibold text-amber-300 hover:text-amber-200">{r.manageLabel} →</a>
+                    <>
+                      <a href={r.manageHref} className="font-semibold text-amber-300 hover:text-amber-200">{r.manageLabel} →</a>
                       {isAdmin && r.level !== 'blocked' && (
-                        <button onClick={() => setPreset({ name: r.name, phone: r.phone, level: 'BLOCKED' })} className="text-left text-[11px] text-zinc-500 hover:text-red-300">Block this number</button>
+                        <button onClick={() => setPreset({ name: r.name, phone: r.phone, level: 'BLOCKED' })} className="ml-3 text-[11px] text-zinc-500 hover:text-red-300">Block</button>
                       )}
-                    </span>
+                    </>
                   )}
                 </td>
               </tr>
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-4 text-center text-zinc-500">
+                <td colSpan={6} className="py-4 text-center text-zinc-500">
                   {rows.length === 0 ? 'AHA recognises no numbers yet — add staff mobiles above, and contacts follow their jobs.' : 'Nothing matches.'}
                 </td>
               </tr>
@@ -344,7 +366,7 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
           </tbody>
         </table>
       </div>
-    </section>
+    </Panel>
   )
 }
 
@@ -355,9 +377,11 @@ function UsageSection({ usage }: { usage: Usage }) {
   const hourLabel = (h: number) => (h === 0 ? '12a' : h === 12 ? '12p' : h > 12 ? `${h - 12}p` : `${h}a`)
 
   return (
-    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Assistant usage</h2>
-      <p className="mt-1 text-xs text-zinc-500">
+    <Panel
+      title="Assistant usage"
+      summary={totals.attempts === 0 ? 'No attempts yet' : `${visits.length} visit${visits.length === 1 ? '' : 's'}${lockoutPct == null ? '' : ` · ${lockoutPct}% locked out`}`}
+    >
+      <p className="text-xs text-zinc-500">
         Grouped into visits — repeated tries within {VISIT_GAP_MINUTES} minutes are one person, not
         several. Times
         are Pacific.
@@ -491,7 +515,7 @@ function UsageSection({ usage }: { usage: Usage }) {
           </div>
         </>
       )}
-    </section>
+    </Panel>
   )
 }
 
@@ -606,6 +630,8 @@ export default function AssistantAdminPage() {
     )
   })
 
+  const onCallCount = (data?.emergencyContacts || []).filter((c) => c.isEmergencyContact && c.emergencyPhone).length
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-semibold text-lt-fg">AHA — After Hours Assistant</h1>
@@ -626,7 +652,7 @@ export default function AssistantAdminPage() {
           {/* Nobody on call means every escalation silently degrades to an
               email to hq@ that no one reads at 1am. The assistant can only
               hand a stranded driver a person if a person is reachable. */}
-          {data.emergencyContacts.filter((c) => c.isEmergencyContact && c.emergencyPhone).length === 0 && (
+          {onCallCount === 0 && (
             <div className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4">
               <div className="text-sm font-semibold text-red-900">No on-call contact is set</div>
               <p className="mt-1 text-xs text-red-800">
@@ -664,11 +690,12 @@ export default function AssistantAdminPage() {
           {data.usage && <UsageSection usage={data.usage} />}
 
           {/* Standing gate code */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Standing lot gate code
-            </h2>
-            <p className="mt-1 text-xs text-zinc-500">
+          <Panel
+            title="Lot gate + container codes"
+            summary={`Gate ${data.gateCode ? 'set' : 'not set'} · container ${data.containerCode ? 'set' : 'not set'}`}
+            defaultOpen
+          >
+            <p className="text-xs text-zinc-500">
               This <span className="text-zinc-300">records</span> the code the assistant releases to
               verified drivers. It does <span className="text-zinc-300">not</span> change the gate —
               reprogram the opener at the gate, then update this to match.
@@ -725,14 +752,11 @@ export default function AssistantAdminPage() {
                 Last recorded {fmt(data.containerCodeUpdatedAt)}.
               </div>
             </div>
-          </section>
+          </Panel>
 
           {/* Per-job codes */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-                Per-job access codes
-              </h2>
+          <Panel title="Per-job access codes" summary={`${data.jobs.length} job${data.jobs.length === 1 ? '' : 's'}`}>
+            <div className="flex items-center justify-end gap-3">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -782,12 +806,14 @@ export default function AssistantAdminPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </Panel>
 
           {/* Emergency contacts */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Emergency contacts</h2>
-            <p className="mt-1 text-xs text-zinc-500">
+          <Panel
+            title="Emergency contacts"
+            summary={`${onCallCount} on call`}
+          >
+            <p className="text-xs text-zinc-500">
               On-call staff the assistant <span className="text-zinc-300">texts</span> when a caller declares a genuine
               emergency — so they can review the request and decide whether to call back. Toggle a person on and add
               their emergency (cell) number. Numbers are never shown to callers; every alert is logged below.
@@ -853,18 +879,15 @@ export default function AssistantAdminPage() {
               ))}
               {(data.emergencyContacts || []).length === 0 && <div className="text-sm text-zinc-500">No eligible staff.</div>}
             </div>
-          </section>
+          </Panel>
 
           <RecognizedSection rows={data.recognized ?? []} isAdmin={Boolean(data.me?.isAdmin)} onChanged={load} />
 
           <HqAssistantPanel level={data.me?.level ?? 'staff'} firstName={data.me?.firstName ?? null} />
 
           {/* Release log */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Recent access log
-            </h2>
-            <div className="mt-3 overflow-x-auto">
+          <Panel title="Recent access log" summary={`${data.audit.length} event${data.audit.length === 1 ? '' : 's'}`}>
+            <div className="max-h-[24rem] overflow-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
@@ -891,7 +914,7 @@ export default function AssistantAdminPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </Panel>
         </>
       )}
     </div>
