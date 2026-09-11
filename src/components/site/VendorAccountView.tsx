@@ -20,6 +20,7 @@ import { UnitRateForm } from '@/components/site/UnitRateForm'
 import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
 import { partnerSection } from '@/lib/site/partnerSections'
+import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 
 const STATUS: Record<string, { label: string; tone: string; bg: string }> = {
   ESTIMATED: { label: 'Quoted', tone: '#8a6d1f', bg: '#fbf3df' },
@@ -245,7 +246,10 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
 
         {/* "See what HQ can do for you" — Wes 2026-09-05. The white-label
             HQ (by VerMar Design) a partner can run their own fleet on. Once
-            they've started one, this is the way back into it. */}
+            they've started one, this is the way back into it.
+            OFF since 2026-09-11 (PARTNER_HQ_OFFER): partners are not offered
+            the tech — "so they can't compete with our client service". */}
+        {PARTNER_HQ_OFFER && (
         <div style={{ marginTop: 36, borderTop: '1px solid #e2ddd0', paddingTop: 18, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           {v.hq.workspace ? (
             <>
@@ -261,6 +265,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )

@@ -20,7 +20,7 @@ import { notFound } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { loadWorkspaceByToken } from '@/lib/hq-white-label/workspace'
-import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { HQ_PRODUCT, PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { isVerMarOperator } from '@/lib/hq-white-label/operator'
 import { HqNav } from '@/components/hq-white-label/HqNav'
 import { UtliizIcon } from '@/components/hq-white-label/UtliizMark'
@@ -46,6 +46,9 @@ async function viewerIsVerMar(): Promise<boolean> {
 
 export default async function HqLayout({ children, params }: { children: React.ReactNode; params: { token: string } }) {
   const support = await viewerIsVerMar()
+  // Partners are not offered the tech (Wes 2026-09-11): a partner's link no
+  // longer opens their workspace. VerMar's support view still does.
+  if (!PARTNER_HQ_OFFER && !support) notFound()
   const ws = await loadWorkspaceByToken(params.token, { stamp: !support })
   if (!ws) notFound()
   const base = `/hq/${params.token}`

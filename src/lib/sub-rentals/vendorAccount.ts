@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma'
 import { unitNameOf } from '@/lib/sub-rentals/conduit'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
 import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
+import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { effectiveSharePercent, partnerNet } from '@/lib/sub-rentals/partnerShare'
 import type { PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { resolvePartnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
@@ -251,7 +252,8 @@ async function buildVendorAccount(vendor: {
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, signedAt: true, signerName: true, expiryDate: true },
     }),
-    workspaceLinkForVendor(vendor.id),
+    // Utliiz is not offered to partners (Wes 2026-09-11) — no link, no lookup.
+    PARTNER_HQ_OFFER ? workspaceLinkForVendor(vendor.id) : Promise.resolve(null),
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))
   const sharePercent = num(vendor.partnerSharePercent)
@@ -342,8 +344,8 @@ async function buildVendorAccount(vendor: {
     current,
     past,
     hq: {
-      landingPath: portalToken ? hqLandingPath(portalToken) : null,
-      workspace: hqWorkspace,
+      landingPath: PARTNER_HQ_OFFER && portalToken ? hqLandingPath(portalToken) : null,
+      workspace: PARTNER_HQ_OFFER ? hqWorkspace : null,
     },
   }
 }

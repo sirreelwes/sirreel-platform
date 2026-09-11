@@ -4,11 +4,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { vendorByToken } from '@/lib/sub-rentals/vendorAccountActions'
 import { startWorkspaceTrial, hqUrl } from '@/lib/hq-white-label/workspace'
+import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+  // Not offered to partners (Wes 2026-09-11).
+  if (!PARTNER_HQ_OFFER) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!checkRateLimit(`vendor-hq-start:${clientIp(req)}`).ok) return NextResponse.json({ error: 'Slow down.' }, { status: 429 })
   const v = await vendorByToken(params.token)
   if (!v) return NextResponse.json({ error: 'Not found' }, { status: 404 })

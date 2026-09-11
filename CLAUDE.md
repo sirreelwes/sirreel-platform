@@ -442,6 +442,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the roster unit page or removes the photo. Columns via
   `scripts/add-partner-photo-columns.ts` (additive SQL); everything fails
   soft until it has run. `npm run test:partner-photos`.
+- **Utliiz is NOT offered to partners (Wes 2026-09-11):** "focus on using
+  this tech to aggregate partners into our sales and take a smaller piece…
+  I don't want them to have the tech so they can't compete with our client
+  service." `PARTNER_HQ_OFFER = false` in `src/lib/hq-white-label/product.ts`
+  closes the account-page strip, the /vendor/account/[token]/hq landing
+  page, the start-trial route and the /hq/[token] shell (VerMar support view
+  still opens). The white-label code stays parked; flip the flag to restore.
+  Partner emails never carried a Utliiz link — only the turquoise accent,
+  which stays (it is the brand accent now, not a foreshadow).
 - **Do NOT `prisma db push` for the next partner column.** 2026-09-10: the
   live DB carries `sr_job_locations` and nine `sub_rentals` columns that no
   schema file knows; a push from a checkout drops them. Add columns with

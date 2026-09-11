@@ -24,6 +24,12 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-11
 
+### Partners are not offered Utliiz
+
+`__SHA3__` partners: take Utliiz out of every partner surface
+
+Wes: "remove the Utliiz links from all communication for now. I think we are going to focus on using this tech to aggregate partners into our sales and take a smaller piece… I don't want them to have the tech so they can't compete with our client service." One flag, `PARTNER_HQ_OFFER = false` (product.ts), closes every partner-side door: the "See what Utliiz can do for you" / "Open your Utliiz" strip on the account page, the landing page under the partner token (404), the start-trial route (404) and the /hq/[token] workspace shell for a partner's link (VerMar's support view still opens). The account loader no longer looks the workspace up. Partner emails carried no link — only the turquoise, which stays. The white-label code is parked, not deleted.
+
 ### An account certificate awaiting review is "awaiting HQ approval" on the tile, not "missing"
 
 `948f0424` COI: an account certificate nobody has reviewed reads "awaiting HQ approval", not "missing"

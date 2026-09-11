@@ -14,6 +14,22 @@
  * is simply the client whose bookings flow in.
  */
 
+/**
+ * Whether SirReel's partners are OFFERED Utliiz at all.
+ *
+ * Wes 2026-09-11: "remove the Utliiz links from all communication for now.
+ * I think we are going to focus on using this tech to aggregate partners
+ * into our sales and take a smaller piece… I don't want them to have the
+ * tech so they can't compete with our client service."
+ *
+ * FALSE closes every partner-side door in one place: the strip on the
+ * partner account page, the "See what Utliiz can do for you" landing page,
+ * the start-trial route, and the workspace shell itself (a VerMar operator's
+ * support view still opens). The product code stays; flipping this back on
+ * restores all of it without a rebuild of anything else.
+ */
+export const PARTNER_HQ_OFFER = false
+
 export const HQ_PRODUCT = {
   /**
    * What the product is called. Wes 2026-09-06: "Utliiz" — coined from

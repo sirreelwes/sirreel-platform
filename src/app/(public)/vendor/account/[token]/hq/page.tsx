@@ -12,7 +12,7 @@ import { CalendarDays, ClipboardList, FileSignature, Truck, UserRound, Users } f
 import { vendorByToken } from '@/lib/sub-rentals/vendorAccountActions'
 import { prisma } from '@/lib/prisma'
 import { workspaceLinkForVendor } from '@/lib/hq-white-label/workspace'
-import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
+import { HQ_PITCH, HQ_PLANS, HQ_PRODUCT, PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { StartHqTrialForm } from '@/components/hq-white-label/StartHqTrialForm'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +21,8 @@ export const metadata: Metadata = { title: `See what ${HQ_PRODUCT.name} can do f
 const ICONS = [CalendarDays, ClipboardList, Truck, Users, UserRound, FileSignature]
 
 export default async function HqLandingPage({ params }: { params: { token: string } }) {
+  // Not offered to partners (Wes 2026-09-11) — the page does not exist for them.
+  if (!PARTNER_HQ_OFFER) notFound()
   const v = await vendorByToken(params.token)
   if (!v) notFound()
   const [vendor, ws] = await Promise.all([
