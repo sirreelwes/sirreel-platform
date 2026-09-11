@@ -50,6 +50,24 @@ import {
   defaultWeekCap,
   weekCapChoices,
 } from '@/lib/orders/billing';
+import {
+  weekCapExempt,
+  weekDecisionsPending,
+  weekSection,
+  type WeekLine,
+  type WeekSection,
+} from '@/lib/orders/weekDecision';
+import { WeekDecisionPrompt } from '@/components/orders/WeekDecisionPrompt';
+
+/** What each create action is called, for the prompt's primary button —
+ *  the agent pressed one of these and should be handed it back, not a
+ *  generic "Continue". */
+const CREATE_ACTION_LABEL: Record<'draft' | 'preview' | 'download' | 'send', string> = {
+  draft: 'Save draft',
+  preview: 'Preview PDF',
+  download: 'Download PDF',
+  send: 'Send quote',
+};
 
 const DEPARTMENTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'GE', 'EXPENDABLES', 'PRO_SUPPLIES', 'ART',
@@ -106,6 +124,23 @@ interface ResolvedItem {
   // ("Package contents modified — verify pricing"). Pricing math is
   // unchanged; this is a soft warning for the rep.
   isPackageModified?: boolean;
+}
+
+/** A builder row, as the billing-week arithmetic needs it. One adapter so
+ *  the section select, the pre-send prompt and the section-wide apply all
+ *  ask the same question of the same fields. */
+function weekLine(it: ResolvedItem): WeekLine {
+  return {
+    department: it.department,
+    quantity: it.quantity,
+    rate: it.rate,
+    rateType: it.rateType,
+    billableDays: it.billableDays,
+    pickupDate: it.pickupDate,
+    returnDate: it.returnDate,
+    catalogProductId: it.catalogProductId,
+    description: it.description,
+  };
 }
 
 interface ParsedTop {
@@ -1369,17 +1404,34 @@ function NewQuotePageInner() {
     return { vehicleDays: q.vehicleDays, eligible: q.eligible.length, excluded: q.excluded.length, allExcluded: q.allExcluded };
   }, [items]);
 
+  /** Which sections the agent has deliberately answered the week
+   *  question for. Set by the section select and by the pre-send prompt;
+   *  read only by `weekDecisionsPending`, which also treats hand-typed
+   *  day counts as an answer (they read as 'custom'). Session-scoped —
+   *  nothing persists, because nothing here is a fact about the order,
+   *  only about whether someone was asked. */
+  const [weekDecided, setWeekDecided] = useState<Partial<Record<LineItemDepartment, number>>>({});
+
   /** Section-level week cap (Wes 2026-08-31: "selectable by section and
    *  applied to whole section"): reprice EVERY dated line in the
    *  department at `cap` days per 7-day week, from each line's own
    *  calendar range. Overwrites existing day counts — that is the point
    *  of a section-wide control; per-line dissent goes through the days
-   *  input afterwards. Undated (TBD) lines are skipped, not guessed. */
+   *  input afterwards. Undated (TBD) lines are skipped, not guessed.
+   *
+   *  Specialty vehicles are skipped too (Wes 2026-09-07, the class
+   *  2026-09-10): they bill calendar days with no weekly reduction, the
+   *  order page shows them no cap chips, and bulk-days / dates-apply
+   *  refuse to write one. A section-wide cap must not be the one door
+   *  that discounts them. The builder sees only the NAME rule — a
+   *  catalogued specialty unit still slips through here. */
   const applyWeekCapToDept = (dept: LineItemDepartment, cap: number) => {
+    setWeekDecided((prev) => ({ ...prev, [dept]: cap }));
     setItems((prev) =>
       prev.map((it) => {
         if (it.department !== dept) return it;
         if (!it.pickupDate || !it.returnDate) return it;
+        if (weekCapExempt(weekLine(it))) return it;
         const cal = calendarDays(new Date(it.pickupDate), new Date(it.returnDate));
         if (!Number.isFinite(cal)) return it;
         return { ...it, billableDays: computeBillableDays(cal, cap) };
@@ -2210,6 +2262,37 @@ function NewQuotePageInner() {
         setCreating(false);
       }
     }
+  };
+
+  // ── The billing week, asked once, before the paper leaves ──────────
+  //
+  // Wes 2026-09-11: "If a 3d 2d or 1d week isn't selected, it goes out
+  // full rate. I feel like we should prompt agents to select rather than
+  // risk losing work because our quote comes in so much higher."
+  //
+  // The three actions that put a NUMBER in front of a client route
+  // through here: a downloaded PDF is on its way to somebody as surely
+  // as a sent one. "Save Draft" does not — it is how a rep parks a
+  // half-priced quote mid-build, and interrupting there would spend the
+  // one ask on figures nobody has finished typing. The draft's own send,
+  // from the order page, has the per-line week chips.
+  //
+  // Asked ONCE per builder session (`weekAskedRef`): a second button
+  // press is not a second interrogation, and the nested re-entries
+  // inside createQuote (the Job handoff, the resolver modal) never come
+  // back through this door at all.
+  const [weekPromptAction, setWeekPromptAction] = useState<CreateAction | null>(null);
+  const weekAskedRef = useRef(false);
+  const weekSections: WeekSection[] = useMemo(
+    () => weekDecisionsPending(items.map(weekLine), weekDecided),
+    [items, weekDecided],
+  );
+  const requestCreate = (action: CreateAction) => {
+    if (action !== 'draft' && !weekAskedRef.current && weekSections.length > 0) {
+      setWeekPromptAction(action);
+      return;
+    }
+    void createQuote(action);
   };
 
   // ─────────────────────────────────────────────────────────────────────
@@ -3179,7 +3262,7 @@ function NewQuotePageInner() {
             Cancel
           </button>
           <button
-            onClick={() => createQuote('download')}
+            onClick={() => requestCreate('download')}
             disabled={!canCreate || creating}
             className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and download the PDF"
@@ -3187,7 +3270,7 @@ function NewQuotePageInner() {
             {creating ? 'Saving…' : 'Download PDF'}
           </button>
           <button
-            onClick={() => createQuote('preview')}
+            onClick={() => requestCreate('preview')}
             disabled={!canCreate || creating}
             className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and open the PDF in a new tab"
@@ -3195,7 +3278,7 @@ function NewQuotePageInner() {
             {creating ? 'Saving…' : 'Preview PDF'}
           </button>
           <button
-            onClick={() => createQuote('draft')}
+            onClick={() => requestCreate('draft')}
             disabled={!canCreate || creating}
             className="px-5 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and open the order detail page"
@@ -3203,7 +3286,7 @@ function NewQuotePageInner() {
             {creating ? 'Saving Draft…' : 'Save Draft'}
           </button>
           <button
-            onClick={() => createQuote('send')}
+            onClick={() => requestCreate('send')}
             disabled={!canCreate || creating}
             className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg"
             title="Create the quote, generate the PDF, then open the welcome+quote review gate"
@@ -3216,6 +3299,26 @@ function NewQuotePageInner() {
       <LineItemUndoToast toast={undoToast} />
       </div>
       {inquirySourceDrawer}
+      {weekPromptAction && weekSections.length > 0 && (
+        <WeekDecisionPrompt
+          sections={weekSections}
+          actionLabel={CREATE_ACTION_LABEL[weekPromptAction]}
+          onPick={applyWeekCapToDept}
+          onProceed={() => {
+            weekAskedRef.current = true;
+            const action = weekPromptAction;
+            setWeekPromptAction(null);
+            void createQuote(action);
+          }}
+          onCancel={() => {
+            // They have seen the numbers; the gate has done its job.
+            // Re-asking on the next press is how a prompt becomes
+            // something people click through without reading.
+            weekAskedRef.current = true;
+            setWeekPromptAction(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -3262,12 +3365,23 @@ function DepartmentGroup({
   const [bulkReturn, setBulkReturn] = useState('');
   const [bulkDays, setBulkDays] = useState('');
   const [appliedFlash, setAppliedFlash] = useState(false);
-  // Section week-cap select. Uncontrolled-ish: '' = nothing chosen yet;
-  // choosing a cap applies it to every dated line in the section
-  // immediately and keeps the choice displayed. Per-line edits after
-  // that can diverge — the select shows the last section-wide action,
-  // not a claim that every row still matches it.
-  const [weekCap, setWeekCap] = useState('');
+  // Section week-cap select — READ OFF THE ROWS, not off the last button
+  // anyone pressed. It used to hold its own state starting at '' and
+  // render "Week…", which is the same thing it said on a section quoting
+  // every calendar day at full rate: an agent had no way to tell, and no
+  // reason to open it (Wes 2026-09-11). Now it names the week in effect,
+  // says "Custom days" when hand-typed counts explain none of them, and
+  // only reads "Week…" when nothing in the section is dated yet.
+  const weekState = weekSection(department, rows.map(weekLine));
+  const inEffect = weekState?.current ?? null;
+  const selectValue =
+    inEffect === 'custom' ? 'custom' : typeof inEffect === 'number' ? String(inEffect) : '';
+  // The deepest week still on the table, priced. The whole point of the
+  // control is the money, so the money is on the outside of it.
+  const savings =
+    weekState && typeof weekState.current === 'number'
+      ? [...weekState.options].filter((o) => o.delta < 0).sort((a, b) => a.delta - b.delta)[0] ?? null
+      : null;
   const capChoices = weekCapChoices(department);
   const stdCap = defaultWeekCap(department);
   const isExpendable = department === 'EXPENDABLES';
@@ -3316,28 +3430,45 @@ function DepartmentGroup({
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="text-lt-fg3">Apply to category:</span>
             {capChoices.length > 0 && (
-              <select
-                value={weekCap}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setWeekCap(v);
-                  const cap = parseInt(v, 10);
-                  if (Number.isFinite(cap)) {
-                    onApplyWeekCap(department, cap);
-                    setAppliedFlash(true);
-                    setTimeout(() => setAppliedFlash(false), 1800);
-                  }
-                }}
-                title="Billing week for this whole section — every dated line is repriced at this many days per 7-day week"
-                className="bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg"
-              >
-                <option value="">Week…</option>
-                {capChoices.map((cap) => (
-                  <option key={cap} value={cap}>
-                    {cap}-day wk{cap === stdCap ? ' (std)' : ''}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={selectValue}
+                  onChange={(e) => {
+                    const cap = parseInt(e.target.value, 10);
+                    if (Number.isFinite(cap)) {
+                      onApplyWeekCap(department, cap);
+                      setAppliedFlash(true);
+                      setTimeout(() => setAppliedFlash(false), 1800);
+                    }
+                  }}
+                  title="Billing week for this whole section — every dated line is repriced at this many days per 7-day week"
+                  className="bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg"
+                >
+                  {inEffect == null && <option value="">Week…</option>}
+                  {inEffect === 'custom' && <option value="custom">Custom days</option>}
+                  {capChoices.map((cap) => (
+                    <option key={cap} value={cap}>
+                      {cap}-day wk{cap === stdCap ? ' (std)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* What the shorter weeks are worth, beside the control
+                    that sets them. A HINT, deliberately not a button:
+                    the deepest week is two thirds off a section, and a
+                    discount that size should cost a considered click in
+                    the select, not a stray one on a chip. */}
+                {savings && (
+                  <span
+                    title={weekState!.options
+                      .filter((o) => o.delta < 0)
+                      .map((o) => `${o.cap}-day wk · ${o.days} billable days · ${fmtMoney(o.total)} (${fmtMoney(o.delta)})`)
+                      .join('\n')}
+                    className="text-[10px] text-lt-fg3 whitespace-nowrap"
+                  >
+                    {savings.cap}-day wk −{fmtMoney(Math.abs(savings.delta))}
+                  </span>
+                )}
+              </>
             )}
             <input
               type="date" value={bulkPickup}

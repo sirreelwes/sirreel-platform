@@ -41,6 +41,7 @@
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:quote-hold": "tsx tests/orders/quote-hold.test.ts",
+    "test:week-decision": "tsx tests/orders/week-decision.test.ts",
     "test:kit-reconcile": "tsx tests/orders/kit-reconcile.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:coi-confirmation": "tsx tests/coi/job-confirmation.test.ts",
