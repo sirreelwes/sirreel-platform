@@ -265,6 +265,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
+- Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
+  `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING
+  else, so ANY @sirreel.com Google account reaches a session whether or
+  not a `User` row exists. The `session` callback only sets `role` when
+  it finds a row, and the dashboard layout read the absence as
+  `UserRole.AGENT` — the SALES surface (client contacts, pricing, CRM)
+  for an account nobody provisioned.
+- Fix: the session callback stamps `provisioned = !!dbUser`, and the
+  layout renders "This account isn't set up yet" + Sign out instead of a
+  department. The `|| UserRole.AGENT` fallback stays for a row that
+  somehow has no role, but it is no longer reachable by a missing row.
+- The DATA was never exposed — every API route looks the row up by email
+  and 401s. Only the shell lied. Still: adding a login is
+  `scripts/add-hq-user.ts`, and a Google account on the domain is NOT an
+  HQ account.
+- `add-hq-user.ts` takes WAREHOUSE / FLEET_TECH (a shared desk: yard
+  screens, no pricing or client contact) and `--like <email>` copies an
+  existing user's role. The check-in desk is `cpr@sirreel.com`
+  (WAREHOUSE, created 2026-09-11). **`warehouse@sirreel.com` has NO user
+  row** — it is the mailbox the pull orders are emailed to, which is
+  exactly why `--like warehouse@sirreel.com` failed.
+
 ## Barcode phase 3 — per-UNIT check-out / check-in (2026-09-11)
 - Wes: "integrating the barcode scanners that we have to facilitate
   tracking high value items like CP 200 radios, generators, Hazers etc…
