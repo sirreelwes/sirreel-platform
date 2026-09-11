@@ -50,6 +50,13 @@ const handler = NextAuth({
           where: { email: session.user.email },
           select: { role: true, name: true, salesOnly: true, publicSlug: true }
         });
+        // Whether this email has an HQ user row at all. The signIn gate
+        // above only checks the DOMAIN, so any @sirreel.com Google account
+        // reaches a session; without this flag the shell could not tell
+        // "no row" from "row with no role" and fell back to AGENT — a
+        // sales view, complete with client contacts and pricing, for an
+        // account nobody had provisioned. See the dashboard layout.
+        (session.user as any).provisioned = !!dbUser;
         if (dbUser) {
           (session.user as any).role = dbUser.role;
           (session.user as any).salesOnly = dbUser.salesOnly;

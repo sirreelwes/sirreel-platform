@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import { getPermissions, getNavSections, defaultLandingPath } from '@/lib/permissions';
@@ -78,6 +78,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!session) return null;
 
   const user = session.user as any;
+
+  // No HQ user row for this email (Hugo, 2026-09-11: warehouse@ "is
+  // presenting as a sales view"). Sign-in only gates on the email DOMAIN
+  // — see the signIn callback — so any @sirreel.com Google account gets a
+  // session whether or not anyone provisioned it. The role fallback below
+  // then read it as AGENT, which is the SALES surface: client contacts,
+  // pricing, CRM, none of which an unprovisioned account should see, and
+  // none of which its API calls would actually return (every route looks
+  // the row up and 401s). So the shell says so instead of rendering a
+  // department this person was never given.
+  if (user.provisioned === false) {
+    return (
+      <div className="min-h-screen bg-lt-page flex items-center justify-center px-6">
+        <div className="max-w-sm text-center">
+          <h1 className="text-lt-fg text-lg font-semibold mb-2">This account isn&apos;t set up yet</h1>
+          <p className="text-lt-fg2 text-sm">
+            You&apos;re signed in as <span className="font-semibold text-lt-fg">{user.email}</span>, but it has no
+            HQ account, so there is nothing to show you. Ask Wes to add it and say which team you&apos;re on.
+          </p>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="mt-4 text-[13px] font-semibold px-3 py-2 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const actualRole: UserRole = user.role || UserRole.AGENT;
   const actualSalesOnly: boolean = !!user.salesOnly;
 
