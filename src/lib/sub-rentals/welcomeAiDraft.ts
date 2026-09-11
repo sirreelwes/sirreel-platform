@@ -84,6 +84,7 @@ export async function draftFromPrompt(a: {
     `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and insurance as SirReel's own.`,
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
+    `His stance on the terms: all of this has to work for both parties, and he is happy to discuss their thoughts.`,
     `The sender: ${a.senderName}, who owns SirReel — a Los Angeles company that has rented production vehicles to film and TV for 30 years.`,
     `The sign-off, exactly, one item per line, skipping any that is missing: his name; ${a.senderTitle?.trim() ? `the title line "${a.senderTitle.trim()}"` : 'no title line'}; ${a.senderPhone?.trim() ? `"M: ${signaturePhone(a.senderPhone)}"` : 'no mobile line'}; ${a.senderEmail?.trim() ? `"E: ${a.senderEmail.trim()}"` : 'no email line'}. No dash before his name, no bare company line, and an email address is not a link.`,
   ].join('\n')
