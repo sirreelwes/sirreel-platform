@@ -19,7 +19,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSendPartnerWelcome, WES_SIGNATURE_TITLE } from '@/lib/sub-rentals/welcomeSender'
-import { partnerIntroDraft, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
+import { partnerIntroDraft, partnerWelcomeExtras, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
 import { draftFromPrompt } from '@/lib/sub-rentals/welcomeAiDraft'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +51,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     })
     if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
     const draft = await partnerIntroDraft(id, { name: g.name?.trim() || 'Wes Bailey', email: g.email, phone: g.phone, title: g.title })
-    const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body })
+    const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body, ...(await partnerWelcomeExtras(id)) })
     return NextResponse.json({
       draft,
       html,
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (b.preview) {
       const v = await prisma.vendor.findUnique({ where: { id }, select: { name: true } })
       if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-      const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body })
+      const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, ...(await partnerWelcomeExtras(id)) })
       // Nothing is sent and nothing is stamped on this path.
       return NextResponse.json({ preview: true, html, text })
     }

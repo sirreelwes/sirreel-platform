@@ -617,6 +617,24 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   (`/api/orders/[id]/partner-cancelled-lines`, audited). Pre-book lines need
   no warning: booking routes them. `npm run test:partner-cancelled-lines`.
 
+## The introduction carries the link now (2026-09-11 — Wes)
+- REVERSES the 2026-09-10 rule ("I don't want to send a portal link without the
+  initial welcome email" → no link in the introduction). Wes 2026-09-11: "I
+  think we should include the partner's logos in the intro email as well as the
+  portal link … the sooner we get info to them the better!"
+- `renderPartnerWelcome` takes `accountUrl` + `logoUrl` (from
+  `partnerWelcomeExtras`, which mints the token if there is none — minting is
+  not an invite; this mail IS). Their logo rides at the top of the body via the
+  PUBLIC token proxy `/api/public/vendor-account/[token]/logo`, so it loads in
+  an inbox with no login. Preview and send share the renderer, so the preview
+  is still the mail.
+- **The link is added by the RENDERER, never by the model** — welcomeAiDraft
+  still strips links from anything it writes. Keep it that way.
+- Sending stamps `portalInvitedAt/To` as well as `welcomeSentAt`: the link has
+  gone, and the Portals tab must not read "never sent". The separate "Email the
+  account link" button stays, for resending on its own.
+- `npm run test:partner-welcome`.
+
 ## Partner contacts — the people at a partner (2026-09-11 — Wes)
 - Wes: "I need to be able to add people on the partner portal. owners and
   others. let's have a contacts section." `VendorContact` (`sr_vendor_contacts`,
