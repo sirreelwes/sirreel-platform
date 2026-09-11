@@ -602,8 +602,10 @@ export function MakeReservationModal({
     setResolverOpen(false)
   }
 
-  async function createCompany(allowNearMatch: boolean) {
-    const name = newCompanyName.trim()
+  // `nameOverride` is the picker's "+ Create new company" row handing
+  // over what the rep typed — state hasn't caught up yet at that point.
+  async function createCompany(allowNearMatch: boolean, nameOverride?: string) {
+    const name = (nameOverride ?? newCompanyName).trim()
     if (!name) return
     setCompanyBusy(true)
     setCompanyError(null)
@@ -1637,11 +1639,22 @@ export function MakeReservationModal({
                 ) : (
                   <div className="space-y-1">
                     <CompanyPicker
+                      tone="light"
                       value={company?.id ?? null}
                       selectedName={company?.name}
+                      initialQuery={company ? undefined : (prefill?.companyName ?? undefined)}
                       onChange={(id: string | null, name?: string) =>
                         setCompany(id ? { id, name: name || '' } : null)
                       }
+                      onCreate={(name) => {
+                        // Open the inline form with the name in it so a 409
+                        // near-match (or an error) has somewhere to land.
+                        setNewCompanyName(name)
+                        setCompanyError(null)
+                        setCompanyNearMatch(null)
+                        setCreatingCompany(true)
+                        void createCompany(false, name)
+                      }}
                     />
                     <button
                       onClick={() => setCreatingCompany(true)}
