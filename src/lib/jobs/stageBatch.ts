@@ -30,6 +30,7 @@ import { deriveJobDateRange } from './dateRange'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import type { CoiRollupState } from './listRow'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS, type JobStage } from './stage'
+import { PARTNER_LINE_WHERE } from '@/lib/orders/partnerLines'
 
 export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobStage>> {
   const ids = [...new Set(jobIds.filter(Boolean))]
@@ -52,7 +53,7 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
           signedAgreements: {
             select: { contractType: true, status: true, coveredByAgreementId: true },
           },
-          _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS } } } } },
+          _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS }, NOT: PARTNER_LINE_WHERE } } } },
         },
       },
       // Several + the review, so a workers' comp upload on its own does not

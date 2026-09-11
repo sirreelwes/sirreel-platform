@@ -582,6 +582,9 @@ export async function POST(req: NextRequest, { params }: Params) {
           orderId,
           orderLineItemId: lineItem.id,
           department: resolvedDepartment,
+          // A partner's unit: its booking is created below, so the lookup
+          // would miss it. It never goes on the pick list (partnerLines.ts).
+          partnerFulfilled: !!subcontractedVehicleId,
         });
 
     // (#2 Phase 2) Holds sync — VEHICLES / STAGES only, gated on
@@ -754,6 +757,15 @@ export async function POST(req: NextRequest, { params }: Params) {
             clientDailyRate: lineItem.rate,
           },
           select: { id: true, vendorId: true },
+        });
+      } else if (lineItem.type !== "FEE") {
+        // The unit wasn't there to book after all, so the line is ours —
+        // file it the way any other line would have been.
+        await syncPickListOnLineAdd(prisma, {
+          orderId,
+          orderLineItemId: lineItem.id,
+          department: resolvedDepartment,
+          partnerFulfilled: false,
         });
       }
     }

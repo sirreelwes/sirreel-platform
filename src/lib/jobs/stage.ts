@@ -56,7 +56,8 @@ const warehouseBeatsHold = false
 
 /** Departments whose lines the WAREHOUSE pulls — the same routing
  *  bookOrder.ts applies at book time (routeDepartment), listed here so a
- *  QUOTE (no fulfillmentLane yet) can be judged the same way. */
+ *  QUOTE (no fulfillmentLane yet) can be judged the same way. Callers count
+ *  these with NOT PARTNER_LINE_WHERE — a partner's unit is never a pull. */
 export const WAREHOUSE_DEPARTMENTS: LineItemDepartment[] = [
   'COMMUNICATIONS',
   'PRO_SUPPLIES',

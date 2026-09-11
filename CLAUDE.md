@@ -527,6 +527,27 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   deploy (see memory "enum add before deploy"). A new department touches ~27
   files — grep an existing one (WARDROBE_MAKEUP) and add beside every hit.
 
+## Partner lines stay off the pick list (2026-09-11 — Wes)
+- Wes: "keep partner lines off the pick list." A partner's unit is delivered
+  by the partner or collected from them — never through our warehouse.
+- A PARTNER LINE = a line with a live SubRental on a ROSTER unit
+  (`subcontractedVehicleId` set, not CANCELLED), or a line riding under one.
+  Ad-hoc gear sub-rentals ("Sub-rent…", POST /api/sub-rentals) are NOT partner
+  lines — our crew collects that gear, so it stays on the list. One definition:
+  `src/lib/orders/partnerLines.ts` (`PARTNER_LINE_WHERE`, `isPartnerLineIn`,
+  `partnerRouting`).
+- A would-be WAREHOUSE partner line gets `fulfillmentLane` null, `pickStatus`
+  null, no PickListItem — every warehouse reader (load-ready rollup, check
+  reports, pull-order backfill) keys on lane WAREHOUSE, so they all skip it.
+  FLEET / STAGE routings are untouched.
+- Enforced in: `syncPickListOnLineAdd` (looks it up; the add-line route passes
+  `partnerFulfilled` because the booking is created after the line),
+  `bookOrder` (and takes back unpicked pre-book items), auto-bind
+  (`releasePartnerLineFromPickList` — already-picked rows stay), the paper pull
+  sheet + pull-order preview, and both job-stage warehouse counts.
+- `npm run test:partner-pick-list`. A cancelled partner booking does NOT put
+  the line back on the list — re-add it if our own gear replaces the unit.
+
 ## Partner discount waterfall (2026-09-11 — Wes)
 - Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a
   client"): a client discount on a partner's unit is **shared 50/50** until

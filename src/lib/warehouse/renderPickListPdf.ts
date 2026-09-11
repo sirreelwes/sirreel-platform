@@ -16,6 +16,7 @@
  */
 
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
+import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import {
@@ -47,7 +48,10 @@ export async function renderPickListPdf(
       job: { select: { jobCode: true, name: true } },
       pickList: { select: { assignedTo: { select: { name: true } } } },
       lineItems: {
-        include: { inventoryItem: { select: { code: true } } },
+        include: {
+          inventoryItem: { select: { code: true } },
+          subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
+        },
         orderBy: { sortOrder: 'asc' },
       },
     },
@@ -56,8 +60,10 @@ export async function renderPickListPdf(
 
   // Physical goods only — fees, discounts, and labor have nothing to
   // pull off a shelf.
+  // A partner's unit never passes through our warehouse (Wes 2026-09-11:
+  // "keep partner lines off the pick list"; partnerLines.ts).
   const pickable = order.lineItems.filter(
-    (li) => li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR',
+    (li) => li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR' && !isPartnerLineIn(li, order.lineItems),
   )
   if (pickable.length === 0) {
     return { ok: false, error: 'Order has no pickable line items', status: 400 }

@@ -26,6 +26,7 @@ import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { WELCOME_SENT_ACTION, welcomeSignal } from '@/lib/jobs/welcomeReminder'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
+import { PARTNER_LINE_WHERE } from '@/lib/orders/partnerLines'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
 import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
 import { newestFullCoi, OWN_COI_TAKE, pickCarriedCoi } from '@/lib/coi/companyCoi'
@@ -166,7 +167,7 @@ export async function GET(req: NextRequest) {
             subtotal: true,
             // Stage ladder: a live order carrying a WAREHOUSE-department line
             // paints the job red once it is booked. Counted, not hydrated.
-            _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS } } } } },
+            _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS }, NOT: PARTNER_LINE_WHERE } } } },
             // An archived order is a duplicate someone has already
             // dismissed — liveOrdersForRollup drops it before any
             // derived state reads it.

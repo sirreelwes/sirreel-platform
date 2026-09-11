@@ -37,6 +37,7 @@
 
 import type { FulfillmentLane, LineItemPickStatus, Prisma, PrismaClient } from '@prisma/client'
 import { routeDepartment } from './bookOrder'
+import { isPartnerLine, partnerRouting } from './partnerLines'
 
 type TxClient = PrismaClient | Prisma.TransactionClient
 
@@ -52,13 +53,19 @@ export async function syncPickListOnLineAdd(
     orderId: string
     orderLineItemId: string
     department: Parameters<typeof routeDepartment>[0]
+    /** The caller already knows (the add route creates the partner's
+     *  booking AFTER the line). Omitted = looked up. See partnerLines.ts. */
+    partnerFulfilled?: boolean
   },
 ): Promise<{
-  lane: FulfillmentLane
+  lane: FulfillmentLane | null
   pickStatus: LineItemPickStatus | null
   pickListAction: 'none' | 'appended' | 'created'
 }> {
-  const routing = routeDepartment(args.department)
+  // A partner's unit never passes through our warehouse: no lane, no pick
+  // item (Wes 2026-09-11 — partnerLines.ts).
+  const partner = args.partnerFulfilled ?? (await isPartnerLine(tx, args.orderLineItemId))
+  const routing = partnerRouting(routeDepartment(args.department), partner)
 
   // Stamp lane / pickStatus on the new line. Mirrors bookOrder.ts:175.
   await tx.orderLineItem.update({
@@ -105,6 +112,40 @@ export async function syncPickListOnLineAdd(
     data: { pickListId: existing.id, orderLineItemId: args.orderLineItemId },
   })
   return { lane: routing.lane, pickStatus: routing.pickStatus, pickListAction: 'appended' }
+}
+
+/** Take a line that has just become partner-fulfilled — a booking bound to
+ *  it after it was filed — off the pick list, with anything riding under it.
+ *  Gear someone already pulled is a physical fact the floor has to undo, so
+ *  those rows stay and are reported. */
+export async function releasePartnerLineFromPickList(
+  tx: TxClient,
+  orderLineItemId: string,
+): Promise<{ released: number; keptAlreadyPicked: number }> {
+  const out = { released: 0, keptAlreadyPicked: 0 }
+  const lines = await tx.orderLineItem.findMany({
+    where: { OR: [{ id: orderLineItemId }, { parentLineItemId: orderLineItemId }] },
+    select: { id: true, orderId: true, fulfillmentLane: true, pickStatus: true },
+  })
+  for (const line of lines) {
+    if (line.fulfillmentLane !== 'WAREHOUSE') continue
+    const snap = await readPickListItemForDelete(tx, line.id)
+    if (snap?.pickedAt || (line.pickStatus && line.pickStatus !== 'PENDING_PICK')) {
+      out.keptAlreadyPicked++
+      continue
+    }
+    await syncPickListOnLineDelete(tx, {
+      orderId: line.orderId,
+      orderLineItemId: line.id,
+      pickListItem: snap,
+      pickStatusAtDelete: line.pickStatus,
+      userId: null,
+      ipAddress: null,
+    })
+    await tx.orderLineItem.update({ where: { id: line.id }, data: { fulfillmentLane: null, pickStatus: null } })
+    out.released++
+  }
+  return out
 }
 
 /** Pre-fetches the PickListItem for a line about to be deleted.

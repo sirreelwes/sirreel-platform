@@ -47,6 +47,7 @@
  */
 
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p, calloutBox, detailTable } from '@/lib/email/templates/shell'
@@ -132,7 +133,12 @@ export async function previewPullOrder(
       endDate: true,
       deliveryRequested: true,
       company: { select: { name: true } },
-      lineItems: { select: { type: true, fulfillmentLane: true } },
+      lineItems: {
+        select: {
+          id: true, type: true, fulfillmentLane: true, parentLineItemId: true,
+          subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
+        },
+      },
       pickList: {
         select: {
           releasedAt: true,
@@ -198,7 +204,8 @@ export async function previewPullOrder(
   })
   if (!order) return { ok: false, error: 'order not found', status: 404 }
 
-  const pickable = order.lineItems.filter(isPickableLine)
+  // Partner lines are not ours to pull (partnerLines.ts) — same filter the sheet applies.
+  const pickable = order.lineItems.filter((li) => isPickableLine(li) && !isPartnerLineIn(li, order.lineItems))
   const recipients = await recipientsForPullOrder()
 
   return {
