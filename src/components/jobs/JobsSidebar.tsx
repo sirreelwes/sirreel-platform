@@ -242,6 +242,7 @@ const ROLE_WORD: Record<string, string> = {
   PC: 'PC',
   TRANSPO: 'Transpo',
   ACCOUNTING: 'Accounting',
+  ART_DEPT: 'Art Dept',
   OTHER: 'Contact',
 }
 

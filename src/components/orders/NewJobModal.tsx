@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-const JOB_ROLES = ["PRODUCER", "PM", "PC", "TRANSPO", "ACCOUNTING", "OTHER"] as const;
+const JOB_ROLES = ["PRODUCER", "PM", "PC", "TRANSPO", "ACCOUNTING", "ART_DEPT", "OTHER"] as const;
 const PRODUCTION_TYPES = [
   "FILM",
   "TV",

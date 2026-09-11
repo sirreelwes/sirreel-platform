@@ -3562,6 +3562,7 @@ const driverTone = (d: any): string => {
               <option value="PC">Production Coordinator</option>
               <option value="TRANSPO">Transpo</option>
               <option value="ACCOUNTING">Accounting</option>
+              <option value="ART_DEPT">Art Dept</option>
               <option value="OTHER">Other</option>
             </select>
             {/* The role is routing, not just a label — say so where it is picked. */}

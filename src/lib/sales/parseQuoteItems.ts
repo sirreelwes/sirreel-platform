@@ -124,7 +124,7 @@ If the input is plain text without those header lines, treat it as a single mess
       "title": "Job title from signature, or null",
       "phone": "phone from signature, or null",
       "company": "Company from signature or domain, or null",
-      "suggested_role": "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "OTHER" | null,
+      "suggested_role": "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER" | null,
       "source": "header" | "signature" | "body_mention",
       "confidence": "high" | "medium" | "low"
     }
@@ -152,6 +152,7 @@ ROLE INFERENCE (suggested_role)
     Production Coordinator / Coord.     → PC
     Transportation Coordinator / TC     → TRANSPO
     Accountant / Accounting / AP        → ACCOUNTING
+    Art Director / Production Designer / Set Decorator / Set Dresser / Art Coordinator / Prop Master → ART_DEPT
   If you can't infer, set null. Don't guess from ambiguous titles.
 
 FILTERS (apply yourself; the server also re-checks)

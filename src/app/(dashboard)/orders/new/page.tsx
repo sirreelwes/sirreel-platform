@@ -135,8 +135,8 @@ interface ClientCandidate {
 type ContactSource = 'header' | 'signature' | 'body_mention';
 type ContactConfidence = 'high' | 'medium' | 'low';
 type ContactMatchStatus = 'existing' | 'new' | 'possible_match';
-type SuggestedJobRole = 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER';
-const JOB_ROLES: SuggestedJobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING', 'OTHER'];
+type SuggestedJobRole = 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'ART_DEPT' | 'OTHER';
+const JOB_ROLES: SuggestedJobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING', 'ART_DEPT', 'OTHER'];
 
 interface ResolvedContact {
   name: string;

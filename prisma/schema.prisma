@@ -6374,6 +6374,9 @@ enum JobRole {
   PC
   TRANSPO
   ACCOUNTING
+  /// Art department contact (Wes 2026-09-10) — the person on an ART_DEPT
+  /// job who orders the set dressing, not a producer or a PC.
+  ART_DEPT
   OTHER
 }
 

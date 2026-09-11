@@ -22,6 +22,7 @@ const ROLE_LABEL: Record<JobRole, string> = {
   PC: 'Production coordinator',
   TRANSPO: 'Transportation',
   ACCOUNTING: 'Accounting',
+  ART_DEPT: 'Art department',
   OTHER: 'Contact',
 }
 

@@ -1005,7 +1005,7 @@ export default function OrderDetailPage() {
   const [addEmail, setAddEmail] = useState("");
   const [addFirst, setAddFirst] = useState("");
   const [addLast, setAddLast] = useState("");
-  const [addRole, setAddRole] = useState<"PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER">("PRODUCER");
+  const [addRole, setAddRole] = useState<"PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER">("PRODUCER");
   const [addGrantPortal, setAddGrantPortal] = useState(true);
 
   const resetAddForm = () => {
@@ -5702,7 +5702,7 @@ function AddContactForm({
   email: string;
   first: string;
   last: string;
-  role: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER";
+  role: "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER";
   grantPortal: boolean;
   busy: boolean;
   err: string;
@@ -5711,7 +5711,7 @@ function AddContactForm({
     email: (v: string) => void;
     first: (v: string) => void;
     last: (v: string) => void;
-    role: (v: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER") => void;
+    role: (v: "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER") => void;
     grantPortal: (v: boolean) => void;
   };
   onSubmit: (andSendQuote: boolean) => void;
@@ -5753,7 +5753,9 @@ function AddContactForm({
             <option value="PRODUCER">Producer</option>
             <option value="PM">PM</option>
             <option value="PC">PC</option>
+            <option value="TRANSPO">Transpo</option>
             <option value="ACCOUNTING">Accounting</option>
+            <option value="ART_DEPT">Art Dept</option>
             <option value="OTHER">Other</option>
           </select>
         </label>
