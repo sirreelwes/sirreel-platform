@@ -27,6 +27,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { sendSms } from '@/lib/sms/sendSms'
 
@@ -115,12 +116,17 @@ export async function verifyAndRelease(input: {
   vehicleNumber?: string | null
   vinLast4?: string | null
   driverName?: string | null
+  /** Text channel only: the E.164 number the message came from. Checked
+   *  against the drivers and contacts on file for the live assignment
+   *  (src/lib/assistant/phoneFactor.ts). Never set from web chat. */
+  senderPhone?: string | null
   ip: string
 }): Promise<ReleaseResult> {
   const jobCodeRaw = input.jobCode?.trim() || ''
   const vehicleNumber = input.vehicleNumber?.trim() || ''
   const vinLast4 = normAlnum(input.vinLast4 || '').slice(-4)
   const driverName = input.driverName?.trim() || ''
+  const senderTail = phoneTail(input.senderPhone)
   const ip = input.ip
 
   const audit = async (action: string, extra: Record<string, unknown>) => {
@@ -137,6 +143,7 @@ export async function verifyAndRelease(input: {
             vehicleNumber: vehicleNumber || null,
             vinLast4: vinLast4 || null,
             driverName: driverName || null,
+            senderPhoneTail: senderTail ? senderTail.slice(-4) : null,
           },
           newValues: { ...extra, at: new Date().toISOString() },
         },
@@ -188,8 +195,9 @@ export async function verifyAndRelease(input: {
 
   const vehicleResolvedLegacy = Boolean(matchedAssetIds && matchedAssetIds.length)
 
-  // Nothing to anchor on → can't verify.
-  if (!jobId && !vehicleResolvedLegacy) {
+  // Nothing to anchor on → can't verify. A sender number is an anchor too:
+  // the live assignments are searched for it below.
+  if (!jobId && !vehicleResolvedLegacy && !senderTail) {
     // Check the VIN even though nothing anchored — this is precisely the
     // case that stranded a driver: correct VIN, no job code, dead end.
     const atVehicle = Boolean(await vehicleForVinLast4(vinLast4))
@@ -209,7 +217,7 @@ export async function verifyAndRelease(input: {
   const graceEnd = new Date(today)
   graceEnd.setUTCDate(graceEnd.getUTCDate() - GRACE_DAYS)
 
-  const assignments = await prisma.bookingAssignment.findMany({
+  let assignments = await prisma.bookingAssignment.findMany({
     where: {
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       startDate: { lte: graceStart },
@@ -239,20 +247,43 @@ export async function verifyAndRelease(input: {
           booking: {
             select: {
               jobName: true,
-              person: { select: { firstName: true, lastName: true } },
+              person: { select: { firstName: true, lastName: true, phone: true, mobile: true } },
               job: {
                 select: {
                   name: true,
-                  jobContacts: { select: { person: { select: { firstName: true, lastName: true } } } },
+                  jobContacts: { select: { person: { select: { firstName: true, lastName: true, phone: true, mobile: true } } } },
                 },
               },
             },
           },
         },
       },
-      checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true } } } },
+      checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true, phone: true } } } },
     },
   })
+
+  // ── 3b. The sender's number against the numbers on file for each assignment ──
+  // When the number is the ONLY anchor, the assignment set is narrowed to the
+  // driver's own current job(s) so the VIN / unit check and the lockbox pin
+  // below can only land on a truck that job holds.
+  const phoneMatched = senderTail
+    ? assignments.filter((asg) => {
+        const b = asg.bookingItem.booking
+        const numbers: Array<string | null | undefined> = [b.person?.phone, b.person?.mobile]
+        for (const jc of b.job?.jobContacts ?? []) numbers.push(jc.person.phone, jc.person.mobile)
+        for (const cr of asg.checkoutRecords) numbers.push(cr.driver?.phone)
+        return phoneOnFile(senderTail, numbers)
+      })
+    : []
+  const phoneOk = phoneMatched.length > 0
+  if (!jobId && !vehicleResolvedLegacy) {
+    if (!phoneOk) {
+      const atVehicle = Boolean(await vehicleForVinLast4(vinLast4))
+      await audit('public.access_denied', { reason: 'sender_number_not_on_current_job', atVehicle })
+      return { result: 'NOT_VERIFIED', atVehicle }
+    }
+    assignments = phoneMatched
+  }
 
   if (assignments.length === 0) {
     await audit('public.access_denied', { reason: 'no_active_rental', jobCodeOk })
@@ -300,9 +331,12 @@ export async function verifyAndRelease(input: {
 
   // Release bar. Job code is the strong factor; it needs one corroborator.
   // The legacy unit+name path stays open for a substitute returner who
-  // wasn't handed the job code.
+  // wasn't handed the job code. By text, the sender's number on file for
+  // the current job plus the vehicle (VIN last 4 or unit) is the third path.
   const authed =
-    (jobCodeOk && (vinLast4Ok || nameOk)) || (!jobCodeOk && vehicleResolvedLegacy && nameOk)
+    (jobCodeOk && (vinLast4Ok || nameOk)) ||
+    (!jobCodeOk && vehicleResolvedLegacy && nameOk) ||
+    (phoneOk && (vinLast4Ok || vehicleResolvedLegacy))
 
   if (!authed) {
     // vinLast4Ok above is scoped to the assignments we resolved; this asks the
@@ -313,6 +347,7 @@ export async function verifyAndRelease(input: {
       jobCodeOk,
       vinLast4Ok,
       nameOk,
+      phoneOk,
       atVehicle,
     })
     await notifyDenied(ip, 'insufficient factors', { jobCodeOk, vinLast4Ok, nameOk })
@@ -348,7 +383,7 @@ export async function verifyAndRelease(input: {
     lockboxHint = 'AMBIGUOUS'
   }
 
-  const verifiedBy = [jobCodeOk && 'job code', vinLast4Ok && 'VIN last-4', nameOk && 'driver name']
+  const verifiedBy = [jobCodeOk && 'job code', vinLast4Ok && 'VIN last-4', nameOk && 'driver name', phoneOk && 'sender number on file']
     .filter(Boolean)
     .join(' + ')
 

@@ -18,6 +18,10 @@ import { requireAssistantAccess } from '@/lib/assistant/requireAssistantAccess'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
 import { resolveTwilioConfig } from '@/lib/sms/sendSms'
+import { listRecognizedNumbers } from '@/lib/assistant/recognizedNumbers'
+import { phoneTail } from '@/lib/assistant/phoneFactor'
+import { levelForRole } from '@/lib/assistant/access'
+import { firstNameOf } from '@/lib/assistant/greeting'
 
 export const dynamic = 'force-dynamic'
 const SINGLETON = 'singleton'
@@ -98,10 +102,14 @@ export async function GET() {
 
   const twilio = resolveTwilioConfig()
 
+  // The roster of numbers AHA recognises, read from the same facts the live
+  // checks read. Never fails the page: an empty list with a note beats a 500.
+  const recognized = await listRecognizedNumbers().catch((err) => { console.error('[admin/assistant] recognized roster failed:', err); return [] })
+
   const emergencyContacts = await prisma.user.findMany({
     where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
-    select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true },
+    select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true, phone: true },
   })
 
   return NextResponse.json({
@@ -121,6 +129,10 @@ export async function GET() {
     // different actions, and guessing between them costs an evening.
     smsConfigured: twilio.config !== null,
     smsProblem: twilio.config === null ? twilio.reason : null,
+    recognized,
+    // The signed-in user's own AHA level, for the "Ask AHA as yourself" panel
+    // and to gate the add/remove controls (admin only).
+    me: { level: levelForRole(String(gate.user.role)), firstName: firstNameOf(gate.user.name), isAdmin: gate.user.role === 'ADMIN' },
   })
 }
 
@@ -129,9 +141,65 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string }
+    | {
+        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string
+        name?: string; level?: string; note?: string; jobCode?: string; grantId?: string
+      }
     | null
   if (!body?.action) return NextResponse.json({ error: 'action required' }, { status: 400 })
+
+  // ── Add a person to (or take one off) the AHA list by hand ──
+  // Wes 2026-09-11. One active row per number: adding again replaces. Rows
+  // are never deleted — revoked, so the history says who granted what.
+  const GRANTS_MISSING = 'The AHA grants table is not in the database yet — run `npx prisma db push` (see docs), then try again.'
+  if (body.action === 'add-grant') {
+    if (gate.user.role !== 'ADMIN') return NextResponse.json({ error: 'only an admin can change the AHA list' }, { status: 403 })
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : ''
+    const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 30) : ''
+    const tail = phoneTail(phone)
+    const levelRaw = typeof body.level === 'string' ? body.level.trim().toUpperCase() : ''
+    const level = (['BLOCKED', 'CONTACT', 'STAFF', 'ADMIN'] as const).find((l) => l === levelRaw) ?? null
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) || null : null
+    if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 })
+    if (!tail) return NextResponse.json({ error: 'a full US mobile number is required' }, { status: 400 })
+    if (!level) return NextResponse.json({ error: 'level must be BLOCKED, CONTACT, STAFF or ADMIN' }, { status: 400 })
+    let jobId: string | null = null
+    if (level === 'CONTACT') {
+      const jobCode = typeof body.jobCode === 'string' ? body.jobCode.trim() : ''
+      if (!jobCode) return NextResponse.json({ error: 'a CONTACT grant needs the job code it is a contact on' }, { status: 400 })
+      const job = await prisma.job.findFirst({ where: { jobCode: { equals: jobCode, mode: 'insensitive' } }, select: { id: true } })
+      if (!job) return NextResponse.json({ error: `no job ${jobCode}` }, { status: 404 })
+      jobId = job.id
+    }
+    try {
+      const replaced = await prisma.ahaGrant.updateMany({ where: { phoneTail: tail, revokedAt: null }, data: { revokedAt: new Date(), revokedById: gate.user.id } })
+      const row = await prisma.ahaGrant.create({ data: { phone, phoneTail: tail, name, level, jobId, note, createdById: gate.user.id }, select: { id: true } })
+      await prisma.auditLog.create({
+        data: { userId: gate.user.id, action: 'admin.aha_grant_added', entityType: 'AhaGrant', entityId: row.id, oldValues: { replaced: replaced.count }, newValues: { name, level, phoneTail: tail.slice(-4), jobId, at: new Date().toISOString() } },
+      })
+      return NextResponse.json({ ok: true, id: row.id })
+    } catch (err) {
+      console.error('[admin/assistant] add-grant failed:', err)
+      return NextResponse.json({ error: GRANTS_MISSING }, { status: 500 })
+    }
+  }
+  if (body.action === 'revoke-grant') {
+    if (gate.user.role !== 'ADMIN') return NextResponse.json({ error: 'only an admin can change the AHA list' }, { status: 403 })
+    const grantId = typeof body.grantId === 'string' ? body.grantId : ''
+    if (!grantId) return NextResponse.json({ error: 'grantId required' }, { status: 400 })
+    try {
+      const g = await prisma.ahaGrant.findUnique({ where: { id: grantId }, select: { id: true, revokedAt: true, name: true, level: true } })
+      if (!g) return NextResponse.json({ error: 'not found' }, { status: 404 })
+      if (!g.revokedAt) await prisma.ahaGrant.update({ where: { id: grantId }, data: { revokedAt: new Date(), revokedById: gate.user.id } })
+      await prisma.auditLog.create({
+        data: { userId: gate.user.id, action: 'admin.aha_grant_revoked', entityType: 'AhaGrant', entityId: grantId, oldValues: { name: g.name, level: g.level }, newValues: { at: new Date().toISOString() } },
+      })
+      return NextResponse.json({ ok: true })
+    } catch (err) {
+      console.error('[admin/assistant] revoke-grant failed:', err)
+      return NextResponse.json({ error: GRANTS_MISSING }, { status: 500 })
+    }
+  }
 
   if (body.action === 'set-gate-code') {
     const gateCode = typeof body.gateCode === 'string' ? body.gateCode.trim().slice(0, 60) : ''
@@ -224,6 +292,18 @@ export async function POST(req: NextRequest) {
     if (typeof body.isEmergencyContact === 'boolean') data.isEmergencyContact = body.isEmergencyContact
     if (typeof body.emergencyPhone === 'string') data.emergencyPhone = body.emergencyPhone.trim().slice(0, 30) || null
     await prisma.user.update({ where: { id: userId }, data })
+    return NextResponse.json({ ok: true })
+  }
+
+  // The staff member's own mobile — the number AHA recognises as staff by
+  // text (src/lib/assistant/senderIdentity.ts). Wes 2026-09-10: Jose, Dani,
+  // Wes, Oliver, Hugo, Albert. Emergency phone counts too, so an on-call
+  // number does not need entering twice.
+  if (body.action === 'set-staff-phone') {
+    const userId = typeof body.userId === 'string' ? body.userId : ''
+    if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
+    if (typeof body.phone !== 'string') return NextResponse.json({ error: 'phone required' }, { status: 400 })
+    await prisma.user.update({ where: { id: userId }, data: { phone: body.phone.trim().slice(0, 30) || null } })
     return NextResponse.json({ ok: true })
   }
 

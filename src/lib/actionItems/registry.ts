@@ -86,8 +86,13 @@ import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHo
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
+import { emailChangeSignalProvider } from '@/lib/actionItems/providers/emailChangeSignal'
 
 const PROVIDERS: ActionItemProvider[] = [
+  // A client email reads like a cancellation / hold / date change on a
+  // live job. The system never applies it (Wes 2026-09-11) — this is the
+  // suggestion; the job page is where a person confirms or dismisses.
+  emailChangeSignalProvider,
   // A client set up their own job on the public agreement page and may
   // already have signed. Nothing else fires on these: the inquiry is
   // born CONVERTED (so every SLA surface skips it) and quote-aging

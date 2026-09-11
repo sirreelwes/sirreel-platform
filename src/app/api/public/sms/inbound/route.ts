@@ -25,12 +25,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { checkRateLimit } from '@/lib/portal/publicRateLimit'
 import { runAssistant } from '@/lib/assistant/runAssistant'
+import { greetingMoment } from '@/lib/assistant/greeting'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import {
   applyKeyword, classifyKeyword, getOrCreateThread, identifyNumber, KEYWORD_REPLIES,
   recordInbound, recordOutbound, turnsForModel,
 } from '@/lib/sms/threads'
 import { prisma } from '@/lib/prisma'
+import { identifySender } from '@/lib/assistant/senderIdentity'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,20 +104,35 @@ export async function POST(req: NextRequest) {
     return twiml(reply)
   }
 
-  const who = await identifyNumber(thread.phone)
+  const [who, sender] = await Promise.all([identifyNumber(thread.phone), identifySender(thread.phone).catch(() => null)])
   if (who.personId !== thread.personId || who.subRentalId !== thread.subRentalId) {
     await prisma.smsThread.update({ where: { id: thread.id }, data: { personId: who.personId, subRentalId: who.subRentalId } }).catch(() => {})
+  }
+
+  // Taken off the list by hand on /admin/assistant: keywords still work
+  // (handled above), everything else is a fixed line. Never reaches the model.
+  if (sender?.level === 'blocked') {
+    const reply = `SirReel Studio Services: This number isn't set up to use our text assistant. Please call ${PUBLIC_CONTACT.phone} and an agent will help. Reply STOP to opt out.`
+    await recordOutbound({ threadId: thread.id, body: reply, source: 'system', status: 'twiml' })
+    await prisma.auditLog.create({
+      data: { action: 'sms.blocked_number', entityType: 'SmsThread', entityId: thread.id, newValues: { phoneTail: thread.phone.slice(-4), grantId: sender.grant?.id ?? null } },
+    }).catch(() => {})
+    return twiml(reply)
   }
 
   const turns = await turnsForModel(thread.id)
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') turns.push({ role: 'user', content: body })
 
-  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context })
+  // `thread` was fetched before this inbound was recorded, so its timestamps
+  // are the PREVIOUS contact — which is what "an hour since" means.
+  const greeting = greetingMoment(thread)
+  const firstName = sender?.firstName ?? who.firstName
+  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone, sender: sender ?? undefined, firstName, greeting })
   const reply = replyRaw.length > 1500 ? `${replyRaw.slice(0, 1480)}…` : replyRaw
   await recordOutbound({ threadId: thread.id, body: reply, source: 'assistant', status: 'twiml', subRentalId: who.subRentalId })
   if (toolsUsed.length) {
     await prisma.auditLog.create({
-      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4) } },
+      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4), level: sender?.level ?? 'public', staff: sender?.staff?.name ?? null, contactJobs: sender?.contactJobs.map((j) => j.jobCode) ?? [] } },
     }).catch(() => {})
   }
   return twiml(reply)

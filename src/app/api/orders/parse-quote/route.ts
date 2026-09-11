@@ -20,7 +20,7 @@ interface AiContact {
   title: string | null
   phone: string | null
   company: string | null
-  suggested_role: 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER' | null
+  suggested_role: 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'ART_DEPT' | 'OTHER' | null
   source: 'header' | 'signature' | 'body_mention'
   confidence: 'high' | 'medium' | 'low'
 }

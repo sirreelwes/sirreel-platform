@@ -440,9 +440,17 @@ type StatusAction = {
 // equivalent. "Back to Draft" and "Close Order" use a restrained
 // muted tone since they aren't forward-progress on the engagement.
 const STATUS_ACTIONS: Record<string, StatusAction[]> = {
-  DRAFT: [{ label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" }],
+  // "Mark booked" (endpoint mark-booked) is the client-said-yes shortcut:
+  // APPROVED + Book it in one go, holds firmed. From DRAFT it books with no
+  // quote round and no booking-welcome email (Wes 2026-09-10 — a rep must
+  // be able to book and go straight to the pre-invoice).
+  DRAFT: [
+    { label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" },
+    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
+  ],
   QUOTE_SENT: [
     { label: "Mark Approved", next: "APPROVED", color: "bg-lt-fg hover:bg-black" },
+    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
     { label: "Back to Draft", next: "DRAFT", color: "bg-lt-fg2 hover:bg-lt-fg" },
   ],
   APPROVED: [
@@ -530,6 +538,10 @@ export default function OrderDetailPage() {
   const [liUnitMode, setLiUnitMode] = useState<'next' | 'named' | 'none'>('next');
   const [liUnitIds, setLiUnitIds] = useState<string[]>([]);
   const [liUnitOptions, setLiUnitOptions] = useState<{ assetId: string; unitName: string; tier: string; state: 'free' | 'buffer' | 'booked' }[] | null>(null);
+  // Whether the picked catalog row is something a unit can be bound to —
+  // false for a quantity-tracked row, so the Unit block hides. Null while
+  // unknown.
+  const [liHoldable, setLiHoldable] = useState<boolean | null>(null);
   // The hold a "Change unit…" click opens the picker on.
   const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
   const [unitNotice, setUnitNotice] = useState<string | null>(null);
@@ -997,7 +1009,7 @@ export default function OrderDetailPage() {
   const [addEmail, setAddEmail] = useState("");
   const [addFirst, setAddFirst] = useState("");
   const [addLast, setAddLast] = useState("");
-  const [addRole, setAddRole] = useState<"PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER">("PRODUCER");
+  const [addRole, setAddRole] = useState<"PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER">("PRODUCER");
   const [addGrantPortal, setAddGrantPortal] = useState(true);
 
   const resetAddForm = () => {
@@ -1548,6 +1560,39 @@ export default function OrderDetailPage() {
     }
   };
 
+  // "Mark booked" — DRAFT / QUOTE_SENT → BOOKED via the client-said-yes
+  // route (verbal-approval stamp + APPROVED + the real bookOrder + hold
+  // firming). Confirms first because the QUOTE_SENT path emails the client
+  // a booking confirmation; from DRAFT the server suppresses that email
+  // (no quote was sent) and the confirm says so.
+  const markBooked = async () => {
+    if (booking) return;
+    const fromDraft = order?.status === "DRAFT";
+    const ok = confirm(
+      fromDraft
+        ? `Book ${order?.orderNumber} without a quote round?\n\nThe order goes to Booked at its current total and the held units firm up. No booking-confirmation email goes to the client — the pre-invoice is the first thing they see. Partners on the order are told it's a go.`
+        : `Book ${order?.orderNumber} on the client's word?\n\nThe order goes to Booked at its current total, the held units firm up, and the client gets the booking confirmation.`,
+    );
+    if (!ok) return;
+    setBooking(true);
+    setBookErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/mark-booked`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: fromDraft ? "booked from draft on the order page" : null }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setBookErr(`Mark booked failed: ${data.reason || data.error || `HTTP ${r.status}`}`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setBooking(false);
+    }
+  };
+
   // Phase 3 — fleet-side lifecycle trigger. Stamp (or undo) fleet-ready.
   // Either call may auto-advance the order to LOADED_READY via the
   // server-side rollup. After a successful response we re-fetch to
@@ -1801,7 +1846,7 @@ export default function OrderDetailPage() {
 
   const resetForm = () => {
     setLiType("EQUIPMENT"); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setLiSubVehicle(null);
-    setLiUnitMode('next'); setLiUnitIds([]); setLiUnitOptions(null);
+    setLiUnitMode('next'); setLiUnitIds([]); setLiUnitOptions(null); setLiHoldable(null);
     // Custom dates default OFF — the API inherits from the parent
     // Order. Per-line override is opt-in via the toggle on the form.
     setLiStartDate("");
@@ -1856,16 +1901,22 @@ export default function OrderDetailPage() {
   // modal uses; buffer-state units are listed but marked, booked ones are
   // disabled.
   useEffect(() => {
-    if (liType !== 'VEHICLE' || !liAssetCatId || liSubVehicle) { setLiUnitOptions(null); return; }
+    // A catalog pick is an INVENTORY row (the common case — "Cargo Van
+    // w/ Liftgate" off the box), a category pick is the legacy path;
+    // the availability route resolves either to the class it holds on.
+    const key = liAssetCatId ? `categoryId=${encodeURIComponent(liAssetCatId)}` : liInvItemId ? `inventoryItemId=${encodeURIComponent(liInvItemId)}` : '';
+    if (liType !== 'VEHICLE' || !key || liSubVehicle) { setLiUnitOptions(null); setLiHoldable(null); return; }
     const start = (liCustomDates && liStartDate) ? liStartDate : (order?.startDate ?? '').slice(0, 10);
     const end = (liCustomDates && liEndDate) ? liEndDate : (order?.endDate ?? '').slice(0, 10);
     if (!start || !end) { setLiUnitOptions([]); return; }
     let cancelled = false;
     setLiUnitOptions(null);
-    fetch(`/api/scheduling/availability?categoryId=${encodeURIComponent(liAssetCatId)}&start=${start}&end=${end}`)
+    fetch(`/api/scheduling/availability?${key}&start=${start}&end=${end}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
+        if (d?.holdable === false) { setLiHoldable(false); setLiUnitOptions([]); return; }
+        setLiHoldable(true);
         const units = Array.isArray(d?.units) ? d.units : [];
         const tier: Record<string, number> = { PREMIUM: 0, STANDARD: 1, ECONOMY: 2 };
         units.sort((a: { tier: string; unitName: string }, b: { tier: string; unitName: string }) =>
@@ -1874,7 +1925,7 @@ export default function OrderDetailPage() {
       })
       .catch(() => { if (!cancelled) setLiUnitOptions([]); });
     return () => { cancelled = true; };
-  }, [liType, liAssetCatId, liSubVehicle, liCustomDates, liStartDate, liEndDate, order?.startDate, order?.endDate]);
+  }, [liType, liAssetCatId, liInvItemId, liSubVehicle, liCustomDates, liStartDate, liEndDate, order?.startDate, order?.endDate]);
 
   /** The hold a VEHICLE line raised, if any — matched the way the hold was
    *  created: the line's category, directly or through its catalog row. */
@@ -2857,9 +2908,10 @@ export default function OrderDetailPage() {
               {actions.map((action) => {
                 const isSendQuote = action.next === "QUOTE_SENT";
                 const isBook = action.endpoint === "book";
+                const isMarkBooked = action.endpoint === "mark-booked";
                 const disabled =
                   (isSendQuote && (noRecipient || !order.quotePdfUrl)) ||
-                  (isBook && booking);
+                  ((isBook || isMarkBooked) && booking);
                 const title = isSendQuote
                   ? noRecipient
                     ? "Add a contact to the job before sending the quote."
@@ -2871,7 +2923,9 @@ export default function OrderDetailPage() {
                   ? openSendQuoteReview
                   : isBook
                     ? bookIt
-                    : () => updateStatus(action.next);
+                    : isMarkBooked
+                      ? markBooked
+                      : () => updateStatus(action.next);
                 return (
                   <button
                     key={action.next}
@@ -2880,7 +2934,7 @@ export default function OrderDetailPage() {
                     title={title}
                     className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    {isBook && booking ? "Booking…" : action.label}
+                    {(isBook || isMarkBooked) && booking ? "Booking…" : action.label}
                   </button>
                 );
               })}
@@ -3656,7 +3710,7 @@ export default function OrderDetailPage() {
                 class and binds the next free unit; the rep can name one
                 here instead. The unit number stays off the quote — it is
                 a reservation fact, not a line-item fact. */}
-            {liType === 'VEHICLE' && liAssetCatId && !liSubVehicle && (
+            {liType === 'VEHICLE' && (liAssetCatId || liInvItemId) && !liSubVehicle && liHoldable !== false && (
               <div className="mb-3 rounded-lg border border-lt-hairline bg-lt-inner/60 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   <span className="font-semibold text-lt-fg">Unit</span>
@@ -3673,6 +3727,12 @@ export default function OrderDetailPage() {
                     Hold the class only
                   </label>
                   <span className="text-lt-fg3">Internal — never on the quote.</span>
+                  {liUnitOptions && liUnitOptions.length > 0 && (() => {
+                    const free = liUnitOptions.filter((u) => u.state === 'free').length;
+                    return free === 0
+                      ? <span className="rounded bg-chip-bad-bg px-1.5 py-0.5 font-semibold text-chip-bad-fg">No unit free for these dates — the class is held, nothing gets assigned</span>
+                      : <span className="rounded bg-chip-good-bg px-1.5 py-0.5 font-semibold text-chip-good-fg">{free} of {liUnitOptions.length} free</span>;
+                  })()}
                 </div>
                 {liUnitMode === 'named' && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -3939,14 +3999,7 @@ export default function OrderDetailPage() {
                 <button type="button" onClick={() => setUnitNotice(null)} className="text-lt-fg3 hover:text-lt-fg">Dismiss</button>
               </div>
             )}
-            {assignHoldId && (
-              <AssignUnitsModal
-                bookingItemId={assignHoldId}
-                bufferDays={1}
-                onClose={() => setAssignHoldId(null)}
-                onChanged={fetchOrder}
-              />
-            )}
+
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
@@ -5314,6 +5367,17 @@ export default function OrderDetailPage() {
 
       <LineItemUndoToast toast={lineItemUndoToast} />
 
+      {/* Unit picker for a vehicle line's hold. Rendered at the page
+          root, outside every money/section gate, so "Change unit…"
+          opens for anyone who can see the link. */}
+      {assignHoldId && (
+        <AssignUnitsModal
+          bookingItemId={assignHoldId}
+          bufferDays={1}
+          onClose={() => setAssignHoldId(null)}
+          onChanged={fetchOrder}
+        />
+      )}
       {subRentalLine && (
         <SubRentalModal
           line={subRentalLine}
@@ -5654,7 +5718,7 @@ function AddContactForm({
   email: string;
   first: string;
   last: string;
-  role: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER";
+  role: "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER";
   grantPortal: boolean;
   busy: boolean;
   err: string;
@@ -5663,7 +5727,7 @@ function AddContactForm({
     email: (v: string) => void;
     first: (v: string) => void;
     last: (v: string) => void;
-    role: (v: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER") => void;
+    role: (v: "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "ART_DEPT" | "OTHER") => void;
     grantPortal: (v: boolean) => void;
   };
   onSubmit: (andSendQuote: boolean) => void;
@@ -5705,7 +5769,9 @@ function AddContactForm({
             <option value="PRODUCER">Producer</option>
             <option value="PM">PM</option>
             <option value="PC">PC</option>
+            <option value="TRANSPO">Transpo</option>
             <option value="ACCOUNTING">Accounting</option>
+            <option value="ART_DEPT">Art Dept</option>
             <option value="OTHER">Other</option>
           </select>
         </label>

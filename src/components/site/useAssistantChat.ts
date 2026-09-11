@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { ASSISTANT_GREETING_TEXT } from '@/lib/assistant/identity'
 
 /**
  * Shared client-side transcript + send logic for the public after-hours
@@ -20,12 +21,17 @@ export interface AssistantMsg {
 
 export const ASSISTANT_GREETING: AssistantMsg = {
   role: 'assistant',
-  content:
-    "Hi — I'm SirReel's assistant. I can help after hours with things like a lost vehicle access code, directions, or getting a message to your agent. What do you need?",
+  content: ASSISTANT_GREETING_TEXT,
 }
 
-export function useAssistantChat() {
-  const [messages, setMessages] = useState<AssistantMsg[]>([ASSISTANT_GREETING])
+/**
+ * `endpoint` defaults to the public route; the signed-in HQ chat on
+ * /admin/assistant points it at /api/admin/assistant/ask, which runs the
+ * same assistant with the user's own access level.
+ */
+export function useAssistantChat(opts: { endpoint?: string; greeting?: string } = {}) {
+  const endpoint = opts.endpoint ?? '/api/public/assistant'
+  const [messages, setMessages] = useState<AssistantMsg[]>([opts.greeting ? { role: 'assistant', content: opts.greeting } : ASSISTANT_GREETING])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -42,7 +48,7 @@ export function useAssistantChat() {
     setDraft('')
     setBusy(true)
     try {
-      const res = await fetch('/api/public/assistant', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next.slice(1) }),

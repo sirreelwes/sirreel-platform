@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           orderNumber: true,
-          company: { select: { name: true } },
+          company: { select: { id: true, name: true } },
           job: { select: { id: true, name: true, jobCode: true } },
         },
       },
@@ -182,6 +182,9 @@ export async function GET(req: NextRequest) {
       orderId: i.order.id,
       orderNumber: i.order.orderNumber,
       companyName: i.order.company?.name ?? null,
+      // The charge panel's wrong-client guard keys on this — a row that
+      // can be charged from must say whose it is.
+      companyId: i.order.company?.id ?? null,
       jobId: i.order.job?.id ?? null,
       jobName: i.order.job?.name ?? null,
       jobCode: i.order.job?.jobCode ?? null,

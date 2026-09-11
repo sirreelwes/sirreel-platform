@@ -101,6 +101,12 @@ const nextConfig = {
         'node_modules/@napi-rs/canvas/**',
         'node_modules/@napi-rs/canvas-linux-x64-gnu/**',
       ],
+      // AHA's platform memory (src/lib/assistant/memory.ts) reads the
+      // written record at request time. Markdown is not imported anywhere,
+      // so nft would never trace it into the lambda; these two routes are
+      // the ones that can call the admin-only memory tools.
+      '/api/public/sms/inbound': ['CLAUDE.md', 'SHIPLOG.md', 'docs/**/*.md'],
+      '/api/admin/assistant/ask': ['CLAUDE.md', 'SHIPLOG.md', 'docs/**/*.md'],
     },
   },
 };

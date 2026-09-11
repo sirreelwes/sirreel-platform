@@ -48,6 +48,11 @@ export const PDF_BRAND = {
 
   /** Discounts / warnings. Unchanged — it must NOT read as the accent. */
   amber: '#b45309',
+
+  /** The PAID stamp on a settled invoice. A status green, not the accent:
+   *  a stamp in brand turquoise would read as chrome, and the one thing a
+   *  stamp must do is read as a verdict. */
+  paid: '#1E7A46',
 } as const
 
 export type PdfBrand = typeof PDF_BRAND

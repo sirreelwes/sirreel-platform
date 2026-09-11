@@ -27,9 +27,15 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     where: { email: session.user.email },
     select: { role: true, salesOnly: true },
   })
-  if (!actor || !can(actor.role, 'billing')) {
+  // Billing, plus the sales agents. Wes 2026-09-10: the rep who booked
+  // the job should be able to put the pre-invoice in front of the client
+  // themselves rather than wait on billing — the pre-invoice is a review
+  // copy, not the issued invoice (issuing stays a billing action; see
+  // /api/invoices/[id]/send).
+  const allowed = !!actor && (can(actor.role, 'billing') || actor.role === 'AGENT')
+  if (!allowed) {
     return NextResponse.json(
-      { error: 'forbidden', reason: 'Sending a pre-invoice is a billing action.' },
+      { error: 'forbidden', reason: 'Sending a pre-invoice is a billing or sales action.' },
       { status: 403 },
     )
   }

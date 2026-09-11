@@ -287,7 +287,23 @@ export async function POST(req: NextRequest, { params }: Params) {
     let holdsAvailability: Awaited<ReturnType<typeof checkHoldFeasibility>>['availability'] | null = null;
     let holdsOverrideNote: string | null = null;
     const isHoldDept = resolvedDepartment === 'VEHICLES' || resolvedDepartment === 'STAGES';
-    const wantsHoldSync = isHoldDept && assetCategoryId;
+    // The category this line HOLDS against. A catalog pick is an INVENTORY
+    // row — "Cargo Van w/ Liftgate" off the order form's catalog box has
+    // no assetCategoryId — so until 2026-09-10 a vehicle added that way
+    // held nothing and bound no unit until the quote was SENT (Wes: "no
+    // prompt to put a van on reservation once I added it"). Resolved the
+    // way holdOnQuoteSend resolves it: unit-tracked + legacyAssetCategoryId.
+    let holdCategoryId: string | null = assetCategoryId || null;
+    if (!holdCategoryId && isHoldDept && inventoryItemId) {
+      const invHold = await prisma.inventoryItem.findUnique({
+        where: { id: inventoryItemId },
+        select: { trackingMode: true, legacyAssetCategoryId: true },
+      });
+      if (invHold?.trackingMode === 'UNIT_TRACKED' && invHold.legacyAssetCategoryId) {
+        holdCategoryId = invHold.legacyAssetCategoryId;
+      }
+    }
+    const wantsHoldSync = isHoldDept && !!holdCategoryId;
     let parentBookingId: string | null = null;
     if (wantsHoldSync) {
       const parentOrderForBooking = await prisma.order.findUnique({
@@ -297,7 +313,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (parentBookingId) {
         const feas = await checkHoldFeasibility({
           tx: prisma,
-          categoryId: assetCategoryId,
+          categoryId: holdCategoryId!,
           startDate: pickupResolved,
           endDate: returnResolved,
           deltaQty: Number(quantity),
@@ -314,7 +330,7 @@ export async function POST(req: NextRequest, { params }: Params) {
               error: 'over-capacity',
               requiresConfirmation: true,
               reason: `Adding ${quantity} unit(s) would exceed the category's available capacity for ${pickupResolved.toISOString().slice(0,10)}–${returnResolved.toISOString().slice(0,10)}. ${feas.conflicts.length} other booking(s) hold this category in the window.`,
-              category: { id: assetCategoryId },
+              category: { id: holdCategoryId },
               deltaQty: Number(quantity),
               availability: feas.availability,
               conflicts: feas.conflicts.map((c) => ({
@@ -590,10 +606,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         await reconcileHoldFirmness(orderId);
       }
     }
-    if (wantsHoldSync && parentBookingId && assetCategoryId) {
+    if (wantsHoldSync && parentBookingId && holdCategoryId) {
       holdsResult = await syncHoldOnLineAdd(prisma, {
         bookingId: parentBookingId,
-        categoryId: assetCategoryId,
+        categoryId: holdCategoryId,
         addedQty: Number(quantity),
         conflictOverrideNote: holdsOverrideNote,
       });
@@ -638,10 +654,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     // exists. Vehicles only — a stage hold's rooms are picked on the
     // stage side. Non-fatal: the line and the hold stand either way.
     let unitOutcome: UnitAssignmentOutcome | null = null;
-    if (wantsHoldSync && assetCategoryId && resolvedDepartment === 'VEHICLES') {
+    if (wantsHoldSync && holdCategoryId && resolvedDepartment === 'VEHICLES') {
       unitOutcome = await assignUnitsForLine({
         orderId,
-        categoryId: assetCategoryId,
+        categoryId: holdCategoryId,
         quantity: Number(quantity),
         request: parseUnitAssignment(unitAssignment),
         categoryLabel: effectiveDescription,

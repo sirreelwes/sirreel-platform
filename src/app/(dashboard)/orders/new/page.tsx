@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { quoteLcdw, LCDW_FEE_CODE } from '@/lib/pricing/lcdwEligibility';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
@@ -135,8 +136,8 @@ interface ClientCandidate {
 type ContactSource = 'header' | 'signature' | 'body_mention';
 type ContactConfidence = 'high' | 'medium' | 'low';
 type ContactMatchStatus = 'existing' | 'new' | 'possible_match';
-type SuggestedJobRole = 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER';
-const JOB_ROLES: SuggestedJobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING', 'OTHER'];
+type SuggestedJobRole = 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'ART_DEPT' | 'OTHER';
+const JOB_ROLES: SuggestedJobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING', 'ART_DEPT', 'OTHER'];
 
 interface ResolvedContact {
   name: string;
@@ -1292,6 +1293,13 @@ function NewQuotePageInner() {
   const [feeSelections, setFeeSelections] = useState<
     Record<string, { on: boolean; rate: number; quantity: number }>
   >({});
+  // Damage waiver (LCDW) — ON by default (Wes 2026-09-10: "better if they
+  // have to remove it"). The rep can untick it here; the client can decline
+  // it in the portal, and a signed refusal takes the line off. Priced by
+  // the server (applyLcdwToOrder, the one pricer) after the order exists;
+  // this only carries the decision and shows an estimate.
+  const [lcdwOn, setLcdwOn] = useState(true);
+  const [lcdwFee, setLcdwFee] = useState<{ id: string; amount: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1307,6 +1315,8 @@ function NewQuotePageInner() {
             : null;
         }).filter(Boolean) as BuilderFee[];
         setFeeCatalog(picked);
+        const lf = all.find((x) => x.code === LCDW_FEE_CODE);
+        setLcdwFee(lf ? { id: lf.id, amount: Number(lf.amount) } : null);
         setFeeSelections((prev) => {
           const next = { ...prev };
           for (const f of picked) {
@@ -1339,6 +1349,23 @@ function NewQuotePageInner() {
     () => activeFees.reduce((sum, f) => sum + f.quantity * f.rate, 0),
     [activeFees],
   );
+  // Client-side ESTIMATE of the waiver — the builder's lines carry no
+  // catalog code, so a specialty vehicle is caught by name here and by
+  // the catalog row on the server. The server's answer is the one that
+  // prices; this is what the checkbox reads.
+  const lcdwEstimate = useMemo(() => {
+    const q = quoteLcdw(
+      items.map((it, i) => ({
+        id: String(i),
+        description: it.description,
+        code: null,
+        department: String(it.department),
+        quantity: it.quantity,
+        billableDays: it.billableDays ?? null,
+      })),
+    );
+    return { vehicleDays: q.vehicleDays, eligible: q.eligible.length, excluded: q.excluded.length, allExcluded: q.allExcluded };
+  }, [items]);
 
   /** Section-level week cap (Wes 2026-08-31: "selectable by section and
    *  applied to whole section"): reprice EVERY dated line in the
@@ -1590,12 +1617,74 @@ function NewQuotePageInner() {
     return { lineSum, rows: withOrder, total };
   }, [discounts, departmentSubtotals]);
 
+  // Is a unit actually FREE for each vehicle line? (Wes 2026-09-10: the
+  // parser missed a cargo van, he added it by hand, "there was no prompt
+  // to put a van on reservation … this could cause issues if the quote
+  // goes out and there isn't an available unit"). Saving holds the class
+  // and binds next-available on its own; this is the readout BEFORE the
+  // quote goes out, per line, for its own dates. Cached per
+  // product+window so typing elsewhere does not refetch.
+  type VehicleAvail = { status: 'loading' } | { status: 'na' } | { status: 'ok'; free: number; total: number; category: string | null };
+  const [vehicleAvail, setVehicleAvail] = useState<Record<string, VehicleAvail>>({});
+  const availKey = (it: ResolvedItem) =>
+    it.department === 'VEHICLES' && it.catalogProductId && (it.catalogType === 'INVENTORY' || it.catalogType === 'ASSET_CATEGORY') && it.pickupDate && it.returnDate
+      ? `${it.catalogType}:${it.catalogProductId}|${it.pickupDate}|${it.returnDate}`
+      : null;
+  useEffect(() => {
+    const wanted = new Map<string, ResolvedItem>();
+    for (const it of items) { const k = availKey(it); if (k && !vehicleAvail[k]) wanted.set(k, it); }
+    if (wanted.size === 0) return;
+    setVehicleAvail((prev) => { const next = { ...prev }; for (const k of wanted.keys()) next[k] = { status: 'loading' }; return next; });
+    let cancelled = false;
+    for (const [k, it] of wanted) {
+      const param = it.catalogType === 'ASSET_CATEGORY' ? `categoryId=${encodeURIComponent(it.catalogProductId!)}` : `inventoryItemId=${encodeURIComponent(it.catalogProductId!)}`;
+      fetch(`/api/scheduling/availability?${param}&start=${it.pickupDate}&end=${it.returnDate}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled) return;
+          const v: VehicleAvail = d?.ok && d.holdable !== false
+            ? { status: 'ok', free: Number(d.freeCount ?? 0), total: Number(d.serviceableCount ?? 0), category: d.category?.name ?? null }
+            : { status: 'na' };
+          setVehicleAvail((prev) => ({ ...prev, [k]: v }));
+        })
+        .catch(() => { if (!cancelled) setVehicleAvail((prev) => ({ ...prev, [k]: { status: 'na' } })); });
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+  /** One note per vehicle line, for the VEHICLES group strip. */
+  const vehicleAvailNotes = useMemo(() => {
+    const out: { localId: string; tone: 'good' | 'bad' | 'muted'; text: string }[] = [];
+    for (const it of items) {
+      if (it.department !== 'VEHICLES') continue;
+      const k = availKey(it);
+      const need = Math.max(1, it.quantity || 1);
+      if (!k) {
+        if (!it.catalogProductId) out.push({ localId: it.localId, tone: 'bad', text: `${it.description || 'Vehicle'}: not matched to the catalog — nothing will be reserved for it. Pick it from the list.` });
+        else if (!it.pickupDate || !it.returnDate) out.push({ localId: it.localId, tone: 'muted', text: `${it.description}: dates TBD — availability unknown.` });
+        continue;
+      }
+      const a = vehicleAvail[k];
+      if (!a || a.status === 'loading') out.push({ localId: it.localId, tone: 'muted', text: `${it.description}: checking the board…` });
+      else if (a.status === 'na') out.push({ localId: it.localId, tone: 'muted', text: `${it.description}: not a unit-tracked vehicle — no reservation.` });
+      else if (a.free >= need) out.push({ localId: it.localId, tone: 'good', text: `${it.description}: ${a.free} of ${a.total} free ${it.pickupDate} – ${it.returnDate} — ${need === 1 ? 'one' : need} will be reserved on save.` });
+      else out.push({ localId: it.localId, tone: 'bad', text: `${it.description}: only ${a.free} of ${a.total} free ${it.pickupDate} – ${it.returnDate}, ${need} asked — the quote would go out ${a.free === 0 ? 'with no unit' : 'short'}. Move the dates, or check the board.` });
+    }
+    return out;
+  }, [items, vehicleAvail]);
+
+  /** The waiver as money, for the vehicles section and the total. A fee,
+   *  so it lands after discounts like every other fee. */
+  const lcdwAmount = useMemo(
+    () => (lcdwOn && lcdwFee ? lcdwFee.amount * lcdwEstimate.vehicleDays : 0),
+    [lcdwOn, lcdwFee, lcdwEstimate.vehicleDays],
+  );
   const orderTotal = useMemo(
     // Fees are added AFTER discounts on purpose: a gear discount
     // discounts gear, not a delivery run. Same order the order page
     // and the quote PDF use.
-    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total) + feeTotal,
-    [discountBreakdown, feeTotal],
+    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total) + feeTotal + lcdwAmount,
+    [discountBreakdown, feeTotal, lcdwAmount],
   );
 
   // Save is allowed when there's at least one line item AND the user
@@ -1985,8 +2074,22 @@ function NewQuotePageInner() {
         setCreating(false);
         return;
       }
-      const { orderId } = (await fromParseRes.json()) as { orderId: string };
+      const created = (await fromParseRes.json()) as {
+        orderId: string;
+        unitAssignments?: { assigned: { unitName: string }[]; note: string | null }[];
+      };
+      const orderId = created.orderId;
       const order = { id: orderId };
+      // Which trucks the save reserved, and which lines got none. The
+      // order page shows it per line too, but a van with no unit is the
+      // thing to know BEFORE the quote goes out, so it is said here.
+      {
+        const bound = (created.unitAssignments ?? []).flatMap((u) => u.assigned.map((a) => a.unitName));
+        const gaps = (created.unitAssignments ?? []).map((u) => u.note).filter((n): n is string => !!n);
+        if (gaps.length > 0) {
+          alert(`Reserved: ${bound.length ? bound.join(', ') : 'nothing'}\n\n${gaps.join('\n')}`);
+        }
+      }
       // jobId for downstream inquiry-PATCH — always the resolved Job.
       const jobId: string = existingJobId;
 
@@ -2006,6 +2109,22 @@ function NewQuotePageInner() {
           }
         } catch (err) {
           console.warn('[orders/new] attach-to-unit failed (non-fatal):', err);
+        }
+      }
+
+      // Damage waiver — applied by the server's one pricer, which judges
+      // eligibility off the saved lines and recalcs totals, so the quote
+      // PDF generated below already carries it. Non-fatal: the order
+      // exists, and the order page's LCDW prompt can add it by hand.
+      if (lcdwOn && lcdwFee) {
+        try {
+          const r = await fetch(`/api/orders/${orderId}/lcdw`, { method: 'POST' });
+          if (!r.ok) {
+            const e = await r.json().catch(() => ({}));
+            console.warn('[orders/new] LCDW not applied:', e?.error || r.status);
+          }
+        } catch (err) {
+          console.warn('[orders/new] LCDW apply failed (non-fatal):', err);
         }
       }
 
@@ -2780,6 +2899,21 @@ function NewQuotePageInner() {
                 key={dept}
                 department={dept}
                 rows={group}
+                notes={dept === 'VEHICLES' ? vehicleAvailNotes : undefined}
+                // The waiver shows as a line under the vehicles it covers
+                // (Wes 2026-09-10: "I don't see the fees adding to the
+                // line above") — derived, not a row the rep edits; the
+                // card below is where it is switched on or off.
+                derivedLine={
+                  dept === 'VEHICLES' && lcdwOn && lcdwFee && lcdwEstimate.vehicleDays > 0
+                    ? {
+                        label: 'Damage waiver (LCDW)',
+                        note: `${fmtMoney(lcdwFee.amount)}/day × ${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'} · ${lcdwEstimate.eligible} eligible line${lcdwEstimate.eligible === 1 ? '' : 's'}`,
+                        rate: lcdwFee.amount,
+                        amount: lcdwAmount,
+                      }
+                    : null
+                }
                 onChange={updateItem}
                 onDelete={removeItem}
                 onAdd={() => addRowToDept(dept)}
@@ -2799,6 +2933,38 @@ function NewQuotePageInner() {
           (Wes 2026-08-31). Catalog-driven: the amount comes from
           /admin/fees and is editable here as an override the server
           re-resolves and audits. */}
+      {/* Damage waiver — on the quote unless the rep takes it off (Wes
+          2026-09-10). Shown whenever the fee exists in the catalog and the
+          quote has a vehicle line; the server decides eligibility per
+          vehicle when the order is saved. */}
+      {lcdwFee && lcdwEstimate.vehicleDays + lcdwEstimate.excluded > 0 && (
+        <div className={`border rounded-xl p-4 ${lcdwOn ? 'bg-chip-good-bg border-chip-good-fg/30' : 'bg-lt-card border-lt-hairline'}`}>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={lcdwOn}
+              onChange={(e) => setLcdwOn(e.target.checked)}
+              className="accent-amber-600 mt-1"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-lt-fg">
+                Damage waiver (LCDW) · {fmtMoney(lcdwFee.amount)}/day per vehicle
+                {lcdwOn && lcdwEstimate.vehicleDays > 0 && (
+                  <span className="ml-2 font-mono text-xs text-lt-fg2">est. +{fmtMoney(lcdwFee.amount * lcdwEstimate.vehicleDays)}</span>
+                )}
+              </span>
+              <span className="block text-[12px] text-lt-fg2 mt-0.5">
+                {lcdwEstimate.allExcluded
+                  ? 'None of the vehicles on this quote are eligible — nothing will be added.'
+                  : lcdwOn
+                    ? `Goes on the quote for ${lcdwEstimate.eligible} eligible vehicle line${lcdwEstimate.eligible === 1 ? '' : 's'} (${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'}). The client can decline it in the portal; untick to leave it off.`
+                    : 'Left off the quote. The order page can add it later.'}
+                {lcdwEstimate.excluded > 0 && !lcdwEstimate.allExcluded && ` ${lcdwEstimate.excluded} vehicle line${lcdwEstimate.excluded === 1 ? ' is' : 's are'} not eligible and won\u2019t be charged.`}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
       {feeCatalog && feeCatalog.length > 0 && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -3064,10 +3230,16 @@ const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
-  companyId,
+  companyId, derivedLine, notes,
 }: {
   department: LineItemDepartment;
   rows: ResolvedItem[];
+  /** Per-line availability readout (VEHICLES only) — rendered as a strip
+   *  under the rows so the rep sees "none free" before the quote goes out. */
+  notes?: { localId: string; tone: 'good' | 'bad' | 'muted'; text: string }[];
+  /** A line the section carries but the rep does not edit here — the
+   *  damage waiver under the vehicles. Counted in the section subtotal. */
+  derivedLine?: { label: string; note: string; rate: number; amount: number } | null;
   /** The client this quote is for — prices the catalog picker off their
    *  negotiated rate card. Null for a brand-new company (no deals yet). */
   companyId: string | null;
@@ -3229,6 +3401,37 @@ function DepartmentGroup({
             descriptionRef={registerDescriptionRef?.(it.localId)}
           />
         ))}
+        {notes && notes.length > 0 && (
+          <div className="px-3 py-2 border-t border-lt-hairline bg-lt-card/30 space-y-1">
+            {notes.map((n) => (
+              <div
+                key={n.localId}
+                className={`text-[12px] rounded px-2 py-1 ${
+                  n.tone === 'bad'
+                    ? 'bg-chip-bad-bg text-chip-bad-fg font-semibold'
+                    : n.tone === 'good'
+                      ? 'bg-chip-good-bg text-chip-good-fg'
+                      : 'text-lt-fg3'
+                }`}
+              >
+                {n.text}
+              </div>
+            ))}
+          </div>
+        )}
+        {derivedLine && (
+          <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 items-center border-t border-dashed border-lt-hairline bg-chip-good-bg/40`}>
+            <div className="text-sm tabular-nums text-lt-fg2 text-center">1</div>
+            <div className="min-w-0">
+              <div className="text-sm text-lt-fg font-medium">{derivedLine.label}</div>
+              <div className="text-[11px] text-lt-fg3">{derivedLine.note}</div>
+            </div>
+            <div className="text-sm tabular-nums text-lt-fg2 text-right">{fmtMoney(derivedLine.rate)}</div>
+            <div className="col-span-3 text-[11px] text-lt-fg3">Follows the vehicle lines above</div>
+            <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(derivedLine.amount)}</div>
+            <div></div>
+          </div>
+        )}
       </div>
 
       {/* Per-category add — drops a blank row defaulted to this
@@ -3249,7 +3452,7 @@ function DepartmentGroup({
       {/* Subtotal row */}
       <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-lt-fg2 items-center`}>
         <div className="col-span-6 font-bold uppercase tracking-wider text-[11px]">Subtotal</div>
-        <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal)}</div>
+        <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal + (derivedLine?.amount ?? 0))}</div>
         <div></div>
       </div>
     </section>

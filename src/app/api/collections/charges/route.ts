@@ -21,6 +21,7 @@ export async function GET() {
     take: 25,
     select: {
       id: true,
+      rwInvoiceId: true,
       invoiceNumber: true,
       customerName: true,
       amount: true,
@@ -45,8 +46,13 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    charges: rows.map((r) => ({
+    charges: rows.map(({ rwInvoiceId, ...r }) => ({
       ...r,
+      // An HQ-native invoice, when the charge settled one — the `hq:` anchor
+      // written by the charge route. Lets the row link to the stamped PDF and
+      // say which system the money landed in. Never the raw anchor: an RW id
+      // is meaningless to the operator and a `final:` id is not a link.
+      hqInvoiceId: rwInvoiceId.startsWith('hq:') ? rwInvoiceId.slice(3) : null,
       amount: Number(r.amount),
       surchargeAmount: r.surchargeAmount == null ? 0 : Number(r.surchargeAmount),
       // What the card was actually debited — reversing returns this, not the

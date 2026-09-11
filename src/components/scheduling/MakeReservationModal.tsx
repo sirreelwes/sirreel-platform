@@ -270,7 +270,7 @@ export interface ReservationPrefill {
   company: { id: string; name: string } | null
   companyName: string | null
   jobName: string | null
-  contact: { firstName: string; lastName: string; email: string } | null
+  contact: { firstName: string; lastName: string; email: string; phone?: string | null } | null
   notes: string | null
 }
 
@@ -333,7 +333,7 @@ export function MakeReservationModal({
   const [contactFirst, setContactFirst] = useState(prefill?.contact?.firstName ?? '')
   const [contactLast, setContactLast] = useState(prefill?.contact?.lastName ?? '')
   const [contactEmail, setContactEmail] = useState(prefill?.contact?.email ?? '')
-  const [jobContacts, setJobContacts] = useState<{ name: string; email: string; role: string }[] | null>(null)
+  const [jobContacts, setJobContacts] = useState<{ id: string; name: string; email: string; role: string }[] | null>(null)
   const [contactsLoading, setContactsLoading] = useState(false)
 
   // Inline "+ New company" — same 409 near-match discipline the hold
@@ -356,6 +356,19 @@ export function MakeReservationModal({
   const [pre, setPre] = useState<Record<string, Preflight>>({})
 
   const [submitting, setSubmitting] = useState(false)
+
+  // Esc closes the modal — but only when it's the top layer. The source
+  // drawer handles its own Escape without stopping propagation (one keypress
+  // would close both), and the job resolver must not lose its parent from
+  // under it.
+  useEffect(() => {
+    if (sourceOpen || resolverOpen || submitting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sourceOpen, resolverOpen, submitting, onClose])
   const [error, setError] = useState<string | null>(null)
   /** The line that tripped a capacity conflict, and who it steps on. */
   const [conflict, setConflict] = useState<{ rowKey: string; conflicts: Conflict[] } | null>(null)
@@ -529,6 +542,12 @@ export function MakeReservationModal({
     !!contactFirst.trim() && !!contactLast.trim() && /\S+@\S+\.\S+/.test(contactEmail.trim())
   /** The job already satisfies the Booking's person requirement. */
   const jobHasContact = (jobContacts?.length ?? 0) > 0
+  /** The typed person is ALREADY on the job — typically because the
+   *  resolver just created the job with them as its lead contact. Adding
+   *  them again under a second role is how SR-JOB-0355 got two Dominic
+   *  Colangelo rows (Wes 2026-09-10). */
+  const contactOnJob =
+    jobContacts?.find((c) => c.email.trim().toLowerCase() === contactEmail.trim().toLowerCase()) ?? null
   const contactReady = jobHasContact || contactTyped
 
   /**
@@ -589,8 +608,10 @@ export function MakeReservationModal({
     setResolverOpen(false)
   }
 
-  async function createCompany(allowNearMatch: boolean) {
-    const name = newCompanyName.trim()
+  // `nameOverride` is the picker's "+ Create new company" row handing
+  // over what the rep typed — state hasn't caught up yet at that point.
+  async function createCompany(allowNearMatch: boolean, nameOverride?: string) {
+    const name = (nameOverride ?? newCompanyName).trim()
     if (!name) return
     setCompanyBusy(true)
     setCompanyError(null)
@@ -654,6 +675,23 @@ export function MakeReservationModal({
         // Nothing to add — the job's existing contact is what the
         // Booking will attach to.
         mark('contact', 'skipped')
+      } else if (contactOnJob) {
+        // Same person, already on the job. When the resolver created the
+        // job a moment ago it filed them as OTHER (its default); this desk
+        // knows they are the producer, so fix the role rather than add a
+        // second row. An existing job's roles were set by someone — leave
+        // them.
+        if (jobCreated && contactOnJob.role === 'OTHER') {
+          mark('contact', 'running')
+          await fetch(`/api/jobs/${job.id}/contacts/${contactOnJob.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'PRODUCER' }),
+          }).catch(() => null)
+          mark('contact', 'done')
+        } else {
+          mark('contact', 'skipped')
+        }
       } else {
         mark('contact', 'running')
         const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
@@ -1218,8 +1256,11 @@ export function MakeReservationModal({
               {prefill ? 'Reserve the request' : 'Make a reservation'}
             </h2>
             <button
+              type="button"
               onClick={onClose}
-              className="text-lt-fg3 hover:text-lt-fg"
+              disabled={submitting}
+              title="Close (Esc)"
+              className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md border border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner disabled:opacity-50"
               aria-label="Close"
             >
               <X size={16} aria-hidden />
@@ -1621,11 +1662,22 @@ export function MakeReservationModal({
                 ) : (
                   <div className="space-y-1">
                     <CompanyPicker
+                      tone="light"
                       value={company?.id ?? null}
                       selectedName={company?.name}
+                      initialQuery={company ? undefined : (prefill?.companyName ?? undefined)}
                       onChange={(id: string | null, name?: string) =>
                         setCompany(id ? { id, name: name || '' } : null)
                       }
+                      onCreate={(name) => {
+                        // Open the inline form with the name in it so a 409
+                        // near-match (or an error) has somewhere to land.
+                        setNewCompanyName(name)
+                        setCompanyError(null)
+                        setCompanyNearMatch(null)
+                        setCreatingCompany(true)
+                        void createCompany(false, name)
+                      }}
                     />
                     <button
                       onClick={() => setCreatingCompany(true)}
@@ -1879,10 +1931,14 @@ export function MakeReservationModal({
             // asking — the resolver ranks on both, so withholding them
             // would make it re-ask what the client already typed.
             jobNameHint: prefill?.jobName ?? null,
-            contactName: prefill?.contact
-              ? `${prefill.contact.firstName} ${prefill.contact.lastName}`
-              : null,
-            contactEmail: prefill?.contact?.email ?? null,
+            // What the rep has TYPED wins over the request — they may
+            // have corrected it — and a modal opened with no request at
+            // all (the gantt, the /jobs toolbar) has only the typed one.
+            contactName:
+              `${contactFirst.trim()} ${contactLast.trim()}`.trim() ||
+              (prefill?.contact ? `${prefill.contact.firstName} ${prefill.contact.lastName}` : null),
+            contactEmail: contactEmail.trim() || prefill?.contact?.email || null,
+            contactPhone: prefill?.contact?.phone ?? null,
           }}
           onResolved={onJobResolved}
           onClose={() => setResolverOpen(false)}

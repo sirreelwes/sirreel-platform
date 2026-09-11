@@ -25,8 +25,10 @@
  * WHAT IT SENDS — exactly what the existing "Book it" button sends, no
  * more, because it calls the same bookOrder():
  *   - sub-rental partner "it's a go" notices, for partners on this order;
- *   - a BOOKING_WELCOME email to the CLIENT. bookOrder projects cadence
- *     to BOOKED, and scheduleCadenceForState queues BOOKING_WELCOME at
+ *   - a BOOKING_WELCOME email to the CLIENT — unless the order is booked
+ *     straight from DRAFT (no quote sent; see BOOKABLE_FROM), in which
+ *     case that one event is suppressed. bookOrder projects cadence to
+ *     BOOKED, and scheduleCadenceForState queues BOOKING_WELCOME at
  *     offset 0 for the runner to send. Forward-only projection means an
  *     order whose cadence already reached BOOKED (portal sign path) does
  *     NOT get a second one.
@@ -38,7 +40,7 @@
  * alreadyBooked=true rather than re-stamping or re-notifying.
  *
  * Returns:
- *   200 { ok, orderId, orderNumber, status, alreadyBooked, holdsFirmed, paperworkMissing }
+ *   200 { ok, orderId, orderNumber, status, alreadyBooked, quoteSkipped, holdsFirmed, paperworkMissing }
  *   401 { error: 'unauthorized' }
  *   404 { error: 'order not found' }
  *   409 { error, currentStatus }  — not a bookable source state
@@ -55,15 +57,21 @@ import { findPendingDayClaims } from '@/lib/orders/dayClaimGate'
 export const dynamic = 'force-dynamic'
 
 /**
- * States a verbal yes can move FROM — deliberately NOT DRAFT.
+ * States a verbal yes can move FROM.
  *
- * A client cannot have approved a quote that was never sent, and booking a
- * draft would snapshot a half-built total and email that client a booking
- * confirmation for numbers they have not seen. Mirrors the order page's
- * own ladder, which only offers Mark Approved from QUOTE_SENT. Past BOOKED
- * the question is already settled.
+ * DRAFT was excluded until 2026-09-10 on the grounds that a client cannot
+ * have approved a quote that was never sent. Wes overruled it the same
+ * day (God of Wrath & Ruin, S260829-005: a van nine days into its rental
+ * on an order nobody ever quoted, and Jose could not invoice it): "allow
+ * Jose to change to booked without having to resend quote." The draft's
+ * live total is what gets snapshotted, so the agent owns the number.
+ *
+ * What still holds from the old objection: a client who never saw a
+ * quote must not get a BOOKING_WELCOME quoting it. From DRAFT the book
+ * runs with `skipBookingWelcome`; the pre-invoice round is the first
+ * document they see. Past BOOKED the question is already settled.
  */
-const BOOKABLE_FROM = new Set(['QUOTE_SENT', 'APPROVED'])
+const BOOKABLE_FROM = new Set(['DRAFT', 'QUOTE_SENT', 'APPROVED'])
 const ALREADY_BOOKED = new Set(['BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'])
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -136,7 +144,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const ipAddress =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null
-  const booked = await bookOrder({ orderId: order.id, userId, ipAddress })
+  // Straight from DRAFT = no quote was ever sent. See BOOKABLE_FROM.
+  const quoteSkipped = order.status === 'DRAFT'
+  const booked = await bookOrder({ orderId: order.id, userId, ipAddress, skipBookingWelcome: quoteSkipped })
   if (!booked.ok) {
     return NextResponse.json({ ok: false, error: booked.error, currentStatus: booked.currentStatus }, { status: 409 })
   }
@@ -148,7 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       entityId: order.id,
       userId,
       ipAddress,
-      newValues: { from: order.status, to: 'BOOKED', note } as never,
+      newValues: { from: order.status, to: 'BOOKED', note, quoteSkipped, bookingWelcomeSuppressed: quoteSkipped } as never,
     },
   }).catch(() => { /* audit is best-effort; the booking already committed */ })
 
@@ -162,6 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderNumber: order.orderNumber,
     status: 'BOOKED',
     alreadyBooked: false,
+    quoteSkipped,
     holdsFirmed: holds.promoted,
     holdsFirm: holds.firm,
     paperworkMissing: holds.missing,

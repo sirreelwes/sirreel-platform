@@ -20,17 +20,23 @@
  * is holding in their hand comes back "not found" for having been paid. The
  * pills dim and say so while the box has text.
  *
- * What it does NOT copy is the RW list's click-to-charge. Payment against an
- * HQ invoice is recorded on the invoice itself, and a second path into
- * charging — from a search result, where it is easy to have the wrong row
- * selected — is how a client gets billed against someone else's invoice. So
- * a row here opens the document or the job, and that is all.
+ * Charging. This list first shipped read-only — a click-to-charge from a
+ * search result, where it is easy to have the wrong row selected, is how a
+ * client gets billed against someone else's invoice. Ana, 2026-09-10: "the
+ * Collections module lets me charge out RentalWorks invoices but not HQ
+ * invoices. I currently have to charge out via CardPointe" — i.e. the
+ * gateway's own virtual terminal, which records nothing on the invoice. So
+ * the row now carries an explicit CHARGE button (not a row click), only on
+ * an invoice that is SENT or PARTIAL with a balance, and the charge panel
+ * names the invoice, the client and the balance before anything is keyed.
+ * The charge itself records a real Payment on the invoice, which is what
+ * flips it PAID and closes the order — see /api/collections/charge.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-interface HqInvoice {
+export interface HqInvoice {
   id: string
   invoiceNumber: string
   type: string
@@ -49,6 +55,7 @@ interface HqInvoice {
   orderId: string
   orderNumber: string
   companyName: string | null
+  companyId: string | null
   jobId: string | null
   jobName: string | null
   jobCode: string | null
@@ -113,7 +120,24 @@ const SCOPES: { key: Scope; label: string; hint: string }[] = [
   { key: 'all', label: 'All', hint: 'Every HQ invoice, newest first — including drafts and voids' },
 ]
 
-export function HqInvoiceSearch() {
+/** Can money be taken against this row? Same rule the charge route
+ *  enforces: issued, not settled, not void. */
+export function hqInvoiceChargeable(i: HqInvoice): boolean {
+  return (i.status === 'SENT' || i.status === 'PARTIAL') && i.balanceDue > 0
+}
+
+export function HqInvoiceSearch({
+  onCharge,
+  selectedId,
+  refreshKey,
+}: {
+  /** Hands a chargeable row to the charge panel. Absent → read-only list. */
+  onCharge?: (invoice: HqInvoice) => void
+  /** The row currently armed in the charge panel, for the highlight. */
+  selectedId?: string | null
+  /** Bump to re-fetch — after a charge lands, the row's balance changed. */
+  refreshKey?: number
+} = {}) {
   const [q, setQ] = useState('')
   const [scope, setScope] = useState<Scope>('owed')
   const [rows, setRows] = useState<HqInvoice[]>([])
@@ -153,7 +177,7 @@ export function HqInvoiceSearch() {
   useEffect(() => {
     const t = setTimeout(() => void load(q, scope), q ? 250 : 0)
     return () => clearTimeout(t)
-  }, [q, scope, load])
+  }, [q, scope, load, refreshKey])
 
   // A search ignores scope server-side; say so rather than leaving a pill
   // lit over a list it did not filter.
@@ -233,8 +257,12 @@ export function HqInvoiceSearch() {
         ) : (
           rows.map((i) => {
             const late = i.status !== 'PAID' && i.status !== 'VOID' ? daysPastDue(i.dueDate) : null
+            const selected = !!selectedId && selectedId === i.id
             return (
-              <div key={i.id} className="py-2.5 px-2">
+              <div
+                key={i.id}
+                className={`py-2.5 px-2 rounded transition-colors ${selected ? 'bg-amber-600/15' : ''}`}
+              >
                 <div className="flex justify-between gap-3">
                   <span className="text-sm font-semibold text-zinc-900">
                     {i.invoiceNumber}
@@ -313,6 +341,19 @@ export function HqInvoiceSearch() {
                   <Link href={`/orders/${i.orderId}`} className="font-semibold hover:text-zinc-900">
                     Order →
                   </Link>
+                  {onCharge && hqInvoiceChargeable(i) && (
+                    <button
+                      type="button"
+                      onClick={() => onCharge(i)}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        selected
+                          ? 'bg-amber-600 text-white'
+                          : 'border border-amber-600/50 text-amber-700 hover:bg-amber-600 hover:text-white'
+                      }`}
+                    >
+                      {selected ? 'Selected' : 'Charge'}
+                    </button>
+                  )}
                 </div>
               </div>
             )

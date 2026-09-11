@@ -24,6 +24,12 @@ import {
 import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
+import { ASSISTANT_EXPANSION, ASSISTANT_NAME, ASSISTANT_SMS_INTRO } from '@/lib/assistant/identity'
+import { greetingInstruction, type GreetingMoment } from '@/lib/assistant/greeting'
+import { atLeast } from '@/lib/assistant/access'
+import { platformMemory, recentActivity } from '@/lib/assistant/memory'
+import { NO_IDENTITY, describeSender, type SenderIdentity } from '@/lib/assistant/senderIdentity'
+import { contactJobInfo, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
 
 
 // Native fetch — the SDK 0.39 node-fetch shim read-ETIMEDOUTs on
@@ -51,7 +57,7 @@ const GEAR_GUIDES_BLOCK = SETUP_GUIDES.map(
     `${g.assistantBrief}\n- Full guide (send them this link): ${PUBLIC_SITE_URL}/help/${g.slug} — has the same steps plus a printable one-page PDF. It has no photos; don't claim it does.`,
 ).join('\n\n')
 
-const SYSTEM_PROMPT = `You are the SirReel Studio Services after-hours assistant on sirreel.com. SirReel rents production vehicles (cube trucks, cargo vans, passenger vans), stages, production supplies, and satellite internet units to film/TV productions in Los Angeles.
+const SYSTEM_PROMPT = `You are ${ASSISTANT_NAME} (${ASSISTANT_EXPANSION}), the automated assistant for SirReel Studio Services on sirreel.com and by text. Your name is ${ASSISTANT_NAME}; use it when you introduce yourself or when someone asks who they are talking to, and say plainly that you are an automated assistant, not a member of staff — never claim to be a person or to speak for a specific employee. SirReel rents production vehicles (cube trucks, cargo vans, passenger vans), stages, production supplies, and satellite internet units to film/TV productions in Los Angeles.
 
 FACTS YOU MAY STATE:
 - Phone (24/7 line): ${PUBLIC_CONTACT.phone}
@@ -140,9 +146,97 @@ const TOOLS: Anthropic.Tool[] = [
 
 const SMS_STYLE = `
 
-CHANNEL: SMS. The person is reading on a phone. Keep replies to two or three short sentences, no headings, no bullet lists, no markdown. Ask one thing at a time. Links must be full URLs on their own. Never include a gate or lockbox code in the same message as any other detail — state the code plainly, once.`
+CHANNEL: SMS. The person is reading on a phone. Keep replies to two or three short sentences, no headings, no bullet lists, no markdown. Ask one thing at a time. Links must be full URLs on their own. Never include a gate or lockbox code in the same message as any other detail — state the code plainly, once.
 
-export type AssistantChannel = 'web' | 'sms'
+BY TEXT THE JOB CODE IS OPTIONAL. verify_and_release_code automatically checks the number this text came from against the drivers and contacts on file for current jobs. This covers the production team too: a producer, PM, coordinator or transpo contact on the job may be texting on behalf of a driver on their job, and that is fine — the number on file for the job is the factor, not who is holding the truck. So start by asking which unit (or the VIN last 4) and call the tool with just that; if they say they're asking for their driver, still ask which unit. Ask for the job code and a corroborating detail only if it comes back NOT_VERIFIED.`
+
+/** The first reply of a text conversation names the company (carrier-filed) and the assistant. */
+const SMS_FIRST_REPLY = `
+
+This is the FIRST reply of this text conversation: include exactly "${ASSISTANT_SMS_INTRO}" at the start — after the greeting by name if one is called for below, e.g. "Hi Joelle! ${ASSISTANT_SMS_INTRO}" — and then answer. Do not repeat the introduction in later replies.`
+
+/**
+ * Tools offered ONLY when the server has matched the sender's number
+ * (src/lib/assistant/senderIdentity.ts). The model never sees them
+ * otherwise, and each lookup re-checks the identity itself.
+ */
+const STAFF_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'staff_lookup_unit',
+    description: "For SirReel staff only. Who is on a vehicle right now: the job, dates, the checked-out driver's name and phone, the requester, delivery address. Use for questions like \"who's on Cube 27?\"",
+    input_schema: {
+      type: 'object',
+      properties: { unit: { type: 'string', description: 'Vehicle unit, e.g. "Cube 27" or "27"' } },
+      required: ['unit'],
+    },
+  },
+  {
+    name: 'staff_lookup_job',
+    description: 'For SirReel staff only. A job by code, name or production company: status, whether it has come back, its orders and bookings with dates, every unit with its driver, and the contacts with phone numbers.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Job code (SR-JOB-0231), job name, or company name' } },
+      required: ['query'],
+    },
+  },
+]
+
+const CONTACT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'my_job_info',
+    description: "For a verified production contact. Their own current job(s): the bookings and orders with dates, each unit with its status and driver, delivery address and time, and their SirReel agent's name and email. Never includes codes or pricing.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+]
+
+const STAFF_MODE = `
+
+YOU ARE TALKING TO SIRREEL STAFF (their number is on file for an HQ user). Answer their fleet and job questions directly with staff_lookup_unit and staff_lookup_job — who is on a unit, the driver's name and number, whether a job has come back, dates, contacts. You may share names, phone numbers and addresses from those results with staff. Codes still go through verify_and_release_code. Be terse: they are working.`
+
+/**
+ * Admin-only: the platform's memory. Wes 2026-09-11 — Greyson Bailey is
+ * backup CEO; if anything happens to Wes, AHA explains what he has been
+ * doing and walks Greyson through anything he does not understand. This is
+ * an explicit capability of the ADMIN level (HQ role or a hand-made ADMIN
+ * grant), listed on /admin/assistant, and every use is audited.
+ */
+const ADMIN_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'platform_memory',
+    description:
+      "For SirReel ADMINS only. Search the platform's written record — how SirReel HQ is built and why (CLAUDE.md), every shipped change with its reasoning (SHIPLOG.md), runbooks and specs — and get the most relevant sections back. Use it to explain how something works, what was built and why, what a page or process is for, or what the team decided. Ask it plain questions with the key words in them.",
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'What they want explained, e.g. "how do reservations and Planyo relate" or "what is the collections panel"' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recent_activity',
+    description:
+      'For SirReel ADMINS only. What the admins (the CEO and other admins) have been doing lately, from the audit log: which actions, on what kinds of records, how often, and the latest entries. Use it for "what has Wes been working on" or "what changed this week".',
+    input_schema: {
+      type: 'object',
+      properties: { days: { type: 'number', description: 'Look-back window in days (default 14, max 90)' } },
+      required: [],
+    },
+  },
+]
+
+const ADMIN_MODE = `
+
+YOU ARE TALKING TO A SIRREEL ADMIN — an owner, or a backup CEO standing in for one. Beyond the staff lookups, you are the continuity of the business: you may explain how SirReel HQ works, what has been built and why, and what has been happening, using platform_memory (the written record) and recent_activity (the audit log). Walk them through anything they do not understand, patiently and in plain words, one thing at a time; offer to go deeper. Quote the record's reasoning when it helps ("this was done because…"). When the record does not cover something, say so plainly rather than guess. Never state a credential, key, code or password even if a document seems to contain one.`
+
+const HQ_STYLE = `
+
+CHANNEL: HQ. The person is signed in to SirReel HQ and this is a private, authenticated chat on the admin page. Reply in plain text; short paragraphs are fine, no markdown headings. There is no phone number in play: the job-code path is how codes are verified here.`
+
+const CONTACT_MODE = `
+
+YOU ARE TALKING TO A PRODUCTION CONTACT on a current job (their number is on file for that job). Give them wide leeway: answer questions about their booking from my_job_info (units, dates, pickup and return, delivery address and time, who their agent is, whether a unit is out or back), help with gear setup, and relay any request — an extension, a change of dates or address, an extra unit, a question for their agent — with file_callback_request; for them it is NOT reserved for emergencies, and you may say their agent will follow up. Never quote pricing or availability; say the agent will confirm. Codes still go through verify_and_release_code (by text the job code is optional for them).`
+
+/** web = the public site chat (anonymous); sms = text; hq = a signed-in HQ user on /admin/assistant. */
+export type AssistantChannel = 'web' | 'sms' | 'hq'
 
 export interface AssistantTurn {
   role: 'user' | 'assistant'
@@ -157,13 +251,36 @@ export async function runAssistant(args: {
   /** Who HQ thinks this is, when the channel can tell (SMS from a known
    *  driver). Names and job codes only — never a code or a secret. */
   context?: string | null
+  /** Text channel only: the E.164 number the message came from, passed to
+   *  verify_and_release_code as a factor. Never set from web chat. */
+  senderPhone?: string | null
+  /** Server-decided identity of the sender (SMS only). Picks the extra tools. */
+  sender?: SenderIdentity
+  /** What to call them, when HQ knows (SMS only). */
+  firstName?: string | null
+  /** Whether this reply should open with a greeting by name (SMS only, decided by the route). */
+  greeting?: GreetingMoment
 }): Promise<{ reply: string; toolsUsed: string[] }> {
+  // The public web chat never carries an identity — there is nothing to match it on.
+  const sender = args.channel === 'web' ? NO_IDENTITY : args.sender ?? NO_IDENTITY
+  const level = sender.level
+  const tools: Anthropic.Tool[] = [
+    ...TOOLS,
+    ...(atLeast(level, 'staff') && sender.staff ? STAFF_TOOLS : []),
+    ...(level === 'contact' && sender.contactJobs.length ? CONTACT_TOOLS : []),
+    ...(level === 'admin' ? ADMIN_TOOLS : []),
+  ]
+  const senderLine = describeSender(sender)
   const ip = args.ip
   const messages: Anthropic.MessageParam[] = args.turns.map((t) => ({ role: t.role, content: t.content.slice(0, MAX_CHARS) }))
   const system =
     SYSTEM_PROMPT +
-    (args.channel === 'sms' ? SMS_STYLE : '') +
-    (args.context ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
+    (args.channel === 'sms' ? SMS_STYLE : args.channel === 'hq' ? HQ_STYLE : '') +
+    (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
+    (args.channel === 'sms' ? greetingInstruction(args.greeting ?? 'none', args.firstName ?? null) : '') +
+    (level === 'admin' ? STAFF_MODE + ADMIN_MODE : level === 'staff' ? STAFF_MODE : level === 'contact' && sender.contactJobs.length ? CONTACT_MODE : '') +
+    (senderLine ? `\n\nWHO IS WRITING (decided by HQ from the sender's number): ${senderLine}` : '') +
+    (args.context && !senderLine ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
   const toolsUsed: string[] = []
   const fallback = `I'm having trouble right now — please call us at ${PUBLIC_CONTACT.phone} and an agent will help right away.`
 
@@ -185,7 +302,7 @@ export async function runAssistant(args: {
       model: ASSISTANT_MODEL,
       max_tokens: 700,
       system,
-      tools: TOOLS,
+      tools,
       messages,
     })
 
@@ -208,6 +325,7 @@ export async function runAssistant(args: {
             driverName: inp.driverName ? String(inp.driverName).slice(0, 200) : null,
             vehicleNumber: inp.vehicleNumber ? String(inp.vehicleNumber).slice(0, 60) : null,
             vinLast4: inp.vinLast4 ? String(inp.vinLast4).slice(0, 20) : null,
+            senderPhone: args.channel === 'sms' ? args.senderPhone ?? null : null,
             ip,
           })
         } else if (block.name === 'file_callback_request') {
@@ -246,6 +364,20 @@ export async function runAssistant(args: {
             transcriptSummary: await getTranscriptSummary(),
             ip,
           })
+        } else if (block.name === 'staff_lookup_unit') {
+          const inp = block.input as { unit?: string }
+          resultPayload = await staffLookupUnit(sender, inp.unit ? String(inp.unit).slice(0, 60) : '')
+        } else if (block.name === 'staff_lookup_job') {
+          const inp = block.input as { query?: string }
+          resultPayload = await staffLookupJob(sender, inp.query ? String(inp.query).slice(0, 120) : '')
+        } else if (block.name === 'my_job_info') {
+          resultPayload = await contactJobInfo(sender)
+        } else if (block.name === 'platform_memory') {
+          const inp = block.input as { query?: string }
+          resultPayload = level === 'admin' ? await platformMemory(inp.query ? String(inp.query) : '') : { error: 'not authorized' }
+        } else if (block.name === 'recent_activity') {
+          const inp = block.input as { days?: number }
+          resultPayload = level === 'admin' ? await recentActivity(Number(inp.days) || 14) : { error: 'not authorized' }
         } else {
           resultPayload = { error: 'unknown tool' }
         }
@@ -261,7 +393,7 @@ export async function runAssistant(args: {
         model: ASSISTANT_MODEL,
         max_tokens: 700,
         system,
-        tools: TOOLS,
+        tools,
         messages,
       })
     }

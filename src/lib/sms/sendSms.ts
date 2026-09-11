@@ -21,6 +21,18 @@
  * TWILIO_FROM_NUMBER is an SMS-capable Twilio number. When credentials are
  * missing this NO-OPS and returns { ok:false, skipped:true } so callers fall
  * back to email rather than error.
+ *
+ * TWILIO_MESSAGING_SERVICE_SID (MG…) is the registered path. The A2P 10DLC
+ * campaign was approved 2026-09-10 against Messaging Service
+ * MGda3482bd81e2c26b45cc188de36124dc, and carriers treat traffic as
+ * registered only when it goes out THROUGH that service — sending with a
+ * bare From number that happens to be in the service works, but sending
+ * from a number that was never added to it is filtered as unregistered
+ * (error 30034) with no error at send time. So when the service SID is set
+ * the request carries MessagingServiceSid and no From: the service picks
+ * its sender, and a number that is not in the service cannot be picked,
+ * which turns "silently filtered" into "failed at send time". The From
+ * number stays the fallback for an environment with no service configured.
  */
 
 export interface TwilioConfig {
@@ -29,7 +41,10 @@ export interface TwilioConfig {
   user: string
   /** HTTP Basic password — API key secret when present, else the auth token. */
   pass: string
-  from: string
+  /** Bare sender; used only when no messaging service is configured. */
+  from: string | null
+  /** MG… SID. When set, sends go through the service and From is omitted. */
+  messagingServiceSid: string | null
 }
 
 /**
@@ -44,10 +59,11 @@ export function resolveTwilioConfig(
   const keySid = env.TWILIO_API_KEY_SID?.trim()
   const keySecret = env.TWILIO_API_KEY_SECRET?.trim()
   const authToken = env.TWILIO_AUTH_TOKEN?.trim()
-  const from = env.TWILIO_FROM_NUMBER?.trim()
+  const from = env.TWILIO_FROM_NUMBER?.trim() || null
+  const messagingServiceSid = env.TWILIO_MESSAGING_SERVICE_SID?.trim() || null
 
   // Nothing configured at all is the normal "SMS is off" state, not an error.
-  if (!accountSid && !keySid && !authToken && !from) return { config: null, reason: null }
+  if (!accountSid && !keySid && !authToken && !from && !messagingServiceSid) return { config: null, reason: null }
 
   if (!accountSid) {
     return { config: null, reason: 'TWILIO_ACCOUNT_SID is not set (the AC… value from Console → Account Info).' }
@@ -58,13 +74,22 @@ export function resolveTwilioConfig(
       reason: `TWILIO_ACCOUNT_SID must be the Account SID starting with "AC" — got "${accountSid.slice(0, 2)}…". An API key SID (SK…) belongs in TWILIO_API_KEY_SID.`,
     }
   }
-  if (!from) return { config: null, reason: 'TWILIO_FROM_NUMBER is not set.' }
+  if (messagingServiceSid && !messagingServiceSid.startsWith('MG')) {
+    return {
+      config: null,
+      reason: `TWILIO_MESSAGING_SERVICE_SID must be the Messaging Service SID starting with "MG" — got "${messagingServiceSid.slice(0, 2)}…".`,
+    }
+  }
+  if (!from && !messagingServiceSid) {
+    return { config: null, reason: 'Neither TWILIO_MESSAGING_SERVICE_SID nor TWILIO_FROM_NUMBER is set.' }
+  }
 
-  if (keySid && keySecret) return { config: { accountSid, user: keySid, pass: keySecret, from } }
+  const sender = { from, messagingServiceSid }
+  if (keySid && keySecret) return { config: { accountSid, user: keySid, pass: keySecret, ...sender } }
   if (keySid && !keySecret) {
     return { config: null, reason: 'TWILIO_API_KEY_SID is set but TWILIO_API_KEY_SECRET is missing.' }
   }
-  if (authToken) return { config: { accountSid, user: accountSid, pass: authToken, from } }
+  if (authToken) return { config: { accountSid, user: accountSid, pass: authToken, ...sender } }
   return {
     config: null,
     reason: 'No Twilio credential: set TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN.',
@@ -98,6 +123,26 @@ export function toE164(raw: string): string | null {
   return null
 }
 
+/**
+ * The form body for one outbound message. Pure, so the test can pin the one
+ * fact that matters: with a messaging service configured, the request names
+ * the service and carries NO From — Twilio rejects a From that is not in the
+ * service, which is the loud failure we want over a silently filtered send.
+ */
+export function buildMessageParams(
+  config: Pick<TwilioConfig, 'from' | 'messagingServiceSid'>,
+  args: { to: string; body: string; statusCallback?: string },
+): URLSearchParams {
+  const params = new URLSearchParams({ To: args.to, Body: args.body.slice(0, 1500) })
+  if (config.messagingServiceSid) params.set('MessagingServiceSid', config.messagingServiceSid)
+  // The From number is env-configured by hand too, and Twilio rejects it in
+  // the same way as a bad destination — normalised so a dashed number in
+  // Vercel does not fail every send with a message about the destination.
+  else if (config.from) params.set('From', toE164(config.from) ?? config.from.trim())
+  if (args.statusCallback) params.set('StatusCallback', args.statusCallback)
+  return params
+}
+
 export async function sendSms(
   to: string,
   body: string,
@@ -115,7 +160,7 @@ export async function sendSms(
       ? { ok: false, error: resolved.reason }
       : { ok: false, skipped: true }
   }
-  const { accountSid, user, pass, from } = resolved.config
+  const { accountSid, user, pass } = resolved.config
 
   const dest = toE164(to)
   if (!dest) return { ok: false, error: `unusable destination number: ${to.trim() || '(empty)'}` }
@@ -127,15 +172,7 @@ export async function sendSms(
         Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64'),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      // The From number is env-configured by hand too, and Twilio rejects it
-      // in the same way — normalised so a dashed number in Vercel does not
-      // fail every send with a message about the destination.
-      body: new URLSearchParams({
-        To: dest,
-        From: toE164(from) ?? from.trim(),
-        Body: body.slice(0, 1500),
-        ...(opts.statusCallback ? { StatusCallback: opts.statusCallback } : {}),
-      }).toString(),
+      body: buildMessageParams(resolved.config, { to: dest, body, statusCallback: opts.statusCallback }).toString(),
     })
     if (!res.ok) {
       const t = await res.text().catch(() => '')

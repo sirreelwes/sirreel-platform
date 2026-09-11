@@ -22,6 +22,7 @@ import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { getCompanyPortalSessionFromRequest } from '@/lib/portal/companyPortal'
 import { renderPreInvoice } from '@/lib/invoices/renderPreInvoice'
+import { renderPaidInvoice, paidInvoiceResponse } from '@/lib/invoices/renderPaidInvoice'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,18 @@ export async function GET(
   }
   if (invoice.status === 'DRAFT' || invoice.status === 'VOID') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  // Settled invoices carry the PAID stamp, same as the staff copy — the
+  // client's own view must not keep asking for money that arrived.
+  if (invoice.status === 'PAID') {
+    const stamped = await renderPaidInvoice(params.invoiceId)
+    if (stamped) {
+      return paidInvoiceResponse(
+        stamped,
+        invoice.invoiceNumber,
+        req.nextUrl.searchParams.get('download') === '1',
+      )
+    }
   }
   if (!invoice.pdfBlobKey) {
     return NextResponse.json({ error: 'Invoice PDF not generated' }, { status: 404 })

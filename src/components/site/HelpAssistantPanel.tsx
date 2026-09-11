@@ -7,6 +7,7 @@
  */
 
 import { useAssistantChat } from './useAssistantChat'
+import { ASSISTANT_EXPANSION, ASSISTANT_NAME } from '@/lib/assistant/identity'
 import { MessageSquare } from 'lucide-react'
 
 export function HelpAssistantPanel() {
@@ -19,9 +20,9 @@ export function HelpAssistantPanel() {
           <span className="text-[18px] leading-none" aria-hidden><MessageSquare size={16} aria-hidden /></span>
           <div>
             <div className="text-[14px] font-extrabold text-white" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              SirReel Assistant
+              {ASSISTANT_NAME}
             </div>
-            <div className="text-[11px] text-[#8b857a]">Here 24/7 · after-hours help &amp; access codes</div>
+            <div className="text-[11px] text-[#8b857a]">{ASSISTANT_EXPANSION} · here 24/7 for access codes &amp; help</div>
           </div>
         </div>
         <a href="tel:+18884777335" className="hidden sm:inline text-[12px] font-bold text-[#4DB1C6] hover:text-[#6FC3D4]">
@@ -73,7 +74,7 @@ export function HelpAssistantPanel() {
           </button>
         </div>
         <div className="mt-1.5 text-[10px] text-[#5c574d]">
-          For emergencies call (888) 477-7335 — this assistant can also file a callback.
+          {ASSISTANT_NAME} is automated. For emergencies call (888) 477-7335 — it can also file a callback.
         </div>
       </div>
     </div>

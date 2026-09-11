@@ -213,7 +213,7 @@ export async function mergePersons(input: MergePersonsInput): Promise<MergePerso
     const loserJobContacts = await tx.jobContact.findMany({
       where: { personId: loserId },
     })
-    const collisions: { id: string; jobId: string; role: 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER'; isPrimary: boolean; createdAt: Date }[] = []
+    const collisions: { id: string; jobId: string; role: 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'ART_DEPT' | 'OTHER'; isPrimary: boolean; createdAt: Date }[] = []
     const survivable: string[] = []
     for (const jc of loserJobContacts) {
       const dupe = await tx.jobContact.findFirst({

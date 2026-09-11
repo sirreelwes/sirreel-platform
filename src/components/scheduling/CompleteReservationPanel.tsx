@@ -138,8 +138,8 @@ export function CompleteReservationPanel({
     }
   }
 
-  async function createCompany(allowNearMatch: boolean) {
-    const name = newCompanyName.trim()
+  async function createCompany(allowNearMatch: boolean, nameOverride?: string) {
+    const name = (nameOverride ?? newCompanyName).trim()
     if (!name) return
     setBusy(true)
     setError(null)
@@ -238,10 +238,18 @@ export function CompleteReservationPanel({
             <div>
               <div className="text-[10px] uppercase tracking-wide text-amber-800 font-semibold mb-1">Company</div>
               <CompanyPicker
+                tone="light"
                 value={null}
                 selectedName={null}
                 initialQuery={companySeed || undefined}
                 onChange={(id) => { if (id) void save({ companyId: id }) }}
+                onCreate={(name) => {
+                  setNewCompanyName(name)
+                  setError(null)
+                  setNearMatch(null)
+                  setCreatingCompany(true)
+                  void createCompany(false, name)
+                }}
               />
               {!creatingCompany ? (
                 <button

@@ -22,6 +22,7 @@
 import { prisma } from '@/lib/prisma'
 import { sendSms, toE164 } from '@/lib/sms/sendSms'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { firstNameOf } from '@/lib/assistant/greeting'
 
 /** Turns older than this are not shown to the model. */
 const IDLE_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -128,9 +129,9 @@ export async function turnsForModel(threadId: string): Promise<Array<{ role: 'us
  * address, or anything a stranger spoofing a number should learn. The
  * assistant still verifies before releasing a code.
  */
-export async function identifyNumber(phone: string): Promise<{ context: string | null; personId: string | null; subRentalId: string | null }> {
+export async function identifyNumber(phone: string): Promise<{ context: string | null; personId: string | null; subRentalId: string | null; firstName: string | null }> {
   const digits = phone.replace(/\D/g, '').slice(-10)
-  if (digits.length < 10) return { context: null, personId: null, subRentalId: null }
+  if (digits.length < 10) return { context: null, personId: null, subRentalId: null, firstName: null }
   const like = `%${digits.slice(0, 3)}%${digits.slice(3, 6)}%${digits.slice(6)}%`
 
   // A partner's driver or delivery contact on a live sub-rental.
@@ -153,6 +154,7 @@ export async function identifyNumber(phone: string): Promise<{ context: string |
       context: `${s.driver_name ?? 'A driver'} — ${s.vendor}'s driver/delivery contact for the ${s.item ?? 'unit'}${s.job_code ? ` on job ${s.job_code}` : ''}${when}.`,
       personId: null,
       subRentalId: s.id,
+      firstName: firstNameOf(s.driver_name),
     }
   }
 
@@ -175,9 +177,10 @@ export async function identifyNumber(phone: string): Promise<{ context: string |
       context: `${name}${p.role ? ` (${p.role})` : ''}${p.job_code ? `, a contact on job ${p.job_code}` : ', a client contact with no live job on file'}.`,
       personId: p.id,
       subRentalId: null,
+      firstName: firstNameOf(p.first_name),
     }
   }
-  return { context: null, personId: null, subRentalId: null }
+  return { context: null, personId: null, subRentalId: null, firstName: null }
 }
 
 /** 9pm–6am Pacific: automated texts wait. Staff sends are exempt. */

@@ -114,6 +114,14 @@ export interface InvoiceDocumentProps {
    *  who receives something headed "INVOICE" will reasonably pay it, and
    *  the whole point of the round is that the figure might still change. */
   isPreInvoice?: boolean
+  /** PAID presentation: the invoice has been settled in full. Stamps the
+   *  document PAID with the settlement date, prints the real Amount Paid /
+   *  Balance Due figures, and drops the pay-by blocks — a receipt does not
+   *  ask for money. Ana, 2026-09-10: "Is there a PAID stamp for paid
+   *  invoices? Like the ones we have in RentalWorks." Rendered on demand
+   *  from the stored snapshot (see renderPaidInvoice), never stored: the
+   *  blob stays the document the client was billed on. */
+  paid?: { paidAt: Date | null } | null
   orderNumber: string
   issuedAt: Date
   dueDate: Date | null
@@ -186,6 +194,37 @@ const styles = StyleSheet.create({
   brandAddress: { fontSize: 8, color: C.muted, marginTop: 1 },
   titleColumn: { flex: 1, alignItems: 'center' },
   preNote: { fontSize: 8, marginTop: 6, textAlign: 'center', lineHeight: 1.2 },
+  // ── PAID stamp ──────────────────────────────────────────────
+  // Sits over the top band, tilted like an ink stamp, so it reads on the
+  // first glance the way the RentalWorks stamp does. Absolute so it never
+  // shifts the layout underneath — the stamped copy must line up with the
+  // document the client was billed on.
+  // Absolute INSIDE the totals block, so it sits beside the figures it
+  // answers on any page length and never shifts the layout underneath —
+  // the stamped copy must line up with the document the client was billed
+  // on. Word only: the date is on the title line, and a second line inside
+  // a rotated box clips.
+  paidStamp: {
+    position: 'absolute',
+    left: 40,
+    top: 22,
+    transform: 'rotate(-12deg)',
+    borderWidth: 3,
+    borderColor: C.paid,
+    borderRadius: 5,
+    paddingTop: 6,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+    opacity: 0.85,
+  },
+  paidStampWord: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 30,
+    letterSpacing: 8,
+    lineHeight: 1,
+    color: C.paid,
+  },
+  paidNote: { fontSize: 8, marginTop: 6, textAlign: 'center', lineHeight: 1.2, color: C.paid },
   docTitle: {
     lineHeight: 1,
     fontFamily: 'Helvetica-Bold',
@@ -543,7 +582,9 @@ export function InvoiceDocument({
   notes,
   bookingTerms,
   isPreInvoice = false,
+  paid = null,
 }: InvoiceDocumentProps): React.ReactElement {
+  const isPaid = !!paid && !isPreInvoice
   const docTitle = isPreInvoice
     ? 'PRE-INVOICE'
     : invoiceType === 'LD'
@@ -592,6 +633,11 @@ export function InvoiceDocument({
             <Text style={styles.docTitle}>{docTitle}</Text>
             {isPreInvoice && (
               <Text style={styles.preNote}>For your review — not yet payable</Text>
+            )}
+            {isPaid && (
+              <Text style={styles.paidNote}>
+                Paid in full{paid?.paidAt ? ` · ${fmtDate(paid.paidAt)}` : ''}
+              </Text>
             )}
           </View>
           <View style={styles.meta}>
@@ -762,6 +808,11 @@ export function InvoiceDocument({
 
         {/* ── Totals (kept together; never split across pages) ── */}
         <View style={styles.totals} wrap={false}>
+          {isPaid && (
+            <View style={styles.paidStamp}>
+              <Text style={styles.paidStampWord}>PAID</Text>
+            </View>
+          )}
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>Subtotal</Text>
             <Text style={styles.totalsValue}>{fmtUsd(subtotal)}</Text>
@@ -808,7 +859,10 @@ export function InvoiceDocument({
           )}
         </View>
 
-        {!isPreInvoice && <ZellePayBlock />}
+        {/* A settled invoice does not ask for money either — the stamped
+            copy is a receipt, and a Zelle QR under a PAID stamp invites a
+            second payment. */}
+        {!isPreInvoice && !isPaid && <ZellePayBlock />}
 
         {isPreInvoice ? (
           <View style={styles.termsBox}>

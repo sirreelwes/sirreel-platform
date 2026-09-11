@@ -15,9 +15,18 @@
  * The response includes `flowMatchesDoc`: whether the stored message flow
  * matches docs/sms/twilio-a2p-campaign.md. False means the Console lost the
  * edit and the fix is to re-file, not to rewrite the copy.
+ *
+ * APPROVED 2026-09-10. From here the route is the go-live check rather than
+ * the rejection debugger: `sendPath` says whether production sends through
+ * the service (registered) or a bare From number, and `serviceNumbers` lists
+ * the numbers attached to the service — the approval email's own condition
+ * ("begin sending by adding phone numbers to the linked messaging service").
+ * `fromNumberInService` is the one line to read: false means outbound is
+ * being filtered as unregistered even though the campaign says approved.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
+import { resolveTwilioConfig, toE164 } from '@/lib/sms/sendSms'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,6 +85,14 @@ export async function GET(req: NextRequest) {
     return { url, status: r.status, ok: r.ok, json: j as Record<string, unknown> }
   }
 
+  // What the send path will actually do with the env as deployed here.
+  const sendConfig = resolveTwilioConfig()
+  const sendPath = !sendConfig.config
+    ? { mode: 'off' as const, reason: sendConfig.reason }
+    : sendConfig.config.messagingServiceSid
+      ? { mode: 'messaging-service' as const, messagingServiceSid: sendConfig.config.messagingServiceSid, matchesQueriedService: sendConfig.config.messagingServiceSid === MESSAGING_SERVICE_SID }
+      : { mode: 'from-number' as const, from: toE164(sendConfig.config.from ?? '') ?? sendConfig.config.from }
+
   const CAMPAIGN_URL = `https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}/Compliance/Usa2p`
   let res = await call(CAMPAIGN_URL)
 
@@ -107,6 +124,23 @@ export async function GET(req: NextRequest) {
 
   const body = res.json
 
+  // The numbers in the service. An approved campaign sends nothing until the
+  // number is added here; the From number configured for the fallback path
+  // must be one of them or the two paths disagree about the sender.
+  const numbersRes = await call(`https://messaging.twilio.com/v1/Services/${MESSAGING_SERVICE_SID}/PhoneNumbers?PageSize=20`)
+  const numberRows = Array.isArray((numbersRes.json as { phone_numbers?: unknown[] })?.phone_numbers)
+    ? (numbersRes.json as { phone_numbers: Array<Record<string, unknown>> }).phone_numbers
+    : []
+  const serviceNumbers = numberRows.map((n) => ({ sid: n.sid, phoneNumber: n.phone_number, capabilities: n.capabilities ?? null }))
+  const envFrom = toE164(process.env.TWILIO_FROM_NUMBER ?? '')
+  const service = {
+    sid: MESSAGING_SERVICE_SID,
+    numbersStatus: numbersRes.status,
+    serviceNumbers,
+    envFromNumber: envFrom,
+    fromNumberInService: envFrom ? serviceNumbers.some((n) => n.phoneNumber === envFrom) : null,
+  }
+
   const compliances = Array.isArray(body.compliances) ? (body.compliances as Array<Record<string, unknown>>) : []
   // The service came back with NO campaign on 2026-09-09, though Twilio's
   // rejection emails name one. So widen: list every messaging service and
@@ -132,6 +166,8 @@ export async function GET(req: NextRequest) {
       messagingServices: svc.map((x) => ({ sid: x.sid, friendlyName: x.friendly_name, useInboundWebhookOnNumber: x.use_inbound_webhook_on_number })),
       brands: brandList.map((b) => ({ sid: b.sid, status: b.status, brandType: b.brand_type, identityStatus: b.identity_status, failureReason: b.failure_reason ?? null })),
       directCampaign: direct ? { status: direct.status, json: direct.json } : null,
+      sendPath,
+      service,
       campaigns: [],
     })
   }
@@ -164,5 +200,5 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ ok: true, messagingServiceSid: MESSAGING_SERVICE_SID, campaigns })
+  return NextResponse.json({ ok: true, messagingServiceSid: MESSAGING_SERVICE_SID, sendPath, service, campaigns })
 }

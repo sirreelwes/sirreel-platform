@@ -211,7 +211,17 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
             select: { id: true },
           })
         : null
-      if (existing) bookingId = existing.id
+      if (existing) {
+        bookingId = existing.id
+        // LINK the order to the booking it now holds on. This branch used
+        // to append items and walk away, so every order after the first
+        // on a job read `bookingId: null` — and both the Make Reservation
+        // flow (`/api/scheduling/order-hold`) and the line-add unit
+        // binding look the hold up THROUGH Order.bookingId. On Game
+        // Changer S10 (SR-JOB-0347, 2026-09-10) six of seven
+        // reservations assigned no unit for exactly this reason.
+        await prisma.order.update({ where: { id: order.id }, data: { bookingId } })
+      }
     }
     // A booking releaseHoldsOnLost() cancelled comes back to life when
     // the quote does (mark-lost undo, or a re-send): flip it to REQUEST
@@ -284,8 +294,49 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
     // idempotent without a per-line FK: the desired quantity is
     // recomputed from the order every time and SET, so editing a quote
     // down releases the difference instead of stacking.
+    //
+    // The booking is JOB-level and shared by every order on the job, so
+    // the peak has to be taken across the SIBLING orders' vehicle lines
+    // too, not this order's alone. Before 2026-09-10 each order's run SET
+    // the shared item to its own peak: Game Changer S10 (SR-JOB-0347)
+    // quoted six date blocks as six orders — 1 cube Oct 20-28 on one,
+    // 2 cubes Oct 28 on the next — and the hold came out as 2, not 3,
+    // whichever order ran last. Siblings that are cancelled, lost or
+    // archived, or that hold on a DIFFERENT booking, stay out.
+    const siblings = order.jobId
+      ? await prisma.order.findMany({
+          where: {
+            jobId: order.jobId,
+            id: { not: order.id },
+            status: { not: 'CANCELLED' },
+            quoteStatus: { notIn: ['LOST', 'EXPIRED'] },
+            archivedAt: null,
+            OR: [{ bookingId }, { bookingId: null }],
+          },
+          select: {
+            lineItems: {
+              select: {
+                quantity: true, pickupDate: true, returnDate: true, assetCategoryId: true,
+                description: true, department: true,
+                assetCategory: { select: { id: true, department: true } },
+                inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true } },
+              },
+            },
+          },
+        })
+      : []
+    const unresolvedBefore = out.unresolvedVehicles.length
+    const siblingHoldable = siblings
+      .flatMap((o) => o.lineItems)
+      .map((li) => ({ li, categoryId: categoryFor(li) }))
+      .filter(({ li, categoryId }) => !!categoryId && !!li.pickupDate && !!li.returnDate)
+    // categoryFor reports unresolved vehicles as a side effect; a
+    // sibling's free-typed truck is that order's problem, not this
+    // quote's, so the list is trimmed back to this order's own.
+    out.unresolvedVehicles.length = unresolvedBefore
+
     const windowsByCategory = new Map<string, HoldWindow[]>()
-    for (const { li, categoryId } of holdable) {
+    for (const { li, categoryId } of [...holdable, ...siblingHoldable]) {
       const w: HoldWindow = { start: li.pickupDate!, end: li.returnDate!, quantity: li.quantity || 1 }
       const list = windowsByCategory.get(categoryId!)
       if (list) list.push(w)
@@ -303,14 +354,22 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
           categoryId,
           status: { in: ['REQUESTED', 'ASSIGNED'] },
         },
-        select: { id: true, quantity: true, status: true },
+        select: { id: true, quantity: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
       })
       if (existing) {
         if (existing.quantity === want) { out.reused++; continue }
         // Never shrink below what a human has already assigned units to —
         // an ASSIGNED item is dispatch's work, not this function's.
         if (existing.status === 'ASSIGNED' && want < existing.quantity) { out.reused++; continue }
-        await prisma.bookingItem.update({ where: { id: existing.id }, data: { quantity: want } })
+        // Growing past the units already bound reopens the item: the
+        // availability maths and the needs-a-unit lane count only
+        // REQUESTED demand, so an ASSIGNED item at 2 with one truck on
+        // it was an invisible open slot (SR-JOB-0347, 2026-09-10).
+        const reopen = existing.status === 'ASSIGNED' && want > existing._count.assignments
+        await prisma.bookingItem.update({
+          where: { id: existing.id },
+          data: { quantity: want, ...(reopen ? { status: 'REQUESTED' } : {}) },
+        })
         out.adjusted++
         continue
       }

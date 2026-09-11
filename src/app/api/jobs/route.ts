@@ -26,6 +26,7 @@ import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
+import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
@@ -370,6 +371,10 @@ export async function GET(req: NextRequest) {
       arr.push(c)
       companyCoisByCompany.set(c.companyId, arr)
     }
+    // Annual accounts: the company's current auto-covering master papers
+    // every job it books, addendum row or not — the same read as the job
+    // page's annualCoverage banner (lib/orders/annualCoverage).
+    const annualByCompany = await annualCoverageByCompany(jobs.map((j) => j.companyId))
 
     // …unless the production told us THIS job runs on its own policy (Wes,
     // 2026-09-09). That is the one answer that stops the account cert
@@ -501,6 +506,7 @@ export async function GET(req: NextRequest) {
       // past its expiry reads as unsigned again, not as covered.
       const now = new Date()
       const coveredBy = (type: ContractType) =>
+        (!!j.companyId && !!annualByCompany.get(j.companyId)?.has(type)) ||
         j.agreementAddenda.some(
           (a) =>
             a.companyAgreement.contractType === type &&

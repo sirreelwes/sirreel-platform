@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAssistantChat } from './useAssistantChat'
+import { ASSISTANT_EXPANSION, ASSISTANT_NAME } from '@/lib/assistant/identity'
 import { MessageSquare } from 'lucide-react'
 
 export function PublicAssistantWidget() {
@@ -33,7 +34,7 @@ export function PublicAssistantWidget() {
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
           <span className="text-[17px] leading-none"><MessageSquare size={16} aria-hidden /></span>
-          Need help?
+          Ask {ASSISTANT_NAME}
         </button>
       )}
 
@@ -43,9 +44,9 @@ export function PublicAssistantWidget() {
           <div className="flex items-center justify-between px-4 py-3 bg-[#0c0c0d] border-b border-[#2e2e30]">
             <div>
               <div className="text-white font-extrabold text-[14px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                SirReel Assistant
+                {ASSISTANT_NAME}
               </div>
-              <div className="text-[#8b857a] text-[11px]">After-hours help · (888) 477-7335</div>
+              <div className="text-[#8b857a] text-[11px]">{ASSISTANT_EXPANSION} · (888) 477-7335</div>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -100,7 +101,7 @@ export function PublicAssistantWidget() {
               </button>
             </div>
             <div className="text-[10px] text-[#5c574d] mt-1.5">
-              For emergencies call (888) 477-7335 — this assistant can also file a callback.
+              {ASSISTANT_NAME} is automated. For emergencies call (888) 477-7335 — it can also file a callback.
             </div>
           </div>
         </div>

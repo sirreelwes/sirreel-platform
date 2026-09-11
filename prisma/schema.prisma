@@ -2157,6 +2157,7 @@ model EmailMessage {
   // InquiryCapture verdict row — one per evaluated INBOUND message on
   // info@/jose@/oliver@. Drives the CRM capture-review widget.
   inquiryCapture InquiryCapture?
+  jobSignals     JobEmailSignal[]
 
   @@index([rfc822MessageId])
   @@index([duplicateOfId])
@@ -6061,6 +6062,7 @@ model Job {
   bookings              Booking[]
   dispatchTasks         DispatchTask[]
   jobContacts           JobContact[]
+  emailSignals          JobEmailSignal[]
   contractReviews       ContractReview[]
   coiChecks             CoiCheck[]
   agreementAddenda      JobAgreementAddendum[]
@@ -6374,6 +6376,9 @@ enum JobRole {
   PC
   TRANSPO
   ACCOUNTING
+  /// Art department contact (Wes 2026-09-10) — the person on an ART_DEPT
+  /// job who orders the set dressing, not a producer or a PC.
+  ART_DEPT
   OTHER
 }
 
@@ -9773,6 +9778,37 @@ enum SmsDirection {
   OUTBOUND
 }
 
+/// What AHA lets a phone number do, when a person has been added or
+/// blocked BY HAND on /admin/assistant. Numbers that belong to an HQ user
+/// or to a contact on a current job are recognised without a row here —
+/// the row is for everyone else, and for taking someone away.
+/// Wes 2026-09-11: "a way to add and subtract people from the AHA list".
+enum AhaLevel {
+  BLOCKED
+  CONTACT
+  STAFF
+  ADMIN
+}
+
+model AhaGrant {
+  id          String    @id @default(uuid())
+  /// As typed. Matching is on the ten-digit tail below.
+  phone       String    @db.VarChar(30)
+  phoneTail   String    @map("phone_tail") @db.VarChar(10)
+  name        String    @db.VarChar(120)
+  level       AhaLevel
+  /// CONTACT grants need a job to be a contact ON; ignored for other levels.
+  jobId       String?   @map("job_id")
+  note        String?   @db.VarChar(300)
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  revokedById String?   @map("revoked_by_id")
+  revokedAt   DateTime? @map("revoked_at")
+
+  @@index([phoneTail])
+  @@map("sr_aha_grants")
+}
+
 model SmsThread {
   id             String    @id @default(uuid())
   /// E.164, unique — the thread key.
@@ -9827,4 +9863,58 @@ model SmsMessage {
   @@index([threadId, createdAt])
   @@index([jobId])
   @@map("sr_sms_messages")
+}
+
+// ── Job email signals ─────────────────────────────────────────────────
+// A client email that READS like a change of plan on a live job — a
+// cancellation, a hold, moved dates, an extension, an early return, or
+// something added to / dropped from the order ("a couple of fans").
+// Written by src/lib/email/jobChangeSignals.ts at ingest; NEVER applied
+// to the job by the system. Wes 2026-09-11: "there can be nuance in a
+// client's cancelling or changing of a job — any changes to HQ are gated
+// with a confirmation or suggestion." A row is the suggestion; a human
+// confirms (and makes the change through the existing controls) or
+// dismisses it. One row per (job, message).
+
+enum JobEmailSignalKind {
+  CANCEL
+  HOLD
+  DATE_CHANGE
+  EXTEND
+  RETURN_EARLY
+  ADD_ITEMS
+  REMOVE_ITEMS
+}
+
+enum JobEmailSignalStatus {
+  OPEN
+  CONFIRMED
+  DISMISSED
+}
+
+model JobEmailSignal {
+  id             String               @id @default(uuid())
+  jobId          String               @map("job_id")
+  emailMessageId String               @map("email_message_id")
+  kind           JobEmailSignalKind
+  status         JobEmailSignalStatus @default(OPEN)
+  /// The phrase / classifier verdict / extractor nature that raised it —
+  /// shown verbatim so the reader can judge the nuance themselves.
+  evidence       String[]             @default([])
+  /// How the message was tied to this job: thread / contact / domain / subject.
+  linkedBy       String[]             @default([]) @map("linked_by")
+  /// One-line AI summary of the message when one exists.
+  summary        String?              @db.Text
+  resolvedById   String?              @map("resolved_by_id")
+  resolvedAt     DateTime?            @map("resolved_at")
+  resolutionNote String?              @map("resolution_note") @db.Text
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  job     Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  message EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, emailMessageId])
+  @@index([status, createdAt])
+  @@index([jobId, status])
+  @@map("sr_job_email_signals")
 }

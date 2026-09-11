@@ -25,6 +25,7 @@ scripts/*
 !scripts/onboard-power-trip.ts
 !scripts/onboard-battery-partners.ts
 !scripts/battery-partner-candidates.ts
+!scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
 !scripts/import-annual-agreements.ts
 !scripts/create-annual-agreement-companies.ts
@@ -86,3 +87,4 @@ scripts/*
 !scripts/backfill-auto-reply-flag.ts
 !scripts/rw-sync-status.ts
 !scripts/planyo-unit-alignment.ts
+!scripts/brief-email-crosscheck.ts

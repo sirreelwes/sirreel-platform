@@ -169,6 +169,133 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## After-hours VEHICLE pickup email (2026-09-10)
+- Wes: "an easy button for sales to send this summary" — Jose's hand-typed
+  After Hours Instructions (address, Gate 1 code, driver's-license line,
+  Vehicle / Plate / Lock Box Code). `JobVehiclePickupPanel` on `/jobs/[id]`
+  → `/api/jobs/[id]/vehicle-pickup` → `src/lib/afterHours/vehiclePickup.ts`.
+  **The gate code and each unit's `Asset.accessCode` go IN the email** (the
+  container flow next to it sends a link instead — different call, on
+  purpose). Units = the job's live assignments; no lock box code = 409
+  naming the unit; no plate = the row is omitted (0/81 units have a plate
+  on file — Fleet page edits it). The old `/vehiclemap` + `/lockbox` links
+  are dead and deliberately absent. Recorded as AuditLog
+  `job.vehicle_pickup_sent`, never on `Job.afterHours*`.
+  `npm run test:vehicle-pickup`.
+
+## Text messaging (Twilio) — A2P 10DLC campaign APPROVED 2026-09-10
+- Campaign `CMadf71a…` (ACCOUNT_NOTIFICATION) on Messaging Service
+  `MGda3482bd81e2c26b45cc188de36124dc`, number (747) 335-1665. Filing,
+  keyword replies and the go-live checklist: `docs/sms/twilio-a2p-campaign.md`.
+  `KEYWORD_REPLIES` in `src/lib/sms/threads.ts` must match that doc.
+- **Sends must go THROUGH the service to count as registered.** Set
+  `TWILIO_MESSAGING_SERVICE_SID` and `sendSms` sends `MessagingServiceSid`
+  with no `From`; `TWILIO_FROM_NUMBER` is only the fallback. A bare-number
+  send from a number outside the service is filtered by carriers (30034)
+  with no error at send time. `GET /api/admin/a2p-campaign` reports
+  `sendPath` and `service.fromNumberInService`. `npm run test:sms-config`.
+- Every outbound goes through `sendTracked()` (STOP honored, quiet hours
+  9pm–6am Pacific for automated sends, one `SmsMessage` row per text).
+- **The assistant is named AHA** (SirReel After Hours Assistant — Wes,
+  2026-09-10). Name, expansion, greeting and SMS intro live in
+  `src/lib/assistant/identity.ts`; the prompt, the chat widget, /help, the
+  admin page and the nav all import from there. It always says it is
+  automated, and texts still name SirReel Studio Services (carrier-filed).
+  The keyword replies stay exactly as filed — no name in them.
+- **Sender number is a release factor by text** (Wes, 2026-09-10): the
+  number a text came from, when on file for a driver OR a production
+  contact on a CURRENT job, plus the unit number or VIN last 4, releases
+  that job's truck without the job code (`verifyAndRelease.senderPhone`,
+  `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
+  to the live assignment — a number on another job unlocks nothing. Web
+  chat never passes a number; the job-code paths are unchanged.
+- **AHA knows who is texting, by number, server-side**
+  (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
+  active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as
+  staff)") or `emergencyPhone` matches → `staff_lookup_unit` / `staff_lookup_job`
+  (who is on Cube 27, has a job come back, drivers + numbers). PRODUCTION
+  CONTACT on a CURRENT job (JobContact or booking requester, ±7 days) →
+  `my_job_info` + free use of file_callback_request ("wide leeway", Wes).
+  Lookups in `src/lib/assistant/lookups.ts`, read-only, never codes or
+  pricing. Web chat gets none of this — there is no number to match.
+- **"Who AHA recognises" on /admin/assistant** (Wes 2026-09-11: "where do I
+  manage what numbers have access to what") — `listRecognizedNumbers()` in
+  `src/lib/assistant/recognizedNumbers.ts` lists every number in a tier
+  (staff / production contact / checkout driver) with the field it sits in,
+  what it unlocks, when it lapses, and a link to the record. It reads the
+  SAME predicates as `identifySender` / `verifyAndRelease` so the list is
+  the access — nothing is granted there. Change the record it points to.
+  `npm run test:recognized-numbers`.
+- **AHA greets known people by first name** (Wes 2026-09-11: "Hi, Joelle!"
+  the first time, don't overuse it, work it in again after an hour or
+  more). Decided SERVER-SIDE in `src/lib/assistant/greeting.ts`:
+  `greetingMoment(thread)` reads the thread's last in/outbound BEFORE the
+  new inbound is recorded → first / returning (≥ 60 min) / none, and
+  `greetingInstruction()` is the prompt block. The name comes from
+  `SenderIdentity.firstName` (staff user or matched contact) or
+  `identifyNumber().firstName` (partner driver / CRM person). Text only —
+  web chat has no number. `npm run test:greeting`.
+- **AHA access LEVELS** (Wes 2026-09-11: "whatever they can from whatever
+  role they have in HQ", plus add/subtract people by hand). One level per
+  sender, resolved in `src/lib/assistant/access.ts`: BLOCKED grant →
+  hand-made grant → HQ role (`levelForRole`: ADMIN→admin, MANAGER/AGENT/
+  BILLING→staff) → contact on a current job → public. Hand-made rows are
+  `AhaGrant` (`sr_aha_grants`, one active row per number, revoked never
+  deleted) added on /admin/assistant → "Add a person · or block one"
+  (admin only, audited `admin.aha_grant_*`). `SenderIdentity.level` picks
+  the tools in `runAssistant`; a BLOCKED number gets a fixed line in the
+  SMS route and never reaches the model. **Schema change: run
+  `npx prisma db push` (additive: one enum + one table) — until then the
+  grant reads fail soft and only the derived tiers apply.**
+  `npm run test:aha-access`.
+- **ADMIN level = continuity** (Wes: Greyson Bailey is backup CEO; "if
+  anything happens to me, AHA can explain everything I've been doing").
+  NOT a hidden door — an explicit, audited capability of the admin level:
+  `platform_memory(query)` searches CLAUDE.md + SHIPLOG.md + docs/**/*.md
+  by section (`src/lib/assistant/memory.ts`, credential-looking lines
+  redacted; the markdown is traced into the two routes via
+  `outputFileTracingIncludes`), `recent_activity(days)` reads the admins'
+  audit log (counts + latest rows, never old/new values). Reached by text
+  from an admin-level number, or — stronger — signed in on
+  /admin/assistant → "Ask AHA as yourself" (`POST /api/admin/assistant/ask`,
+  channel `hq`, level from the session role, audited `hq.assistant_tools`).
+  New HQ users: `npx tsx scripts/add-hq-user.ts --name … --email … --role
+  ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
+  `npm run test:memory-search`.
+
+## Email never changes a job on its own (2026-09-11 — Wes)
+- Wes: "there can be nuance in a client's cancelling or changing of a
+  job — we want to make sure that any changes to HQ are gated with a
+  confirmation or suggestion." **Rule: no code path may change a Job,
+  Order, Booking, hold or assignment because of what an email SAYS.**
+  Email may raise a suggestion; a person applies the change through the
+  existing controls (Mark lost, status menu, order dates).
+- The suggestion is `JobEmailSignal` (`sr_job_email_signals`, kind
+  CANCEL / HOLD / DATE_CHANGE / EXTEND / RETURN_EARLY / ADD_ITEMS /
+  REMOVE_ITEMS, status OPEN → CONFIRMED / DISMISSED). Add-ons ("a couple
+  of fans") and drops ("cancel the fans, keep the cube") are ORDER
+  changes: the rep edits the line items; a bare "cancel the cube" reads
+  as a drop, and whether it is the whole job is the rep's call. `src/lib/email/jobChangeSignals.ts`:
+  `classifyChangeSignal()` is the pure read of the words + the reply
+  classifier + the extractor's messageNature, evidence quoted verbatim;
+  `detectJobChangeSignals(messageId)` ties the message to LIVE jobs
+  (thread.jobId / JobContact email / company website domain / order
+  number in the subject) and upserts one row per (job, message). Runs
+  from the pubsub ingest and again after extraction. Shown on the job
+  page (`JobEmailSignalsCard` — Mark lost… opens the same modal as the
+  menu; Handled / Not a change resolve the row, audited
+  `job.email_signal_*`) and in Action Items (`email-change-signal`).
+- `applyReplyClassificationToCadence` no longer marks an order LOST on
+  EXPLICIT_REJECTION — it pauses the cadence and leaves the LOST call to
+  the human. (It was dead anyway: `EmailMessage.companyId` is never
+  written at ingest, so the bridge always returned `no-company-link`.)
+- `scripts/brief-email-crosscheck.ts` is the manual version of the same
+  read: the jobs a "Today at SirReel" brief named, against the last N
+  days of client email, flagged with the same classifier. Read-only.
+- **Schema change: run `npx prisma db push` (additive: two enums + one
+  table). Until then every write/read of the table fails soft** — no
+  suggestions, nothing else affected. `npm run test:job-change-signals`.
+
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
   Hill / Long Beach) is the second partner after King Kong, and rents

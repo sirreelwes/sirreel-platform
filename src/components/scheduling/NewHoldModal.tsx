@@ -233,8 +233,8 @@ export function NewHoldModal({
   // "+ New company" — creates via the CRM endpoint, which returns a
   // 409 near_match when a similarly-named company exists; the agent
   // explicitly chooses "use existing" or "create anyway".
-  async function createCompany(allowNearMatch: boolean) {
-    const name = newCompanyName.trim()
+  async function createCompany(allowNearMatch: boolean, nameOverride?: string) {
+    const name = (nameOverride ?? newCompanyName).trim()
     if (!name) return
     setCompanyBusy(true)
     setCompanyError(null)
@@ -537,9 +537,17 @@ export function NewHoldModal({
               Company <span className="normal-case tracking-normal text-zinc-400">(optional — can follow later)</span>
             </span>
             <CompanyPicker
+              tone="light"
               value={company?.id ?? null}
               selectedName={company?.name ?? null}
               onChange={(id, name) => setCompany(id ? { id, name } : null)}
+              onCreate={(name) => {
+                setNewCompanyName(name)
+                setCompanyError(null)
+                setCompanyNearMatch(null)
+                setCreatingCompany(true)
+                void createCompany(false, name)
+              }}
             />
             {!creatingCompany ? (
               <button

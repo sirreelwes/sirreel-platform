@@ -138,10 +138,16 @@ export async function clearUnexecutedFutureEvents(
 export async function scheduleCadenceForState(
   orderId: string,
   state: CadenceState,
-  opts: { now?: Date } = {},
+  opts: { now?: Date; suppress?: CadenceEventType[] } = {},
   tx: Tx | PrismaClient = prisma,
 ): Promise<{ scheduled: number; skippedPast: number }> {
-  const templates = EVENT_PLAN[state] || []
+  // `suppress` drops named events from this one plan without touching
+  // the plan itself — used when an order is booked straight from DRAFT
+  // (no quote was ever sent) so the client is not welcomed to a booking
+  // whose numbers they have never seen. The pre-invoice is their first
+  // document in that path.
+  const suppress = new Set<CadenceEventType>(opts.suppress ?? [])
+  const templates = (EVENT_PLAN[state] || []).filter((t) => !suppress.has(t.eventType))
   if (templates.length === 0) return { scheduled: 0, skippedPast: 0 }
 
   const order = await (tx as Prisma.TransactionClient | typeof prisma).order.findUnique({
@@ -182,7 +188,7 @@ export async function scheduleCadenceForState(
 export async function transitionCadenceState(
   orderId: string,
   newState: CadenceState,
-  opts: { now?: Date } = {},
+  opts: { now?: Date; suppress?: CadenceEventType[] } = {},
 ): Promise<{ scheduled: number; cleared: number; skippedPast: number }> {
   return prisma.$transaction(async (tx) => {
     const cleared = await clearUnexecutedFutureEvents(orderId, tx as unknown as Tx)
