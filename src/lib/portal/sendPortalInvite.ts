@@ -92,10 +92,17 @@ export async function sendPortalInvite(args: {
     })
   }
 
+  // 'refresh' is the default since 2026-09-11: every send used to mint a
+  // NEW PortalAccess row while the old ones stayed live, so Roger Blandon
+  // (SR-JOB-0351) held four rows on one order after a quote, an agreement
+  // release and two re-sends — the Portals page listed him four times and a
+  // revoke on one row left three working links. One live row per
+  // (order, contact); a re-send extends it. 'issue' remains only for a
+  // caller that has already revoked (the Resend button's regenerate path).
   const issued =
-    args.linkPolicy === 'refresh'
-      ? await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: person.id })
-      : await issueJobMagicLink({ orderId: order.id, contactId: person.id })
+    args.linkPolicy === 'issue'
+      ? await issueJobMagicLink({ orderId: order.id, contactId: person.id })
+      : await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: person.id })
   const portalUrl = portalJobUrl(order.portalSlug, issued.token)
 
   const jobLabel = order.job?.name || order.company?.name || ''

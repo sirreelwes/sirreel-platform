@@ -121,6 +121,45 @@ export default async function CompanyPortalsPage() {
     },
   })
 
+  // One row per PERSON, not per link. Until 2026-09-11 every send minted a
+  // fresh PortalAccess row and left the old ones live, so the pane showed
+  // the same contact four times with four Resend buttons (Roger Blandon,
+  // SR-JOB-0351). Older orders still carry those rows: fold them — newest
+  // link is the one Resend/Revoke act on, opens are summed, and a person is
+  // "expired" only when every link they hold has lapsed.
+  const groupPortalPeople = (
+    rows: {
+      id: string; contactId: string; createdAt: Date; revokedAt: Date | null; magicLinkExpiresAt: Date;
+      lastAccessedAt: Date | null; accessCount: number;
+      contact: { firstName: string; lastName: string; email: string };
+    }[],
+    at: Date,
+  ): JobPortalJobProps['orders'][number]['people'] => {
+    const byContact = new Map<string, JobPortalJobProps['orders'][number]['people'][number]>()
+    for (const a of rows) {
+      if (a.revokedAt) continue
+      const expired = a.magicLinkExpiresAt.getTime() < at.getTime()
+      const cur = byContact.get(a.contactId)
+      if (!cur) {
+        byContact.set(a.contactId, {
+          accessId: a.id, accessIds: [a.id], contactId: a.contactId,
+          name: `${a.contact.firstName} ${a.contact.lastName}`.trim(), email: a.contact.email,
+          sentAt: a.createdAt.toISOString(), lastAccessedAt: a.lastAccessedAt?.toISOString() ?? null,
+          accessCount: a.accessCount, expired, links: 1,
+        })
+        continue
+      }
+      cur.accessIds.push(a.id)
+      cur.links += 1
+      cur.accessCount += a.accessCount
+      cur.expired = cur.expired && expired
+      if (a.lastAccessedAt && (!cur.lastAccessedAt || a.lastAccessedAt.toISOString() > cur.lastAccessedAt)) {
+        cur.lastAccessedAt = a.lastAccessedAt.toISOString()
+      }
+    }
+    return [...byContact.values()]
+  }
+
   // Jobs pane: every order with at least one portal link, grouped by job,
   // with what the portal currently shows (releases live on the order).
   const SIGNED = ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED', 'SIGNED_OFFLINE']
@@ -167,12 +206,7 @@ export default async function CompanyPortalsPage() {
       quoteSent: !!o.quoteSentAt,
       agreement,
       invoicesVisible: o.invoices.length,
-      people: o.portalAccesses.filter((a) => !a.revokedAt).map((a) => ({
-        accessId: a.id, contactId: a.contactId,
-        name: `${a.contact.firstName} ${a.contact.lastName}`.trim(), email: a.contact.email,
-        sentAt: a.createdAt.toISOString(), lastAccessedAt: a.lastAccessedAt?.toISOString() ?? null,
-        accessCount: a.accessCount, expired: a.magicLinkExpiresAt.getTime() < now.getTime(),
-      })),
+      people: groupPortalPeople(o.portalAccesses, now),
     })
     jobsMap.set(o.job.id, entry)
   }

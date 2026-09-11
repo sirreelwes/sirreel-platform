@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { nextOrderNumber } from '@/lib/orders'
 import { applyStandingDiscounts } from '@/lib/orders/applyStandingDiscounts'
 import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import {
   ensureSignedAgreementForOrder,
@@ -71,7 +71,7 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
   const resolveToExisting = async (orderId: string): Promise<WelcomeStartResult> => {
     const order = await prisma.order.findUnique({ where: { id: orderId }, select: { portalSlug: true } })
     if (!order?.portalSlug) return landing
-    const issued = await issueJobMagicLink({ orderId, contactId: invite.personId })
+    const issued = await refreshOrIssueJobMagicLink({ orderId, contactId: invite.personId })
     return { kind: 'redirect', url: portalJobUrl(order.portalSlug, issued.token) }
   }
   if (invite.createdOrderId) return resolveToExisting(invite.createdOrderId)
@@ -209,6 +209,6 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
   }
 
   if (!portalSlug) return landing
-  const issued = await issueJobMagicLink({ orderId, contactId: invite.personId })
+  const issued = await refreshOrIssueJobMagicLink({ orderId, contactId: invite.personId })
   return { kind: 'redirect', url: portalJobUrl(portalSlug, issued.token) }
 }

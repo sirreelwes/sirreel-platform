@@ -8,7 +8,7 @@ import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { inBusinessHours } from '@/lib/email/notifyClientCreatedJob'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { companyNameKey } from '@/lib/companies/normalize'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl, portalBaseUrl } from '@/lib/portal/portalUrl'
 import { startWelcomeInvite } from '@/lib/portal/welcomeStart'
 import {
@@ -403,7 +403,7 @@ export async function confirmJobEntry(token: string): Promise<{ kind: 'redirect'
   if (!entry.usedAt) {
     await prisma.agreementEntry.updateMany({ where: { id: entry.id, usedAt: null }, data: { usedAt: new Date() } })
   }
-  const issued = await issueJobMagicLink({ orderId: order.id, contactId: entry.personId })
+  const issued = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: entry.personId })
   return { kind: 'redirect', url: portalJobUrl(order.portalSlug, issued.token) }
 }
 

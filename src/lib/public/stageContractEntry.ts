@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { resolvePersonByEmail } from '@/lib/people/email'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl, portalBaseUrl } from '@/lib/portal/portalUrl'
 import { isStageLineItem } from '@/lib/orders/stageLines'
 import { emailShell, btn, P, esc, entryToken, expiry } from '@/lib/public/agreementEntry'
@@ -373,6 +373,6 @@ export async function confirmStageEntry(
   if (!entry.usedAt) {
     await prisma.agreementEntry.updateMany({ where: { id: entry.id, usedAt: null }, data: { usedAt: new Date() } })
   }
-  const issued = await issueJobMagicLink({ orderId: target.id, contactId: entry.personId })
+  const issued = await refreshOrIssueJobMagicLink({ orderId: target.id, contactId: entry.personId })
   return { kind: 'redirect', url: portalJobUrl(target.portalSlug, issued.token) }
 }

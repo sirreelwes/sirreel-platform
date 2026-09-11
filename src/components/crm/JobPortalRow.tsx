@@ -16,7 +16,12 @@ import Link from 'next/link'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 
 export interface JobPortalPerson {
+  /** Newest live link — what Resend regenerates from. */
   accessId: string
+  /** Every live link this person holds on the order (older sends minted
+   *  duplicates); Revoke must close all of them or the portal stays open. */
+  accessIds: string[]
+  links: number
   contactId: string
   name: string
   email: string
@@ -61,16 +66,18 @@ export function JobPortalRow(props: JobPortalJobProps) {
   const [gone, setGone] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<string | null>(null)
 
-  async function revoke(orderId: string, accessId: string) {
+  async function revoke(orderId: string, accessId: string, accessIds: string[]) {
     if (!confirm('Revoke this person’s link to the job portal?')) return
     setBusy(accessId)
     try {
-      const res = await fetch(`/api/orders/${orderId}/portal-access`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portalAccessId: accessId }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Revoke failed')
+      for (const id of accessIds) {
+        const res = await fetch(`/api/orders/${orderId}/portal-access`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portalAccessId: id }),
+        })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Revoke failed')
+      }
       setGone((g) => new Set(g).add(accessId))
       setNotice('Revoked.')
     } catch (e) {
@@ -146,6 +153,11 @@ export function JobPortalRow(props: JobPortalJobProps) {
                       {p.lastAccessedAt ? `opened ${fmt(p.lastAccessedAt)} (${p.accessCount}×)` : 'never opened'}
                     </span>
                     {p.expired && <span className="px-2 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg">link expired</span>}
+                    {p.links > 1 && (
+                      <span className="px-2 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg" title="Older sends each minted a link; all of them still open this portal">
+                        {p.links} links
+                      </span>
+                    )}
                     {props.canEdit && (
                       <>
                         <button
@@ -157,7 +169,7 @@ export function JobPortalRow(props: JobPortalJobProps) {
                           {busy === p.accessId ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Resend
                         </button>
                         <button
-                          onClick={() => revoke(o.orderId, p.accessId)}
+                          onClick={() => revoke(o.orderId, p.accessId, p.accessIds)}
                           disabled={busy === p.accessId}
                           className="text-lt-fg3 hover:text-chip-bad-fg"
                           title="Revoke"
