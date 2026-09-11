@@ -1617,12 +1617,18 @@ function NewQuotePageInner() {
     return { lineSum, rows: withOrder, total };
   }, [discounts, departmentSubtotals]);
 
+  /** The waiver as money, for the vehicles section and the total. A fee,
+   *  so it lands after discounts like every other fee. */
+  const lcdwAmount = useMemo(
+    () => (lcdwOn && lcdwFee ? lcdwFee.amount * lcdwEstimate.vehicleDays : 0),
+    [lcdwOn, lcdwFee, lcdwEstimate.vehicleDays],
+  );
   const orderTotal = useMemo(
     // Fees are added AFTER discounts on purpose: a gear discount
     // discounts gear, not a delivery run. Same order the order page
     // and the quote PDF use.
-    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total) + feeTotal,
-    [discountBreakdown, feeTotal],
+    () => Math.max(0, discountBreakdown.lineSum - discountBreakdown.total) + feeTotal + lcdwAmount,
+    [discountBreakdown, feeTotal, lcdwAmount],
   );
 
   // Save is allowed when there's at least one line item AND the user
@@ -2823,6 +2829,20 @@ function NewQuotePageInner() {
                 key={dept}
                 department={dept}
                 rows={group}
+                // The waiver shows as a line under the vehicles it covers
+                // (Wes 2026-09-10: "I don't see the fees adding to the
+                // line above") — derived, not a row the rep edits; the
+                // card below is where it is switched on or off.
+                derivedLine={
+                  dept === 'VEHICLES' && lcdwOn && lcdwFee && lcdwEstimate.vehicleDays > 0
+                    ? {
+                        label: 'Damage waiver (LCDW)',
+                        note: `${fmtMoney(lcdwFee.amount)}/day × ${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'} · ${lcdwEstimate.eligible} eligible line${lcdwEstimate.eligible === 1 ? '' : 's'}`,
+                        rate: lcdwFee.amount,
+                        amount: lcdwAmount,
+                      }
+                    : null
+                }
                 onChange={updateItem}
                 onDelete={removeItem}
                 onAdd={() => addRowToDept(dept)}
@@ -3139,10 +3159,13 @@ const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
-  companyId,
+  companyId, derivedLine,
 }: {
   department: LineItemDepartment;
   rows: ResolvedItem[];
+  /** A line the section carries but the rep does not edit here — the
+   *  damage waiver under the vehicles. Counted in the section subtotal. */
+  derivedLine?: { label: string; note: string; rate: number; amount: number } | null;
   /** The client this quote is for — prices the catalog picker off their
    *  negotiated rate card. Null for a brand-new company (no deals yet). */
   companyId: string | null;
@@ -3304,6 +3327,19 @@ function DepartmentGroup({
             descriptionRef={registerDescriptionRef?.(it.localId)}
           />
         ))}
+        {derivedLine && (
+          <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 items-center border-t border-dashed border-lt-hairline bg-chip-good-bg/40`}>
+            <div className="text-sm tabular-nums text-lt-fg2 text-center">1</div>
+            <div className="min-w-0">
+              <div className="text-sm text-lt-fg font-medium">{derivedLine.label}</div>
+              <div className="text-[11px] text-lt-fg3">{derivedLine.note}</div>
+            </div>
+            <div className="text-sm tabular-nums text-lt-fg2 text-right">{fmtMoney(derivedLine.rate)}</div>
+            <div className="col-span-3 text-[11px] text-lt-fg3">Follows the vehicle lines above</div>
+            <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(derivedLine.amount)}</div>
+            <div></div>
+          </div>
+        )}
       </div>
 
       {/* Per-category add — drops a blank row defaulted to this
@@ -3324,7 +3360,7 @@ function DepartmentGroup({
       {/* Subtotal row */}
       <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-lt-fg2 items-center`}>
         <div className="col-span-6 font-bold uppercase tracking-wider text-[11px]">Subtotal</div>
-        <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal)}</div>
+        <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal + (derivedLine?.amount ?? 0))}</div>
         <div></div>
       </div>
     </section>
