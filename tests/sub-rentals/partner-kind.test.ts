@@ -5,8 +5,10 @@
  *   · partnerVocab / defaultReceiveMethodFor: an equipment partner's unit is
  *     DELIVERED unless the unit says otherwise; a vehicle partner's is driven.
  *   · groupPartnerUnits: a generator and a star wagon never share a section
- *     on /vehicles; sections come out in page order; a unit with no section
- *     falls into the vendor's default, never off the page.
+ *     on /vehicles; sections come out in page order. Membership is the card's
+ *     `section`, not `partner`: the loader always resolves a partner unit's
+ *     section (resolvePartnerSection — never off the page), and an owned
+ *     Specialty Vehicle carries LOCATION_VEHICLES beside partner coaches.
  *   · vendorAgreementFor: EQUIPMENT files the Partner Equipment Agreement,
  *     whose clause 7 is delivery/setup, not drivers; VEHICLES is unchanged.
  *   · buildPartnerWelcome: the equipment welcome never asks for a driver and
@@ -54,8 +56,9 @@ const groups = groupPartnerUnits([unit('cube', null, false), unit('gen100', 'POW
 eq('owned fleet is not a partner group', groups.some((g) => g.items.some((i) => i.id === 'cube')), false)
 eq('sections come out in page order', groups.map((g) => g.meta.key), ['LOCATION_VEHICLES', 'POWER_GENERATORS', 'LIFTS'])
 eq('generators share one section', groups.find((g) => g.meta.key === 'POWER_GENERATORS')!.items.map((i) => i.id), ['gen100', 'gen60'])
-eq('a partner unit with no section lands in the default group', groupPartnerUnits([unit('mystery', null)]).map((g) => g.meta.key), ['LOCATION_VEHICLES'])
-eq('no partner units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
+eq('a sectionless partner unit resolves to the default before it reaches the grid', resolvePartnerSection({ catalogSection: null }, { catalogSection: null }).key, 'LOCATION_VEHICLES')
+eq('an owned specialty vehicle shares the section with partner coaches', groupPartnerUnits([unit('restroom2', 'LOCATION_VEHICLES', false), unit('starwagon', 'LOCATION_VEHICLES')]).map((g) => [g.meta.key, g.items.map((i) => i.id)]), [['LOCATION_VEHICLES', ['restroom2', 'starwagon']]])
+eq('no sectioned units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
 
 // ── Agreement variant ───────────────────────────────────────────────────────
 const veh = vendorAgreementFor('VEHICLES')

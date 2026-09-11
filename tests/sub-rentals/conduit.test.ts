@@ -22,6 +22,7 @@ import {
   buildLogisticsForDriver,
   buildDriverNamedForProduction,
   buildDriverAckForProduction,
+  buildVendorWordForHq,
 } from '@/lib/sub-rentals/conduit'
 import { isProfileComplete, driverDisplayName } from '@/lib/sub-rentals/vendorDrivers'
 
@@ -134,6 +135,17 @@ no('missing phone = incomplete', isProfileComplete({ ...full, phone: '  ' }))
 no('missing first name = incomplete', isProfileComplete({ ...full, firstName: null }))
 eq('display name falls back to the email', driverDisplayName({ firstName: null, lastName: null, email: 'sam@kk.com' }), 'sam@kk.com')
 eq('display name joins first + last', driverDisplayName({ firstName: 'Sam', lastName: 'Driver', email: 'x' }), 'Sam Driver')
+
+// ── The partner's word, to HQ — a confirm the COI gate held back ────────────
+const word = { vendorName: 'PowerTrip Rentals', unitName: 'Generator 100 kW', startDate: '2026-09-14', endDate: '2026-09-16', jobCode: 'SR-JOB-0001', note: null, hqUrl: 'https://hq.sirreel.com/jobs/x#sub-rentals' }
+const blocked = buildVendorWordForHq({ ...word, kind: 'confirmed-coi-blocked', coiReason: 'This job has no certificate of insurance.' })
+yes('COI-blocked confirm says the COI has not cleared in the subject', /COI hasn’t cleared/.test(blocked.subject))
+yes('COI-blocked confirm says the status is still REQUESTED', /still REQUESTED/.test(blocked.text))
+no('COI-blocked confirm never claims CONFIRMED', /is CONFIRMED|now CONFIRMED/.test(blocked.text + blocked.html))
+yes('COI-blocked confirm carries the gate reason', /no certificate of insurance/.test(blocked.text) && /no certificate of insurance/.test(blocked.html))
+const plain = buildVendorWordForHq({ ...word, kind: 'confirmed', coiReason: 'ignored' })
+yes('a plain confirm still reads CONFIRMED', /CONFIRMED/.test(plain.text))
+no('a plain confirm never shows a COI reason', /ignored/.test(plain.text + plain.html))
 
 console.log(fail ? `\n${fail} FAILED` : '\nall ok')
 process.exit(fail ? 1 : 0)

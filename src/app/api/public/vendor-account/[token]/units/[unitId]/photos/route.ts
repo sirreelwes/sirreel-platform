@@ -42,12 +42,14 @@ const MAX_PHOTOS = 12
  */
 const UPLOAD_RATE = { windowMs: 10 * 60_000, max: 60 }
 
-/** The unit, only if it belongs to the partner holding this token. */
+/** The unit, only if it belongs to the partner holding this token AND is one
+ *  they offer to SirReel — the account page lists nothing else, and units kept
+ *  to their own workspace are not ours to put pictures on. */
 async function ownUnit(token: string, unitId: string) {
   const v = await vendorByToken(token)
   if (!v) return null
   const unit = await prisma.subcontractedVehicle.findFirst({
-    where: { id: unitId, vendorId: v.id },
+    where: { id: unitId, vendorId: v.id, offeredToSirReel: true },
     select: { id: true, name: true },
   })
   return unit ? { vendor: v, unit } : null

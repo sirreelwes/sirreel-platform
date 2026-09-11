@@ -31,7 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     return NextResponse.json({ ok: true, signedAt: r.signedAt })
   } catch (e) {
     const status = (e as { status?: number }).status ?? 500
-    if (status >= 500) console.error('[vendor agreement sign] failed:', e)
+    if (status >= 500) {
+      console.error('[vendor agreement sign] failed:', e)
+      return NextResponse.json({ error: 'Signing did not go through — please try again.' }, { status })
+    }
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Signing failed' }, { status })
   }
 }

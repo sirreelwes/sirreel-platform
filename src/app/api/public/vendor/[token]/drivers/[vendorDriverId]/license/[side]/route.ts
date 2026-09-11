@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
+import { vendorBookingWhere } from '@/lib/sub-rentals/potentialSubRental'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,10 +14,11 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   const { token, vendorDriverId, side } = params
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (side !== 'front' && side !== 'back') return NextResponse.json({ error: 'side must be front or back' }, { status: 400 })
-  const sub = await prisma.subRental.findFirst({ where: { vendorToken: token }, select: { vendorId: true } })
+  const sub = await prisma.subRental.findFirst({ where: vendorBookingWhere(token), select: { vendorId: true } })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const d = await prisma.vendorDriver.findFirst({
-    where: { id: vendorDriverId, vendorId: sub.vendorId },
+    // A driver removed from the roster takes their licence with them.
+    where: { id: vendorDriverId, vendorId: sub.vendorId, isActive: true },
     select: { firstName: true, lastName: true, licenseFrontUrl: true, licenseFrontMimeType: true, licenseBackUrl: true, licenseBackMimeType: true },
   })
   const url = side === 'front' ? d?.licenseFrontUrl : d?.licenseBackUrl

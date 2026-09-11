@@ -19,12 +19,13 @@
  */
 
 import { randomUUID } from 'crypto'
-import { get as getBlob, put } from '@vercel/blob'
+import { del, get as getBlob, put } from '@vercel/blob'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { prisma } from '@/lib/prisma'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { shouldNotifyHq } from '@/lib/sub-rentals/partnerPhotos'
+import { MAX_PROPOSED_RATE } from '@/lib/sub-rentals/rateProposalInput'
 
 async function tellHq(subject: string, line: string, href: string): Promise<void> {
   const to = await channelRecipients('vendor-portal')
@@ -86,11 +87,18 @@ export interface RateProposalInput {
 
 export async function proposeUnitRates(vendorId: string, unitId: string, input: RateProposalInput): Promise<void> {
   const unit = await prisma.subcontractedVehicle.findFirst({
-    where: { id: unitId, vendorId },
+    // Only units offered to SirReel — the account page lists nothing else.
+    where: { id: unitId, vendorId, offeredToSirReel: true },
     select: { id: true, name: true, listDailyRate: true, listWeeklyRate: true, listMonthlyRate: true, vendor: { select: { name: true } } },
   })
   if (!unit) throw Object.assign(new Error('unit not found'), { status: 404 })
-  const pos = (n: number | null | undefined) => (n != null && Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null)
+  // The route validates first (rateProposalInput.ts); this is the backstop, so
+  // an out-of-range number is a 400 here and never a Decimal(10,2) throw.
+  const pos = (n: number | null | undefined) => {
+    if (n == null) return null
+    if (!Number.isFinite(n) || n <= 0 || n > MAX_PROPOSED_RATE) throw Object.assign(new Error('Rates must be above $0 and no more than $1,000,000.'), { status: 400 })
+    return Math.round(n * 100) / 100
+  }
   const daily = pos(input.daily), weekly = pos(input.weekly), monthly = pos(input.monthly)
   if (daily == null && weekly == null && monthly == null) {
     throw Object.assign(new Error('Enter at least one rate.'), { status: 400 })
@@ -150,7 +158,7 @@ export async function resolveRateProposal(unitId: string, decision: 'accept' | '
  * signed — the partner's word is permission, not publication.
  */
 export async function setUnitMarketing(vendorId: string, unitId: string, allowed: boolean): Promise<void> {
-  const unit = await prisma.subcontractedVehicle.findFirst({ where: { id: unitId, vendorId }, select: { id: true, name: true, publiclyListed: true, vendor: { select: { name: true } } } })
+  const unit = await prisma.subcontractedVehicle.findFirst({ where: { id: unitId, vendorId, offeredToSirReel: true }, select: { id: true, name: true, publiclyListed: true, vendor: { select: { name: true } } } })
   if (!unit) throw Object.assign(new Error('unit not found'), { status: 404 })
   if (unit.publiclyListed === allowed) return
   await prisma.subcontractedVehicle.update({ where: { id: unit.id }, data: { publiclyListed: allowed } })
@@ -319,8 +327,12 @@ export async function signVendorAgreement(i: SignVendorAgreementInput): Promise<
   const key = `vendor-agreements/${i.vendorId}/${row.id}-signed-${signedAt.getTime()}.pdf`
   const up = await put(key, bytes, { access: 'private' as 'public', contentType: 'application/pdf' })
 
-  await prisma.vendorAgreement.update({
-    where: { id: row.id },
+  // Conditional on still being unsigned AND still live. The read above is
+  // seconds old by now (blob read, PDF build, blob write): a double submit
+  // would otherwise overwrite the first signer's evidence, and a staff re-file
+  // in between would let the partner "sign" the superseded document.
+  const won = await prisma.vendorAgreement.updateMany({
+    where: { id: row.id, signedAt: null, deletedAt: null },
     data: {
       signedAt,
       signerName: i.signerName,
@@ -334,6 +346,15 @@ export async function signVendorAgreement(i: SignVendorAgreementInput): Promise<
       signedFileUrl: up.url,
     },
   })
+  if (won.count !== 1) {
+    // Lost the race: the executed copy we just wrote belongs to nobody.
+    await del(up.url).catch(() => {})
+    const now = await prisma.vendorAgreement.findUnique({ where: { id: row.id }, select: { deletedAt: true } })
+    throw Object.assign(
+      new Error(now?.deletedAt ? 'This agreement was replaced while you were signing — reload the page to sign the current one.' : 'This agreement has already been signed.'),
+      { status: 409 },
+    )
+  }
   await tellHq(
     `${row.vendor.name} signed the partner agreement`,
     `${i.signerName}${i.signerTitle ? ` (${i.signerTitle})` : ''} signed "${row.title}" for ${row.vendor.name} from their partner page.`,

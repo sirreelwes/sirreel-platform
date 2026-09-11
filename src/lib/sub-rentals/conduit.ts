@@ -648,8 +648,10 @@ export function buildDriverQuestionForProduction(a: {
   return { subject, html, text }
 }
 
-/** To HQ: the partner confirmed — or cannot hold. */
-export type VendorWordKind = 'confirmed' | 'declined' | 'release-acked'
+/** To HQ: the partner confirmed — or cannot hold. `confirmed-coi-blocked` is
+ *  the partner's confirm landing on a job whose certificate hasn't cleared
+ *  (coiGate.ts): their word is recorded, the status is NOT moved. */
+export type VendorWordKind = 'confirmed' | 'confirmed-coi-blocked' | 'declined' | 'release-acked'
 
 export function buildVendorWordForHq(a: {
   kind: VendorWordKind
@@ -660,44 +662,57 @@ export function buildVendorWordForHq(a: {
   jobCode: string | null
   note: string | null
   hqUrl: string
+  /** confirmed-coi-blocked only: the gate's own sentence. */
+  coiReason?: string | null
 }): BuiltEmail {
   const range = fmtRange(a.startDate, a.endDate)
   const ref = a.jobCode ? ` · ${a.jobCode}` : ''
   const subject =
     a.kind === 'confirmed'
       ? `${a.vendorName} confirmed the hold — ${a.unitName}, ${range}${ref}`
-      : a.kind === 'release-acked'
-        ? `${a.vendorName} acknowledged the release — ${a.unitName}, ${range}${ref}`
-        : `${a.vendorName} CANNOT hold — ${a.unitName}, ${range}${ref}`
+      : a.kind === 'confirmed-coi-blocked'
+        ? `${a.vendorName} confirmed the hold, but the COI hasn’t cleared — ${a.unitName}, ${range}${ref}`
+        : a.kind === 'release-acked'
+          ? `${a.vendorName} acknowledged the release — ${a.unitName}, ${range}${ref}`
+          : `${a.vendorName} CANNOT hold — ${a.unitName}, ${range}${ref}`
   const heading =
     a.kind === 'confirmed'
       ? `${a.vendorName} confirmed`
-      : a.kind === 'release-acked'
-        ? `${a.vendorName} has the dates back`
-        : `${a.vendorName} can’t hold the dates`
+      : a.kind === 'confirmed-coi-blocked'
+        ? `${a.vendorName} confirmed — COI not cleared`
+        : a.kind === 'release-acked'
+          ? `${a.vendorName} has the dates back`
+          : `${a.vendorName} can’t hold the dates`
   const leadHtml =
     a.kind === 'confirmed'
       ? `${esc(a.vendorName)} pressed <strong>Confirm hold</strong> on their booking page for the <strong>${esc(a.unitName)}</strong>, ${esc(range)}. The sub-rental is now CONFIRMED.`
-      : a.kind === 'release-acked'
-        ? `${esc(a.vendorName)} confirmed they have the <strong>${esc(a.unitName)}</strong> back for ${esc(range)}. Nothing further is owed on this one — the release landed.`
-        : `${esc(a.vendorName)} says they <strong>cannot hold</strong> the <strong>${esc(a.unitName)}</strong> for ${esc(range)}. The status has NOT been changed — someone needs to source a replacement or talk to the client.`
+      : a.kind === 'confirmed-coi-blocked'
+        ? `${esc(a.vendorName)} pressed <strong>Confirm hold</strong> on their booking page for the <strong>${esc(a.unitName)}</strong>, ${esc(range)}. The sub-rental is still <strong>REQUESTED</strong>: the job's certificate of insurance hasn't cleared. Confirm it in HQ once it does — or with a written override.`
+        : a.kind === 'release-acked'
+          ? `${esc(a.vendorName)} confirmed they have the <strong>${esc(a.unitName)}</strong> back for ${esc(range)}. Nothing further is owed on this one — the release landed.`
+          : `${esc(a.vendorName)} says they <strong>cannot hold</strong> the <strong>${esc(a.unitName)}</strong> for ${esc(range)}. The status has NOT been changed — someone needs to source a replacement or talk to the client.`
   const leadText =
     a.kind === 'confirmed'
       ? `${a.vendorName} confirmed the hold on the ${a.unitName}, ${range}. Sub-rental is CONFIRMED.`
-      : a.kind === 'release-acked'
-        ? `${a.vendorName} confirmed they have the ${a.unitName} back for ${range}. The release landed.`
-        : `${a.vendorName} CANNOT hold the ${a.unitName} for ${range}. Status unchanged — source a replacement or talk to the client.`
+      : a.kind === 'confirmed-coi-blocked'
+        ? `${a.vendorName} confirmed the hold on the ${a.unitName}, ${range}. Sub-rental is still REQUESTED — the job's COI hasn't cleared. Confirm it in HQ once it does, or with a written override.`
+        : a.kind === 'release-acked'
+          ? `${a.vendorName} confirmed they have the ${a.unitName} back for ${range}. The release landed.`
+          : `${a.vendorName} CANNOT hold the ${a.unitName} for ${range}. Status unchanged — source a replacement or talk to the client.`
+  const coiReason = a.kind === 'confirmed-coi-blocked' ? a.coiReason ?? null : null
   const html = renderEmailShell({
     eyebrow: 'Sub-rentals',
     heading,
     bodyHtml: [
       p(leadHtml),
+      coiReason ? calloutBox(esc(coiReason)) : '',
       a.note ? calloutBox(`<strong>Their note:</strong><br/>${esc(a.note)}`) : '',
     ].join('\n'),
     cta: { label: 'Open the job in HQ', href: a.hqUrl },
   })
   const text = renderEmailText([
     leadText,
+    ...(coiReason ? ['', coiReason] : []),
     ...(a.note ? ['', `Their note: ${a.note}`] : []),
     '',
     a.hqUrl,
@@ -955,7 +970,12 @@ export async function relayDriverQuestion(subRentalId: string, question: string)
  * the order's agent, the sales desk, and the conduit CC — and an Alert is
  * raised so it shows on the dashboard even if nobody reads mail.
  */
-export async function notifyVendorWord(subRentalId: string, kind: VendorWordKind, note: string | null): Promise<void> {
+export async function notifyVendorWord(
+  subRentalId: string,
+  kind: VendorWordKind,
+  note: string | null,
+  opts: { coiReason?: string | null } = {},
+): Promise<void> {
   const row = await loadConduit(subRentalId)
   if (!row) return
   const unitName = unitNameOf(row)
@@ -970,6 +990,7 @@ export async function notifyVendorWord(subRentalId: string, kind: VendorWordKind
     jobCode: row.job?.jobCode ?? null,
     note,
     hqUrl,
+    coiReason: opts.coiReason ?? null,
   })
   const desk = await channelRecipients('sales-team-cc')
   const agent = row.job?.orders.find((o) => o.id === row.orderId)?.agent?.email ?? row.job?.orders[0]?.agent?.email ?? null
@@ -982,9 +1003,11 @@ export async function notifyVendorWord(subRentalId: string, kind: VendorWordKind
       label:
         kind === 'confirmed'
           ? 'sub-rental/vendor-confirmed'
-          : kind === 'release-acked'
-            ? 'sub-rental/vendor-release-acked'
-            : 'sub-rental/vendor-declined',
+          : kind === 'confirmed-coi-blocked'
+            ? 'sub-rental/vendor-confirmed-coi-blocked'
+            : kind === 'release-acked'
+              ? 'sub-rental/vendor-release-acked'
+              : 'sub-rental/vendor-declined',
       orderId: row.orderId,
     })
   }
@@ -994,13 +1017,16 @@ export async function notifyVendorWord(subRentalId: string, kind: VendorWordKind
         type:
           kind === 'confirmed'
             ? 'sub_rental.vendor_confirmed'
-            : kind === 'release-acked'
-              ? 'sub_rental.vendor_release_acked'
-              : 'sub_rental.vendor_declined',
+            : kind === 'confirmed-coi-blocked'
+              ? 'sub_rental.vendor_confirmed_coi_blocked'
+              : kind === 'release-acked'
+                ? 'sub_rental.vendor_release_acked'
+                : 'sub_rental.vendor_declined',
         title: mail.subject,
-        body: note ? `Their note: ${note}` : '',
-        // An acknowledged release is good news, not an alarm.
-        severity: kind === 'declined' ? 'high' : kind === 'release-acked' ? 'low' : 'medium',
+        body: [kind === 'confirmed-coi-blocked' ? opts.coiReason : null, note ? `Their note: ${note}` : null].filter(Boolean).join('\n'),
+        // An acknowledged release is good news, not an alarm. A confirm the
+        // COI gate held back needs a person, same as a decline.
+        severity: kind === 'declined' || kind === 'confirmed-coi-blocked' ? 'high' : kind === 'release-acked' ? 'low' : 'medium',
         link: jobId ? `/jobs/${jobId}#sub-rentals` : null,
       },
     })

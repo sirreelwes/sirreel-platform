@@ -2,6 +2,8 @@
  * POST /api/public/vendor/[token]/hold — the partner's own word on the hold.
  *
  *   { action: 'confirm' }               REQUESTED → CONFIRMED, vendorConfirmedAt stamped
+ *                                        (status stays REQUESTED when the COI gate
+ *                                        refuses — see below)
  *   { action: 'decline', note?: string } status UNCHANGED, vendorDeclinedAt + note stamped
  *   { action: 'ack-release' }            CANCELLED only — the partner has the dates
  *                                        back; recorded as an AuditLog event
@@ -13,6 +15,12 @@
  * CANCELLED because a partner clicked a button, with a client committed on
  * the other side, is worse than a loud alarm and a human deciding.
  *
+ * Confirming is gated like the staff route (lib/sub-rentals/coiGate.ts): no
+ * cleared COI, no CONFIRMED. The partner can't fix the production's
+ * certificate, so they are not refused — their confirm is stamped and their
+ * page reads as confirmed — but the status stays REQUESTED and HQ is alerted
+ * to confirm it once the COI clears, or with the named override.
+ *
  * Token-gated like everything on the vendor page; there is no vendor login.
  */
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,6 +28,8 @@ import { prisma } from '@/lib/prisma'
 import { notifyVendorWord } from '@/lib/sub-rentals/conduit'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
 import { recordReleaseAck } from '@/lib/sub-rentals/releaseAck'
+import { checkSubRentalCoi } from '@/lib/sub-rentals/coiGate'
+import { vendorBookingWhere } from '@/lib/sub-rentals/potentialSubRental'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const token = params.token
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const sub = await prisma.subRental.findFirst({
-    where: { vendorToken: token },
+    where: vendorBookingWhere(token),
     select: { id: true, status: true, vendorConfirmedAt: true },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -71,32 +81,53 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (sub.status === 'ESTIMATED') {
       return NextResponse.json({ error: 'Nothing to confirm yet — the production hasn’t accepted.' }, { status: 409 })
     }
-    const already = !!sub.vendorConfirmedAt
+    if (sub.vendorConfirmedAt) {
+      // Already their word — a second tab or a reload. The first press told HQ.
+      return NextResponse.json({ ok: true, status: sub.status, confirmedAt: sub.vendorConfirmedAt.toISOString() })
+    }
+
+    // Only REQUESTED → CONFIRMED is a transition the gate governs; a row staff
+    // already moved on keeps its status either way.
+    const verdict = sub.status === 'REQUESTED' ? await checkSubRentalCoi(sub.id) : null
+    const coiBlocked = !!verdict && !verdict.ok
+    const nextStatus = sub.status === 'REQUESTED' && !coiBlocked ? 'CONFIRMED' : sub.status
     const now = new Date()
-    await prisma.subRental.update({
-      where: { id: sub.id },
+    // Conditional on nobody having confirmed (or moved the status) since the
+    // read: a double click is one stamp, one audit row, one HQ mail.
+    const won = await prisma.subRental.updateMany({
+      where: { id: sub.id, vendorConfirmedAt: null, status: sub.status },
       data: {
-        status: sub.status === 'REQUESTED' ? 'CONFIRMED' : sub.status,
-        vendorConfirmedAt: sub.vendorConfirmedAt ?? now,
+        status: nextStatus,
+        vendorConfirmedAt: now,
         vendorDeclinedAt: null,
         vendorDeclineNote: null,
       },
     })
-    await stampVendorCost(sub.id).catch(() => null)
-    if (!already) {
-      await prisma.auditLog.create({
-        data: {
-          action: 'sub_rental.vendor_confirmed',
-          entityType: 'SubRental',
-          entityId: sub.id,
-          newValues: { from: sub.status, via: 'vendor-page' },
-        },
-      })
-      await notifyVendorWord(sub.id, 'confirmed', null).catch((err) =>
-        console.warn('[vendor/hold] notify failed:', err instanceof Error ? err.message : err),
-      )
+    if (won.count !== 1) {
+      const cur = await prisma.subRental.findUnique({ where: { id: sub.id }, select: { status: true, vendorConfirmedAt: true } })
+      if (cur?.vendorConfirmedAt) {
+        return NextResponse.json({ ok: true, status: cur.status, confirmedAt: cur.vendorConfirmedAt.toISOString() })
+      }
+      return NextResponse.json({ error: 'This booking just changed — reload the page.' }, { status: 409 })
     }
-    return NextResponse.json({ ok: true, status: sub.status === 'REQUESTED' ? 'CONFIRMED' : sub.status, confirmedAt: (sub.vendorConfirmedAt ?? now).toISOString() })
+    await stampVendorCost(sub.id).catch(() => null)
+    await prisma.auditLog.create({
+      data: {
+        action: 'sub_rental.vendor_confirmed',
+        entityType: 'SubRental',
+        entityId: sub.id,
+        newValues: {
+          from: sub.status,
+          to: nextStatus,
+          via: 'vendor-page',
+          ...(coiBlocked ? { coiBlocked: true, coiState: verdict!.state } : {}),
+        },
+      },
+    })
+    await notifyVendorWord(sub.id, coiBlocked ? 'confirmed-coi-blocked' : 'confirmed', null, { coiReason: verdict?.reason ?? null }).catch((err) =>
+      console.warn('[vendor/hold] notify failed:', err instanceof Error ? err.message : err),
+    )
+    return NextResponse.json({ ok: true, status: nextStatus, confirmedAt: now.toISOString() })
   }
 
   // decline

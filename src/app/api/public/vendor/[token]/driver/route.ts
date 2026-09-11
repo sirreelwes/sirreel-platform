@@ -15,6 +15,7 @@ import { assignDriver } from '@/lib/sub-rentals/driverRelay'
 import { notifyDriverAssigned } from '@/lib/sub-rentals/conduit'
 import { assignRosterDriver } from '@/lib/sub-rentals/vendorDrivers'
 import { recordConsent } from '@/lib/sms/threads'
+import { vendorBookingWhere } from '@/lib/sub-rentals/potentialSubRental'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   const sub = await prisma.subRental.findFirst({
-    where: { vendorToken: token },
+    where: vendorBookingWhere(token),
     select: { id: true, status: true },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
