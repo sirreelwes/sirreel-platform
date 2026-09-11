@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { EmailBody } from '@/components/email/EmailBody'
 
 interface DrawerMessage {
@@ -132,7 +133,9 @@ export function InquirySourceDrawer({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]" onClick={onClose} aria-hidden="true" />
+      {/* Same z as the drawer: MakeReservationModal is itself fixed z-50, so a
+          z-40 backdrop paints UNDER it and a click outside never reaches this. */}
+      <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px]" onClick={onClose} aria-hidden="true" />
       <div
         ref={drawerRef}
         role="dialog"
@@ -166,11 +169,13 @@ export function InquirySourceDrawer({
           </div>
           <button
             ref={closeBtnRef}
+            type="button"
             onClick={onClose}
             aria-label="Close original inquiry"
-            className="text-gray-400 hover:text-gray-700 text-xl p-1 flex-shrink-0"
+            title="Close (Esc)"
+            className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md border border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
           >
-           
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
