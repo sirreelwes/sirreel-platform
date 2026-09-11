@@ -212,6 +212,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   SAME predicates as `identifySender` / `verifyAndRelease` so the list is
   the access — nothing is granted there. Change the record it points to.
   `npm run test:recognized-numbers`.
+- **AHA greets known people by first name** (Wes 2026-09-11: "Hi, Joelle!"
+  the first time, don't overuse it, work it in again after an hour or
+  more). Decided SERVER-SIDE in `src/lib/assistant/greeting.ts`:
+  `greetingMoment(thread)` reads the thread's last in/outbound BEFORE the
+  new inbound is recorded → first / returning (≥ 60 min) / none, and
+  `greetingInstruction()` is the prompt block. The name comes from
+  `SenderIdentity.firstName` (staff user or matched contact) or
+  `identifyNumber().firstName` (partner driver / CRM person). Text only —
+  web chat has no number. `npm run test:greeting`.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal

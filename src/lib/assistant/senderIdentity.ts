@@ -22,6 +22,7 @@
  */
 import { prisma } from '@/lib/prisma'
 import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
+import { firstNameOf } from '@/lib/assistant/greeting'
 
 /** Days either side of today an order/booking window may sit and still count as current. */
 const CURRENT_GRACE_DAYS = 7
@@ -29,9 +30,11 @@ const CURRENT_GRACE_DAYS = 7
 export interface SenderIdentity {
   staff: { userId: string; name: string; role: string } | null
   contactJobs: Array<{ jobId: string; jobCode: string; name: string; role: string | null }>
+  /** What to call them — the staff user's or the matched contact's first name. */
+  firstName: string | null
 }
 
-export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [] }
+export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [], firstName: null }
 
 export function currentWindow(now = new Date()): { from: Date; to: Date } {
   const from = new Date(now); from.setUTCHours(0, 0, 0, 0); from.setUTCDate(from.getUTCDate() - CURRENT_GRACE_DAYS)
@@ -77,19 +80,23 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
     },
     select: {
       id: true, jobCode: true, name: true,
-      jobContacts: { select: { role: true, person: { select: { phone: true, mobile: true } } } },
-      bookings: { where: { archivedAt: null, status: { notIn: ['CANCELLED', 'ARCHIVED'] } }, select: { person: { select: { phone: true, mobile: true } } } },
+      jobContacts: { select: { role: true, person: { select: { firstName: true, phone: true, mobile: true } } } },
+      bookings: { where: { archivedAt: null, status: { notIn: ['CANCELLED', 'ARCHIVED'] } }, select: { person: { select: { firstName: true, phone: true, mobile: true } } } },
     },
     orderBy: { updatedAt: 'desc' },
     take: 200,
   })
   const contactJobs: SenderIdentity['contactJobs'] = []
+  let contactFirstName: string | null = null
   for (const j of jobs) {
     const jc = j.jobContacts.find((c) => phoneOnFile(tail, [c.person.phone, c.person.mobile]))
-    const asRequester = !jc && j.bookings.some((b) => phoneOnFile(tail, [b.person.phone, b.person.mobile]))
-    if (jc || asRequester) contactJobs.push({ jobId: j.id, jobCode: j.jobCode, name: j.name, role: jc ? String(jc.role) : 'REQUESTER' })
+    const requester = jc ? null : j.bookings.find((b) => phoneOnFile(tail, [b.person.phone, b.person.mobile]))
+    if (jc || requester) {
+      contactJobs.push({ jobId: j.id, jobCode: j.jobCode, name: j.name, role: jc ? String(jc.role) : 'REQUESTER' })
+      contactFirstName ??= firstNameOf(jc?.person.firstName, requester?.person.firstName)
+    }
   }
-  return { staff, contactJobs }
+  return { staff, contactJobs, firstName: firstNameOf(staffHit?.name) ?? contactFirstName }
 }
 
 /** The one-line hint the prompt gets. Names and roles only. */

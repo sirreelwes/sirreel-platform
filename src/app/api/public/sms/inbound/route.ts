@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { checkRateLimit } from '@/lib/portal/publicRateLimit'
 import { runAssistant } from '@/lib/assistant/runAssistant'
+import { greetingMoment } from '@/lib/assistant/greeting'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import {
   applyKeyword, classifyKeyword, getOrCreateThread, identifyNumber, KEYWORD_REPLIES,
@@ -111,7 +112,11 @@ export async function POST(req: NextRequest) {
   const turns = await turnsForModel(thread.id)
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') turns.push({ role: 'user', content: body })
 
-  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone, sender: sender ?? undefined })
+  // `thread` was fetched before this inbound was recorded, so its timestamps
+  // are the PREVIOUS contact — which is what "an hour since" means.
+  const greeting = greetingMoment(thread)
+  const firstName = sender?.firstName ?? who.firstName
+  const { reply: replyRaw, toolsUsed } = await runAssistant({ turns, ip: thread.phone, channel: 'sms', context: who.context, senderPhone: thread.phone, sender: sender ?? undefined, firstName, greeting })
   const reply = replyRaw.length > 1500 ? `${replyRaw.slice(0, 1480)}…` : replyRaw
   await recordOutbound({ threadId: thread.id, body: reply, source: 'assistant', status: 'twiml', subRentalId: who.subRentalId })
   if (toolsUsed.length) {

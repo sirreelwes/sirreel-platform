@@ -25,6 +25,7 @@ import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 import { ASSISTANT_EXPANSION, ASSISTANT_NAME, ASSISTANT_SMS_INTRO } from '@/lib/assistant/identity'
+import { greetingInstruction, type GreetingMoment } from '@/lib/assistant/greeting'
 import { NO_IDENTITY, describeSender, type SenderIdentity } from '@/lib/assistant/senderIdentity'
 import { contactJobInfo, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
 
@@ -150,7 +151,7 @@ BY TEXT THE JOB CODE IS OPTIONAL. verify_and_release_code automatically checks t
 /** The first reply of a text conversation names the company (carrier-filed) and the assistant. */
 const SMS_FIRST_REPLY = `
 
-This is the FIRST reply of this text conversation: open with exactly "${ASSISTANT_SMS_INTRO}" and then answer. Do not repeat the introduction in later replies.`
+This is the FIRST reply of this text conversation: include exactly "${ASSISTANT_SMS_INTRO}" at the start — after the greeting by name if one is called for below, e.g. "Hi Joelle! ${ASSISTANT_SMS_INTRO}" — and then answer. Do not repeat the introduction in later replies.`
 
 /**
  * Tools offered ONLY when the server has matched the sender's number
@@ -214,6 +215,10 @@ export async function runAssistant(args: {
   senderPhone?: string | null
   /** Server-decided identity of the sender (SMS only). Picks the extra tools. */
   sender?: SenderIdentity
+  /** What to call them, when HQ knows (SMS only). */
+  firstName?: string | null
+  /** Whether this reply should open with a greeting by name (SMS only, decided by the route). */
+  greeting?: GreetingMoment
 }): Promise<{ reply: string; toolsUsed: string[] }> {
   const sender = args.channel === 'sms' ? args.sender ?? NO_IDENTITY : NO_IDENTITY
   const tools: Anthropic.Tool[] = [
@@ -228,6 +233,7 @@ export async function runAssistant(args: {
     SYSTEM_PROMPT +
     (args.channel === 'sms' ? SMS_STYLE : '') +
     (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
+    (args.channel === 'sms' ? greetingInstruction(args.greeting ?? 'none', args.firstName ?? null) : '') +
     (sender.staff ? STAFF_MODE : sender.contactJobs.length ? CONTACT_MODE : '') +
     (senderLine ? `\n\nWHO IS WRITING (decided by HQ from the sender's number): ${senderLine}` : '') +
     (args.context && !senderLine ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
