@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canSendPartnerWelcome } from '@/lib/sub-rentals/welcomeSender'
+import { canSendPartnerWelcome, WES_SIGNATURE_TITLE } from '@/lib/sub-rentals/welcomeSender'
 import { partnerIntroDraft, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
 import { draftFromPrompt } from '@/lib/sub-rentals/welcomeAiDraft'
 
@@ -33,7 +33,12 @@ async function wes() {
   if (!canSendPartnerWelcome(email)) {
     return { error: NextResponse.json({ error: 'Only Wes sends the partner introduction.' }, { status: 403 }) }
   }
-  return { email, name: session?.user?.name ?? null }
+  // His cell lives on his User row (no other surface carries it) — the
+  // sign-off wants it (Wes 2026-09-11: "Add my cell and email address").
+  const u = await prisma.user.findUnique({ where: { email }, select: { name: true, phone: true } })
+  // The title line is the owner's; a delegated sender (PARTNER_WELCOME_SENDERS) signs with name and contact only.
+  const title = email.toLowerCase() === 'wes@sirreel.com' ? WES_SIGNATURE_TITLE : null
+  return { email, name: session?.user?.name ?? u?.name ?? null, phone: u?.phone ?? null, title }
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -45,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       select: { name: true, email: true, contactName: true, welcomeSentAt: true, welcomeSentTo: true, welcomeSubject: true },
     })
     if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-    const draft = await partnerIntroDraft(id, g.name?.trim() || 'Wes Bailey')
+    const draft = await partnerIntroDraft(id, { name: g.name?.trim() || 'Wes Bailey', email: g.email, phone: g.phone, title: g.title })
     const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body })
     return NextResponse.json({
       draft,
@@ -84,6 +89,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         prompt: b.prompt.trim(),
         current: { subject, body },
         senderName: g.name?.trim() || 'Wes Bailey',
+        senderPhone: g.phone,
+        senderEmail: g.email,
+        senderTitle: g.title,
       })
       return NextResponse.json({ draft: out })
     }

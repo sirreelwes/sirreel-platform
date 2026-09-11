@@ -28,7 +28,7 @@ import { prisma } from '@/lib/prisma'
 import { EMAIL_SUGGEST_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
-import type { IntroDraft } from '@/lib/sub-rentals/welcomeSender'
+import { signaturePhone, type IntroDraft } from '@/lib/sub-rentals/welcomeSender'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -46,6 +46,9 @@ export async function draftFromPrompt(a: {
   prompt: string
   current: { subject: string; body: string }
   senderName: string
+  senderPhone?: string | null
+  senderEmail?: string | null
+  senderTitle?: string | null
 }): Promise<IntroDraft> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw Object.assign(new Error('AI drafting is not configured on this environment.'), { status: 503 })
@@ -66,6 +69,9 @@ export async function draftFromPrompt(a: {
   // fact it has.
   const facts = [
     `Partner company: ${v.name}`,
+    `SirReel's standing: 30 years of reputation and a customer base in production — that is what SirReel puts behind the partner's ${words.many}.`,
+    `How it works, in order: SirReel features the partner's products and services on its website and in its communications with clients. When a client orders, SirReel gets that information to the partner instantly. The partner confirms by email, text, or on a portal SirReel provides. SirReel handles all client contracts, insurance and client interaction. The same portal gives the partner the delivery information, the site contact and any instructions from the client. At the end of the job SirReel bills the client, collects the money and passes it along to the partner minus SirReel's percentage.`,
+    `SirReel's role: ${v.name}'s OUTSIDE SALES PARTNER — SirReel features their ${words.many} on sirreel.com and in its quotes, and brings them the bookings; the client books through SirReel and the job lands on the partner's page with dates, location and contact.`,
     `Their contact: ${v.contactName ?? 'unknown — do not invent a name'}${first ? ` (first name "${first}")` : ''}`,
     `What they rent us: ${words.many}`,
     share == null
@@ -75,23 +81,24 @@ export async function draftFromPrompt(a: {
     words.drivers
       ? `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery, mileage, generator hours, driver time.`
       : `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery and collection, fuel, cable and distribution, technician time.`,
-    `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} are covered under the same agreement and insurance as SirReel's own.`,
+    `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and insurance as SirReel's own.`,
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
-    `The sender: ${a.senderName}, who owns SirReel.`,
+    `The sender: ${a.senderName}, who owns SirReel — a Los Angeles company that has rented production vehicles to film and TV for 30 years.`,
+    `The sign-off, exactly, one item per line, skipping any that is missing: his name; ${a.senderTitle?.trim() ? `the title line "${a.senderTitle.trim()}"` : 'no title line'}; ${a.senderPhone?.trim() ? `"M: ${signaturePhone(a.senderPhone)}"` : 'no mobile line'}; ${a.senderEmail?.trim() ? `"E: ${a.senderEmail.trim()}"` : 'no email line'}. No dash before his name, no bare company line, and an email address is not a link.`,
   ].join('\n')
 
   const system = [
     'You are drafting a short business email for the owner of SirReel, a Los Angeles production-rental company, to the owner of a company he wants to partner with.',
     '',
-    'CONTEXT THAT CHANGES THE TONE: he has ALREADY SPOKEN TO THIS PERSON BY PHONE. Do not introduce him, do not explain what SirReel does, do not open with pleasantries about reaching out cold. This is the written follow-up to a conversation that already happened — get to the substance.',
+    'CONTEXT THAT SETS THE TONE: this is FIRST CONTACT. The reader may never have heard of SirReel. Open with one line saying who he is and what SirReel is (from the FACTS), then get to the substance. Do not assume any earlier conversation, and do not pad the opening with pleasantries about reaching out.',
     '',
     'HARD RULES, in order of importance:',
     '1. Every factual claim must come from the FACTS block. Invent NO percentage, price, date, availability, unit count or deadline that is not written there. If the instruction asks for something the facts do not support, write around it rather than making it up.',
     '2. Include NO links or URLs. The account-page link is a separate email sent later.',
     '3. Spell it "SirReel" — capital S, capital R. Never "SirReel Production Vehicles"; that entity name is for contracts only.',
-    '4. Write as him, first person, plain and direct. No marketing voice, no exclamation marks in the body, no bullet lists — short paragraphs separated by a blank line.',
-    '5. Keep it under 250 words unless told otherwise.',
+    '4. Write as him, first person, plain, warm and direct — the voice of an owner who has done this for 30 years and is always looking for a way to offer more. No marketing voice, no bullet lists; short paragraphs separated by a blank line. At most one exclamation mark, at the close ("a win/win!" is his).',
+    '5. Keep it under 200 words unless told otherwise. This is the FIRST email: a hook, not a terms sheet. Lead with SirReel wanting to be their outside sales partner and what that does for them; the fine detail of the page and the paperwork comes in a later email.',
     '',
     'FACTS:',
     facts,

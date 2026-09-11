@@ -23,6 +23,8 @@ scripts/*
 !scripts/generate-canonical-agreement-pdf.ts
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
+!scripts/onboard-battery-partners.ts
+!scripts/battery-partner-candidates.ts
 !scripts/add-partner-photo-columns.ts
 !scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
@@ -82,6 +84,7 @@ scripts/*
 !scripts/rotate-rw-prod.sh
 !scripts/merge-companies.ts
 !scripts/promote-user.ts
+!scripts/set-user-phone.ts
 !scripts/backfill-auto-reply-flag.ts
 !scripts/rw-sync-status.ts
 !scripts/planyo-unit-alignment.ts
