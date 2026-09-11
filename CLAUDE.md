@@ -263,6 +263,59 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Barcode phase 3 — per-UNIT check-out / check-in (2026-09-11)
+- Wes: "integrating the barcode scanners that we have to facilitate
+  tracking high value items like CP 200 radios, generators, Hazers etc…
+  checking out the orders so much quicker if they can just simply scan."
+  Phases 1–2 (2026-09-02) mirrored RW's per-unit register into
+  `InventoryUnit` and taught `resolveScan` to read an `SR######` label;
+  nothing recorded WHICH unit went on WHICH order. Now:
+  - **`OrderUnitScan` (`sr_order_unit_scans`)** — one row per physical
+    unit per trip: order, line it was counted against (null = went out
+    UNLISTED), `outScannedAt/ById`, `inScannedAt/ById`, `inImplied`,
+    void fields. Never deleted — a wrong scan is VOIDED. A unit has at
+    most one OPEN row (out, not back) across all orders; enforced in
+    `recordUnitScan`, not by the DB. `InventoryUnit` stays a read-only
+    RW mirror — nothing here writes to it or to RentalWorks.
+  - **Schema change: run `npx prisma db push` (additive: one table +
+    three relations).** Until then the report's scanner panel hides
+    itself (`unitScanSummary` fails soft on P2021) and the sheet is
+    typed as before; a POST would 500.
+  - **Where scanning happens: the check in/out report**
+    (`/reports/orders/[id]?edge=OUT|IN`, the screen the yard board's
+    Check out / Check in buttons land on — the floor pulls on paper and
+    a supervisor files there, per Hugo). `UnitScanPanel` is an
+    auto-focused box a wedge scanner's Enter submits; each scan hits
+    `POST /api/orders/[id]/unit-scans` and the line's Out/In number
+    FOLLOWS the scan count (`applySummary` in CheckReportForm — only
+    lines the scanner touched; withdraw every scan and the line goes
+    back to the pre-filled count). `LineUnitStrip` under a barcoded
+    line shows "3 of 6 scanned" / "4 of 6 back · 2 still out" and the
+    labels behind it, each with a withdraw (void) ✕. A line is
+    "barcoded" when its catalog row has ≥1 `InventoryUnit`
+    (`unitTrackedItemIds`) — NOT `trackingMode`, which means vehicles.
+  - **Decisions are pure** (`src/lib/warehouse/unitScanRules.ts`,
+    `npm run test:unit-scans`): catalog code / unknown / unlinked →
+    refused, no override; line full → refused, `allowOver` attaches
+    over the quantity; not on the order → refused, `allowOver` records
+    it unlisted (the report offers "Add as a row"); still open on
+    another order → refused NAMING the order, `closeOpen` marks it back
+    from there (`inImplied`) and sends it here; IN of a unit never
+    scanned out → recorded, not refused (the IN scan is the valuable
+    one). Duplicates are 200 with `outcome: 'duplicate'`, never errors.
+    Every refusal is a 409 with `reason` + `override`; the panel renders
+    the one button that pushes it through.
+  - **`/warehouse/units` "Find a Unit"** (nav, all three yard branches):
+    scan a label → register row + the order it is open on + recent
+    trips. `GET /api/warehouse/units/lookup?code=`. Yard door
+    (`requireYardAccess`) on every route, same as the report.
+  - AuditLog: `order.unit_scanned_out`, `order.unit_scanned_in`
+    (`implied` / `neverScannedOut` flags), `order.unit_scan_voided`,
+    entityType `OrderUnitScan`.
+  - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
+    only `PickListItem.scannedCode`; no write-back to RW; no camera
+    scanning (wedge/keyboard only, as before).
+
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
   Hill / Long Beach) is the second partner after King Kong, and rents

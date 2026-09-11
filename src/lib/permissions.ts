@@ -496,6 +496,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // at both ends, off a list instead of a deep link.
           { id: 'vehicle-reports', label: 'Vehicle Check In/Out', icon: 'Car', href: '/reports/vehicles' },
           { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ListChecks', href: '/warehouse/pick' },
+          // Barcode phase 3 (Wes, 2026-09-11): scan a label, see which
+          // order it is out on. Read-only; scanning happens on the check
+          // in/out report.
+          { id: 'unit-lookup', label: 'Find a Unit', icon: 'ScanLine', href: '/warehouse/units' },
           { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
           { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
           { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },
@@ -649,6 +653,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
                 { id: 'order-reports', label: 'Check In/Out Reports', icon: 'ClipboardList', href: '/reports/orders' },
                 { id: 'vehicle-reports', label: 'Vehicle Check In/Out', icon: 'Car', href: '/reports/vehicles' },
                 { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ListChecks', href: '/warehouse/pick' },
+                { id: 'unit-lookup', label: 'Find a Unit', icon: 'ScanLine', href: '/warehouse/units' },
               ]
             : []),
         ],
@@ -782,6 +787,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
         { id: 'dispatch-fleet', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ClipboardList', href: '/warehouse/pick' },
+        { id: 'unit-lookup', label: 'Find a Unit', icon: 'ScanLine', href: '/warehouse/units' },
         { id: 'fleet', label: 'Vehicles', icon: 'Car', href: '/fleet' },
         { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
         { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },

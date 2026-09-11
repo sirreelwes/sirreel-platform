@@ -28,6 +28,8 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { UnitScanPanel, LineUnitStrip } from '@/components/reports/UnitScanPanel'
+import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
 /**
  * What to tell the supervisor when a complete outbound sheet did not put
@@ -134,6 +136,37 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
   const patch = (id: string, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.orderLineItemId === id ? { ...r, ...next } : r)))
+
+  // ── Barcode phase 3: the scanner counts the line ──────────────────
+  // Null when the scan table is not there yet (schema not pushed): the
+  // panel simply does not render and the sheet is typed as before.
+  const [unitScans, setUnitScans] = useState<UnitScanSummary | null>(draft.unitScans)
+  const scanCount = (s: UnitScanSummary | null, lineId: string): number | null => {
+    const l = s?.lines.find((x) => x.orderLineItemId === lineId)
+    if (!l) return null
+    return isOut ? l.out : l.back
+  }
+  /**
+   * A new summary from the scanner. A line whose scan count CHANGED
+   * takes that count as its Out/In number — the scanner is the count on
+   * a scanned line — and comes back on the sheet if it had been left
+   * off. A line whose scans were all withdrawn goes back to the
+   * pre-filled "it all went". Lines the scanner never touched are left
+   * exactly as the supervisor typed them.
+   */
+  const applySummary = (next: UnitScanSummary) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        const before = scanCount(unitScans, r.orderLineItemId)
+        const after = scanCount(next, r.orderLineItemId)
+        if (before === after) return r
+        if (after === null) return { ...r, actualQty: r.expectedQty }
+        return { ...r, actualQty: after, onSheet: true }
+      }),
+    )
+    setUnitScans(next)
+  }
+  const trackedLines = draft.lines.filter((l) => l.unitTracked).length
 
   /**
    * Every difference on the sheet, described the way the order, the audit
@@ -637,6 +670,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         </label>
       </div>
 
+      {unitScans && (
+        <UnitScanPanel
+          orderId={draft.orderId}
+          edge={draft.edge}
+          trackedLines={trackedLines}
+          summary={unitScans}
+          onSummary={applySummary}
+        />
+      )}
+
       <div className="border border-lt-hairline bg-lt-card rounded-xl overflow-hidden mb-4">
         <div className="px-3 py-2 bg-lt-inner border-b border-lt-hairline flex items-center justify-between">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
@@ -695,6 +738,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     ordered {r.expectedQty}
                     {r.lane && <span className="text-lt-fg3"> · {r.lane.toLowerCase()}</span>}
                   </div>
+                  {/* A line the scanner can count, or already has. */}
+                  {unitScans && (r.unitTracked || unitScans.lines.some((l) => l.orderLineItemId === r.orderLineItemId)) && (
+                    <LineUnitStrip
+                      orderId={draft.orderId}
+                      edge={draft.edge}
+                      expectedQty={r.expectedQty}
+                      line={unitScans.lines.find((l) => l.orderLineItemId === r.orderLineItemId) ?? null}
+                      onSummary={applySummary}
+                    />
+                  )}
                 </div>
                 <label className="flex items-center gap-1.5 flex-none">
                   <span className="text-[12px] text-lt-fg3 uppercase tracking-wide">
@@ -802,6 +855,43 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             Flagged to the agent to price — nothing is added to the order here.
           </span>
         </div>
+        {/* Units the scanner recorded that matched no line. Each one is
+            a row the agent has to price — one tap turns it into one. */}
+        {unitScans && unitScans.unlisted.length > 0 && (
+          <div className="px-3 py-2 border-b border-lt-hairline bg-chip-warn-bg">
+            <div className="text-[12px] font-semibold text-chip-warn-fg mb-1">
+              Scanned {isOut ? 'out' : 'back'} but not on the order
+            </div>
+            <ul className="space-y-1">
+              {unitScans.unlisted.map((u) => {
+                const name = u.description ?? u.barcode
+                const listed = extras.some((e) => e.description.trim() === `${name} (${u.barcode})`)
+                return (
+                  <li key={u.scanId} className="flex items-center gap-2 text-[13px] text-chip-warn-fg">
+                    <span className="font-mono">{u.barcode}</span>
+                    <span className="truncate flex-1 min-w-0">{u.description ?? ''}</span>
+                    {listed ? (
+                      <span className="text-[11px] uppercase tracking-wider font-bold">row added</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtras((prev) => [
+                            ...prev,
+                            { key: `scan-${u.scanId}`, description: `${name} (${u.barcode})`, actualQty: 1, note: '' },
+                          ])
+                        }
+                        className="underline font-semibold hover:text-amber-700"
+                      >
+                        Add as a row
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
         {extras.map((e, i) => (
           <div key={e.key} className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 flex items-center gap-2">
             <input
