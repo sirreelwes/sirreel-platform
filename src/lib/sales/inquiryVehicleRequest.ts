@@ -101,7 +101,7 @@ export interface VehicleRequest {
   supplies: SupplyRequestLine[]
   start: string | null
   end: string | null
-  contact: { firstName: string; lastName: string; email: string } | null
+  contact: { firstName: string; lastName: string; email: string; phone: string | null } | null
   companyName: string | null
   jobName: string | null
   notes: string | null
@@ -175,7 +175,9 @@ export function readVehicleRequest(
       const split = splitName(meta.contact?.name)
       const email = meta.contact?.email?.trim() || ''
       if (!split || !email) return null
-      return { ...split, email }
+      // The phone rides along to the Job's contact (Wes 2026-09-10: the
+      // job forgot what the request said) — it is not a modal field.
+      return { ...split, email, phone: meta.contact?.phone?.trim() || null }
     })(),
     companyName: meta.production?.companyName?.trim() || null,
     jobName: meta.production?.jobName?.trim() || null,

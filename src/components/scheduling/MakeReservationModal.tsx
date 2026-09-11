@@ -270,7 +270,7 @@ export interface ReservationPrefill {
   company: { id: string; name: string } | null
   companyName: string | null
   jobName: string | null
-  contact: { firstName: string; lastName: string; email: string } | null
+  contact: { firstName: string; lastName: string; email: string; phone?: string | null } | null
   notes: string | null
 }
 
@@ -333,7 +333,7 @@ export function MakeReservationModal({
   const [contactFirst, setContactFirst] = useState(prefill?.contact?.firstName ?? '')
   const [contactLast, setContactLast] = useState(prefill?.contact?.lastName ?? '')
   const [contactEmail, setContactEmail] = useState(prefill?.contact?.email ?? '')
-  const [jobContacts, setJobContacts] = useState<{ name: string; email: string; role: string }[] | null>(null)
+  const [jobContacts, setJobContacts] = useState<{ id: string; name: string; email: string; role: string }[] | null>(null)
   const [contactsLoading, setContactsLoading] = useState(false)
 
   // Inline "+ New company" — same 409 near-match discipline the hold
@@ -542,6 +542,12 @@ export function MakeReservationModal({
     !!contactFirst.trim() && !!contactLast.trim() && /\S+@\S+\.\S+/.test(contactEmail.trim())
   /** The job already satisfies the Booking's person requirement. */
   const jobHasContact = (jobContacts?.length ?? 0) > 0
+  /** The typed person is ALREADY on the job — typically because the
+   *  resolver just created the job with them as its lead contact. Adding
+   *  them again under a second role is how SR-JOB-0355 got two Dominic
+   *  Colangelo rows (Wes 2026-09-10). */
+  const contactOnJob =
+    jobContacts?.find((c) => c.email.trim().toLowerCase() === contactEmail.trim().toLowerCase()) ?? null
   const contactReady = jobHasContact || contactTyped
 
   /**
@@ -669,6 +675,23 @@ export function MakeReservationModal({
         // Nothing to add — the job's existing contact is what the
         // Booking will attach to.
         mark('contact', 'skipped')
+      } else if (contactOnJob) {
+        // Same person, already on the job. When the resolver created the
+        // job a moment ago it filed them as OTHER (its default); this desk
+        // knows they are the producer, so fix the role rather than add a
+        // second row. An existing job's roles were set by someone — leave
+        // them.
+        if (jobCreated && contactOnJob.role === 'OTHER') {
+          mark('contact', 'running')
+          await fetch(`/api/jobs/${job.id}/contacts/${contactOnJob.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'PRODUCER' }),
+          }).catch(() => null)
+          mark('contact', 'done')
+        } else {
+          mark('contact', 'skipped')
+        }
       } else {
         mark('contact', 'running')
         const cRes = await fetch(`/api/jobs/${job.id}/contacts`, {
@@ -1908,10 +1931,14 @@ export function MakeReservationModal({
             // asking — the resolver ranks on both, so withholding them
             // would make it re-ask what the client already typed.
             jobNameHint: prefill?.jobName ?? null,
-            contactName: prefill?.contact
-              ? `${prefill.contact.firstName} ${prefill.contact.lastName}`
-              : null,
-            contactEmail: prefill?.contact?.email ?? null,
+            // What the rep has TYPED wins over the request — they may
+            // have corrected it — and a modal opened with no request at
+            // all (the gantt, the /jobs toolbar) has only the typed one.
+            contactName:
+              `${contactFirst.trim()} ${contactLast.trim()}`.trim() ||
+              (prefill?.contact ? `${prefill.contact.firstName} ${prefill.contact.lastName}` : null),
+            contactEmail: contactEmail.trim() || prefill?.contact?.email || null,
+            contactPhone: prefill?.contact?.phone ?? null,
           }}
           onResolved={onJobResolved}
           onClose={() => setResolverOpen(false)}
