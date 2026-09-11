@@ -81,12 +81,24 @@ export interface IntroDraft {
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
  */
+/** "— Wes Bailey / SirReel / Cell (818) … · wes@sirreel.com" — whichever of
+ *  the two contacts are known, on one line under the company. */
+export function signOff(name: string, phone?: string | null, email?: string | null): string {
+  const contact = [phone?.trim() ? `Cell ${phone.trim()}` : null, email?.trim() || null].filter(Boolean).join(' · ')
+  return [`— ${name}`, 'SirReel', contact || null].filter(Boolean).join('\n')
+}
+
 export function buildIntroDraft(a: {
   vendorName: string
   contactName: string | null
   kind?: PartnerKindKey
   /** Full name — it introduces him ("It's Wes Bailey from SirReel"). */
   senderName: string
+  /** His cell and address, for the sign-off (Wes 2026-09-11: "Add my cell
+   *  and email address"). The cell is User.phone on his row; when it is
+   *  not set the sign-off carries the email alone rather than a blank. */
+  senderPhone?: string | null
+  senderEmail?: string | null
   /** SirReel's share, when the deal is set. Their share is the remainder. */
   sharePercent?: number | null
 }): IntroDraft {
@@ -106,7 +118,7 @@ export function buildIntroDraft(a: {
       `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
       `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
       `I'd love to show you how I think this could be a win/win!`,
-      `— ${a.senderName}\nSirReel`,
+      signOff(a.senderName, a.senderPhone, a.senderEmail),
     ].join('\n\n'),
   }
 }

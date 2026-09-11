@@ -82,6 +82,7 @@ scripts/*
 !scripts/rotate-rw-prod.sh
 !scripts/merge-companies.ts
 !scripts/promote-user.ts
+!scripts/set-user-phone.ts
 !scripts/backfill-auto-reply-flag.ts
 !scripts/rw-sync-status.ts
 !scripts/planyo-unit-alignment.ts

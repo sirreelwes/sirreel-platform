@@ -33,7 +33,10 @@ async function wes() {
   if (!canSendPartnerWelcome(email)) {
     return { error: NextResponse.json({ error: 'Only Wes sends the partner introduction.' }, { status: 403 }) }
   }
-  return { email, name: session?.user?.name ?? null }
+  // His cell lives on his User row (no other surface carries it) — the
+  // sign-off wants it (Wes 2026-09-11: "Add my cell and email address").
+  const u = await prisma.user.findUnique({ where: { email }, select: { name: true, phone: true } })
+  return { email, name: session?.user?.name ?? u?.name ?? null, phone: u?.phone ?? null }
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -45,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       select: { name: true, email: true, contactName: true, welcomeSentAt: true, welcomeSentTo: true, welcomeSubject: true },
     })
     if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-    const draft = await partnerIntroDraft(id, g.name?.trim() || 'Wes Bailey')
+    const draft = await partnerIntroDraft(id, { name: g.name?.trim() || 'Wes Bailey', email: g.email, phone: g.phone })
     const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body })
     return NextResponse.json({
       draft,
@@ -84,6 +87,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         prompt: b.prompt.trim(),
         current: { subject, body },
         senderName: g.name?.trim() || 'Wes Bailey',
+        senderPhone: g.phone,
+        senderEmail: g.email,
       })
       return NextResponse.json({ draft: out })
     }
