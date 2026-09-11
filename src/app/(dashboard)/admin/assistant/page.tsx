@@ -764,32 +764,35 @@ export default function AssistantAdminPage() {
                 className="w-56 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
               />
             </div>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
-                    <th className="py-2 pr-3 font-medium">Job</th>
-                    <th className="py-2 pr-3 font-medium">Status</th>
-                    <th className="py-2 pr-3 font-medium">Code</th>
-                    <th className="py-2 pr-3 font-medium"></th>
+            {/* Same shape as the recognised-numbers list: one line per job,
+                capped box, sticky header. 200 jobs at two lines each was the
+                tallest thing left on the page once the panels collapsed. */}
+            <div className="mt-3 max-h-[26rem] overflow-y-auto rounded-lg border border-zinc-800">
+              <table className="w-full table-fixed text-sm">
+                <thead className="sticky top-0 bg-zinc-900">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
+                    <th className="px-2 py-1.5 font-medium">Job</th>
+                    <th className="w-[7rem] px-2 py-1.5 font-medium">Status</th>
+                    <th className="w-[7rem] px-2 py-1.5 font-medium">Code</th>
+                    <th className="w-[7.5rem] px-2 py-1.5 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.map((j) => (
-                    <tr key={j.id} className="border-t border-zinc-800">
-                      <td className="py-2 pr-3">
-                        <div className="text-white">{j.name}</div>
-                        <div className="text-xs text-zinc-500">{j.jobCode}</div>
+                    <tr key={j.id} className="border-t border-zinc-800 align-middle">
+                      <td className="truncate px-2 py-1.5 text-white" title={`${j.name} · ${j.jobCode}`}>
+                        {j.name}
+                        <span className="ml-2 text-[11px] text-zinc-500">{j.jobCode}</span>
                       </td>
-                      <td className="py-2 pr-3 text-zinc-400">{j.status}</td>
-                      <td className="py-2 pr-3 font-mono tracking-widest text-amber-300">
+                      <td className="truncate px-2 py-1.5 text-xs text-zinc-400">{j.status}</td>
+                      <td className="px-2 py-1.5 font-mono text-xs tracking-widest text-amber-300">
                         {j.assistantAuthCode || '—'}
                       </td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="px-2 py-1.5 text-right">
                         <button
                           onClick={() => regen(j)}
                           disabled={regenId === j.id}
-                          className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-amber-500 hover:text-amber-300 disabled:opacity-40"
+                          className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-amber-500 hover:text-amber-300 disabled:opacity-40"
                         >
                           {regenId === j.id ? '…' : 'Regenerate'}
                         </button>
