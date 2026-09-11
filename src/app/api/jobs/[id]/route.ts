@@ -573,7 +573,11 @@ export async function GET(
     // account's, clearly labelled — otherwise staff chase a document HQ
     // already holds. Only when the job has NONE: a certificate uploaded
     // against this job was attached deliberately and always wins.
-    const carriedCoi = job.coiChecks.length === 0 ? await resolveJobCoi(job.id) : null
+    // Staff surface: an account certificate nobody has reviewed yet is shown
+    // here too, as Pending with the Review button — the tile says "awaiting
+    // HQ approval" and this is where the approval happens.
+    const carriedCoi =
+      job.coiChecks.length === 0 ? await resolveJobCoi(job.id, prisma, { includeAwaitingReview: true }) : null
 
     // Has the production confirmed the account's certificate is the right
     // insurance for THIS job (Wes, 2026-09-09)? Unconfirmed is an open
@@ -636,6 +640,7 @@ export async function GET(
                   // Marked so no surface renders a carried certificate as if
                   // it had been uploaded for this job.
                   carriedFromCompany: true,
+                  awaitingReview: !!carriedCoi.awaitingReview,
                   expiresDuringRental: carriedCoi.expiresDuringRental?.toISOString() ?? null,
                   sourceSentence: coiSourceSentence(carriedCoi, job.company?.name),
                   // Blank unless there is something to say — the chip beside

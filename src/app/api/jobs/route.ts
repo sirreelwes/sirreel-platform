@@ -28,6 +28,7 @@ import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
 import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
+import { pickCarriedCoi } from '@/lib/coi/companyCoi'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
@@ -370,7 +371,9 @@ export async function GET(req: NextRequest) {
           where: {
             companyId: { in: companyIdsNeedingCoi },
             deletedAt: null,
-            humanDecision: 'APPROVED',
+            // Unreviewed ones too — carried as "awaiting HQ approval", never
+            // as coverage (lib/coi/companyCoi.pickCarriedCoi).
+            humanDecision: { in: ['APPROVED', 'PENDING', 'COUNTERED'] },
             policyExpiryDate: { not: null },
           },
           orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
@@ -380,6 +383,8 @@ export async function GET(req: NextRequest) {
             policyExpiryDate: true,
             coverageVerified: true,
             decidedWithVehicles: true,
+            namedInsured: true,
+            company: { select: { name: true } },
           },
         })
       : []
@@ -557,10 +562,11 @@ export async function GET(req: NextRequest) {
         const start = range.start ?? new Date()
         const end = range.end ?? start
         const certs = companyCoisByCompany.get(j.companyId)!
-        const covering =
-          certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= end) ??
-          certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= start)
-        if (covering) coi = rollupCoiState({ ...covering, jobHasVehicles: hasVehicles })
+        const picked = pickCarriedCoi(certs, start, end, {
+          includeAwaitingReview: true,
+          companyName: certs[0]?.company?.name ?? null,
+        })
+        if (picked) coi = rollupCoiState({ ...picked.coi, jobHasVehicles: hasVehicles })
       }
 
       const paperwork = {
