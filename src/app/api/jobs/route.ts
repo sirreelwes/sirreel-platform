@@ -28,7 +28,7 @@ import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
 import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
-import { pickCarriedCoi } from '@/lib/coi/companyCoi'
+import { newestFullCoi, OWN_COI_TAKE, pickCarriedCoi } from '@/lib/coi/companyCoi'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
@@ -244,7 +244,9 @@ export async function GET(req: NextRequest) {
         coiChecks: {
           where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
-          take: 1,
+          // Several, so newestFullCoi can step past a workers' comp upload to
+          // the certificate that governs (MNX, 2026-09-11).
+          take: OWN_COI_TAKE,
           select: {
             humanDecision: true,
             policyExpiryDate: true,
@@ -253,6 +255,7 @@ export async function GET(req: NextRequest) {
             // for a gear-only job does not cover the truck someone added
             // afterwards (src/lib/coi/coiState.coiScopeGap).
             decidedWithVehicles: true,
+            aiResponse: true,
           },
         },
         // Job-level agreement coverage — the job attached as an addendum to
@@ -363,7 +366,7 @@ export async function GET(req: NextRequest) {
     // consulted for jobs with no certificate of their own.
     const companyIdsNeedingCoi = [
       ...new Set(
-        jobs.filter((j) => j.coiChecks.length === 0 && j.companyId).map((j) => j.companyId as string),
+        jobs.filter((j) => !newestFullCoi(j.coiChecks) && j.companyId).map((j) => j.companyId as string),
       ),
     ]
     const companyCois = companyIdsNeedingCoi.length
@@ -384,6 +387,8 @@ export async function GET(req: NextRequest) {
             coverageVerified: true,
             decidedWithVehicles: true,
             namedInsured: true,
+            // pickCarriedCoi skips workers' comp on its own.
+            aiResponse: true,
             company: { select: { name: true } },
           },
         })
@@ -420,7 +425,7 @@ export async function GET(req: NextRequest) {
     // answer it for the other 295 would be a real cost for no verdict.
     const scopeCandidateIds = jobs
       .filter((j) => {
-        const own = j.coiChecks[0]
+        const own = newestFullCoi(j.coiChecks)
         if (own) return own.decidedWithVehicles === false
         if (!j.companyId) return false
         return (companyCoisByCompany.get(j.companyId) ?? []).some(
@@ -547,8 +552,9 @@ export async function GET(req: NextRequest) {
           : null
       let coi: { state: CoiRollupState; expiresAt?: string | null } = { state: 'NONE' }
       const hasVehicles = jobHasVehicles.has(j.id) ? jobHasVehicles.get(j.id)! : null
-      if (j.coiChecks[0]) {
-        coi = rollupCoiState({ ...j.coiChecks[0], jobHasVehicles: hasVehicles })
+      const ownCoi = newestFullCoi(j.coiChecks)
+      if (ownCoi) {
+        coi = rollupCoiState({ ...ownCoi, jobHasVehicles: hasVehicles })
       } else if (
         j.companyId &&
         companyCoisByCompany.has(j.companyId) &&

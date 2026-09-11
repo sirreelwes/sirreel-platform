@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { loadJobReplacementValue } from '@/lib/coi/replacementValue'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
-import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
+import { resolveJobCoi, coiSourceSentence, newestFullCoi, withoutAiResponse } from '@/lib/coi/companyCoi'
+import { coiDocumentKind } from '@/lib/coi/coverageKind'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import {
   getJobCoiConfirmation,
@@ -80,6 +81,9 @@ export async function GET(
             namedInsured: true,
             decidedWithVehicles: true,
             createdAt: true,
+            // Only to tell workers' comp from a full certificate
+            // (lib/coi/coverageKind); stripped before the response.
+            aiResponse: true,
           },
         },
         // Job-level agreement coverage — a job is attached as an addendum
@@ -577,8 +581,11 @@ export async function GET(
     // Staff surface: an account certificate nobody has reviewed yet is shown
     // here too, as Pending with the Review button — the tile says "awaiting
     // HQ approval" and this is where the approval happens.
+    // "Its own" means its own FULL certificate. MNX (2026-09-11) filed workers'
+    // comp after general liability, and the workers' comp one took over.
+    const ownCoi = newestFullCoi(job.coiChecks)
     const carriedCoi =
-      job.coiChecks.length === 0 ? await resolveJobCoi(job.id, prisma, { includeAwaitingReview: true }) : null
+      !ownCoi ? await resolveJobCoi(job.id, prisma, { includeAwaitingReview: true }) : null
 
     // Has the production confirmed the account's certificate is the right
     // insurance for THIS job (Wes, 2026-09-09)? Unconfirmed is an open
@@ -587,13 +594,18 @@ export async function GET(
     // where the carried cert stops standing in, and the job reads as
     // awaiting theirs.
     const coiConfirmation =
-      job.coiChecks.length === 0 ? await getJobCoiConfirmation(job.id, carriedCoi) : NO_CONFIRMATION
+      !ownCoi ? await getJobCoiConfirmation(job.id, carriedCoi) : NO_CONFIRMATION
     const carriedCoiStands = carriedCoiApplies(coiConfirmation)
 
     // Does this job rent a vehicle? Only asked when a certificate was signed
     // off gear-only — otherwise there is no verdict for it to change, and
     // this loads every line item and booking item on the job to answer it.
-    const governingCoi = carriedCoi?.coi ?? job.coiChecks[0] ?? null
+    const governingCoi = carriedCoi?.coi ?? ownCoi ?? null
+    // The page reads row 0 as the verdict, so the governing certificate goes
+    // first; every row is labelled so a workers' comp one still shows as one.
+    const ownCoiRows = [...job.coiChecks]
+      .sort((a, b) => (a === ownCoi ? -1 : b === ownCoi ? 1 : 0))
+      .map((c) => ({ ...withoutAiResponse(c), documentKind: coiDocumentKind(c.aiResponse) }))
     const jobHasVehicles =
       governingCoi?.decidedWithVehicles === false
         ? deriveVehicleScope(
@@ -655,8 +667,11 @@ export async function GET(
                   confirmationState: coiConfirmation.state,
                   confirmationWord: COI_CONFIRMATION_WORD[coiConfirmation.state],
                 },
+                // Anything the job holds of its own here is workers' comp
+                // (a full one would have governed) — listed, never the verdict.
+                ...ownCoiRows,
               ]
-            : job.coiChecks,
+            : ownCoiRows,
         // The production told us this job runs on its own policy. Rendered
         // wherever the job would otherwise read as a plain "no COI" — staff
         // are chasing THEIR certificate, not wondering if we lost one.

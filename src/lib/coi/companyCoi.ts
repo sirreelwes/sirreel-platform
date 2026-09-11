@@ -34,6 +34,7 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { coiDocumentKind } from '@/lib/coi/coverageKind'
 
 type Db = PrismaClient | Prisma.TransactionClient
 
@@ -58,6 +59,34 @@ export const COI_SELECT = {
 
 export type ResolvedCoi = Prisma.CoiCheckGetPayload<{ select: typeof COI_SELECT }>
 
+/**
+ * How many of a job's newest certificates a caller loads, so the pick can
+ * step past a workers' comp certificate to the one that insures the rental.
+ */
+export const OWN_COI_TAKE = 10
+
+/**
+ * The newest FULL certificate in a newest-first list — never a workers' comp
+ * certificate on its own.
+ *
+ * Wes 2026-09-11: "MNX has submitted one for work comp and one for general
+ * liability." Every surface took the job's NEWEST certificate, so the
+ * workers' comp one — uploaded last — governed SR-JOB-0333 in place of the
+ * approved general liability certificates beside it. Workers' comp insures
+ * the production's crew; it says nothing about the truck. A row with no AI
+ * review counts as a full certificate (lib/coi/coverageKind — never mislabel
+ * real insurance as missing).
+ */
+export function newestFullCoi<T extends { aiResponse?: unknown }>(newestFirst: T[]): T | null {
+  return newestFirst.find((c) => coiDocumentKind(c.aiResponse) === 'COI') ?? null
+}
+
+/** Drop the AI review a pick needed before the row goes anywhere else. */
+export function withoutAiResponse<T extends { aiResponse?: unknown }>(row: T): Omit<T, 'aiResponse'> {
+  const { aiResponse: _ai, ...rest } = row
+  return rest
+}
+
 export interface JobCoiResolution {
   coi: ResolvedCoi
   /** 'JOB' — uploaded against this job. 'COMPANY' — the account's certificate
@@ -79,6 +108,10 @@ export interface CarryCandidate {
   humanDecision: string
   policyExpiryDate: Date | null
   namedInsured?: string | null
+  /** The stored AI review — lets the pick skip a workers' comp certificate.
+   *  A caller that does not select it gets every row treated as a full
+   *  certificate, so SELECT IT. */
+  aiResponse?: unknown
 }
 
 export interface CarriedPick<T extends CarryCandidate> {
@@ -116,6 +149,8 @@ export function pickCarriedCoi<T extends CarryCandidate>(
   opts: { includeAwaitingReview?: boolean; companyName?: string | null } = {},
 ): CarriedPick<T> | null {
   const dated = certs
+    // Workers' comp on its own is never the certificate a rental carries.
+    .filter((c) => coiDocumentKind(c.aiResponse) === 'COI')
     .filter((c) => c.policyExpiryDate instanceof Date && !isNaN(c.policyExpiryDate.getTime()))
     .sort((a, b) => b.policyExpiryDate!.getTime() - a.policyExpiryDate!.getTime())
 
@@ -172,7 +207,7 @@ export async function findCompanyCoi(
   mustCoverThrough: Date,
   db: Db = defaultPrisma,
 ): Promise<ResolvedCoi | null> {
-  return db.coiCheck.findFirst({
+  const rows = await db.coiCheck.findMany({
     where: {
       companyId,
       deletedAt: null,
@@ -180,8 +215,11 @@ export async function findCompanyCoi(
       policyExpiryDate: { gte: mustCoverThrough },
     },
     orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
-    select: COI_SELECT,
+    take: OWN_COI_TAKE,
+    select: { ...COI_SELECT, aiResponse: true },
   })
+  const pick = newestFullCoi(rows)
+  return pick ? withoutAiResponse(pick) : null
 }
 
 /**
@@ -203,12 +241,17 @@ export async function resolveJobCoi(
     includeAwaitingReview?: boolean
   } = {},
 ): Promise<JobCoiResolution | null> {
-  const own = await db.coiCheck.findFirst({
-    where: { jobId, deletedAt: null },
-    orderBy: { createdAt: 'desc' },
-    select: COI_SELECT,
-  })
-  if (own) return { coi: own, source: 'JOB', expiresDuringRental: null }
+  // The job's newest FULL certificate — a workers' comp one on its own never
+  // governs, and never stops the account's certificate standing in.
+  const own = newestFullCoi(
+    await db.coiCheck.findMany({
+      where: { jobId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: OWN_COI_TAKE,
+      select: { ...COI_SELECT, aiResponse: true },
+    }),
+  )
+  if (own) return { coi: withoutAiResponse(own), source: 'JOB', expiresDuringRental: null }
 
   const window = await jobRentalWindow(jobId, db)
   if (!window?.companyId) return null
@@ -245,14 +288,14 @@ export async function resolveJobCoi(
         policyExpiryDate: { gte: start },
       },
       orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
-      select: { ...COI_SELECT, company: { select: { name: true } } },
+      select: { ...COI_SELECT, aiResponse: true, company: { select: { name: true } } },
     })
     const pick = pickCarriedCoi(unreviewed, start, end, {
       includeAwaitingReview: true,
       companyName: unreviewed[0]?.company?.name ?? null,
     })
     if (pick) {
-      const { company: _company, ...coi } = pick.coi
+      const { company: _company, aiResponse: _ai, ...coi } = pick.coi
       return { coi, source: 'COMPANY', expiresDuringRental: pick.expiresDuringRental, awaitingReview: true }
     }
   }

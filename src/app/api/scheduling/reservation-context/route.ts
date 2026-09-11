@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { getPermissions } from '@/lib/permissions'
 import { effectiveViewRole } from '@/lib/auth/viewAs'
 
@@ -65,8 +66,8 @@ export async function GET(req: NextRequest) {
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { humanDecision: true, policyExpiryDate: true, coverageVerified: true },
+            take: OWN_COI_TAKE,
+            select: { humanDecision: true, policyExpiryDate: true, coverageVerified: true, aiResponse: true },
           },
           orders: {
             where: { status: { not: 'CANCELLED' } },
@@ -95,7 +96,8 @@ export async function GET(req: NextRequest) {
         ? 'sent'
         : 'missing'
 
-  const coiRow = booking.job?.coiChecks[0] ?? null
+  // Newest FULL certificate — workers' comp on its own is not the COI.
+  const coiRow = newestFullCoi(booking.job?.coiChecks ?? [])
   const todayYmd = new Date().toISOString().slice(0, 10)
   let coi: 'verified' | 'pending' | 'expired' | 'rejected' | 'missing'
   if (coiRow) {

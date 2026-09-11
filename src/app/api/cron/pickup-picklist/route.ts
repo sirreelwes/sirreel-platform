@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { AgreementStatus, ContractType, ReviewDecision } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/templates/shell'
 import { channelRecipients } from '@/lib/email/notificationChannels'
@@ -166,8 +167,8 @@ export async function GET(req: NextRequest) {
       coiChecks: {
         where: { deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { humanDecision: true, policyExpiryDate: true, coverageVerified: true },
+        take: OWN_COI_TAKE,
+        select: { humanDecision: true, policyExpiryDate: true, coverageVerified: true, aiResponse: true },
       },
       orders: {
         where: { status: { not: 'CANCELLED' }, archivedAt: null },
@@ -237,7 +238,7 @@ export async function GET(req: NextRequest) {
     )
 
     const readiness = computeReadiness({
-      coi: coiState(j.coiChecks[0] ?? null),
+      coi: coiState(newestFullCoi(j.coiChecks)),
       rental: agreementState(rentalRows, liveOrders.length),
       stage: stageRows.length > 0 ? agreementState(stageRows, liveOrders.length) : null,
       cardOnFile: j.bookings.some((b) => b.paperworkRequests.length > 0),

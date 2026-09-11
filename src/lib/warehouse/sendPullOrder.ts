@@ -54,6 +54,7 @@ import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannel
 import { renderPickListPdf } from '@/lib/warehouse/renderPickListPdf'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { rollupCoiState } from '@/lib/coi/coiState'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 
@@ -146,12 +147,13 @@ export async function previewPullOrder(
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
-            take: 1,
+            take: OWN_COI_TAKE,
             select: {
               humanDecision: true,
               policyExpiryDate: true,
               coverageVerified: true,
               decidedWithVehicles: true,
+              aiResponse: true,
             },
           },
           orders: {
@@ -235,6 +237,7 @@ function jobReadiness(
       policyExpiryDate: Date | null
       coverageVerified: boolean
       decidedWithVehicles?: boolean | null
+      aiResponse?: unknown
     }[]
     orders: {
       status?: string | null
@@ -260,7 +263,8 @@ function jobReadiness(
 ): { blockers: string[]; ready: boolean } {
   if (!job) return { blockers: [], ready: true }
 
-  const coi = job.coiChecks[0]
+  // Newest FULL certificate — workers' comp on its own is not the COI.
+  const coi = newestFullCoi(job.coiChecks)
   // A certificate approved for a gear-only job does not cover a truck someone
   // added since. This is the last gate before the pull sheet leaves for the
   // warehouse, so it is exactly where that has to bite.

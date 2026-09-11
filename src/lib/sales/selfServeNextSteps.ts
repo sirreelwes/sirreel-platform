@@ -25,6 +25,7 @@ import { withTeamCc } from '@/lib/email/teamVisibility'
 import { buildSelfServeNextStepsEmail } from '@/lib/email/templates/selfServeNextSteps'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 
 /** Stable per-order tag — how we know it already went out. */
 export const SELF_SERVE_EMAIL_LABEL = 'self-serve-next-steps'
@@ -80,7 +81,14 @@ export async function composeSelfServeNextSteps(jobId: string): Promise<ComposeR
           },
         },
       },
-      coiChecks: { select: { id: true }, take: 1 },
+      // A deleted certificate is not on file, and neither is workers' comp on
+      // its own (lib/coi/companyCoi.newestFullCoi).
+      coiChecks: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: OWN_COI_TAKE,
+        select: { id: true, aiResponse: true },
+      },
       orders: {
         // The unquoted order this email is about. A job with several
         // orders is not the self-serve shape, but take the earliest
@@ -150,7 +158,7 @@ export async function composeSelfServeNextSteps(jobId: string): Promise<ComposeR
     dateRange: start ? `${fmt(start)}${end && +end !== +start ? ` – ${fmt(end)}` : ''}` : null,
     daysUntilStart,
     agreementSigned: order.signedAgreements.length > 0,
-    coiOnFile: job.coiChecks.length > 0 || !!job.company?.coiOnFile,
+    coiOnFile: !!newestFullCoi(job.coiChecks) || !!job.company?.coiOnFile,
     driversNamed,
     portalUrl: portalJobUrl(order.portalSlug, token),
     repName: repEstablished ? job.agent!.name : null,
