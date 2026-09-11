@@ -67,6 +67,7 @@ export async function draftFromPrompt(a: {
   const facts = [
     `Partner company: ${v.name}`,
     `SirReel's standing: 30 years of reputation and a customer base in production — that is what SirReel puts behind the partner's ${words.many}.`,
+    `How it works, in order: SirReel features the partner's products and services on its website and in its communications with clients. When a client orders, SirReel gets that information to the partner instantly. The partner confirms by email, text, or on a portal SirReel provides. SirReel handles all client contracts, insurance and client interaction. The same portal gives the partner the delivery information, the site contact and any instructions from the client. At the end of the job SirReel bills the client, collects the money and passes it along to the partner minus SirReel's percentage.`,
     `SirReel's role: ${v.name}'s OUTSIDE SALES PARTNER — SirReel features their ${words.many} on sirreel.com and in its quotes, and brings them the bookings; the client books through SirReel and the job lands on the partner's page with dates, location and contact.`,
     `Their contact: ${v.contactName ?? 'unknown — do not invent a name'}${first ? ` (first name "${first}")` : ''}`,
     `What they rent us: ${words.many}`,
@@ -92,7 +93,7 @@ export async function draftFromPrompt(a: {
     '1. Every factual claim must come from the FACTS block. Invent NO percentage, price, date, availability, unit count or deadline that is not written there. If the instruction asks for something the facts do not support, write around it rather than making it up.',
     '2. Include NO links or URLs. The account-page link is a separate email sent later.',
     '3. Spell it "SirReel" — capital S, capital R. Never "SirReel Production Vehicles"; that entity name is for contracts only.',
-    '4. Write as him, first person, plain and direct. No marketing voice, no exclamation marks in the body, no bullet lists — short paragraphs separated by a blank line.',
+    '4. Write as him, first person, plain, warm and direct — the voice of an owner who has done this for 30 years and is always looking for a way to offer more. No marketing voice, no bullet lists; short paragraphs separated by a blank line. At most one exclamation mark, at the close ("a win/win!" is his).',
     '5. Keep it under 200 words unless told otherwise. This is the FIRST email: a hook, not a terms sheet. Lead with SirReel wanting to be their outside sales partner and what that does for them; the fine detail of the page and the paperwork comes in a later email.',
     '',
     'FACTS:',

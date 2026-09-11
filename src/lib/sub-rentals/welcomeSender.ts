@@ -21,7 +21,7 @@
  * like mail-merge is worse than no approach.
  */
 
-import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import type { PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 
 const SENDERS_BASE: ReadonlyArray<string> = ['wes@sirreel.com']
 
@@ -49,31 +49,34 @@ export interface IntroDraft {
 /**
  * The opening draft.
  *
- * ── It is FIRST CONTACT ─────────────────────────────────────────────────────
+ * ── It is FIRST CONTACT, in Wes's words ─────────────────────────────────────
  * Wes 2026-09-11: "Let's change this into an email that is the first contact.
- * Hi, it's Wes Bailey from SirReel...." This supersedes the 2026-09-10 note
- * that the mail followed a phone call. It opens by saying who he is and what
- * SirReel is in one line, because the reader may never have heard of us, and
- * it closes by asking for the conversation rather than assuming it happened.
+ * Hi, it's Wes Bailey from SirReel...." — and then, on the next cut, the tone
+ * he wanted, given as the email itself: "SirReel has been offering solutions
+ * to production clients in Los Angeles for 30 years and we are always looking
+ * for a way to offer more. We think Saniset could be a partner in that goal.
+ * Here's how it would work: SirReel begins to feature your products and
+ * services on their website and communications with clients. When a client
+ * orders, we get that info instantly to Saniset. Confirmation can be done via
+ * email or text and we handle all client contracts, insurance and interaction
+ * and provide you with a portal where you can confirm it. That same portal
+ * gives you delivery information, site contact and any instructions from the
+ * client. At the end of the job, we bill the client, collect the money and
+ * pass it along to you minus our percentage. I'd love to show you how I think
+ * this could be a win/win!"
  *
- * ── It is SHORT, and leads with the pitch ───────────────────────────────────
- * Wes 2026-09-11, on the nine-paragraph first cut: "This is fine for a follow
- * up email. But for the initial email needs to be short and hit the high
- * points: SirReel wants to be your outside Sales Partner! We will feature your
- * equipment on our site, facilitate seamless bookings from our clients to your
- * equipment, etc..." And: "highlight that we have 30 years of reputation and
- * customer base!" The walk through the page and the paperwork lives in the
- * account-link email, which already carries it. This one is the hook: who we
- * are (30 years renting to production in LA), what we want to be (their
- * outside sales partner), what we do (feature their gear, bring them the
- * bookings), what it costs their customer (nothing), what happens next.
+ * So the body below IS that, with the partner's name in the two places his
+ * had "Saniset" and the percentage filled in where the deal is set. It walks
+ * the flow in order — feature, order, confirm, deliver, bill, pay — which is
+ * the order the partner will live it in. No page tour, no paperwork list;
+ * those are the account-link email's, once they say yes.
  *
  * It carries the NUMBERS when the deal is set, because a term nobody wrote down
- * is a term that gets re-negotiated later. When it isn't set, the sentence says
- * so plainly rather than inventing a percentage.
+ * is a term that gets re-negotiated later. When it isn't set, "our percentage"
+ * stays as he wrote it, with a clause that it is agreed before anything books.
  *
- * Still NO account link — that is the second mail, once they say yes. The lock
- * in sendVendorInvite depends on this one having gone.
+ * Still NO account link — that is the second mail. The lock in sendVendorInvite
+ * depends on this one having gone.
  *
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
@@ -87,30 +90,22 @@ export function buildIntroDraft(a: {
   /** SirReel's share, when the deal is set. Their share is the remainder. */
   sharePercent?: number | null
 }): IntroDraft {
-  const words = partnerVocab(a.kind ?? 'VEHICLES')
   const first = a.contactName?.trim().split(/\s+/)[0] || null
   const greeting = first ? `Hi ${first},` : `Hello,`
 
   const share = a.sharePercent
-  const theirs = share == null ? null : Math.round((100 - share) * 100) / 100
-  const splitLine =
+  const settle =
     share == null
-      ? `Your listed rate is what the production pays, and our share comes out of it rather than on top — so it costs your customer nothing to come through us. We'd agree the exact split before anything is booked.`
-      : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, paid within 30 days of each booking coming back — so it costs your customer nothing to come through us.`
-
-  const ancillaries = words.drivers
-    ? `Delivery, mileage, generator hours and driver time are billed at your rates and are yours in full.`
-    : `Delivery, fuel, cable and technician time are billed at your rates and are yours in full.`
+      ? `At the end of the job, we bill the client, collect the money and pass it along to you minus our percentage, which we'd agree on before anything is booked.`
+      : `At the end of the job, we bill the client, collect the money and pass it along to you within 30 days, minus our ${share}%.`
 
   return {
     subject: `SirReel wants to be your outside sales partner!`,
     body: [
       greeting,
-      `It's ${a.senderName} from SirReel. We've rented production vehicles to film and TV in Los Angeles for 30 years, and I'd like to put that reputation and that customer base behind ${a.vendorName}'s ${words.many}.`,
-      `The idea: SirReel becomes your outside sales partner. We feature your ${words.many} on sirreel.com and in our quotes, and we bring you the bookings — the production books through us, and the job lands on a page of yours with the dates, the location and the contact.`,
-      `${splitLine} ${ancillaries}`,
-      `Your ${words.many} and your rates stay yours to change any time. The production signs one agreement and sends one certificate — to us — so they never set you up as a vendor, and your ${words.many} ${words.drivers ? 'are' : 'is'} covered under our contract and our insurance while on our job.`,
-      `If that's worth a conversation, reply here or give me a call and I'll walk you through how it works.`,
+      `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
+      `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
+      `I'd love to show you how I think this could be a win/win!`,
       `— ${a.senderName}\nSirReel`,
     ].join('\n\n'),
   }
