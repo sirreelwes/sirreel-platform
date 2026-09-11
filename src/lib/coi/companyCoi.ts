@@ -33,6 +33,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 type Db = PrismaClient | Prisma.TransactionClient
 
@@ -66,6 +67,82 @@ export interface JobCoiResolution {
    *  certificate is still shown — it covers part of the job — but this names
    *  the date it stops, so nobody reads it as clean coverage. */
   expiresDuringRental: Date | null
+  /** True when the account's certificate is on file but nobody has signed it
+   *  off yet (rule 1 above). Only ever set for callers that OPTED IN via
+   *  `includeAwaitingReview` — staff surfaces that can act on it. Never
+   *  coverage: rollupCoiState reads such a row as PENDING, not VERIFIED. */
+  awaitingReview?: boolean
+}
+
+/** What `pickCarriedCoi` needs to know about a certificate. */
+export interface CarryCandidate {
+  humanDecision: string
+  policyExpiryDate: Date | null
+  namedInsured?: string | null
+}
+
+export interface CarriedPick<T extends CarryCandidate> {
+  coi: T
+  awaitingReview: boolean
+  expiresDuringRental: Date | null
+}
+
+/**
+ * Which of an account's certificates carries forward to a job running
+ * `start`..`end`. PURE — the /jobs list, the readiness batch and the job
+ * detail all pick through here so a tile cannot disagree with the page it
+ * opens onto. `npm run test:coi-carry`.
+ *
+ *   1. APPROVED first, always: one spanning the whole rental, else one that
+ *      at least covers the start (returned with the lapse date named).
+ *   2. Only when asked (`includeAwaitingReview`) and nothing is approved:
+ *      a certificate still waiting on a person — PENDING or COUNTERED. It
+ *      is NOT coverage; it is "on file, somebody has to look", and the
+ *      caller renders it that way with the review button beside it.
+ *      Wes, 2026-09-11: Echobend's harvested annual certificate had sat
+ *      PENDING since 09-02, so every Echobend tile said "COI missing"
+ *      about a document HQ was holding.
+ *
+ * Among unreviewed certificates the one that INSURES THIS COMPANY wins
+ * over a longer-dated one for somebody else: the email harvest files by
+ * client domain, and a producer's other production company can land in
+ * the same account (Echobend's file held a CMP Film & Design certificate).
+ * Carrying that one forward would put a mismatch flag on every job.
+ */
+export function pickCarriedCoi<T extends CarryCandidate>(
+  certs: T[],
+  start: Date,
+  end: Date,
+  opts: { includeAwaitingReview?: boolean; companyName?: string | null } = {},
+): CarriedPick<T> | null {
+  const dated = certs
+    .filter((c) => c.policyExpiryDate instanceof Date && !isNaN(c.policyExpiryDate.getTime()))
+    .sort((a, b) => b.policyExpiryDate!.getTime() - a.policyExpiryDate!.getTime())
+
+  const choose = (pool: T[]): { coi: T; expiresDuringRental: Date | null } | null => {
+    const full = pool.find((c) => c.policyExpiryDate!.getTime() >= end.getTime())
+    if (full) return { coi: full, expiresDuringRental: null }
+    const partial = pool.find((c) => c.policyExpiryDate!.getTime() >= start.getTime())
+    if (partial) return { coi: partial, expiresDuringRental: partial.policyExpiryDate }
+    return null
+  }
+
+  const approved = choose(dated.filter((c) => c.humanDecision === 'APPROVED'))
+  if (approved) return { ...approved, awaitingReview: false }
+  if (!opts.includeAwaitingReview) return null
+
+  const unreviewed = dated.filter((c) => c.humanDecision === 'PENDING' || c.humanDecision === 'COUNTERED')
+  if (unreviewed.length === 0) return null
+  // 0 = insures this company · 1 = cannot tell · 2 = insures somebody else.
+  const rank = (c: T): 0 | 1 | 2 => {
+    const v = evaluateInsuredMatch(c.namedInsured, [opts.companyName]).verdict
+    return v === 'MATCH' || v === 'CLOSE' ? 0 : v === 'MISMATCH' ? 2 : 1
+  }
+  for (const tier of [0, 1, 2] as const) {
+    const pick = choose(unreviewed.filter((c) => rank(c) === tier))
+    if (pick) return { ...pick, awaitingReview: true }
+  }
+  return null
 }
 
 /** The window a job's insurance actually has to span. */
@@ -118,6 +195,13 @@ export async function findCompanyCoi(
 export async function resolveJobCoi(
   jobId: string,
   db: Db = defaultPrisma,
+  opts: {
+    /** Staff surfaces only. Falls back to the account's UNREVIEWED
+     *  certificate (flagged `awaitingReview`) when nothing is approved, so
+     *  the reviewer sees the document instead of "Missing". Client-facing
+     *  and gating callers never pass this — rule 1 holds for them. */
+    includeAwaitingReview?: boolean
+  } = {},
 ): Promise<JobCoiResolution | null> {
   const own = await db.coiCheck.findFirst({
     where: { jobId, deletedAt: null },
@@ -152,6 +236,27 @@ export async function resolveJobCoi(
     }
   }
 
+  if (opts.includeAwaitingReview) {
+    const unreviewed = await db.coiCheck.findMany({
+      where: {
+        companyId: window.companyId,
+        deletedAt: null,
+        humanDecision: { in: ['PENDING', 'COUNTERED'] },
+        policyExpiryDate: { gte: start },
+      },
+      orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
+      select: { ...COI_SELECT, company: { select: { name: true } } },
+    })
+    const pick = pickCarriedCoi(unreviewed, start, end, {
+      includeAwaitingReview: true,
+      companyName: unreviewed[0]?.company?.name ?? null,
+    })
+    if (pick) {
+      const { company: _company, ...coi } = pick.coi
+      return { coi, source: 'COMPANY', expiresDuringRental: pick.expiresDuringRental, awaitingReview: true }
+    }
+  }
+
   return null
 }
 
@@ -159,6 +264,9 @@ export async function resolveJobCoi(
 export function coiSourceSentence(r: JobCoiResolution, companyName?: string | null): string {
   if (r.source === 'JOB') return ''
   const who = companyName ? `${companyName}'s` : 'your'
+  if (r.awaitingReview) {
+    return `${who[0].toUpperCase()}${who.slice(1)} certificate of insurance is on file but nobody at HQ has reviewed it yet. Approve it and it covers this job.`
+  }
   const until = r.coi.policyExpiryDate
     ? ` It is in effect through ${r.coi.policyExpiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}.`
     : ''

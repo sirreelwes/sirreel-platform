@@ -24,6 +24,7 @@ import { prisma } from '@/lib/prisma'
 import type { AgreementStatus, ContractType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
+import { pickCarriedCoi } from '@/lib/coi/companyCoi'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
@@ -145,11 +146,14 @@ export async function readinessForJobs(
     // COMPANY (CompanyCard), not on a booking's paperwork row, so the check
     // has to ask both stores (lib/payments/jobCardOnFile).
     companiesWithWalletCards(jobs.map((j) => j.companyId)),
+    // APPROVED carries as coverage; PENDING / COUNTERED carries as "on
+    // file, awaiting HQ approval" — pickCarriedCoi ranks them, and
+    // rollupCoiState reads the unreviewed one as PENDING, never VERIFIED.
     prisma.coiCheck.findMany({
       where: {
         companyId: { in: companyIdsNeedingCoi },
         deletedAt: null,
-        humanDecision: 'APPROVED',
+        humanDecision: { in: ['APPROVED', 'PENDING', 'COUNTERED'] },
         policyExpiryDate: { not: null },
       },
       orderBy: [{ policyExpiryDate: 'desc' }, { createdAt: 'desc' }],
@@ -159,6 +163,8 @@ export async function readinessForJobs(
         policyExpiryDate: true,
         coverageVerified: true,
         decidedWithVehicles: true,
+        namedInsured: true,
+        company: { select: { name: true } },
       },
     }),
     // …unless the production told us THIS job runs on its own policy. That
@@ -241,10 +247,11 @@ export async function readinessForJobs(
       const start = range.start ?? new Date()
       const end = range.end ?? start
       const certs = companyCoisByCompany.get(j.companyId)!
-      const covering =
-        certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= end) ??
-        certs.find((c) => c.policyExpiryDate && c.policyExpiryDate >= start)
-      if (covering) coi = rollupCoiState({ ...covering, jobHasVehicles: hasVehicles })
+      const picked = pickCarriedCoi(certs, start, end, {
+        includeAwaitingReview: true,
+        companyName: certs[0]?.company?.name ?? null,
+      })
+      if (picked) coi = rollupCoiState({ ...picked.coi, jobHasVehicles: hasVehicles })
     }
 
     // A cancelled hold never went out and has nothing to bring back — it
