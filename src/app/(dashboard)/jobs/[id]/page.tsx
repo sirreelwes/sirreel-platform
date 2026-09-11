@@ -1648,9 +1648,11 @@ const driverTone = (d: any): string => {
                 <span className="text-[19px] font-semibold text-zinc-900 leading-tight">
                   {pickupDays !== null && pickupDays < 0 ? 'Picked up' : 'Picks up'} {fmtPickup(nextPickup.start)}
                 </span>
+                {/* Phone: the return takes its own line, no separator to
+                    orphan. Wider: one line, dot between. */}
                 {nextPickup.end && (
-                  <span className="text-[15px] text-zinc-700">
-                    · back {fmtPickup(nextPickup.end)}
+                  <span className="text-[15px] text-zinc-700 w-full sm:w-auto">
+                    <span className="hidden sm:inline">· </span>back {fmtPickup(nextPickup.end)}
                   </span>
                 )}
                 {!job.returnedAt && (
