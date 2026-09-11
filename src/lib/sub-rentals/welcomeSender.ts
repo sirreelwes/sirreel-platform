@@ -147,8 +147,12 @@ export function buildIntroDraft(a: {
       `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
       `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
       // Wes 2026-09-11: "after the 20% add a line about..." — its own paragraph,
-      // in both the set and the unset case, before the close.
-      `Of course, all of this has to work for both parties, and I'm happy to discuss your thoughts.`,
+      // in both the set and the unset case, before the close. And, later the
+      // same day: "I am going to choose the best partner to work with, so I
+      // don't want my email to sound like all they need to do is agree." So
+      // the paragraph says we are talking to more than one company and asks
+      // how THEY would approach it — a reply is a pitch, not a signature.
+      `Of course, all of this has to work for both parties. We're talking with a few companies about this and want to find the right fit, so I'd like to hear your thoughts on how you'd approach it.`,
       `I'd love to show you how I think this could be a win/win!`,
       signOff(a.senderName, a.senderPhone, a.senderEmail, a.senderTitle),
     ].join('\n\n'),
