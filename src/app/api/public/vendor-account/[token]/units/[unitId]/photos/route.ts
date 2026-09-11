@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
-import { vendorByToken } from '@/lib/sub-rentals/vendorAccountActions'
+import { vendorByToken, notePartnerPhotoAdded } from '@/lib/sub-rentals/vendorAccountActions'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -111,6 +111,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         select: { id: true, caption: true, sortOrder: true, isPrimary: true },
       })
     })
+    // Live already; this marks it as the partner's and tells HQ once per
+    // burst (Wes 2026-09-11). Never blocks the upload.
+    await notePartnerPhotoAdded({ vendorId: own.vendor.id, vendorName: own.vendor.name, unitId: own.unit.id, unitName: own.unit.name, photoId: photo.id }).catch(() => {})
     return NextResponse.json({ ok: true, photo })
   } catch (err) {
     console.error('[vendor-account photos POST] upload failed:', err)
