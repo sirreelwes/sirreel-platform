@@ -25,13 +25,34 @@ import { reportListFor, type ReportListRow } from '@/lib/orders/checkReports'
 
 export const dynamic = 'force-dynamic'
 
-function dayLabel(ymd: string, today: string): string {
-  if (!ymd) return 'No dates'
-  if (ymd === today) return 'Today'
+function fmtDay(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number)
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
   }).format(new Date(Date.UTC(y, m - 1, d)))
+}
+
+function dayLabel(ymd: string, today: string): string {
+  if (!ymd) return 'No dates'
+  if (ymd === today) return `Today · ${fmtDay(ymd)}`
+  if (ymd === pacificYmd(1)) return `Tomorrow · ${fmtDay(ymd)}`
+  return fmtDay(ymd)
+}
+
+/**
+ * Wes, 2026-09-11: "this list should start with today and as the most
+ * visible." The query returns the window oldest-first, which put three
+ * days of un-entered backlog above the sheets the floor is handing in
+ * right now. Order the days: today, then what's coming, then the
+ * backlog — most recent first, since that is the one most likely to
+ * still be on someone's desk. Undated rows trail everything.
+ */
+function orderDays(days: string[], today: string): string[] {
+  const dated = days.filter(Boolean)
+  const upcoming = dated.filter((d) => d > today).sort()
+  const earlier = dated.filter((d) => d < today).sort().reverse()
+  const undated = days.includes('') ? [''] : []
+  return [today, ...upcoming, ...earlier, ...undated]
 }
 
 export default async function OrderReportsPage() {
@@ -99,19 +120,41 @@ function Lane({
       {rows.length === 0 ? (
         <p className="text-lt-fg2 text-[15px] border border-lt-hairline bg-lt-card rounded-lg px-4 py-6 text-center">{empty}</p>
       ) : (
-        days.map((ymd) => (
-          <div key={ymd} className="mb-4">
-            <div className={`text-[12px] font-bold uppercase tracking-[0.16em] mb-1.5 ${
-              ymd === today ? 'text-amber-600' : 'text-lt-fg3'
-            }`}>
+        orderDays(days, today).map((ymd) => {
+          const isToday = ymd === today
+          const dayRows = rows.filter((r) => r.ymd === ymd)
+          const firstEarlier = ymd && ymd < today && !days.some((d) => d && d < today && d > ymd)
+          // Today always renders, even with nothing on it — it is the
+          // anchor the eye lands on, and "nothing today" is itself the
+          // answer the supervisor came for.
+          if (dayRows.length === 0 && !isToday) return null
+          return (
+          <div key={ymd || 'undated'} className={isToday ? 'mb-6' : 'mb-4'}>
+            {firstEarlier && (
+              <div className="text-lt-fg3 text-[11px] font-semibold uppercase tracking-[0.16em] border-t border-lt-hairline pt-3 mt-2 mb-2">
+                Earlier · still open
+              </div>
+            )}
+            <div className={isToday
+              ? 'text-amber-600 text-[15px] font-bold uppercase tracking-[0.12em] mb-2'
+              : 'text-lt-fg3 text-[12px] font-bold uppercase tracking-[0.16em] mb-1.5'}>
               {dayLabel(ymd, today)}
             </div>
+            {dayRows.length === 0 && (
+              <p className="text-lt-fg2 text-[15px] border border-dashed border-lt-hairline bg-lt-card rounded-lg px-4 py-4 text-center">
+                {edge === 'OUT' ? 'Nothing going out today.' : 'Nothing due back today.'}
+              </p>
+            )}
             <div className="space-y-1.5">
-              {rows.filter((r) => r.ymd === ymd).map((r) => (
+              {dayRows.map((r) => (
                 <Link
                   key={r.orderId}
                   href={`/reports/orders/${r.orderId}?edge=${edge}`}
-                  className="border border-lt-hairline rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-lt-card hover:border-lt-fg3 hover:bg-lt-inner transition-colors"
+                  className={`border rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-lt-card hover:bg-lt-inner transition-colors ${
+                    isToday
+                      ? 'border-amber-600/40 border-l-4 border-l-amber-600 hover:border-amber-600'
+                      : 'border-lt-hairline hover:border-lt-fg3'
+                  }`}
                 >
                   <ClipboardList size={16} aria-hidden className="text-lt-fg3 flex-none" />
                   <div className="min-w-0 flex-1">
@@ -166,7 +209,8 @@ function Lane({
               ))}
             </div>
           </div>
-        ))
+          )
+        })
       )}
     </section>
   )
