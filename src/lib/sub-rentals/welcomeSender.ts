@@ -1,6 +1,6 @@
 /**
- * Who may send a partner introduction — "SirReel wants to partner with
- * PowerTrip!" — and what the draft says.
+ * Who may send a partner introduction — "SirReel wants to be your outside
+ * sales partner!" — and what the draft says.
  *
  * ── Why this is Wes-only, and why it is an email allowlist ──────────────────
  * Wes 2026-09-10. This is not a system notification; it is the owner asking
@@ -53,9 +53,20 @@ export interface IntroDraft {
  * Wes 2026-09-10: "I am going to reach out by phone before I send this email,
  * so no need to introduce myself. Let's jump into the meat." So this does NOT
  * explain who SirReel is or what we do — a man who just spoke to the owner does
- * not need telling. It is the written version of the conversation: the split,
- * what it costs their customer (nothing), what they get, and the two things we
- * need back.
+ * not need telling.
+ *
+ * ── It is SHORT, and leads with the pitch ───────────────────────────────────
+ * Wes 2026-09-11, on the first cut (nine paragraphs walking the split, the
+ * ancillaries, the page, the paperwork): "This is fine for a follow up email.
+ * But for the initial email needs to be short and hit the high points: SirReel
+ * wants to be your outside Sales Partner! We will feature your equipment on
+ * our site, facilitate seamless bookings from our clients to your equipment,
+ * etc..." The detail moved to the account-link email, which already carries
+ * it. This one is the hook: what we are (their outside sales partner), what we
+ * do (feature their gear, bring them the bookings), what we bring (Wes,
+ * mid-draft: "highlight that we have 30 years of reputation and customer
+ * base!"), what it costs their
+ * customer (nothing), what we need back (two things), what happens next.
  *
  * It carries the NUMBERS when the deal is set, because a term nobody wrote down
  * is a term that gets re-negotiated later. When it isn't set, the sentence says
@@ -83,23 +94,22 @@ export function buildIntroDraft(a: {
   const theirs = share == null ? null : Math.round((100 - share) * 100) / 100
   const splitLine =
     share == null
-      ? `Your listed rate is what the production pays. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing. I'll confirm the exact split with you before anything is booked.`
-      : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, invoiced to us after each booking comes back and paid within 30 days. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing, and there is no version of this where they save money by going around me.`
+      ? `Your listed rate is what the production pays, and our share comes out of it rather than on top — so it costs your customer nothing to come through us. I'll confirm the exact split with you before anything is booked.`
+      : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, paid within 30 days of each booking coming back — so it costs your customer nothing to come through us.`
 
   const ancillaries = words.drivers
-    ? `Delivery, mileage, generator hours and driver time bill on top at the rates you set, and those are yours in full.`
-    : `Delivery and collection, fuel, cable and technician time bill on top at the rates you set, and those are yours in full.`
+    ? `Delivery, mileage, generator hours and driver time are billed at your rates and are yours in full.`
+    : `Delivery, fuel, cable and technician time are billed at your rates and are yours in full.`
 
   return {
-    subject: `SirReel wants to partner with ${a.vendorName}!`,
+    subject: `SirReel wants to be your outside sales partner!`,
     body: [
       greeting,
-      `Good speaking with you. Here is what I described, in writing, so you have it in front of you.`,
-      splitLine,
-      ancillaries,
-      `The reason productions like this: they sign one agreement with us, send us one certificate of insurance and get one invoice. They never have to set you up as a new vendor, and your ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and the same insurance as ours.`,
-      `You'd get your own page with us — your ${words.many} and your rates, which stay yours to change any time, your own photos, delivery contacts, and every booking we send your way in one place. Nothing goes out to a client without your rate on it.`,
-      `Two things I need from you: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on that page.`,
+      `Good speaking with you. The short version, in writing:`,
+      `SirReel wants to be ${a.vendorName}'s outside sales partner. We have 30 years of reputation and a customer base in production to put behind your ${words.many}: we feature ${words.drivers ? 'them' : 'it'} on sirreel.com and in our quotes, and we bring you the bookings — our clients book through us, and the job lands on a page of yours with the dates, the location and the contact.`,
+      `${splitLine} ${ancillaries}`,
+      `Your ${words.many} and your rates stay yours to change any time. The production signs one agreement and sends one certificate — to us — so they never set you up as a vendor, and your ${words.many} ${words.drivers ? 'are' : 'is'} covered under our contract and our insurance while on our job.`,
+      `Two things I'll need back: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on your page.`,
       `Say the word and I'll send you the link.`,
       `— ${a.senderName}\nSirReel`,
     ].join('\n\n'),
