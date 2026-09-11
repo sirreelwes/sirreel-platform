@@ -3262,6 +3262,9 @@ model InventoryUnit {
 
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
 
+  // HQ-side movement (barcode phase 3). The mirror itself stays read-only.
+  orderScans OrderUnitScan[]
+
   @@index([inventoryItemId])
   @@index([rwICode])
   @@index([status])
@@ -3623,6 +3626,7 @@ model Order {
   // (Hugo, 2026-09-03 — the floor picks on paper, a supervisor types the
   // paperwork in). Cascade-deletes with the order.
   checkReports       OrderCheckReport[]
+  unitScans          OrderUnitScan[]
   // The specific units sales said are going out on this order — the
   // other end of BookingAssignment.orderId. Drives the "Order attached"
   // indicator on the unit.
@@ -3780,6 +3784,74 @@ model OrderCheckReportLine {
   @@index([reportId])
   @@index([orderLineItemId])
   @@map("sr_order_check_report_lines")
+}
+
+// ── Barcode phase 3: ONE physical unit on ONE order ──────────────────
+//
+// Wes, 2026-09-11: "integrating the barcode scanners that we have to
+// facilitate tracking high value items like CP 200 radios, generators,
+// Hazers etc. The walkies have barcodes on them, and it makes checking
+// out the orders so much quicker if they can just simply scan."
+//
+// Phase 2 could READ a label (resolveScan → InventoryUnit) but had
+// nowhere to put the fact: PickListItem is one row per LINE and only
+// kept the last `scannedCode` in an audit row. This is the row per
+// UNIT — which walkie left on which order, when, who scanned it, and
+// when it came back. It is HQ's first record of gear movement that does
+// not go through RentalWorks; InventoryUnit stays a read-only mirror
+// and is never written from here.
+//
+//   outScannedAt set, inScannedAt null → the unit is OUT on this order
+//   both set                            → a completed trip
+//   only inScannedAt                    → it came back without an OUT
+//                                         scan (paper out, scanned in)
+//
+// A unit has at most ONE open row across all orders — enforced in
+// recordUnitScan (src/lib/warehouse/unitScans.ts), which refuses an OUT
+// on a second order until the first is closed. Never deleted: a wrong
+// scan is VOIDED (voidedAt) so the audit trail keeps the mistake.
+//
+// User ids are SOFT FKs, the OrderCheckReport convention — adding this
+// table did not have to touch the User model.
+model OrderUnitScan {
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// The line the unit was counted against. Null = went out UNLISTED
+  /// (nothing on the order matched its catalog row and the supervisor
+  /// sent it anyway) — the report shows these so the agent can price
+  /// them. SetNull: deleting the line keeps the movement record.
+  orderLineItemId String?        @map("order_line_item_id")
+  orderLineItem   OrderLineItem? @relation(fields: [orderLineItemId], references: [id], onDelete: SetNull)
+
+  inventoryUnitId String        @map("inventory_unit_id")
+  inventoryUnit   InventoryUnit @relation(fields: [inventoryUnitId], references: [id])
+  /// The catalog row the unit belonged to when scanned. Denormalised so
+  /// a later RW re-link does not rewrite what this row meant.
+  inventoryItemId String? @map("inventory_item_id")
+  /// What was on the label, normalised — kept even if RW reprints it.
+  barcode String
+
+  outScannedAt   DateTime? @map("out_scanned_at")
+  outScannedById String?   @map("out_scanned_by_id")
+  inScannedAt    DateTime? @map("in_scanned_at")
+  inScannedById  String?   @map("in_scanned_by_id")
+  /// Set when the IN was implied rather than scanned — the unit was
+  /// still open here when it was scanned OUT on another order.
+  inImplied Boolean @default(false) @map("in_implied")
+
+  voidedAt   DateTime? @map("voided_at")
+  voidedById String?   @map("voided_by_id")
+  voidReason String?   @map("void_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([inventoryUnitId])
+  @@index([orderLineItemId])
+  @@map("sr_order_unit_scans")
 }
 
 // OrderDocument — typed file attachments on an order. Mirrors the
@@ -4108,6 +4180,7 @@ model OrderLineItem {
   // Only WAREHOUSE-lane lines get a PickListItem at book time. FLEET
   // and STAGE lines stay null.
   pickListItem  PickListItem?
+  unitScans     OrderUnitScan[]
   // Sub-rentals: zero-or-many vendor-sourced fulfillments for this line.
   // Internal-only — read by /admin and /sub-rentals surfaces, never by
   // any client-facing serializer (portal, quote PDF, invoice PDF).

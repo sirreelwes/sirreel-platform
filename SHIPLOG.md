@@ -34,6 +34,20 @@ Wes: "Also fix the COI chip, Echobend has an annual COI on file." It was — har
 - Among unreviewed certs the one that insures THIS company beats a longer-dated one for another entity — the harvest had filed a CMP Film & Design Burbank cert under Echobend, and expiry-desc would have carried it with a mismatch flag on every job.
 - `npm run test:coi-carry`.
 - **Still open for Wes:** approve Echobend's certificate (Review on the RIPS job page, or /admin/paperwork) — that flips the chip to verified. The CMP cert filed under Echobend wants a look: wrong company, or a sibling production.
+### Barcode phase 3: a scanned label at the check-out desk is a unit on the order
+
+`616eac8` warehouse: scan a unit's barcode at check-out, and it is on the order
+
+Wes: "integrating the barcode scanners that we have to facilitate tracking high value items like CP 200 radios, generators, Hazers etc. The walkies have barcodes on them, and it makes checking out the orders so much quicker if they can just simply scan the barcode." Phases 1–2 (09-02) gave HQ the register (`InventoryUnit`, 1,831 RW units) and a resolver that reads `SR######`, but the only place a scan landed was `PickListItem.scannedCode` — one row per LINE, so a second walkie overwrote the first. Nothing said which unit was on which order.
+
+- **`OrderUnitScan` (`sr_order_unit_scans`, additive — created by `npx tsx scripts/add-unit-scan-table.ts`, never `db push`):** one row per physical unit per trip — order, the line it was counted against (null = went out unlisted), `outScannedAt/ById`, `inScannedAt/ById`, `inImplied`, void fields (voided, never deleted). One OPEN row per unit across all orders, enforced in `recordUnitScan`. `InventoryUnit` stays a read-only RW mirror; nothing writes back.
+- **The scanner lives on the check in/out report** (`/reports/orders/[id]`), because that is where the paper goes (Hugo) and where the yard board's Check out / Check in buttons land. `UnitScanPanel`: auto-focused box, Enter submits, focus returns; the line's Out/In number follows the scan count for lines the scanner touched (withdraw every scan and it goes back to the pre-fill). `LineUnitStrip` under a barcoded line: "3 of 6 scanned" / "4 of 6 back · 2 still out", the labels behind it, a withdraw ✕ each. Barcoded = the catalog row has ≥1 register unit (`unitTrackedItemIds`), NOT `trackingMode` (vehicles).
+- **Decisions are pure** (`unitScanRules.ts`, `npm run test:unit-scans`, 19 checks). Refused with no override: unknown label, catalog code ("scan the SR barcode on the piece"), register unit unmatched in the catalog. Refused with the one override the panel renders as a button: line full → `allowOver`; not on the order → `allowOver` records it unlisted and the report offers "Add as a row" in the Not-on-the-order card; still open on another order → refused NAMING that order, `closeOpen` marks it back from there (`inImplied`) and sends it here — `allowOver` alone never takes a unit off another order. IN of a unit never scanned out is recorded on the matching line, not refused. Double reads are 200 `duplicate`, never errors.
+- **`/warehouse/units` "Find a Unit"** (nav, all three yard branches): scan → register row (serial, shelf, replacement cost), the order it is open on with a link to that order's check-in sheet, recent trips. `GET /api/warehouse/units/lookup?code=`.
+- Routes: `GET/POST /api/orders/[id]/unit-scans`, `DELETE …/unit-scans/[scanId]` (void). Yard door (`requireYardAccess`) on all. AuditLog `order.unit_scanned_out` / `order.unit_scanned_in` / `order.unit_scan_voided`, entityType `OrderUnitScan`.
+- Fails soft until the table exists: `unitScanSummary` catches P2021 and the panel does not render; the sheet is typed exactly as before. A `migrate diff` run from Wes's laptop on 2026-09-11 (against a stale checkout) showed the live DB already carries `sr_order_unit_scans` + its three FKs — the script verifies the shape and exits 2 on a mismatch rather than assuming.
+- Not in this ship: the pick-list floor still writes only `scannedCode`; no RW write-back; keyboard-wedge only, no camera.
+- `npm run build` exit 0 (with a placeholder `RESEND_API_KEY` — the build container has no `.env.local`; `/api/client/auth` builds a Resend client at module load). `test:scan` and `test:unit-scans` green.
 
 ### Partner photos: live at once, and HQ gets the glance it owes them
 
@@ -63,6 +77,8 @@ Wes: "When a client sends a request and our team replies with a quote, there is 
 Wes: "the agreement icon is red in job tile, while an annual agreement is clearly on file." RIPS (Echobend, SR-JOB-0329): the job page said "Covered by the company's annual agreement through Feb 25, 2027", the rail tile said "Still needed: Agreement". Two derivations. The job page asks `findCompanyAnnualCoverage` (the company's current `autoCoverJobs` master); the list route and `readinessForJobs` (rail chips, gantt meter, timeline) honoured only job-level addenda and sibling coverage, so an annual account with no addendum row read as unsigned on every tile.
 
 - **`annualCoverageByCompany()`** in `src/lib/orders/annualCoverage.ts` — one query per batch, the same `isCoverageCurrent` verdict per row as the single-company read. `/api/jobs` and `readinessForJobs` both OR it into `coveredBy(type)` ahead of the addendum check. Verified on the real handler with a stubbed session: RIPS rental → SIGNED, blockers COI / Card / Gear.
+
+## 2026-09-10
 
 ### Partner portal: a second partner, and the first one that rents equipment
 

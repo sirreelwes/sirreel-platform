@@ -37,6 +37,8 @@ import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { advanceOneOrderToOnJob, ordersCarriedByBooking, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
+import { unitScanSummary, unitTrackedItemIds } from '@/lib/warehouse/unitScans'
+import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
 /**
  * Orders a check report can be filed against.
@@ -193,6 +195,10 @@ export interface DraftLine {
   /** False when a previous partial pull left this line off the sheet.
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
+  inventoryItemId: string | null
+  /** The catalog row has barcoded units in the register — a scanner can
+   *  count this line (barcode phase 3). Quantity-only gear is typed. */
+  unitTracked: boolean
 }
 
 export interface ReportDraft {
@@ -220,6 +226,9 @@ export interface ReportDraft {
   lines: DraftLine[]
   /** Rows a previous report ADDED that are not order lines. */
   extras: Array<{ description: string; actualQty: number; note: string | null; filed?: boolean }>
+  /** Per-unit scans on this order, by line. Null until the scan table
+   *  exists — the form hides the scanner panel rather than fail. */
+  unitScans: UnitScanSummary | null
 }
 
 /**
@@ -245,6 +254,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         select: {
           id: true, description: true, qualifier: true,
           quantity: true, fulfillmentLane: true, sortOrder: true,
+          inventoryItemId: true,
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -265,6 +275,13 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     },
   })
   if (!order) return null
+
+  // Which lines a scanner can count, and what has been scanned so far.
+  // Both read the register / scan table; the second fails soft.
+  const [tracked, unitScans] = await Promise.all([
+    unitTrackedItemIds(order.lineItems.map((l) => l.inventoryItemId).filter((x): x is string => !!x)),
+    unitScanSummary(order.id),
+  ])
 
   const prior = order.checkReports[0] ?? null
   const priorByLine = new Map(
@@ -315,6 +332,8 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         onSheet: p ? p.onSheet : true,
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,
+        inventoryItemId: li.inventoryItemId,
+        unitTracked: !!li.inventoryItemId && tracked.has(li.inventoryItemId),
       }
     }),
     // `filed: true` marks an addition the previous submission already
@@ -326,6 +345,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     extras: (prior?.lines ?? [])
       .filter((l) => !l.orderLineItemId)
       .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note, filed: true })),
+    unitScans,
   }
 }
 
