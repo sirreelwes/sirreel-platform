@@ -341,6 +341,44 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - AuditLog: `order.unit_scanned_out`, `order.unit_scanned_in`
     (`implied` / `neverScannedOut` flags), `order.unit_scan_voided`,
     entityType `OrderUnitScan`.
+  - **Antenna + battery on every walkie** (Wes 2026-09-11: "add antenna
+    and battery to pick lists as part of the kit"). Wes's RW sheet
+    (order 304656) settles the SHAPE: RW prints them as their OWN lines
+    beside `104387 … Radio 15`, which is what the floor counts. So they
+    are KIT PIECES — `scripts/seed-radio-parts-kit.ts --write` (FREE,
+    `clientVisible: false`; no battery or antenna has a price, only a
+    replacement cost). Antenna is 1 per radio body.
+  - **BATTERIES ARE ONE POOL, at 1.5 per radio** (Wes: "every battery is
+    the same and none have a price… We need to make sure that the
+    pickers count correctly each direction"). One in each body + a spare
+    per two, rounded up: 15 radios → **23 batteries**. NOT a 1:1 row
+    beside the old 0.5 `CP200-BATTERY` spare row — two rows for one
+    physical object make a return uncountable, because nobody can say
+    which pile a returned cell came from. The seed DEACTIVATES the
+    legacy spare's kit links on those radios (journaled, reversible by
+    id; the item row itself is left alone) and moves its "spare battery"
+    aliases onto `102930`. The kit note prints under the line on the
+    sheet so the picker knows where to look: 15 in the bodies, 8 loose.
+    `npm run test:kit-pieces` pins the totals AND proves one pool equals
+    the old body+spare split at every size. The Surveillance Kit is NOT
+    seeded — on that sheet it is what the client ordered.
+  - **Per-unit checks** are the second half ("each walkie needs to
+    confirm those") and are a DIFFERENT mechanism, for parts that never
+    get their own line: `InventoryItem.unitChecks String[]` (drawer
+    field "Per-unit checks"; `scripts/seed-unit-checks.ts`). Printed
+    under the line as "Each unit: ( ) X × N" — but `renderPickListPdf`
+    SUPPRESSES a check whose name already appears as a line on the same
+    sheet, so seeding both antenna sources never prints it twice. At the
+    desk every landed scan shows the checks as chips
+    defaulting to present; a tap marks one missing → `PATCH
+    /api/orders/[id]/unit-scans/[scanId]/checks` → `OrderUnitScan.
+    missingOut / missingIn` (names, clamped to the item's list by
+    `clampMissing`). The report form writes the exceptions into the
+    line note behind a fixed prefix ("Came back without: SR004674
+    Antenna") so the agent sees it on the filed sheet; Find a Unit's
+    history shows them. **Columns via `scripts/add-unit-checks-columns.
+    ts` (additive SQL) — run BEFORE deploying: `unitScanSummary` treats
+    a missing column like a missing table and hides the panel.**
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).

@@ -19,7 +19,7 @@
 import assert from 'node:assert'
 import type { ScanResolution } from '../../src/lib/warehouse/resolveScan'
 import {
-  decideIn, decideOut, summarizeUnitScans,
+  clampMissing, decideIn, decideOut, normalizeUnitChecks, summarizeUnitScans,
   type LiveScan, type ScanLine,
 } from '../../src/lib/warehouse/unitScanRules'
 
@@ -230,6 +230,35 @@ console.log('\nSummary for the report screen')
   assert.equal(s.totalBack, 2)
   assert.equal(radios.units[0].inAt, t1.toISOString())
   console.log('  ok — per-line out / back / still-out, unlisted rows, and totals')
+}
+
+// ── Per-unit checks (antenna, battery) ───────────────────────────────
+
+console.log('\nPer-unit checks')
+{
+  assert.deepEqual(normalizeUnitChecks(['Antenna', ' Battery ', 'antenna', '', 'Belt  clip']), ['Antenna', 'Battery', 'Belt clip'])
+  assert.deepEqual(normalizeUnitChecks('Antenna'), [], 'a non-array is no checks')
+  console.log('  ok — names are trimmed, de-duped case-insensitively, first spelling kept')
+}
+{
+  const checks = ['Antenna', 'Battery']
+  assert.deepEqual(clampMissing(checks, ['battery']), ['Battery'], 'matched case-insensitively, returned in the item spelling')
+  assert.deepEqual(clampMissing(checks, ['Antenna', 'Charger']), ['Antenna'], 'a name the item has no check for is dropped')
+  assert.deepEqual(clampMissing(checks, 'Antenna'), [], 'garbage is an empty list, not an error')
+  assert.deepEqual(clampMissing([], ['Antenna']), [], 'an item with no checks can have nothing missing')
+  console.log('  ok — a missing list is clamped to the item’s checks')
+}
+{
+  const t0 = new Date('2026-09-11T15:00:00Z')
+  const rows = [
+    { id: 'a', orderLineItemId: 'l-radios', barcode: 'SR000001', description: 'CP200', outScannedAt: t0, inScannedAt: null, inImplied: false, checks: ['Antenna', 'Battery'], missingOut: ['Antenna'], missingIn: [] },
+    { id: 'b', orderLineItemId: 'l-radios', barcode: 'SR000002', description: 'CP200', outScannedAt: t0, inScannedAt: null, inImplied: false },
+  ]
+  const s = summarizeUnitScans(['l-radios'], rows)
+  const [u1, u2] = s.lines[0].units
+  assert.deepEqual({ checks: u1.checks, out: u1.missingOut, in: u1.missingIn }, { checks: ['Antenna', 'Battery'], out: ['Antenna'], in: [] })
+  assert.deepEqual({ checks: u2.checks, out: u2.missingOut, in: u2.missingIn }, { checks: [], out: [], in: [] }, 'rows without the columns read as nothing missing')
+  console.log('  ok — the summary carries each unit’s checks and what was missing at each edge')
 }
 
 console.log('\n✓ unit-scan decisions hold\n')

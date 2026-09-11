@@ -176,6 +176,8 @@ export function UnitLookup() {
                       {h.outAt ? `out ${fmt(h.outAt)}` : 'no out scan'}
                       {' · '}
                       {h.inAt ? `back ${fmt(h.inAt)}${h.inImplied ? ' (implied)' : ''}` : 'not back'}
+                      {h.missingOut.length ? ` · out without ${h.missingOut.join(', ')}` : ''}
+                      {h.missingIn.length ? ` · back without ${h.missingIn.join(', ')}` : ''}
                       {h.voided ? ' · withdrawn' : ''}
                     </span>
                   </li>

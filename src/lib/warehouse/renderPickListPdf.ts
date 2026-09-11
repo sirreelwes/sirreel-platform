@@ -49,7 +49,7 @@ export async function renderPickListPdf(
       pickList: { select: { assignedTo: { select: { name: true } } } },
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true } },
+          inventoryItem: { select: { code: true, unitChecks: true } },
           subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
         },
         orderBy: { sortOrder: 'asc' },
@@ -84,6 +84,20 @@ export async function renderPickListPdf(
   const onSheet = selected.length > 0 ? selected : pickable
   const omittedLineCount = pickable.length - onSheet.length
 
+  // A check that is ALREADY its own line on this sheet must not also
+  // print under the parent — the RW sheet the floor knows shows
+  // "CP200 - Antenna  15" as a line, and a parent that then repeats
+  // "Each unit: ( ) Antenna" is the same thing counted twice.
+  const lineNames = new Set(
+    onSheet.map((li) => li.description.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()),
+  )
+  const printableChecks = (checks: string[]): string[] =>
+    checks.filter((c) => {
+      const key = c.toLowerCase().trim()
+      for (const name of lineNames) if (name.includes(key)) return false
+      return true
+    })
+
   const lines: PickListLine[] = onSheet.map((li) => {
     // "Out" = already pulled. Warehouse lines advance through the
     // digital picking floor; fleet lines flip in bulk when the fleet
@@ -102,6 +116,7 @@ export async function renderPickListPdf(
       out: isOut ? li.quantity : 0,
       picked: warehousePicked,
       includedAccessory: !!li.autoKitPieceId,
+      unitChecks: printableChecks(li.inventoryItem?.unitChecks ?? []),
     }
   })
 

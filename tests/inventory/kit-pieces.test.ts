@@ -55,6 +55,42 @@ check(
   `battery ratio reads as a sentence (got "${describeKitRatio(BATTERIES)}")`,
 )
 
+// ── One battery pool, counted the same both directions ───────────────
+//
+// Wes, 2026-09-11: "every battery is the same and none have a price
+// associated with them, other than a replacement cost. We need to make
+// sure that the pickers count correctly each direction."
+//
+// So the battery is ONE row at 1.5 per radio — one in each body plus a
+// spare per two — not a 1:1 row beside a 0.5 spare row. The numbers
+// below are what the picker counts out and the checker counts back; if
+// they ever stop matching, a return becomes an argument about which
+// pile a cell came from.
+console.log('\nBatteries are one pool at 1.5 per radio')
+const ALL_BATTERIES = { qtyPer: 1.5, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 }
+const ANTENNAS = { qtyPer: 1, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 }
+
+eq(resolveKitQuantity(ALL_BATTERIES, 15), 23, '15 radios send 23 batteries — 15 in the bodies, 8 loose')
+eq(resolveKitQuantity(ALL_BATTERIES, 1), 2, 'one radio still gets a spare (1 in it + 1 loose)')
+eq(resolveKitQuantity(ALL_BATTERIES, 2), 3, 'two radios: 2 in the bodies + 1 spare')
+eq(resolveKitQuantity(ALL_BATTERIES, 12), 18, 'twelve radios: 12 + 6, no rounding needed')
+eq(resolveKitQuantity(ALL_BATTERIES, 0), 0, 'no radios, no batteries')
+
+// The old split — a 1:1 body battery plus the 0.5 spare — must add up to
+// the same total, or folding the two rows into one would have changed
+// what goes on the truck.
+const BODY_ONLY = { qtyPer: 1, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 }
+for (const radios of [1, 2, 7, 12, 15, 30]) {
+  eq(
+    resolveKitQuantity(ALL_BATTERIES, radios),
+    resolveKitQuantity(BODY_ONLY, radios) + resolveKitQuantity(BATTERIES, radios),
+    `${radios} radios: one pool matches body + spare counted separately`,
+  )
+}
+
+eq(resolveKitQuantity(ANTENNAS, 15), 15, 'one antenna per radio body')
+eq(resolveKitQuantity(ANTENNAS, 1), 1, 'one radio, one antenna')
+
 if (failures.length > 0) {
   console.error(`\n${failures.length} failure(s):`)
   for (const f of failures) console.error(`  ✗ ${f}`)

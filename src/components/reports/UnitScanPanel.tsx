@@ -26,6 +26,9 @@ type Feed = {
   text: string
   /** Re-send the same code with this flag. */
   override?: { flag: 'allowOver' | 'closeOpen'; code: string; label: string }
+  /** A landed scan with per-unit checks: the chips the desk can tap to
+   *  mark one missing. The list IS the state — each tap PATCHes it. */
+  checks?: { scanId: string; names: string[]; missing: string[] }
 }
 
 export function UnitScanPanel({
@@ -87,7 +90,21 @@ export function UnitScanPanel({
         })
         return
       }
-      push({ tone: data.outcome === 'duplicate' ? 'warn' : 'good', text: data.message })
+      const names: string[] = Array.isArray(data.checks) ? data.checks : []
+      const landed = data.outcome !== 'duplicate' && data.scanId && names.length > 0
+      // The unit's current missing list, if the summary already knows it
+      // (a re-scan of a unit marked earlier keeps its chips honest).
+      const known = data.summary
+        ? [...(data.summary.lines as LineUnitSummary[]).flatMap((l) => l.units), ...(data.summary.unlisted as UnitScanUnit[])]
+            .find((u) => u.scanId === data.scanId)
+        : undefined
+      push({
+        tone: data.outcome === 'duplicate' ? 'warn' : 'good',
+        text: data.message,
+        checks: landed
+          ? { scanId: data.scanId, names, missing: known ? (isOut ? known.missingOut : known.missingIn) : [] }
+          : undefined,
+      })
       if (data.summary) onSummary(data.summary)
     } catch (e) {
       push({ tone: 'bad', text: e instanceof Error ? e.message : 'Scan failed.' })
@@ -100,6 +117,32 @@ export function UnitScanPanel({
   }
 
   const stillOut = summary.lines.reduce((n, l) => n + l.stillOut, 0) + summary.unlisted.filter((u) => u.outAt && !u.inAt).length
+
+  /** Tap a chip: flip that check between present and missing. */
+  async function toggleCheck(feedKey: string, scanId: string, name: string, current: string[]) {
+    const next = current.includes(name) ? current.filter((n) => n !== name) : [...current, name]
+    // Optimistic — the chip flips at once; the server answer settles it.
+    setFeed((prev) => prev.map((f) => (f.key === feedKey && f.checks ? { ...f, checks: { ...f.checks, missing: next } } : f)))
+    try {
+      const res = await fetch(`/api/orders/${orderId}/unit-scans/${scanId}/checks`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edge, missing: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setFeed((prev) => prev.map((f) => (f.key === feedKey && f.checks ? { ...f, checks: { ...f.checks, missing: data.missing ?? next } } : f)))
+        if (data.summary) onSummary(data.summary)
+      } else {
+        setFeed((prev) => prev.map((f) => (f.key === feedKey && f.checks ? { ...f, checks: { ...f.checks, missing: current } } : f)))
+        push({ tone: 'bad', text: data.error || `Could not record that (${res.status}).` })
+      }
+    } catch {
+      setFeed((prev) => prev.map((f) => (f.key === feedKey && f.checks ? { ...f, checks: { ...f.checks, missing: current } } : f)))
+    } finally {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }
 
   return (
     <div className="border border-lt-hairline bg-lt-card rounded-xl p-3 mb-4">
@@ -171,6 +214,31 @@ export function UnitScanPanel({
               )}
               <span className="flex-1 min-w-0">
                 {f.text}
+                {f.checks && (
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] uppercase tracking-wider font-bold opacity-70">
+                      {isOut ? 'With it' : 'Came back with'}
+                    </span>
+                    {f.checks.names.map((name) => {
+                      const missing = f.checks!.missing.includes(name)
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => void toggleCheck(f.key, f.checks!.scanId, name, f.checks!.missing)}
+                          title={missing ? `Mark ${name} present` : `Mark ${name} missing`}
+                          className={`text-[12px] font-semibold rounded-full px-2 py-0.5 border ${
+                            missing
+                              ? 'bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30'
+                              : 'bg-lt-card text-chip-good-fg border-chip-good-fg/30'
+                          }`}
+                        >
+                          {name} {missing ? '✕ missing' : '✓'}
+                        </button>
+                      )
+                    })}
+                  </span>
+                )}
                 {f.override && i === 0 && (
                   <button
                     type="button"
@@ -220,6 +288,7 @@ export function LineUnitStrip({
   const out = line?.out ?? 0
   const back = line?.back ?? 0
   const stillOut = line?.stillOut ?? 0
+  const missingCount = (line?.units ?? []).filter((u) => (isOut ? u.missingOut : u.missingIn).length > 0).length
 
   let label: string
   let tone: 'good' | 'warn' | 'neutral' | 'bad'
@@ -228,15 +297,15 @@ export function LineUnitStrip({
       label = 'scan to count'
       tone = 'neutral'
     } else {
-      label = `${out} of ${expectedQty} scanned`
-      tone = out === expectedQty ? 'good' : 'warn'
+      label = `${out} of ${expectedQty} scanned${missingCount ? ` · ${missingCount} missing parts` : ''}`
+      tone = missingCount ? 'bad' : out === expectedQty ? 'good' : 'warn'
     }
   } else if (out === 0 && back === 0) {
     label = 'nothing scanned out'
     tone = 'neutral'
   } else {
-    label = `${back} of ${out || expectedQty} back${stillOut ? ` · ${stillOut} still out` : ''}`
-    tone = stillOut ? 'bad' : 'good'
+    label = `${back} of ${out || expectedQty} back${stillOut ? ` · ${stillOut} still out` : ''}${missingCount ? ` · ${missingCount} missing parts` : ''}`
+    tone = stillOut || missingCount ? 'bad' : 'good'
   }
 
   async function undo(u: UnitScanUnit) {
@@ -298,6 +367,11 @@ export function LineUnitStrip({
                         ? 'still out'
                         : ''}
                 </span>
+                {(isOut ? u.missingOut : u.missingIn).length > 0 && (
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-chip-bad-fg whitespace-nowrap">
+                    no {(isOut ? u.missingOut : u.missingIn).join(', ')}
+                  </span>
+                )}
                 {!isOut && isOpenRow && (
                   <span className="text-[11px] font-bold uppercase tracking-wider text-chip-bad-fg">
                     out
