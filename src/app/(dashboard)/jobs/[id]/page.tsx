@@ -5,7 +5,8 @@ import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
+import { deriveJobDateRange, deriveOrderWindow, isoDate } from '@/lib/jobs/dateRange';
+import { daysUntil, fmtPickup, pickupLabel } from '@/lib/sales/quoteUrgency';
 import { isStageLineItem } from '@/lib/orders/stageLines';
 import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
 
@@ -69,7 +70,7 @@ import { STAGE_HINT, STAGE_LABEL, type JobStage } from '@/lib/jobs/stage';
 import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/statusTokens';
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { rollupCoiState } from '@/lib/coi/coiState';
-import { AlertTriangle, Check, User } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, User } from 'lucide-react'
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
 import type { UserRole } from '@prisma/client';
@@ -978,6 +979,47 @@ export default function JobDetailPage() {
   // off the individual orders and bookings.
   const orderSpan = deriveJobDateRange(job.orders);
 
+  // THE PICKUP, in the header (Wes 2026-09-10: "the pickup date at a
+  // minimum should be prominently displayed"). This is not the job-wide
+  // rollup the 09-01 ruling banned — it is ONE window, named by the order
+  // or hold it belongs to, the way the Quotes Out row names its pickup.
+  // The one shown is the next to go out; if everything has already gone,
+  // the most recent. Other windows are counted, not merged.
+  const pickupWindows = (() => {
+    const seen = new Set<string>()
+    const out: { label: string; start: string; end: string | null }[] = []
+    const push = (label: string, start: string | null, end: string | null) => {
+      if (!start) return
+      const key = `${start.slice(0, 10)}|${(end ?? '').slice(0, 10)}`
+      if (seen.has(key)) return
+      seen.add(key)
+      out.push({ label, start: start.slice(0, 10), end: end ? end.slice(0, 10) : null })
+    }
+    for (const o of liveOrders) {
+      const w = deriveOrderWindow({ lineItems: o.lineItems })
+      push(o.orderNumber, isoDate(w.start) ?? o.startDate, isoDate(w.end) ?? o.endDate)
+    }
+    for (const b of job.bookings ?? []) {
+      if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
+      push(`hold ${b.bookingNumber}`, b.startDate, b.endDate)
+    }
+    return out
+  })();
+  const nextPickup = (() => {
+    const upcoming = pickupWindows
+      .filter((w) => (daysUntil(w.start) ?? -1) >= 0)
+      .sort((a, b) => a.start.localeCompare(b.start));
+    if (upcoming[0]) return upcoming[0];
+    return [...pickupWindows].sort((a, b) => b.start.localeCompare(a.start))[0] ?? null;
+  })();
+  const pickupDays = nextPickup ? daysUntil(nextPickup.start) : null;
+  const pickupTone =
+    pickupDays === null ? 'bg-zinc-100 text-zinc-700 border-zinc-200'
+    : pickupDays < 0 ? 'bg-zinc-100 text-zinc-700 border-zinc-200'
+    : pickupDays <= 2 ? 'bg-rose-50 text-rose-700 border-rose-200'
+    : pickupDays <= 6 ? 'bg-amber-50 text-amber-800 border-amber-200'
+    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
   // Operational position. Server-derived (see src/lib/jobs/cadence.ts);
   // the fallback only covers a stale client that fetched before the API
   // started returning it.
@@ -1598,6 +1640,34 @@ const driverTone = (d: any): string => {
                   currentCompanyName={job.company.name}
                   onChanged={load}
                 />
+              </div>
+            )}
+            {nextPickup && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                <CalendarDays className="w-5 h-5 text-amber-700 flex-shrink-0" aria-hidden />
+                <span className="text-[19px] font-semibold text-zinc-900 leading-tight">
+                  {pickupDays !== null && pickupDays < 0 ? 'Picked up' : 'Picks up'} {fmtPickup(nextPickup.start)}
+                </span>
+                {nextPickup.end && (
+                  <span className="text-[15px] text-zinc-700">
+                    · back {fmtPickup(nextPickup.end)}
+                  </span>
+                )}
+                {!job.returnedAt && (
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${pickupTone}`}>
+                    {pickupLabel(nextPickup.start)}
+                  </span>
+                )}
+                <span className="text-[12px] text-zinc-600">
+                  {nextPickup.label}
+                  {pickupWindows.length > 1 && (
+                    <>
+                      {' '}· <a href="#orders" className="hover:text-amber-600 underline-offset-2 hover:underline">
+                        +{pickupWindows.length - 1} more window{pickupWindows.length - 1 === 1 ? '' : 's'}
+                      </a>
+                    </>
+                  )}
+                </span>
               </div>
             )}
             {/* Who we'd be writing to, and the button that writes to them.
