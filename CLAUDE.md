@@ -427,7 +427,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]` upserts the vendor, seeds a placeholder roster
   across their categories (rates EMPTY — Evan proposes from his page;
   unlisted until photos + signature), mints the account link, journals ids.
-  Then on /crm/portals#vendor: set the deal, file the standard agreement,
+  Then on /crm/portals#partners: set the deal, file the standard agreement,
   email the link. The Portals partner list now includes partners with roster
   units or a minted link, not only ones with bookings.
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
@@ -482,7 +482,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   LA service area — not LA-based). Emails seeded only where quotable.
 - `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
   --all [--dry] [--email slug=… --phone slug=…]` queues PROSPECTS ONLY (the
-  Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#vendor:
+  Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#partners:
   introduction (Wes) → they reply → Mark as new partner → deal → standard
   Partner Equipment Agreement → email the link. Nothing has been run yet.
 - The introduction (`buildIntroDraft`) is first contact in Wes's words
@@ -492,6 +492,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `scripts/set-user-phone.ts` sets the phone.
 - `npm run test:battery-candidates` guards the registry; `npm run
   test:partner-stage` guards the stage rule.
+
+## Partners vs vendors — two words, two tabs (2026-09-11 — Wes)
+- Wes: "Vendors are companies that serve SirReel: plumber, electrician etc.
+  Partners provide services for clients along with us." King Kong,
+  PowerTrip, Transpo and the battery candidates are PARTNERS. Staff- and
+  partner-facing copy says partner; `Vendor` stays the model/table name
+  (renaming it is not worth the churn).
+- /crm/portals has a **Partners** tab (`#partners` — the old tab, partner
+  accounts + unit links) and a **Vendors** tab (`#vendors` — active Vendor
+  rows that are not partner accounts; no portal link yet, just who to call).
+  `#vendor` (every link written before today, incl. sent emails) lands on
+  Partners — `FROM_HASH` in PortalsTabs.tsx. Link new code to `#partners`.
+- Every Partners/Vendors row shows the main contact with mailto/tel. The
+  partner's own page has a "Your SirReel contact" card from
+  `Vendor.sirreelContactUserId` (null = Wes, with his signature title), picked
+  on the Portals row; resolve via `sirreelContactFor()`. Column added by
+  targeted ALTER.
 
 ## Partner discount waterfall (2026-09-11 — Wes)
 - Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a

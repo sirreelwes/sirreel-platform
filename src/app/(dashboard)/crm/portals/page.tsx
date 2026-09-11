@@ -20,7 +20,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { canSendPartnerWelcome } from '@/lib/sub-rentals/welcomeSender'
-import { Building2, Eye, Link2, Send, Truck, Users } from 'lucide-react'
+import { Building2, Eye, Link2, Mail, Phone, Send, Truck, Users, Wrench } from 'lucide-react'
+import { SIRREEL_CONTACT_ROLES } from '@/lib/sub-rentals/sirreelContact'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
@@ -38,6 +39,27 @@ import { findNewPartnerPhotos } from '@/lib/actionItems/providers/partnerPhotosA
 import { findProspectVendorIds, readPartnerStages, STAGE_LABEL, type PartnerStage } from '@/lib/sub-rentals/partnerStage'
 
 export const dynamic = 'force-dynamic'
+
+/** Their main contact, ready to call or write (Wes 2026-09-11: "each partner
+ *  and vendor portal needs the contact info for our main contact"). */
+function ContactLine({ name, email, phone }: { name: string | null; email: string | null; phone: string | null }) {
+  if (!name && !email && !phone) return <span className="text-xs text-chip-bad-fg">No contact on file</span>
+  return (
+    <span className="text-xs text-lt-fg2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {name && <span className="text-lt-fg">{name}</span>}
+      {email && (
+        <a href={`mailto:${email}`} className="inline-flex items-center gap-1 hover:text-lt-fg">
+          <Mail className="w-3.5 h-3.5" /> {email}
+        </a>
+      )}
+      {phone && (
+        <a href={`tel:${phone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-1 hover:text-lt-fg">
+          <Phone className="w-3.5 h-3.5" /> {phone}
+        </a>
+      )}
+    </span>
+  )
+}
 
 function fmtDay(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -269,7 +291,7 @@ export default async function CompanyPortalsPage() {
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
-      partnerSharePercent: true, partnerMaxSharePercent: true, nameClientFacing: true, namePermissionNote: true,
+      partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, nameClientFacing: true, namePermissionNote: true,
       welcomeSentAt: true, welcomeSentTo: true,
       coiReceivedAt: true, coiExpiresAt: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
@@ -281,6 +303,20 @@ export default async function CompanyPortalsPage() {
     },
   })
   const dec = (d: unknown) => (d == null ? null : Number(d))
+  // VENDORS — companies that serve SirReel (plumber, electrician, suppliers),
+  // as distinct from partners, who serve our clients with us (Wes
+  // 2026-09-11). No portal link of their own yet; the tab is who to call.
+  const serviceVendors = await prisma.vendor.findMany({
+    where: { isActive: true, id: { notIn: vendorAccounts.map((v) => v.id) } },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, contactName: true, email: true, poEmail: true, phone: true, supplies: true },
+  })
+  // Who can be a partner's SirReel contact.
+  const staff = await prisma.user.findMany({
+    where: { isActive: true, role: { in: [...SIRREEL_CONTACT_ROLES] } },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, email: true },
+  })
   // Partner-added photos nobody has looked at yet, by vendor (fail-soft).
   const newPhotoGroups = await findNewPartnerPhotos()
   // prospect → introduced → partner; null map = columns not there yet, and
@@ -320,7 +356,7 @@ export default async function CompanyPortalsPage() {
       </div>
 
       <PortalsTabs
-        counts={{ company: rows.length, job: jobRows.length, client: clientPeople.length, vendor: vendorPortals.length }}
+        counts={{ company: rows.length, job: jobRows.length, client: clientPeople.length, partner: vendorAccounts.length, vendor: serviceVendors.length }}
         panes={{
           company: (
             <div>
@@ -407,7 +443,7 @@ export default async function CompanyPortalsPage() {
               )}
             </div>
           ),
-          vendor: (
+          partner: (
             <div>
               {/* Partner ACCOUNT links — one per vendor, every job at once
                   (Wes 2026-09-05: "multiple jobs for the vendor to look at
@@ -430,8 +466,8 @@ export default async function CompanyPortalsPage() {
                       </div>
                       <div className="text-xs text-lt-fg2 truncate">
                         {va.partnerKind === 'EQUIPMENT' ? 'Equipment · ' : ''}{va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}{va.partnerSharePercent != null ? ` · ${Number(va.partnerSharePercent)}% to SirReel` : ''}
-                        {va.contactName ? ` · ${va.contactName}` : ''}
                       </div>
+                      <div className="mt-1"><ContactLine name={va.contactName} email={va.email} phone={va.phone} /></div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
                       {va.portalToken ? (
@@ -462,6 +498,8 @@ export default async function CompanyPortalsPage() {
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
                       maxSharePercent={dec(va.partnerMaxSharePercent)}
+                      sirreelContactUserId={va.sirreelContactUserId}
+                      staff={staff}
                       naming={{ allowed: va.nameClientFacing, note: va.namePermissionNote }}
                       vendorName={va.name}
                       welcomeSent={va.welcomeSentAt ? { at: va.welcomeSentAt.toISOString(), to: va.welcomeSentTo } : null}
@@ -485,7 +523,7 @@ export default async function CompanyPortalsPage() {
       {vendorPortals.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
           <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
-          <p className="text-sm text-lt-fg2">No vendor links have been issued yet.</p>
+          <p className="text-sm text-lt-fg2">No partner unit links have been issued yet.</p>
         </div>
       ) : (
         <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
@@ -542,7 +580,7 @@ export default async function CompanyPortalsPage() {
                 {/* Wes 2026-09-05: see what the portal looks like for the vendor / the driver. */}
                 <div className="flex items-center gap-3 sm:shrink-0 text-xs">
                   <Link href={`/crm/portals/preview/vendor/${v.id}`} className="inline-flex items-center gap-1 text-lt-fg2 hover:text-lt-fg">
-                    <Eye className="w-3.5 h-3.5" /> Vendor view
+                    <Eye className="w-3.5 h-3.5" /> Partner view
                   </Link>
                   {v.driverName && (
                     <Link href={`/crm/portals/preview/driver/${v.id}`} className="inline-flex items-center gap-1 text-lt-fg2 hover:text-lt-fg">
@@ -555,6 +593,35 @@ export default async function CompanyPortalsPage() {
           })}
         </div>
       )}
+            </div>
+          ),
+          vendor: (
+            <div>
+              <p className="text-sm text-lt-fg2 mb-3 max-w-[70ch]">
+                Companies that serve SirReel — plumbers, electricians, suppliers. Partners, who serve our clients
+                with us, are under Partners. Vendors don&apos;t have a portal link yet; this is who to call.{' '}
+                <Link href="/admin/vendors" className="underline hover:text-lt-fg">Edit vendors</Link>
+              </p>
+              {serviceVendors.length === 0 ? (
+                <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+                  <Wrench className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                  <p className="text-sm text-lt-fg2">No vendors on file.</p>
+                </div>
+              ) : (
+                <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
+                  {serviceVendors.map((sv) => (
+                    <div key={sv.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+                      <div className="min-w-0 sm:w-[38%]">
+                        <div className="text-sm font-medium text-lt-fg truncate">{sv.name}</div>
+                        {sv.supplies && <div className="text-xs text-lt-fg2 truncate">{sv.supplies}</div>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <ContactLine name={sv.contactName} email={sv.email ?? sv.poEmail} phone={sv.phone} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ),
         }}

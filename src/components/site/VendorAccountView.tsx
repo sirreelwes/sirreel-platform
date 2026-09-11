@@ -164,6 +164,34 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           </section>
         </div>
 
+        {/* Who at SirReel they call (Wes 2026-09-11: "each partner and vendor
+            portal needs the contact info for our main contact"). */}
+        {v.sirreelContact && (
+          <section style={{ ...CARD, marginTop: 14 }}>
+            <div style={{ ...H2, margin: '0 0 6px' }}>Your SirReel contact</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{v.sirreelContact.name}</div>
+            {v.sirreelContact.title && <div style={{ fontSize: 13, color: '#6b6560', marginTop: 2 }}>{v.sirreelContact.title}</div>}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 10, fontSize: 14 }}>
+              {v.sirreelContact.phone && (
+                <a
+                  href={preview ? undefined : `tel:${v.sirreelContact.phone.replace(/[^\d+]/g, '')}`}
+                  aria-disabled={preview}
+                  style={{ color: '#0F7A93', fontWeight: 600, textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto' }}
+                >
+                  {v.sirreelContact.phone}
+                </a>
+              )}
+              <a
+                href={preview ? undefined : `mailto:${v.sirreelContact.email}`}
+                aria-disabled={preview}
+                style={{ color: '#0F7A93', fontWeight: 600, textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto' }}
+              >
+                {v.sirreelContact.email}
+              </a>
+            </div>
+          </section>
+        )}
+
         {/* The deal — plain words, the same numbers the agreement carries */}
         <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
           <div style={{ minWidth: 0, flex: 1 }}>

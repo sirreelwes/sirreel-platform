@@ -4,7 +4,7 @@
  *
  * Wes 2026-09-11: "no company gets onboarded until they reply and I mark it
  * as a new partner." So this registry seeds NOTHING but a Vendor row (the
- * prospect — enough to send the introduction from /crm/portals#vendor). The
+ * prospect — enough to send the introduction from /crm/portals#partners). The
  * roster below is created only by markAsPartner() in partnerStage.ts, when
  * Wes presses "Mark as new partner" after they reply.
  *

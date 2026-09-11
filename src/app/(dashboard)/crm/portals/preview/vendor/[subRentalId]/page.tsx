@@ -30,7 +30,7 @@ export default async function VendorPreviewPage({ params }: { params: { subRenta
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Link href="/crm/portals#vendors" className="inline-flex items-center gap-1.5 text-sm text-lt-fg2 hover:text-lt-fg">
+        <Link href="/crm/portals#partners" className="inline-flex items-center gap-1.5 text-sm text-lt-fg2 hover:text-lt-fg">
           <ArrowLeft className="w-4 h-4" /> Portals
         </Link>
         {job && <Link href={`/jobs/${job.id}#sub-rentals`} className="text-sm text-lt-fg2 hover:text-lt-fg">Job {job.jobCode} →</Link>}

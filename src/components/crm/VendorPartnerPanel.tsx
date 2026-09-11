@@ -18,7 +18,7 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, maxSharePercent = null, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, maxSharePercent = null, sirreelContactUserId = null, staff = [], naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
   vendorId: string
   hasLogo: boolean
   /** Units with partner-added photos nobody at HQ has looked at. Live already. */
@@ -44,6 +44,10 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   sharePercent: number | null
   /** How far SirReel's share may rise to keep a client (discountWaterfall.ts). */
   maxSharePercent?: number | null
+  /** Who at SirReel they call, shown on their page. Null = Wes. */
+  sirreelContactUserId?: string | null
+  /** People who can be that contact. */
+  staff?: { id: string; name: string; email: string }[]
   /** Clause 10 permission to name them to clients, and what they said. */
   naming?: { allowed: boolean; note: string | null } | null
   /** Their certificate of insurance: when HQ received it and when it lapses. */
@@ -69,6 +73,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [shareDraft, setShareDraft] = useState(sharePercent == null ? '' : String(sharePercent))
   const [maxShare, setMaxShare] = useState<number | null>(maxSharePercent)
   const [maxDraft, setMaxDraft] = useState(maxSharePercent == null ? '' : String(maxSharePercent))
+  const [ourContact, setOurContact] = useState(sirreelContactUserId ?? '')
   const [named, setNamed] = useState(!!naming?.allowed)
   const [nameNote, setNameNote] = useState(naming?.note ?? '')
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
@@ -249,6 +254,31 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
             </select>
             <div className="text-[11px] text-lt-fg3 mt-1">Where their listed units appear under “Also from SirReel”. A unit can pick its own section on its roster page.</div>
           </div>
+        </div>
+      </div>
+
+      {/* Who at SirReel they call — the card on their page. */}
+      <div className="border border-lt-hairline rounded-lg p-3">
+        <div className="text-sm font-medium text-lt-fg">Their SirReel contact</div>
+        <div className="text-xs text-lt-fg2 mt-1">Shown on their partner page with a cell and email. Blank = Wes.</div>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            value={ourContact}
+            disabled={busy === 'ourContact'}
+            onChange={async (e) => {
+              const next = e.target.value
+              setBusy('ourContact'); setMsg(null)
+              const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sirreelContactUserId: next || null }) })
+              if (r.ok) { setOurContact(next); setMsg(`Saved — their page now names ${staff.find((s) => s.id === next)?.name ?? 'Wes Bailey'} as their SirReel contact.`) }
+              else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+              setBusy(null)
+            }}
+            className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg"
+          >
+            <option value="">Wes Bailey (default)</option>
+            {staff.filter((s) => s.email.toLowerCase() !== 'wes@sirreel.com').map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          {busy === 'ourContact' && <Loader2 className="w-3 h-3 animate-spin text-lt-fg3" />}
         </div>
       </div>
 

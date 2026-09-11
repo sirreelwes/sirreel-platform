@@ -21,6 +21,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 import { isPartnerKind } from '@/lib/sub-rentals/partnerKind'
 import { isPartnerSectionKey } from '@/lib/site/partnerSections'
+import { SIRREEL_CONTACT_ROLES } from '@/lib/sub-rentals/sirreelContact'
 
 export const dynamic = 'force-dynamic'
 
@@ -155,6 +156,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }
     }
     data.partnerMaxSharePercent = n === null ? null : Math.round(n * 100) / 100
+  }
+
+  if ('sirreelContactUserId' in body) {
+    // Who at SirReel the partner calls (sirreelContact.ts). Empty = Wes.
+    const raw = body.sirreelContactUserId
+    if (raw === null || raw === '') data.sirreelContactUserId = null
+    else {
+      const user = typeof raw === 'string'
+        ? await prisma.user.findFirst({ where: { id: raw, isActive: true, role: { in: [...SIRREEL_CONTACT_ROLES] } }, select: { id: true } })
+        : null
+      if (!user) return NextResponse.json({ error: 'sirreelContactUserId must be an active SirReel staff member' }, { status: 400 })
+      data.sirreelContactUserId = user.id
+    }
   }
 
   if (Object.keys(data).length === 0) {

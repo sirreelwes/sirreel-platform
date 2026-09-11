@@ -21,7 +21,7 @@
  *      listed, has a photo, AND the agreement is signed (SUB_LISTED_WHERE).
  *   3. Mints the partner's account link (Vendor.portalToken) and prints it.
  *      Minting is silent — the welcome email goes from the Portals tab
- *      (/crm/portals#vendor → PowerTrip → "Email the account link"), where
+ *      (/crm/portals#partners → PowerTrip → "Email the account link"), where
  *      the deal (% to SirReel) and the standard Partner EQUIPMENT Agreement
  *      are filed first.
  *
@@ -221,7 +221,7 @@ async function main() {
     const token = await ensureVendorPortalToken(vendor.id)
     journal.portalUrl = vendorAccountUrl(token)
     console.log(`\nPartner account link (minted, NOT sent): ${journal.portalUrl}`)
-    console.log('Next, on /crm/portals#vendor → PowerTrip Rentals: set the deal (% to SirReel), file the standard Partner Equipment Agreement, then "Email the account link" to Evan.')
+    console.log('Next, on /crm/portals#partners → PowerTrip Rentals: set the deal (% to SirReel), file the standard Partner Equipment Agreement, then "Email the account link" to Evan.')
     mkdirSync('journals', { recursive: true })
     const file = `journals/onboard-power-trip-${journal.at.replace(/[:.]/g, '-')}.json`
     writeFileSync(file, JSON.stringify(journal, null, 2))

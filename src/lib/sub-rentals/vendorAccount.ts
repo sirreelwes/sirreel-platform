@@ -24,6 +24,7 @@
 import { randomBytes } from 'crypto'
 import type { SubRentalStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { sirreelContactFor, type SirReelContact } from '@/lib/sub-rentals/sirreelContact'
 import { unitNameOf } from '@/lib/sub-rentals/conduit'
 import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
 import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
@@ -144,6 +145,8 @@ export interface VendorAccountView {
   /** How far SirReel's share may rise when a client gets a discount on their
    *  unit (the discount waterfall). Null = they do not flex. */
   maxSharePercent: number | null
+  /** Who at SirReel they call — Vendor.sirreelContactUserId, else Wes. */
+  sirreelContact: SirReelContact | null
   current: VendorAccountJob[]
   past: VendorAccountJob[]
   /**
@@ -174,7 +177,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -189,7 +192,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor, null)
@@ -206,6 +209,7 @@ async function buildVendorAccount(vendor: {
   logoSvg: string | null
   partnerSharePercent: unknown
   partnerMaxSharePercent: unknown
+  sirreelContactUserId: string | null
   partnerKind: PartnerKindKey
   catalogSection: string | null
 }, portalToken: string | null): Promise<VendorAccountView> {
@@ -261,6 +265,7 @@ async function buildVendorAccount(vendor: {
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))
   const sharePercent = num(vendor.partnerSharePercent)
+  const sirreelContact = await sirreelContactFor(vendor.sirreelContactUserId).catch(() => null)
 
   const byJob = new Map<string, VendorAccountJob>()
   for (const r of rows) {
@@ -343,6 +348,7 @@ async function buildVendorAccount(vendor: {
     })),
     sharePercent,
     maxSharePercent: num(vendor.partnerMaxSharePercent),
+    sirreelContact,
     agreement: agreementRow
       ? { id: agreementRow.id, title: agreementRow.title, signedAt: agreementRow.signedAt?.toISOString() ?? null, signerName: agreementRow.signerName, expiryDate: agreementRow.expiryDate?.toISOString() ?? null }
       : null,

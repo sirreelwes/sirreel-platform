@@ -4752,6 +4752,12 @@ model Vendor {
   /// (10% of list); deeper is declined. Null = the partner does not flex.
   /// Read through discountWaterfall.ts / partnerMargins.ts, never raw.
   partnerMaxSharePercent Decimal? @map("partner_max_share_percent") @db.Decimal(5, 2)
+  /// WHO AT SIRREEL THEY CALL (Wes 2026-09-11: "each partner and vendor
+  /// portal needs the contact info for our main contact"). A User id, shown
+  /// on the partner's account page as "Your SirReel contact". Null = Wes.
+  /// Deliberately not a relation — the column went in by additive SQL on a
+  /// drifted DB. Read through sirreelContact.ts.
+  sirreelContactUserId String? @map("sirreel_contact_user_id")
   /// UNUSED — nothing reads or writes these three.
   ///
   /// Added 2026-09-10 for a partner-side "propose a different split" form, and

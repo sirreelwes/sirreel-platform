@@ -72,7 +72,7 @@ export async function updateVendorContact(
       .filter(([, val]) => val !== undefined)
       .map(([k, val]) => `${k} → ${val ?? '(cleared)'}`)
       .join('; ')}.`,
-    '/crm/portals#vendor',
+    '/crm/portals#partners',
   )
 }
 
@@ -117,7 +117,7 @@ export async function proposeUnitRates(vendorId: string, unitId: string, input: 
   await tellHq(
     `${unit.vendor.name} proposed new rates on ${unit.name}`,
     `${unit.vendor.name} asked for new rates on ${unit.name}: daily ${fmt(daily)} (was ${fmt(unit.listDailyRate)}), weekly ${fmt(weekly)} (was ${fmt(unit.listWeeklyRate)}), monthly ${fmt(monthly)} (was ${fmt(unit.listMonthlyRate)}). Nothing has changed yet — accept or decline it on the Portals tab.`,
-    '/crm/portals#vendor',
+    '/crm/portals#partners',
   )
 }
 
@@ -170,7 +170,7 @@ export async function setUnitMarketing(vendorId: string, unitId: string, allowed
     allowed
       ? `${unit.vendor.name} re-allowed SirReel to offer their ${unit.name} to clients. It returns to sirreel.com only if it has a slug and photos.`
       : `${unit.vendor.name} withdrew permission to market their ${unit.name}. It is off sirreel.com now; do not quote it to clients.`,
-    '/crm/portals#vendor',
+    '/crm/portals#partners',
   )
 }
 
@@ -358,7 +358,7 @@ export async function signVendorAgreement(i: SignVendorAgreementInput): Promise<
   await tellHq(
     `${row.vendor.name} signed the partner agreement`,
     `${i.signerName}${i.signerTitle ? ` (${i.signerTitle})` : ''} signed "${row.title}" for ${row.vendor.name} from their partner page.`,
-    '/crm/portals#vendor',
+    '/crm/portals#partners',
   )
   return { signedAt }
 }
