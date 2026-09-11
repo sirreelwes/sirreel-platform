@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { flatTotalToDepartmentDiscount } from '@/lib/orders/discountedTotals'
+import { SIRREEL_FLOOR_PERCENT, type PartnerLineMargin } from '@/lib/sub-rentals/discountWaterfall'
 
 const DEPT_LABELS: Record<string, string> = {
   VEHICLES: 'Vehicles',
@@ -38,6 +39,7 @@ const DEPT_LABELS: Record<string, string> = {
   GE: 'Grip & Electric',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 
 type Scope = 'ORDER' | 'DEPARTMENT'
@@ -78,6 +80,9 @@ interface Breakdown {
 export interface DiscountsPanelData {
   discounts: DiscountRow[]
   breakdown: Breakdown
+  /** One row per partner unit on the order — what the discounts leave the
+   *  partner and SirReel (discountWaterfall.ts). */
+  partnerMargins?: PartnerLineMargin[]
 }
 
 function fmt(n: number): string {
@@ -311,6 +316,57 @@ export function DiscountsPanel({
             ({fmt(data.breakdown.flatTotalTarget)}) — discount clamped to $0.
           </div>
         )}
+      </div>
+
+      {/* ── Partner units: what the discounts leave each side ──── */}
+      {data.partnerMargins && data.partnerMargins.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-lt-hairline/60 text-sm">
+          <div className="text-lt-fg font-medium py-1">Partner units</div>
+          <div className="space-y-2">
+            {data.partnerMargins.map((m) => <PartnerMarginRow key={m.subRentalId} m={m} />)}
+          </div>
+          <div className="mt-2 text-[11px] text-lt-fg3">
+            A discount on a partner&apos;s unit is shared equally with them up to the most they&apos;ll give, then comes out of
+            SirReel&apos;s share — never below {SIRREEL_FLOOR_PERCENT}% of their list. Deeper is refused.
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PartnerMarginRow({ m }: { m: PartnerLineMargin }) {
+  const w = m.waterfall
+  const name = (
+    <span className="text-lt-fg2 min-w-0 truncate">
+      <span className="font-medium text-lt-fg">{m.unitName}</span> · {m.vendorName}
+    </span>
+  )
+  if (!w) {
+    return (
+      <div className="flex items-center justify-between gap-2 text-xs">
+        {name}
+        <span className="px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg whitespace-nowrap">
+          {m.status === 'no-deal' ? 'no deal set — margin unknown' : 'no list rate — margin unknown'}
+        </span>
+      </div>
+    )
+  }
+  const tone = m.status === 'declined'
+    ? 'bg-chip-bad-bg text-chip-bad-fg'
+    : w.stage === 'sirreel' ? 'bg-chip-warn-bg text-chip-warn-fg' : 'bg-chip-neutral-bg text-chip-neutral-fg'
+  return (
+    <div className="text-xs">
+      <div className="flex items-center justify-between gap-2">
+        {name}
+        <span className={`px-1.5 py-0.5 rounded font-mono whitespace-nowrap ${tone}`}>SirReel keeps {fmt(m.sirreelKeep ?? 0)}</span>
+      </div>
+      <div className="text-lt-fg3 mt-0.5">
+        Client {fmt(w.billed)} of {fmt(w.list)} list{w.discountPercent > 0 ? ` (${w.discountPercent}% off)` : ''} · partner{' '}
+        {fmt(m.partnerPay ?? 0)}{m.committed ? ' (already told)' : ''} ·{' '}
+        {m.status === 'declined'
+          ? <span className="text-chip-bad-fg">below SirReel&apos;s {fmt(w.sirreelFloor)} floor — it can&apos;t be quoted or booked like this</span>
+          : <>deepest discount {w.maxDiscountPercent}% ({fmt(w.minBilled)})</>}
       </div>
     </div>
   )

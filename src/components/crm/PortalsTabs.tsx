@@ -1,12 +1,17 @@
 'use client'
 
 /**
- * The four kinds of portal, one at a time.
+ * The five kinds of portal, one at a time.
  *
  * Wes 2026-09-05: "give three options in portals — Client Portals (people),
  * Production Company Portals, and Vendor Portals. I want to add Job
  * Portals here too (for shows or movies and this is where we control what
  * they see and who sees it)."
+ *
+ * Wes 2026-09-11: "all of these should be Partners, not vendors. Vendors are
+ * companies that serve SirReel: plumber, electrician etc. Partners provide
+ * services for clients along with us." So the old Vendors tab is PARTNERS,
+ * and VENDORS is its own tab for the companies that serve us.
  *
  * Server-rendered panes, client-side switch. The panes arrive as children
  * so the page keeps its data fetching on the server; this only decides
@@ -15,16 +20,27 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Building2, Clapperboard, Truck, Users } from 'lucide-react'
+import { Building2, Clapperboard, Handshake, Users, Wrench } from 'lucide-react'
 
-export type PortalKind = 'company' | 'job' | 'client' | 'vendor'
+export type PortalKind = 'company' | 'job' | 'client' | 'partner' | 'vendor'
 
 const TABS: { key: PortalKind; label: string; icon: typeof Users; hint: string }[] = [
   { key: 'company', label: 'Production Companies', icon: Building2, hint: 'Executives who see the whole account' },
   { key: 'job', label: 'Jobs', icon: Clapperboard, hint: 'What each show’s team sees, and who' },
   { key: 'client', label: 'Clients', icon: Users, hint: 'People who have signed in' },
-  { key: 'vendor', label: 'Vendors', icon: Truck, hint: 'Partner links for sub-rentals' },
+  { key: 'partner', label: 'Partners', icon: Handshake, hint: 'Serve our clients alongside us' },
+  { key: 'vendor', label: 'Vendors', icon: Wrench, hint: 'Companies that serve SirReel' },
 ]
+
+const HASH: Record<PortalKind, string> = { company: 'company', job: 'job', client: 'client', partner: 'partners', vendor: 'vendors' }
+
+/** `#vendor` is every link written before 2026-09-11 — emails already sent,
+ *  action items, scripts — and all of them meant partners. */
+const FROM_HASH: Record<string, PortalKind> = {
+  company: 'company', job: 'job', client: 'client',
+  partners: 'partner', partner: 'partner', vendor: 'partner',
+  vendors: 'vendor',
+}
 
 export function PortalsTabs({
   counts,
@@ -36,13 +52,13 @@ export function PortalsTabs({
   const [active, setActive] = useState<PortalKind>('company')
 
   useEffect(() => {
-    const h = window.location.hash.replace('#', '') as PortalKind
-    if (TABS.some((t) => t.key === h)) setActive(h)
+    const h = FROM_HASH[window.location.hash.replace('#', '')]
+    if (h) setActive(h)
   }, [])
 
   function pick(k: PortalKind) {
     setActive(k)
-    window.history.replaceState(null, '', `#${k}`)
+    window.history.replaceState(null, '', `#${HASH[k]}`)
   }
 
   return (

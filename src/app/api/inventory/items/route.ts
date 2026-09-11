@@ -16,6 +16,7 @@ const VALID_DEPARTMENTS: LineItemDepartment[] = [
   "GE",
   "ART",
   "WARDROBE_MAKEUP",
+  "PHOTO_SHOOT",
 ];
 
 export async function POST(req: NextRequest) {

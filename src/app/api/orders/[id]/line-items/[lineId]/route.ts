@@ -16,6 +16,7 @@ import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -218,6 +219,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
         });
         data.billableDays = effectiveDays;
         data.lineTotal = Math.round(lineTotal * 100) / 100;
+
+        // A partner unit priced below what SirReel's floor allows is refused
+        // (discountWaterfall.ts). Any line is checked, not only partner lines:
+        // a FIXED or flat-total order discount re-spreads when another line
+        // moves. Exits at once on an order with no partner units.
+        const floor = await partnerFloorGate(orderId, {
+          line: { id: lineId, lineTotal: Math.round(lineTotal * 100) / 100, billableDays: effectiveDays, quantity: effectiveQty, rate: effectiveRate },
+        });
+        if (!floor.ok) {
+          return NextResponse.json({ error: "below partner floor", reason: floor.message }, { status: 409 });
+        }
       }
     }
 

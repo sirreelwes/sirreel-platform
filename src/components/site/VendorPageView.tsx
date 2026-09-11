@@ -43,6 +43,16 @@ const STATUS_COPY: Record<string, { label: string; blurb: string; tone: string }
   },
 }
 
+/** REQUESTED, but the partner has already pressed Confirm hold. HQ may still be
+ *  finishing its side (the COI gate holds the status back until the production's
+ *  certificate clears) — that is ours to chase, so the page stops asking them. */
+const REQUESTED_CONFIRMED_COPY = {
+  label: 'Hold confirmed',
+  blurb:
+    'You have confirmed the hold — thank you. SirReel is finalising the booking with the production and will follow up with the PO. Name your driver whenever you are ready; the location and call time appear here as the production sets them.',
+  tone: '#2f7d5d',
+}
+
 function fmtDate(d: Date | null): string {
   if (!d) return '—'
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -62,7 +72,12 @@ const DT = 'text-[13px] font-semibold uppercase tracking-[0.06em] text-[#8b857a]
 const DD = 'text-[15px] font-semibold text-[#0c0c0d] text-right'
 
 export function VendorPageView({ v, token, preview = false }: { v: VendorView; token: string; preview?: boolean }) {
-  const status = STATUS_COPY[v.status] ?? { label: v.status, blurb: '', tone: '#5a554c' }
+  // REQUESTED with the partner's confirm already stamped: HQ is still finishing
+  // its side (the COI gate can hold the status back), so don't ask them again.
+  const status =
+    v.status === 'REQUESTED' && v.vendorConfirmedAt
+      ? REQUESTED_CONFIRMED_COPY
+      : STATUS_COPY[v.status] ?? { label: v.status, blurb: '', tone: '#5a554c' }
   const photos = v.photos.map((p) => ({ id: p.id, src: `/api/public/vendor/${token}/photo/${p.id}` }))
   const l = v.logistics
   const showLogistics = ['REQUESTED', 'CONFIRMED', 'PICKED_UP', 'ON_RENT'].includes(v.status)

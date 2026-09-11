@@ -164,6 +164,34 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           </section>
         </div>
 
+        {/* Who at SirReel they call (Wes 2026-09-11: "each partner and vendor
+            portal needs the contact info for our main contact"). */}
+        {v.sirreelContact && (
+          <section style={{ ...CARD, marginTop: 14 }}>
+            <div style={{ ...H2, margin: '0 0 6px' }}>Your SirReel contact</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{v.sirreelContact.name}</div>
+            {v.sirreelContact.title && <div style={{ fontSize: 13, color: '#6b6560', marginTop: 2 }}>{v.sirreelContact.title}</div>}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 10, fontSize: 14 }}>
+              {v.sirreelContact.phone && (
+                <a
+                  href={preview ? undefined : `tel:${v.sirreelContact.phone.replace(/[^\d+]/g, '')}`}
+                  aria-disabled={preview}
+                  style={{ color: '#0F7A93', fontWeight: 600, textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto' }}
+                >
+                  {v.sirreelContact.phone}
+                </a>
+              )}
+              <a
+                href={preview ? undefined : `mailto:${v.sirreelContact.email}`}
+                aria-disabled={preview}
+                style={{ color: '#0F7A93', fontWeight: 600, textDecoration: 'none', pointerEvents: preview ? 'none' : 'auto' }}
+              >
+                {v.sirreelContact.email}
+              </a>
+            </div>
+          </section>
+        )}
+
         {/* The deal — plain words, the same numbers the agreement carries */}
         <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -172,7 +200,10 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
               <div style={{ fontSize: 14, color: '#6b6560' }}>SirReel hasn&apos;t set the split yet. It will show here, and on every booking, once it is.</div>
             ) : (
               <div style={{ fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>
-                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
+                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.{' '}
+                {v.maxSharePercent != null && v.maxSharePercent > v.sharePercent
+                  ? <>If a production needs a discount to book, it is <strong style={{ color: '#111' }}>shared equally with SirReel</strong> until SirReel&apos;s share reaches {v.maxSharePercent}% (you receive {Math.round((100 - v.maxSharePercent) * 100) / 100}% of list); past that, SirReel covers the rest.</>
+                  : <>If a production needs a discount to book, it comes out of SirReel&apos;s share, not yours.</>}
               </div>
             )}
             {/* Wes 2026-09-10, second pass: the split is a conversation he

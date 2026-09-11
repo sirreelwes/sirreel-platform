@@ -10,17 +10,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { addVendorDriver, assignRosterDriver, rosterForVendor } from '@/lib/sub-rentals/vendorDrivers'
+import { vendorBookingWhere } from '@/lib/sub-rentals/potentialSubRental'
+import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
 
+/** Every POST can send an invite email. Room for a partner putting a whole
+ *  crew on at once; not room for a loop mailing strangers from our domain. */
+const INVITE_RATE = { windowMs: 10 * 60_000, max: 20 }
+
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+  if (!checkRateLimit(`vendor-drivers:${clientIp(req)}`, INVITE_RATE).ok) {
+    return NextResponse.json({ error: 'That is a lot of invites at once — give it a few minutes.' }, { status: 429 })
+  }
   const token = params.token
   if (!token || token.length < 32) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const sub = await prisma.subRental.findFirst({
-    where: { vendorToken: token },
+    where: vendorBookingWhere(token),
     select: { id: true, status: true, vendorId: true, subcontractedVehicleId: true },
   })
   if (!sub) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  // A closed booking's link is not a standing way to mail invites.
+  if (sub.status === 'CANCELLED' || sub.status === 'RETURNED') {
+    return NextResponse.json({ error: 'This booking is closed.' }, { status: 409 })
+  }
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
   const added = await addVendorDriver({
@@ -40,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   })
 
   let assignment: unknown = null
-  if (body.assign === true && sub.status !== 'CANCELLED') {
+  if (body.assign === true) {
     const a = await assignRosterDriver(sub.id, added.driverId)
     if (!a.ok) return NextResponse.json({ error: a.error }, { status: 400 })
     assignment = a

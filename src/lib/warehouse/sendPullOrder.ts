@@ -47,6 +47,7 @@
  */
 
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p, calloutBox, detailTable } from '@/lib/email/templates/shell'
@@ -54,6 +55,7 @@ import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannel
 import { renderPickListPdf } from '@/lib/warehouse/renderPickListPdf'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { rollupCoiState } from '@/lib/coi/coiState'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 
@@ -131,7 +133,12 @@ export async function previewPullOrder(
       endDate: true,
       deliveryRequested: true,
       company: { select: { name: true } },
-      lineItems: { select: { type: true, fulfillmentLane: true } },
+      lineItems: {
+        select: {
+          id: true, type: true, fulfillmentLane: true, parentLineItemId: true,
+          subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
+        },
+      },
       pickList: {
         select: {
           releasedAt: true,
@@ -146,12 +153,13 @@ export async function previewPullOrder(
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
-            take: 1,
+            take: OWN_COI_TAKE,
             select: {
               humanDecision: true,
               policyExpiryDate: true,
               coverageVerified: true,
               decidedWithVehicles: true,
+              aiResponse: true,
             },
           },
           orders: {
@@ -196,7 +204,8 @@ export async function previewPullOrder(
   })
   if (!order) return { ok: false, error: 'order not found', status: 404 }
 
-  const pickable = order.lineItems.filter(isPickableLine)
+  // Partner lines are not ours to pull (partnerLines.ts) — same filter the sheet applies.
+  const pickable = order.lineItems.filter((li) => isPickableLine(li) && !isPartnerLineIn(li, order.lineItems))
   const recipients = await recipientsForPullOrder()
 
   return {
@@ -235,6 +244,7 @@ function jobReadiness(
       policyExpiryDate: Date | null
       coverageVerified: boolean
       decidedWithVehicles?: boolean | null
+      aiResponse?: unknown
     }[]
     orders: {
       status?: string | null
@@ -260,7 +270,8 @@ function jobReadiness(
 ): { blockers: string[]; ready: boolean } {
   if (!job) return { blockers: [], ready: true }
 
-  const coi = job.coiChecks[0]
+  // Newest FULL certificate — workers' comp on its own is not the COI.
+  const coi = newestFullCoi(job.coiChecks)
   // A certificate approved for a gear-only job does not cover a truck someone
   // added since. This is the last gate before the pull sheet leaves for the
   // warehouse, so it is exactly where that has to bite.

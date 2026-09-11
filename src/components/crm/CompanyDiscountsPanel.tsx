@@ -31,6 +31,7 @@ const DEPARTMENTS: { value: string; label: string }[] = [
   { value: 'GE', label: 'Grip & electric' },
   { value: 'ART', label: 'Art department' },
   { value: 'WARDROBE_MAKEUP', label: 'Wardrobe & makeup' },
+  { value: 'PHOTO_SHOOT', label: 'Photo shoot rentals' },
 ]
 
 interface Discount {

@@ -19,7 +19,7 @@ export default async function VendorAccountPreviewPage({ params }: { params: { v
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <Link href="/crm/portals#vendor" className="text-sm text-lt-fg2 hover:text-lt-fg">← Portals</Link>
+        <Link href="/crm/portals#partners" className="text-sm text-lt-fg2 hover:text-lt-fg">← Portals</Link>
       </div>
       <div className="mb-3 rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg text-sm px-4 py-2.5 flex items-center gap-2">
         <Eye className="w-4 h-4 shrink-0" />

@@ -20,7 +20,7 @@
  *     said COI missing (Wes: "Echobend has an annual COI on file").
  */
 
-import { pickCarriedCoi } from '../../src/lib/coi/companyCoi'
+import { newestFullCoi, pickCarriedCoi } from '../../src/lib/coi/companyCoi'
 import { rollupCoiState } from '../../src/lib/coi/coiState'
 
 const failures: string[] = []
@@ -88,6 +88,19 @@ check('REJECTED is never carried', pickCarriedCoi([cert('r', 'REJECTED', '2027-0
 check('no expiry date, no carry-forward', pickCarriedCoi([cert('n', 'APPROVED', null)], start, end, staff) === null)
 check('lapsed before the job starts is not coverage', pickCarriedCoi([cert('old', 'APPROVED', '2026-09-01')], start, end, staff) === null)
 check('empty file → null', pickCarriedCoi([], start, end, staff) === null)
+
+// ── Workers' comp on its own never governs (MNX, 2026-09-11) ───────
+{
+  const wcReview = { generalLiability: { found: '' }, workersComp: { found: 'WC 080772104, E.L. $1,000,000' } }
+  const glReview = { generalLiability: { pass: true, perOccurrence: { found: '$1,000,000' } }, workersComp: { found: 'Policy 7997-9687' } }
+  const approvedWc = { ...cert('wc', 'APPROVED', '2028-01-01', 'TakeOne Network Corp.'), aiResponse: wcReview }
+  const approvedGl = { ...cert('gl', 'APPROVED', '2027-08-24', 'Chaotic Neutral LTD'), aiResponse: glReview }
+  check("an account's approved workers' comp cert is never carried, even longer-dated", pickCarriedCoi([approvedWc, approvedGl], start, end, staff)?.coi.id === 'gl')
+  check("workers' comp alone carries nothing", pickCarriedCoi([approvedWc], start, end, staff) === null)
+  check("the newest FULL cert governs over a newer workers' comp upload (MNX)", newestFullCoi([approvedWc, approvedGl])?.id === 'gl')
+  check("only workers' comp on the job → no certificate of its own (LAFSC)", newestFullCoi([approvedWc]) === null)
+  check('a row with no AI review still counts as a certificate', newestFullCoi([{ ...cert('old', 'APPROVED', '2027-01-01'), aiResponse: null }])?.id === 'old')
+}
 
 console.log('')
 if (failures.length) {

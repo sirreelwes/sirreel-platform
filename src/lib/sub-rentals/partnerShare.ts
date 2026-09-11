@@ -20,6 +20,7 @@
  * number a human typed (a one-off negotiated price) is never overwritten.
  */
 import { prisma } from '@/lib/prisma'
+import { partnerMarginsForOrder } from '@/lib/sub-rentals/partnerMargins'
 
 const num = (v: unknown): number | null => {
   if (v == null || v === '') return null
@@ -62,46 +63,86 @@ export function costForWindow(rates: { daily: number | null; weekly: number | nu
 }
 
 export interface StampedCost {
+  /** SirReel's share of list as actually applied to this booking: the deal,
+   *  plus the partner's part of any client discount. */
   sharePercent: number
   listDaily: number | null
   vendorDaily: number | null
   vendorTotal: number | null
+  /** Points of list the partner gave to keep this client (discountWaterfall). */
+  concessionPercent: number
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100
+
 /**
- * Write the vendor-side money onto a sub-rental from its unit's list rates
- * and the effective share. Null fields only; returns what is now on the row
- * (for the email that follows), or null when there is no deal to apply.
+ * Write the vendor-side money onto a sub-rental. Null fields only; returns
+ * what is now on the row (for the email that follows), or null when there is
+ * no deal or no list rate to apply.
+ *
+ * On an order line the partner is paid what the discount waterfall says —
+ * their deal, less their share of any client discount — for the days the
+ * LINE bills. Partner units bill calendar days, never a weekly block
+ * (partnerDaily.ts); stamping weekly blocks here told a partner $9,428 for a
+ * ten-day booking the client paid daily for.
+ *
+ * The list rate comes from the partner's roster unit only. It used to fall
+ * back to the booking's clientDailyRate — the CLIENT's price, discounts and
+ * all — so the partner's pay moved with our client deals and their notice
+ * quoted that price as their "list".
  */
 export async function stampVendorCost(subRentalId: string): Promise<StampedCost | null> {
   const s = await prisma.subRental.findUnique({
     where: { id: subRentalId },
     select: {
-      quantity: true, startDate: true, endDate: true,
-      vendorDailyRate: true, vendorWeeklyRate: true, vendorTotal: true, clientDailyRate: true, clientWeeklyRate: true, clientTotal: true,
-      subcontractedVehicle: { select: { listDailyRate: true, listWeeklyRate: true, discountPercent: true } },
+      quantity: true, startDate: true, endDate: true, orderId: true, orderLineItemId: true,
+      vendorDailyRate: true, vendorTotal: true, clientDailyRate: true, clientTotal: true,
+      subcontractedVehicle: { select: { listDailyRate: true, discountPercent: true } },
       vendor: { select: { partnerSharePercent: true } },
     },
   })
   if (!s) return null
   const share = effectiveSharePercent(s.subcontractedVehicle, s.vendor)
-  if (share == null) return null
-  const listDaily = num(s.subcontractedVehicle?.listDailyRate) ?? num(s.clientDailyRate)
-  const listWeekly = num(s.subcontractedVehicle?.listWeeklyRate) ?? num(s.clientWeeklyRate)
-  const vendorDaily = num(s.vendorDailyRate) ?? partnerNet(listDaily, share)
-  const vendorWeekly = num(s.vendorWeeklyRate) ?? partnerNet(listWeekly, share)
-  const days = rentalDays(s.startDate, s.endDate)
-  const vendorTotal = num(s.vendorTotal) ?? costForWindow({ daily: vendorDaily, weekly: vendorWeekly }, days, s.quantity)
-  const clientTotal = num(s.clientTotal) ?? costForWindow({ daily: listDaily, weekly: listWeekly }, days, s.quantity)
+  const listDaily = num(s.subcontractedVehicle?.listDailyRate)
+  if (share == null || listDaily == null) return null
+
+  const margin = s.orderId && s.orderLineItemId
+    ? (await partnerMarginsForOrder(s.orderId)).find((m) => m.subRentalId === subRentalId) ?? null
+    : null
+  let vendorDaily: number | null
+  let vendorTotal: number | null
+  let clientTotal: number | null
+  let concessionPercent = 0
+  if (margin?.waterfall && margin.partnerPay != null) {
+    vendorDaily = round2(margin.partnerPay / margin.units)
+    vendorTotal = round2(margin.partnerPay)
+    clientTotal = margin.waterfall.billed
+    if (!margin.committed) concessionPercent = margin.waterfall.concessionPercent
+  } else {
+    // Not on a line yet (a quoted unit hanging off the job): the deal on
+    // list, calendar days.
+    const days = rentalDays(s.startDate, s.endDate)
+    vendorDaily = partnerNet(listDaily, share)
+    vendorTotal = costForWindow({ daily: vendorDaily, weekly: null }, days, s.quantity)
+    clientTotal = costForWindow({ daily: listDaily, weekly: null }, days, s.quantity)
+  }
   await prisma.subRental.update({
     where: { id: subRentalId },
     data: {
       ...(s.vendorDailyRate == null && vendorDaily != null ? { vendorDailyRate: vendorDaily } : {}),
-      ...(s.vendorWeeklyRate == null && vendorWeekly != null ? { vendorWeeklyRate: vendorWeekly } : {}),
       ...(s.vendorTotal == null && vendorTotal != null ? { vendorTotal } : {}),
-      ...(s.clientDailyRate == null && listDaily != null ? { clientDailyRate: listDaily } : {}),
+      ...(s.clientDailyRate == null ? { clientDailyRate: listDaily } : {}),
       ...(s.clientTotal == null && clientTotal != null ? { clientTotal } : {}),
     },
   })
-  return { sharePercent: share, listDaily, vendorDaily, vendorTotal }
+  const onRowDaily = num(s.vendorDailyRate) ?? vendorDaily
+  return {
+    // Read back off what the partner is actually paid, so a hand-typed rate
+    // is described truthfully in the notice.
+    sharePercent: onRowDaily != null ? round2((1 - onRowDaily / listDaily) * 100) : share,
+    listDaily,
+    vendorDaily: onRowDaily,
+    vendorTotal: num(s.vendorTotal) ?? vendorTotal,
+    concessionPercent: s.vendorDailyRate == null ? concessionPercent : 0,
+  }
 }

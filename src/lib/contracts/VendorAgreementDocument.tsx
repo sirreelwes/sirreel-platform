@@ -20,6 +20,9 @@ export interface VendorAgreementPartyForRender {
   email: string | null
   /** SirReel's share of the vehicle rental rate — the deal. */
   sharePercent: number | null
+  /** How far the partner's share may rise to keep a client (the discount
+   *  waterfall). Null = they do not flex. */
+  maxSharePercent?: number | null
 }
 
 export interface VendorAgreementDocumentProps {
@@ -109,7 +112,7 @@ export function VendorAgreementDocument({ partner, kind, generatedAt }: VendorAg
 
         <View style={styles.terms}>
           <Text style={styles.termsTitle}>Terms</Text>
-          {doc.terms(partner.sharePercent).map((r) => (
+          {doc.terms(partner.sharePercent, partner.maxSharePercent ?? null).map((r) => (
             <View key={r.label} style={styles.termsRow}>
               <Text style={styles.termsLabel}>{r.label}</Text>
               <Text style={styles.termsValue}>{r.value}</Text>

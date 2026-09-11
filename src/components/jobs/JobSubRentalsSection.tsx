@@ -416,7 +416,14 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                   {s.vendorDeclineNote && <> &ldquo;{s.vendorDeclineNote}&rdquo;</>} Status unchanged — source a replacement or talk to the client.
                 </div>
               ) : s.vendorConfirmedAt ? (
-                <div className="mt-1 text-[12px] text-emerald-700">Partner confirmed the hold on their page {stamp(s.vendorConfirmedAt)}.</div>
+                <div className="mt-1 text-[12px] text-emerald-700">
+                  Partner confirmed the hold on their page {stamp(s.vendorConfirmedAt)}.
+                  {s.status === 'REQUESTED' && (
+                    <span className="text-amber-700">
+                      {' '}Still <strong className="font-semibold">REQUESTED</strong> — the job&rsquo;s COI hadn&rsquo;t cleared. Confirm it here once it does, or with a written override.
+                    </span>
+                  )}
+                </div>
               ) : null}
 
               {/* Where and when — what the client set on their portal, and whether it reached the other side. */}

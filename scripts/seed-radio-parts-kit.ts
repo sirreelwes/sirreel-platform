@@ -15,15 +15,35 @@
  *   102930  CP200 - Battery                               15
  *   102938  Surveillance Kit                              15
  *
- * So these are KIT PIECES at 1-per-1 (qtyPer 1, perUnits 1), not the
- * ratio pieces the walkie-kit seed adds (spare batteries at 50%, one
- * charger per 12). Both can hang off the same radio: the 1:1 battery is
- * the one IN the radio, the 0.5 spare is the second one in the case.
+ * These are KIT PIECES — an antenna and a battery per radio BODY.
  *
- * Deliberately NOT client-visible and FREE: a quote that suddenly grew
- * three extra lines per radio reads as a pricing change to the client.
- * The pick list sees them either way — membership follows the line's
- * department, not its visibility.
+ * BATTERIES ARE ONE POOL (Wes, 2026-09-11): "we have radio body attached
+ * with a battery, along with the antennas for each radio body.
+ * Additionally, we include extra batteries. We call the additional
+ * batteries beyond the radio body count: spare batteries. In reality
+ * every battery is the same and none have a price associated with them,
+ * other than a replacement cost. We need to make sure that the pickers
+ * count correctly each direction."
+ *
+ * So the battery is ONE catalog row at 1.5 per radio — one in each body
+ * plus a spare per two — NOT a 1:1 row beside the old 0.5 "spare" row.
+ * Two rows for one physical object is what makes a return uncountable:
+ * 15 radios send 23 batteries, and the 23 that come back are just
+ * batteries. Nobody can say which pile a given cell belongs to, so the
+ * sheet must not ask. The line's note carries the split (15 in the
+ * bodies, 8 loose) so the picker knows where to look for them.
+ *
+ * A legacy 0.5-ratio spare row (CP200-BATTERY, from
+ * seed-walkie-kit-pieces.ts) is DEACTIVATED here on the radios this
+ * script touches, and its aliases move onto the surviving row. Its own
+ * item is left alone — archiving a catalog row with order history is
+ * not this script's business, and it is reported instead.
+ *
+ * Deliberately NOT client-visible and FREE: no battery or antenna has a
+ * price, only a replacement cost, and a quote that suddenly grew two
+ * lines per radio reads as a pricing change. The pick list sees them
+ * either way — membership follows the line's department, not its
+ * visibility.
  *
  * The Surveillance Kit is NOT seeded: on that sheet it is what the
  * client ordered, not what the radio comes with.
@@ -58,22 +78,29 @@ function numArg(flag: string): number | null {
 const RADIO_CODES = ['103733', '104387']
 if (args.includes('--include-sub')) RADIO_CODES.push('CP200S')
 
+/** The HQ-invented spare row this script folds into the battery pool. */
+const LEGACY_SPARE_CODE = 'CP200-BATTERY'
+
 const PARTS = [
   {
     code: '102933',
     description: 'CP200 - Antenna',
     aliases: ['antenna', 'walkie antenna', 'radio antenna'],
     qty: numArg('--antenna-qty'),
-    note: 'One per radio — the antenna on it.',
+    // qtyPer / perUnits / rounding: one antenna per radio body.
+    kit: { qtyPer: 1, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 },
+    note: 'One per radio — on the body. Count one per radio both ways.',
   },
   {
     code: '102930',
     description: 'CP200 - Battery',
-    aliases: ['walkie battery', 'radio battery'],
+    // Every battery is the same cell, so the spare wording lives here as
+    // an alias rather than on a second row.
+    aliases: ['walkie battery', 'radio battery', 'spare battery', 'spare batteries', 'battery'],
     qty: numArg('--battery-qty'),
-    // NOT "spare battery" — that alias belongs to CP200-BATTERY, the
-    // 50%-ratio spare from the walkie-kit seed. Two rows, two meanings.
-    note: 'One per radio — the battery in it.',
+    // 1 in each body + 1 spare per 2 radios, rounded up: 15 → 23.
+    kit: { qtyPer: 1.5, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 },
+    note: 'Every battery is the same — one in each radio, plus a spare per two. Count them ALL, in the radios and loose, both directions.',
   },
 ]
 
@@ -81,6 +108,8 @@ const created = {
   items: [] as Array<{ id: string; code: string }>,
   kitPieces: [] as Array<{ id: string; parentCode: string; pieceCode: string }>,
 }
+/** Legacy spare-battery kit links this run switched off — reversible by id. */
+const deactivated: Array<{ id: string; parentCode: string; pieceCode: string }> = []
 
 async function main() {
   const radios = await prisma.inventoryItem.findMany({
@@ -141,17 +170,15 @@ async function main() {
     }
 
     for (const radio of radios) {
-      console.log(`    ${radio.code} → ${part.code}  1 per 1`)
+      const per = part.kit.qtyPer === 1 ? '1 per radio' : `${part.kit.qtyPer} per radio (15 → ${Math.ceil(15 * part.kit.qtyPer)})`
+      console.log(`    ${radio.code} → ${part.code}  ${per}`)
       if (!WRITE || !item) continue
       const existing = await prisma.inventoryKitPiece.findUnique({
         where: { parentItemId_pieceItemId: { parentItemId: radio.id, pieceItemId: item.id } },
         select: { id: true },
       })
       const data = {
-        qtyPer: 1,
-        perUnits: 1,
-        rounding: 'CEIL' as const,
-        minQty: 0,
+        ...part.kit,
         billing: 'FREE' as const,
         // Warehouse-only: the client ordered radios, and a quote that
         // grows three lines per radio looks like a price change.
@@ -175,10 +202,56 @@ async function main() {
     console.log()
   }
 
-  if (WRITE && (created.items.length || created.kitPieces.length)) {
+  // ── Fold the legacy 0.5 "spare battery" row into the one pool ───────
+  // Left alone, 15 radios would put TWO battery lines on the sheet (15
+  // and 8) for one physical object, and the checker would have to decide
+  // which pile each returned cell came from. There is no such fact.
+  const legacy = await prisma.inventoryItem.findUnique({
+    where: { code: LEGACY_SPARE_CODE },
+    select: { id: true, code: true, description: true, aliases: true },
+  })
+  if (legacy) {
+    const links = await prisma.inventoryKitPiece.findMany({
+      where: { pieceItemId: legacy.id, parentItemId: { in: radios.map((r) => r.id) }, isActive: true },
+      select: { id: true, parentItemId: true },
+    })
+    console.log(`Legacy spare row ${legacy.code} — ${legacy.description}`)
+    if (!links.length) {
+      console.log('  · no active kit links on these radios; nothing to fold\n')
+    } else {
+      for (const link of links) {
+        const parent = radios.find((r) => r.id === link.parentItemId)
+        console.log(`  − deactivate ${parent?.code ?? link.parentItemId} → ${legacy.code} (now covered by 102930 at 1.5)`)
+        if (WRITE) {
+          await prisma.inventoryKitPiece.update({ where: { id: link.id }, data: { isActive: false } })
+          await prisma.auditLog.create({
+            data: {
+              userId: null,
+              action: 'inventory.kit_piece_folded',
+              entityType: 'InventoryKitPiece',
+              entityId: link.id,
+              oldValues: { isActive: true, pieceCode: legacy.code },
+              newValues: {
+                isActive: false,
+                reason: 'batteries are one pool — 102930 now carries 1.5 per radio',
+                script: 'scripts/seed-radio-parts-kit.ts',
+              },
+            },
+          })
+          deactivated.push({ id: link.id, parentCode: parent?.code ?? '?', pieceCode: legacy.code })
+        }
+      }
+      console.log(
+        `  The ${legacy.code} ITEM is left as it is — it has order history, and archiving a catalog\n` +
+          '  row is not this script\'s call. It simply stops being added to new radio orders.\n',
+      )
+    }
+  }
+
+  if (WRITE && (created.items.length || created.kitPieces.length || deactivated.length)) {
     mkdirSync('journals', { recursive: true })
     const file = path.join('journals', `radio-parts-kit-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
-    writeFileSync(file, JSON.stringify(created, null, 2))
+    writeFileSync(file, JSON.stringify({ ...created, deactivated }, null, 2))
     console.log(`journal: ${file}`)
   }
   if (!WRITE) console.log('Dry run — add --write to apply.')

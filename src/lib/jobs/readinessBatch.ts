@@ -24,7 +24,7 @@ import { prisma } from '@/lib/prisma'
 import type { AgreementStatus, ContractType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
-import { pickCarriedCoi } from '@/lib/coi/companyCoi'
+import { newestFullCoi, OWN_COI_TAKE, pickCarriedCoi } from '@/lib/coi/companyCoi'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
@@ -93,12 +93,14 @@ export async function readinessForJobs(
       coiChecks: {
         where: { deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        take: 1,
+        // Several, so newestFullCoi can step past a workers' comp upload.
+        take: OWN_COI_TAKE,
         select: {
           humanDecision: true,
           policyExpiryDate: true,
           coverageVerified: true,
           decidedWithVehicles: true,
+          aiResponse: true,
         },
       },
       agreementAddenda: {
@@ -136,7 +138,7 @@ export async function readinessForJobs(
   // no expiry date = no carry-forward. Only consulted for jobs with no
   // certificate of their own.
   const companyIdsNeedingCoi = [
-    ...new Set(jobs.filter((j) => j.coiChecks.length === 0 && j.companyId).map((j) => j.companyId as string)),
+    ...new Set(jobs.filter((j) => !newestFullCoi(j.coiChecks) && j.companyId).map((j) => j.companyId as string)),
   ]
 
   // Three independent follow-ups, issued together. In series this helper
@@ -164,6 +166,8 @@ export async function readinessForJobs(
         coverageVerified: true,
         decidedWithVehicles: true,
         namedInsured: true,
+        // pickCarriedCoi skips workers' comp on its own.
+        aiResponse: true,
         company: { select: { name: true } },
       },
     }),
@@ -193,7 +197,7 @@ export async function readinessForJobs(
   // change a verdict — a certificate signed off gear-only.
   const scopeCandidateIds = jobs
     .filter((j) => {
-      const own = j.coiChecks[0]
+      const own = newestFullCoi(j.coiChecks)
       if (own) return own.decidedWithVehicles === false
       if (!j.companyId) return false
       return (companyCoisByCompany.get(j.companyId) ?? []).some((c) => c.decidedWithVehicles === false)
@@ -237,8 +241,9 @@ export async function readinessForJobs(
 
     let coi: { state: CoiRollupState } = { state: 'NONE' }
     const hasVehicles = jobHasVehicles.has(j.id) ? jobHasVehicles.get(j.id)! : null
-    if (j.coiChecks[0]) {
-      coi = rollupCoiState({ ...j.coiChecks[0], jobHasVehicles: hasVehicles })
+    const ownCoi = newestFullCoi(j.coiChecks)
+    if (ownCoi) {
+      coi = rollupCoiState({ ...ownCoi, jobHasVehicles: hasVehicles })
     } else if (j.companyId && companyCoisByCompany.has(j.companyId) && !separatePolicyJobIds.has(j.id)) {
       // Newest-expiry first (the query's order), so the first cert that
       // covers the whole window governs; failing that, the first that

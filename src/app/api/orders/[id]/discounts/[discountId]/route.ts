@@ -19,6 +19,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { auditLineItemEdit, extractIp } from '@/lib/orders/auditLineItemEdit'
 import { isMoneyEditable } from '@/lib/orders/editability'
 import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
+import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,6 +122,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
+  }
+
+  // Raising it past what a partner's unit can carry is refused; the gate
+  // lets anything through that leaves SirReel no worse off.
+  if (data.type !== undefined || data.value !== undefined) {
+    const floor = await partnerFloorGate(orderId, {
+      discount: {
+        id: existing.id,
+        next: {
+          id: existing.id, scope: existing.scope, departmentKey: existing.departmentKey,
+          type: (data.type as DiscountType | undefined) ?? existing.type,
+          value: data.value !== undefined ? Number(data.value) : Number(existing.value),
+          label: existing.label,
+        },
+      },
+    })
+    if (!floor.ok) {
+      return NextResponse.json({ error: floor.message, reason: floor.message }, { status: 409 })
+    }
   }
 
   const updated = await prisma.orderDiscount.update({

@@ -56,6 +56,7 @@ import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { notifySubRentalsBooked } from '@/lib/sub-rentals/lifecycleNotices'
 import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { confirmBooking } from '@/lib/bookings/confirmBooking'
+import { PARTNER_SUB_RENTAL_WHERE, partnerRouting } from '@/lib/orders/partnerLines'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -74,6 +75,7 @@ export function routeDepartment(dept: LineItemDepartment): LaneRouting {
     case 'GE':
     case 'ART':
     case 'WARDROBE_MAKEUP':
+    case 'PHOTO_SHOOT':
       return { lane: 'WAREHOUSE', pickStatus: 'PENDING_PICK' }
     default: {
       const _exhaustive: never = dept
@@ -138,7 +140,12 @@ export async function bookOrder(args: {
           wonAt: true,
           lostAt: true,
           bookingId: true,
-          lineItems: { select: { id: true, department: true, type: true } },
+          lineItems: {
+            select: {
+              id: true, department: true, type: true, parentLineItemId: true,
+              subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
+            },
+          },
         },
       })
       if (!order) {
@@ -189,13 +196,19 @@ export async function bookOrder(args: {
         STAGE: 0,
       }
       const warehouseLineIds: string[] = []
+      const partnerLineIds: string[] = []
       for (const li of order.lineItems) {
         // Fee-catalog lines (type=FEE) are money-only — no lane, no
         // pick list. A "Delivery Fee" must never appear on the
         // warehouse picking floor.
         if (li.type === 'FEE') continue
-        const routing = routeDepartment(li.department)
-        laneCounts[routing.lane] += 1
+        // A partner's unit, and anything riding under it, never passes
+        // through our warehouse — no lane, no pick item (Wes 2026-09-11:
+        // "keep partner lines off the pick list"; partnerLines.ts).
+        const parent = li.parentLineItemId ? order.lineItems.find((p) => p.id === li.parentLineItemId) : null
+        const partner = li.subRentals.length > 0 || (parent?.subRentals.length ?? 0) > 0
+        const routing = partnerRouting(routeDepartment(li.department), partner)
+        if (routing.lane) laneCounts[routing.lane] += 1
         await tx.orderLineItem.update({
           where: { id: li.id },
           data: {
@@ -205,6 +218,21 @@ export async function bookOrder(args: {
         })
         if (routing.lane === 'WAREHOUSE') {
           warehouseLineIds.push(li.id)
+        } else if (partner) {
+          partnerLineIds.push(li.id)
+        }
+      }
+
+      // The pre-book sync runs on every line add, so a partner line may
+      // already be filed. Take back what nobody has pulled; a list left
+      // holding nothing is parked CANCELLED, the same as a delete leaves it.
+      if (partnerLineIds.length > 0) {
+        await tx.pickListItem.deleteMany({ where: { orderLineItemId: { in: partnerLineIds }, pickedAt: null } })
+        if (warehouseLineIds.length === 0) {
+          const list = await tx.pickList.findUnique({ where: { orderId }, select: { id: true, _count: { select: { items: true } } } })
+          if (list && list._count.items === 0) {
+            await tx.pickList.update({ where: { id: list.id }, data: { status: 'CANCELLED' } })
+          }
         }
       }
 

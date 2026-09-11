@@ -18,6 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     await setUnitMarketing(v.id, params.unitId, b.allowed)
     return NextResponse.json({ ok: true, allowed: b.allowed })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'failed' }, { status: (e as { status?: number }).status ?? 500 })
+    const status = (e as { status?: number }).status
+    if (status && status < 500) return NextResponse.json({ error: e instanceof Error ? e.message : 'failed' }, { status })
+    console.error('[vendor-account marketing] failed:', e)
+    return NextResponse.json({ error: 'That did not go through — please try again.' }, { status: 500 })
   }
 }

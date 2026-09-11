@@ -28,6 +28,7 @@
  * reported, and the surfaces say so out loud rather than assuming.
  */
 import { prisma } from '@/lib/prisma'
+import { releasePartnerLineFromPickList } from '@/lib/orders/pickListSync'
 
 export type BindResult =
   | { bound: true; orderLineItemId: string; already: boolean }
@@ -54,7 +55,7 @@ export async function bindSubRentalToOrderLine(subRentalId: string): Promise<Bin
   const sub = await prisma.subRental.findUnique({
     where: { id: subRentalId },
     select: {
-      id: true, orderId: true, orderLineItemId: true, itemDescription: true, status: true,
+      id: true, orderId: true, orderLineItemId: true, itemDescription: true, status: true, subcontractedVehicleId: true,
       subcontractedVehicle: { select: { name: true } },
     },
   })
@@ -81,6 +82,11 @@ export async function bindSubRentalToOrderLine(subRentalId: string): Promise<Bin
 
   const target = matches[0]
   await prisma.subRental.update({ where: { id: sub.id }, data: { orderLineItemId: target.id } })
+  // A partner's roster unit never passes through our warehouse. The line was
+  // filed as ours when it was added; take it back off (partnerLines.ts).
+  if (sub.subcontractedVehicleId) {
+    await releasePartnerLineFromPickList(prisma, target.id).catch(() => null)
+  }
   await prisma.auditLog.create({
     data: {
       action: 'sub_rental.linked_to_line',

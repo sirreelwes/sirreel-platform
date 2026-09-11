@@ -52,6 +52,7 @@ const DEPT_LABEL: Record<string, string> = {
   GE: 'Grip & Electric',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 
 export function NegotiatedRatesPanel({

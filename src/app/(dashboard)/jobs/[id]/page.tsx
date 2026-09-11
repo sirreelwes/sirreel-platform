@@ -339,7 +339,10 @@ interface JobDetail {
     /** Carried from the company rather than uploaded here — and whether the
      *  production has confirmed it covers THIS job. Blank word = nothing to
      *  say; this is a chip beside the verdict, never a second verdict. */
-    carriedFromCompany?: boolean; confirmationState?: string; confirmationWord?: string }>;
+    carriedFromCompany?: boolean; confirmationState?: string; confirmationWord?: string;
+    /** 'WORKERS_COMP' when the certificate covers workers' comp only — listed,
+     *  never the verdict (lib/coi/coverageKind). Absent on carried rows. */
+    documentKind?: 'COI' | 'WORKERS_COMP' }>;
   /** Does the job rent a vehicle? Server-computed, and only when a
    *  certificate was signed off gear-only — null otherwise. */
   jobHasVehicles?: boolean | null;
@@ -1401,10 +1404,13 @@ const driverTone = (d: any): string => {
   // human APPROVED, so a certificate pending review was green here and
   // "Missing" on the rail (SR-JOB-0311, 2026-09-06). The human decision is
   // the verdict; the AI read is "Pending review" until somebody signs off.
+  // The certificate that decides the verdict: the first FULL one. The API
+  // sends it first, but a job holding only workers' comp gets none — WC
+  // insures the crew, not the rental (MNX / LAFSC, 2026-09-11).
+  const governingCoiRow = (job.coiChecks ?? []).find((c) => c.documentKind !== 'WORKERS_COMP') ?? null;
   const coiStatus: 'Verified' | 'Pending' | 'Expired' | 'Rejected' | 'Missing' = (() => {
-    const checks = job.coiChecks ?? [];
-    if (checks.length === 0) return 'Missing';
-    const latest = checks[0];
+    if (!governingCoiRow) return 'Missing';
+    const latest = governingCoiRow;
     const { state } = rollupCoiState({
       humanDecision: latest.humanDecision,
       policyExpiryDate: latest.policyExpiryDate,
@@ -1419,7 +1425,7 @@ const driverTone = (d: any): string => {
   // Why it is pending, in one line — an AI pass awaiting a person is a very
   // different chase from a certificate nobody has looked at.
   const coiPendingWhy =
-    coiStatus === 'Pending' && job.coiChecks?.[0]?.coverageVerified
+    coiStatus === 'Pending' && governingCoiRow?.coverageVerified
       ? 'Coverage reads OK — awaiting HQ approval'
       : 'Awaiting review';
 
@@ -1480,7 +1486,7 @@ const driverTone = (d: any): string => {
   // re-run on every load()). Logistics is absent on purpose: it derives
   // from orders and already hides itself when it has nothing to say.
   const sectionEmpty: Record<string, boolean> = {
-    coi: (job.coiChecks ?? []).length === 0,
+    coi: !governingCoiRow,
     wc: wcCerts.length === 0,
     agreement: agreementStatus === 'none',
     reservations: (job.bookings ?? []).length === 0,
@@ -2322,6 +2328,13 @@ const driverTone = (d: any): string => {
           )
         ) : (
           <div className="space-y-2">
+            {/* Only workers' comp on file: it is listed, but the job still has
+                no certificate that insures the rental (LAFSC, 2026-09-11). */}
+            {!governingCoiRow && (
+              <div className="text-[13px] text-chip-warn-fg bg-chip-warn-bg rounded-lg px-3.5 py-2">
+                Workers&apos; comp only — no general liability / auto certificate on file for this job yet.
+              </div>
+            )}
             {job.coiChecks.map((c) => {
               const verified = c.coverageVerified || c.humanDecision === 'APPROVED';
               const expired = !!c.policyExpiryDate && new Date(c.policyExpiryDate) < new Date();
@@ -2353,6 +2366,14 @@ const driverTone = (d: any): string => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[15px] text-zinc-900 truncate">{c.originalFilename}</span>
+                        {c.documentKind === 'WORKERS_COMP' && (
+                          <span
+                            title="Covers workers' comp only — the job still needs its general liability / auto certificate"
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 bg-chip-neutral-bg text-chip-neutral-fg"
+                          >
+                            Workers&apos; comp
+                          </span>
+                        )}
                         {c.aiRiskLevel && (
                           <span
                             title={`AI review: ${c.aiRecommendation === 'accept' ? 'passes checks' : 'needs review'}`}

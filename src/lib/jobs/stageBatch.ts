@@ -22,12 +22,15 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
+import { coiDocumentKind } from '@/lib/coi/coverageKind'
 import type { ContractType } from '@prisma/client'
 import { rollupAgreementState } from './readinessBatch'
 import { deriveJobDateRange } from './dateRange'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import type { CoiRollupState } from './listRow'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS, type JobStage } from './stage'
+import { PARTNER_LINE_WHERE } from '@/lib/orders/partnerLines'
 
 export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobStage>> {
   const ids = [...new Set(jobIds.filter(Boolean))]
@@ -50,10 +53,17 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
           signedAgreements: {
             select: { contractType: true, status: true, coveredByAgreementId: true },
           },
-          _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS } } } } },
+          _count: { select: { lineItems: { where: { department: { in: WAREHOUSE_DEPARTMENTS }, NOT: PARTNER_LINE_WHERE } } } },
         },
       },
-      coiChecks: { where: { deletedAt: null }, take: 1, select: { id: true } },
+      // Several + the review, so a workers' comp upload on its own does not
+      // count as the job's certificate (lib/coi/companyCoi.newestFullCoi).
+      coiChecks: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: OWN_COI_TAKE,
+        select: { id: true, aiResponse: true },
+      },
       agreementAddenda: {
         where: { deletedAt: null },
         select: { companyAgreement: { select: { contractType: true, isAnnual: true, expiryDate: true } } },
@@ -72,7 +82,7 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
   if (jobs.length === 0) return out
 
   const companyIdsNeedingCoi = [
-    ...new Set(jobs.filter((j) => j.coiChecks.length === 0 && j.companyId).map((j) => j.companyId as string)),
+    ...new Set(jobs.filter((j) => !newestFullCoi(j.coiChecks) && j.companyId).map((j) => j.companyId as string)),
   ]
   const [walletCardCompanies, companyCois, separatePolicyRows] = await Promise.all([
     companiesWithWalletCards(jobs.map((j) => j.companyId)),
@@ -84,9 +94,9 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
             humanDecision: 'APPROVED',
             policyExpiryDate: { not: null },
           },
-          select: { companyId: true, policyExpiryDate: true },
+          select: { companyId: true, policyExpiryDate: true, aiResponse: true },
         })
-      : Promise.resolve([] as { companyId: string | null; policyExpiryDate: Date | null }[]),
+      : Promise.resolve([] as { companyId: string | null; policyExpiryDate: Date | null; aiResponse: unknown }[]),
     prisma.jobCoiConfirmation.findMany({
       where: { jobId: { in: jobs.map((j) => j.id) }, decision: 'SEPARATE_POLICY' },
       select: { jobId: true },
@@ -96,6 +106,8 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
   const coisByCompany = new Map<string, Date[]>()
   for (const c of companyCois) {
     if (!c.companyId || !c.policyExpiryDate) continue
+    // Workers' comp on its own never carries to a job.
+    if (coiDocumentKind(c.aiResponse) === 'WORKERS_COMP') continue
     const arr = coisByCompany.get(c.companyId) ?? []
     arr.push(c.policyExpiryDate)
     coisByCompany.set(c.companyId, arr)
@@ -130,7 +142,7 @@ export async function stageForJobs(jobIds: string[]): Promise<Map<string, JobSta
     // For the stage only EXISTENCE matters — a certificate that reached us
     // means the request went out — so any non-NONE rollup value will do.
     let coi: CoiRollupState = 'NONE'
-    if (j.coiChecks.length > 0) {
+    if (newestFullCoi(j.coiChecks)) {
       coi = 'PENDING'
     } else if (j.companyId && coisByCompany.has(j.companyId) && !separatePolicyJobIds.has(j.id)) {
       const range = deriveJobDateRange(j.orders, j.bookings)

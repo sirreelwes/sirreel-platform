@@ -1,6 +1,6 @@
 /**
  * Queue partner PROSPECTS — a Vendor row each, so the introduction can be
- * sent from /crm/portals#vendor. Nothing more.
+ * sent from /crm/portals#partners. Nothing more.
  *
  * Wes 2026-09-11: "no company gets onboarded until they reply and I mark it
  * as a new partner." So this no longer seeds a roster or mints an account
@@ -18,7 +18,7 @@
  *   2. Stamps partnerProspectAt if it is not set, so the Portals tab lists
  *      them under Partner accounts with a "Prospect" chip.
  *
- * Then, on /crm/portals#vendor → the company: send the introduction (Wes).
+ * Then, on /crm/portals#partners → the company: send the introduction (Wes).
  * When they reply: "Mark as new partner" → deal → standard Partner Equipment
  * Agreement → email the account link.
  *
@@ -144,7 +144,7 @@ async function main() {
     await queue(c, emails[slug], phones[slug])
     console.log('')
   }
-  if (!DRY) console.log('Next, on /crm/portals#vendor: send the introduction (Wes). When they reply, "Mark as new partner" — that seeds the roster and mints the link — then the deal, the standard Partner Equipment Agreement, and "Email the account link".')
+  if (!DRY) console.log('Next, on /crm/portals#partners: send the introduction (Wes). When they reply, "Mark as new partner" — that seeds the roster and mints the link — then the deal, the standard Partner Equipment Agreement, and "Email the account link".')
 }
 
 main()

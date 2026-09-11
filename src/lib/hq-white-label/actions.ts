@@ -55,8 +55,8 @@ async function tellHq(subject: string, line: string): Promise<void> {
   await sendAgreementEmail({
     to,
     subject,
-    html: `<p>${line}</p><p><a href="${base}/crm/portals#vendor">${base}/crm/portals#vendor</a></p>`,
-    text: `${line}\n\n${base}/crm/portals#vendor`,
+    html: `<p>${line}</p><p><a href="${base}/crm/portals#partners">${base}/crm/portals#partners</a></p>`,
+    text: `${line}\n\n${base}/crm/portals#partners`,
     label: 'vendor-hq',
   }).catch(() => null)
 }

@@ -189,6 +189,16 @@ export interface VendorView {
 }
 
 /**
+ * The one lookup for a per-booking vendor link: the token, AND a partner that
+ * is still active. Deactivating a partner already closed their account page
+ * (vendorByToken); without this their booking links — and every button on
+ * them — kept working.
+ */
+export function vendorBookingWhere(token: string) {
+  return { vendorToken: token, vendor: { isActive: true } }
+}
+
+/**
  * The vendor's page data. Loads NO production identity: the job's name,
  * company and contacts are not selected — and since 2026-09-05 the job's
  * report-to fields ARE (Wes: the partner and their driver see the location
@@ -200,7 +210,8 @@ export async function getVendorViewByToken(
 ): Promise<VendorView | null> {
   if (!token || token.length < 32) return null
   const s = await prisma.subRental.findFirst({
-    where: { vendorToken: token },
+    // A staff preview still renders a deactivated partner's booking.
+    where: opts.stamp === false ? { vendorToken: token } : vendorBookingWhere(token),
     select: {
       id: true,
       status: true,
@@ -318,7 +329,7 @@ export async function getVendorPhotoUrl(token: string, photoId: string): Promise
   const photo = await prisma.subcontractedVehiclePhoto.findFirst({
     where: {
       id: photoId,
-      vehicle: { subRentals: { some: { vendorToken: token } } },
+      vehicle: { subRentals: { some: vendorBookingWhere(token) } },
     },
     select: { url: true },
   })

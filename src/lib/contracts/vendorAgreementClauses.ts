@@ -78,7 +78,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-10b'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-11'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -88,13 +88,21 @@ export const VENDOR_AGREEMENT_SIRREEL = {
   signerTitle: 'CEO',
 } as const
 
-/** Rendered in the Terms box when the vendor's deal is set. */
-export function vendorAgreementTerms(sharePercent: number | null): { label: string; value: string }[] {
+/** Rendered in the Terms box when the vendor's deal is set. The discount row
+ *  is the partner's side of the waterfall only (discountWaterfall.ts) —
+ *  SirReel's own floor is SirReel's business and is not printed. */
+export function vendorAgreementTerms(sharePercent: number | null, maxSharePercent: number | null = null): { label: string; value: string }[] {
   if (sharePercent == null) return [{ label: 'SirReel’s share of the vehicle rental rate', value: 'As recorded on your partner page' }]
   const keep = Math.round((100 - sharePercent) * 100) / 100
   return [
     { label: 'SirReel’s share of the vehicle rental rate', value: `${sharePercent}%` },
     { label: 'Partner receives', value: `${keep}% of the listed rate, paid within 30 days of the Vehicle’s return` },
+    {
+      label: 'Client discounts (Section 8)',
+      value: maxSharePercent != null && maxSharePercent > sharePercent
+        ? `Shared equally until SirReel’s share reaches ${maxSharePercent}%; SirReel bears the rest`
+        : 'Borne by SirReel',
+    },
   ]
 }
 
@@ -140,7 +148,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '8',
     title: 'Rates and Payment',
-    body: 'Your listed rate for a Vehicle is the rate the production pays. SirReel keeps the share of the vehicle rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Vehicle on your partner page at the time the booking is confirmed, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
+    body: 'Your listed rate for a Vehicle is the rate SirReel quotes the production. SirReel keeps the share of the vehicle rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Vehicle on your partner page at the time the booking is confirmed, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. When SirReel gives a production a discount off that rate to secure a booking, the discount is shared equally between you and SirReel until SirReel’s share reaches the maximum stated in the Terms box, and SirReel bears any further discount; where no maximum is stated, SirReel bears the whole discount. Either way your payment for the Vehicle is never less than its listed rate reduced by that maximum, or by SirReel’s share where no maximum is stated, and the booking notice shows the rate that applies. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
   },
   {
     ref: '9',
@@ -209,7 +217,7 @@ export interface VendorAgreementText {
   version: string
   opening: string
   clauses: VendorAgreementClause[]
-  terms: (sharePercent: number | null) => { label: string; value: string }[]
+  terms: (sharePercent: number | null, maxSharePercent?: number | null) => { label: string; value: string }[]
 }
 
 export function vendorAgreementFor(kind: string | null | undefined): VendorAgreementText {

@@ -265,6 +265,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
+- Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
+  `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING
+  else, so ANY @sirreel.com Google account reaches a session whether or
+  not a `User` row exists. The `session` callback only sets `role` when
+  it finds a row, and the dashboard layout read the absence as
+  `UserRole.AGENT` — the SALES surface (client contacts, pricing, CRM)
+  for an account nobody provisioned.
+- Fix: the session callback stamps `provisioned = !!dbUser`, and the
+  layout renders "This account isn't set up yet" + Sign out instead of a
+  department. The `|| UserRole.AGENT` fallback stays for a row that
+  somehow has no role, but it is no longer reachable by a missing row.
+- The DATA was never exposed — every API route looks the row up by email
+  and 401s. Only the shell lied. Still: adding a login is
+  `scripts/add-hq-user.ts`, and a Google account on the domain is NOT an
+  HQ account.
+- `add-hq-user.ts` takes WAREHOUSE / FLEET_TECH (a shared desk: yard
+  screens, no pricing or client contact) and `--like <email>` copies an
+  existing user's role. The check-in desk is `cpr@sirreel.com`
+  (WAREHOUSE, created 2026-09-11). **`warehouse@sirreel.com` has NO user
+  row** — it is the mailbox the pull orders are emailed to, which is
+  exactly why `--like warehouse@sirreel.com` failed.
+
 ## Barcode phase 3 — per-UNIT check-out / check-in (2026-09-11)
 - Wes: "integrating the barcode scanners that we have to facilitate
   tracking high value items like CP 200 radios, generators, Hazers etc…
@@ -319,17 +342,26 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     (`implied` / `neverScannedOut` flags), `order.unit_scan_voided`,
     entityType `OrderUnitScan`.
   - **Antenna + battery on every walkie** (Wes 2026-09-11: "add antenna
-    and battery to pick lists as part of the kit … each walkie needs to
-    confirm those"). Wes's RW sheet (order 304656) settles the SHAPE:
-    RW prints them as their OWN lines at the radio's quantity
-    (`102933 CP200 - Antenna 15`, `102930 CP200 - Battery 15` beside
-    `104387 … Radio 15`), which is what the floor counts. So they are
-    1:1 KIT PIECES — `scripts/seed-radio-parts-kit.ts --write` (FREE,
-    `clientVisible: false` so a quote doesn't grow three lines per
-    radio). Distinct from the walkie-kit RATIO pieces: the 1:1 battery
-    is the one IN the radio, `CP200-BATTERY` at 0.5 is the spare in the
-    case. The Surveillance Kit is NOT seeded — on that sheet it is what
-    the client ordered.
+    and battery to pick lists as part of the kit"). Wes's RW sheet
+    (order 304656) settles the SHAPE: RW prints them as their OWN lines
+    beside `104387 … Radio 15`, which is what the floor counts. So they
+    are KIT PIECES — `scripts/seed-radio-parts-kit.ts --write` (FREE,
+    `clientVisible: false`; no battery or antenna has a price, only a
+    replacement cost). Antenna is 1 per radio body.
+  - **BATTERIES ARE ONE POOL, at 1.5 per radio** (Wes: "every battery is
+    the same and none have a price… We need to make sure that the
+    pickers count correctly each direction"). One in each body + a spare
+    per two, rounded up: 15 radios → **23 batteries**. NOT a 1:1 row
+    beside the old 0.5 `CP200-BATTERY` spare row — two rows for one
+    physical object make a return uncountable, because nobody can say
+    which pile a returned cell came from. The seed DEACTIVATES the
+    legacy spare's kit links on those radios (journaled, reversible by
+    id; the item row itself is left alone) and moves its "spare battery"
+    aliases onto `102930`. The kit note prints under the line on the
+    sheet so the picker knows where to look: 15 in the bodies, 8 loose.
+    `npm run test:kit-pieces` pins the totals AND proves one pool equals
+    the old body+spare split at every size. The Surveillance Kit is NOT
+    seeded — on that sheet it is what the client ordered.
   - **Per-unit checks** are the second half ("each walkie needs to
     confirm those") and are a DIFFERENT mechanism, for parts that never
     get their own line: `InventoryItem.unitChecks String[]` (drawer
@@ -456,7 +488,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]` upserts the vendor, seeds a placeholder roster
   across their categories (rates EMPTY — Evan proposes from his page;
   unlisted until photos + signature), mints the account link, journals ids.
-  Then on /crm/portals#vendor: set the deal, file the standard agreement,
+  Then on /crm/portals#partners: set the deal, file the standard agreement,
   email the link. The Portals partner list now includes partners with roster
   units or a minted link, not only ones with bookings.
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
@@ -511,7 +543,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   LA service area — not LA-based). Emails seeded only where quotable.
 - `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
   --all [--dry] [--email slug=… --phone slug=…]` queues PROSPECTS ONLY (the
-  Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#vendor:
+  Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#partners:
   introduction (Wes) → they reply → Mark as new partner → deal → standard
   Partner Equipment Agreement → email the link. Nothing has been run yet.
 - The introduction (`buildIntroDraft`) is first contact in Wes's words
@@ -521,6 +553,103 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `scripts/set-user-phone.ts` sets the phone.
 - `npm run test:battery-candidates` guards the registry; `npm run
   test:partner-stage` guards the stage rule.
+
+## Partners vs vendors — two words, two tabs (2026-09-11 — Wes)
+- Wes: "Vendors are companies that serve SirReel: plumber, electrician etc.
+  Partners provide services for clients along with us." King Kong,
+  PowerTrip, Transpo and the battery candidates are PARTNERS. Staff- and
+  partner-facing copy says partner; `Vendor` stays the model/table name
+  (renaming it is not worth the churn).
+- /crm/portals has a **Partners** tab (`#partners` — the old tab, partner
+  accounts + unit links) and a **Vendors** tab (`#vendors` — active Vendor
+  rows that are not partner accounts; no portal link yet, just who to call).
+  `#vendor` (every link written before today, incl. sent emails) lands on
+  Partners — `FROM_HASH` in PortalsTabs.tsx. Link new code to `#partners`.
+- Every Partners/Vendors row shows the main contact with mailto/tel. The
+  partner's own page has a "Your SirReel contact" card from
+  `Vendor.sirreelContactUserId` (null = Wes, with his signature title), picked
+  on the Portals row; resolve via `sirreelContactFor()`. Column added by
+  targeted ALTER.
+
+## Photo Shoot Rentals — a department AND a catalog section (2026-09-11 — Wes)
+- Wes: "for VSM planet, photo shoot rentals is going to be a new class of
+  rentals." It is both a `LineItemDepartment` (own section + subtotal on
+  quotes/invoices, department discounts, every picker) and a
+  `PartnerCatalogSection` (`#photo-shoot` on /vehicles), value `PHOTO_SHOOT`.
+- A partner unit's quote department comes from `partnerUnitDepartment()` in
+  `partnerSections.ts`: section PHOTO_SHOOT → PHOTO_SHOOT, else EQUIPMENT →
+  GE, else VEHICLES. Catalog search uses it; don't re-derive it inline.
+- Billing rule: 3-day week (CAP_PER_WEEK 3) for any gear SirReel owns there;
+  partner units bill calendar days regardless (partnerDaily.ts). Lane:
+  WAREHOUSE like every gear department — so a PARTNER line there creates a pick
+  task for gear SirReel doesn't hold (pre-existing for GE partners too; open).
+- Enum values went in by `scripts/add-photo-shoot-enum-values.ts` (additive
+  ALTER TYPE, before the code deploy); rows move to the value only after the
+  deploy (see memory "enum add before deploy"). A new department touches ~27
+  files — grep an existing one (WARDROBE_MAKEUP) and add beside every hit.
+
+## Partner lines stay off the pick list (2026-09-11 — Wes)
+- Wes: "keep partner lines off the pick list." A partner's unit is delivered
+  by the partner or collected from them — never through our warehouse.
+- A PARTNER LINE = a line with a live SubRental on a ROSTER unit
+  (`subcontractedVehicleId` set, not CANCELLED), or a line riding under one.
+  Ad-hoc gear sub-rentals ("Sub-rent…", POST /api/sub-rentals) are NOT partner
+  lines — our crew collects that gear, so it stays on the list. One definition:
+  `src/lib/orders/partnerLines.ts` (`PARTNER_LINE_WHERE`, `isPartnerLineIn`,
+  `partnerRouting`).
+- A would-be WAREHOUSE partner line gets `fulfillmentLane` null, `pickStatus`
+  null, no PickListItem — every warehouse reader (load-ready rollup, check
+  reports, pull-order backfill) keys on lane WAREHOUSE, so they all skip it.
+  FLEET / STAGE routings are untouched.
+- Enforced in: `syncPickListOnLineAdd` (looks it up; the add-line route passes
+  `partnerFulfilled` because the booking is created after the line),
+  `bookOrder` (and takes back unpicked pre-book items), auto-bind
+  (`releasePartnerLineFromPickList` — already-picked rows stay), the paper pull
+  sheet + pull-order preview, and both job-stage warehouse counts.
+- `npm run test:partner-pick-list`. A cancelled partner booking does NOT put
+  the line back on the list by itself — Wes: "there needs to be a warning
+  wired in." `partnerCancelledLines.ts` finds the line (warehouse department,
+  no lane, no live partner booking, a CANCELLED roster booking on it or its
+  parent) on an order the warehouse is working (BOOKED / LOADED_READY / ON_JOB,
+  or a pull order already released). It raises action item
+  `partner-cancelled-off-pick-list` (high once loaded / on the job / picking up
+  within 3 days) and a prompt on the order page whose button files it
+  (`/api/orders/[id]/partner-cancelled-lines`, audited). Pre-book lines need
+  no warning: booking routes them. `npm run test:partner-cancelled-lines`.
+
+## Partner discount waterfall (2026-09-11 — Wes)
+- Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a
+  client"): a client discount on a partner's unit is **shared 50/50** until
+  the partner's share reaches `Vendor.partnerMaxSharePercent`, then comes out
+  of **SirReel's share alone** down to a floor of **10% of LIST**
+  (`SIRREEL_FLOOR_PERCENT`); deeper is **declined**. $1,000 list: 0% →
+  VSM $650 / SirReel $350 · 16% → $570 / $270 · 33% → $570 / $100 · 35%
+  declined. The floor is of LIST, not of the billed price — 10% of billed
+  would let 35% through, and Wes declines it. Null max = the partner doesn't
+  flex. Before this the partner was paid list × (1 − share) whatever the
+  client paid, so 30% off a 30% deal made SirReel $0.
+- Pure math in `src/lib/sub-rentals/discountWaterfall.ts` (`npm run
+  test:discount-waterfall`); the DB half is `partnerMargins.ts`. Department
+  and order discounts are spread over the lines from computeOrderTotals'
+  breakdown (expendables excluded, as there).
+- `partnerFloorGate` runs on discount POST/PATCH, line PUT (ANY line — a
+  FIXED or flat-total order discount re-spreads), send-quote and
+  mark-booked. It refuses only what an edit makes worse, so an order already
+  over the line can still be eased. There is no override.
+- `stampVendorCost` pays the partner the waterfall for the LINE's billable
+  days — no weekly blocks, and no fallback to `clientDailyRate` (that is the
+  client's price). A stamped `vendorDailyRate` is COMMITTED: a later
+  discount comes out of SirReel, still floored.
+- Surfaces: DiscountsPanel "Partner units" (staff only — names the partner);
+  Portals deal card max field + `describeDeal`; partner page, account-link
+  invite, agreement §8 + Terms box say discounts are shared up to their max
+  and never mention SirReel's floor. Agreement v2026-09-11 — re-file for any
+  partner whose agreement was filed earlier.
+- Not guarded: a discount landing on a partner's ANCILLARY fee lines (paid
+  to them in full) comes out of SirReel; a partner unit ADDED under an
+  existing discount is caught at send/book, not at the add. VSM Planet is
+  in the DB (2026-09-11: 35% deal, 43% max). The column went in by targeted `ALTER TABLE … ADD
+  COLUMN IF NOT EXISTS` — the live DB has drift, never `db push` blind.
 
 ## Active Roadmap
 1. AI fleet optimization

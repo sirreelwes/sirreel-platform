@@ -37,6 +37,7 @@ const DEPARTMENTS: LineItemDepartment[] = [
   'GE',
   'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
 ]
 
 async function requireUser() {

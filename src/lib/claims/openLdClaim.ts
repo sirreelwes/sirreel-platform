@@ -25,6 +25,7 @@
 
 import type { ClaimStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { nextClaimNumber } from '@/lib/orders'
 
 export type OpenLdClaimResult =
@@ -118,20 +119,24 @@ export async function openLdClaim(args: {
   }
 
   // Resolve COI: caller override (including explicit null), else
-  // most-recent non-deleted CoiCheck linked to job or company.
+  // most-recent non-deleted FULL CoiCheck linked to job or company — a
+  // damage claim is never filed against a workers' comp certificate.
   let coiCheckId: string | null = args.coiCheckId ?? null
   if (args.coiCheckId === undefined) {
-    const coi = await prisma.coiCheck.findFirst({
-      where: {
-        deletedAt: null,
-        OR: [
-          invoice.order.jobId ? { jobId: invoice.order.jobId } : { id: '__none__' },
-          { companyId: invoice.order.companyId },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
+    const coi = newestFullCoi(
+      await prisma.coiCheck.findMany({
+        where: {
+          deletedAt: null,
+          OR: [
+            invoice.order.jobId ? { jobId: invoice.order.jobId } : { id: '__none__' },
+            { companyId: invoice.order.companyId },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: OWN_COI_TAKE,
+        select: { id: true, aiResponse: true },
+      }),
+    )
     coiCheckId = coi?.id ?? null
   }
 

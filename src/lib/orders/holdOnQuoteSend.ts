@@ -43,6 +43,7 @@ import { prisma } from '@/lib/prisma'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { coiScopeGap } from '@/lib/coi/coiState'
+import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { createAgentDirectBooking } from '@/lib/paperwork/ensurePaperworkBooking'
@@ -437,12 +438,13 @@ export async function clientPaperworkIn(orderId: string): Promise<{
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
-            take: 1,
+            take: OWN_COI_TAKE,
             select: {
               humanDecision: true,
               coverageVerified: true,
               policyExpiryDate: true,
               decidedWithVehicles: true,
+              aiResponse: true,
             },
           },
           orders: {
@@ -480,7 +482,8 @@ export async function clientPaperworkIn(orderId: string): Promise<{
   })
   if (!order) return { ok: false, missing: ['order not found'] }
 
-  const coi = order.job?.coiChecks[0] ?? null
+  // Newest FULL certificate — workers' comp on its own firms up nothing.
+  const coi = newestFullCoi(order.job?.coiChecks ?? [])
   const coiExpired = coi?.policyExpiryDate ? coi.policyExpiryDate.getTime() < Date.now() : false
   // A certificate signed off on a gear-only job says nothing about the truck
   // that has since been added to it, so it cannot firm up a hold on one

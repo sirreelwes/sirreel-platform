@@ -132,8 +132,10 @@ const ASSET_CATEGORY_ALIASES: { slug: string; aliases: string[] }[] = [
   // yard which van a client had actually been sold. The bare terms
   // ("passenger van", "pax van") default to 15-passenger: that is the
   // five-truck pool, and what an unqualified ask has always meant here.
-  { slug: '12-passenger-van',     aliases: ['12 passenger van', '12-passenger van', '12 pass van', '12 passenger', '12-pass', 'nissan nv'] },
-  { slug: '15-passenger-van',     aliases: ['15 passenger van', '15-passenger van', '15 pass van', '15 passenger', '15-pass', 'passenger van', 'pass van', 'pax van'] },
+  // One pool again since 2026-09-11 (merge-passenger-vans.ts): every
+  // size word lands on the merged 'passenger-van' class; the size travels
+  // as a configuration note on the line, not as a class.
+  { slug: 'passenger-van',        aliases: ['passenger van', 'pass van', 'pax van', '15 passenger van', '15-passenger van', '15 pass van', '15 passenger', '15-pass', '12 passenger van', '12-passenger van', '12 pass van', '12 passenger', '12-pass', 'nissan nv'] },
   { slug: 'studios',              aliases: ['stage', 'stages', 'soundstage', 'soundstages', 'studio', 'sound stage'] },
   { slug: 'popvan',               aliases: ['popvan', 'pop van', 'pop-van'] },
   { slug: 'stakebed',             aliases: ['stakebed', 'stake bed', 'flatbed'] },
@@ -212,7 +214,7 @@ async function main() {
   // Group by inferred department for a tally so we can sanity-check.
   const tally: Record<LineItemDepartment, number> = {
     VEHICLES: 0, COMMUNICATIONS: 0, STAGES: 0,
-    PRO_SUPPLIES: 0, EXPENDABLES: 0, GE: 0, ART: 0, WARDROBE_MAKEUP: 0,
+    PRO_SUPPLIES: 0, EXPENDABLES: 0, GE: 0, ART: 0, WARDROBE_MAKEUP: 0, PHOTO_SHOOT: 0,
   }
   for (const it of items) {
     const dept = inferDepartment(it.code, it.description)

@@ -38,6 +38,14 @@ const STATUS_CHIP: Record<ClientCoiStatus, { label: string; cls: string }> = {
 }
 
 function rowSentence(r: ClientCoiRow): string {
+  // Workers' comp on its own insures their crew, not the rental — say so, so
+  // an accepted one is never read as the certificate their shows need.
+  if (r.kind === 'WORKERS_COMP' && r.status === 'ACCEPTED') {
+    return `Workers' comp only, through ${fmtDate(r.policyExpiry)}. Your general liability and auto certificate is a separate upload.`
+  }
+  if (r.kind === 'WORKERS_COMP' && r.status === 'IN_REVIEW') {
+    return "Workers' comp only, with SirReel for review. Your general liability and auto certificate is a separate upload."
+  }
   if (r.status === 'ACCEPTED') {
     return r.coversShows
       ? `Covers your shows through ${fmtDate(r.policyExpiry)}.`
@@ -163,6 +171,11 @@ export function AccountCoiUpload({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-zinc-900 truncate max-w-full">{c.namedInsured || c.filename}</span>
+                  {c.kind === 'WORKERS_COMP' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700">
+                      Workers&apos; comp
+                    </span>
+                  )}
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${STATUS_CHIP[c.status].cls}`}>
                     {STATUS_CHIP[c.status].label}
                   </span>

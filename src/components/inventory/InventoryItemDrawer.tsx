@@ -61,6 +61,7 @@ const DEPARTMENT_LABEL: Record<string, string> = {
   EXPENDABLES: 'Expendables',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 interface LocationOption { id: string; name: string; code: string }
 interface VendorOption { id: string; name: string; website: string | null }

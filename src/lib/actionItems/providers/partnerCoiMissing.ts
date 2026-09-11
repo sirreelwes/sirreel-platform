@@ -77,7 +77,7 @@ export const partnerCoiMissingProvider: ActionItemProvider = {
           : `${who} signed the Partner Vehicle Agreement ${r.signedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}; clause 4 asks for their certificate of insurance and we hold none. Ask for it (SirReel Production Vehicles, Inc. as additional insured), then mark it received on the Portals tab.`,
         ownerRole: OWNER,
         priority: 'medium' as const,
-        href: '/crm/portals#vendor',
+        href: '/crm/portals#partners',
         occurredAt: r.expiredAt ?? new Date(r.signedAt.getTime() + PARTNER_COI_GRACE_DAYS * 86_400_000),
         source: 'partner-coi-missing',
         dismissal: { kind: 'sideRow' as const },

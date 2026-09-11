@@ -53,6 +53,7 @@ import { bookOrder } from '@/lib/orders/bookOrder'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { findPendingDayClaims } from '@/lib/orders/dayClaimGate'
+import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,6 +112,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       { status: 409 },
     )
+  }
+
+  // Booking from DRAFT skips the quote, and with it the send-quote floor
+  // check — so a partner unit below SirReel's floor is refused here too.
+  const floor = await partnerFloorGate(order.id)
+  if (!floor.ok) {
+    return NextResponse.json({ ok: false, error: 'below partner floor', reason: floor.message, currentStatus: order.status }, { status: 409 })
   }
 
   let userId: string | null = null

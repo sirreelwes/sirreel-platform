@@ -9,8 +9,9 @@ import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
+import { JobCoiUpload } from '@/components/portal/JobCoiUpload';
 import { JobPortalShell, chromeFromPortalData } from '@/components/portal/JobPortalChrome';
-import { FileText, Lock, Send } from 'lucide-react';
+import { FileText, Lock, Send, Upload } from 'lucide-react';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -354,6 +355,9 @@ export default function JobPortalPage() {
   const [coiUploading, setCoiUploading] = useState(false);
   const [coiConfirming, setCoiConfirming] = useState<'CONFIRMED' | 'SEPARATE_POLICY' | null>(null);
   const [coiError, setCoiError] = useState<string>('');
+  // Upload another certificate while one is already on file (renewal,
+  // corrected cert, this show's own policy).
+  const [coiReplaceOpen, setCoiReplaceOpen] = useState(false);
   // Quote approval. Two-step on purpose — approving is a commitment that
   // releases the rental agreement, so it should not be a single stray tap.
   const [approveConfirming, setApproveConfirming] = useState(false);
@@ -435,6 +439,7 @@ export default function JobPortalPage() {
       }
       // Refresh the portal data so the COI section now shows received state.
       setCoiFile(null);
+      setCoiReplaceOpen(false);
       const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
       if (res.ok) setData(await res.json());
     } catch {
@@ -1394,6 +1399,41 @@ export default function JobPortalPage() {
                         <CoiRequirementsBlock replacementValue={data.paperwork.replacementValue ?? null} />
                       </>
                     )}
+                    {/* Wes 2026-09-11: "Upload a COI for your teams" — always
+                        an option, on the job portal too. Until now the
+                        uploader vanished the moment ANY certificate stood on
+                        the job, so a renewal, a corrected certificate or this
+                        show's own policy had nowhere to go. Opens by itself
+                        when the one on file was rejected or insures somebody
+                        else — that is exactly when they need to send another.
+                        A job's own upload wins over the account's straight
+                        away (lib/coi/companyCoi.ts), even in review, and the
+                        copy says so. */}
+                    {coiReplaceOpen ||
+                    data.paperwork.coi.humanDecision === 'REJECTED' ||
+                    !!data.paperwork.coi.insuredNotice ? (
+                      <div className="rounded-lg border border-zinc-200 px-3 py-2.5 space-y-2">
+                        <p className="text-[11px] text-zinc-600 leading-relaxed">
+                          {data.paperwork.coi.source === 'COMPANY'
+                            ? 'Upload a certificate for this job and it is used here instead of your company’s certificate on file. SirReel reviews it.'
+                            : 'Upload the renewal or corrected certificate — it replaces the one above for this job, and SirReel reviews it.'}
+                        </p>
+                        <JobCoiUpload
+                          file={coiFile}
+                          uploading={coiUploading}
+                          error={coiError}
+                          onFile={setCoiFile}
+                          onSubmit={uploadCoi}
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCoiReplaceOpen(true)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-600"
+                      >
+                        <Upload size={14} aria-hidden /> Upload a COI for your teams
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1406,41 +1446,13 @@ export default function JobPortalPage() {
                         {data.paperwork.coiSeparatePolicyNotice}
                       </div>
                     )}
-                    <label
-                      htmlFor="portal-coi-file"
-                      className={`block border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${
-                        coiFile ? 'border-amber-300 bg-amber-50' : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50'
-                      }`}
-                    >
-                      {coiFile ? (
-                        <>
-                          <div className="text-xl"><FileText size={20} aria-hidden /></div>
-                          <div className="text-xs font-semibold text-amber-700">{coiFile.name}</div>
-                          <div className="text-[10px] text-zinc-400 mt-0.5">{(coiFile.size / 1024).toFixed(0)} KB</div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-xl"><Send size={20} aria-hidden /></div>
-                          <div className="text-xs text-zinc-500">Click to upload your COI</div>
-                          <div className="text-[10px] text-zinc-400 mt-0.5">PDF, PNG, or JPG · max 10 MB</div>
-                        </>
-                      )}
-                      <input
-                        id="portal-coi-file"
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => setCoiFile(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                    {coiError && <div className="text-[11px] text-red-600">{coiError}</div>}
-                    <button
-                      onClick={uploadCoi}
-                      disabled={!coiFile || coiUploading}
-                      className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-xl"
-                    >
-                      {coiUploading ? 'Uploading & reviewing…' : 'Submit COI'}
-                    </button>
+                    <JobCoiUpload
+                      file={coiFile}
+                      uploading={coiUploading}
+                      error={coiError}
+                      onFile={setCoiFile}
+                      onSubmit={uploadCoi}
+                    />
 
                     {/* Don't have one yet? This is the block that gets the
                         right certificate issued the first time — the

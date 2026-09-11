@@ -5,8 +5,10 @@
  *   · partnerVocab / defaultReceiveMethodFor: an equipment partner's unit is
  *     DELIVERED unless the unit says otherwise; a vehicle partner's is driven.
  *   · groupPartnerUnits: a generator and a star wagon never share a section
- *     on /vehicles; sections come out in page order; a unit with no section
- *     falls into the vendor's default, never off the page.
+ *     on /vehicles; sections come out in page order. Membership is the card's
+ *     `section`, not `partner`: the loader always resolves a partner unit's
+ *     section (resolvePartnerSection — never off the page), and an owned
+ *     Specialty Vehicle carries LOCATION_VEHICLES beside partner coaches.
  *   · vendorAgreementFor: EQUIPMENT files the Partner Equipment Agreement,
  *     whose clause 7 is delivery/setup, not drivers; VEHICLES is unchanged.
  *   · buildPartnerWelcome: the equipment welcome never asks for a driver and
@@ -15,7 +17,7 @@
  * Run: npm run test:partner-kind
  */
 import { partnerVocab, defaultReceiveMethodFor } from '@/lib/sub-rentals/partnerKind'
-import { partnerSection, resolvePartnerSection, isPartnerSectionKey, PARTNER_SECTIONS } from '@/lib/site/partnerSections'
+import { partnerSection, resolvePartnerSection, isPartnerSectionKey, partnerUnitDepartment, PARTNER_SECTIONS } from '@/lib/site/partnerSections'
 import { groupPartnerUnits, type PublicVehicle } from '@/lib/site/vehicleCatalog'
 import { vendorAgreementFor } from '@/lib/contracts/vendorAgreementClauses'
 import { buildPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
@@ -41,6 +43,11 @@ eq('unit override beats the vendor kind', defaultReceiveMethodFor({ defaultRecei
 eq('default section is motorhomes & trailers', partnerSection(null).key, 'LOCATION_VEHICLES')
 eq('unknown key falls back, never throws', partnerSection('WIDGETS').key, 'LOCATION_VEHICLES')
 yes('POWER_GENERATORS is a section', isPartnerSectionKey('POWER_GENERATORS'))
+yes('PHOTO_SHOOT is a section', isPartnerSectionKey('PHOTO_SHOOT'))
+eq('a photo-shoot unit quotes under Photo Shoot Rentals', partnerUnitDepartment({ catalogSection: 'PHOTO_SHOOT' }, { catalogSection: 'LIGHTING', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
+eq('a photo-shoot partner’s units quote under Photo Shoot Rentals by default', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'PHOTO_SHOOT', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
+eq('other partner equipment quotes under G&E', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'POWER_GENERATORS', partnerKind: 'EQUIPMENT' }), 'GE')
+eq('partner vehicles quote under Vehicles', partnerUnitDepartment(null, { catalogSection: null, partnerKind: 'VEHICLES' }), 'VEHICLES')
 no('lowercase is not a section', isPartnerSectionKey('power_generators'))
 eq('unit override beats vendor default', resolvePartnerSection({ catalogSection: 'LIFTS' }, { catalogSection: 'POWER_GENERATORS' }).key, 'LIFTS')
 eq('vendor default when the unit has none', resolvePartnerSection({ catalogSection: null }, { catalogSection: 'POWER_GENERATORS' }).key, 'POWER_GENERATORS')
@@ -54,8 +61,9 @@ const groups = groupPartnerUnits([unit('cube', null, false), unit('gen100', 'POW
 eq('owned fleet is not a partner group', groups.some((g) => g.items.some((i) => i.id === 'cube')), false)
 eq('sections come out in page order', groups.map((g) => g.meta.key), ['LOCATION_VEHICLES', 'POWER_GENERATORS', 'LIFTS'])
 eq('generators share one section', groups.find((g) => g.meta.key === 'POWER_GENERATORS')!.items.map((i) => i.id), ['gen100', 'gen60'])
-eq('a partner unit with no section lands in the default group', groupPartnerUnits([unit('mystery', null)]).map((g) => g.meta.key), ['LOCATION_VEHICLES'])
-eq('no partner units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
+eq('a sectionless partner unit resolves to the default before it reaches the grid', resolvePartnerSection({ catalogSection: null }, { catalogSection: null }).key, 'LOCATION_VEHICLES')
+eq('an owned specialty vehicle shares the section with partner coaches', groupPartnerUnits([unit('restroom2', 'LOCATION_VEHICLES', false), unit('starwagon', 'LOCATION_VEHICLES')]).map((g) => [g.meta.key, g.items.map((i) => i.id)]), [['LOCATION_VEHICLES', ['restroom2', 'starwagon']]])
+eq('no sectioned units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
 
 // ── Agreement variant ───────────────────────────────────────────────────────
 const veh = vendorAgreementFor('VEHICLES')

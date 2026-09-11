@@ -33,8 +33,12 @@ const CONFIG_NOTES: Readonly<Record<string, readonly string[]>> = {
   // the rear bench out is the standard "we need the cargo room" ask — it is
   // how Pass 2 has been set up for years, which is exactly why it read as a
   // 12-passenger in Planyo and why one blended category was confusing.
+  // 2026-09-11: merged back into ONE class (Wes: "let's have all pass
+  // vans together"). CAT_PASSENGER_VAN_15 is the surviving row, named
+  // "Passenger Van"; the seating size is now exactly the kind of note
+  // this file exists for — a request on the line, not a SKU.
+  CAT_PASSENGER_VAN_15: ['12-passenger (Pass 1 or Pass 2)', '15-passenger', 'Remove last row of seats'],
   CAT_PASSENGER_VAN_12: ['Remove last row of seats'],
-  CAT_PASSENGER_VAN_15: ['Remove last row of seats'],
   // The retired pre-split code. Kept so a historical line opened for edit
   // still offers the same suggestion rather than looking broken.
   CAT_PASSENGER_VAN: ['Remove last row of seats'],
@@ -60,6 +64,7 @@ export function configNotesFor(code: string | null | undefined): readonly string
  * itself, which is free text a rep can always type.
  */
 const CODE_BY_CATEGORY_NAME: Readonly<Record<string, string>> = {
+  'Passenger Van': 'CAT_PASSENGER_VAN_15',
   '12-Passenger Van': 'CAT_PASSENGER_VAN_12',
   '15-Passenger Van': 'CAT_PASSENGER_VAN_15',
 }

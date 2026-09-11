@@ -32,6 +32,7 @@ const DEPARTMENT_LABEL: Record<string, string> = {
   EXPENDABLES: 'Expendables',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 };
 
 /** The API's 201 body — handed to onCreated so a caller (the quote

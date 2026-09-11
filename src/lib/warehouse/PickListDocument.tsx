@@ -39,6 +39,7 @@ export type Department =
   | 'GE'
   | 'ART'
   | 'WARDROBE_MAKEUP'
+  | 'PHOTO_SHOOT'
 
 export interface PickListLine {
   department: Department
@@ -111,6 +112,7 @@ const DEPT_LABELS: Record<Department, string> = {
   GE: 'Grip & Electric',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 
 const DEPT_ORDER: Department[] = [
@@ -120,6 +122,7 @@ const DEPT_ORDER: Department[] = [
   'EXPENDABLES',
   'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
   'STAGES',
   'VEHICLES',
 ]

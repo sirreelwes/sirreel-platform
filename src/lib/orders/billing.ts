@@ -30,6 +30,10 @@ export const BILLING_RULES: Record<LineItemDepartment, BillingRule> = {
   // identically to what it did the day before — a reclassification
   // should not silently reprice the book.
   WARDROBE_MAKEUP:{ model: 'CAP_PER_WEEK', cap: 3 },
+  // Photo Shoot Rentals (2026-09-11): the rental-house 3-day week for any
+  // gear SirReel itself carries here. Partner units bill calendar days with
+  // no cap regardless (partnerDaily.ts), so VSM Planet's pricing is unaffected.
+  PHOTO_SHOOT:    { model: 'CAP_PER_WEEK', cap: 3 },
 }
 
 /**

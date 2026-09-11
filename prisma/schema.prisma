@@ -2828,6 +2828,11 @@ enum LineItemDepartment {
   // scattered across PRO_SUPPLIES (the WAR-* cluster), EXPENDABLES
   // (hangers) and COMMUNICATIONS (a wardrobe Z-rack, plainly misfiled).
   WARDROBE_MAKEUP
+  // Photo Shoot Rentals (Wes 2026-09-11, for VSM Planet): strobes, modifiers,
+  // cameras, backings and grip for stills and studio shoots — its own section
+  // and subtotal on quotes. Added by additive SQL
+  // (scripts/add-photo-shoot-enum-values.ts), never db push.
+  PHOTO_SHOOT
 }
 
 // First-class order discounts (additive Phase). Coexists with legacy
@@ -4555,6 +4560,10 @@ enum PaymentMethod {
   CARDPOINTE
   CASH
   OTHER
+  // Ana, 2026-09-11 — Zelle arrives outside the gateway like a wire, and
+  // "how was it paid" has to be able to say so. Last, matching the live
+  // ALTER TYPE ... ADD VALUE.
+  ZELLE
 }
 
 // Phase 6 commit 1 — payment lifecycle. Pre-Phase-6 operator payments
@@ -4668,6 +4677,7 @@ enum PartnerCatalogSection {
   LIFTS
   LIGHTING
   CARTS
+  PHOTO_SHOOT
 }
 
 model Vendor {
@@ -4759,6 +4769,20 @@ model Vendor {
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
   partnerSharePercent Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
+  /// HOW FAR THE PARTNER WILL GO TO KEEP A CLIENT (Wes 2026-09-11, VSM
+  /// Planet: deal 35%, "willing to go to 40-43% off to keep a client").
+  /// When a client gets a discount on one of their units, SirReel's share
+  /// may rise from partnerSharePercent up to this: the discount is shared
+  /// equally until it gets here, then SirReel alone gives, down to its floor
+  /// (10% of list); deeper is declined. Null = the partner does not flex.
+  /// Read through discountWaterfall.ts / partnerMargins.ts, never raw.
+  partnerMaxSharePercent Decimal? @map("partner_max_share_percent") @db.Decimal(5, 2)
+  /// WHO AT SIRREEL THEY CALL (Wes 2026-09-11: "each partner and vendor
+  /// portal needs the contact info for our main contact"). A User id, shown
+  /// on the partner's account page as "Your SirReel contact". Null = Wes.
+  /// Deliberately not a relation — the column went in by additive SQL on a
+  /// drifted DB. Read through sirreelContact.ts.
+  sirreelContactUserId String? @map("sirreel_contact_user_id")
   /// UNUSED — nothing reads or writes these three.
   ///
   /// Added 2026-09-10 for a partner-side "propose a different split" form, and

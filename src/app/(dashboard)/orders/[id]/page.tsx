@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
+import { paymentMethodLabel } from '@/lib/invoices/paymentMethods';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -15,6 +16,7 @@ import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
+import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -50,6 +52,7 @@ import {
 } from "@/lib/orders/lineItemDepartments";
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
+import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -99,7 +102,7 @@ type LineItem = {
   // (Phase 1 step 4) Department drives the per-row lock check for
   // the post-BOOKED gate. Always present on rows from the GET; the
   // string union mirrors LineItemDepartment from Prisma.
-  department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART' | 'WARDROBE_MAKEUP';
+  department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART' | 'WARDROBE_MAKEUP' | 'PHOTO_SHOOT';
   inventoryItem: {
     id: string;
     code: string;
@@ -308,7 +311,7 @@ type InvoiceRow = {
 type PaymentRow = {
   id: string;
   amount: string;
-  method: 'CHECK' | 'WIRE' | 'ACH' | 'CREDIT_CARD' | 'CARDPOINTE' | 'CASH' | 'OTHER';
+  method: 'CHECK' | 'WIRE' | 'ACH' | 'CREDIT_CARD' | 'CARDPOINTE' | 'CASH' | 'ZELLE' | 'OTHER';
   reference: string | null;
   receivedAt: string;
   notes: string | null;
@@ -323,6 +326,7 @@ const PAYMENT_METHODS = [
   'CHECK',
   'WIRE',
   'ACH',
+  'ZELLE',
   'CREDIT_CARD',
   'CARDPOINTE',
   'CASH',
@@ -792,6 +796,9 @@ export default function OrderDetailPage() {
   // the target line's context (id, qty cap, rate, dates) so the modal
   // can clamp + pre-fill. Null when closed.
   const [subRentalLine, setSubRentalLine] = useState<SubRentalLineContext | null>(null);
+  // "Switch class…" on a vehicle line (Wes 2026-09-11) — liftgate to no
+  // liftgate, or up to a cube at the quoted rate.
+  const [switchLine, setSwitchLine] = useState<SwitchClassLine | null>(null);
   // One-shot guard so the ?send=1 auto-open fires once per page load,
   // not on every re-render or refresh.
   const [autoSendHandled, setAutoSendHandled] = useState(false);
@@ -2512,6 +2519,7 @@ export default function OrderDetailPage() {
           <option value="GE">G&amp;E</option>
           <option value="PRO_SUPPLIES">Pro Supplies</option>
           <option value="WARDROBE_MAKEUP">Wardrobe &amp; Makeup</option>
+          <option value="PHOTO_SHOOT">Photo Shoot</option>
           <option value="EXPENDABLES">Expendables</option>
           <option value="ART">Art</option>
         </select>
@@ -2748,6 +2756,13 @@ export default function OrderDetailPage() {
             // and discounts/fees aren't sub-rented.
             const canSubRent = canManageSubRentals
               && (li.type === 'EQUIPMENT' || li.type === 'EXPENDABLE')
+            // Class switch: our own vehicle lines only — a partner's unit
+            // is their calendar, an included accessory follows its parent.
+            const canSwitchClass = lineEditable
+              && li.department === 'VEHICLES'
+              && li.type !== 'FEE' && li.type !== 'DISCOUNT'
+              && !li.autoKitPieceId
+              && !(li.subRentals && li.subRentals.length > 0)
             return (
               <>
                 {lineEditable && (
@@ -2756,6 +2771,23 @@ export default function OrderDetailPage() {
                     className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
                   >
                     Edit
+                  </button>
+                )}
+                {canSwitchClass && (
+                  <button
+                    onClick={() => setSwitchLine({
+                      id: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                      rateType: li.rateType,
+                      pickupDate: li.pickupDate,
+                      returnDate: li.returnDate,
+                    })}
+                    title="Move this line to another vehicle class — the quoted rate stays unless you change it"
+                    className="text-lt-fg3 hover:text-amber-800 text-xs mr-2"
+                  >
+                    Switch class…
                   </button>
                 )}
                 {canSubRent && (
@@ -4007,6 +4039,10 @@ export default function OrderDetailPage() {
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+
+            {/* A partner cancelled and we are filling the line — partner lines
+                are kept off the pick list, so the warehouse was never told. */}
+            <PartnerCancelledLinesPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
           </div>
         )}
 
@@ -5391,6 +5427,15 @@ export default function OrderDetailPage() {
           onChanged={fetchOrder}
         />
       )}
+      {switchLine && order && (
+        <SwitchVehicleClassModal
+          orderId={orderId}
+          orderNumber={order.orderNumber}
+          line={switchLine}
+          onClose={() => setSwitchLine(null)}
+          onChanged={fetchOrder}
+        />
+      )}
       {subRentalLine && (
         <SubRentalModal
           line={subRentalLine}
@@ -5938,7 +5983,7 @@ function PaymentsPanel({
                   <span className="font-semibold">
                     ${Number(p.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{p.method}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{paymentMethodLabel(p.method)}</span>
                   {p.reference && <span className="text-[11px] text-lt-fg2">ref {p.reference}</span>}
                   <span className="text-[11px] text-lt-fg3">
                     Received {new Date(p.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -5992,7 +6037,7 @@ function PaymentsPanel({
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             >
               {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                <option key={m} value={m}>{paymentMethodLabel(m)}</option>
               ))}
             </select>
           </label>
@@ -6011,7 +6056,7 @@ function PaymentsPanel({
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="Check #, wire id…"
+              placeholder="Check #, wire ref, Zelle confirmation…"
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
