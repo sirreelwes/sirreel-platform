@@ -221,6 +221,33 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `SenderIdentity.firstName` (staff user or matched contact) or
   `identifyNumber().firstName` (partner driver / CRM person). Text only —
   web chat has no number. `npm run test:greeting`.
+- **AHA access LEVELS** (Wes 2026-09-11: "whatever they can from whatever
+  role they have in HQ", plus add/subtract people by hand). One level per
+  sender, resolved in `src/lib/assistant/access.ts`: BLOCKED grant →
+  hand-made grant → HQ role (`levelForRole`: ADMIN→admin, MANAGER/AGENT/
+  BILLING→staff) → contact on a current job → public. Hand-made rows are
+  `AhaGrant` (`sr_aha_grants`, one active row per number, revoked never
+  deleted) added on /admin/assistant → "Add a person · or block one"
+  (admin only, audited `admin.aha_grant_*`). `SenderIdentity.level` picks
+  the tools in `runAssistant`; a BLOCKED number gets a fixed line in the
+  SMS route and never reaches the model. **Schema change: run
+  `npx prisma db push` (additive: one enum + one table) — until then the
+  grant reads fail soft and only the derived tiers apply.**
+  `npm run test:aha-access`.
+- **ADMIN level = continuity** (Wes: Greyson Bailey is backup CEO; "if
+  anything happens to me, AHA can explain everything I've been doing").
+  NOT a hidden door — an explicit, audited capability of the admin level:
+  `platform_memory(query)` searches CLAUDE.md + SHIPLOG.md + docs/**/*.md
+  by section (`src/lib/assistant/memory.ts`, credential-looking lines
+  redacted; the markdown is traced into the two routes via
+  `outputFileTracingIncludes`), `recent_activity(days)` reads the admins'
+  audit log (counts + latest rows, never old/new values). Reached by text
+  from an admin-level number, or — stronger — signed in on
+  /admin/assistant → "Ask AHA as yourself" (`POST /api/admin/assistant/ask`,
+  channel `hq`, level from the session role, audited `hq.assistant_tools`).
+  New HQ users: `npx tsx scripts/add-hq-user.ts --name … --email … --role
+  ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
+  `npm run test:memory-search`.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal

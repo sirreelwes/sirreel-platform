@@ -57,6 +57,8 @@
     "test:sms-config": "tsx tests/sms/send-config.test.ts",
     "test:recognized-numbers": "tsx tests/assistant/recognized-numbers.test.ts",
     "test:greeting": "tsx tests/assistant/greeting.test.ts",
+    "test:aha-access": "tsx tests/assistant/access.test.ts",
+    "test:memory-search": "tsx tests/assistant/memory-search.test.ts",
     "test:phone-factor": "tsx tests/assistant/phone-factor.test.ts",
     "test:bounce-event": "tsx tests/email/bounce-event.test.ts",
     "test:lcdw": "tsx tests/pricing/lcdw-eligibility.test.ts",

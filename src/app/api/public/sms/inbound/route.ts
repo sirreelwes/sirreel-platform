@@ -109,6 +109,17 @@ export async function POST(req: NextRequest) {
     await prisma.smsThread.update({ where: { id: thread.id }, data: { personId: who.personId, subRentalId: who.subRentalId } }).catch(() => {})
   }
 
+  // Taken off the list by hand on /admin/assistant: keywords still work
+  // (handled above), everything else is a fixed line. Never reaches the model.
+  if (sender?.level === 'blocked') {
+    const reply = `SirReel Studio Services: This number isn't set up to use our text assistant. Please call ${PUBLIC_CONTACT.phone} and an agent will help. Reply STOP to opt out.`
+    await recordOutbound({ threadId: thread.id, body: reply, source: 'system', status: 'twiml' })
+    await prisma.auditLog.create({
+      data: { action: 'sms.blocked_number', entityType: 'SmsThread', entityId: thread.id, newValues: { phoneTail: thread.phone.slice(-4), grantId: sender.grant?.id ?? null } },
+    }).catch(() => {})
+    return twiml(reply)
+  }
+
   const turns = await turnsForModel(thread.id)
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') turns.push({ role: 'user', content: body })
 
@@ -121,7 +132,7 @@ export async function POST(req: NextRequest) {
   await recordOutbound({ threadId: thread.id, body: reply, source: 'assistant', status: 'twiml', subRentalId: who.subRentalId })
   if (toolsUsed.length) {
     await prisma.auditLog.create({
-      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4), staff: sender?.staff?.name ?? null, contactJobs: sender?.contactJobs.map((j) => j.jobCode) ?? [] } },
+      data: { action: 'sms.assistant_tools', entityType: 'SmsThread', entityId: thread.id, newValues: { tools: toolsUsed, phoneTail: thread.phone.slice(-4), level: sender?.level ?? 'public', staff: sender?.staff?.name ?? null, contactJobs: sender?.contactJobs.map((j) => j.jobCode) ?? [] } },
     }).catch(() => {})
   }
   return twiml(reply)

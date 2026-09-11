@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { VISIT_GAP_MINUTES } from '@/lib/assistant/usageSummary'
+import { LEVEL_CAPABILITIES } from '@/lib/assistant/access'
+import { HqAssistantPanel } from '@/components/admin/HqAssistantPanel'
 
 type Job = {
   id: string
@@ -46,7 +48,8 @@ type Usage = {
   lastUsedAt: string | null
 }
 type RecognizedNumber = {
-  tier: 'staff' | 'contact' | 'driver'
+  tier: 'staff' | 'contact' | 'driver' | 'grant' | 'blocked'
+  level: 'blocked' | 'public' | 'contact' | 'staff' | 'admin'
   tail: string
   phone: string
   name: string
@@ -58,7 +61,10 @@ type RecognizedNumber = {
   jobCode?: string | null
   jobName?: string | null
   unit?: string | null
+  grantId?: string | null
+  note?: string | null
 }
+type Me = { level: string; firstName: string | null; isAdmin: boolean }
 type Data = {
   gateCode: string
   gateCodeUpdatedAt: string | null
@@ -72,6 +78,7 @@ type Data = {
   smsProblem?: string | null
   emergencyContacts: EmergencyContact[]
   recognized?: RecognizedNumber[]
+  me?: Me
 }
 
 function fmt(d: string | null): string {
@@ -107,9 +114,83 @@ function auditLabel(a: AuditRow): string {
  * leads, and the reasons sit next to it because they are the fixable part.
  */
 const TIER_LABEL: Record<RecognizedNumber['tier'], { label: string; chip: string; blurb: string }> = {
-  staff: { label: 'Staff', chip: 'bg-amber-600/20 text-amber-300 border-amber-600/40', blurb: 'Fleet + job lookups by text' },
+  grant: { label: 'Added by hand', chip: 'bg-violet-600/20 text-violet-300 border-violet-600/40', blurb: 'A person put on the list here' },
+  blocked: { label: 'Blocked', chip: 'bg-red-600/20 text-red-300 border-red-600/40', blurb: 'Taken off the list here' },
+  staff: { label: 'HQ user', chip: 'bg-amber-600/20 text-amber-300 border-amber-600/40', blurb: 'Level follows their HQ role' },
   contact: { label: 'Production contact', chip: 'bg-sky-600/20 text-sky-300 border-sky-600/40', blurb: 'Own job, message to agent, that job’s truck codes' },
   driver: { label: 'Checkout driver', chip: 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40', blurb: 'That truck’s codes' },
+}
+
+const LEVEL_CHIP: Record<RecognizedNumber['level'], string> = {
+  admin: 'bg-amber-600/20 text-amber-200 border-amber-500/50',
+  staff: 'bg-amber-600/10 text-amber-300 border-amber-600/30',
+  contact: 'bg-sky-600/20 text-sky-300 border-sky-600/40',
+  public: 'bg-zinc-700/40 text-zinc-300 border-zinc-600',
+  blocked: 'bg-red-600/20 text-red-300 border-red-600/40',
+}
+
+/**
+ * Put a person on the list by hand, or take one off. Admin only. A number
+ * that already has a hand-made row is replaced (one active row per number);
+ * an HQ user or job contact can be BLOCKED the same way — the block wins.
+ */
+function AddNumberForm({ onDone, preset }: { onDone: () => void; preset?: { name: string; phone: string; level: string } | null }) {
+  const [name, setName] = useState(preset?.name ?? '')
+  const [phone, setPhone] = useState(preset?.phone ?? '')
+  const [level, setLevel] = useState(preset?.level ?? 'STAFF')
+  const [jobCode, setJobCode] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (preset) { setName(preset.name); setPhone(preset.phone); setLevel(preset.level) }
+  }, [preset])
+
+  async function submit() {
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch('/api/admin/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add-grant', name, phone, level, jobCode: jobCode || undefined, note: note || undefined }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(j.error || 'Could not save.'); return }
+      setName(''); setPhone(''); setJobCode(''); setNote('')
+      onDone()
+    } finally { setBusy(false) }
+  }
+
+  const input = 'rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none'
+  return (
+    <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+      <div className="text-[11px] uppercase tracking-wider text-zinc-400">Add a person · or block one</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className={`${input} w-44`} />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile" className={`${input} w-40 font-mono`} />
+        <select value={level} onChange={(e) => setLevel(e.target.value)} className={`${input} w-48`}>
+          <option value="ADMIN">Admin — everything, incl. platform memory</option>
+          <option value="STAFF">Staff — fleet + job lookups</option>
+          <option value="CONTACT">Production contact — one job</option>
+          <option value="BLOCKED">Blocked — nothing</option>
+        </select>
+        {level === 'CONTACT' && <input value={jobCode} onChange={(e) => setJobCode(e.target.value)} placeholder="Job code (SR-JOB-0231)" className={`${input} w-44 font-mono`} />}
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why (optional)" className={`${input} w-56`} />
+        <button
+          onClick={() => void submit()}
+          disabled={busy || !name.trim() || !phone.trim()}
+          className={`rounded px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40 ${level === 'BLOCKED' ? 'bg-red-700 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-500'}`}
+        >
+          {level === 'BLOCKED' ? 'Block' : 'Add'}
+        </button>
+      </div>
+      {err && <div className="mt-2 text-xs text-red-300">{err}</div>}
+      <div className="mt-2 text-[11px] text-zinc-600">
+        HQ users get their level from their role automatically — add them here only to give a different level or to block. Every change is audited.
+      </div>
+    </div>
+  )
 }
 
 function fmtDay(d: string | null): string {
@@ -126,9 +207,20 @@ function fmtTail(tail: string): string {
  * use, so this list IS the access. Nothing is granted here; each row says
  * where the number lives and links there.
  */
-function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
+function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumber[]; isAdmin: boolean; onChanged: () => void }) {
   const [q, setQ] = useState('')
   const [tier, setTier] = useState<'all' | RecognizedNumber['tier']>('all')
+  const [preset, setPreset] = useState<{ name: string; phone: string; level: string } | null>(null)
+  const [rowErr, setRowErr] = useState<string | null>(null)
+
+  async function revoke(grantId: string) {
+    setRowErr(null)
+    const res = await fetch('/api/admin/assistant', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke-grant', grantId }),
+    })
+    if (!res.ok) { const j = await res.json().catch(() => ({})); setRowErr(j.error || 'Could not remove.'); return }
+    onChanged()
+  }
   const digits = q.replace(/\D/g, '')
   const needle = q.trim().toLowerCase()
   const shown = rows.filter((r) => {
@@ -137,7 +229,7 @@ function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
     if (digits.length >= 3 && r.tail.includes(digits)) return true
     return r.name.toLowerCase().includes(needle) || (r.jobCode ?? '').toLowerCase().includes(needle) || (r.jobName ?? '').toLowerCase().includes(needle) || (r.unit ?? '').toLowerCase().includes(needle)
   })
-  const counts = { staff: 0, contact: 0, driver: 0 } as Record<RecognizedNumber['tier'], number>
+  const counts = { grant: 0, blocked: 0, staff: 0, contact: 0, driver: 0 } as Record<RecognizedNumber['tier'], number>
   for (const r of rows) counts[r.tier]++
   const distinct = new Set(rows.map((r) => r.tail)).size
 
@@ -147,19 +239,35 @@ function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Who AHA recognises</h2>
           <p className="mt-1 max-w-3xl text-xs text-zinc-500">
-            Every number AHA treats as more than the public, right now, and why. Nothing is granted on this list — it
-            reads the same records the live checks read, so to change access, change the record it points to.
-            Any number not here gets the public tier: job-code verification, emergencies, gear setup. There is no
-            block list; STOP only stops our texts to a number.
+            Every number AHA treats as more than the public, right now, its level, and why. HQ users get the level
+            of their HQ role; contacts and drivers follow their job; anyone else is Public. To change a person’s
+            level or take them off, add a row by hand below — it wins over the automatic ones. STOP only stops our
+            texts to a number; Blocked here is what stops AHA answering it.
           </p>
         </div>
         <div className="text-right text-xs text-zinc-500">
-          <span className="text-zinc-300">{distinct}</span> number{distinct === 1 ? '' : 's'} · {rows.length} grant{rows.length === 1 ? '' : 's'}
+          <span className="text-zinc-300">{distinct}</span> number{distinct === 1 ? '' : 's'} · {rows.length} row{rows.length === 1 ? '' : 's'}
         </div>
       </div>
 
+      <div className="mt-3 grid gap-2 md:grid-cols-5">
+        {(['admin', 'staff', 'contact', 'public', 'blocked'] as const).map((l) => (
+          <div key={l} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
+            <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[l]}`}>{LEVEL_CAPABILITIES[l].label}</span>
+            <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-400">
+              {LEVEL_CAPABILITIES[l].can.map((c) => <li key={c}>· {c}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {isAdmin ? <AddNumberForm onDone={() => { setPreset(null); onChanged() }} preset={preset} /> : (
+        <div className="mt-3 text-[11px] text-zinc-600">Only an admin can add or remove people here.</div>
+      )}
+      {rowErr && <div className="mt-2 text-xs text-red-300">{rowErr}</div>}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {(['all', 'staff', 'contact', 'driver'] as const).map((t) => (
+        {(['all', 'grant', 'blocked', 'staff', 'contact', 'driver'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTier(t)}
@@ -182,7 +290,8 @@ function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
             <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
               <th className="py-2 pr-3 font-medium">Number</th>
               <th className="py-2 pr-3 font-medium">Who</th>
-              <th className="py-2 pr-3 font-medium">Tier</th>
+              <th className="py-2 pr-3 font-medium">Level</th>
+              <th className="py-2 pr-3 font-medium">How</th>
               <th className="py-2 pr-3 font-medium">Why AHA knows it</th>
               <th className="py-2 pr-3 font-medium">Can ask for</th>
               <th className="py-2 pr-3 font-medium">Until</th>
@@ -198,21 +307,36 @@ function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
                   {r.jobCode && <div className="text-[11px] text-zinc-500">{r.jobCode}{r.jobName ? ` · ${r.jobName}` : ''}</div>}
                 </td>
                 <td className="py-2 pr-3 whitespace-nowrap">
+                  <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[r.level]}`}>{LEVEL_CAPABILITIES[r.level].label}</span>
+                </td>
+                <td className="py-2 pr-3 whitespace-nowrap">
                   <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${TIER_LABEL[r.tier].chip}`}>{TIER_LABEL[r.tier].label}</span>
                 </td>
-                <td className="py-2 pr-3 text-zinc-300">{r.reason}</td>
+                <td className="py-2 pr-3 text-zinc-300">
+                  {r.reason}
+                  {r.note && <div className="text-[11px] text-zinc-500">“{r.note}”</div>}
+                </td>
                 <td className="py-2 pr-3 text-xs text-zinc-400">{r.grants}</td>
                 <td className="py-2 pr-3 whitespace-nowrap text-zinc-400" title={r.until ? 'Lapses on its own after this date' : 'Until removed'}>
                   {r.until ? fmtDay(r.until) : 'Until removed'}
                 </td>
                 <td className="py-2 pr-3 whitespace-nowrap">
-                  <a href={r.manageHref} className="text-xs font-semibold text-amber-300 hover:text-amber-200">{r.manageLabel} →</a>
+                  {r.grantId && isAdmin ? (
+                    <button onClick={() => void revoke(r.grantId!)} className="text-xs font-semibold text-red-300 hover:text-red-200">Remove</button>
+                  ) : (
+                    <span className="flex flex-col gap-0.5">
+                      <a href={r.manageHref} className="text-xs font-semibold text-amber-300 hover:text-amber-200">{r.manageLabel} →</a>
+                      {isAdmin && r.level !== 'blocked' && (
+                        <button onClick={() => setPreset({ name: r.name, phone: r.phone, level: 'BLOCKED' })} className="text-left text-[11px] text-zinc-500 hover:text-red-300">Block this number</button>
+                      )}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-4 text-center text-zinc-500">
+                <td colSpan={8} className="py-4 text-center text-zinc-500">
                   {rows.length === 0 ? 'AHA recognises no numbers yet — add staff mobiles above, and contacts follow their jobs.' : 'Nothing matches.'}
                 </td>
               </tr>
@@ -731,7 +855,9 @@ export default function AssistantAdminPage() {
             </div>
           </section>
 
-          <RecognizedSection rows={data.recognized ?? []} />
+          <RecognizedSection rows={data.recognized ?? []} isAdmin={Boolean(data.me?.isAdmin)} onChanged={load} />
+
+          <HqAssistantPanel level={data.me?.level ?? 'staff'} firstName={data.me?.firstName ?? null} />
 
           {/* Release log */}
           <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
