@@ -24,6 +24,12 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-11
 
+### Partner photos: live at once, and HQ gets the glance it owes them
+
+`efdb601` partners: a partner's photos go live at once, and HQ is told
+
+Wes, asked "HQ approves before public" or "live at once, HQ notified": the second. `41965af` had already let a partner add photos from their page (Evan should not email pictures and wait); this is the other half. Each partner upload is stamped `uploadedByPartnerAt`, the vendor-portal channel gets ONE email per ten-minute burst (six photos, one mail), and a `partner-photos-added` Action Item (one per unit, low) points at the roster unit page, where every partner photo wears a "New · partner" chip with a "Looks good" button and a header "all look good". Removing the photo clears it too. The Portals partner panel lists the units with unlooked-at photos. Columns added with `scripts/add-partner-photo-columns.ts` — additive `ADD COLUMN IF NOT EXISTS`, never `db push` — and every read/write of them fails soft until it has run. `npm run test:partner-photos`. Also: the PowerTrip notes no longer say to run `prisma db push`.
+
 ### The /jobs tile reads an annual agreement the way the job page does
 
 `db64f690` jobs: an annual account's tile stops saying "Agreement" is still needed
