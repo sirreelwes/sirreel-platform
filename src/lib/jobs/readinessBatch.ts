@@ -23,6 +23,7 @@
 import { prisma } from '@/lib/prisma'
 import type { AgreementStatus, ContractType } from '@prisma/client'
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
+import { annualCoverageByCompany } from '@/lib/orders/annualCoverage'
 import { rollupCoiState, type CoiRollupState } from '@/lib/coi/coiState'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { deriveJobDateRange } from '@/lib/jobs/dateRange'
@@ -139,7 +140,7 @@ export async function readinessForJobs(
 
   // Three independent follow-ups, issued together. In series this helper
   // cost ~1s for a 140-job window and the gantt waits on it.
-  const [walletCardCompanies, companyCois, separatePolicyRows] = await Promise.all([
+  const [walletCardCompanies, companyCois, separatePolicyRows, annualByCompany] = await Promise.all([
     // A card keyed in from a signed off-portal authorization lives on the
     // COMPANY (CompanyCard), not on a booking's paperwork row, so the check
     // has to ask both stores (lib/payments/jobCardOnFile).
@@ -168,6 +169,10 @@ export async function readinessForJobs(
       where: { jobId: { in: jobs.map((j) => j.id) }, decision: 'SEPARATE_POLICY' },
       select: { jobId: true },
     }),
+    // An annual account signed once for the year: the company's current
+    // auto-covering master papers every job it books, with or without an
+    // addendum row on the job. Same read as the job page's annualCoverage.
+    annualCoverageByCompany(jobs.map((j) => j.companyId)),
   ])
   const separatePolicyJobIds = new Set(separatePolicyRows.map((r) => r.jobId))
   const companyCoisByCompany = new Map<string, typeof companyCois>()
@@ -202,6 +207,7 @@ export async function readinessForJobs(
     const liveOrders = j.orders.filter((o) => o.status !== 'CANCELLED')
     const allAgreements = liveOrders.flatMap((o) => o.signedAgreements)
     const coveredBy = (type: ContractType) =>
+      (!!j.companyId && !!annualByCompany.get(j.companyId)?.has(type)) ||
       j.agreementAddenda.some(
         (a) =>
           a.companyAgreement.contractType === type &&
