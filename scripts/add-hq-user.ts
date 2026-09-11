@@ -4,6 +4,7 @@
  * the users table (src/app/api/auth/[...nextauth]/route.ts denies unknown
  * emails). There is no user-creation page.
  *
+ *   npx tsx scripts/add-hq-user.ts --name "CPR Check-in Desk" --email cpr@sirreel.com --like warehouse@sirreel.com
  *   npx tsx scripts/add-hq-user.ts --name "Greyson Bailey" --email greyson@sirreel.com --role ADMIN --phone "(818) 555-0100" [--title "Backup CEO"]
  *
  * Needs DATABASE_URL in the shell (see CLAUDE.md "Before Prisma migrations").
@@ -25,15 +26,25 @@ function arg(name: string): string | null {
 async function main() {
   const name = arg('name')
   const email = arg('email')?.toLowerCase()
-  const role = (arg('role') ?? 'AGENT').toUpperCase() as UserRole
+  // --like copies another user's role (Wes 2026-09-11: "add this as a
+  // login with same as warehouse@") — for a second desk account that
+  // should see exactly what an existing one sees, without anyone having
+  // to remember which role that is. --role still wins if both are given.
+  const like = arg('like')?.toLowerCase() ?? null
+  let role = (arg('role') ?? (like ? '' : 'AGENT')).toUpperCase() as UserRole
   const phone = arg('phone')
   const title = arg('title')
   if (!name || !email) {
-    console.error('usage: --name "Full Name" --email who@sirreel.com [--role ADMIN|MANAGER|AGENT|BILLING] [--phone "(818) 555-0100"] [--title "Backup CEO"]')
+    console.error('usage: --name "Full Name" --email who@sirreel.com [--role ADMIN|MANAGER|AGENT|BILLING|WAREHOUSE|FLEET_TECH] [--phone "(818) 555-0100"] [--title "Backup CEO"]')
     process.exit(1)
   }
-  if (!['ADMIN', 'MANAGER', 'AGENT', 'BILLING'].includes(role)) {
-    console.error(`role must be ADMIN, MANAGER, AGENT or BILLING (got ${role})`)
+  // WAREHOUSE / FLEET_TECH (Wes 2026-09-11): the check-in desk computer
+  // signs in as its own account (cpr@sirreel.com) and needs the yard
+  // screens — Today, the check in/out reports, Find a Unit — with no
+  // pricing, client contact or email. That is the WAREHOUSE role, which
+  // this script used to refuse.
+  if (role && !['ADMIN', 'MANAGER', 'AGENT', 'BILLING', 'WAREHOUSE', 'FLEET_TECH'].includes(role)) {
+    console.error(`role must be ADMIN, MANAGER, AGENT, BILLING, WAREHOUSE or FLEET_TECH (got ${role})`)
     process.exit(1)
   }
   if (!isAllowedEmailDomain(email)) {
@@ -47,6 +58,18 @@ async function main() {
 
   const prisma = new PrismaClient()
   try {
+    if (like) {
+      const source = await prisma.user.findUnique({
+        where: { email: like },
+        select: { role: true, isActive: true, salesOnly: true },
+      })
+      if (!source) {
+        console.error(`--like ${like}: no HQ user with that email`)
+        process.exit(1)
+      }
+      if (!role) role = source.role
+      console.log(`${like} is ${source.role}${source.isActive ? '' : ' (inactive)'} → ${email} gets ${role}`)
+    }
     const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, role: true, name: true } })
     const user = await prisma.user.upsert({
       where: { email },
