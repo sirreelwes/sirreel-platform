@@ -22,7 +22,15 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
-## 2026-09-10
+## 2026-09-11
+
+### The /jobs tile reads an annual agreement the way the job page does
+
+`db64f690` jobs: an annual account's tile stops saying "Agreement" is still needed
+
+Wes: "the agreement icon is red in job tile, while an annual agreement is clearly on file." RIPS (Echobend, SR-JOB-0329): the job page said "Covered by the company's annual agreement through Feb 25, 2027", the rail tile said "Still needed: Agreement". Two derivations. The job page asks `findCompanyAnnualCoverage` (the company's current `autoCoverJobs` master); the list route and `readinessForJobs` (rail chips, gantt meter, timeline) honoured only job-level addenda and sibling coverage, so an annual account with no addendum row read as unsigned on every tile.
+
+- **`annualCoverageByCompany()`** in `src/lib/orders/annualCoverage.ts` — one query per batch, the same `isCoverageCurrent` verdict per row as the single-company read. `/api/jobs` and `readinessForJobs` both OR it into `coveredBy(type)` ahead of the addendum check. Verified on the real handler with a stubbed session: RIPS rental → SIGNED, blockers COI / Card / Gear.
 
 ### Partner portal: a second partner, and the first one that rents equipment
 
