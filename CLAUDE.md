@@ -617,6 +617,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   (`/api/orders/[id]/partner-cancelled-lines`, audited). Pre-book lines need
   no warning: booking routes them. `npm run test:partner-cancelled-lines`.
 
+## Partner contacts — the people at a partner (2026-09-11 — Wes)
+- Wes: "I need to be able to add people on the partner portal. owners and
+  others. let's have a contacts section." `VendorContact` (`sr_vendor_contacts`,
+  added by `scripts/add-vendor-contacts-table.ts`, additive SQL). Roles are
+  TEXT against the list in `lib/sub-rentals/vendorContacts.ts` — not a Postgres
+  enum, so a new role needs no two-deploy dance.
+- **Both sides keep the list** (Wes's choice): HQ on /crm/portals#partners
+  (`VendorContactsPanel`), the partner on their page (`VendorContactsCard`);
+  the partner's edits email HQ through `tellHq`, like their contact-details
+  edit. One rule set: `cleanContactInput` / `addVendorContact` / … in
+  vendorContacts.ts. Both write paths go through it.
+- **`isPrimary` IS the address on file** — it mirrors into
+  Vendor.contactName/email/phone, so every existing partner mail path
+  (`poEmail ?? email`) keeps working and nothing else had to change. The main
+  contact can't be removed; make someone else primary first. Removal is
+  `isActive false`, never a delete.
+- **`emailBookings` is per person and OFF by default** (Wes's ruling): ticked,
+  `vendorBookingCc()` CC's them on the estimate notice, hold request,
+  it's-a-go, cancellation and logistics mail. NOT on the introduction or the
+  account link — those stay one-to-one with the person holding the page.
+- The partner's existing contact on file seeds as the first row on first read,
+  so neither side opens empty. `npm run test:vendor-contacts`.
+
 ## Partner discount waterfall (2026-09-11 — Wes)
 - Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a
   client"): a client discount on a partner's unit is **shared 50/50** until

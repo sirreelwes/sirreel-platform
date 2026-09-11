@@ -27,6 +27,7 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
+import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
@@ -172,7 +173,8 @@ export async function sendHoldRequest(args: {
     // a partner's unit and the desk must see that it went out.
     const res = await sendAgreementEmail({
       to: [to],
-      cc: await withTeamCc([], to),
+      // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
+      cc: await withTeamCc(await vendorBookingCc(prisma, s.vendor.id, [to]), to),
       replyTo: agentReplyTo(args.agentEmail) ?? undefined,
       subject: notice.subject,
       html: notice.html,

@@ -15,6 +15,7 @@
 import type { VendorAccountJob, VendorAccountView as View, UnitAlert } from '@/lib/sub-rentals/vendorAccount'
 import { fmtRange } from '@/lib/sub-rentals/conduit'
 import { VendorContactForm } from '@/components/site/VendorContactForm'
+import { VendorContactsCard } from '@/components/site/VendorContactsCard'
 import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
 import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
@@ -163,6 +164,9 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
             )}
           </section>
         </div>
+
+        {/* Their own people — owner, accounting, dispatch (Wes 2026-09-11). */}
+        <VendorContactsCard token={token} preview={preview} />
 
         {/* Who at SirReel they call (Wes 2026-09-11: "each partner and vendor
             portal needs the contact info for our main contact"). */}

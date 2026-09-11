@@ -6,6 +6,7 @@ import { Camera, Check, FileSignature, FileText, Loader2, Percent, Send, ShieldC
 import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
+import { VendorContactsPanel } from '@/components/crm/VendorContactsPanel'
 import type { PartnerStage } from '@/lib/sub-rentals/partnerStage'
 import { describeDeal, SIRREEL_FLOOR_PERCENT } from '@/lib/sub-rentals/discountWaterfall'
 
@@ -256,6 +257,9 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
           </div>
         </div>
       </div>
+
+      {/* The people at the partner — both sides keep this list. */}
+      <VendorContactsPanel vendorId={vendorId} />
 
       {/* Who at SirReel they call — the card on their page. */}
       <div className="border border-lt-hairline rounded-lg p-3">

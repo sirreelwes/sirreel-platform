@@ -31,6 +31,7 @@ import { buildVendorBookedNotice, buildVendorCancelledNotice } from '@/lib/sub-r
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
+import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { bindSubRentalToOrderLine } from '@/lib/sub-rentals/bindToOrderLine'
 
 export interface LifecycleNoticeOutcome {
@@ -98,7 +99,7 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
       id: true, itemDescription: true, quantity: true, startDate: true, endDate: true, vendorToken: true,
       vendorConfirmedAt: true, driverName: true, receiveMethod: true,
       subcontractedVehicle: { select: { name: true } },
-      vendor: { select: { name: true, email: true, poEmail: true, contactName: true } },
+      vendor: { select: { id: true, name: true, email: true, poEmail: true, contactName: true } },
     },
   })
   const out: LifecycleNoticeOutcome[] = []
@@ -127,7 +128,8 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
         jobName: ctx.jobName,
       })
       const res = await sendAgreementEmail({
-        to: [to], cc: await withTeamCc([], to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
+        // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
+        to: [to], cc: await withTeamCc(await vendorBookingCc(prisma, s.vendor.id, [to]), to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
         subject: notice.subject, html: notice.html, text: notice.text, label: 'sub-rental-booked', orderId: ctx.orderId,
       }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : 'send threw' }))
       if (res.ok) {
@@ -189,7 +191,7 @@ async function cancelSubRentalsWhere(
       id: true, status: true, itemDescription: true, quantity: true, startDate: true, endDate: true, vendorToken: true,
       vendorHoldRequestedAt: true, vendorNotifiedAt: true, vendorCancelNotifiedAt: true,
       subcontractedVehicle: { select: { name: true } },
-      vendor: { select: { name: true, email: true, poEmail: true } },
+      vendor: { select: { id: true, name: true, email: true, poEmail: true } },
     },
   })
   const out: LifecycleNoticeOutcome[] = []
@@ -213,7 +215,8 @@ async function cancelSubRentalsWhere(
         agentName: ctx.agentName ?? 'Team SirReel',
       })
       const res = await sendAgreementEmail({
-        to: [to], cc: await withTeamCc([], to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
+        // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
+        to: [to], cc: await withTeamCc(await vendorBookingCc(prisma, s.vendor.id, [to]), to), replyTo: agentReplyTo(ctx.agentEmail) ?? undefined,
         subject: notice.subject, html: notice.html, text: notice.text, label: 'sub-rental-cancelled', orderId: ctx.orderId,
       }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : 'send threw' }))
       if (res.ok) {

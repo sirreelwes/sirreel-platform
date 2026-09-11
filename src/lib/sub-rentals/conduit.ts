@@ -38,6 +38,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
+import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { renderEmailShell, renderEmailText, p, detailTable, calloutBox } from '@/lib/email/templates/shell'
 import { portalBaseUrl, portalJobUrl } from '@/lib/portal/portalUrl'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -798,6 +799,8 @@ export async function notifyLogisticsChanged(args: {
     if (vTo && row.vendorToken) {
       const ok = await send({
         to: vTo,
+        // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
+        cc: await vendorBookingCc(prisma, row.vendor.id, [vTo]),
         mail: buildLogisticsForVendor({
           vendorName: row.vendor.name,
           unitName,

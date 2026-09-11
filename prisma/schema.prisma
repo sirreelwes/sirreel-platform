@@ -4849,6 +4849,8 @@ model Vendor {
   subcontractedFees     SubcontractedFee[]
   // The partner's own driver roster — see VendorDriver.
   drivers               VendorDriver[]
+  // The people at the partner: owner, accounting, dispatch — see VendorContact.
+  contacts              VendorContact[]
   // The partner's white-label HQ workspace, if they've started one.
   workspace             VendorWorkspace?
 
@@ -5200,6 +5202,54 @@ model VendorDriver {
   /// One roster row per address per partner — re-adding refreshes the invite.
   @@unique([vendorId, email])
   @@map("sr_vendor_drivers")
+}
+
+/// THE PEOPLE AT A PARTNER (Wes 2026-09-11: "I need to be able to add people
+/// on the partner portal. owners and others. let's have a contacts section").
+/// Vendor.contactName/email/phone stayed one person, and every partner email
+/// goes to that one address.
+///
+/// Both sides keep this list: HQ from the Portals panel, the partner from their
+/// own page (HQ is told when they do). `isPrimary` is the address on file — the
+/// row mirrors into Vendor.contactName/email/phone, so every existing mail path
+/// keeps working untouched. `emailBookings` is the per-person opt-in Wes asked
+/// for, OFF by default: a name added for reference never starts receiving
+/// booking traffic, and ticking it CC's them on estimates, hold requests,
+/// it's-a-go, cancellations and logistics — never on the introduction or the
+/// account link, which stay one-to-one.
+///
+/// `role` is plain text against the list in lib/sub-rentals/vendorContacts.ts,
+/// not a Postgres enum: a new role should not need a two-deploy dance.
+/// Table added by additive SQL (scripts/add-vendor-contacts-table.ts).
+model VendorContact {
+  id       String @id @default(uuid())
+  vendorId String @map("vendor_id")
+
+  name  String
+  email String?
+  phone String? @db.VarChar(30)
+  /// OWNER | ACCOUNTING | DISPATCH | SALES | OPERATIONS | OTHER.
+  role  String  @default("OTHER")
+  notes String? @db.Text
+
+  /// The address on file — mirrored to Vendor.contactName/email/phone. One per
+  /// partner; setting a new one clears the old.
+  isPrimary     Boolean @default(false) @map("is_primary")
+  /// CC this person on booking mail. Off unless someone turns it on.
+  emailBookings Boolean @default(false) @map("email_bookings")
+  /// The partner added this one from their own page, not HQ.
+  addedByPartner Boolean @default(false) @map("added_by_partner")
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  /// One row per address per partner; a person with no email is fine.
+  @@unique([vendorId, email])
+  @@index([vendorId])
+  @@map("sr_vendor_contacts")
 }
 
 // ── Subcontracted vehicles ─────────────────────────────────────────

@@ -26,6 +26,13 @@ import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { shouldNotifyHq } from '@/lib/sub-rentals/partnerPhotos'
 import { MAX_PROPOSED_RATE } from '@/lib/sub-rentals/rateProposalInput'
+import {
+  addVendorContact,
+  listVendorContacts,
+  removeVendorContact,
+  updateVendorContactRow,
+  type VendorContactInput,
+} from '@/lib/sub-rentals/vendorContacts'
 
 async function tellHq(subject: string, line: string, href: string): Promise<void> {
   const to = await channelRecipients('vendor-portal')
@@ -74,6 +81,54 @@ export async function updateVendorContact(
       .join('; ')}.`,
     '/crm/portals#partners',
   )
+}
+
+// ── Contacts ───────────────────────────────────────────────────────────
+//
+// The partner's own list of people (Wes 2026-09-11: "I need to be able to add
+// people on the partner portal. owners and others"). Same rules and same table
+// as the HQ side — lib/sub-rentals/vendorContacts.ts — with HQ told whenever
+// the partner changes it, exactly as a contact-details edit is announced.
+
+export async function partnerListContacts(vendorId: string) {
+  return listVendorContacts(prisma, vendorId)
+}
+
+export async function partnerAddContact(vendorId: string, vendorName: string, input: VendorContactInput) {
+  const r = await addVendorContact(prisma, vendorId, input, { byPartner: true })
+  if (r.ok) {
+    await tellHq(
+      `${vendorName} added a contact: ${r.contact.name}`,
+      `${vendorName} added ${r.contact.name} (${r.contact.roleLabel}) to their people on their partner page — ${r.contact.email ?? 'no email'}${r.contact.phone ? ` · ${r.contact.phone}` : ''}.${r.contact.isPrimary ? ' They are now the main contact, so partner mail goes to them.' : ''}${r.contact.emailBookings ? ' They asked to be copied on bookings.' : ''}`,
+      '/crm/portals#partners',
+    )
+  }
+  return r
+}
+
+export async function partnerUpdateContact(vendorId: string, vendorName: string, contactId: string, input: VendorContactInput) {
+  const r = await updateVendorContactRow(prisma, vendorId, contactId, input)
+  if (r.ok) {
+    await tellHq(
+      `${vendorName} updated a contact: ${r.contact.name}`,
+      `${vendorName} changed ${r.contact.name} (${r.contact.roleLabel}) on their partner page — ${r.contact.email ?? 'no email'}${r.contact.phone ? ` · ${r.contact.phone}` : ''}.${r.contact.isPrimary ? ' They are the main contact.' : ''}${r.contact.emailBookings ? ' Copied on bookings.' : ''}`,
+      '/crm/portals#partners',
+    )
+  }
+  return r
+}
+
+export async function partnerRemoveContact(vendorId: string, vendorName: string, contactId: string) {
+  const gone = await prisma.vendorContact.findFirst({ where: { id: contactId, vendorId }, select: { name: true } })
+  const r = await removeVendorContact(prisma, vendorId, contactId)
+  if (r.ok) {
+    await tellHq(
+      `${vendorName} removed a contact${gone ? `: ${gone.name}` : ''}`,
+      `${vendorName} took ${gone?.name ?? 'someone'} off their people on their partner page. The row is kept — who we used to email is history.`,
+      '/crm/portals#partners',
+    )
+  }
+  return r
 }
 
 // ── Rate proposals ─────────────────────────────────────────────────────

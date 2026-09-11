@@ -33,6 +33,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { createPotentialSubRental, vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { buildVendorEstimateNotice } from '@/lib/sub-rentals/vendorNotice'
+import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 
 export const dynamic = 'force-dynamic'
@@ -164,8 +165,13 @@ export async function POST(req: NextRequest, { params }: Params) {
           vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(potential.vendorToken)}`,
           agentName: user.name ?? 'SirReel',
         })
+        // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
+        const partnerCc = await prisma.subRental
+          .findUnique({ where: { id: potential.subRentalId }, select: { vendorId: true } })
+          .then((r) => (r ? vendorBookingCc(prisma, r.vendorId, [potential.vendorEmail]) : []))
         const vres = await sendAgreementEmail({
           to: [potential.vendorEmail],
+          cc: partnerCc.length ? partnerCc : undefined,
           replyTo: agentReplyTo(user.email) ?? undefined,
           subject: notice.subject,
           html: notice.html,
