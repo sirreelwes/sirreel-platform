@@ -155,6 +155,10 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             name: true,
+            // Masthead: only whether a mark exists — the image itself is
+            // served by /api/portal/job/company-logo under this session.
+            logoUrl: true,
+            logoSvg: true,
             // Standing-agreement context for the portal banner. Only
             // the fields the client should see (no raw PDF URL when
             // the order's SignedAgreement already carries it via
@@ -602,7 +606,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     contact: resolved.contact,
     portalAccessId: resolved.portalAccessId,
-    company: { id: order.company.id, name: order.company.name },
+    company: { id: order.company.id, name: order.company.name, hasLogo: !!(order.company.logoSvg || order.company.logoUrl) },
     standingAgreement,
     /** The annual-agreement option on this account: null when it doesn't
      *  apply (already covered), otherwise the state of the ask. */

@@ -9,7 +9,7 @@ import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
+import { PORTAL } from '@/lib/brand/portalTokens';
 import { FileText, Lock, Send } from 'lucide-react';
 
 /**
@@ -26,7 +26,7 @@ import { FileText, Lock, Send } from 'lucide-react';
 
 interface PortalData {
   contact: { id: string; firstName: string; lastName: string; email: string } | null;
-  company: { id: string; name: string };
+  company: { id: string; name: string; hasLogo?: boolean };
   /** Standing-agreement banner context. Renders when the order's
    *  rental agreement was auto-applied from the Company's negotiated
    *  PDF (Path A from the contract-review work). */
@@ -539,7 +539,7 @@ export default function JobPortalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">Loading your job portal…</div>
+      <div className="min-h-screen flex items-center justify-center text-zinc-400 text-sm">Loading your job portal…</div>
     );
   }
   if (error || !data) {
@@ -569,10 +569,10 @@ export default function JobPortalPage() {
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center space-y-4">
           <div className="text-5xl"><Lock size={44} aria-hidden /></div>
-          <h1 className="text-xl font-semibold text-gray-900">{sentTitle}</h1>
+          <h1 className="text-xl font-semibold text-zinc-900">{sentTitle}</h1>
 
           {resendState === 'sent' ? (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-zinc-600">
               If this portal has a contact on file, a fresh secure link is on its way. Check
               your inbox in the next minute or two.
             </p>
@@ -583,17 +583,17 @@ export default function JobPortalPage() {
             </p>
           ) : (
             <>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-zinc-500">
                 We can email you a fresh secure link to the contact on file for this portal.
               </p>
               <button
                 onClick={() => { void requestFreshLink(); }}
                 disabled={resendState === 'requesting'}
-                className="inline-flex items-center justify-center px-5 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
+                className="inline-flex items-center justify-center px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
               >
                 {resendState === 'requesting' ? 'Sending…' : 'Email me a secure link'}
               </button>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-zinc-400">
                 Still stuck? Reach your SirReel rep for help.
               </p>
             </>
@@ -614,52 +614,77 @@ export default function JobPortalPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Dark hero — same touchpoint family as the welcome email,
-          /portal/[token], /portal/account, and the sign pages.
-          Compact band: wordmark + gold rule + greeting. The richer
-          status panel (countdown + STATUS_STAGE progress + rep contact)
-          lives in the white card below — that's the page's working
-          surface, the hero is the brand anchor.
+      {/* ── Masthead ─────────────────────────────────────────────────
+          Same band as the account portal (CompanyPortalView) — Wes
+          2026-09-11: "the client-facing job page — match the company
+          portal." Their mark left, ours right, the rule centred; no logo
+          on file → their name in the display face. */}
+      <div className="w-full bg-white border-b border-zinc-200">
+        <div className="max-w-5xl mx-auto px-6 py-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+          <div className="min-w-0 flex justify-start">
+            {data.company.hasLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/api/portal/job/company-logo"
+                alt={data.company.name}
+                className="block h-6 sm:h-[29px] w-auto max-w-[38vw] sm:max-w-[220px] object-contain object-left"
+              />
+            ) : (
+              <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">
+                {data.company.name}
+              </span>
+            )}
+          </div>
+          <span className="block w-px h-9 bg-zinc-300" aria-hidden />
+          <div className="min-w-0 flex justify-end">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/sirreel-logo.png" alt="SirReel" className="block h-8 sm:h-10 w-auto max-w-[38vw] sm:max-w-[220px] object-contain object-right" />
+          </div>
+        </div>
+      </div>
 
-          "Presents / TSX" removed 2026-08-29 (Wes): the portal reads as
-          SirReel to the client, not a sub-brand. */}
+      {/* ── Who's here, for which show ─────────────────────────────── */}
       <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-7 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/sirreel-logo-white.png"
-            alt="SirReel Studio Services"
-            width={170}
-            style={{ display: 'inline-block', maxWidth: 170, height: 'auto' }}
-          />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
-          <h1
-            className="mt-5 text-white text-[22px] sm:text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: PORTAL_SERIF }}
-          >
-            {data.company.name}
-          </h1>
-          <p className="mt-2 text-white/60 text-[13px]">{jobTitle}</p>
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <div className="min-w-0 text-[13px] text-white/85 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {data.contact && (
+              <>
+                <span className="font-semibold text-white">
+                  {`${data.contact.firstName} ${data.contact.lastName}`.trim()}
+                </span>
+                <span className="text-white/40 hidden sm:inline">·</span>
+                <span className="truncate max-w-full">{data.contact.email}</span>
+                <span className="text-white/40 hidden sm:inline">·</span>
+              </>
+            )}
+            <span style={{ color: PORTAL.gold }}>{jobTitle}</span>
+          </div>
+          <span className="shrink-0 text-[11px] font-mono text-white/45">
+            {data.job?.jobCode || data.order.orderNumber}
+          </span>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
+        <section>
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Your show</h2>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <div className="text-xs uppercase tracking-widest text-gray-400 font-semibold">{data.company.name}</div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-0.5 truncate">{jobTitle}</h1>
-              <div className="text-xs text-gray-500 mt-1 font-mono">
+              {/* The masthead carries the company and the band carries the
+                  show, so this is a quiet title, not a second headline
+                  (the account portal's "no big h1" rule, Wes 2026-09-04). */}
+              <h1 className="text-lg font-semibold text-zinc-900 truncate">{jobTitle}</h1>
+              <div className="text-xs text-zinc-500 mt-1 font-mono">
                 {data.job?.jobCode || data.order.orderNumber}
               </div>
             </div>
             {data.countdown && (
               <div className="text-right">
-                <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Status</div>
-                <div className="text-sm font-semibold text-gray-900 mt-0.5">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Status</div>
+                <div className="text-sm font-semibold text-zinc-900 mt-0.5">
                   {fmtCountdown(data.countdown.msUntilPickup)}
                 </div>
               </div>
@@ -674,10 +699,10 @@ export default function JobPortalPage() {
                 <div key={stage.key} className="flex-1 flex flex-col items-center gap-1">
                   <div
                     className={`w-full h-1.5 rounded-full ${
-                      reached ? 'bg-amber-500' : 'bg-gray-200'
+                      reached ? 'bg-amber-500' : 'bg-zinc-200'
                     }`}
                   />
-                  <div className={`text-[10px] font-semibold ${reached ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <div className={`text-[10px] font-semibold ${reached ? 'text-zinc-900' : 'text-zinc-400'}`}>
                     {stage.label}
                   </div>
                 </div>
@@ -690,7 +715,7 @@ export default function JobPortalPage() {
               contact. Every order has an agent assigned, but an automatic
               assignment is not a relationship, and showing one put the wrong
               person's name, phone and email in front of clients. */}
-          <div className="border-t border-gray-100 pt-4 flex items-center gap-3">
+          <div className="border-t border-zinc-100 pt-4 flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
               {data.agent?.avatarUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -702,29 +727,29 @@ export default function JobPortalPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs uppercase tracking-widest text-gray-400 font-semibold">
+              <div className="text-xs uppercase tracking-widest text-zinc-400 font-semibold">
                 {data.agent ? 'Your SirReel rep' : 'Questions?'}
               </div>
-              <div className="text-sm font-semibold text-gray-900">
+              <div className="text-sm font-semibold text-zinc-900">
                 {data.agent ? data.agent.name : 'SirReel Studio Services'}
               </div>
-              <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+              <div className="text-xs text-zinc-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
                 {data.agent ? (
                   <>
-                    {data.agent.phone && <a href={`tel:${data.agent.phone}`} className="hover:text-gray-900">{data.agent.phone}</a>}
-                    <a href={`mailto:${data.agent.email}`} className="hover:text-gray-900">{data.agent.email}</a>
+                    {data.agent.phone && <a href={`tel:${data.agent.phone}`} className="hover:text-zinc-900">{data.agent.phone}</a>}
+                    <a href={`mailto:${data.agent.email}`} className="hover:text-zinc-900">{data.agent.email}</a>
                   </>
                 ) : (
                   <>
-                    <a href="tel:8884777335" className="hover:text-gray-900">(888) 477-7335</a>
-                    <a href="mailto:info@sirreel.com" className="hover:text-gray-900">info@sirreel.com</a>
+                    <a href="tel:8884777335" className="hover:text-zinc-900">(888) 477-7335</a>
+                    <a href="mailto:info@sirreel.com" className="hover:text-zinc-900">info@sirreel.com</a>
                   </>
                 )}
               </div>
             </div>
           </div>
-          <div className="text-[11px] text-gray-400 -mt-2">
-            After-hours line: <a href={`tel:${data.afterHoursLine}`} className="text-gray-600 hover:text-gray-900">{data.afterHoursLine}</a>
+          <div className="text-[11px] text-zinc-400 -mt-2">
+            After-hours line: <a href={`tel:${data.afterHoursLine}`} className="text-zinc-600 hover:text-zinc-900">{data.afterHoursLine}</a>
           </div>
 
           {/* After-hours access, once a rep has released it for this job.
@@ -737,20 +762,21 @@ export default function JobPortalPage() {
           {data.afterHoursReleased && (
             <a
               href={`/portal/job/${slug}/after-hours`}
-              className="block rounded-xl border p-4 hover:border-gray-400 transition-colors"
+              className="block rounded-xl border p-4 hover:border-zinc-400 transition-colors"
               style={{ borderColor: '#E8D7A8', backgroundColor: '#FDF8EC' }}
             >
               <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: '#8a6a1f' }}>
                 After-hours pickup &amp; drop-off
               </div>
-              <div className="text-sm font-semibold text-gray-900 mt-1">
+              <div className="text-sm font-semibold text-zinc-900 mt-1">
                 Gate code, container code and directions →
               </div>
-              <div className="text-xs text-gray-600 mt-0.5">
+              <div className="text-xs text-zinc-600 mt-0.5">
                 Send this link to whoever is making the run.
               </div>
             </a>
           )}
+          </div>
         </section>
 
         {/* Not booked yet.
@@ -763,29 +789,29 @@ export default function JobPortalPage() {
             paperwork they have done is real and counts. */}
         {data.order.awaitingConfirmation && (
           <section
-            className="rounded-2xl border p-6 shadow-sm"
+            className="rounded-xl border p-6"
             style={{ borderColor: '#E8D7A8', backgroundColor: '#FDF8EC' }}
           >
             <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: '#8a6a1f' }}>
               Not booked yet
             </div>
-            <h2 className="text-lg font-bold text-gray-900 mt-1">
+            <h2 className="text-lg font-bold text-zinc-900 mt-1">
               {data.agent ? `${data.agent.name.split(' ')[0]} is confirming your dates` : 'We’re confirming your dates'}
             </h2>
-            <p className="text-sm text-gray-700 mt-2 leading-relaxed">
+            <p className="text-sm text-zinc-700 mt-2 leading-relaxed">
               Your job is set up and the paperwork you complete here counts — signing the rental
               agreement, adding your certificate of insurance and naming your drivers all carry
               straight through, and getting them out of the way now is genuinely the fastest way to
               be ready on day one. Thank you for doing it.
             </p>
-            <p className="text-sm text-gray-700 mt-3 leading-relaxed">
+            <p className="text-sm text-zinc-700 mt-3 leading-relaxed">
               What is <strong>not</strong> locked in yet is the vehicles and the dates. Nothing is
               reserved until{' '}
               {data.agent ? data.agent.name : 'your SirReel rep'} confirms availability and sends
               your quote. This page updates the moment that happens, and you will see the equipment
               and pricing appear right here.
             </p>
-            <p className="text-xs text-gray-600 mt-3">
+            <p className="text-xs text-zinc-600 mt-3">
               Need these dates held sooner, or something changed?{' '}
               {data.agent?.phone ? (
                 <a href={`tel:${data.agent.phone}`} className="font-semibold" style={{ color: '#8a6a1f' }}>
@@ -802,20 +828,22 @@ export default function JobPortalPage() {
         )}
 
         {/* ── Schedule ────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
-          <h2 className="text-base font-bold text-gray-900">Schedule</h2>
+        <section>
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Schedule</h2>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Pickup</div>
-              <div className="text-sm font-semibold text-gray-900 mt-1">{fmtDate(data.order.startDate)}</div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Pickup</div>
+              <div className="text-sm font-semibold text-zinc-900 mt-1">{fmtDate(data.order.startDate)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Return</div>
-              <div className="text-sm font-semibold text-gray-900 mt-1">{fmtDate(data.order.endDate)}</div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Return</div>
+              <div className="text-sm font-semibold text-zinc-900 mt-1">{fmtDate(data.order.endDate)}</div>
             </div>
           </div>
-          <div className="border-t border-gray-100 pt-3 text-[11px] text-gray-500">
+          <div className="border-t border-zinc-100 pt-3 text-[11px] text-zinc-500">
             SirReel Studio Rentals · 8500 Lankershim Blvd, Sun Valley, CA 91352
+          </div>
           </div>
         </section>
 
@@ -826,31 +854,33 @@ export default function JobPortalPage() {
             off, but the page guards on both for belt-and-suspenders. */}
         {((data.order.blindPickup && data.order.blindPickupInstructions) ||
           (data.order.blindReturn && data.order.blindReturnInstructions)) && (
-          <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
-            <h2 className="text-base font-bold text-gray-900">Self-checkout instructions</h2>
-            <p className="text-xs text-gray-500">
+          <section>
+            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Self-checkout instructions</h2>
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4">
+            <p className="text-xs text-zinc-500">
               You'll handle this part of the handoff on your own. Here's everything you need.
             </p>
             {data.order.blindPickup && data.order.blindPickupInstructions && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-2">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-2">
                   Picking up
                 </div>
-                <div className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                <div className="text-sm text-zinc-900 whitespace-pre-wrap leading-relaxed">
                   {data.order.blindPickupInstructions}
                 </div>
               </div>
             )}
             {data.order.blindReturn && data.order.blindReturnInstructions && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-2">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-2">
                   Returning
                 </div>
-                <div className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                <div className="text-sm text-zinc-900 whitespace-pre-wrap leading-relaxed">
                   {data.order.blindReturnInstructions}
                 </div>
               </div>
             )}
+            </div>
           </section>
         )}
 
@@ -859,12 +889,13 @@ export default function JobPortalPage() {
             outstanding row here (#paperwork), the way the driver ask lands
             on #drivers. Without the anchor those links dropped the client at
             the top of the page with the list to find. */}
-        <section id="paperwork" className="scroll-mt-4 bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
-          <h2 className="text-base font-bold text-gray-900">Paperwork</h2>
+        <section id="paperwork" className="scroll-mt-4">
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Paperwork</h2>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-5">
 
           {/* Your paperwork */}
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your paperwork</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">Your paperwork</div>
 
             {/* Standing-agreement banner — renders when the order's
                 rental agreement was auto-applied from the company's
@@ -941,7 +972,7 @@ export default function JobPortalPage() {
                      row can never show a signature pad to a client who has
                      already signed for the year. */
                   <div className="space-y-1.5">
-                    <div className="text-xs text-gray-600 leading-relaxed">
+                    <div className="text-xs text-zinc-600 leading-relaxed">
                       {data.annualAgreement.sentence}
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
@@ -962,7 +993,7 @@ export default function JobPortalPage() {
                       <a
                         href={`${data.annualAgreement.jobCopyUrl || data.annualAgreement.pdfUrl}?download=1`}
                         download
-                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                        className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
                       >
                         Download PDF
                       </a>
@@ -973,7 +1004,7 @@ export default function JobPortalPage() {
                      signature and when — a bare "Covered" reads like a
                      glitch to someone who knows they never signed for this
                      order, and Ana needs to be able to trace it too. */
-                  <div className="text-xs text-gray-600 leading-relaxed">
+                  <div className="text-xs text-zinc-600 leading-relaxed">
                     {data.agreementCoverage.sentence}
                   </div>
                 ) : data.paperwork.agreement?.signedAt ? (
@@ -995,7 +1026,7 @@ export default function JobPortalPage() {
                       <a
                         href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT&doc=signed&download=1"
                         download
-                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                        className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
                       >
                         Download PDF
                       </a>
@@ -1015,13 +1046,13 @@ export default function JobPortalPage() {
                       href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                      className="text-xs font-semibold text-zinc-700 hover:text-zinc-900 underline"
                     >
                       Read the agreement
                     </a>
                     <a
                       href={`/portal/job/${slug}/sign/rental`}
-                      className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                     >
                       Sign agreement →
                     </a>
@@ -1031,7 +1062,7 @@ export default function JobPortalPage() {
                     href={data.paperwork.legacyPaperworkPortalUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                    className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                   >
                     Sign agreement →
                   </a>
@@ -1045,16 +1076,16 @@ export default function JobPortalPage() {
                       href="/rentalagreement"
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                     >
                       Sign agreement →
                     </a>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[11px] text-zinc-400">
                       Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
                     </p>
                   </div>
                 ) : quoteIsApproved ? (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-zinc-500">
                     Your SirReel rep is preparing your agreement — it will appear here to sign.
                   </span>
                 ) : (
@@ -1062,7 +1093,7 @@ export default function JobPortalPage() {
                   // will send the agreement shortly" — described a step
                   // nobody was waiting on: approving the quote above is what
                   // releases the agreement to this row.
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-zinc-500">
                     Approve your quote above and the rental agreement appears here to sign.
                   </span>
                 )}
@@ -1076,15 +1107,15 @@ export default function JobPortalPage() {
                     affordance and never in front of it — this job's
                     paperwork is unaffected either way. */}
                 {data.annualOption && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="mt-3 pt-3 border-t border-zinc-100">
                     {data.annualOption.state === 'PENDING_SIGNATURE' ? (
-                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
                         An annual agreement is with your account&rsquo;s executives to sign. Until
                         it&rsquo;s signed, each show is papered on its own — including this one.
                       </p>
                     ) : annualAsked || data.annualOption.state === 'REQUESTED' ? (
-                      <p className="text-[11px] text-gray-500 leading-relaxed">
-                        <span className="font-semibold text-gray-700">
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        <span className="font-semibold text-zinc-700">
                           Annual agreement requested.
                         </span>{' '}
                         Your rep has it and will follow up — an executive at your company signs it
@@ -1093,7 +1124,7 @@ export default function JobPortalPage() {
                       </p>
                     ) : (
                       <div className="space-y-1">
-                        <p className="text-[11px] text-gray-500 leading-relaxed">
+                        <p className="text-[11px] text-zinc-500 leading-relaxed">
                           Renting from us more than once this year? An annual agreement is signed
                           once by an executive at your company; every show after that is confirmed
                           with a one-page addendum instead of the full agreement.
@@ -1151,14 +1182,14 @@ export default function JobPortalPage() {
                        branch below precisely because being covered is not the
                        same as having said you know you are. */
                     <div className="space-y-1.5">
-                      <p className="text-xs text-gray-600 leading-relaxed">
+                      <p className="text-xs text-zinc-600 leading-relaxed">
                         {data.lcdw.effective
                           ? `Your annual agreement covers this job and ${data.lcdw.effective.decision === 'ACCEPTED' ? 'accepts' : 'declines'} the damage waiver. Please confirm both for this job — it takes a moment, and you can change the waiver here if you want a different answer this time.`
                           : `Your annual agreement covers this job. Please confirm it, and accept or decline the damage waiver — $${data.lcdw.ratePerDay}/day per eligible vehicle.`}
                       </p>
                       <a
                         href={`/portal/job/${slug}/lcdw`}
-                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                        className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                       >
                         Confirm →
                       </a>
@@ -1171,21 +1202,21 @@ export default function JobPortalPage() {
                        not an outstanding question they already answered when
                        they signed for the year. */
                     <div className="space-y-1.5">
-                      <div className="text-xs text-gray-600 leading-relaxed">
+                      <div className="text-xs text-zinc-600 leading-relaxed">
                         {data.lcdw.effective.decision === 'ACCEPTED'
                           ? `Your annual agreement accepts the waiver for all fleet vehicle rentals — $${data.lcdw.ratePerDay}/day per eligible vehicle applies to this job.`
                           : 'Your annual agreement declines the waiver for all fleet vehicle rentals, so it does not apply to this job.'}
                       </div>
                       <a
                         href={`/portal/job/${slug}/lcdw`}
-                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                        className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
                       >
                         Change it for this job
                       </a>
                     </div>
                   ) : data.lcdw.election ? (
                     <div className="space-y-1.5">
-                      <div className="text-xs text-gray-600 leading-relaxed">
+                      <div className="text-xs text-zinc-600 leading-relaxed">
                         {data.lcdw.election.decision === 'ACCEPTED'
                           ? `Accepted at $${data.lcdw.ratePerDay}/day per eligible vehicle`
                           : 'Declined'}
@@ -1202,21 +1233,21 @@ export default function JobPortalPage() {
                           wrong one should not have to email to fix it. */}
                       <a
                         href={`/portal/job/${slug}/lcdw`}
-                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                        className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
                       >
                         Change my answer
                       </a>
                     </div>
                   ) : data.lcdw.available ? (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-gray-600 leading-relaxed">
+                      <p className="text-xs text-zinc-600 leading-relaxed">
                         Accept or decline the Limited Collision Damage Waiver — $
                         {data.lcdw.ratePerDay}/day per eligible vehicle. We need your
                         answer either way before pickup.
                       </p>
                       <a
                         href={`/portal/job/${slug}/lcdw`}
-                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                        className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                       >
                         Choose →
                       </a>
@@ -1225,7 +1256,7 @@ export default function JobPortalPage() {
                     /* Vehicles on the job, none of them eligible. Say so
                        plainly rather than offering a waiver that would cover
                        nothing — see lcdwEligibility.ts. */
-                    <p className="text-xs text-gray-500 leading-relaxed">
+                    <p className="text-xs text-zinc-500 leading-relaxed">
                       The damage waiver isn&rsquo;t available on the vehicles booked for
                       this job
                       {data.lcdw.excluded.length > 0
@@ -1265,7 +1296,7 @@ export default function JobPortalPage() {
                         <a
                           href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT&doc=signed&download=1"
                           download
-                          className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
                         >
                           Download PDF
                         </a>
@@ -1277,13 +1308,13 @@ export default function JobPortalPage() {
                         href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT"
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                        className="text-xs font-semibold text-zinc-700 hover:text-zinc-900 underline"
                       >
                         View pre-signed PDF
                       </a>
                       <a
                         href={`/portal/job/${slug}/sign/stage`}
-                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                        className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                       >
                         Sign stage contract →
                       </a>
@@ -1299,16 +1330,16 @@ export default function JobPortalPage() {
                         href="/studiocontract"
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                        className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                       >
                         Sign stage contract →
                       </a>
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-zinc-400">
                         Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
                       </p>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500">Your SirReel rep will send the stage contract shortly.</span>
+                    <span className="text-xs text-zinc-500">Your SirReel rep will send the stage contract shortly.</span>
                   )}
                 </PaperworkRow>
               )}
@@ -1321,7 +1352,7 @@ export default function JobPortalPage() {
               >
                 {data.paperwork.coi ? (
                   <div className="space-y-1.5">
-    <div className="text-xs text-gray-500">
+    <div className="text-xs text-zinc-500">
                       {data.paperwork.coi.source === 'COMPANY' ? 'On file since ' : 'Received '}
                       {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       {data.paperwork.coi.policyExpiryDate && (
@@ -1353,12 +1384,12 @@ export default function JobPortalPage() {
                         one uploaded against this job needs no confirming. */}
                     {data.paperwork.coi.source === 'COMPANY' &&
                       data.paperwork.coi.confirmation.state === 'NEEDED' && (
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
-                          <p className="text-[11px] font-semibold text-gray-900">
+                        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 space-y-2">
+                          <p className="text-[11px] font-semibold text-zinc-900">
                             {data.paperwork.coi.confirmation.question}
                           </p>
                           {data.paperwork.coi.confirmation.aboutSupersededCoi && (
-                            <p className="text-[11px] text-gray-500 leading-relaxed">
+                            <p className="text-[11px] text-zinc-500 leading-relaxed">
                               You confirmed an earlier certificate — this is a newer one, so we&rsquo;re
                               checking again.
                             </p>
@@ -1367,21 +1398,21 @@ export default function JobPortalPage() {
                             <button
                               onClick={() => answerCoiConfirmation('CONFIRMED')}
                               disabled={coiConfirming !== null}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg"
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-lg"
                             >
                               {coiConfirming === 'CONFIRMED' ? 'Saving…' : 'Yes — that covers this job'}
                             </button>
                             <button
                               onClick={() => answerCoiConfirmation('SEPARATE_POLICY')}
                               disabled={coiConfirming !== null}
-                              className="px-3 py-1.5 border border-gray-300 hover:border-gray-400 disabled:opacity-50 text-gray-700 text-xs font-semibold rounded-lg bg-white"
+                              className="px-3 py-1.5 border border-zinc-300 hover:border-zinc-400 disabled:opacity-50 text-zinc-700 text-xs font-semibold rounded-lg bg-white"
                             >
                               {coiConfirming === 'SEPARATE_POLICY'
                                 ? 'Saving…'
                                 : 'No — this job has its own insurance'}
                             </button>
                           </div>
-                          <p className="text-[11px] text-gray-500 leading-relaxed">
+                          <p className="text-[11px] text-zinc-500 leading-relaxed">
                             If this production carries its own policy, tell us here and send that
                             certificate instead — we&rsquo;ll stop counting the one on file for this job.
                           </p>
@@ -1389,7 +1420,7 @@ export default function JobPortalPage() {
                         </div>
                       )}
                     {data.paperwork.coi.confirmation.state === 'CONFIRMED' && (
-                      <p className="text-[11px] text-gray-500">
+                      <p className="text-[11px] text-zinc-500">
                         Confirmed as the coverage for this job
                         {data.paperwork.coi.confirmation.confirmerName
                           ? ` by ${data.paperwork.coi.confirmation.confirmerName}`
@@ -1431,20 +1462,20 @@ export default function JobPortalPage() {
                     <label
                       htmlFor="portal-coi-file"
                       className={`block border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${
-                        coiFile ? 'border-amber-300 bg-amber-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                        coiFile ? 'border-amber-300 bg-amber-50' : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50'
                       }`}
                     >
                       {coiFile ? (
                         <>
                           <div className="text-xl"><FileText size={20} aria-hidden /></div>
                           <div className="text-xs font-semibold text-amber-700">{coiFile.name}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">{(coiFile.size / 1024).toFixed(0)} KB</div>
+                          <div className="text-[10px] text-zinc-400 mt-0.5">{(coiFile.size / 1024).toFixed(0)} KB</div>
                         </>
                       ) : (
                         <>
                           <div className="text-xl"><Send size={20} aria-hidden /></div>
-                          <div className="text-xs text-gray-500">Click to upload your COI</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">PDF, PNG, or JPG · max 10 MB</div>
+                          <div className="text-xs text-zinc-500">Click to upload your COI</div>
+                          <div className="text-[10px] text-zinc-400 mt-0.5">PDF, PNG, or JPG · max 10 MB</div>
                         </>
                       )}
                       <input
@@ -1459,7 +1490,7 @@ export default function JobPortalPage() {
                     <button
                       onClick={uploadCoi}
                       disabled={!coiFile || coiUploading}
-                      className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-xl"
+                      className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-xl"
                     >
                       {coiUploading ? 'Uploading & reviewing…' : 'Submit COI'}
                     </button>
@@ -1486,8 +1517,8 @@ export default function JobPortalPage() {
           </div>
 
           {/* SirReel paperwork */}
-          <div className="border-t border-gray-100 pt-5">
-            <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">SirReel paperwork</div>
+          <div className="border-t border-zinc-100 pt-5">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">SirReel paperwork</div>
             <div className="space-y-3">
               <PaperworkRow
                 label="Quote PDF"
@@ -1518,19 +1549,19 @@ export default function JobPortalPage() {
                             setApproveError('');
                             setApproveConfirming(true);
                           }}
-                          className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
                         >
                           Approve quote →
                         </button>
-                        <p className="text-[11px] text-gray-400 mt-1">
+                        <p className="text-[11px] text-zinc-400 mt-1">
                           Approving sends you the rental agreement to sign.
                         </p>
                       </div>
                     )}
 
                     {quoteIsApprovable && approveConfirming && (
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
-                        <p className="text-[12px] text-gray-700 leading-relaxed">
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+                        <p className="text-[12px] text-zinc-700 leading-relaxed">
                           Approve <strong>{data.order.orderNumber}</strong> for{' '}
                           <strong>${Number(data.order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>?
                           We&rsquo;ll send the rental agreement straight to this page for you to sign.
@@ -1542,7 +1573,7 @@ export default function JobPortalPage() {
                           <button
                             onClick={approveQuote}
                             disabled={approving}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg"
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-lg"
                           >
                             {approving ? 'Approving…' : 'Yes, approve'}
                           </button>
@@ -1552,7 +1583,7 @@ export default function JobPortalPage() {
                               setApproveError('');
                             }}
                             disabled={approving}
-                            className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800"
+                            className="px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800"
                           >
                             Cancel
                           </button>
@@ -1568,7 +1599,7 @@ export default function JobPortalPage() {
                       </p>
                     )}
                     {!justApproved && quoteIsApproved && (
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-zinc-400">
                         You approved this quote. Your rep has been notified.
                       </p>
                     )}
@@ -1577,7 +1608,7 @@ export default function JobPortalPage() {
                     )}
                   </div>
                 ) : (
-                  <span className="text-xs text-gray-500">Your SirReel rep is finalizing the quote.</span>
+                  <span className="text-xs text-zinc-500">Your SirReel rep is finalizing the quote.</span>
                 )}
               </PaperworkRow>
               <PaperworkRow
@@ -1595,11 +1626,11 @@ export default function JobPortalPage() {
                     Download DOT info sheet (PDF)
                   </a>
                 ) : (
-                  <span className="text-xs text-gray-500">Year, make, VIN, plate &amp; latest BIT for your vehicles — your rep will send this.</span>
+                  <span className="text-xs text-zinc-500">Year, make, VIN, plate &amp; latest BIT for your vehicles — your rep will send this.</span>
                 )}
               </PaperworkRow>
               <PaperworkRow label="Order PDF" status="Coming soon" statusKind="pending">
-                <span className="text-xs text-gray-500">Available once your order is confirmed.</span>
+                <span className="text-xs text-zinc-500">Available once your order is confirmed.</span>
               </PaperworkRow>
               {/* Phase 6 commit 2 — live invoices + portal card pay. The
                   panel hides itself when there are no invoices (renders
@@ -1644,8 +1675,8 @@ export default function JobPortalPage() {
           {/* Vehicle DOT paperwork — per CRH brief §7. Insurance card is NEVER */}
           {/* surfaced here; the data endpoint's select clause is the audit gate. */}
           {data.paperwork.vehicles.length > 0 && (
-            <div className="border-t border-gray-100 pt-5">
-              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">
+            <div className="border-t border-zinc-100 pt-5">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">
                 Vehicle paperwork (for the cab)
               </div>
               <div className="space-y-3">
@@ -1655,27 +1686,29 @@ export default function JobPortalPage() {
               </div>
             </div>
           )}
+          </div>
         </section>
 
         {/* ── Equipment ───────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-3 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">Equipment</h2>
-            <span className="text-xs text-gray-400">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
+        <section>
+          <div className="flex items-baseline justify-between mb-3">
+            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500">Equipment</h2>
+            <span className="text-xs text-zinc-400 font-mono">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
           </div>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-3">
           {data.lineItems.length === 0 ? (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-zinc-500">
               {data.order.awaitingConfirmation
                 ? 'Nothing here yet — your equipment and pricing appear once your rep has confirmed availability.'
                 : 'Your equipment list will appear here once it\u2019s finalized.'}
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-zinc-100">
               {data.lineItems.map((li) => (
                 <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-gray-900 truncate">{li.description}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">
+                    <div className="text-sm text-zinc-900 truncate">{li.description}</div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5">
                       {li.categoryName && <span>{li.categoryName} · </span>}
                       Qty {li.quantity}
                       {/* FLAT lines (partner ancillaries, one-off charges) bill
@@ -1687,12 +1720,12 @@ export default function JobPortalPage() {
                         is the estimate wording — the client has to see it
                         here, not only on the quote PDF. */}
                     {li.notes && (
-                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-gray-500'}`}>
+                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-zinc-500'}`}>
                         {li.notes}
                       </div>
                     )}
                   </div>
-                  <div className="text-[11px] text-gray-500 text-right flex-shrink-0">
+                  <div className="text-[11px] text-zinc-500 text-right flex-shrink-0">
                     {li.isIncluded && Number(li.rate) === 0 ? (
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                         Included
@@ -1700,7 +1733,7 @@ export default function JobPortalPage() {
                     ) : (
                       <>
                         {fmtCurrency(li.rate)}
-                        <div className="text-[10px] text-gray-400">{li.rateType.toLowerCase()}</div>
+                        <div className="text-[10px] text-zinc-400">{li.rateType.toLowerCase()}</div>
                       </>
                     )}
                   </div>
@@ -1708,9 +1741,10 @@ export default function JobPortalPage() {
               ))}
             </div>
           )}
-          <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-sm">
-            <span className="text-gray-500 font-semibold">Total</span>
-            <span className="text-gray-900 font-bold">{fmtCurrency(data.order.total)}</span>
+          <div className="border-t border-zinc-100 pt-3 flex items-center justify-between text-sm">
+            <span className="text-zinc-500 font-semibold">Total</span>
+            <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
+          </div>
           </div>
         </section>
 
@@ -1722,15 +1756,16 @@ export default function JobPortalPage() {
             Guarded on length — `bookingTerms` is [] for an order with no
             lines, and an empty "Booking details" heading is worse than none. */}
         {data.bookingTerms.length > 0 && (
-          <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
-            <h2 className="text-base font-bold text-gray-900">Booking details</h2>
+          <section>
+            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Booking details</h2>
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4">
             <dl className="grid gap-4 sm:grid-cols-2">
               {data.bookingTerms.map((t) => (
                 <div key={t.key}>
-                  <dt className="text-[11px] uppercase tracking-widest text-gray-400 font-semibold">
+                  <dt className="text-[11px] uppercase tracking-widest text-zinc-400 font-semibold">
                     {t.title}
                   </dt>
-                  <dd className="text-[13px] text-gray-700 mt-1 leading-relaxed">{t.body}</dd>
+                  <dd className="text-[13px] text-zinc-700 mt-1 leading-relaxed">{t.body}</dd>
                   {/* Amber, matching the estimate wording above: a term's note
                       is the qualification that must not be skimmed — above all
                       the LCDW exclusions. */}
@@ -1740,6 +1775,7 @@ export default function JobPortalPage() {
                 </div>
               ))}
             </dl>
+            </div>
           </section>
         )}
 
@@ -1753,11 +1789,12 @@ export default function JobPortalPage() {
         <PortalDriversSection />
 
         {/* ── Contacts ────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
-          <h2 className="text-base font-bold text-gray-900">Contacts</h2>
+        <section>
+          <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Contacts</h2>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4">
           <div className="space-y-4">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your team</div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">Your team</div>
               <div className="space-y-1.5">
                 {data.contact && (
                   <ContactRow
@@ -1774,12 +1811,12 @@ export default function JobPortalPage() {
                   />
                 ))}
                 {!data.contact && data.team.length === 0 && (
-                  <div className="text-xs text-gray-500">No team members added yet.</div>
+                  <div className="text-xs text-zinc-500">No team members added yet.</div>
                 )}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your SirReel team</div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">Your SirReel team</div>
               <div className="space-y-1.5">
                 {/* Same rule as the contact card above — a named REP only
                     when one has actually been established for this order. */}
@@ -1807,32 +1844,33 @@ export default function JobPortalPage() {
               </div>
             </div>
           </div>
+          </div>
         </section>
 
         {/* ── Activity ────────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+        <section className="bg-white border border-zinc-200 rounded-xl p-5">
           <button
             type="button"
             onClick={() => setActivityOpen((v) => !v)}
             className="w-full flex items-center justify-between gap-3 text-left"
           >
             <div>
-              <div className="text-base font-bold text-gray-900">Activity</div>
-              <div className="text-[11px] text-gray-500 mt-0.5">{data.activity.length} event{data.activity.length === 1 ? '' : 's'}</div>
+              <div className="text-base font-bold text-zinc-900">Activity</div>
+              <div className="text-[11px] text-zinc-500 mt-0.5">{data.activity.length} event{data.activity.length === 1 ? '' : 's'}</div>
             </div>
-            <span className="text-xs text-gray-500">{activityOpen ? '▾' : '▸'}</span>
+            <span className="text-xs text-zinc-500">{activityOpen ? '▾' : '▸'}</span>
           </button>
           {activityOpen && (
             <ol className="mt-4 space-y-2">
               {data.activity.length === 0 && (
-                <li className="text-xs text-gray-500">No activity yet.</li>
+                <li className="text-xs text-zinc-500">No activity yet.</li>
               )}
               {data.activity.map((a, i) => (
                 <li key={`${a.kind}-${i}-${a.at}`} className="flex items-start gap-3 text-xs">
-                  <div className="w-2 h-2 rounded-full bg-gray-300 mt-1.5 flex-shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-zinc-300 mt-1.5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-gray-800">{a.label}</div>
-                    <div className="text-gray-400">{fmtRelative(a.at)}</div>
+                    <div className="text-zinc-800">{a.label}</div>
+                    <div className="text-zinc-400">{fmtRelative(a.at)}</div>
                   </div>
                 </li>
               ))}
@@ -1842,26 +1880,23 @@ export default function JobPortalPage() {
 
       </main>
 
-      {/* Footer — same band the welcome email + /portal/[token] use */}
-      <footer className="mt-4 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-center">
-          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29).
-              Black variant — the footer band is #fafaf8. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/s-logo-black.png"
-            alt="SirReel"
-            width={30}
-            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
-          />
-          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
-            SirReel Studio Services<br />
-            8500 Lankershim Blvd, Sun Valley, CA 91352
-          </p>
-          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
-          </p>
-        </div>
+      {/* Footer — the account portal's, with the after-hours line kept. */}
+      <footer className="max-w-5xl mx-auto px-6 pb-10 text-xs text-zinc-400">
+        Questions about this job?{' '}
+        {data.agent ? (
+          <a href={`mailto:${data.agent.email}`} className="underline text-zinc-600">
+            {data.agent.name}
+          </a>
+        ) : (
+          <a href="mailto:info@sirreel.com" className="underline text-zinc-600">
+            info@sirreel.com
+          </a>
+        )}{' '}
+        · After-hours{' '}
+        <a href={`tel:${data.afterHoursLine}`} className="underline text-zinc-600">
+          {data.afterHoursLine}
+        </a>{' '}
+        · SirReel Studio Services, 8500 Lankershim Blvd, Sun Valley, CA 91352
       </footer>
     </div>
   );
@@ -1882,14 +1917,14 @@ function PaperworkRow({
 }) {
   const pill: Record<PaperworkStatusKind, string> = {
     success: 'bg-emerald-100 text-emerald-700',
-    pending: 'bg-gray-100 text-gray-600',
+    pending: 'bg-zinc-100 text-zinc-600',
     warning: 'bg-amber-100 text-amber-700',
     failed: 'bg-red-100 text-red-700',
   };
   return (
-    <div className="rounded-xl border border-gray-100 p-3 space-y-2">
+    <div className="rounded-xl border border-zinc-100 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-gray-900">{label}</div>
+        <div className="text-sm font-semibold text-zinc-900">{label}</div>
         <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${pill[statusKind]}`}>
           {status}
         </span>
@@ -1921,8 +1956,8 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
         rel="noreferrer"
         className={
           primary
-            ? 'inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg'
-            : 'text-xs font-semibold text-gray-600 hover:text-gray-900 underline'
+            ? 'inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg'
+            : 'text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline'
         }
       >
         {label}
@@ -1933,7 +1968,7 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
     return (
       <PaperworkRow label="Card Authorization" status="On file" statusKind="success">
         <div className="space-y-1.5">
-          <div className="text-xs text-gray-600 leading-relaxed">
+          <div className="text-xs text-zinc-600 leading-relaxed">
             {card.origin === 'job' ? (
               <>
                 {cardWords ? `Card ${cardWords}` : 'A card'} authorized
@@ -1958,7 +1993,7 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
     return (
       <PaperworkRow label="Card Authorization" status="Needed" statusKind="warning">
         <div className="space-y-2">
-          <div className="text-xs text-gray-600 leading-relaxed">
+          <div className="text-xs text-zinc-600 leading-relaxed">
             We sent a secure card authorization link
             {card.requestedTo ? ` to ${card.requestedTo}` : ''}
             {fmt(card.requestedAt) ? ` on ${fmt(card.requestedAt)}` : ''}, and it has not been
@@ -1966,7 +2001,7 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
           </div>
           {openLink('Add card authorization →', true)}
           <CardAuthHandoff />
-          <div className="text-[11px] text-gray-400">
+          <div className="text-[11px] text-zinc-400">
             The card is entered on a secure form and is used for rental fees, deposits and any charges
             under the rental agreement. Prefer to pay by check or bank transfer? Tell your rep — the
             bank details are further down this page.
@@ -1978,7 +2013,7 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
 
   return (
     <PaperworkRow label="Card Authorization" status="Not yet requested" statusKind="pending">
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-zinc-500">
         Your rep will send a secure card authorization link when it is needed. Once it is out, you
         can hand it to your accounting team from here.
       </div>
@@ -2036,12 +2071,12 @@ function CardAuthHandoff() {
 
   if (!open) {
     return (
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-zinc-500">
         Not yours to handle?{' '}
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="font-semibold text-gray-700 hover:text-gray-900 underline"
+          className="font-semibold text-zinc-700 hover:text-zinc-900 underline"
         >
           Hand this to your accounting team →
         </button>
@@ -2050,9 +2085,9 @@ function CardAuthHandoff() {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
-      <div className="text-xs font-semibold text-gray-800">Who should complete the card authorization?</div>
-      <div className="text-[11px] text-gray-500 leading-relaxed">
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+      <div className="text-xs font-semibold text-zinc-800">Who should complete the card authorization?</div>
+      <div className="text-[11px] text-zinc-500 leading-relaxed">
         We will email them the secure link, add them to this job as your accounting contact, and give
         them their own link to this page.
       </div>
@@ -2061,7 +2096,7 @@ function CardAuthHandoff() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Their name"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+          className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-zinc-400"
         />
         <input
           value={email}
@@ -2069,7 +2104,7 @@ function CardAuthHandoff() {
           placeholder="Their email"
           type="email"
           inputMode="email"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+          className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-zinc-400"
         />
       </div>
       <input
@@ -2077,7 +2112,7 @@ function CardAuthHandoff() {
         onChange={(e) => setNote(e.target.value)}
         placeholder="A note for them (optional)"
         maxLength={600}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+        className="w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-zinc-400"
       />
       {err && <div className="text-xs text-red-700">{err}</div>}
       <div className="flex items-center gap-3">
@@ -2085,7 +2120,7 @@ function CardAuthHandoff() {
           type="button"
           onClick={submit}
           disabled={busy || !email.trim()}
-          className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
+          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
         >
           {busy ? 'Sending…' : 'Send them the link'}
         </button>
@@ -2093,7 +2128,7 @@ function CardAuthHandoff() {
           type="button"
           onClick={() => setOpen(false)}
           disabled={busy}
-          className="text-xs text-gray-500 hover:text-gray-800 underline"
+          className="text-xs text-zinc-500 hover:text-zinc-800 underline"
         >
           Cancel
         </button>
@@ -2140,11 +2175,11 @@ function VehiclePaperworkRow({ vehicle }: { vehicle: PortalData['paperwork']['ve
   const expiringSoon = (d: Date | null) => !!d && d.getTime() - now < 30 * 86_400_000 && d.getTime() > now;
   const expired = (d: Date | null) => !!d && d.getTime() <= now;
   return (
-    <div className="rounded-xl border border-gray-100 p-3 space-y-2">
+    <div className="rounded-xl border border-zinc-100 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-sm font-semibold text-gray-900">{vehicle.title}</div>
+        <div className="text-sm font-semibold text-zinc-900">{vehicle.title}</div>
         {vehicle.licensePlate && (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-100 text-zinc-700">
             {vehicle.licensePlate}
           </span>
         )}
@@ -2184,18 +2219,18 @@ function DocLink({
 }) {
   return (
     <div className="text-xs">
-      <div className="text-gray-500 uppercase tracking-wider text-[10px] font-semibold">{label}</div>
+      <div className="text-zinc-500 uppercase tracking-wider text-[10px] font-semibold">{label}</div>
       {url ? (
         <a href={url} target="_blank" rel="noreferrer" className="text-amber-700 hover:text-amber-900 font-semibold">
           Download
         </a>
       ) : (
-        <span className="text-gray-400">Not yet on file</span>
+        <span className="text-zinc-400">Not yet on file</span>
       )}
       {expiry && (
         <div
           className={`text-[10px] mt-0.5 ${
-            expired ? 'text-red-600 font-semibold' : expiringSoon ? 'text-amber-700 font-semibold' : 'text-gray-400'
+            expired ? 'text-red-600 font-semibold' : expiringSoon ? 'text-amber-700 font-semibold' : 'text-zinc-400'
           }`}
         >
           {expired ? 'Expired ' : 'Expires '}
@@ -2220,21 +2255,21 @@ function ContactRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <div className="text-sm text-gray-900 truncate flex items-center gap-2">
+        <div className="text-sm text-zinc-900 truncate flex items-center gap-2">
           {name}
           {badge && (
-            <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+            <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
               {badge}
             </span>
           )}
         </div>
-        <div className="text-[11px] text-gray-500 flex gap-2 flex-wrap">
+        <div className="text-[11px] text-zinc-500 flex gap-2 flex-wrap">
           {email && (
-            <a href={`mailto:${email}`} className="hover:text-gray-900 truncate">
+            <a href={`mailto:${email}`} className="hover:text-zinc-900 truncate">
               {email}
             </a>
           )}
-          {detail && <span className="text-gray-500">{detail}</span>}
+          {detail && <span className="text-zinc-500">{detail}</span>}
         </div>
       </div>
     </div>
