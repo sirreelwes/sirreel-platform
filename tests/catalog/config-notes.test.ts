@@ -32,8 +32,11 @@ console.log('\nThe hold modal reaches the same text by category name')
 check(configNotesForCategoryName('15-Passenger Van').includes('Remove last row of seats'),
   '"15-Passenger Van" resolves to the same suggestion the code does')
 check(configNotesForCategoryName('  12-Passenger Van  ').length === 1, 'surrounding whitespace does not defeat it')
-check(configNotesForCategoryName('Passenger Van').length === 0,
-  'the retired display name suggests nothing — that category is off every picker')
+// 2026-09-11: "Passenger Van" is the LIVE merged class again (merge-passenger-
+// vans.ts) — the seating size is a note on it, so the name resolves and
+// offers the size chips.
+check(configNotesForCategoryName('Passenger Van').includes('12-passenger (Pass 1 or Pass 2)'),
+  'the merged display name offers the seating-size chips')
 check(configNotesForCategoryName(null).length === 0, 'a missing name is not an error')
 
 console.log('\nAppending is idempotent — the chip sits in a form reps double-click')
