@@ -57,6 +57,36 @@ console.log('other kinds win over cancel when both appear')
   check('"on hold" → HOLD', r?.kind === 'HOLD', r)
 }
 
+console.log('add-ons and drops are order changes, not job cancellations')
+{
+  const r = sig('Re: S260910-003', 'Hi Jose — can we add a couple of fans to the order? Same dates.')
+  check('"add a couple of fans to the order" → ADD_ITEMS', r?.kind === 'ADD_ITEMS', r)
+}
+{
+  const r = sig('Re: Quote', 'Could you also throw in two walkies for the shoot days?')
+  check('"throw in two walkies" → ADD_ITEMS', r?.kind === 'ADD_ITEMS', r)
+}
+{
+  const r = sig('Re: Quote', 'Please add the generator to the rental, we lost our house power.')
+  check('"add the generator to the rental" → ADD_ITEMS', r?.kind === 'ADD_ITEMS', r)
+}
+{
+  const r = sig('Re: Cube 27', 'We can cancel the fans but keep the cube as quoted.')
+  check('"cancel the fans, keep the cube" → REMOVE_ITEMS not CANCEL', r?.kind === 'REMOVE_ITEMS', r)
+}
+{
+  const r = sig('Re: Order', "Turns out we won't need the second trailer after all.")
+  check('"won\'t need the second trailer" → REMOVE_ITEMS', r?.kind === 'REMOVE_ITEMS', r)
+}
+{
+  const r = sig('Re: Shoot', 'Bad news, we are cancelling the shoot — please remove the fans and the cube from the order.')
+  check('whole-shoot cancel with item words → CANCEL', r?.kind === 'CANCEL', r)
+}
+{
+  const r = sig('Re: Booking', 'Cancel the cube.')
+  check('"cancel the cube" is an item drop, the rep decides if it is the job', r?.kind === 'REMOVE_ITEMS', r)
+}
+
 console.log('must not raise')
 {
   const r = sig('Re: Quote', 'Looks great, send over the contract and we will get it signed today.')
@@ -73,6 +103,14 @@ console.log('must not raise')
 {
   const r = sig('Re: Van', 'Please move the truck to bay 2 when it arrives.')
   check('"move the truck" (not dates) → null', r === null, r)
+}
+{
+  const r = sig('Re: Call sheet', 'Can you add me to the call sheet distro list? Thanks.')
+  check('"add me to the call sheet" (not an item) → null', r === null, r)
+}
+{
+  const r = sig('Re: Delivery', 'Drop it at the gate, security will let you in.')
+  check('"drop it at the gate" (not a removal) → null', r === null, r)
 }
 {
   const r = sig('Re: Van', 'Sounds good.\n\nOn Tue, Sep 9, 2026 at 3:12 PM Jose <jose@sirreel.com> wrote:\n> If the shoot is cancelled just let us know.')
