@@ -271,8 +271,11 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   Email may raise a suggestion; a person applies the change through the
   existing controls (Mark lost, status menu, order dates).
 - The suggestion is `JobEmailSignal` (`sr_job_email_signals`, kind
-  CANCEL / HOLD / DATE_CHANGE / EXTEND / RETURN_EARLY, status OPEN →
-  CONFIRMED / DISMISSED). `src/lib/email/jobChangeSignals.ts`:
+  CANCEL / HOLD / DATE_CHANGE / EXTEND / RETURN_EARLY / ADD_ITEMS /
+  REMOVE_ITEMS, status OPEN → CONFIRMED / DISMISSED). Add-ons ("a couple
+  of fans") and drops ("cancel the fans, keep the cube") are ORDER
+  changes: the rep edits the line items; a bare "cancel the cube" reads
+  as a drop, and whether it is the whole job is the rep's call. `src/lib/email/jobChangeSignals.ts`:
   `classifyChangeSignal()` is the pure read of the words + the reply
   classifier + the extractor's messageNature, evidence quoted verbatim;
   `detectJobChangeSignals(messageId)` ties the message to LIVE jobs

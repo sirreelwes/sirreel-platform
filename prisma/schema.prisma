@@ -9867,7 +9867,8 @@ model SmsMessage {
 
 // ── Job email signals ─────────────────────────────────────────────────
 // A client email that READS like a change of plan on a live job — a
-// cancellation, a hold, moved dates, an extension, an early return.
+// cancellation, a hold, moved dates, an extension, an early return, or
+// something added to / dropped from the order ("a couple of fans").
 // Written by src/lib/email/jobChangeSignals.ts at ingest; NEVER applied
 // to the job by the system. Wes 2026-09-11: "there can be nuance in a
 // client's cancelling or changing of a job — any changes to HQ are gated
@@ -9881,6 +9882,8 @@ enum JobEmailSignalKind {
   DATE_CHANGE
   EXTEND
   RETURN_EARLY
+  ADD_ITEMS
+  REMOVE_ITEMS
 }
 
 enum JobEmailSignalStatus {

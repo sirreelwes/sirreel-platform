@@ -13,7 +13,8 @@
  *                  Nothing is pre-ticked; the modal decides nothing.
  *   Handled        the client meant it and the change has been made (or
  *                  is being made) through the normal controls: status
- *                  menu for a hold, the order's dates for a move/extend.
+ *                  menu for a hold, the order's dates for a move/extend,
+ *                  the order's line items for an add / drop.
  *   Not a change   a false positive ("cancel the cube" was one line item;
  *                  "on hold" was the client's own schedule).
  *
@@ -24,7 +25,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-type Kind = 'CANCEL' | 'HOLD' | 'DATE_CHANGE' | 'EXTEND' | 'RETURN_EARLY';
+type Kind = 'CANCEL' | 'HOLD' | 'DATE_CHANGE' | 'EXTEND' | 'RETURN_EARLY' | 'ADD_ITEMS' | 'REMOVE_ITEMS';
 
 interface Signal {
   id: string;
@@ -50,6 +51,8 @@ const HEADLINE: Record<Kind, string> = {
   DATE_CHANGE: 'Client may be moving the dates',
   EXTEND: 'Client may be extending',
   RETURN_EARLY: 'Client may be returning early',
+  ADD_ITEMS: 'Client may be adding to the order',
+  REMOVE_ITEMS: 'Client may be dropping something from the order',
 };
 
 const NEXT_STEP: Record<Kind, string> = {
@@ -58,6 +61,8 @@ const NEXT_STEP: Record<Kind, string> = {
   DATE_CHANGE: 'If so, change the dates on the order. Nothing has been changed.',
   EXTEND: 'If so, extend the dates on the order and check the units are free. Nothing has been changed.',
   RETURN_EARLY: 'If so, shorten the order and let the yard know. Nothing has been changed.',
+  ADD_ITEMS: 'If so, add the line items on the order and re-send the quote if the total moved. Nothing has been changed.',
+  REMOVE_ITEMS: 'If so, remove the line items on the order and release any unit that held them. Nothing has been changed.',
 };
 
 const LINK_LABEL: Record<string, string> = {

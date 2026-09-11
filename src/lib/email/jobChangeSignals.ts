@@ -1,6 +1,7 @@
 /**
  * Job email signals — a client email that READS like a change of plan on
- * a live job becomes a SUGGESTION on that job, never a change to it.
+ * a live job (cancel, hold, move / extend / shorten the dates, add or drop
+ * items) becomes a SUGGESTION on that job, never a change to it.
  *
  * Wes 2026-09-11: "Because there can be nuance in a client's cancelling
  * or changing of a job we want to make sure that any changes to HQ are
@@ -70,6 +71,13 @@ export interface ChangeSignal {
  * quote through", "move" alone is "move the truck to bay 2". The matched
  * text is quoted back in the evidence so a false positive costs one glance.
  */
+// Things a production adds to or drops from an order. Generous on
+// purpose: a wrong KIND still lands on the right job as a suggestion the
+// rep reads; a missed one lands nowhere.
+const ITEMS =
+  '(?:fans?|cubes?|vans?|trucks?|trailers?|generators?|gennys?|lifts?|carts?|tents?|heaters?|a\\/?c units?|hvac|lights?|lighting|walkies?|radios?|tables?|chairs?|restrooms?|distro|cables?|dollies|dolly|units?|vehicles?|line items?|days?)'
+const QTY = "(?:a |an |another |one more |a couple(?: of)? |a few |some |two |three |four |\\d+ )?"
+
 const PATTERNS: ReadonlyArray<{ kind: JobEmailSignalKind; re: RegExp }> = [
   {
     kind: 'RETURN_EARLY',
@@ -87,9 +95,35 @@ const PATTERNS: ReadonlyArray<{ kind: JobEmailSignalKind; re: RegExp }> = [
     kind: 'HOLD',
     re: /\b(on hold|put (?:it |this |the (?:job|shoot|booking|order) )?on hold|pause (?:the |our )?(?:job|booking|order|rental)|holding off (?:on|for now)|hold off (?:on|for now)|tbd (?:on|for) (?:dates|now)|up in the air|waiting on (?:the )?green ?light|not (?:yet )?confirmed (?:yet|on our end))\b/i,
   },
+  // A cancellation that names the WHOLE thing outranks an item change:
+  // "we're cancelling the shoot, so please remove the fans" is a CANCEL.
   {
     kind: 'CANCEL',
-    re: /\b(cancel(?:l?ed|l?ing|lation|s)?|pull(?:ing|ed)? (?:out|the plug)|no longer (?:need|needs|needed|require|required|going ahead|happening|moving forward)|not (?:going to|gonna) need|won'?t be (?:needing|moving forward|going ahead|proceeding)|not moving forward|scrap(?:ped|ping)?|call(?:ed|ing)? (?:it |the (?:job|shoot) )?off|fell through|falls through|didn'?t get (?:the )?(?:job|green ?light|greenlight|go-ahead)|(?:job|shoot|show|project|production) (?:is |was |got |has been )?(?:dead|killed|axed|shelved|off)|kill(?:ed|ing)? (?:the )?(?:job|shoot|show|project)|release (?:the |our )?(?:hold|holds|units?|trucks?|vehicles?|dates?))\b/i,
+    re: /\b(cancel(?:l?ed|l?ing|s)? (?:the |our |this |that )?(?:whole |entire |full )?(?:job|shoot|show|project|production|order|rental|booking|reservation|everything|it all|all of it)|(?:job|shoot|show|project|production|order|rental|booking|reservation) (?:is |was |got |has been |have been )?(?:cancel(?:l?ed)?|dead|killed|axed|shelved|off|scrapped)|pull(?:ing|ed)? (?:out|the plug)|no longer (?:going ahead|happening|moving forward)|won'?t be (?:moving forward|going ahead|proceeding)|not moving forward|call(?:ed|ing)? (?:it |the (?:job|shoot) )?off|fell through|falls through|didn'?t get (?:the )?(?:job|green ?light|greenlight|go-ahead)|kill(?:ed|ing)? (?:the )?(?:job|shoot|show|project))\b/i,
+  },
+  // Adding to / dropping from the order. Bound to an ITEM word (or "to the
+  // order") so "add me to the call sheet" and "drop it at the gate" stay
+  // quiet. The item list is deliberately generous: a wrong kind still lands
+  // on the right job as a suggestion, and the rep reads the sentence.
+  {
+    kind: 'ADD_ITEMS',
+    re: new RegExp(
+      String.raw`\b(add(?:ing)? (?:on )?${QTY}(?:\w+ ){0,3}?${ITEMS}|add(?:ing)? (?:\w+ ){1,6}?to (?:the |our |this )?(?:order|rental|booking|quote|reservation|truck)|(?:also|additionally) (?:need|want|like|get|take|require) ${QTY}(?:\w+ ){0,3}?${ITEMS}|(?:throw(?:ing)?|toss(?:ing)?) in ${QTY}(?:\w+ ){0,3}?${ITEMS}|tack(?:ing)? on ${QTY}(?:\w+ ){0,3}?${ITEMS}|one more (?:\w+ ){0,2}?${ITEMS}|in addition to (?:the |our )?(?:order|rental|booking|quote))\b`,
+      'i',
+    ),
+  },
+  {
+    kind: 'REMOVE_ITEMS',
+    re: new RegExp(
+      String.raw`\b((?:cancel|drop|remove|take off|scratch|kill|lose|skip|don'?t need|won'?t need|no longer need|not need(?:ing)?|do without) (?:the |a |an |one |one of the |two |three |\d+ |our |those |these |that |any )?(?:\w+ ){0,3}?(?:${ITEMS}|second (?:one|unit|vehicle)|extra (?:one|unit|vehicle|day)|last day)|take (?:the |a |one |two |\d+ )?(?:\w+ ){0,3}?${ITEMS} off)\b`,
+      'i',
+    ),
+  },
+  // Bare cancellation vocabulary, last: something was cancelled and the
+  // sentence did not say what. Still a suggestion; the rep reads it.
+  {
+    kind: 'CANCEL',
+    re: /\b(cancel(?:l?ed|l?ing|lation|s)?|no longer (?:need|needs|needed|require|required)|not (?:going to|gonna) need|won'?t be needing|scrap(?:ped|ping)?|release (?:the |our )?(?:hold|holds|units?|trucks?|vehicles?|dates?))\b/i,
   },
 ]
 
@@ -100,9 +134,11 @@ const PATTERNS: ReadonlyArray<{ kind: JobEmailSignalKind; re: RegExp }> = [
  *
  * Priority: the most specific vocabulary wins (an "extend" is not a
  * "cancel" even though "we're cancelling the Friday return and keeping it
- * through Monday" contains both), then the classifier's EXPLICIT_REJECTION
- * / the extractor's "rejection" as CANCEL when the words alone said
- * nothing.
+ * through Monday" contains both). A cancellation that names the whole
+ * job / shoot / order outranks an item change; an item change ("cancel
+ * the fans", "add a couple of fans") outranks a bare "cancel". Then the
+ * classifier's EXPLICIT_REJECTION / the extractor's "rejection" count as
+ * CANCEL when the words alone said nothing.
  */
 export function classifyChangeSignal(input: ChangeSignalInput): ChangeSignal | null {
   const text = `${input.subject ?? ''}\n${input.bodyText ?? ''}`
@@ -139,6 +175,8 @@ export const SIGNAL_KIND_LABEL: Record<JobEmailSignalKind, string> = {
   DATE_CHANGE: 'may be moving the dates',
   EXTEND: 'may be extending',
   RETURN_EARLY: 'may be returning early',
+  ADD_ITEMS: 'may be adding to the order',
+  REMOVE_ITEMS: 'may be dropping something from the order',
 }
 
 // ── 2. Linking a message to live jobs ────────────────────────────────
