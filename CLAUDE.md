@@ -569,7 +569,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   (`releasePartnerLineFromPickList` — already-picked rows stay), the paper pull
   sheet + pull-order preview, and both job-stage warehouse counts.
 - `npm run test:partner-pick-list`. A cancelled partner booking does NOT put
-  the line back on the list — re-add it if our own gear replaces the unit.
+  the line back on the list by itself — Wes: "there needs to be a warning
+  wired in." `partnerCancelledLines.ts` finds the line (warehouse department,
+  no lane, no live partner booking, a CANCELLED roster booking on it or its
+  parent) on an order the warehouse is working (BOOKED / LOADED_READY / ON_JOB,
+  or a pull order already released). It raises action item
+  `partner-cancelled-off-pick-list` (high once loaded / on the job / picking up
+  within 3 days) and a prompt on the order page whose button files it
+  (`/api/orders/[id]/partner-cancelled-lines`, audited). Pre-book lines need
+  no warning: booking routes them. `npm run test:partner-cancelled-lines`.
 
 ## Partner discount waterfall (2026-09-11 — Wes)
 - Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a

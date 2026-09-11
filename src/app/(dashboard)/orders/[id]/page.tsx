@@ -16,6 +16,7 @@ import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
+import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -4038,6 +4039,10 @@ export default function OrderDetailPage() {
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
+
+            {/* A partner cancelled and we are filling the line — partner lines
+                are kept off the pick list, so the warehouse was never told. */}
+            <PartnerCancelledLinesPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
           </div>
         )}
 

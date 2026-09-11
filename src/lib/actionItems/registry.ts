@@ -33,6 +33,10 @@
  *   - annual-requested (DERIVED) — a client asked, from their portal, to
  *     be set up on an annual rental agreement. Clears when the annual is
  *     offered for signature (or a master is already pending/covering).
+ *   - partner-cancelled-off-pick-list (DERIVED) — a partner's booking on a
+ *     line was cancelled while the order is booked (or its pull order is out),
+ *     and the line, kept off the pick list as a partner line, never went on
+ *     it. Clears when put on the list from the order page or the line goes.
  *   - replacement-cost-missing (DERIVED) — a catalog row going out on an
  *     upcoming order with no replacement cost, so the order cannot tell
  *     the client's broker what to insure it for. One item per ROW, not
@@ -93,6 +97,7 @@ import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possib
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { emailChangeSignalProvider } from '@/lib/actionItems/providers/emailChangeSignal'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
+import { partnerCancelledOffPickListProvider } from '@/lib/actionItems/providers/partnerCancelledOffPickList'
 
 const PROVIDERS: ActionItemProvider[] = [
   // A client email reads like a cancellation / hold / date change on a
@@ -107,6 +112,9 @@ const PROVIDERS: ActionItemProvider[] = [
   // The yard changed a booked order at the dock and the agent hasn't
   // seen it yet — the money moved without them.
   checkReportChangesProvider,
+  // A partner's booking was cancelled and SirReel is filling the line — but
+  // partner lines are kept off the pick list, so the warehouse was never told.
+  partnerCancelledOffPickListProvider,
   // HQ sent the card link, nothing came back, and the yard will refuse
   // to release the vehicle until the agent keys a signed authorization.
   cardRequiredProvider,
