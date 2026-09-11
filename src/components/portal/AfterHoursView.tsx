@@ -58,6 +58,11 @@ export interface AfterHoursViewData {
   support: { phone: string; phoneHref: string; staffedHours: string; helpUrl: string };
   rules: { droppingOff: string; pickingUp: string };
   agent: { name: string | null; email: string | null; phone: string | null } | null;
+  /** Client copy only (2026-09-11) — what the job portal's shared chrome
+   *  needs. Absent on the driver's shared copy. */
+  company?: { name: string; hasLogo: boolean } | null;
+  contact?: { firstName: string; lastName: string; email: string } | null;
+  jobCode?: string | null;
 }
 
 export function AfterHoursShell({

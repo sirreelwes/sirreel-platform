@@ -34,9 +34,12 @@ export async function GET(req: NextRequest) {
     where: { id: resolved.orderId },
     select: {
       id: true,
+      orderNumber: true,
+      company: { select: { name: true, logoUrl: true, logoSvg: true } },
       job: {
         select: {
           id: true,
+          jobCode: true,
           name: true,
           afterHoursReleasedAt: true,
           afterHoursNote: true,
@@ -85,6 +88,14 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     projectName: job.name,
+    // Chrome facts for the job portal's shared masthead (JobPortalChrome).
+    company: order?.company
+      ? { name: order.company.name, hasLogo: !!(order.company.logoSvg || order.company.logoUrl) }
+      : null,
+    contact: resolved.contact
+      ? { firstName: resolved.contact.firstName, lastName: resolved.contact.lastName, email: resolved.contact.email }
+      : null,
+    jobCode: job.jobCode ?? order?.orderNumber ?? null,
     note: job.afterHoursNote,
     releasedAt: job.afterHoursReleasedAt,
     agent: job.agent

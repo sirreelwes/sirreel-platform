@@ -17,11 +17,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
-  AfterHoursShell,
   AfterHoursBody,
   AfterHoursProblem,
   type AfterHoursViewData,
 } from '@/components/portal/AfterHoursView';
+import { JobPortalShell, JobPortalKicker, type JobPortalChromeData } from '@/components/portal/JobPortalChrome';
 import { AfterHoursSharePanel } from '@/components/portal/AfterHoursSharePanel';
 
 export default function AfterHoursPage() {
@@ -80,9 +80,26 @@ export default function AfterHoursPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  // The route carries the chrome facts (company, contact, code) so this
+  // page shares the job portal's masthead without a second data call.
+  const chrome: JobPortalChromeData | null = data
+    ? {
+        company: { name: data.company?.name ?? '', hasLogo: !!data.company?.hasLogo },
+        contact: data.contact ?? null,
+        headline: data.projectName,
+        code: data.jobCode ?? '',
+        rep: data.agent?.email ? { name: data.agent.name || data.agent.email, email: data.agent.email } : null,
+        afterHoursLine: data.support?.phone ?? '(888) 477-7335',
+      }
+    : null;
+
   return (
-    <AfterHoursShell subtitle={data?.projectName}>
-      {loading && <div className="text-sm text-gray-500">Loading…</div>}
+    <JobPortalShell chrome={chrome} width="narrow">
+      <div>
+        <JobPortalKicker className="mb-2">After-hours access</JobPortalKicker>
+        <h1 className="text-xl font-semibold text-zinc-900">Picking up or dropping off.</h1>
+      </div>
+      {loading && <div className="text-sm text-zinc-500">Loading…</div>}
       {!loading && error && <AfterHoursProblem message={error} />}
       {!loading && data && (
         <>
@@ -91,13 +108,13 @@ export default function AfterHoursPage() {
           <div className="text-center">
             <a
               href={`/portal/job/${slug}`}
-              className="text-[13px] text-gray-500 hover:text-gray-900"
+              className="text-[13px] text-zinc-500 hover:text-zinc-900"
             >
               ← Back to your project page
             </a>
           </div>
         </>
       )}
-    </AfterHoursShell>
+    </JobPortalShell>
   );
 }

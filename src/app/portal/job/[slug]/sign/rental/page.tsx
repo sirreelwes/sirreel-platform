@@ -48,7 +48,7 @@ import { SignaturePad } from "@/components/portal/SignaturePad";
 import { RentalAgreementBody } from '@/components/contracts/RentalAgreementBody';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
+import { JobPortalShell, JobPortalKicker, chromeFromPortalData, type JobPortalChromeData } from '@/components/portal/JobPortalChrome';
 
 const ACKNOWLEDGEMENT_TEXT =
   'I have read and agree to the Rental Agreement above. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.';
@@ -68,6 +68,7 @@ export default function RentalAgreementSignPage() {
   const slug = String(params?.slug || '');
 
   const [agreement, setAgreement] = useState<AgreementShape | null>(null);
+  const [chrome, setChrome] = useState<JobPortalChromeData | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [signerName, setSignerName] = useState('');
   const [signerTitle, setSignerTitle] = useState('Producer');
@@ -97,6 +98,7 @@ export default function RentalAgreementSignPage() {
     try {
       const r = await fetch('/api/portal/job/data');
       const d = await r.json();
+      setChrome(chromeFromPortalData(d));
       const a = d?.paperwork?.agreement as AgreementShape | null;
       if (!a) {
         setError('No rental agreement has been generated for this order yet.');
@@ -239,7 +241,7 @@ export default function RentalAgreementSignPage() {
 
   const isBaseline = agreement?.documentType !== 'NEGOTIATED';
 
-  if (loading) return <div className="p-8 text-gray-500">Loading…</div>;
+  if (loading) return <JobPortalShell chrome={chrome} width="narrow"><div className="text-sm text-zinc-500">Loading…</div></JobPortalShell>;
   if (error && !pdfUrl) {
     return (
       <div className="p-8 text-red-700 bg-red-50 max-w-2xl mx-auto mt-12 rounded-xl">
@@ -258,44 +260,17 @@ export default function RentalAgreementSignPage() {
     agreement?.status === 'NEGOTIATED_READY';
 
   return (
-    <div className="min-h-screen bg-[#F8F7F4]">
-      {/* Archivo joins DM Sans here because RentalAgreementBody sets its
-          headings in it — the public /rental-agreement page gets it from the
-          (public) layout, which the portal does not share. */}
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Archivo:wght@400;700;900&display=swap" rel="stylesheet" />
-
-      {/* Dark hero — same shell as /portal/[token] + /portal/account */}
-      <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
-        <div className="max-w-3xl mx-auto px-6 py-7 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/sirreel-logo-white.png"
-            alt="SirReel Studio Services"
-            width={160}
-            style={{ display: 'inline-block', maxWidth: 160, height: 'auto' }}
-          />
-          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: PORTAL.gold }} />
-          <div
-            className="mt-3 text-[10px] uppercase font-semibold"
-            style={{ color: PORTAL.gold, letterSpacing: '2.5px' }}
-          >
-            Rental Agreement
-          </div>
-          <h1
-            className="mt-1 text-white text-[24px] font-light italic leading-tight"
-            style={{ fontFamily: PORTAL_SERIF }}
-          >
-            {isSigned ? 'Signed.' : isRedlinePending ? 'Under review.' : 'Review and sign.'}
-          </h1>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto p-6 space-y-6">
+    <JobPortalShell chrome={chrome} width="narrow">
+      <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&display=swap" rel="stylesheet" />
+      <div>
+        <JobPortalKicker className="mb-2">Rental agreement</JobPortalKicker>
+        <h1 className="text-xl font-semibold text-zinc-900">{isSigned ? 'Signed.' : isRedlinePending ? 'Under review.' : 'Review and sign.'}</h1>
+      </div>
         <div>
-          <a href={`/portal/job/${slug}`} className="text-xs text-gray-500 hover:text-gray-900">
+          <a href={`/portal/job/${slug}`} className="text-xs text-zinc-500 hover:text-zinc-900">
             ← Back to Job Page
           </a>
-          <p className="text-sm text-gray-700 mt-3">
+          <p className="text-sm text-zinc-700 mt-3">
             {isSigned
               ? 'This agreement has been signed.'
               : isRedlinePending
@@ -320,7 +295,7 @@ export default function RentalAgreementSignPage() {
                   href={pdfUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[12px] font-semibold text-gray-600 hover:text-gray-900 underline underline-offset-2"
+                  className="text-[12px] font-semibold text-zinc-600 hover:text-zinc-900 underline underline-offset-2"
                 >
                   Open as PDF
                 </a>
@@ -332,11 +307,11 @@ export default function RentalAgreementSignPage() {
             <p className="mt-8 text-[12px] text-[#6d6759] italic">End of agreement.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               The agreement
             </div>
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-zinc-700">
               This is the negotiated version of the agreement for your production. Open it, read it
               in full, then come back to sign.
             </p>
@@ -346,14 +321,14 @@ export default function RentalAgreementSignPage() {
                   href={pdfUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg"
+                  className="inline-block px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold rounded-lg"
                 >
                   Open the agreement →
                 </a>
                 {/* Wide screens can also read it in place; phones get the
                     full-screen open above, which is the only way a PDF is
                     actually readable there. */}
-                <div className="hidden md:block rounded-lg border border-gray-200 overflow-hidden">
+                <div className="hidden md:block rounded-lg border border-zinc-200 overflow-hidden">
                   <iframe src={pdfUrl} className="w-full" style={{ height: 600 }} title="Rental agreement PDF" />
                 </div>
               </>
@@ -361,7 +336,7 @@ export default function RentalAgreementSignPage() {
             {canSign && !reviewed && (
               <button
                 onClick={() => setReviewed(true)}
-                className="block w-full sm:w-auto px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-900 text-sm font-semibold rounded-lg"
+                className="block w-full sm:w-auto px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-900 text-sm font-semibold rounded-lg"
               >
                 I&rsquo;ve read the agreement — continue to sign
               </button>
@@ -377,11 +352,11 @@ export default function RentalAgreementSignPage() {
 
         {/* Redline path — download + upload */}
         {canSign && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-3">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               Want your team to review?
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-zinc-600">
               Download a Word version, redline it in track changes, and upload it back. We&rsquo;ll
               review and respond.
             </p>
@@ -389,11 +364,11 @@ export default function RentalAgreementSignPage() {
               <button
                 onClick={downloadDocx}
                 disabled={downloading}
-                className="px-4 py-2 bg-white hover:bg-gray-50 disabled:opacity-50 border border-gray-300 text-gray-900 text-sm font-semibold rounded-lg"
+                className="px-4 py-2 bg-white hover:bg-zinc-50 disabled:opacity-50 border border-zinc-300 text-zinc-900 text-sm font-semibold rounded-lg"
               >
                 {downloading ? 'Preparing…' : 'Download .docx for redline'}
               </button>
-              <label className="text-sm text-gray-700 cursor-pointer">
+              <label className="text-sm text-zinc-700 cursor-pointer">
                 <input
                   type="file"
                   accept=".pdf,.docx"
@@ -401,14 +376,14 @@ export default function RentalAgreementSignPage() {
                   className="hidden"
                   disabled={redlineUploading}
                 />
-                <span className="px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg font-semibold inline-block">
+                <span className="px-3 py-2 bg-white hover:bg-zinc-50 border border-zinc-300 rounded-lg font-semibold inline-block">
                   {redlineFile ? `Selected: ${redlineFile.name}` : 'Choose redline file…'}
                 </span>
               </label>
               <button
                 onClick={uploadRedline}
                 disabled={!redlineFile || redlineUploading}
-                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
+                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
               >
                 {redlineUploading ? 'Uploading…' : 'Upload redline'}
               </button>
@@ -431,8 +406,8 @@ export default function RentalAgreementSignPage() {
         {/* Not read yet — say what opens the form, and don't render a
             signature pad under a document nobody has looked at. */}
         {canSign && !reviewed && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">Read the agreement to continue.</span>{' '}
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 text-sm text-zinc-600">
+            <span className="font-semibold text-zinc-900">Read the agreement to continue.</span>{' '}
             {isBaseline
               ? 'Scroll to the end of the agreement above and the signature form opens here.'
               : 'Open the agreement above, then confirm you have read it.'}
@@ -441,12 +416,12 @@ export default function RentalAgreementSignPage() {
 
         {/* Sign form */}
         {canSign && reviewed && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               Sign as-is
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">
+              <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
                 Your Name
               </label>
               <input
@@ -454,39 +429,39 @@ export default function RentalAgreementSignPage() {
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
                 placeholder="Type your full legal name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
               />
             </div>
             {/* One column on a phone: two 3-char-wide inputs side by side is
                 how "japrod23@gmail.c" happens. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">
+                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
                   Title
                 </label>
                 <input
                   type="text"
                   value={signerTitle}
                   onChange={(e) => setSignerTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">
+                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
                   Email
                 </label>
                 <input
                   type="email"
                   value={signerEmail}
                   onChange={(e) => setSignerEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
                 />
               </div>
             </div>
 
             <SignaturePad onChange={setSignature} disabled={signing} />
 
-            <label className="flex items-start gap-3 text-xs text-gray-700">
+            <label className="flex items-start gap-3 text-xs text-zinc-700">
               <input
                 type="checkbox"
                 checked={acknowledged}
@@ -506,42 +481,19 @@ export default function RentalAgreementSignPage() {
               <button
                 onClick={submitSign}
                 disabled={!signerName.trim() || !acknowledged || !signature || signing}
-                className="px-5 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
+                className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
               >
                 {signing ? 'Signing…' : 'Sign Rental Agreement'}
               </button>
               <a
                 href={`/portal/job/${slug}`}
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-sm text-zinc-600 hover:text-zinc-900"
               >
                 Cancel
               </a>
             </div>
           </div>
         )}
-      </main>
-
-      <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
-        <div className="max-w-3xl mx-auto px-6 py-6 text-center">
-          {/* S mark in place of the "SirReel" wordmark (Wes 2026-08-29) —
-              same treatment as /portal/job/[slug]. Black variant; every
-              portal footer band is light. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/s-logo-black.png"
-            alt="SirReel"
-            width={30}
-            style={{ display: 'inline-block', width: 30, height: 'auto', opacity: 0.55 }}
-          />
-          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
-            SirReel Studio Services<br />
-            8500 Lankershim Blvd, Sun Valley, CA 91352
-          </p>
-          <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
-          </p>
-        </div>
-      </footer>
-    </div>
+    </JobPortalShell>
   );
 }

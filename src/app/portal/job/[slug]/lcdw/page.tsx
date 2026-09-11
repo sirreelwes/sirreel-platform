@@ -25,7 +25,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens';
+import { PORTAL } from '@/lib/brand/portalTokens';
+import { JobPortalShell, JobPortalKicker, chromeFromPortalData, type JobPortalChromeData } from '@/components/portal/JobPortalChrome';
 
 interface LcdwData {
   ratePerDay: number;
@@ -57,6 +58,7 @@ export default function LcdwElectionPage() {
   const slug = String(params?.slug || '');
 
   const [data, setData] = useState<LcdwData | null>(null);
+  const [chrome, setChrome] = useState<JobPortalChromeData | null>(null);
   const [choice, setChoice] = useState<'ACCEPTED' | 'DECLINED' | null>(null);
   const [signerName, setSignerName] = useState('');
   const [signerTitle, setSignerTitle] = useState('Producer');
@@ -91,6 +93,7 @@ export default function LcdwElectionPage() {
         if (nothingEligible) setChoice('DECLINED');
         else if (l.effective) setChoice(l.effective.decision);
         const d = dr.ok ? await dr.json() : null;
+        if (d) setChrome(chromeFromPortalData(d));
         const full = `${d?.contact?.firstName || ''} ${d?.contact?.lastName || ''}`.trim();
         if (full) setSignerName(full);
       } catch {
@@ -135,18 +138,22 @@ export default function LcdwElectionPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-sm text-gray-500">Loading…</div>
+      <JobPortalShell chrome={chrome} width="narrow">
+        <div className="text-sm text-zinc-500">Loading…</div>
+      </JobPortalShell>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16">
+      <JobPortalShell chrome={chrome} width="narrow">
+      <div>
         <p className="text-sm text-red-600">{error}</p>
-        <a href={`/portal/job/${slug}`} className="mt-4 inline-block text-sm underline text-gray-600">
+        <a href={`/portal/job/${slug}`} className="mt-4 inline-block text-sm underline text-zinc-600">
           ← Back to your portal
         </a>
       </div>
+      </JobPortalShell>
     );
   }
 
@@ -154,15 +161,17 @@ export default function LcdwElectionPage() {
 
   if (done) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: PORTAL_SERIF }}>
+      <JobPortalShell chrome={chrome} width="narrow">
+      <div className="py-10 text-center">
+        <h1 className="text-xl font-semibold text-zinc-900">
           Recorded — thank you
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-zinc-600">
           Your damage-waiver election has been added to your job file. Taking you back to
           your portal…
         </p>
       </div>
+      </JobPortalShell>
     );
   }
 
@@ -171,18 +180,17 @@ export default function LcdwElectionPage() {
   const unavailable = !data.hasVehicles || data.allExcluded || data.covered.length === 0;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
+    <JobPortalShell chrome={chrome} width="narrow">
+    <div className="space-y-6">
       <div>
-        <a href={`/portal/job/${slug}`} className="text-xs text-gray-500 hover:text-gray-800 underline">
+        <a href={`/portal/job/${slug}`} className="text-xs text-zinc-500 hover:text-zinc-800 underline">
           ← Back to your portal
         </a>
-        <h1
-          className="mt-3 text-2xl font-bold text-gray-900"
-          style={{ fontFamily: PORTAL_SERIF }}
-        >
+        <JobPortalKicker className="mt-4 mb-2">Damage waiver</JobPortalKicker>
+        <h1 className="text-xl font-semibold text-zinc-900">
           {data.annualAgreement ? 'Confirm your agreement' : data.terms.title}
         </h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-zinc-600">
           {data.annualAgreement
             ? `Two things to confirm for this job: that your ${data.annualAgreement.title} is on file, and your damage-waiver election.`
             : `$${data.ratePerDay}/day, per eligible vehicle. Accept or decline — we need your answer either way.`}
@@ -193,7 +201,7 @@ export default function LcdwElectionPage() {
           cannot meaningfully confirm a document is on file if the page will
           not show them which one. */}
       {data.annualAgreement && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-2">
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 space-y-2">
           <h2 className="text-sm font-bold text-emerald-900">Your agreement on file</h2>
           <p className="text-[13px] leading-relaxed text-emerald-900">
             {data.annualAgreement.companyName
@@ -214,27 +222,27 @@ export default function LcdwElectionPage() {
       )}
 
       {/* What it applies to on THIS job. */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3 shadow-sm">
-        <h2 className="text-sm font-bold text-gray-900">What this covers on your job</h2>
+      <section className="rounded-xl border border-zinc-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-zinc-900">What this covers on your job</h2>
         {data.covered.length > 0 ? (
           <ul className="space-y-1">
             {data.covered.map((v) => (
-              <li key={v} className="text-sm text-gray-700">
+              <li key={v} className="text-sm text-zinc-700">
                 • {v}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">No eligible vehicles on this job.</p>
+          <p className="text-sm text-zinc-500">No eligible vehicles on this job.</p>
         )}
         {data.excluded.length > 0 && (
-          <div className="pt-2 border-t border-gray-100">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+          <div className="pt-2 border-t border-zinc-100">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">
               Not eligible
             </p>
             <ul className="space-y-1">
               {data.excluded.map((v) => (
-                <li key={v.description} className="text-sm text-gray-500">
+                <li key={v.description} className="text-sm text-zinc-500">
                   • {v.description} — {v.reason}
                 </li>
               ))}
@@ -244,29 +252,29 @@ export default function LcdwElectionPage() {
       </section>
 
       {/* The terms themselves, on the page where the choice is made. */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3 shadow-sm">
-        <h2 className="text-sm font-bold text-gray-900">The terms</h2>
-        <p className="text-[13px] leading-relaxed text-gray-700">{data.terms.coverage}</p>
-        <p className="text-[13px] leading-relaxed text-gray-700">{data.terms.exclusions}</p>
-        <p className="text-[13px] leading-relaxed text-gray-700">{data.terms.scope}</p>
-        <p className="text-xs italic text-gray-500">{data.terms.note}</p>
+      <section className="rounded-xl border border-zinc-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-zinc-900">The terms</h2>
+        <p className="text-[13px] leading-relaxed text-zinc-700">{data.terms.coverage}</p>
+        <p className="text-[13px] leading-relaxed text-zinc-700">{data.terms.exclusions}</p>
+        <p className="text-[13px] leading-relaxed text-zinc-700">{data.terms.scope}</p>
+        <p className="text-xs italic text-zinc-500">{data.terms.note}</p>
       </section>
 
       {unavailable && !data.annualAgreement ? (
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-600">
+        <section className="rounded-xl border border-zinc-200 bg-white p-5">
+          <p className="text-sm text-zinc-600">
             The damage waiver isn&rsquo;t available on the vehicles booked for this job, so
             there is nothing to elect. Your rental agreement terms apply as written.
           </p>
         </section>
       ) : (
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4 shadow-sm">
-          <h2 className="text-sm font-bold text-gray-900">
+        <section className="rounded-xl border border-zinc-200 bg-white p-5 space-y-4">
+          <h2 className="text-sm font-bold text-zinc-900">
             {data.annualAgreement ? 'Confirm and sign' : 'Your election'}
           </h2>
 
           {data.election ? (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-zinc-500">
               You previously {data.election.decision === 'ACCEPTED' ? 'accepted' : 'declined'} the
               waiver on{' '}
               {new Date(data.election.decidedAt).toLocaleDateString('en-US', {
@@ -277,7 +285,7 @@ export default function LcdwElectionPage() {
               . Submitting again replaces that answer.
             </p>
           ) : data.standingDecision ? (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-zinc-500">
               Your {data.annualAgreement?.title || 'annual agreement'}{' '}
               {data.standingDecision === 'ACCEPTED' ? 'accepts' : 'declines'} the waiver for all
               fleet vehicle rentals, so that applies here already. Submit only if you want a
@@ -290,7 +298,7 @@ export default function LcdwElectionPage() {
               offering a choice with one real option; the record says DECLINED
               because no waiver applies, and the copy says why. */}
           {unavailable ? (
-            <p className="text-xs text-gray-600 leading-relaxed">
+            <p className="text-xs text-zinc-600 leading-relaxed">
               The damage waiver isn&rsquo;t available on the vehicles booked for this job, so
               there is nothing to elect — no waiver charge applies. We still need you to
               confirm your agreement is on file.
@@ -320,12 +328,12 @@ export default function LcdwElectionPage() {
                   aria-pressed={selected}
                   className={`text-left rounded-xl border p-4 transition ${
                     selected
-                      ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900'
-                      : 'border-gray-200 hover:border-gray-400'
+                      ? 'border-zinc-900 bg-zinc-50 ring-2 ring-zinc-900'
+                      : 'border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
-                  <div className="text-sm font-bold text-gray-900">{opt.title}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-gray-600">{opt.body}</div>
+                  <div className="text-sm font-bold text-zinc-900">{opt.title}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-600">{opt.body}</div>
                 </button>
               );
             })}
@@ -334,20 +342,20 @@ export default function LcdwElectionPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="block text-xs font-semibold text-gray-600 mb-1">Your name</span>
+              <span className="block text-xs font-semibold text-zinc-600 mb-1">Your name</span>
               <input
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
                 placeholder="First Last"
               />
             </label>
             <label className="block">
-              <span className="block text-xs font-semibold text-gray-600 mb-1">Title</span>
+              <span className="block text-xs font-semibold text-zinc-600 mb-1">Title</span>
               <input
                 value={signerTitle}
                 onChange={(e) => setSignerTitle(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
                 placeholder="Producer"
               />
             </label>
@@ -360,7 +368,7 @@ export default function LcdwElectionPage() {
               onChange={(e) => setAcknowledged(e.target.checked)}
               className="mt-0.5"
             />
-            <span className="text-xs leading-relaxed text-gray-600">
+            <span className="text-xs leading-relaxed text-zinc-600">
               {/* Recomposed from the LIVE choice, not the server's snapshot,
                   which was built from whatever answer was current on load. A
                   client who switches to Decline must not be asked to tick a
@@ -394,5 +402,6 @@ export default function LcdwElectionPage() {
         </section>
       )}
     </div>
+    </JobPortalShell>
   );
 }
