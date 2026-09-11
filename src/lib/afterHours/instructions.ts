@@ -120,6 +120,9 @@ export function afterHoursStandingInfo() {
 export interface AfterHoursPayload extends ReturnType<typeof afterHoursStandingInfo> {
   gateCode: string | null
   containerCode: string | null
+  /** Public how-to for the vehicle key lock box (replaces the dead
+   *  www.sirreel.com/lockbox). Not a secret; null when nobody has set one. */
+  lockboxInstructionsUrl: string | null
   steps: AfterHoursStep[]
   /** True when both codes are on file. False means an operator has to fix
    *  something before this is worth sending to anybody. */
@@ -134,14 +137,16 @@ export interface AfterHoursPayload extends ReturnType<typeof afterHoursStandingI
 export async function afterHoursPayload(): Promise<AfterHoursPayload> {
   const s = await prisma.siteSetting.findUnique({
     where: { id: SINGLETON },
-    select: { gateCode: true, containerCode: true },
+    select: { gateCode: true, containerCode: true, lockboxInstructionsUrl: true },
   })
   const gateCode = s?.gateCode?.trim() || null
   const containerCode = s?.containerCode?.trim() || null
+  const lockboxInstructionsUrl = s?.lockboxInstructionsUrl?.trim() || null
   return {
     ...afterHoursStandingInfo(),
     gateCode,
     containerCode,
+    lockboxInstructionsUrl,
     steps: afterHoursSteps({ gateCode, containerCode }),
     complete: !!gateCode && !!containerCode,
   }

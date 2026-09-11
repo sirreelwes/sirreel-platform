@@ -8103,6 +8103,14 @@ model SiteSetting {
   containerCodeUpdatedAt   DateTime? @map("container_code_updated_at")
   containerCodeUpdatedById String?   @map("container_code_updated_by_id")
 
+  /// Link to the vehicle KEY LOCK BOX how-to (the old www.sirreel.com/lockbox
+  /// page, dead since the site cutover). Not a secret — a public how-to
+  /// page or PDF. Rendered in the after-hours vehicle pickup email when
+  /// set (Wes 2026-09-11: "add a way to add the lockbox instructions link
+  /// back in"); omitted when empty. Edited at /admin/assistant. Column
+  /// added to the live DB by ALTER TABLE on 2026-09-11 (additive).
+  lockboxInstructionsUrl String? @map("lockbox_instructions_url")
+
   /// Master switch for the public "Who we are" team section on /contact.
   /// Off until the roster + photos are set in /admin/who-we-are.
   whoWeAreEnabled Boolean @default(false) @map("who_we_are_enabled")

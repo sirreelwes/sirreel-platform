@@ -179,7 +179,9 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   purpose). Units = the job's live assignments; no lock box code = 409
   naming the unit; no plate = the row is omitted (0/81 units have a plate
   on file — Fleet page edits it). The old `/vehiclemap` + `/lockbox` links
-  are dead and deliberately absent. Recorded as AuditLog
+  are dead and NOT hardcoded; the lock box how-to renders only when
+  `SiteSetting.lockboxInstructionsUrl` is set on /admin/assistant (Wes
+  9/11; column added by ALTER TABLE, http(s) only). Recorded as AuditLog
   `job.vehicle_pickup_sent`, never on `Job.afterHours*`.
   `npm run test:vehicle-pickup`.
 

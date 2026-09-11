@@ -11,10 +11,13 @@
  * from memory. This template is that email, read from the records.
  *
  * Deliberate differences from the hand-typed version:
- *   - The two www.sirreel.com links (/vehiclemap, /lockbox) are GONE. They
- *     404 since the site cutover (src/lib/site/legacyRedirects.data.js —
- *     Wes's call, Aug 2026), so the email was sending drivers to dead
- *     pages. The address links to Google Maps instead.
+ *   - The two www.sirreel.com links (/vehiclemap, /lockbox) are not
+ *     hardcoded. They 404 since the site cutover
+ *     (src/lib/site/legacyRedirects.data.js — Wes's call, Aug 2026), so
+ *     the email was sending drivers to dead pages. The address links to
+ *     Google Maps; the lock box how-to renders only when an admin has
+ *     recorded a live link (SiteSetting.lockboxInstructionsUrl, set at
+ *     /admin/assistant — Wes 2026-09-11).
  *   - One block per vehicle. A job with two vans gets two blocks, not one
  *     email per van or one email naming the wrong van.
  *
@@ -47,6 +50,8 @@ export interface VehiclePickupEmailInput {
   vehicles: VehiclePickupVehicle[]
   /** Optional per-send line from the agent, rendered as its own callout. */
   note?: string | null
+  /** Public how-to for the key lock box. Omitted from the email when null. */
+  lockboxInstructionsUrl?: string | null
   repName?: string | null
   repPhone?: string | null
   repEmail?: string | null
@@ -105,6 +110,7 @@ export function buildVehiclePickupEmail(input: VehiclePickupEmailInput): BuiltVe
   const project = (input.projectName || 'your rental').trim()
   const note = (input.note || '').trim()
   const gate = input.gateCode.trim()
+  const lockboxUrl = (input.lockboxInstructionsUrl || '').trim() || null
   const names = input.vehicles.map((v) => v.unitName)
   const which = vehicleListPhrase(names)
   const plural = input.vehicles.length > 1
@@ -129,6 +135,12 @@ export function buildVehiclePickupEmail(input: VehiclePickupEmailInput): BuiltVe
       `<strong>Please have your driver&rsquo;s license handy</strong> — you may be asked to present it when picking up, dropping off, or parking.`,
     ),
     ...input.vehicles.map(vehicleBlockHtml),
+    lockboxUrl
+      ? p(
+          `<a href="${esc(lockboxUrl)}" style="color:#0F7A93;font-weight:600;">Vehicle key lock box instructions</a>` +
+            `<br/><span style="color:#8a8272;font-size:13px;">or visit ${esc(lockboxUrl)}</span>`,
+        )
+      : '',
     note ? calloutBox(`<strong>For this pickup</strong><br/>${esc(note)}`, '#0F7A93') : '',
     p(
       `Any trouble at the gate or the lock box, call ${esc(AFTER_HOURS_SUPPORT.phone)} — it is answered 24 hours.`,
@@ -169,6 +181,7 @@ export function buildVehiclePickupEmail(input: VehiclePickupEmailInput): BuiltVe
       ...(v.window ? [`On the books: ${v.window}`] : []),
       ``,
     ]),
+    ...(lockboxUrl ? [`Vehicle key lock box instructions: ${lockboxUrl}`, ``] : []),
     ...(note ? [`For this pickup: ${note}`, ``] : []),
     `Any trouble at the gate or the lock box, call ${AFTER_HOURS_SUPPORT.phone} — answered 24 hours.`,
     ``,
