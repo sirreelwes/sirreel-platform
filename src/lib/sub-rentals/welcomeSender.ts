@@ -146,6 +146,9 @@ export function buildIntroDraft(a: {
       greeting,
       `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
       `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
+      // Wes 2026-09-11: "after the 20% add a line about..." — its own paragraph,
+      // in both the set and the unset case, before the close.
+      `Of course, all of this has to work for both parties, and I'm happy to discuss your thoughts.`,
       `I'd love to show you how I think this could be a win/win!`,
       signOff(a.senderName, a.senderPhone, a.senderEmail, a.senderTitle),
     ].join('\n\n'),
