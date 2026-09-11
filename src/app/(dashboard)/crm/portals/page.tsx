@@ -33,6 +33,7 @@ import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortal
 import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
 import { VendorPartnerPanel } from '@/components/crm/VendorPartnerPanel'
 import { findNewPartnerPhotos } from '@/lib/actionItems/providers/partnerPhotosAdded'
+import { findProspectVendorIds, readPartnerStages, STAGE_LABEL, type PartnerStage } from '@/lib/sub-rentals/partnerStage'
 
 export const dynamic = 'force-dynamic'
 
@@ -238,8 +239,12 @@ export default async function CompanyPortalsPage() {
   // the roster, or an account link. Until 2026-09-10 this needed a booking,
   // so a partner being onboarded (PowerTrip: roster seeded, nothing booked
   // yet) had no row to invite from. Reorder-only vendors (Amazon) match none.
+  // PROSPECTS too (2026-09-11): a queued company has none of those yet — the
+  // row exists so the introduction can be sent from here, and the stage chip
+  // says where it is. Empty until the stage columns exist (fails soft).
+  const prospectIds = await findProspectVendorIds()
   const vendorAccounts = await prisma.vendor.findMany({
-    where: { isActive: true, OR: [{ subRentals: { some: {} } }, { subcontractedVehicles: { some: {} } }, { portalToken: { not: null } }] },
+    where: { isActive: true, OR: [{ subRentals: { some: {} } }, { subcontractedVehicles: { some: {} } }, { portalToken: { not: null } }, { id: { in: prospectIds } }] },
     orderBy: { name: 'asc' },
     select: {
       id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true,
@@ -261,6 +266,16 @@ export default async function CompanyPortalsPage() {
   const dec = (d: unknown) => (d == null ? null : Number(d))
   // Partner-added photos nobody has looked at yet, by vendor (fail-soft).
   const newPhotoGroups = await findNewPartnerPhotos()
+  // prospect → introduced → partner; null map = columns not there yet, and
+  // every row reads as it did before the stage existed.
+  const stages = await readPartnerStages(vendorAccounts.map((v) => v.id))
+  const stageOf = (id: string): PartnerStage => (stages ? (stages.get(id) ?? 'partner') : 'partner')
+  const STAGE_CHIP: Record<PartnerStage, string> = {
+    vendor: 'bg-chip-neutral-bg text-chip-neutral-fg',
+    prospect: 'bg-chip-neutral-bg text-chip-neutral-fg',
+    introduced: 'bg-chip-warn-bg text-chip-warn-fg',
+    partner: 'bg-chip-good-bg text-chip-good-fg',
+  }
 
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -388,10 +403,11 @@ export default async function CompanyPortalsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-lt-fg truncate">
                         {va.name}
+                        {stages && stageOf(va.id) !== 'partner' && <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded align-middle ${STAGE_CHIP[stageOf(va.id)]}`}>{STAGE_LABEL[stageOf(va.id)]}</span>}
                         {va.subcontractedVehicles.length > 0 && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">{va.subcontractedVehicles.length} rate proposal{va.subcontractedVehicles.length === 1 ? '' : 's'}</span>}
                         {va.agreements[0] && !va.agreements[0].signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg align-middle">agreement unsigned</span>}
                         {va.agreements[0]?.signedAt && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg align-middle">agreement signed</span>}
-                        {va.partnerSharePercent == null && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg align-middle">no deal set</span>}
+                        {va.partnerSharePercent == null && stageOf(va.id) === 'partner' && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg align-middle">no deal set</span>}
                       </div>
                       <div className="text-xs text-lt-fg2 truncate">
                         {va.partnerKind === 'EQUIPMENT' ? 'Equipment · ' : ''}{va._count.subcontractedVehicles} unit{va._count.subcontractedVehicles === 1 ? '' : 's'} on the roster · {va._count.subRentals} booking{va._count.subRentals === 1 ? '' : 's'}{va.partnerSharePercent != null ? ` · ${Number(va.partnerSharePercent)}% to SirReel` : ''}
@@ -433,6 +449,7 @@ export default async function CompanyPortalsPage() {
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                       kind={va.partnerKind}
                       section={va.catalogSection}
+                      stage={stageOf(va.id)}
                       newPhotos={newPhotoGroups.filter((g) => g.vendorId === va.id).map((g) => ({ unitId: g.unitId, unitName: g.unitName, count: g.count, latestAt: g.latestAt.toISOString() }))}
                     />
                   </div>

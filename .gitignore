@@ -24,7 +24,7 @@ scripts/*
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
 !scripts/onboard-battery-partners.ts
-!scripts/battery-partner-candidates.ts
+!scripts/add-partner-prospect-columns.ts
 !scripts/add-partner-photo-columns.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-hq-user.ts

@@ -4726,6 +4726,17 @@ model Vendor {
   welcomeSentAt       DateTime? @map("welcome_sent_at")
   welcomeSentTo       String?   @map("welcome_sent_to")
   welcomeSubject      String?   @map("welcome_subject")
+  /// THE STAGE GATE (Wes 2026-09-11: "no company gets onboarded until they
+  /// reply and I mark it as a new partner"). A PROSPECT is a Vendor row that
+  /// exists so the introduction can be sent — no roster, no account link.
+  /// partnerMarkedAt is his mark, after they reply; only then does the roster
+  /// seed, the link mint and the account-link email unlock. Derived stage in
+  /// src/lib/sub-rentals/partnerStage.ts — read it there, never raw. Columns
+  /// added by scripts/add-partner-prospect-columns.ts (additive SQL, NOT db
+  /// push); every read fails soft until it has run.
+  partnerProspectAt   DateTime? @map("partner_prospect_at")
+  partnerMarkedAt     DateTime? @map("partner_marked_at")
+  partnerMarkedBy     String?   @map("partner_marked_by")
   /// THE DEAL (Wes 2026-09-06, King Kong: "20% of vehicle rental rate goes
   /// to SirReel"). SirReel's share of the vehicle rental rate, in percent.
   /// The partner's listed rate is what the production pays; the partner

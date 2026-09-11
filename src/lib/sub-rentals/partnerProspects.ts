@@ -1,29 +1,34 @@
 /**
- * Battery-power partner candidates — Los Angeles outfits that rent
- * battery / BESS ("battery generator") power to productions, researched
- * 2026-09-10 for Wes ("find me a Los Angeles based battery powered
- * generator [company that] rents to productions in Los Angeles and queue
- * up a partner portal with them").
+ * Partner PROSPECTS — companies SirReel would like as partners, researched
+ * before any contact, with the starter roster each would get once marked.
  *
- * PLAIN DATA, no Prisma import: `scripts/onboard-battery-partners.ts` reads
- * it to seed the vendor + roster + account link, and
- * `tests/sub-rentals/battery-partner-candidates.test.ts` guards its shape.
+ * Wes 2026-09-11: "no company gets onboarded until they reply and I mark it
+ * as a new partner." So this registry seeds NOTHING but a Vendor row (the
+ * prospect — enough to send the introduction from /crm/portals#vendor). The
+ * roster below is created only by markAsPartner() in partnerStage.ts, when
+ * Wes presses "Mark as new partner" after they reply.
+ *
+ * First cohort (2026-09-10): Los Angeles battery-power outfits that rent to
+ * productions ("find me a Los Angeles based battery powered generator
+ * [company that] rents to productions in Los Angeles"). Ranked; the first is
+ * the one to lead with.
  *
  * Every candidate is an EQUIPMENT partner in the PowerTrip mould: units are
  * delivered, set up and collected (no driver), rates are EMPTY on purpose —
  * the partner proposes them from their account page and HQ accepts — and
  * every seeded unit is unlisted until it has a photo, a rate and a signed
- * Partner Equipment Agreement (SUB_LISTED_WHERE).
+ * Partner Equipment Agreement.
  *
- * Contact details below are what the public web says (the research session
- * could not open the companies' own sites — the network egress proxy blocks
- * them — so addresses and phones come from directory listings, the ICG
- * Local 600 article and the search index). Confirm on the first call; a
- * wrong phone here costs a minute, a wrong email sends the introduction to
- * nobody. Emails are deliberately NOT seeded unless they were printed in
- * full somewhere quotable — pass --email on the command line.
+ * Contact details are what the public web says (the research session could
+ * not open the companies' own sites — the network egress proxy blocks them —
+ * so addresses and phones come from directory listings, the ICG Local 600
+ * article and the search index). Confirm on the first call. Emails are
+ * seeded only where printed in full somewhere quotable: a guessed address
+ * sends the introduction to nobody.
  *
- * Ranked. The first is the one to lead with.
+ * PLAIN DATA, no Prisma import: scripts/onboard-battery-partners.ts reads it
+ * to queue prospects, markAsPartner() reads it to seed the roster, and
+ * tests/sub-rentals/battery-partner-candidates.test.ts guards its shape.
  */
 
 export type BatteryPartnerSection = 'POWER_GENERATORS' | 'CABLES_DISTRO' | 'LIGHTING' | 'CARTS'
@@ -36,7 +41,7 @@ export interface BatteryPartnerUnit {
   publicDescription: string
 }
 
-export interface BatteryPartnerCandidate {
+export interface PartnerProspect {
   /** CLI key: `--only saniset`. */
   slug: string
   /** Vendor.name — the upsert key; must be unique across candidates. */
@@ -56,10 +61,13 @@ export interface BatteryPartnerCandidate {
   roster: BatteryPartnerUnit[]
 }
 
+/** @deprecated name kept for the first cohort's callers; the type is PartnerProspect. */
+export type BatteryPartnerCandidate = PartnerProspect
+
 const DELIVERED = 'Delivered, set up and collected by the partner'
 const FUEL_FREE = 'No fuel, no exhaust, no engine noise — runs next to talent and sound'
 
-export const BATTERY_PARTNER_CANDIDATES: readonly BatteryPartnerCandidate[] = [
+export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
   {
     slug: 'saniset',
     name: 'Saniset Fleet',
@@ -203,7 +211,20 @@ export const BATTERY_PARTNER_CANDIDATES: readonly BatteryPartnerCandidate[] = [
   },
 ]
 
-export function findBatteryPartnerCandidate(slug: string): BatteryPartnerCandidate | null {
+/** The first cohort, by the name the script and the docs use. */
+export const BATTERY_PARTNER_CANDIDATES = PARTNER_PROSPECTS
+
+export function findPartnerProspect(slug: string): PartnerProspect | null {
   const s = slug.trim().toLowerCase()
-  return BATTERY_PARTNER_CANDIDATES.find((c) => c.slug === s) ?? null
+  return PARTNER_PROSPECTS.find((c) => c.slug === s) ?? null
 }
+
+/** Match a Vendor row back to its prospect entry — by name, which is the
+ *  upsert key the script used, so a marked vendor finds its starter roster. */
+export function findPartnerProspectByName(name: string): PartnerProspect | null {
+  const n = name.trim().toLowerCase()
+  return PARTNER_PROSPECTS.find((c) => c.name.toLowerCase() === n) ?? null
+}
+
+/** @deprecated use findPartnerProspect */
+export const findBatteryPartnerCandidate = findPartnerProspect
