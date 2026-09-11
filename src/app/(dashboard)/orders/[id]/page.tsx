@@ -51,6 +51,7 @@ import {
 } from "@/lib/orders/lineItemDepartments";
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
+import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -794,6 +795,9 @@ export default function OrderDetailPage() {
   // the target line's context (id, qty cap, rate, dates) so the modal
   // can clamp + pre-fill. Null when closed.
   const [subRentalLine, setSubRentalLine] = useState<SubRentalLineContext | null>(null);
+  // "Switch class…" on a vehicle line (Wes 2026-09-11) — liftgate to no
+  // liftgate, or up to a cube at the quoted rate.
+  const [switchLine, setSwitchLine] = useState<SwitchClassLine | null>(null);
   // One-shot guard so the ?send=1 auto-open fires once per page load,
   // not on every re-render or refresh.
   const [autoSendHandled, setAutoSendHandled] = useState(false);
@@ -2751,6 +2755,13 @@ export default function OrderDetailPage() {
             // and discounts/fees aren't sub-rented.
             const canSubRent = canManageSubRentals
               && (li.type === 'EQUIPMENT' || li.type === 'EXPENDABLE')
+            // Class switch: our own vehicle lines only — a partner's unit
+            // is their calendar, an included accessory follows its parent.
+            const canSwitchClass = lineEditable
+              && li.department === 'VEHICLES'
+              && li.type !== 'FEE' && li.type !== 'DISCOUNT'
+              && !li.autoKitPieceId
+              && !(li.subRentals && li.subRentals.length > 0)
             return (
               <>
                 {lineEditable && (
@@ -2759,6 +2770,23 @@ export default function OrderDetailPage() {
                     className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
                   >
                     Edit
+                  </button>
+                )}
+                {canSwitchClass && (
+                  <button
+                    onClick={() => setSwitchLine({
+                      id: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                      rateType: li.rateType,
+                      pickupDate: li.pickupDate,
+                      returnDate: li.returnDate,
+                    })}
+                    title="Move this line to another vehicle class — the quoted rate stays unless you change it"
+                    className="text-lt-fg3 hover:text-amber-800 text-xs mr-2"
+                  >
+                    Switch class…
                   </button>
                 )}
                 {canSubRent && (
@@ -5391,6 +5419,15 @@ export default function OrderDetailPage() {
           bookingItemId={assignHoldId}
           bufferDays={1}
           onClose={() => setAssignHoldId(null)}
+          onChanged={fetchOrder}
+        />
+      )}
+      {switchLine && order && (
+        <SwitchVehicleClassModal
+          orderId={orderId}
+          orderNumber={order.orderNumber}
+          line={switchLine}
+          onClose={() => setSwitchLine(null)}
           onChanged={fetchOrder}
         />
       )}
