@@ -75,7 +75,7 @@ export async function draftFromPrompt(a: {
     words.drivers
       ? `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery, mileage, generator hours, driver time.`
       : `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery and collection, fuel, cable and distribution, technician time.`,
-    `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} are covered under the same agreement and insurance as SirReel's own.`,
+    `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and insurance as SirReel's own.`,
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
     `The sender: ${a.senderName}, who owns SirReel.`,

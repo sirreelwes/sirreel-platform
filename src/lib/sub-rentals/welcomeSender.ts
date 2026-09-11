@@ -97,7 +97,7 @@ export function buildIntroDraft(a: {
       `Good speaking with you. Here is what I described, in writing, so you have it in front of you.`,
       splitLine,
       ancillaries,
-      `The reason productions like this: they sign one agreement with us, send us one certificate of insurance and get one invoice. They never have to set you up as a new vendor, and your ${words.many} are covered under the same agreement and the same insurance as ours.`,
+      `The reason productions like this: they sign one agreement with us, send us one certificate of insurance and get one invoice. They never have to set you up as a new vendor, and your ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and the same insurance as ours.`,
       `You'd get your own page with us — your ${words.many} and your rates, which stay yours to change any time, your own photos, delivery contacts, and every booking we send your way in one place. Nothing goes out to a client without your rate on it.`,
       `Two things I need from you: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on that page.`,
       `Say the word and I'll send you the link.`,
