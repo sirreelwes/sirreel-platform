@@ -84,3 +84,4 @@ scripts/*
 !scripts/backfill-auto-reply-flag.ts
 !scripts/rw-sync-status.ts
 !scripts/planyo-unit-alignment.ts
+!scripts/brief-email-crosscheck.ts
