@@ -54,6 +54,7 @@ import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
+import { JobVehiclePickupPanel } from '@/components/jobs/JobVehiclePickupPanel';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
@@ -3046,6 +3047,9 @@ const driverTone = (d: any): string => {
               <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
               <span className="text-[11px] text-zinc-700 uppercase tracking-wider">Client-facing access + agent notes</span>
             </div>
+            {/* Vehicle first: a van collected from the lot is the common
+                after-hours case; gear in the container is the other one. */}
+            <JobVehiclePickupPanel jobId={job.id} />
             <JobAfterHoursPanel jobId={job.id} />
             {hasReportTo && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3">

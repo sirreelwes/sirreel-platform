@@ -169,6 +169,20 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## After-hours VEHICLE pickup email (2026-09-10)
+- Wes: "an easy button for sales to send this summary" — Jose's hand-typed
+  After Hours Instructions (address, Gate 1 code, driver's-license line,
+  Vehicle / Plate / Lock Box Code). `JobVehiclePickupPanel` on `/jobs/[id]`
+  → `/api/jobs/[id]/vehicle-pickup` → `src/lib/afterHours/vehiclePickup.ts`.
+  **The gate code and each unit's `Asset.accessCode` go IN the email** (the
+  container flow next to it sends a link instead — different call, on
+  purpose). Units = the job's live assignments; no lock box code = 409
+  naming the unit; no plate = the row is omitted (0/81 units have a plate
+  on file — Fleet page edits it). The old `/vehiclemap` + `/lockbox` links
+  are dead and deliberately absent. Recorded as AuditLog
+  `job.vehicle_pickup_sent`, never on `Job.afterHours*`.
+  `npm run test:vehicle-pickup`.
+
 ## Text messaging (Twilio) — A2P 10DLC campaign APPROVED 2026-09-10
 - Campaign `CMadf71a…` (ACCOUNT_NOTIFICATION) on Messaging Service
   `MGda3482bd81e2c26b45cc188de36124dc`, number (747) 335-1665. Filing,
