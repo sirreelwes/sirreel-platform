@@ -31,7 +31,7 @@
  * quietly stop asking on the strength of an expired document. Coverage
  * requires the explicit `autoCoverJobs` opt-in AND a current window.
  */
-import type { LcdwDecision, Prisma, PrismaClient } from '@prisma/client'
+import type { ContractType, LcdwDecision, Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
 import { SIGNED_STATUSES } from '@/lib/orders/agreementCoverage'
 
@@ -124,6 +124,45 @@ export async function findCompanyAnnualCoverage(
     signedAt: hit.signedAt,
     standingLcdwDecision: hit.standingLcdwDecision,
   }
+}
+
+/**
+ * Batch form for the list surfaces — the /jobs rail, the gantt readiness
+ * meter, the timeline. One query for every company, then the SAME
+ * `isCoverageCurrent` verdict per row as the single-company read, so a tile
+ * can never say "Agreement still needed" while the job page one click later
+ * says "Covered by the annual agreement" (2026-09-11: it did — the batch
+ * gatherers honoured only job-level addenda and sibling coverage).
+ *
+ * Returns, per company id, the set of contract types currently covered.
+ * Companies with no covering master are simply absent.
+ */
+export async function annualCoverageByCompany(
+  companyIds: (string | null | undefined)[],
+  db: Db = defaultPrisma,
+  now: Date = new Date(),
+): Promise<Map<string, Set<ContractType>>> {
+  const out = new Map<string, Set<ContractType>>()
+  const ids = [...new Set(companyIds.filter((id): id is string => !!id))]
+  if (ids.length === 0) return out
+  const rows = await db.companyAgreement.findMany({
+    where: { companyId: { in: ids }, deletedAt: null, autoCoverJobs: true },
+    select: {
+      companyId: true,
+      contractType: true,
+      autoCoverJobs: true,
+      deletedAt: true,
+      effectiveDate: true,
+      expiryDate: true,
+    },
+  })
+  for (const r of rows) {
+    if (!isCoverageCurrent(r, now)) continue
+    const set = out.get(r.companyId) ?? new Set<ContractType>()
+    set.add(r.contractType)
+    out.set(r.companyId, set)
+  }
+  return out
 }
 
 /** Same, resolved from an order. */
