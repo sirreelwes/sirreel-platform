@@ -538,6 +538,10 @@ export default function OrderDetailPage() {
   const [liUnitMode, setLiUnitMode] = useState<'next' | 'named' | 'none'>('next');
   const [liUnitIds, setLiUnitIds] = useState<string[]>([]);
   const [liUnitOptions, setLiUnitOptions] = useState<{ assetId: string; unitName: string; tier: string; state: 'free' | 'buffer' | 'booked' }[] | null>(null);
+  // Whether the picked catalog row is something a unit can be bound to —
+  // false for a quantity-tracked row, so the Unit block hides. Null while
+  // unknown.
+  const [liHoldable, setLiHoldable] = useState<boolean | null>(null);
   // The hold a "Change unit…" click opens the picker on.
   const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
   const [unitNotice, setUnitNotice] = useState<string | null>(null);
@@ -1842,7 +1846,7 @@ export default function OrderDetailPage() {
 
   const resetForm = () => {
     setLiType("EQUIPMENT"); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setLiSubVehicle(null);
-    setLiUnitMode('next'); setLiUnitIds([]); setLiUnitOptions(null);
+    setLiUnitMode('next'); setLiUnitIds([]); setLiUnitOptions(null); setLiHoldable(null);
     // Custom dates default OFF — the API inherits from the parent
     // Order. Per-line override is opt-in via the toggle on the form.
     setLiStartDate("");
@@ -1897,16 +1901,22 @@ export default function OrderDetailPage() {
   // modal uses; buffer-state units are listed but marked, booked ones are
   // disabled.
   useEffect(() => {
-    if (liType !== 'VEHICLE' || !liAssetCatId || liSubVehicle) { setLiUnitOptions(null); return; }
+    // A catalog pick is an INVENTORY row (the common case — "Cargo Van
+    // w/ Liftgate" off the box), a category pick is the legacy path;
+    // the availability route resolves either to the class it holds on.
+    const key = liAssetCatId ? `categoryId=${encodeURIComponent(liAssetCatId)}` : liInvItemId ? `inventoryItemId=${encodeURIComponent(liInvItemId)}` : '';
+    if (liType !== 'VEHICLE' || !key || liSubVehicle) { setLiUnitOptions(null); setLiHoldable(null); return; }
     const start = (liCustomDates && liStartDate) ? liStartDate : (order?.startDate ?? '').slice(0, 10);
     const end = (liCustomDates && liEndDate) ? liEndDate : (order?.endDate ?? '').slice(0, 10);
     if (!start || !end) { setLiUnitOptions([]); return; }
     let cancelled = false;
     setLiUnitOptions(null);
-    fetch(`/api/scheduling/availability?categoryId=${encodeURIComponent(liAssetCatId)}&start=${start}&end=${end}`)
+    fetch(`/api/scheduling/availability?${key}&start=${start}&end=${end}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
+        if (d?.holdable === false) { setLiHoldable(false); setLiUnitOptions([]); return; }
+        setLiHoldable(true);
         const units = Array.isArray(d?.units) ? d.units : [];
         const tier: Record<string, number> = { PREMIUM: 0, STANDARD: 1, ECONOMY: 2 };
         units.sort((a: { tier: string; unitName: string }, b: { tier: string; unitName: string }) =>
@@ -1915,7 +1925,7 @@ export default function OrderDetailPage() {
       })
       .catch(() => { if (!cancelled) setLiUnitOptions([]); });
     return () => { cancelled = true; };
-  }, [liType, liAssetCatId, liSubVehicle, liCustomDates, liStartDate, liEndDate, order?.startDate, order?.endDate]);
+  }, [liType, liAssetCatId, liInvItemId, liSubVehicle, liCustomDates, liStartDate, liEndDate, order?.startDate, order?.endDate]);
 
   /** The hold a VEHICLE line raised, if any — matched the way the hold was
    *  created: the line's category, directly or through its catalog row. */
@@ -3700,7 +3710,7 @@ export default function OrderDetailPage() {
                 class and binds the next free unit; the rep can name one
                 here instead. The unit number stays off the quote — it is
                 a reservation fact, not a line-item fact. */}
-            {liType === 'VEHICLE' && liAssetCatId && !liSubVehicle && (
+            {liType === 'VEHICLE' && (liAssetCatId || liInvItemId) && !liSubVehicle && liHoldable !== false && (
               <div className="mb-3 rounded-lg border border-lt-hairline bg-lt-inner/60 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   <span className="font-semibold text-lt-fg">Unit</span>
@@ -3717,6 +3727,12 @@ export default function OrderDetailPage() {
                     Hold the class only
                   </label>
                   <span className="text-lt-fg3">Internal — never on the quote.</span>
+                  {liUnitOptions && liUnitOptions.length > 0 && (() => {
+                    const free = liUnitOptions.filter((u) => u.state === 'free').length;
+                    return free === 0
+                      ? <span className="rounded bg-chip-bad-bg px-1.5 py-0.5 font-semibold text-chip-bad-fg">No unit free for these dates — the class is held, nothing gets assigned</span>
+                      : <span className="rounded bg-chip-good-bg px-1.5 py-0.5 font-semibold text-chip-good-fg">{free} of {liUnitOptions.length} free</span>;
+                  })()}
                 </div>
                 {liUnitMode === 'named' && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
