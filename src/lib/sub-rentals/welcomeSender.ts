@@ -49,24 +49,24 @@ export interface IntroDraft {
 /**
  * The opening draft.
  *
- * ── It follows a phone call ─────────────────────────────────────────────────
- * Wes 2026-09-10: "I am going to reach out by phone before I send this email,
- * so no need to introduce myself. Let's jump into the meat." So this does NOT
- * explain who SirReel is or what we do — a man who just spoke to the owner does
- * not need telling.
+ * ── It is FIRST CONTACT ─────────────────────────────────────────────────────
+ * Wes 2026-09-11: "Let's change this into an email that is the first contact.
+ * Hi, it's Wes Bailey from SirReel...." This supersedes the 2026-09-10 note
+ * that the mail followed a phone call. It opens by saying who he is and what
+ * SirReel is in one line, because the reader may never have heard of us, and
+ * it closes by asking for the conversation rather than assuming it happened.
  *
  * ── It is SHORT, and leads with the pitch ───────────────────────────────────
- * Wes 2026-09-11, on the first cut (nine paragraphs walking the split, the
- * ancillaries, the page, the paperwork): "This is fine for a follow up email.
- * But for the initial email needs to be short and hit the high points: SirReel
- * wants to be your outside Sales Partner! We will feature your equipment on
- * our site, facilitate seamless bookings from our clients to your equipment,
- * etc..." The detail moved to the account-link email, which already carries
- * it. This one is the hook: what we are (their outside sales partner), what we
- * do (feature their gear, bring them the bookings), what we bring (Wes,
- * mid-draft: "highlight that we have 30 years of reputation and customer
- * base!"), what it costs their
- * customer (nothing), what we need back (two things), what happens next.
+ * Wes 2026-09-11, on the nine-paragraph first cut: "This is fine for a follow
+ * up email. But for the initial email needs to be short and hit the high
+ * points: SirReel wants to be your outside Sales Partner! We will feature your
+ * equipment on our site, facilitate seamless bookings from our clients to your
+ * equipment, etc..." And: "highlight that we have 30 years of reputation and
+ * customer base!" The walk through the page and the paperwork lives in the
+ * account-link email, which already carries it. This one is the hook: who we
+ * are (30 years renting to production in LA), what we want to be (their
+ * outside sales partner), what we do (feature their gear, bring them the
+ * bookings), what it costs their customer (nothing), what happens next.
  *
  * It carries the NUMBERS when the deal is set, because a term nobody wrote down
  * is a term that gets re-negotiated later. When it isn't set, the sentence says
@@ -82,6 +82,7 @@ export function buildIntroDraft(a: {
   vendorName: string
   contactName: string | null
   kind?: PartnerKindKey
+  /** Full name — it introduces him ("It's Wes Bailey from SirReel"). */
   senderName: string
   /** SirReel's share, when the deal is set. Their share is the remainder. */
   sharePercent?: number | null
@@ -94,7 +95,7 @@ export function buildIntroDraft(a: {
   const theirs = share == null ? null : Math.round((100 - share) * 100) / 100
   const splitLine =
     share == null
-      ? `Your listed rate is what the production pays, and our share comes out of it rather than on top — so it costs your customer nothing to come through us. I'll confirm the exact split with you before anything is booked.`
+      ? `Your listed rate is what the production pays, and our share comes out of it rather than on top — so it costs your customer nothing to come through us. We'd agree the exact split before anything is booked.`
       : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, paid within 30 days of each booking coming back — so it costs your customer nothing to come through us.`
 
   const ancillaries = words.drivers
@@ -105,12 +106,11 @@ export function buildIntroDraft(a: {
     subject: `SirReel wants to be your outside sales partner!`,
     body: [
       greeting,
-      `Good speaking with you. The short version, in writing:`,
-      `SirReel wants to be ${a.vendorName}'s outside sales partner. We have 30 years of reputation and a customer base in production to put behind your ${words.many}: we feature ${words.drivers ? 'them' : 'it'} on sirreel.com and in our quotes, and we bring you the bookings — our clients book through us, and the job lands on a page of yours with the dates, the location and the contact.`,
+      `It's ${a.senderName} from SirReel. We've rented production vehicles to film and TV in Los Angeles for 30 years, and I'd like to put that reputation and that customer base behind ${a.vendorName}'s ${words.many}.`,
+      `The idea: SirReel becomes your outside sales partner. We feature your ${words.many} on sirreel.com and in our quotes, and we bring you the bookings — the production books through us, and the job lands on a page of yours with the dates, the location and the contact.`,
       `${splitLine} ${ancillaries}`,
       `Your ${words.many} and your rates stay yours to change any time. The production signs one agreement and sends one certificate — to us — so they never set you up as a vendor, and your ${words.many} ${words.drivers ? 'are' : 'is'} covered under our contract and our insurance while on our job.`,
-      `Two things I'll need back: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on your page.`,
-      `Say the word and I'll send you the link.`,
+      `If that's worth a conversation, reply here or give me a call and I'll walk you through how it works.`,
       `— ${a.senderName}\nSirReel`,
     ].join('\n\n'),
   }

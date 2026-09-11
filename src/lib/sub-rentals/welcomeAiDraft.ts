@@ -80,13 +80,13 @@ export async function draftFromPrompt(a: {
     `Why productions like it: one agreement with SirReel, one certificate of insurance, one invoice. They never set the partner up as a new vendor, and the partner's ${words.many} ${words.drivers ? 'are' : 'is'} covered under the same agreement and insurance as SirReel's own.`,
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
-    `The sender: ${a.senderName}, who owns SirReel.`,
+    `The sender: ${a.senderName}, who owns SirReel — a Los Angeles company that has rented production vehicles to film and TV for 30 years.`,
   ].join('\n')
 
   const system = [
     'You are drafting a short business email for the owner of SirReel, a Los Angeles production-rental company, to the owner of a company he wants to partner with.',
     '',
-    'CONTEXT THAT CHANGES THE TONE: he has ALREADY SPOKEN TO THIS PERSON BY PHONE. Do not introduce him, do not explain what SirReel does, do not open with pleasantries about reaching out cold. This is the written follow-up to a conversation that already happened — get to the substance.',
+    'CONTEXT THAT SETS THE TONE: this is FIRST CONTACT. The reader may never have heard of SirReel. Open with one line saying who he is and what SirReel is (from the FACTS), then get to the substance. Do not assume any earlier conversation, and do not pad the opening with pleasantries about reaching out.',
     '',
     'HARD RULES, in order of importance:',
     '1. Every factual claim must come from the FACTS block. Invent NO percentage, price, date, availability, unit count or deadline that is not written there. If the instruction asks for something the facts do not support, write around it rather than making it up.',
