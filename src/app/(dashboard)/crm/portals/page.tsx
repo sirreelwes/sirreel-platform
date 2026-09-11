@@ -32,6 +32,7 @@ import { PortalsTabs } from '@/components/crm/PortalsTabs'
 import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
 import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
 import { VendorPartnerPanel } from '@/components/crm/VendorPartnerPanel'
+import { findNewPartnerPhotos } from '@/lib/actionItems/providers/partnerPhotosAdded'
 
 export const dynamic = 'force-dynamic'
 
@@ -224,6 +225,8 @@ export default async function CompanyPortalsPage() {
     },
   })
   const dec = (d: unknown) => (d == null ? null : Number(d))
+  // Partner-added photos nobody has looked at yet, by vendor (fail-soft).
+  const newPhotoGroups = await findNewPartnerPhotos()
 
   const fmtStamp = (d: Date | null) =>
     d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -396,6 +399,7 @@ export default async function CompanyPortalsPage() {
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                       kind={va.partnerKind}
                       section={va.catalogSection}
+                      newPhotos={newPhotoGroups.filter((g) => g.vendorId === va.id).map((g) => ({ unitId: g.unitId, unitName: g.unitName, count: g.count, latestAt: g.latestAt.toISOString() }))}
                     />
                   </div>
                   </details>

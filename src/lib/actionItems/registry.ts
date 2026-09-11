@@ -81,13 +81,19 @@ import { holdUnassignedProvider } from '@/lib/actionItems/providers/holdUnassign
 import { checkReportChangesProvider } from '@/lib/actionItems/providers/checkReportChanges'
 import { lcdwUnappliedProvider } from '@/lib/actionItems/providers/lcdwUnapplied'
 import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCoiMissing'
+import { partnerPhotosAddedProvider } from '@/lib/actionItems/providers/partnerPhotosAdded'
 import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
 import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
+import { emailChangeSignalProvider } from '@/lib/actionItems/providers/emailChangeSignal'
 
 const PROVIDERS: ActionItemProvider[] = [
+  // A client email reads like a cancellation / hold / date change on a
+  // live job. The system never applies it (Wes 2026-09-11) — this is the
+  // suggestion; the job page is where a person confirms or dismisses.
+  emailChangeSignalProvider,
   // A client set up their own job on the public agreement page and may
   // already have signed. Nothing else fires on these: the inquiry is
   // born CONVERTED (so every SLA surface skips it) and quote-aging
@@ -122,6 +128,9 @@ const PROVIDERS: ActionItemProvider[] = [
   // A partner signed a week+ ago and we hold no certificate of insurance
   // (or it expired). The welcome email deliberately does not ask.
   partnerCoiMissingProvider,
+  // A partner put photos on a unit from their page. Live at once, no gate
+  // (Wes 2026-09-11) — this is the glance HQ owes them.
+  partnerPhotosAddedProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

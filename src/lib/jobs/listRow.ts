@@ -110,6 +110,11 @@ export interface JobRow {
    *  See lib/jobs/redlineAlert — the rail chip and the detail header
    *  both read it. */
   redlinePending?: number
+  /** The job WELCOME email — the client's link to their job page, sent
+   *  once a quote is out (Wes 2026-09-11). 'due' = quoted within the
+   *  reminder window and never welcomed; the tile says so. See
+   *  lib/jobs/welcomeReminder — the job page button reads the same rule. */
+  welcome?: { state: 'due' | 'sent' | 'none'; quotedAt: string | null; sentAt: string | null }
   cadence?: { state: string; partial: boolean }
   hasLD?: boolean
   hasStageScope?: boolean

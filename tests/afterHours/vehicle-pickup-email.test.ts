@@ -55,6 +55,18 @@ check('text: rep sign-off', one.text.includes('— Jose Pacheco, (818) 555-0100 
 check('html: greets by first name', one.html.includes('Anthony —'))
 check('no note → no callout', !one.html.includes('For this pickup') && !one.text.includes('For this pickup'))
 
+console.log('lock box instructions link — only when set')
+check('no link set → no lock box link line', !one.html.includes('lock box instructions') && !one.text.includes('lock box instructions:'))
+const linked = buildVehiclePickupEmail({
+  projectName: 'Se Levanta', gateCode: '6184#',
+  vehicles: [{ unitName: 'Pass #9', category: null, licensePlate: null, lockboxCode: '45726', window: null }],
+  lockboxInstructionsUrl: 'https://www.sirreel.com/lockbox?x=1&y=2',
+})
+check('html: link renders as an anchor with the url escaped', linked.html.includes('href="https://www.sirreel.com/lockbox?x=1&amp;y=2"') && linked.html.includes('Vehicle key lock box instructions'))
+check('html: "or visit" fallback shows the address', linked.html.includes('or visit https://www.sirreel.com/lockbox?x=1&amp;y=2'))
+check('text: link line', linked.text.includes('Vehicle key lock box instructions: https://www.sirreel.com/lockbox?x=1&y=2'))
+check('blank string behaves as unset', !buildVehiclePickupEmail({ projectName: 'x', gateCode: '1', vehicles: [], lockboxInstructionsUrl: '   ' }).text.includes('lock box instructions:'))
+
 console.log('two vehicles')
 const two = buildVehiclePickupEmail({
   projectName: 'Chad Powers',

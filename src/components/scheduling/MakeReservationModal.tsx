@@ -48,7 +48,7 @@
  * say (`reconcileHoldFirmness`) — this modal deliberately does NOT firm
  * them. A hold firmed by flipping holdRank is undone by the next sweep;
  * the staff override for a client who said yes on the phone is the job
- * page's "Client said yes" button, which is a different decision than
+ * page's "Record client approval" button, which is a different decision than
  * booking a truck.
  *
  * A CONTACT is required ONLY when the job has nobody on it, and that

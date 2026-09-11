@@ -42,6 +42,7 @@ interface Vehicle {
 
 interface PickupState {
   gateCode: string | null;
+  lockboxInstructionsUrl: string | null;
   vehicles: Vehicle[];
   recipient: Contact | null;
   contacts: Contact[];
@@ -340,7 +341,25 @@ export function JobVehiclePickupPanel({ jobId }: { jobId: string }) {
                   {busy ? 'Sending…' : state.last ? 'Send again' : 'Email the pickup instructions'}
                 </button>
                 <span className="text-[11px] text-zinc-600">
-                  Address, gate code, driver&rsquo;s license reminder, then plate + lock box code per unit.
+                  Address, gate code, driver&rsquo;s license reminder, then plate + lock box code per unit
+                  {state.lockboxInstructionsUrl ? (
+                    <>
+                      , plus the{' '}
+                      <a
+                        href={state.lockboxInstructionsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-amber-700 hover:text-amber-600"
+                      >
+                        lock box instructions link
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      . No lock box instructions link is set — add one under Admin → Assistant to include it.
+                    </>
+                  )}
                 </span>
               </div>
 

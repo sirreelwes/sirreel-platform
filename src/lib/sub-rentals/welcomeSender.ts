@@ -1,6 +1,6 @@
 /**
- * Who may send a partner introduction — "SirReel wants to partner with
- * PowerTrip!" — and what the draft says.
+ * Who may send a partner introduction — "SirReel wants to be your outside
+ * sales partner!" — and what the draft says.
  *
  * ── Why this is Wes-only, and why it is an email allowlist ──────────────────
  * Wes 2026-09-10. This is not a system notification; it is the owner asking
@@ -21,7 +21,7 @@
  * like mail-merge is worse than no approach.
  */
 
-import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import type { PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 
 const SENDERS_BASE: ReadonlyArray<string> = ['wes@sirreel.com']
 
@@ -49,59 +49,105 @@ export interface IntroDraft {
 /**
  * The opening draft.
  *
- * ── It follows a phone call ─────────────────────────────────────────────────
- * Wes 2026-09-10: "I am going to reach out by phone before I send this email,
- * so no need to introduce myself. Let's jump into the meat." So this does NOT
- * explain who SirReel is or what we do — a man who just spoke to the owner does
- * not need telling. It is the written version of the conversation: the split,
- * what it costs their customer (nothing), what they get, and the two things we
- * need back.
+ * ── It is FIRST CONTACT, in Wes's words ─────────────────────────────────────
+ * Wes 2026-09-11: "Let's change this into an email that is the first contact.
+ * Hi, it's Wes Bailey from SirReel...." — and then, on the next cut, the tone
+ * he wanted, given as the email itself: "SirReel has been offering solutions
+ * to production clients in Los Angeles for 30 years and we are always looking
+ * for a way to offer more. We think Saniset could be a partner in that goal.
+ * Here's how it would work: SirReel begins to feature your products and
+ * services on their website and communications with clients. When a client
+ * orders, we get that info instantly to Saniset. Confirmation can be done via
+ * email or text and we handle all client contracts, insurance and interaction
+ * and provide you with a portal where you can confirm it. That same portal
+ * gives you delivery information, site contact and any instructions from the
+ * client. At the end of the job, we bill the client, collect the money and
+ * pass it along to you minus our percentage. I'd love to show you how I think
+ * this could be a win/win!"
+ *
+ * So the body below IS that, with the partner's name in the two places his
+ * had "Saniset" and the percentage filled in where the deal is set. It walks
+ * the flow in order — feature, order, confirm, deliver, bill, pay — which is
+ * the order the partner will live it in. No page tour, no paperwork list;
+ * those are the account-link email's, once they say yes.
  *
  * It carries the NUMBERS when the deal is set, because a term nobody wrote down
- * is a term that gets re-negotiated later. When it isn't set, the sentence says
- * so plainly rather than inventing a percentage.
+ * is a term that gets re-negotiated later. When it isn't set, "our percentage"
+ * stays as he wrote it, with a clause that it is agreed before anything books.
  *
- * Still NO account link — that is the second mail, once they say yes. The lock
- * in sendVendorInvite depends on this one having gone.
+ * Still NO account link — that is the second mail. The lock in sendVendorInvite
+ * depends on this one having gone.
  *
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
  */
+/** Stacked like his real email signature (Wes 2026-09-11, screenshot):
+ *
+ *    Wes Bailey
+ *    Founder & CEO | SirReel Studio Services
+ *    M: 760.672.5522
+ *    E: wes@sirreel.com
+ *
+ *  No dash before the name and no bare "SirReel" line (Wes, earlier the
+ *  same day) — the title line is the signature's own. Address, office line,
+ *  hours and the link row stay out: the shell's footer carries the address
+ *  and office number, and the rest is signature furniture, not a letter's.
+ *  Whichever of the contacts are known are printed; a missing one is
+ *  skipped rather than printed blank. */
+export function signOff(name: string, phone?: string | null, email?: string | null, title?: string | null): string {
+  return [
+    name,
+    title?.trim() || null,
+    phone?.trim() ? `M: ${signaturePhone(phone)}` : null,
+    email?.trim() ? `E: ${email.trim()}` : null,
+  ].filter(Boolean).join('\n')
+}
+
+/** 760-672-5522 / (760) 672-5522 / 7606725522 → 760.672.5522, the way his
+ *  signature writes it; anything that is not ten digits passes through. */
+export function signaturePhone(raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  const ten = d.length === 11 && d.startsWith('1') ? d.slice(1) : d
+  return ten.length === 10 ? `${ten.slice(0, 3)}.${ten.slice(3, 6)}.${ten.slice(6)}` : raw.trim()
+}
+
+/** The title line under his name, as his signature has it. Only the owner
+ *  sends this mail (the allowlist above), so the one title lives here. */
+export const WES_SIGNATURE_TITLE = 'Founder & CEO | SirReel Studio Services'
+
 export function buildIntroDraft(a: {
   vendorName: string
   contactName: string | null
   kind?: PartnerKindKey
+  /** Full name — it introduces him ("It's Wes Bailey from SirReel"). */
   senderName: string
+  /** His cell and address, for the sign-off (Wes 2026-09-11: "Add my cell
+   *  and email address"). The cell is User.phone on his row; when it is
+   *  not set the sign-off carries the email alone rather than a blank. */
+  senderPhone?: string | null
+  senderEmail?: string | null
+  /** The line under his name ("Founder & CEO | SirReel Studio Services"). */
+  senderTitle?: string | null
   /** SirReel's share, when the deal is set. Their share is the remainder. */
   sharePercent?: number | null
 }): IntroDraft {
-  const words = partnerVocab(a.kind ?? 'VEHICLES')
   const first = a.contactName?.trim().split(/\s+/)[0] || null
   const greeting = first ? `Hi ${first},` : `Hello,`
 
   const share = a.sharePercent
-  const theirs = share == null ? null : Math.round((100 - share) * 100) / 100
-  const splitLine =
+  const settle =
     share == null
-      ? `Your listed rate is what the production pays. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing. I'll confirm the exact split with you before anything is booked.`
-      : `Your listed rate is what the production pays. You receive ${theirs}% of it and SirReel keeps ${share}%, invoiced to us after each booking comes back and paid within 30 days. Our share comes out of that rate rather than being added on top of it — so coming through us costs your customer nothing, and there is no version of this where they save money by going around me.`
-
-  const ancillaries = words.drivers
-    ? `Delivery, mileage, generator hours and driver time bill on top at the rates you set, and those are yours in full.`
-    : `Delivery and collection, fuel, cable and technician time bill on top at the rates you set, and those are yours in full.`
+      ? `At the end of the job, we bill the client, collect the money and pass it along to you minus our percentage, which we'd agree on before anything is booked.`
+      : `At the end of the job, we bill the client, collect the money and pass it along to you within 30 days, minus our ${share}%.`
 
   return {
-    subject: `SirReel wants to partner with ${a.vendorName}!`,
+    subject: `SirReel wants to be your outside sales partner!`,
     body: [
       greeting,
-      `Good speaking with you. Here is what I described, in writing, so you have it in front of you.`,
-      splitLine,
-      ancillaries,
-      `The reason productions like this: they sign one agreement with us, send us one certificate of insurance and get one invoice. They never have to set you up as a new vendor, and your ${words.many} are covered under the same agreement and the same insurance as ours.`,
-      `You'd get your own page with us — your ${words.many} and your rates, which stay yours to change any time, your own photos, delivery contacts, and every booking we send your way in one place. Nothing goes out to a client without your rate on it.`,
-      `Two things I need from you: the partner agreement signed, and a certificate of insurance naming SirReel. Both live on that page.`,
-      `Say the word and I'll send you the link.`,
-      `— ${a.senderName}\nSirReel`,
+      `It's ${a.senderName} from SirReel. SirReel has been offering solutions to production clients in Los Angeles for 30 years, and we are always looking for a way to offer more. We think ${a.vendorName} could be a partner in that goal.`,
+      `Here's how it would work: SirReel begins to feature your products and services on our website and in our communications with clients. When a client orders, we get that information to ${a.vendorName} instantly. Confirmation can be done by email or text, and we handle all client contracts, insurance and interaction, and provide you with a portal where you can confirm it. That same portal gives you the delivery information, the site contact and any instructions from the client. ${settle}`,
+      `I'd love to show you how I think this could be a win/win!`,
+      signOff(a.senderName, a.senderPhone, a.senderEmail, a.senderTitle),
     ].join('\n\n'),
   }
 }

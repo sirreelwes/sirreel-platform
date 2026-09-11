@@ -69,6 +69,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({
     gateCode: payload.gateCode,
+    lockboxInstructionsUrl: payload.lockboxInstructionsUrl,
     vehicles,
     recipient: primary ? contactRow(primary) : null,
     contacts: mailable.map(contactRow),

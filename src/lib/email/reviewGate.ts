@@ -40,6 +40,9 @@ const REVIEW_REQUIRED: Record<EmailReviewKind, boolean> = {
   // the rest: it names a client's outstanding obligations, which is
   // exactly the kind of email a rep wants to read once before it goes.
   'paperwork-summary': true,
+  // The job welcome — hello + the client's no-login link (Wes 2026-09-11).
+  // Seeded with the standard wording, still read once before it goes.
+  'job-welcome': true,
 }
 
 export function shouldReview(kind: EmailReviewKind): boolean {

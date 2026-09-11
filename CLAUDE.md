@@ -179,7 +179,9 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   purpose). Units = the job's live assignments; no lock box code = 409
   naming the unit; no plate = the row is omitted (0/81 units have a plate
   on file — Fleet page edits it). The old `/vehiclemap` + `/lockbox` links
-  are dead and deliberately absent. Recorded as AuditLog
+  are dead and NOT hardcoded; the lock box how-to renders only when
+  `SiteSetting.lockboxInstructionsUrl` is set on /admin/assistant (Wes
+  9/11; column added by ALTER TABLE, http(s) only). Recorded as AuditLog
   `job.vehicle_pickup_sent`, never on `Job.afterHours*`.
   `npm run test:vehicle-pickup`.
 
@@ -277,10 +279,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     most one OPEN row (out, not back) across all orders; enforced in
     `recordUnitScan`, not by the DB. `InventoryUnit` stays a read-only
     RW mirror — nothing here writes to it or to RentalWorks.
-  - **Schema change: run `npx prisma db push` (additive: one table +
-    three relations).** Until then the report's scanner panel hides
-    itself (`unitScanSummary` fails soft on P2021) and the sheet is
-    typed as before; a POST would 500.
+  - **Schema change — NOT `prisma db push`** (the live DB carries
+    objects no schema file knows; a push offers to drop them — see the
+    partner-column rule below). Create the table with
+    `npx tsx scripts/add-unit-scan-table.ts` (idempotent additive SQL:
+    CREATE IF NOT EXISTS + FKs guarded by name; exits 2 if a
+    pre-existing table has a different shape). Until it has run the
+    report's scanner panel hides itself (`unitScanSummary` fails soft
+    on P2021) and the sheet is typed as before; a POST would 500.
   - **Where scanning happens: the check in/out report**
     (`/reports/orders/[id]?edge=OUT|IN`, the screen the yard board's
     Check out / Check in buttons land on — the floor pulls on paper and
@@ -315,6 +321,61 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Job welcome email — "here is your link" (2026-09-11)
+- Wes: after the team replies with a quote, "remind us to send the welcome
+  email" — on the job tile or page or both. Both: the /jobs tile carries a
+  "Send welcome email" chip and the job header carries the button
+  (`JobWelcomeButton`, beside + New quote), loud while DUE.
+- **DUE = a quote is out on a live order that has NOT gone out yet
+  (QUOTE_SENT → LOADED_READY), within 30 days, and no welcome sent;**
+  `welcomeSignal()` in `src/lib/jobs/welcomeReminder.ts` is the ONE rule —
+  the tile (`/api/jobs` → `welcome`), the button (`GET /api/jobs/[id]/welcome`)
+  and the send all read it. "Sent" is AuditLog `job.welcome_sent` on the
+  Job (no column); a re-send is a newer row. 52 jobs read DUE on ship day.
+- The email (`src/lib/email/templates/jobWelcome.ts`) is Wes's wording,
+  verbatim, seeded into the review modal's box (`defaultJobWelcomeBody`) —
+  edit or send as is; a blank box still sends it. The "Open your job"
+  button is the client's job-page magic link (per-contact, 7 days, no
+  login), minted at send on the newest live order with a `portalSlug`;
+  no portal order → 409 "send the quote first". Modal kind `job-welcome`,
+  routes under `/api/jobs/[id]/welcome/{,preview,send}`, delivery label
+  `job-welcome`. `npm run test:welcome-reminder`.
+- NOT the pre-job "Welcome / Job Begin" invite (`/api/sales/welcome`,
+  inquiry-scoped, mints the order on click) — that one is for leads
+  before a job exists; this one is for a quoted job.
+
+## Email never changes a job on its own (2026-09-11 — Wes)
+- Wes: "there can be nuance in a client's cancelling or changing of a
+  job — we want to make sure that any changes to HQ are gated with a
+  confirmation or suggestion." **Rule: no code path may change a Job,
+  Order, Booking, hold or assignment because of what an email SAYS.**
+  Email may raise a suggestion; a person applies the change through the
+  existing controls (Mark lost, status menu, order dates).
+- The suggestion is `JobEmailSignal` (`sr_job_email_signals`, kind
+  CANCEL / HOLD / DATE_CHANGE / EXTEND / RETURN_EARLY / ADD_ITEMS /
+  REMOVE_ITEMS, status OPEN → CONFIRMED / DISMISSED). Add-ons ("a couple
+  of fans") and drops ("cancel the fans, keep the cube") are ORDER
+  changes: the rep edits the line items; a bare "cancel the cube" reads
+  as a drop, and whether it is the whole job is the rep's call. `src/lib/email/jobChangeSignals.ts`:
+  `classifyChangeSignal()` is the pure read of the words + the reply
+  classifier + the extractor's messageNature, evidence quoted verbatim;
+  `detectJobChangeSignals(messageId)` ties the message to LIVE jobs
+  (thread.jobId / JobContact email / company website domain / order
+  number in the subject) and upserts one row per (job, message). Runs
+  from the pubsub ingest and again after extraction. Shown on the job
+  page (`JobEmailSignalsCard` — Mark lost… opens the same modal as the
+  menu; Handled / Not a change resolve the row, audited
+  `job.email_signal_*`) and in Action Items (`email-change-signal`).
+- `applyReplyClassificationToCadence` no longer marks an order LOST on
+  EXPLICIT_REJECTION — it pauses the cadence and leaves the LOST call to
+  the human. (It was dead anyway: `EmailMessage.companyId` is never
+  written at ingest, so the bridge always returned `no-company-link`.)
+- `scripts/brief-email-crosscheck.ts` is the manual version of the same
+  read: the jobs a "Today at SirReel" brief named, against the last N
+  days of client email, flagged with the same classifier. Read-only.
+- **Schema change: run `npx prisma db push` (additive: two enums + one
+  table). Until then every write/read of the table fails soft** — no
+  suggestions, nothing else affected. `npm run test:job-change-signals`.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
@@ -341,8 +402,8 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     the vehicle document's structure and numbers; clause 4 is GL +
     inland-marine instead of auto, clause 7 is Delivery/Setup/Service
     instead of Drivers. Wes to read once before it goes to Evan.
-- **Onboarding:** `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]`
-  (after `prisma db push`) upserts the vendor, seeds a placeholder roster
+- **Onboarding (ran 2026-09-09, journal `journals/onboard-power-trip-*.json`):**
+  `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]` upserts the vendor, seeds a placeholder roster
   across their categories (rates EMPTY — Evan proposes from his page;
   unlisted until photos + signature), mints the account link, journals ids.
   Then on /crm/portals#vendor: set the deal, file the standard agreement,
@@ -350,6 +411,41 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   units or a minted link, not only ones with bookings.
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
   agreement variant and welcome-email wording.
+- **Partner photos are live at once, HQ is told (Wes 2026-09-11).** Evan adds
+  photos from his page (`UnitPhotosForm`, shipped in `41965af`); they reach
+  sirreel.com the moment the unit is listed and the agreement is signed, no
+  approval gate. `notePartnerPhotoAdded` stamps
+  `SubcontractedVehiclePhoto.uploadedByPartnerAt`, emails the vendor-portal
+  channel once per 10-minute burst, and the `partner-photos-added` action
+  item (one per unit) stays until HQ presses "Looks good" (`reviewedAt`) on
+  the roster unit page or removes the photo. Columns via
+  `scripts/add-partner-photo-columns.ts` (additive SQL); everything fails
+  soft until it has run. `npm run test:partner-photos`.
+- **Do NOT `prisma db push` for the next partner column.** 2026-09-10: the
+  live DB carries `sr_job_locations` and nine `sub_rentals` columns that no
+  schema file knows; a push from a checkout drops them. Add columns with
+  additive SQL (see the specialty-vehicles commit `029d94e`).
+
+## Battery-power partner candidates (2026-09-10 — queued, NOT yet in the DB)
+- Wes asked for an LA battery-generator outfit that rents to productions,
+  with a partner portal queued. Four candidates, ranked, live in
+  `scripts/battery-partner-candidates.ts` (plain data): **Saniset Fleet**
+  (Van Nuys, CleanGEN J250 250 kWh — lead), **Pig Pen Rentals** (LA County,
+  battery is a side line of a toilet/fence renter), **GreenLite Trailers**
+  (Agua Dulce, Moxion 600/75 530 kWh — also rents star trailers, so part
+  competitor), **Greenwave Rentals** (Voltstack fleet, Vancouver HQ with an
+  LA service area — not LA-based). Each carries the research, the fit and
+  the caveat; emails are seeded only where quotable (a guessed email sends
+  the introduction to nobody).
+- `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
+  --all [--dry] [--email slug=… --phone slug=…]` is the PowerTrip onboarding
+  generalised over that registry: upsert Vendor (EQUIPMENT, Power &
+  Generators), seed a rate-less delivered unlisted roster, mint the account
+  link, journal ids. Then /crm/portals#vendor: deal → introduction (Wes) →
+  standard Partner Equipment Agreement → email the link. The session that
+  wrote it had no DATABASE_URL, so nothing has been run yet.
+- `npm run test:battery-candidates` guards the registry (unique names,
+  real sections, no rates, delivered not driven, well-formed emails).
 
 ## Active Roadmap
 1. AI fleet optimization

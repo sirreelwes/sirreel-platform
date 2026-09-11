@@ -23,6 +23,7 @@ import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
+import { WELCOME_SENT_ACTION, welcomeSignal } from '@/lib/jobs/welcomeReminder'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { rollupAgreementState } from '@/lib/jobs/readinessBatch'
@@ -334,6 +335,24 @@ export async function GET(req: NextRequest) {
     // has to ask both stores or it calls a job a blocker with a live card on
     // the account. One query for the page; see lib/payments/jobCardOnFile.ts.
     const walletCardCompanies = await companiesWithWalletCards(jobs.map((j) => j.companyId))
+
+    // Welcome email sent? (Wes 2026-09-11.) The send stamps
+    // `job.welcome_sent` on the job (no column); one query for the page,
+    // newest row per job. The tile's reminder and the job page's button
+    // read the same rule — lib/jobs/welcomeReminder.
+    const welcomeRows = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'Job',
+        action: WELCOME_SENT_ACTION,
+        entityId: { in: jobs.map((j) => j.id) },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { entityId: true, createdAt: true },
+    })
+    const welcomeSentByJob = new Map<string, Date>()
+    for (const r of welcomeRows) {
+      if (!welcomeSentByJob.has(r.entityId)) welcomeSentByJob.set(r.entityId, r.createdAt)
+    }
 
     // Annual COIs carry forward (Wes 2026-09-02) — the detail route resolves
     // this per job through lib/coi/companyCoi.resolveJobCoi; the list needs
@@ -685,6 +704,23 @@ export async function GET(req: NextRequest) {
         (o) => (o as { status: OrderStatus }).status === 'APPROVED',
       ).length
 
+      // Quote out, no welcome yet → the tile reminds. Same inputs the
+      // job page's button reads (GET /api/jobs/[id]/welcome).
+      const welcomeSig = welcomeSignal({
+        jobStatus: j.status,
+        orders: j.orders.map((o) => ({
+          status: o.status,
+          archivedAt: o.archivedAt,
+          quoteSentAt: (o as { quoteSentAt?: Date | null }).quoteSentAt ?? null,
+        })),
+        sentAt: welcomeSentByJob.get(j.id) ?? null,
+      })
+      const welcome = {
+        state: welcomeSig.state,
+        quotedAt: welcomeSig.quotedAt?.toISOString() ?? null,
+        sentAt: welcomeSig.sentAt?.toISOString() ?? null,
+      }
+
       const readinessCardOnFile =
         liveBookings.some(
           (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
@@ -832,6 +868,7 @@ export async function GET(req: NextRequest) {
         gear,
         approvedUnbooked,
         redlinePending,
+        welcome,
         cadence,
         hasLD,
         hasStageScope,

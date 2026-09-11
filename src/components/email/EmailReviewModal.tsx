@@ -151,6 +151,11 @@ export type EmailReviewTarget =
   // Send is NOT gated on the rep writing something: an empty box sends the
   // standard opener above the list.
   | { kind: 'paperwork-summary'; jobId: string; message?: string | null }
+  // "Send welcome email" — the job page's hello-and-here-is-your-link, sent
+  // once a quote is out (Wes 2026-09-11). The compose box is SEEDED with
+  // Wes's wording (composition.defaultBody) so what the rep sees is what
+  // goes; the job-page link is minted at send time.
+  | { kind: 'job-welcome'; jobId: string; message?: string | null }
   // "Ask client for job name" from Review Quote. There is no Order and often
   // no saved Person yet, so the recipient travels in the target rather than
   // being derived server-side. Wes 2026-09-02: this used to send on the first
@@ -235,6 +240,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         send: `/api/jobs/${target.jobId}/paperwork-summary/send`,
         titleKind: 'Paperwork summary',
       };
+    case 'job-welcome':
+      return {
+        preview: `/api/jobs/${target.jobId}/welcome/preview`,
+        send: `/api/jobs/${target.jobId}/welcome/send`,
+        titleKind: 'Welcome email',
+      };
     case 'ask-job-name':
       return {
         preview: `/api/inquiries/${target.inquiryId}/ask-job-name/preview`,
@@ -285,7 +296,8 @@ function buildPreviewBody(
   if (
     target.kind === 'quote' ||
     target.kind === 'card-auth' ||
-    target.kind === 'paperwork-summary'
+    target.kind === 'paperwork-summary' ||
+    target.kind === 'job-welcome'
   ) {
     base.customMessage = customMessage.trim() || null;
   }
@@ -423,6 +435,15 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
           // surface the error — better than wiping the modal.
         } else {
           setPreview(json as CompositionOk);
+          // The welcome opens with Wes's wording already in the box rather
+          // than behind a "Use standard wording" button: the point of the
+          // email is that wording, and a rep who wants to change a line
+          // should see the line. Only on the first fetch, only into an
+          // empty box — never over anything typed.
+          if (isInitial && target.kind === 'job-welcome' && typeof json?.defaultBody === 'string') {
+            const seed = json.defaultBody as string;
+            setCustomMessage((cur) => (cur.trim() ? cur : seed));
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Preview failed');
@@ -670,12 +691,15 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
     target.kind === 'followup-order' ||
     target.kind === 'followup-job' ||
     target.kind === 'ask-job-name' ||
-    target.kind === 'paperwork-summary';
-  // …with one exception. For every other kind the rep's words ARE the email,
+    target.kind === 'paperwork-summary' ||
+    target.kind === 'job-welcome';
+  // …with two exceptions. For every other kind the rep's words ARE the email,
   // so an empty box means an empty send. The paperwork summary's content is
   // the checklist — statuses and buttons derived from the job — and the box
-  // is an optional opener above it, so Send stays live on a blank page.
-  const bodyOptional = target.kind === 'paperwork-summary';
+  // is an optional opener above it, so Send stays live on a blank page. The
+  // welcome's box is seeded with Wes's wording and the server renders that
+  // same wording when it is cleared, so a blank box still sends the welcome.
+  const bodyOptional = target.kind === 'paperwork-summary' || target.kind === 'job-welcome';
   // Nothing is written for the rep any more, so an empty box would mean an
   // empty email. The templated fallback still lives server-side for
   // non-composer callers, but firing it from here would quietly hand back
@@ -799,7 +823,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                       Other contacts on this{' '}
                       {target.kind === 'followup-job' ||
                       target.kind === 'card-auth' ||
-                      target.kind === 'paperwork-summary'
+                      target.kind === 'paperwork-summary' ||
+                      target.kind === 'job-welcome'
                         ? 'job'
                         : 'order'}
                     </div>
@@ -977,7 +1002,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                             ? 'Blank page — write it, or press Suggest. Your words are the whole ask, greeting included; the link the client taps to answer, and the sign-off, stay — without the link there is nothing for them to fill in.'
                             : target.kind === 'paperwork-summary'
                               ? 'Optional. The checklist below your words does the work — what is on file, what is still needed, a button on every outstanding item. Leave this blank and the standard opener goes out; write here and it replaces that opener, greeting included.'
-                              : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
+                              : target.kind === 'job-welcome'
+                                ? 'The standard welcome, ready to go — edit anything, or send it as is. Your words are the whole email, greeting included; the “Open your job” button (no login needed) and the sign-off are added underneath.'
+                                : 'Blank page — write it, or press Suggest. Your words are the whole email, greeting included; the portal button and sign-off are added underneath.'}
                   </p>
                   <div className="mt-2 space-y-2">
                       {/* Who this is going to — reference, not a promise.
@@ -1014,7 +1041,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                                 ? 'Write the ask — start with a greeting. The security paragraph and the secure button follow it; never ask for the number itself. Or press Suggest.'
                                 : target.kind === 'paperwork-summary'
                                   ? 'Optional — leave blank to send the standard opener. Anything you write replaces it, greeting included; do not list the items, the checklist below does that.'
-                                  : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
+                                  : target.kind === 'job-welcome'
+                                    ? 'Leave blank to send the standard welcome. Anything you write replaces it, greeting included; the job link button is added underneath.'
+                                    : 'Write the email — start with a greeting. The portal button and sign-off are added underneath. Or press Suggest.'
                         }
                         className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-500 resize-y disabled:opacity-50"
                       />

@@ -35,6 +35,7 @@ export async function GET() {
     select: {
       gateCode: true, gateCodeUpdatedAt: true, gateCodeUpdatedById: true,
       containerCode: true, containerCodeUpdatedAt: true,
+      lockboxInstructionsUrl: true,
     },
   })
 
@@ -118,6 +119,7 @@ export async function GET() {
     gateCodeUpdatedBy,
     containerCode: s?.containerCode ?? '',
     containerCodeUpdatedAt: s?.containerCodeUpdatedAt ?? null,
+    lockboxInstructionsUrl: s?.lockboxInstructionsUrl ?? '',
     jobs,
     audit,
     usage,
@@ -142,7 +144,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string
+        action?: string; gateCode?: string; containerCode?: string; lockboxInstructionsUrl?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string
         name?: string; level?: string; note?: string; jobCode?: string; grantId?: string
       }
     | null
@@ -263,6 +265,41 @@ export async function POST(req: NextRequest) {
       },
     })
     return NextResponse.json({ ok: true })
+  }
+
+  // The vehicle key lock box how-to. Not a code — a public link (the old
+  // www.sirreel.com/lockbox page is dead since the cutover). Rendered in
+  // the after-hours vehicle pickup email whenever it is set; blank hides
+  // the line. http(s) only, so a typo can't become a mailto: or javascript:.
+  if (body.action === 'set-lockbox-url') {
+    const raw = typeof body.lockboxInstructionsUrl === 'string' ? body.lockboxInstructionsUrl.trim().slice(0, 500) : ''
+    let url: string | null = null
+    if (raw) {
+      const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+      try {
+        const u = new URL(withScheme)
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('scheme')
+        url = u.toString()
+      } catch {
+        return NextResponse.json({ error: 'That is not a web address. Paste a full link like https://www.sirreel.com/lockbox' }, { status: 400 })
+      }
+    }
+    await prisma.siteSetting.upsert({
+      where: { id: SINGLETON },
+      create: { id: SINGLETON, lockboxInstructionsUrl: url },
+      update: { lockboxInstructionsUrl: url },
+    })
+    await prisma.auditLog.create({
+      data: {
+        userId: gate.user.id,
+        action: 'admin.lockbox_instructions_url_updated',
+        entityType: 'SiteSetting',
+        entityId: SINGLETON,
+        oldValues: {},
+        newValues: { url, at: new Date().toISOString() },
+      },
+    })
+    return NextResponse.json({ ok: true, url })
   }
 
   if (body.action === 'regenerate-job-code') {

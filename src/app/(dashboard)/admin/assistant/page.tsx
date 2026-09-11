@@ -72,6 +72,7 @@ type Data = {
   gateCodeUpdatedBy: string | null
   containerCode: string
   containerCodeUpdatedAt: string | null
+  lockboxInstructionsUrl: string
   jobs: Job[]
   audit: AuditRow[]
   usage: Usage
@@ -527,6 +528,8 @@ export default function AssistantAdminPage() {
   const [savingGate, setSavingGate] = useState(false)
   const [containerInput, setContainerInput] = useState('')
   const [savingContainer, setSavingContainer] = useState(false)
+  const [lockboxUrlInput, setLockboxUrlInput] = useState('')
+  const [savingLockboxUrl, setSavingLockboxUrl] = useState(false)
   const [query, setQuery] = useState('')
   const [regenId, setRegenId] = useState<string | null>(null)
 
@@ -539,6 +542,7 @@ export default function AssistantAdminPage() {
       setData(d)
       setGateInput(d.gateCode || '')
       setContainerInput(d.containerCode || '')
+      setLockboxUrlInput(d.lockboxInstructionsUrl || '')
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -594,6 +598,23 @@ export default function AssistantAdminPage() {
       alert('Save failed: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
       setSavingContainer(false)
+    }
+  }
+
+  async function saveLockboxUrl() {
+    setSavingLockboxUrl(true)
+    try {
+      const res = await fetch('/api/admin/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-lockbox-url', lockboxInstructionsUrl: lockboxUrlInput }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      alert('Save failed: ' + (e instanceof Error ? e.message : 'error'))
+    } finally {
+      setSavingLockboxUrl(false)
     }
   }
 
@@ -751,6 +772,47 @@ export default function AssistantAdminPage() {
               <div className="mt-2 text-xs text-zinc-500">
                 Last recorded {fmt(data.containerCodeUpdatedAt)}.
               </div>
+            </div>
+
+            {/* The vehicle key lock box how-to. A link, not a code: Jose's
+                hand-typed pickup email carried www.sirreel.com/lockbox,
+                which died with the site cutover. Set it here and the
+                after-hours vehicle pickup email (job page → Logistics)
+                carries it again; blank leaves the line out. */}
+            <div className="mt-5 border-t border-zinc-800 pt-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                Vehicle lock box instructions link
+              </h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                Public how-to page or PDF for the key lock box on the vehicles. Included in the
+                after-hours vehicle pickup email sales sends from the job page. Leave blank to
+                send the email without it.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <input
+                  value={lockboxUrlInput}
+                  onChange={(e) => setLockboxUrlInput(e.target.value)}
+                  placeholder="https://www.sirreel.com/lockbox"
+                  className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                />
+                <button
+                  onClick={saveLockboxUrl}
+                  disabled={savingLockboxUrl || lockboxUrlInput === (data.lockboxInstructionsUrl || '')}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {savingLockboxUrl ? 'Saving…' : 'Save link'}
+                </button>
+              </div>
+              {data.lockboxInstructionsUrl ? (
+                <div className="mt-2 text-xs text-zinc-500">
+                  Currently{' '}
+                  <a href={data.lockboxInstructionsUrl} target="_blank" rel="noreferrer" className="underline text-zinc-300 hover:text-white">
+                    {data.lockboxInstructionsUrl}
+                  </a>
+                </div>
+              ) : (
+                <div className="mt-2 text-xs text-zinc-500">Not set — the email goes out without a lock box link.</div>
+              )}
             </div>
           </Panel>
 

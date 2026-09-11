@@ -29,7 +29,10 @@
  * so cleanup, if ever wanted, is by captured id.
  *
  *   export DATABASE_URL=$(grep DATABASE_URL .env.local | grep -v PRISMA | cut -d'"' -f2)
- *   npx prisma db push            # the additive partner_kind / catalog_section columns
+ *   # Columns partner_kind / catalog_section / default_receive_method must
+ *   # already exist. They do since 2026-09-09. For any future column use
+ *   # additive SQL, NOT `prisma db push` — the live DB carries tables and
+ *   # columns no schema file knows, and a push drops them (see 029d94e).
  *   npx tsx scripts/onboard-power-trip.ts [--email evan@…] [--phone 562-…] [--dry]
  */
 

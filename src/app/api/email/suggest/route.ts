@@ -41,6 +41,7 @@ type Kind =
   | 'ask-job-name'
   | 'estimate'
   | 'paperwork-summary'
+  | 'job-welcome'
 
 interface Body {
   kind?: string
@@ -111,6 +112,14 @@ function purposeFor(kind: Kind, stage: string | null): string {
         'the moment something changes. Write two or three sentences of context (why now, what the',
         'deadline is) and point at the list below.',
       ].join(' ')
+    case 'job-welcome':
+      return [
+        'This is the WELCOME email a client gets once their quote is out: a short, warm hello that',
+        'says we are looking forward to working with them and hands them the link to their job. Tell',
+        'them paperwork is done there, orders can be viewed and changed there, all the way to the final',
+        'invoice being paid, and that no login is needed — just follow the link. The "Open your job"',
+        'button renders underneath automatically, so do not paste a URL.',
+      ].join(' ')
     case 'followup-order':
     case 'followup-job': {
       const s = (stage || '').toUpperCase()
@@ -137,6 +146,7 @@ const KINDS: Kind[] = [
   'ask-job-name',
   'estimate',
   'paperwork-summary',
+  'job-welcome',
 ]
 
 function firstNameOf(full: string | null | undefined): string {

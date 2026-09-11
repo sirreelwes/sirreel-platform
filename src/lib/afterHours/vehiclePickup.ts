@@ -147,7 +147,7 @@ export async function sendVehiclePickupInstructions(args: {
   })
   if (!job) return { ok: false, reason: 'job_not_found', message: 'Job not found.' }
 
-  const { gateCode } = await afterHoursPayload()
+  const { gateCode, lockboxInstructionsUrl } = await afterHoursPayload()
   if (!gateCode) {
     return {
       ok: false,
@@ -223,6 +223,7 @@ export async function sendVehiclePickupInstructions(args: {
     gateCode,
     vehicles,
     note,
+    lockboxInstructionsUrl,
     repName: job.agent?.name || null,
     repPhone: job.agent?.phone || null,
     repEmail: job.agent?.email || null,

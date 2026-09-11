@@ -35,6 +35,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
 const SHOW_AGREEMENT_ON_FILE = true;
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
+import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
@@ -56,6 +57,7 @@ import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
 import { JobVehiclePickupPanel } from '@/components/jobs/JobVehiclePickupPanel';
+import { JobEmailSignalsCard } from '@/components/jobs/JobEmailSignalsCard';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
@@ -1648,9 +1650,11 @@ const driverTone = (d: any): string => {
                 <span className="text-[19px] font-semibold text-zinc-900 leading-tight">
                   {pickupDays !== null && pickupDays < 0 ? 'Picked up' : 'Picks up'} {fmtPickup(nextPickup.start)}
                 </span>
+                {/* Phone: the return takes its own line, no separator to
+                    orphan. Wider: one line, dot between. */}
                 {nextPickup.end && (
-                  <span className="text-[15px] text-zinc-700">
-                    · back {fmtPickup(nextPickup.end)}
+                  <span className="text-[15px] text-zinc-700 w-full sm:w-auto">
+                    <span className="hidden sm:inline">· </span>back {fmtPickup(nextPickup.end)}
                   </span>
                 )}
                 {!job.returnedAt && (
@@ -1703,7 +1707,7 @@ const driverTone = (d: any): string => {
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               <JobQuickActions
                 job={{
                   id: job.id,
@@ -1716,6 +1720,10 @@ const driverTone = (d: any): string => {
                   endDate: isoDate(orderSpan.end),
                 }}
               />
+              {/* The client's welcome — hello + their no-login link to
+                  this job (Wes 2026-09-11). Loud while a quote is out and
+                  nothing has welcomed them; quiet once sent. */}
+              <JobWelcomeButton jobId={job.id} onSent={load} />
             </div>
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">
@@ -1854,6 +1862,11 @@ const driverTone = (d: any): string => {
             </div>
           </div>
         )}
+
+        {/* A client email that reads like a change of plan. The card is a
+            suggestion with the sentence quoted — Mark lost… is the same
+            modal as the menu; nothing is applied without the click. */}
+        <JobEmailSignalsCard jobId={job.id} onMarkLost={() => setMarkLostOpen(true)} />
 
         {/* Metadata — the four numbers an agent scans, one row. The
             production enum lives with its picker in the hero footer;
