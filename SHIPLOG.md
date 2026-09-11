@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA: owners-only notes, and the one-pagers
 
-`8a101ab` aha: owners' tier for the succession notes + three audience one-pagers
+`7c55e89` aha: owners' tier for the succession notes + three audience one-pagers
 
 Wes: "No one should know that Greyson is the backup CEO. That is for him and me to know." Then: "These are internal notes for owners and not for anyone on the staff other than Tamara, Greyson and Wes to have access to the knowledge." The 2026-09-11 continuity work had written the backup CEO's name into CLAUDE.md, two code comments, the add-user script and the new staff one-pager — and `platform_memory` hands CLAUDE.md + docs/ to EVERY admin, so any ADMIN could have asked AHA who steps in. Fixed two ways: the names are gone from everything indexed for admins, and the knowledge now has a place only the owners can reach.
 
