@@ -80,6 +80,7 @@
     "test:driver-payroll": "tsx tests/sub-rentals/driver-payroll.test.ts",
     "test:sub-rental-hold": "tsx tests/sub-rentals/hold-state.test.ts",
     "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
+    "test:discount-waterfall": "tsx tests/sub-rentals/discount-waterfall.test.ts",
     "test:battery-candidates": "tsx tests/sub-rentals/battery-partner-candidates.test.ts",
     "test:partner-stage": "tsx tests/sub-rentals/partner-stage.test.ts",
     "test:partner-photos": "tsx tests/sub-rentals/partner-photos.test.ts",

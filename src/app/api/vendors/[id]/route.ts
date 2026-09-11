@@ -138,6 +138,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data.partnerSharePercent = n === null ? null : Math.round(n * 100) / 100
   }
 
+  if ('partnerMaxSharePercent' in body) {
+    // How far SirReel's share may rise to keep a client (discountWaterfall.ts).
+    // Empty clears it — the partner does not flex.
+    const raw = body.partnerMaxSharePercent
+    const n = raw === null || raw === '' ? null : Number(raw)
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) {
+      return NextResponse.json({ error: 'partnerMaxSharePercent must be 0–100' }, { status: 400 })
+    }
+    if (n !== null) {
+      const share = 'partnerSharePercent' in data
+        ? (data.partnerSharePercent as number | null)
+        : await prisma.vendor.findUnique({ where: { id }, select: { partnerSharePercent: true } }).then((v) => (v?.partnerSharePercent == null ? null : Number(v.partnerSharePercent)))
+      if (share != null && n < share) {
+        return NextResponse.json({ error: `The maximum can't be below the deal itself (${share}%).` }, { status: 400 })
+      }
+    }
+    data.partnerMaxSharePercent = n === null ? null : Math.round(n * 100) / 100
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
   }

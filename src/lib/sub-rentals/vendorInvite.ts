@@ -37,6 +37,8 @@ export function buildPartnerWelcome(a: {
   senderName: string
   /** SirReel's share of the vehicle rental rate, when the deal is set. */
   sharePercent: number | null
+  /** How far SirReel's share may rise to keep a client (discount waterfall). */
+  maxSharePercent?: number | null
   /** VEHICLES (drivers, hours, mileage) or EQUIPMENT (delivered and set up).
    *  Picks the nouns and swaps the driver ask for a delivery-contact ask. */
   kind?: PartnerKindKey
@@ -50,7 +52,11 @@ export function buildPartnerWelcome(a: {
   const keep = a.sharePercent == null ? null : Math.round((100 - a.sharePercent) * 100) / 100
   const deal = a.sharePercent == null
     ? null
-    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the ${w.rateNoun} and you receive ${keep}%, invoiced to SirReel after each booking returns. Each ${w.one} on your page shows what that comes to per day.`
+    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the ${w.rateNoun} and you receive ${keep}%, invoiced to SirReel after each booking returns. Each ${w.one} on your page shows what that comes to per day. ${
+        a.maxSharePercent != null && a.maxSharePercent > a.sharePercent
+          ? `If a production needs a discount to book, it is shared equally with SirReel until SirReel's share reaches ${a.maxSharePercent}%; past that, SirReel covers the rest.`
+          : `If a production needs a discount to book, it comes out of SirReel's share, not yours.`
+      }`
 
   // Plain-text bullets are the source; HTML wraps them. Kept as data so the
   // two versions of the email cannot drift.
@@ -236,7 +242,7 @@ export async function sendPartnerWelcome(args: {
 export async function partnerIntroDraft(vendorId: string, sender: { name: string; email?: string | null; phone?: string | null; title?: string | null }): Promise<IntroDraft> {
   const v = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { name: true, contactName: true, partnerKind: true, partnerSharePercent: true },
+    select: { name: true, contactName: true, partnerKind: true, partnerSharePercent: true, partnerMaxSharePercent: true },
   })
   if (!v) throw Object.assign(new Error('Vendor not found'), { status: 404 })
   return buildIntroDraft({
@@ -256,7 +262,7 @@ export async function partnerIntroDraft(vendorId: string, sender: { name: string
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
   const v = await prisma.vendor.findUnique({
     where: { id: args.vendorId },
-    select: { id: true, name: true, contactName: true, isActive: true, welcomeSentAt: true, partnerSharePercent: true, partnerKind: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
+    select: { id: true, name: true, contactName: true, isActive: true, welcomeSentAt: true, partnerSharePercent: true, partnerMaxSharePercent: true, partnerKind: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
   })
   if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
   // The introduction comes first (Wes 2026-09-10). A link to a page of rates
@@ -291,6 +297,7 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
     agreementWaiting: v.agreements.length > 0 && !v.agreements[0].signedAt,
     senderName,
     sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
+    maxSharePercent: v.partnerMaxSharePercent == null ? null : Number(v.partnerMaxSharePercent),
     kind: v.partnerKind,
   })
   // Only the recipient is deduped out of the CC list. The sender stays

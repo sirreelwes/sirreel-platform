@@ -72,14 +72,20 @@
 import type { VendorAgreementClause } from './vendorAgreementClauses'
 
 export const VENDOR_EQUIPMENT_AGREEMENT_TITLE = 'Partner Equipment Agreement'
-export const VENDOR_EQUIPMENT_AGREEMENT_VERSION = '2026-09-10b'
+export const VENDOR_EQUIPMENT_AGREEMENT_VERSION = '2026-09-11'
 
-export function vendorEquipmentAgreementTerms(sharePercent: number | null): { label: string; value: string }[] {
+export function vendorEquipmentAgreementTerms(sharePercent: number | null, maxSharePercent: number | null = null): { label: string; value: string }[] {
   if (sharePercent == null) return [{ label: 'SirReel’s share of the rental rate', value: 'As recorded on your partner page' }]
   const keep = Math.round((100 - sharePercent) * 100) / 100
   return [
     { label: 'SirReel’s share of the rental rate', value: `${sharePercent}%` },
     { label: 'Partner receives', value: `${keep}% of the listed rate, plus listed delivery, fuel and technician charges, paid within 30 days of the Unit’s return` },
+    {
+      label: 'Client discounts (Section 8)',
+      value: maxSharePercent != null && maxSharePercent > sharePercent
+        ? `Shared equally until SirReel’s share reaches ${maxSharePercent}%; SirReel bears the rest`
+        : 'Borne by SirReel',
+    },
   ]
 }
 
@@ -125,7 +131,7 @@ export const VENDOR_EQUIPMENT_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '8',
     title: 'Rates and Payment',
-    body: 'Your listed rate for a Unit is the rate the production pays. SirReel keeps the share of the rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Unit on your partner page at the time the booking is confirmed, plus any ancillary charges listed there (delivery and collection, fuel, cable and distribution, generator hours, technician time and the like), which are paid to you in full unless your partner page says otherwise. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Unit is collected, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Unit placed through SirReel.',
+    body: 'Your listed rate for a Unit is the rate SirReel quotes the production. SirReel keeps the share of the rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Unit on your partner page at the time the booking is confirmed, plus any ancillary charges listed there (delivery and collection, fuel, cable and distribution, generator hours, technician time and the like), which are paid to you in full unless your partner page says otherwise. When SirReel gives a production a discount off that rate to secure a booking, the discount is shared equally between you and SirReel until SirReel’s share reaches the maximum stated in the Terms box, and SirReel bears any further discount; where no maximum is stated, SirReel bears the whole discount. Either way your payment for the Unit is never less than its listed rate reduced by that maximum, or by SirReel’s share where no maximum is stated, and the booking notice shows the rate that applies. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Unit is collected, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Unit placed through SirReel.',
   },
   {
     ref: '9',

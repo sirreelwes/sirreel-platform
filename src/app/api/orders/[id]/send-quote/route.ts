@@ -42,6 +42,7 @@ import { rankRecipients } from '@/lib/email/recipients'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import { sendPortalInvite } from '@/lib/portal/sendPortalInvite'
+import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,6 +93,13 @@ function bad(status: number, error: string) {
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
   if (!session?.user?.email) return bad(401, 'unauthorized')
+
+  // Never quote a partner's unit below SirReel's floor (discountWaterfall.ts).
+  // The backstop for what the edit routes don't gate one by one — a partner
+  // unit added under an existing discount, a line deleted from under a flat
+  // total.
+  const floor = await partnerFloorGate(params.id)
+  if (!floor.ok) return bad(409, floor.message)
 
   const body = (await req.json().catch(() => ({}))) as SendQuoteBody
   const message =

@@ -7,6 +7,7 @@ import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rent
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
 import type { PartnerStage } from '@/lib/sub-rentals/partnerStage'
+import { describeDeal, SIRREEL_FLOOR_PERCENT } from '@/lib/sub-rentals/discountWaterfall'
 
 export interface RateProposalRow {
   unitId: string
@@ -17,7 +18,7 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, maxSharePercent = null, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
   vendorId: string
   hasLogo: boolean
   /** Units with partner-added photos nobody at HQ has looked at. Live already. */
@@ -41,6 +42,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   canSendWelcome?: boolean
   /** SirReel's share of the vehicle rental rate — the deal. Null = not set. */
   sharePercent: number | null
+  /** How far SirReel's share may rise to keep a client (discountWaterfall.ts). */
+  maxSharePercent?: number | null
   /** Clause 10 permission to name them to clients, and what they said. */
   naming?: { allowed: boolean; note: string | null } | null
   /** Their certificate of insurance: when HQ received it and when it lapses. */
@@ -64,6 +67,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [coiState, setCoiState] = useState(coi)
   const [coiExpiry, setCoiExpiry] = useState(coi.expiresAt ? coi.expiresAt.slice(0, 10) : '')
   const [shareDraft, setShareDraft] = useState(sharePercent == null ? '' : String(sharePercent))
+  const [maxShare, setMaxShare] = useState<number | null>(maxSharePercent)
+  const [maxDraft, setMaxDraft] = useState(maxSharePercent == null ? '' : String(maxSharePercent))
   const [named, setNamed] = useState(!!naming?.allowed)
   const [nameNote, setNameNote] = useState(naming?.note ?? '')
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
@@ -104,6 +109,17 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     setBusy('share'); setMsg(null)
     const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerSharePercent: n }) })
     if (r.ok) { setShare(n); setMsg(n == null ? 'Deal cleared.' : `Deal saved — SirReel keeps ${n}% of the vehicle rental rate. New bookings and the agreement use it; re-file the agreement so the PDF says so.`) }
+    else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+    setBusy(null)
+  }
+  async function saveMaxShare() {
+    const raw = maxDraft.trim()
+    const n = raw === '' ? null : Number(raw)
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) { setMsg('Maximum must be 0–100.'); return }
+    if (n !== null && share != null && n < share) { setMsg(`The maximum can't be below the deal (${share}%).`); return }
+    setBusy('maxShare'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerMaxSharePercent: n }) })
+    if (r.ok) { setMaxShare(n); setMsg(n == null ? 'Maximum cleared — a client discount on their units now comes out of SirReel’s share alone.' : `Saved — to keep a client, SirReel’s share can rise to ${n}%. The agreement’s Terms box prints it; re-file the agreement so the PDF says so.`) }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
@@ -253,6 +269,19 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
           <button onClick={saveShare} disabled={busy === 'share' || shareDraft.trim() === (share == null ? '' : String(share))} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">
             {busy === 'share' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
           </button>
+        </div>
+        <div className="mt-3 pt-2 border-t border-lt-hairline">
+          <div className="text-xs text-lt-fg2">
+            <span className="text-lt-fg font-medium">To keep a client</span> — the most SirReel&apos;s share may rise when a production gets a discount on their unit (VSM Planet: deal 35%, they&apos;ll go to 43%). A discount is shared equally until it gets there, then comes out of SirReel&apos;s share, never below {SIRREEL_FLOOR_PERCENT}% of list. Blank = they don&apos;t flex.
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input value={maxDraft} onChange={(e) => setMaxDraft(e.target.value)} inputMode="decimal" placeholder={share == null ? '43' : String(share)} className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg w-20 text-right" />
+            <span className="text-xs text-lt-fg2">% max to SirReel</span>
+            <button onClick={saveMaxShare} disabled={busy === 'maxShare' || maxDraft.trim() === (maxShare == null ? '' : String(maxShare))} className="inline-flex items-center gap-1 text-[11px] font-semibold border border-lt-hairline rounded-md px-2 py-1 text-lt-fg disabled:opacity-40">
+              {busy === 'maxShare' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+            </button>
+          </div>
+          {share != null && <div className="text-[11px] text-lt-fg3 mt-1.5">{describeDeal(share, maxShare)}</div>}
         </div>
       </div>
 

@@ -269,7 +269,7 @@ export default async function CompanyPortalsPage() {
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
-      partnerSharePercent: true, nameClientFacing: true, namePermissionNote: true,
+      partnerSharePercent: true, partnerMaxSharePercent: true, nameClientFacing: true, namePermissionNote: true,
       welcomeSentAt: true, welcomeSentTo: true,
       coiReceivedAt: true, coiExpiresAt: true,
       _count: { select: { subRentals: true, subcontractedVehicles: true } },
@@ -461,6 +461,7 @@ export default async function CompanyPortalsPage() {
                       contact={{ name: va.contactName, email: va.email, phone: va.phone, lotAddress: va.lotAddress }}
                       invited={va.portalInvitedAt ? { at: va.portalInvitedAt.toISOString(), to: va.portalInvitedTo ?? '' } : null}
                       sharePercent={dec(va.partnerSharePercent)}
+                      maxSharePercent={dec(va.partnerMaxSharePercent)}
                       naming={{ allowed: va.nameClientFacing, note: va.namePermissionNote }}
                       vendorName={va.name}
                       welcomeSent={va.welcomeSentAt ? { at: va.welcomeSentAt.toISOString(), to: va.welcomeSentTo } : null}

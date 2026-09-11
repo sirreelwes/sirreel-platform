@@ -49,17 +49,20 @@ export interface VendorNoticeArgs {
    *  production pays per day (their list), what the partner receives, and
    *  SirReel's share. Omitted on the estimate (nothing is committed) and on
    *  a cancellation. */
-  rate?: { listDaily: number | null; vendorDaily: number | null; vendorTotal: number | null; sharePercent: number } | null
+  rate?: { listDaily: number | null; vendorDaily: number | null; vendorTotal: number | null; sharePercent: number; concessionPercent?: number } | null
 }
 
 const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
-/** "Your rate: $1,276 / day (80% of $1,595 list) · $1,276 for the booking" */
+/** "Your rate: $1,276 / day (80% of $1,595 list) · $1,276 for the booking" —
+ *  and, when the client got a discount the partner shared in, it says so, so
+ *  a number below their usual split never reads as a mistake. */
 function rateLine(a: VendorNoticeArgs): string | null {
   const r = a.rate
   if (!r || r.vendorDaily == null) return null
   const keep = Math.round((100 - r.sharePercent) * 100) / 100
-  const basis = r.listDaily != null ? ` (${keep}% of ${usd(r.listDaily)} list)` : ` (${keep}% of list)`
+  const shared = r.concessionPercent ? ', after a client discount shared with SirReel' : ''
+  const basis = r.listDaily != null ? ` (${keep}% of ${usd(r.listDaily)} list${shared})` : ` (${keep}% of list${shared})`
   const total = r.vendorTotal != null ? ` · ${usd(r.vendorTotal)} for the booking` : ''
   return `Your rate: ${usd(r.vendorDaily)} / day${basis}${total}`
 }

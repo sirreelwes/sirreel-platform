@@ -172,7 +172,10 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
               <div style={{ fontSize: 14, color: '#6b6560' }}>SirReel hasn&apos;t set the split yet. It will show here, and on every booking, once it is.</div>
             ) : (
               <div style={{ fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>
-                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.
+                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.{' '}
+                {v.maxSharePercent != null && v.maxSharePercent > v.sharePercent
+                  ? <>If a production needs a discount to book, it is <strong style={{ color: '#111' }}>shared equally with SirReel</strong> until SirReel&apos;s share reaches {v.maxSharePercent}% (you receive {Math.round((100 - v.maxSharePercent) * 100) / 100}% of list); past that, SirReel covers the rest.</>
+                  : <>If a production needs a discount to book, it comes out of SirReel&apos;s share, not yours.</>}
               </div>
             )}
             {/* Wes 2026-09-10, second pass: the split is a conversation he

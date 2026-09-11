@@ -493,6 +493,40 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `npm run test:battery-candidates` guards the registry; `npm run
   test:partner-stage` guards the stage rule.
 
+## Partner discount waterfall (2026-09-11 — Wes)
+- Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a
+  client"): a client discount on a partner's unit is **shared 50/50** until
+  the partner's share reaches `Vendor.partnerMaxSharePercent`, then comes out
+  of **SirReel's share alone** down to a floor of **10% of LIST**
+  (`SIRREEL_FLOOR_PERCENT`); deeper is **declined**. $1,000 list: 0% →
+  VSM $650 / SirReel $350 · 16% → $570 / $270 · 33% → $570 / $100 · 35%
+  declined. The floor is of LIST, not of the billed price — 10% of billed
+  would let 35% through, and Wes declines it. Null max = the partner doesn't
+  flex. Before this the partner was paid list × (1 − share) whatever the
+  client paid, so 30% off a 30% deal made SirReel $0.
+- Pure math in `src/lib/sub-rentals/discountWaterfall.ts` (`npm run
+  test:discount-waterfall`); the DB half is `partnerMargins.ts`. Department
+  and order discounts are spread over the lines from computeOrderTotals'
+  breakdown (expendables excluded, as there).
+- `partnerFloorGate` runs on discount POST/PATCH, line PUT (ANY line — a
+  FIXED or flat-total order discount re-spreads), send-quote and
+  mark-booked. It refuses only what an edit makes worse, so an order already
+  over the line can still be eased. There is no override.
+- `stampVendorCost` pays the partner the waterfall for the LINE's billable
+  days — no weekly blocks, and no fallback to `clientDailyRate` (that is the
+  client's price). A stamped `vendorDailyRate` is COMMITTED: a later
+  discount comes out of SirReel, still floored.
+- Surfaces: DiscountsPanel "Partner units" (staff only — names the partner);
+  Portals deal card max field + `describeDeal`; partner page, account-link
+  invite, agreement §8 + Terms box say discounts are shared up to their max
+  and never mention SirReel's floor. Agreement v2026-09-11 — re-file for any
+  partner whose agreement was filed earlier.
+- Not guarded: a discount landing on a partner's ANCILLARY fee lines (paid
+  to them in full) comes out of SirReel; a partner unit ADDED under an
+  existing discount is caught at send/book, not at the add. VSM Planet is
+  not in the DB yet. The column went in by targeted `ALTER TABLE … ADD
+  COLUMN IF NOT EXISTS` — the live DB has drift, never `db push` blind.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

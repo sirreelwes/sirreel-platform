@@ -29,6 +29,7 @@ import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 import { auditLineItemEdit, extractIp, resolveOperatorId } from '@/lib/orders/auditLineItemEdit'
 import { isMoneyEditable } from '@/lib/orders/editability'
 import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
+import { partnerFloorGate, partnerMarginsForOrder } from '@/lib/sub-rentals/partnerMargins'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
       value: Number(d.value),
     })),
     breakdown,
+    // What the discounts leave each side on every partner unit — staff only
+    // (the panel sits behind canSeeMoney and names the partner).
+    partnerMargins: await partnerMarginsForOrder(id),
   })
 }
 
@@ -201,6 +205,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
       { status: 409 },
     )
+  }
+
+  // A partner's unit: the discount is shared with them up to their maximum,
+  // then comes out of SirReel's share — never below the floor
+  // (discountWaterfall.ts). Refused here, before it is on a quote.
+  const floor = await partnerFloorGate(orderId, {
+    discount: { next: { scope, departmentKey, type, value: valueNum, label } },
+  })
+  if (!floor.ok) {
+    return NextResponse.json({ error: floor.message, reason: floor.message }, { status: 409 })
   }
 
   const created = await prisma.orderDiscount.create({
