@@ -1,43 +1,41 @@
 /**
- * Queue up a partner portal for one or more BATTERY-POWER candidates —
- * the PowerTrip onboarding (scripts/onboard-power-trip.ts), generalised
- * over the registry in scripts/battery-partner-candidates.ts.
+ * Queue partner PROSPECTS — a Vendor row each, so the introduction can be
+ * sent from /crm/portals#vendor. Nothing more.
  *
- * Wes 2026-09-10: "find me a Los Angeles based battery powered generator
- * [company that] rents to productions in Los Angeles and Q up a partner
- * portal for me with them … if there are more than one options, give me
- * those so I can select them or even possibly send to all of them."
+ * Wes 2026-09-11: "no company gets onboarded until they reply and I mark it
+ * as a new partner." So this no longer seeds a roster or mints an account
+ * link (it did on 2026-09-10, in the PowerTrip mould). The roster and the
+ * link come from "Mark as new partner" on the Portals tab, after they reply
+ * — markAsPartner() in src/lib/sub-rentals/partnerStage.ts, reading the same
+ * registry this does (src/lib/sub-rentals/partnerProspects.ts).
  *
- * So this takes a selection. For each chosen candidate, idempotently:
+ * For each chosen prospect, idempotently:
  *   1. Upserts the Vendor row by name — kind EQUIPMENT, default catalog
  *      section Power & Generators, website, yard address, what they supply,
  *      the research notes. Email/phone land only when the registry has a
  *      quotable one or you pass --email / --phone (never clobbers a contact
  *      HQ has since set).
- *   2. Seeds a starter roster of SubcontractedVehicle rows, one per
- *      (vendor, name). Rates EMPTY on purpose — the partner proposes from
- *      their page, HQ accepts. Every unit DELIVERY, unlisted, with a
- *      staff-only placeholder note. Nothing reaches sirreel.com until a unit
- *      is listed, has a photo, AND the agreement is signed.
- *   3. Mints the partner's account link (Vendor.portalToken). Minting is
- *      SILENT: the vendor then shows on /crm/portals#vendor, where Wes sets
- *      the deal, sends the introduction (his alone to send — the account
- *      link is locked until it goes), files the standard Partner Equipment
- *      Agreement and emails the link.
+ *   2. Stamps partnerProspectAt if it is not set, so the Portals tab lists
+ *      them under Partner accounts with a "Prospect" chip.
  *
- * Writes a journal of every id it created
- * (journals/onboard-battery-partners-*.json) so cleanup is by captured id.
+ * Then, on /crm/portals#vendor → the company: send the introduction (Wes).
+ * When they reply: "Mark as new partner" → deal → standard Partner Equipment
+ * Agreement → email the account link.
+ *
+ * Writes a journal of the vendor id per prospect
+ * (journals/onboard-battery-partners-*.json).
  *
  *   export DATABASE_URL=$(grep DATABASE_URL .env.local | grep -v PRISMA | cut -d'"' -f2)
+ *   npx tsx scripts/add-partner-prospect-columns.ts        # once
  *   npx tsx scripts/onboard-battery-partners.ts --list
  *   npx tsx scripts/onboard-battery-partners.ts --only saniset --dry
  *   npx tsx scripts/onboard-battery-partners.ts --only saniset --only greenlite
  *   npx tsx scripts/onboard-battery-partners.ts --all
- *   npx tsx scripts/onboard-battery-partners.ts --only saniset --email saniset=rentals@… --phone saniset=818-…
+ *   npx tsx scripts/onboard-battery-partners.ts --only saniset --email saniset=steve@… --phone saniset=818-…
  */
 
 import { writeFileSync, mkdirSync } from 'fs'
-import { BATTERY_PARTNER_CANDIDATES, findBatteryPartnerCandidate, type BatteryPartnerCandidate } from './battery-partner-candidates'
+import { PARTNER_PROSPECTS, findPartnerProspect, type PartnerProspect } from '../src/lib/sub-rentals/partnerProspects'
 
 const args = process.argv.slice(2)
 const DRY = args.includes('--dry')
@@ -54,39 +52,37 @@ function flagAll(k: string): string[] {
 }
 
 /** `--email saniset=addr` → { saniset: 'addr' }. A bare value with ONE
- *  selected candidate is taken for that candidate. */
-function perCandidate(k: string, selected: string[]): Record<string, string> {
+ *  selected prospect is taken for that prospect. */
+function perProspect(k: string, selected: string[]): Record<string, string> {
   const out: Record<string, string> = {}
   for (const raw of flagAll(k)) {
     const eq = raw.indexOf('=')
     if (eq > 0) out[raw.slice(0, eq).trim().toLowerCase()] = raw.slice(eq + 1).trim()
     else if (selected.length === 1) out[selected[0]] = raw.trim()
-    else throw new Error(`${k} needs slug=value when more than one candidate is selected (got "${raw}")`)
+    else throw new Error(`${k} needs slug=value when more than one prospect is selected (got "${raw}")`)
   }
   return out
 }
 
 function printList() {
-  console.log('Battery-power partner candidates (ranked):\n')
-  BATTERY_PARTNER_CANDIDATES.forEach((c, i) => {
+  console.log('Partner prospects (ranked):\n')
+  PARTNER_PROSPECTS.forEach((c, i) => {
     console.log(`${i + 1}. ${c.name}  [--only ${c.slug}]`)
     console.log(`   ${c.website}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ' · no public email'}`)
     if (c.lotAddress) console.log(`   ${c.lotAddress}`)
     console.log(`   Fit: ${c.fit}`)
     if (c.caveat) console.log(`   Watch: ${c.caveat}`)
-    console.log(`   Roster seed: ${c.roster.map((u) => u.name).join(' · ')}\n`)
+    console.log(`   Roster once marked: ${c.roster.map((u) => u.name).join(' · ')}\n`)
   })
 }
 
-async function onboard(c: BatteryPartnerCandidate, email: string | undefined, phone: string | undefined) {
-  // Imported lazily so --list and --dry-without-DB never touch Prisma.
+async function queue(c: PartnerProspect, email: string | undefined, phone: string | undefined) {
+  // Imported lazily so --list never touches Prisma.
   const { prisma } = await import('../src/lib/prisma')
-  const { ensureVendorPortalToken, vendorAccountUrl } = await import('../src/lib/sub-rentals/vendorAccount')
 
-  const journal: { slug: string; vendorId: string | null; createdUnitIds: string[]; existingUnitIds: string[]; portalUrl: string | null; at: string } = {
-    slug: c.slug, vendorId: null, createdUnitIds: [], existingUnitIds: [], portalUrl: null, at: new Date().toISOString(),
+  const journal: { slug: string; vendorId: string | null; created: boolean; at: string } = {
+    slug: c.slug, vendorId: null, created: false, at: new Date().toISOString(),
   }
-  const placeholderNote = `Seeded by scripts/onboard-battery-partners.ts (2026-09-10) from ${c.name}’s public listings. Confirm the exact model, capacity and rates with ${c.contactName ?? 'the partner'} before quoting; rates are proposed by the partner from their account page.`
 
   const base = {
     contactName: c.contactName,
@@ -100,52 +96,34 @@ async function onboard(c: BatteryPartnerCandidate, email: string | undefined, ph
     ...(phone ?? c.phone ? { phone: phone ?? c.phone } : {}),
   }
 
-  const existing = await prisma.vendor.findUnique({ where: { name: c.name }, select: { id: true, email: true, phone: true, partnerKind: true } })
-  if (DRY) console.log(existing ? `vendor exists (${existing.id}) — would update kind/section/details` : 'would create vendor', base)
-  const vendor = DRY
-    ? existing
-    : await prisma.vendor.upsert({
-        where: { name: c.name },
-        update: base,
-        create: { name: c.name, ...base, notes: c.notes },
-        select: { id: true, email: true, phone: true, partnerKind: true },
-      })
-  if (!vendor) { console.log(`  (dry run, ${c.name} not in the DB yet — would create it and ${c.roster.length} units)`); return }
+  let existing: { id: string; email: string | null; partnerProspectAt: Date | null; partnerMarkedAt: Date | null; welcomeSentAt: Date | null } | null
+  try {
+    existing = await prisma.vendor.findUnique({ where: { name: c.name }, select: { id: true, email: true, partnerProspectAt: true, partnerMarkedAt: true, welcomeSentAt: true } })
+  } catch {
+    throw new Error('The partner stage columns are not in the database yet — run scripts/add-partner-prospect-columns.ts first.')
+  }
+  if (DRY) {
+    console.log(existing ? `vendor exists (${existing.id}) — would update details${existing.partnerProspectAt ? '' : ' and stamp partnerProspectAt'}` : 'would create the prospect', base)
+    return
+  }
+  const vendor = await prisma.vendor.upsert({
+    where: { name: c.name },
+    update: base,
+    create: { name: c.name, ...base, notes: c.notes, partnerProspectAt: new Date() },
+    select: { id: true, email: true, partnerProspectAt: true, partnerMarkedAt: true, welcomeSentAt: true },
+  })
   journal.vendorId = vendor.id
-  console.log(`✓ vendor ${c.name} (${vendor.id}) · ${vendor.partnerKind}${vendor.email ? ` · ${vendor.email}` : ' · NO EMAIL YET — set it on /crm/portals before the introduction'}`)
-
-  for (const u of c.roster) {
-    const found = await prisma.subcontractedVehicle.findFirst({ where: { vendorId: vendor.id, name: u.name }, select: { id: true } })
-    if (found) { journal.existingUnitIds.push(found.id); console.log(`  = ${u.name} (exists)`); continue }
-    if (DRY) { console.log(`  + would create ${u.name} [${u.section}]`); continue }
-    const created = await prisma.subcontractedVehicle.create({
-      data: {
-        vendorId: vendor.id,
-        name: u.name,
-        vehicleType: u.vehicleType,
-        description: placeholderNote,
-        publicDescription: u.publicDescription,
-        specs: u.specs.join('\n'),
-        catalogSection: u.section,
-        defaultReceiveMethod: 'DELIVERY',
-        publiclyListed: false,
-        offeredToSirReel: true,
-      },
-      select: { id: true },
-    })
-    journal.createdUnitIds.push(created.id)
-    console.log(`  + ${u.name} (${created.id}) [${u.section}]`)
+  journal.created = !existing
+  if (!vendor.partnerProspectAt) {
+    await prisma.vendor.update({ where: { id: vendor.id }, data: { partnerProspectAt: new Date() } })
   }
+  const stage = vendor.partnerMarkedAt ? 'partner (already marked)' : vendor.welcomeSentAt ? 'introduced — waiting on their reply' : 'prospect — send the introduction'
+  console.log(`✓ ${c.name} (${vendor.id}) · ${stage}${vendor.email ? ` · ${vendor.email}` : ' · NO EMAIL YET — set it on /crm/portals before the introduction'}`)
 
-  if (!DRY) {
-    const token = await ensureVendorPortalToken(vendor.id)
-    journal.portalUrl = vendorAccountUrl(token)
-    console.log(`  account link (minted, NOT sent): ${journal.portalUrl}`)
-    mkdirSync('journals', { recursive: true })
-    const file = `journals/onboard-battery-partners-${c.slug}-${journal.at.replace(/[:.]/g, '-')}.json`
-    writeFileSync(file, JSON.stringify(journal, null, 2))
-    console.log(`  journal: ${file}`)
-  }
+  mkdirSync('journals', { recursive: true })
+  const file = `journals/onboard-battery-partners-${c.slug}-${journal.at.replace(/[:.]/g, '-')}.json`
+  writeFileSync(file, JSON.stringify(journal, null, 2))
+  console.log(`  journal: ${file}`)
 }
 
 async function main() {
@@ -154,19 +132,19 @@ async function main() {
     if (!LIST) console.log('Pick with --only <slug> (repeatable) or --all. Add --dry to preview.')
     return
   }
-  const selected = ALL ? BATTERY_PARTNER_CANDIDATES.map((c) => c.slug) : flagAll('--only').map((s) => s.trim().toLowerCase())
-  const unknown = selected.filter((s) => !findBatteryPartnerCandidate(s))
-  if (unknown.length) throw new Error(`unknown candidate(s): ${unknown.join(', ')} — try --list`)
-  const emails = perCandidate('--email', selected)
-  const phones = perCandidate('--phone', selected)
+  const selected = ALL ? PARTNER_PROSPECTS.map((c) => c.slug) : flagAll('--only').map((s) => s.trim().toLowerCase())
+  const unknown = selected.filter((s) => !findPartnerProspect(s))
+  if (unknown.length) throw new Error(`unknown prospect(s): ${unknown.join(', ')} — try --list`)
+  const emails = perProspect('--email', selected)
+  const phones = perProspect('--phone', selected)
 
-  console.log(`${DRY ? '[dry run] ' : ''}Onboarding ${selected.length} battery-power partner${selected.length === 1 ? '' : 's'}…\n`)
+  console.log(`${DRY ? '[dry run] ' : ''}Queueing ${selected.length} partner prospect${selected.length === 1 ? '' : 's'}…\n`)
   for (const slug of selected) {
-    const c = findBatteryPartnerCandidate(slug)!
-    await onboard(c, emails[slug], phones[slug])
+    const c = findPartnerProspect(slug)!
+    await queue(c, emails[slug], phones[slug])
     console.log('')
   }
-  if (!DRY) console.log('Next, on /crm/portals#vendor for each partner: set the deal (% to SirReel), send the introduction (Wes), file the standard Partner Equipment Agreement, then "Email the account link".')
+  if (!DRY) console.log('Next, on /crm/portals#vendor: send the introduction (Wes). When they reply, "Mark as new partner" — that seeds the roster and mints the link — then the deal, the standard Partner Equipment Agreement, and "Email the account link".')
 }
 
 main()

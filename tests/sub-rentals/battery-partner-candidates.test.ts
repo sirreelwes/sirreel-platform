@@ -1,6 +1,6 @@
 /**
- * Battery-power partner candidates (2026-09-10) — the registry the
- * onboarding script seeds from, asserted:
+ * Partner prospects, first cohort (2026-09-10, battery power) — the registry
+ * the onboarding script queues from and markAsPartner seeds from, asserted:
  *
  *   · slugs and vendor names are unique (Vendor.name is the upsert key —
  *     a duplicate would fold two companies into one row);
@@ -14,7 +14,7 @@
  *
  * Run: npm run test:battery-candidates
  */
-import { BATTERY_PARTNER_CANDIDATES, findBatteryPartnerCandidate } from '../../scripts/battery-partner-candidates'
+import { BATTERY_PARTNER_CANDIDATES, findPartnerProspect, findPartnerProspectByName } from '@/lib/sub-rentals/partnerProspects'
 import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 
 let fail = 0
@@ -47,8 +47,10 @@ for (const c of BATTERY_PARTNER_CANDIDATES) {
   yes(`${c.slug}: every unit has a client blurb`, c.roster.every((u) => u.publicDescription.length > 30))
 }
 
-eq('lookup tolerates case and space', findBatteryPartnerCandidate('  SANISET ')?.slug, 'saniset')
-eq('unknown slug is null', findBatteryPartnerCandidate('nope'), null)
+eq('lookup tolerates case and space', findPartnerProspect('  SANISET ')?.slug, 'saniset')
+eq('unknown slug is null', findPartnerProspect('nope'), null)
+eq('a marked vendor finds its roster by name', findPartnerProspectByName('saniset fleet')?.slug, 'saniset')
+eq('a vendor not in the registry seeds nothing', findPartnerProspectByName('King Kong'), null)
 
 if (fail) { console.error(`\n${fail} failing`); process.exit(1) }
 console.log('\nall good')

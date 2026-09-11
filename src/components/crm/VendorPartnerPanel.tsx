@@ -6,6 +6,7 @@ import { Camera, Check, FileSignature, FileText, Loader2, Percent, Send, ShieldC
 import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
+import type { PartnerStage } from '@/lib/sub-rentals/partnerStage'
 
 export interface RateProposalRow {
   unitId: string
@@ -16,7 +17,7 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [] }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
   vendorId: string
   hasLogo: boolean
   /** Units with partner-added photos nobody at HQ has looked at. Live already. */
@@ -31,6 +32,10 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   vendorName?: string
   /** When the INTRODUCTION went. Null = the account link stays locked. */
   welcomeSent?: { at: string; to: string | null } | null
+  /** prospect → introduced → partner (Wes 2026-09-11: "no company gets
+   *  onboarded until they reply and I mark it as a new partner"). Below
+   *  partner, the account link is locked and the mark card shows. */
+  stage?: PartnerStage
   /** Is the viewer the one person who may send the introduction? Server-gated
    *  too — this decides whether the compose card is even rendered. */
   canSendWelcome?: boolean
@@ -54,6 +59,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [ag, setAg] = useState(agreement)
   const [inv, setInv] = useState(invited)
   const [welcome, setWelcome] = useState(welcomeSent)
+  const [stage, setStage] = useState<PartnerStage>(stageInitial)
   const [share, setShare] = useState<number | null>(sharePercent)
   const [coiState, setCoiState] = useState(coi)
   const [coiExpiry, setCoiExpiry] = useState(coi.expiresAt ? coi.expiresAt.slice(0, 10) : '')
@@ -113,6 +119,19 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ catalogSection: next }) })
     if (r.ok) { setSection(next); setMsg(`Listed units now sit under “${partnerSection(next).title}” on sirreel.com unless a unit says otherwise.`) }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+    setBusy(null)
+  }
+  async function markPartner() {
+    if (!window.confirm(`${vendorName} replied and is a new partner? This seeds their starter roster, mints their account link and unlocks the account-link email.`)) return
+    setBusy('mark'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}/mark-partner`, { method: 'POST' })
+    const j = await r.json().catch(() => ({}))
+    if (r.ok) {
+      setStage('partner')
+      setMsg(j.alreadyMarked
+        ? 'Already a partner — nothing changed.'
+        : `${vendorName} is a partner. ${j.seededUnits > 0 ? `${j.seededUnits} starter unit${j.seededUnits === 1 ? '' : 's'} seeded (rates empty — they propose from their page). ` : 'No starter roster on file — add units on the roster page. '}Account link minted; set the deal, file the agreement, then email the link below.`)
+    } else setMsg(j?.error || 'Failed')
     setBusy(null)
   }
   async function sendInvite() {
@@ -288,19 +307,38 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
         <PartnerWelcomeCard
           vendorId={vendorId}
           vendorName={vendorName}
-          onSent={(at: string, to: string) => setWelcome({ at, to })}
+          onSent={(at: string, to: string) => { setWelcome({ at, to }); setStage((st) => (st === 'prospect' ? 'introduced' : st)) }}
         />
+      )}
+
+      {/* The mark — Wes only (Wes 2026-09-11: "no company gets onboarded
+          until they reply and I mark it as a new partner"). Shown while they
+          are not yet a partner; the account link below stays locked. */}
+      {stage !== 'partner' && (
+        <div className="border border-lt-hairline rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Check className="w-4 h-4 text-lt-fg3" /> New partner</div>
+          <div className="text-xs text-lt-fg2 mt-1">
+            {stage === 'prospect'
+              ? <span>A prospect. Send the introduction{canSendWelcome ? ' above' : ' (Wes sends that)'}; when they reply, they are marked here.</span>
+              : <span>Introduced{welcome?.at ? ` on ${new Date(welcome.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}. When they reply, mark {vendorName} as a new partner: that seeds their starter roster, mints their account link and unlocks the email below. Nothing reaches sirreel.com until units are listed and the agreement is signed.</span>}
+          </div>
+          <div className="mt-2">
+            <button onClick={markPartner} disabled={stage !== 'introduced' || !canSendWelcome || busy === 'mark'} title={!canSendWelcome ? 'Wes marks new partners.' : stage !== 'introduced' ? 'The introduction has to go first.' : undefined} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
+              {busy === 'mark' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Mark as new partner
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Invite */}
       <div className="border border-lt-hairline rounded-lg p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Send className="w-4 h-4 text-lt-fg3" /> Account link</div>
         <div className="text-xs text-lt-fg2 mt-1">
-          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : !welcome ? <span className="text-chip-warn-fg">Locked until the introduction goes out{canSendWelcome ? ' — send it above' : ' (Wes sends that)'}.</span> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, {words.many} &amp; rates, {words.drivers ? 'drivers, lot address' : 'delivery contacts, yard address'}).</span>}
+          {inv ? <>Emailed to <span className="text-lt-fg">{inv.to}</span> on {new Date(inv.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</> : !welcome ? <span className="text-chip-warn-fg">Locked until the introduction goes out{canSendWelcome ? ' — send it above' : ' (Wes sends that)'}.</span> : stage !== 'partner' ? <span className="text-chip-warn-fg">Locked until they reply and are marked as a new partner{canSendWelcome ? ' — above' : ' (Wes does that)'}.</span> : <span className="text-lt-fg3">Not sent yet. The welcome email carries their link and the first-visit checklist (agreement, {words.many} &amp; rates, {words.drivers ? 'drivers, lot address' : 'delivery contacts, yard address'}).</span>}
         </div>
         <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center">
           <input value={invTo} onChange={(e) => setInvTo(e.target.value)} placeholder="partner@example.com" className="text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg sm:w-64" />
-          <button onClick={sendInvite} disabled={!invTo.trim() || busy === 'invite' || !welcome} title={welcome ? undefined : 'The introduction has to go first.'} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
+          <button onClick={sendInvite} disabled={!invTo.trim() || busy === 'invite' || !welcome || stage !== 'partner'} title={!welcome ? 'The introduction has to go first.' : stage !== 'partner' ? 'Mark them as a new partner first.' : undefined} className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40">
             {busy === 'invite' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} {inv ? 'Send again' : 'Email the account link'}
           </button>
         </div>

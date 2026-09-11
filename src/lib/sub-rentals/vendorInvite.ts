@@ -15,6 +15,7 @@ import { ensureVendorPortalToken, vendorAccountUrl } from './vendorAccount'
 import { HQ_PRODUCT } from '@/lib/hq-white-label/product'
 import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { canSendPartnerWelcome, buildIntroDraft, type IntroDraft } from '@/lib/sub-rentals/welcomeSender'
+import { vendorStage } from '@/lib/sub-rentals/partnerStage'
 
 /** Partner mail wears the Utliiz turquoise, not SirReel gold — a foreshadow
  *  of the workspace the partner page points them to. */
@@ -264,6 +265,16 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
   if (!v.welcomeSentAt) {
     throw Object.assign(
       new Error('Send the introduction first — this link only makes sense to someone who has already heard from us.'),
+      { status: 409 },
+    )
+  }
+  // And then THEY reply and Wes marks them (2026-09-11: "no company gets
+  // onboarded until they reply and I mark it as a new partner"). Fails soft
+  // to the introduction gate alone while the stage columns are not there.
+  const stage = await vendorStage(v.id)
+  if (stage && stage !== 'partner') {
+    throw Object.assign(
+      new Error('Mark them as a new partner first — the account link goes out after they reply to the introduction.'),
       { status: 409 },
     )
   }

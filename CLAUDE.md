@@ -447,26 +447,42 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   schema file knows; a push from a checkout drops them. Add columns with
   additive SQL (see the specialty-vehicles commit `029d94e`).
 
-## Battery-power partner candidates (2026-09-10 — queued, NOT yet in the DB)
-- Wes asked for an LA battery-generator outfit that rents to productions,
-  with a partner portal queued. Four candidates, ranked, live in
-  `scripts/battery-partner-candidates.ts` (plain data): **Saniset Fleet**
+## Partner prospects — nobody is onboarded until they reply and Wes marks them (2026-09-11)
+- Wes: "no company gets onboarded until they reply and I mark it as a new
+  partner." Stage is DERIVED in `src/lib/sub-rentals/partnerStage.ts`:
+  **prospect** (Vendor row + `partnerProspectAt`, so the introduction can be
+  sent; no roster, no link) → **introduced** (`welcomeSentAt`) → **partner**
+  (`partnerMarkedAt`, Wes's mark). Legacy partners (King Kong, PowerTrip)
+  read as partner by roster units / bookings / agreement — a minted link
+  alone is not that. `markAsPartner()` (POST `/api/vendors/[id]/mark-partner`,
+  Wes-only allowlist, AuditLog `vendor.partner_marked`) seeds the starter
+  roster from the registry, mints the account link, and `sendVendorInvite`
+  refuses below partner. The Portals row shows a Prospect / Introduced chip
+  and the panel carries "Mark as new partner" between the introduction and
+  the account link.
+- **Columns by additive SQL, not db push:** `npx tsx
+  scripts/add-partner-prospect-columns.ts` once. Until then everything fails
+  soft (no prospects listed, link gated on the introduction alone, the mark
+  refuses and names the script).
+- The registry is `src/lib/sub-rentals/partnerProspects.ts` (plain data).
+  First cohort (2026-09-10, LA battery power, ranked): **Saniset Fleet**
   (Van Nuys, CleanGEN J250 250 kWh — lead), **Pig Pen Rentals** (LA County,
   battery is a side line of a toilet/fence renter), **GreenLite Trailers**
   (Agua Dulce, Moxion 600/75 530 kWh — also rents star trailers, so part
   competitor), **Greenwave Rentals** (Voltstack fleet, Vancouver HQ with an
-  LA service area — not LA-based). Each carries the research, the fit and
-  the caveat; emails are seeded only where quotable (a guessed email sends
-  the introduction to nobody).
+  LA service area — not LA-based). Emails seeded only where quotable.
 - `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
-  --all [--dry] [--email slug=… --phone slug=…]` is the PowerTrip onboarding
-  generalised over that registry: upsert Vendor (EQUIPMENT, Power &
-  Generators), seed a rate-less delivered unlisted roster, mint the account
-  link, journal ids. Then /crm/portals#vendor: deal → introduction (Wes) →
-  standard Partner Equipment Agreement → email the link. The session that
-  wrote it had no DATABASE_URL, so nothing has been run yet.
-- `npm run test:battery-candidates` guards the registry (unique names,
-  real sections, no rates, delivered not driven, well-formed emails).
+  --all [--dry] [--email slug=… --phone slug=…]` queues PROSPECTS ONLY (the
+  Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#vendor:
+  introduction (Wes) → they reply → Mark as new partner → deal → standard
+  Partner Equipment Agreement → email the link. Nothing has been run yet.
+- The introduction (`buildIntroDraft`) is first contact in Wes's words
+  ("It's Wes Bailey from SirReel…", feature / order / confirm / deliver /
+  bill / pay, "both parties", "win/win!"), signed name / Founder & CEO |
+  SirReel Studio Services / M: (User.phone, dotted) / E:.
+  `scripts/set-user-phone.ts` sets the phone.
+- `npm run test:battery-candidates` guards the registry; `npm run
+  test:partner-stage` guards the stage rule.
 
 ## Active Roadmap
 1. AI fleet optimization
