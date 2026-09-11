@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
 import { reverseCardCharge } from '@/lib/cardpointe/client'
+import { adjustHqPayment } from '@/lib/collections/hqChargeReversal'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,14 @@ export const dynamic = 'force-dynamic'
  *
  * Only APPROVED, not-yet-reversed charges can be reversed — reversing a
  * decline is meaningless and double-reversing risks a duplicate credit.
+ *
+ * HQ INVOICES. A charge anchored `hq:<invoiceId>` credited a real Payment
+ * on that invoice (see the charge route), so the money coming back has to
+ * come off the invoice too — otherwise it reads PAID with a refunded card
+ * behind it, and the stamped PDF says so to the client. A full reversal
+ * voids the Payment (which regresses the invoice and reopens the order).
+ * A partial one voids it and records a replacement for what the invoice
+ * still holds, net of the fee slice the gateway returned with the refund.
  */
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -40,6 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     select: {
       id: true,
+      rwInvoiceId: true,
       retref: true,
       status: true,
       amount: true,
@@ -150,6 +160,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   })
 
+  // Take it back off the HQ invoice the charge credited.
+  const hqInvoiceId = charge.rwInvoiceId.startsWith('hq:') ? charge.rwInvoiceId.slice(3) : null
+  let invoiceNote = ''
+  if (hqInvoiceId) {
+    const adjusted = await adjustHqPayment({
+      invoiceId: hqInvoiceId,
+      retref: charge.retref,
+      chargeBase: Number(charge.amount),
+      chargeFee: Number(charge.surchargeAmount ?? 0),
+      reversedGross: reversed,
+      fullyReversed: stillRemaining <= 0,
+      reason,
+      userId: user.id,
+    })
+    invoiceNote = adjusted
+      ? ` The invoice now reads ${adjusted.status.toLowerCase()}` +
+        (Number(adjusted.balanceDue) > 0 ? ` with $${Number(adjusted.balanceDue).toFixed(2)} due.` : '.')
+      : ' No payment was found on the HQ invoice for this charge — check the order.'
+  }
+
   return NextResponse.json({
     ok: true,
     kind: result.kind,
@@ -157,9 +187,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     amount: reversed,
     remaining: stillRemaining,
     message:
-      result.kind === 'void'
+      (result.kind === 'void'
         ? `Voided $${reversed.toFixed(2)} — it will not appear on the client's statement.`
         : `Refunded $${reversed.toFixed(2)} — it will appear as a credit in a few days.` +
-          (stillRemaining > 0 ? ` $${stillRemaining.toFixed(2)} of this charge remains.` : ''),
+          (stillRemaining > 0 ? ` $${stillRemaining.toFixed(2)} of this charge remains.` : '')) +
+      invoiceNote,
   })
 }

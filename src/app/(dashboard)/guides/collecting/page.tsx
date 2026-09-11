@@ -230,6 +230,15 @@ export default function CollectingGuidePage() {
                 the client, the invoice, the balance and how late it is; open the job from the row when
                 you need contacts or history before you call.
               </p>
+              <p>
+                <strong>All HQ invoices</strong> sits directly beneath it and reads the same way — owed,
+                paid or all. A row that is sent and still carries a balance has a <strong>Charge</strong>{' '}
+                button; it arms the charge panel on that invoice exactly as an RW row does. The
+                difference is what happens after: the charge is recorded <em>on the invoice itself</em>,
+                so it turns partial or paid on its own, the order closes, and the PDF comes back stamped{' '}
+                <strong>PAID</strong> with the date. There is no reason to charge an HQ invoice through
+                the CardPointe terminal any more — a charge taken there records nothing here.
+              </p>
             </Step>
             <Step n={4} title="Mark collected when money arrives outside HQ">
               <p>

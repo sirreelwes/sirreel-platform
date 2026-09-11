@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
 import { resolveCardToken } from '@/lib/payments/companyCards'
+import { recordPayment } from '@/lib/invoices/recordPayment'
 import {
   chargeCard,
   isApproved,
@@ -12,8 +13,29 @@ import {
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/collections/charge — take a card payment against a RentalWorks
- * invoice, for money collected before billing moves into HQ.
+ * POST /api/collections/charge — take a card payment against an invoice.
+ *
+ * THREE anchors, one charge form:
+ *   invoiceId       → an HQ-native Invoice (sr_invoices). Ana, 2026-09-10:
+ *                     "the Collections module lets me charge out RentalWorks
+ *                     invoices but not HQ invoices. I currently have to
+ *                     charge out via CardPointe" — the gateway's virtual
+ *                     terminal, which records nothing on the invoice, so
+ *                     the row stayed SENT and the order never closed. This
+ *                     path records a real Payment through recordPayment,
+ *                     which is what flips the invoice PAID (and stamps the
+ *                     PDF) and advances the order to CLOSED. Must be SENT
+ *                     or PARTIAL; the amount is refused over the balance
+ *                     BEFORE the card is touched, because recordPayment
+ *                     would refuse it after and the money would already
+ *                     have moved.
+ *   finalInvoiceId  → a hand-uploaded final invoice on Ana's queue.
+ *   rwInvoiceId     → a raw RentalWorks invoice, for billing still there.
+ *
+ * Every path writes the RwCollectionCharge ledger row (it is the Recent
+ * charges list and the reversal path, whatever the invoice lives in). An
+ * HQ invoice is anchored there as `hq:<invoiceId>` — the same convention as
+ * `final:<id>` — so the reverse route can find the Payment it must void.
  *
  * Two token sources, both ending in the same charge:
  *   savedCardId +    → a card already on file. `savedCardOrigin` says which
@@ -65,6 +87,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     rwInvoiceId?: unknown
     finalInvoiceId?: unknown
+    invoiceId?: unknown
     invoiceNumber?: unknown
     customerName?: unknown
     amount?: unknown
@@ -85,6 +108,13 @@ export async function POST(req: NextRequest) {
 
   const finalInvoiceId =
     typeof body.finalInvoiceId === 'string' ? body.finalInvoiceId.trim() : ''
+  const hqInvoiceId = typeof body.invoiceId === 'string' ? body.invoiceId.trim() : ''
+  if (hqInvoiceId && finalInvoiceId) {
+    return NextResponse.json(
+      { ok: false, error: 'a charge is anchored to one invoice, not two' },
+      { status: 400 },
+    )
+  }
 
   // A charge is anchored to EITHER a finalized invoice (the normal path — an
   // agent agreed the number and queued it) or a raw RW invoice id (the older
@@ -94,7 +124,35 @@ export async function POST(req: NextRequest) {
   // Null on a raw RW invoice — RW customers aren't HQ companies.
   let invoiceCompanyId: string | null = null
   let invoiceCompanyName: string | null = null
-  if (finalInvoiceId) {
+  // The HQ invoice being settled, when that is the anchor. Its balance caps
+  // the charge; its number is what the gateway and the ledger carry.
+  let hqInvoice: { id: string; invoiceNumber: string; balanceDue: number } | null = null
+  if (hqInvoiceId) {
+    const inv = await prisma.invoice.findUnique({
+      where: { id: hqInvoiceId },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        balanceDue: true,
+        order: { select: { company: { select: { id: true, name: true } } } },
+      },
+    })
+    if (!inv) return NextResponse.json({ ok: false, error: 'invoice not found' }, { status: 404 })
+    invoiceCompanyId = inv.order.company?.id ?? null
+    invoiceCompanyName = inv.order.company?.name ?? null
+    if (inv.status !== 'SENT' && inv.status !== 'PARTIAL') {
+      const why =
+        inv.status === 'DRAFT'
+          ? 'that invoice has not been sent yet — send it from the order first'
+          : inv.status === 'PAID'
+            ? 'that invoice is already paid'
+            : `that invoice is ${inv.status.toLowerCase()}`
+      return NextResponse.json({ ok: false, error: why }, { status: 409 })
+    }
+    hqInvoice = { id: inv.id, invoiceNumber: inv.invoiceNumber, balanceDue: Number(inv.balanceDue) }
+    rwInvoiceId = `hq:${inv.id}`
+  } else if (finalInvoiceId) {
     const fi = await prisma.jobFinalInvoice.findUnique({
       where: { id: finalInvoiceId },
       select: {
@@ -130,6 +188,24 @@ export async function POST(req: NextRequest) {
   const amount = Number(body.amount)
   if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
     return NextResponse.json({ ok: false, error: 'invalid amount' }, { status: 400 })
+  }
+  // Over the balance is refused HERE, not discovered after the auth: the
+  // Payment write would refuse it (recordPayment caps at balanceDue) and a
+  // refused write after an approved auth is a charged card with nothing
+  // crediting the invoice.
+  if (hqInvoice) {
+    if (!(hqInvoice.balanceDue > 0)) {
+      return NextResponse.json({ ok: false, error: 'nothing due on that invoice' }, { status: 409 })
+    }
+    if (amount > hqInvoice.balanceDue + 0.001) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `$${amount.toFixed(2)} is more than the $${hqInvoice.balanceDue.toFixed(2)} balance on ${hqInvoice.invoiceNumber}. An HQ invoice cannot be overpaid here — charge the balance.`,
+        },
+        { status: 409 },
+      )
+    }
   }
 
   // Resolve the token. A saved authorization is server-side only — the
@@ -250,8 +326,12 @@ export async function POST(req: NextRequest) {
     cardType = cardType ?? d.cardType
   }
 
-  const invoiceNumber =
-    typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim().slice(0, 60) : ''
+  // An HQ invoice's number comes from the row, never from the caller.
+  const invoiceNumber = hqInvoice
+    ? hqInvoice.invoiceNumber
+    : typeof body.invoiceNumber === 'string'
+      ? body.invoiceNumber.trim().slice(0, 60)
+      : ''
   const customerName =
     typeof body.customerName === 'string' ? body.customerName.trim().slice(0, 200) : null
 
@@ -355,9 +435,58 @@ export async function POST(req: NextRequest) {
       .catch((e) => console.error('[collections] could not mark collected:', e))
   }
 
+  // Credit the HQ invoice. This is the write that makes the charge REAL to
+  // the rest of HQ: the invoice flips PARTIAL/PAID, paidAt is stamped, the
+  // order advances INVOICED → CLOSED, and the PDF proxies start serving the
+  // stamped copy. The ledger row above already exists, so a failure here is
+  // visible in Recent charges rather than lost — and it is logged with the
+  // retref for a manual record on the order.
+  let hqPayment: { status: string; balanceDue: string; paidAt: Date | null } | null = null
+  if (approved && hqInvoice) {
+    const cardRef = cardLast4 ? `card ····${cardLast4}` : 'card'
+    const rec = await recordPayment({
+      invoiceId: hqInvoice.id,
+      amount: base,
+      method: 'CARDPOINTE',
+      receivedAt: new Date(),
+      reference: `${cardRef} · collections${surcharge > 0 ? ' +card fee' : ''}`,
+      notes: typeof body.note === 'string' && body.note.trim() ? body.note.trim().slice(0, 1000) : null,
+      recordedById: user.id,
+      gatewayRefId: resp.retref ?? null,
+      surchargeAmount: surcharge,
+    })
+    if (!rec.ok) {
+      console.error(
+        '[collections] CRITICAL: gateway charged retref=%s against HQ invoice %s but the payment write failed: %s',
+        resp.retref,
+        hqInvoice.invoiceNumber,
+        rec.error,
+      )
+      return NextResponse.json(
+        {
+          ok: false,
+          chargeId: charge.id,
+          retref: resp.retref ?? null,
+          error:
+            `The card was charged $${total.toFixed(2)} (ref ${resp.retref ?? '—'}) but the payment could not be ` +
+            `recorded on ${hqInvoice.invoiceNumber}: ${rec.error}. Record it on the order by hand with that reference.`,
+        },
+        { status: 500 },
+      )
+    }
+    hqPayment = { status: rec.invoice.status, balanceDue: rec.invoice.balanceDue, paidAt: rec.invoice.paidAt }
+  }
+
+  const hqSuffix = hqPayment
+    ? hqPayment.status === 'PAID'
+      ? ` ${invoiceNumber} is now PAID.`
+      : ` ${invoiceNumber} is now ${hqPayment.status.toLowerCase()} — $${Number(hqPayment.balanceDue).toFixed(2)} still due.`
+    : ''
+
   return NextResponse.json({
     ok: approved,
     chargeId: charge.id,
+    invoice: hqPayment,
     status: charge.status,
     base,
     surcharge,
@@ -369,9 +498,10 @@ export async function POST(req: NextRequest) {
     // the operator needs to see that no fee applied, because the client was
     // told one would.
     message: approved
-      ? surcharge > 0
-        ? `Approved — $${total.toFixed(2)} charged ($${base.toFixed(2)} + $${surcharge.toFixed(2)} fee).`
-        : `Approved — $${total.toFixed(2)} charged. No card fee applied (cardholder not eligible for surcharging).`
+      ? (surcharge > 0
+          ? `Approved — $${total.toFixed(2)} charged ($${base.toFixed(2)} + $${surcharge.toFixed(2)} fee).`
+          : `Approved — $${total.toFixed(2)} charged. No card fee applied (cardholder not eligible for surcharging).`) +
+        hqSuffix
       : `Declined: ${resp.resptext || 'no reason given'}`,
   })
 }

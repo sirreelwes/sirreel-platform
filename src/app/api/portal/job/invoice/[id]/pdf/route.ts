@@ -33,6 +33,7 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { renderPreInvoice } from '@/lib/invoices/renderPreInvoice'
+import { renderPaidInvoice, paidInvoiceResponse } from '@/lib/invoices/renderPaidInvoice'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   // number — the presentation is what differs (Wes 2026-09-01).
   if (invoice.status === 'DRAFT' && invoice.preSentAt) {
     return renderPreInvoice(params.id)
+  }
+  // Settled invoices carry the PAID stamp, same as the staff copy — the
+  // client's own view must not keep asking for money that arrived.
+  if (invoice.status === 'PAID') {
+    const stamped = await renderPaidInvoice(params.id)
+    if (stamped) {
+      return paidInvoiceResponse(
+        stamped,
+        invoice.invoiceNumber,
+        req.nextUrl.searchParams.get('download') === '1',
+      )
+    }
   }
   if (!invoice.pdfBlobKey) {
     return NextResponse.json({ error: 'Invoice PDF not generated' }, { status: 404 })

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { RwConnectionCard } from '@/components/collections/RwConnectionCard'
 import { EodReportPanel } from '@/components/collections/EodReportPanel'
 import { BillingQueuePanel } from '@/components/collections/BillingQueuePanel'
-import { HqInvoiceSearch } from '@/components/collections/HqInvoiceSearch'
+import { HqInvoiceSearch, type HqInvoice } from '@/components/collections/HqInvoiceSearch'
 
 /**
  * Collections workspace — pick a RentalWorks invoice, attach its PDF, confirm
@@ -170,6 +170,8 @@ interface CollectionsStats {
 
 interface ChargeRow {
   id: string
+  /** Set when the charge settled an HQ-native invoice (links to its PDF). */
+  hqInvoiceId?: string | null
   invoiceNumber: string | null
   customerName: string | null
   gatewayTotal: number
@@ -289,6 +291,12 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   >(null)
   const [remitUploading, setRemitUploading] = useState(false)
   const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
+  // An HQ-native invoice armed for charging (Ana, 2026-09-10). Exclusive
+  // with finalPick — the charge route refuses both — and cleared whenever
+  // any other row type is picked, so the anchor sent with the charge is
+  // always the row the operator last clicked.
+  const [hqPick, setHqPick] = useState<HqInvoice | null>(null)
+  const [hqRefresh, setHqRefresh] = useState(0)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [reversing, setReversing] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -723,6 +731,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           finalInvoiceId: finalPick?.id,
+          invoiceId: hqPick?.id,
           rwInvoiceId: invoice.rwInvoiceId,
           invoiceNumber: invoice.invoiceNumber,
           customerName: invoice.customerName,
@@ -763,6 +772,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setCrossClientOk(false)
         setAmount('')
         setFinalPick(null)
+        // An HQ invoice that just took money is a different row now (PARTIAL
+        // or PAID) — drop the anchor so the same invoice cannot be charged
+        // again by reflex, and refresh the list it came from.
+        if (hqPick) {
+          setHqPick(null)
+          setInvoice(null)
+          setHqRefresh((k) => k + 1)
+        }
         loadInvoices(q, invScope)
         loadFinals()
         loadCharges()
@@ -818,6 +835,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       const d = await r.json()
       setResult({ ok: !!d.ok, message: d.message || d.error || 'Unknown response' })
       loadCharges()
+      if (c.hqInvoiceId) setHqRefresh((k) => k + 1)
     } catch {
       setResult({ ok: false, message: 'Reversal request failed.' })
     } finally {
@@ -1033,6 +1051,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     ;(e.currentTarget as HTMLElement).click()
                   }}
                   onClick={() => {
+                    setHqPick(null)
                     setFinalPick(fv)
                     setAmount(String(fv.amount))
                     setInvoice({
@@ -1508,6 +1527,8 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 )}
                 <button
                   onClick={() => {
+                    setFinalPick(null)
+                    setHqPick(null)
                     setInvoice(i)
                     setAmount(i.remainingTotal > 0 ? String(i.remainingTotal) : '')
                   }}
@@ -1603,7 +1624,30 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             answer the same question about two systems — and for as long as
             billing straddles both, whichever one an invoice lives in is not
             something anyone should have to remember before searching. */}
-        <HqInvoiceSearch />
+        <HqInvoiceSearch
+          selectedId={hqPick?.id ?? null}
+          refreshKey={hqRefresh}
+          onCharge={(hi) => {
+            setFinalPick(null)
+            setHqPick(hi)
+            setPdf(null)
+            setAmount(String(hi.balanceDue))
+            setInvoice({
+              rwInvoiceId: `hq:${hi.id}`,
+              invoiceNumber: hi.invoiceNumber,
+              customerName: hi.companyName,
+              companyId: hi.companyId,
+              dealName: hi.jobName,
+              orderNumber: hi.orderNumber,
+              invoiceDate: hi.sentAt,
+              dueDate: hi.dueDate,
+              status: hi.status,
+              invoiceTotal: hi.total,
+              remainingTotal: hi.balanceDue,
+              alreadyCharged: { count: 0, total: hi.amountPaid, last: null },
+            })
+          }}
+        />
 
         {/* Recent charges + reversal. Without this the history was
             write-only: a mis-keyed amount had no path back short of a
@@ -1636,7 +1680,24 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       )}
                     </div>
                     <div className="text-xs text-zinc-600 mt-0.5 truncate">
-                      {c.customerName || c.invoiceNumber || '—'} ·{' '}
+                      {c.customerName || c.invoiceNumber || '—'}
+                      {c.hqInvoiceId && c.invoiceNumber && (
+                        <>
+                          {' · '}
+                          <a
+                            href={`/api/invoices/${c.hqInvoiceId}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-amber-700 hover:text-amber-800 font-semibold"
+                          >
+                            {c.invoiceNumber}
+                          </a>
+                          <span className="ml-1 text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-zinc-100 text-zinc-600 align-middle">
+                            HQ
+                          </span>
+                        </>
+                      )}
+                      {' · '}
                       {new Date(c.chargedAt).toLocaleString()}
                     </div>
                     <div className="text-xs text-zinc-600 mt-0.5">
@@ -1734,6 +1795,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 <div className="text-xs text-zinc-600 mt-0.5">
                   {invoice.customerName || '—'} · balance {money(invoice.remainingTotal)}
                 </div>
+                {hqPick && (
+                  <div className="text-xs text-zinc-600 mt-1">
+                    HQ invoice · order {hqPick.orderNumber}
+                    {hqPick.amountPaid > 0 ? ` · ${money(hqPick.amountPaid)} already received` : ''}
+                    . The charge is recorded on the invoice itself
+                    {' '}&mdash; it will read PAID once the balance is covered.
+                  </div>
+                )}
                 {/* Browsing settled invoices is now one click (the Paid
                     pill), which puts thousands of nothing-owed rows next to
                     a card form. Charging one is not blocked — an overpayment
@@ -1748,24 +1817,28 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 )}
                 {/* The queue and browse rows flag prior charges, but THIS box
                     is what the operator reads while charging. */}
-                {invoice.alreadyCharged.total > 0 && (
+                {!hqPick && invoice.alreadyCharged.total > 0 && (
                   <div className="text-xs text-amber-700 mt-1">
                     {money(invoice.alreadyCharged.total)} already charged against this invoice here.
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className={label}>RentalWorks invoice PDF</label>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])}
-                  className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:text-zinc-800 hover:file:bg-zinc-200"
-                />
-                {uploading && <p className="text-xs text-zinc-600 mt-1">Uploading…</p>}
-                {pdf && <p className="text-xs text-green-700 mt-1">Attached: {pdf.name}</p>}
-              </div>
+              {/* An HQ invoice already IS the document; only a RentalWorks
+                  charge needs its PDF attached by hand. */}
+              {!hqPick && (
+                <div>
+                  <label className={label}>RentalWorks invoice PDF</label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])}
+                    className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:text-zinc-800 hover:file:bg-zinc-200"
+                  />
+                  {uploading && <p className="text-xs text-zinc-600 mt-1">Uploading…</p>}
+                  {pdf && <p className="text-xs text-green-700 mt-1">Attached: {pdf.name}</p>}
+                </div>
+              )}
 
               <div>
                 <label className={label}>Amount to apply to the invoice</label>
