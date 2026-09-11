@@ -44,6 +44,7 @@
     "test:kit-reconcile": "tsx tests/orders/kit-reconcile.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:coi-confirmation": "tsx tests/coi/job-confirmation.test.ts",
+    "test:replacement-value": "tsx tests/coi/replacement-value.test.ts",
     "test:scan": "tsx tests/warehouse/scan-normalize.test.ts",
     "test:unit-scans": "tsx tests/warehouse/unit-scans.test.ts",
     "test:yard": "tsx tests/yard/board-grouping.test.ts",

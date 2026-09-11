@@ -33,6 +33,10 @@
  *   - annual-requested (DERIVED) — a client asked, from their portal, to
  *     be set up on an annual rental agreement. Clears when the annual is
  *     offered for signature (or a master is already pending/covering).
+ *   - replacement-cost-missing (DERIVED) — a catalog row going out on an
+ *     upcoming order with no replacement cost, so the order cannot tell
+ *     the client's broker what to insure it for. One item per ROW, not
+ *     per order. Clears when the row (or its RentalWorks units) is priced.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -88,6 +92,7 @@ import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clien
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { emailChangeSignalProvider } from '@/lib/actionItems/providers/emailChangeSignal'
+import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
 
 const PROVIDERS: ActionItemProvider[] = [
   // A client email reads like a cancellation / hold / date change on a
@@ -131,6 +136,9 @@ const PROVIDERS: ActionItemProvider[] = [
   // A partner put photos on a unit from their page. Live at once, no gate
   // (Wes 2026-09-11) — this is the glance HQ owes them.
   partnerPhotosAddedProvider,
+  // A catalog row on an upcoming order has no replacement cost, so the
+  // order's COI figure for the client's broker is a floor, not a total.
+  replacementCostMissingProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

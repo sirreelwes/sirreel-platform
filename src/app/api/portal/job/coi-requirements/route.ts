@@ -29,6 +29,11 @@ import {
   requirementsAsHtml,
   requirementsAsText,
 } from '@/lib/coi/requirements'
+import {
+  loadOrderReplacementValue,
+  replacementValueSentence,
+  toClientReplacementValue,
+} from '@/lib/coi/replacementValue'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +88,12 @@ export async function POST(req: NextRequest) {
 
   const subject = `Certificate of insurance for ${company} — SirReel rental${dates ? ` (${dates})` : ''}`
 
+  // The equipment line asks for "the replacement value of rented equipment";
+  // this is that value, for this order, so the broker is not left to guess.
+  const replacementSentence = replacementValueSentence(
+    toClientReplacementValue(await loadOrderReplacementValue(resolved.orderId)),
+  )
+
   const intro =
     `${clientName || company} is renting production vehicles and equipment from SirReel` +
     `${dates ? ` for ${dates}` : ''}, and has asked us to send you the certificate requirements directly.`
@@ -94,6 +105,7 @@ export async function POST(req: NextRequest) {
     '',
     requirementsAsText(),
     '',
+    ...(replacementSentence ? [replacementSentence, ''] : []),
     AUTO_PHYSICAL_DAMAGE_NOTE,
     '',
     `A sample certificate showing the format we need: ${sampleUrl}`,
@@ -112,6 +124,7 @@ export async function POST(req: NextRequest) {
     <p style="font-size: 14px; line-height: 1.6;">${intro}</p>
     <p style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${MUTED}; margin: 22px 0 8px;">Insurance requirements (all jobs)</p>
     ${requirementsAsHtml({ textColor: INK, mutedColor: MUTED, accent: ACCENT })}
+    ${replacementSentence ? `<p style="font-size: 14px; line-height: 1.6; margin: 14px 0 0;"><strong>${replacementSentence}</strong></p>` : ''}
     <p style="font-size: 13px; line-height: 1.6; color: ${ACCENT}; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px 14px; margin: 18px 0;">
       ${AUTO_PHYSICAL_DAMAGE_NOTE}
     </p>

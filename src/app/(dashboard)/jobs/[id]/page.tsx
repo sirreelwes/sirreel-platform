@@ -41,6 +41,7 @@ import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
+import { ReplacementValueCard, type ReplacementValueData } from '@/components/orders/ReplacementValueCard';
 import { MarkLostModal } from '@/components/sales/MarkLostModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import EnterRedlineModal from '@/components/orders/EnterRedlineModal';
@@ -342,6 +343,9 @@ interface JobDetail {
   /** Does the job rent a vehicle? Server-computed, and only when a
    *  certificate was signed off gear-only — null otherwise. */
   jobHasVehicles?: boolean | null;
+  /** Replacement value of the gear on the job's live orders — the figure the
+   *  client's broker writes the equipment limit off. */
+  replacementValue?: ReplacementValueData | null;
   /** Set once the production tells us this job runs on its own policy, so
    *  the account certificate stopped standing in for it. */
   coiSeparatePolicy?: { sentence: string; decidedAt: string | null; confirmerName: string | null; note: string | null } | null;
@@ -2443,6 +2447,14 @@ const driverTone = (d: any): string => {
                 </div>
               );
             })}
+          </div>
+        )}
+        {/* The number the broker needs for the equipment line of that
+            certificate. Sits inside the COI section because that is the
+            conversation it belongs to; money-gated like the order page. */}
+        {canSeeMoney && job.replacementValue && job.replacementValue.counted > 0 && (
+          <div className="mt-3">
+            <ReplacementValueCard value={job.replacementValue} scope="job" compact />
           </div>
         )}
       </div>

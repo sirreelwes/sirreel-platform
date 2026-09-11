@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isPlaceholderJobName } from '@/lib/jobs/displayName'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { loadJobReplacementValue } from '@/lib/coi/replacementValue'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
@@ -604,6 +605,11 @@ export async function GET(
     // quoted yet? Gates the "Next-steps email" button on the job page.
     const selfServeUnquoted = await isClientCreatedUnquoted(job.id)
 
+    // The replacement value of everything on the job's live orders — the
+    // figure the client's broker writes the equipment limit off. A floor
+    // (complete:false) when a line has nothing on file to value it.
+    const replacementValue = await loadJobReplacementValue(job.id)
+
     // Does the Planyo importer think this job has a twin? Asked with
     // THIS job's id so the banner appears on BOTH sides of the pairing —
     // the person who opened the wrong twin is the one who needs telling.
@@ -629,6 +635,7 @@ export async function GET(
         ...job,
         selfServeUnquoted,
         duplicateSignals,
+        replacementValue,
         // Feeds rollupCoiState on the page — a certificate approved before a
         // truck was added reads as an issue, not as Verified (Wes 2026-09-09).
         jobHasVehicles,

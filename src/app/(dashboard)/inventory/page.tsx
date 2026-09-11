@@ -102,6 +102,22 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  // `/inventory?item=<id>` — the action-items panel and the order page's
+  // replacement-value card land here to price ONE row. Fetch it directly
+  // (it may sit on any page of the list) and open its drawer.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("item");
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/inventory/items?id=${encodeURIComponent(id)}`);
+      const data = await res.json().catch(() => null);
+      const row = data?.items?.[0] as Item | undefined;
+      if (row && !cancelled) setDrawerItem(row);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const applyBulkUpdate = async () => {
     if (!bulkPct) return;
     const catName = bulkCatId ? categories.find(c => c.id === bulkCatId)?.name : "ALL categories";

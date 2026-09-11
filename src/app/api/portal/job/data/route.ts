@@ -29,6 +29,7 @@ import {
 } from '@/lib/coi/jobCoiConfirmation'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { loadOrderReplacementValue, toClientReplacementValue } from '@/lib/coi/replacementValue'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 
@@ -685,6 +686,10 @@ export async function GET(req: NextRequest) {
       // Said out loud wherever the account certificate has stopped standing
       // in: silence here would read as a client who simply never uploaded.
       coiSeparatePolicyNotice: separatePolicySentence(coiConfirmation) || null,
+      // The figure their broker needs for the equipment line of the COI —
+      // descriptions, quantities and values only. A floor (complete:false)
+      // when a line is still being valued, and said so on the page.
+      replacementValue: toClientReplacementValue(await loadOrderReplacementValue(order.id)),
       legacyPaperworkPortalUrl: paperworkPortal
         ? portalTokenUrl(paperworkPortal.token)
         : null,

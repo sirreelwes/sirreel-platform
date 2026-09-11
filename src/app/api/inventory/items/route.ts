@@ -111,6 +111,12 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { isActive: !archived };
 
+  // `?id=` — one row, whatever page or filter it would otherwise sit on.
+  // The action-items panel deep-links a catalog row that needs a
+  // replacement cost (/inventory?item=…) and the page opens its drawer.
+  const id = searchParams.get("id");
+  if (id) { where.id = id; delete where.isActive; }
+
   if (categoryId) where.categoryId = categoryId;
   if (search) {
     where.OR = [

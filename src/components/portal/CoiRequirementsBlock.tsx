@@ -19,8 +19,22 @@
 
 import { useState } from 'react'
 import { COI_REQUIREMENTS, STICKING_POINT, CERTIFICATE_HOLDER } from '@/lib/coi/requirements'
+import {
+  formatReplacementValue,
+  replacementValueSentence,
+  type ClientReplacementValue,
+} from '@/lib/coi/replacementValue'
 
-export function CoiRequirementsBlock() {
+/**
+ * The equipment line of the requirements asks for "the replacement value of
+ * rented equipment". `replacementValue` is that number for THIS order, so the
+ * coordinator can hand their broker a figure instead of a question. A floor
+ * (complete:false) is labelled as one — a broker writes the limit they are
+ * given, and an understated one is worse than none.
+ */
+export function CoiRequirementsBlock({ replacementValue = null }: { replacementValue?: ClientReplacementValue | null }) {
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const sentence = replacementValueSentence(replacementValue)
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
@@ -73,6 +87,44 @@ export function CoiRequirementsBlock() {
           </li>
         ))}
       </ul>
+
+      {sentence && (
+        <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 space-y-1">
+          <div className="text-[11px] text-gray-900 leading-relaxed">
+            <span className="font-semibold">{sentence}</span>
+          </div>
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Give your broker this figure for the rented-equipment line. Add-ons change it — the number here is
+            always current.
+          </p>
+          {replacementValue && replacementValue.schedule.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setScheduleOpen((v) => !v)}
+                className="text-[10px] font-semibold text-gray-600 underline underline-offset-2 hover:text-gray-900"
+              >
+                {scheduleOpen ? 'Hide' : 'Show'} the equipment schedule
+              </button>
+              {scheduleOpen && (
+                <ul className="mt-1 space-y-0.5">
+                  {replacementValue.schedule.map((row, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 text-[10px] text-gray-700">
+                      <span className="min-w-0 truncate">
+                        {row.quantity > 1 ? `${row.quantity}× ` : ''}
+                        {row.description}
+                      </span>
+                      <span className="font-mono tabular-nums shrink-0">
+                        {row.total === null ? 'being valued' : formatReplacementValue(row.total)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
         <span className="font-semibold">Auto Physical Damage is the one that holds things up.</span>{' '}

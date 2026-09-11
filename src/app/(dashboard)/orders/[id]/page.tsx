@@ -13,6 +13,7 @@ import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsS
 import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
+import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
@@ -214,6 +215,9 @@ type Order = {
   /** Server-computed: the stored PDF predates the order's current line
    *  items / discounts. See lib/orders/quotePdfFreshness.ts. */
   quotePdfStale?: boolean;
+  /** The rented gear's replacement value — the client's broker's equipment
+   *  limit — and the lines nothing on file could value (lib/coi/replacementValue). */
+  replacementValue?: ReplacementValueData | null;
   // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
   // progress panel + "Mark Fleet Ready" / undo buttons.
   fleetReadyAt: string | null;
@@ -4050,6 +4054,15 @@ export default function OrderDetailPage() {
                 <span>Total</span><span className="font-mono">{fmt(order.total)}</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* What the client's broker insures the gear for. Money-gated with
+            the rest of the order's figures — the yard never needs it, and a
+            floor shown without its warning is the one thing this must not be. */}
+        {canSeeMoney && order.replacementValue && order.replacementValue.counted > 0 && (
+          <div className="px-6 pb-4">
+            <ReplacementValueCard value={order.replacementValue} scope="order" />
           </div>
         )}
       </div>

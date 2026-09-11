@@ -4,6 +4,7 @@ import { findPendingDayClaims } from '@/lib/orders/dayClaimGate';
 import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { loadOrderReplacementValue } from '@/lib/coi/replacementValue';
 import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
@@ -228,7 +229,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
     orderBy: { startDate: 'asc' },
   });
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn });
+  // What the client's broker insures the rented gear for — derived from the
+  // lines on read, with the lines nothing on file could value listed so the
+  // desk can price the catalog row (lib/coi/replacementValue).
+  const replacementValue = await loadOrderReplacementValue(id);
+
+  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

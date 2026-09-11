@@ -198,6 +198,9 @@ interface PortalData {
     /** Present once the production has told us this job carries its own
      *  policy — the account certificate has stopped standing in for it. */
     coiSeparatePolicyNotice: string | null;
+    /** The rented gear's replacement value for the COI's equipment line —
+     *  a floor while `complete` is false (lib/coi/replacementValue). */
+    replacementValue?: { total: number; complete: boolean; pendingCount: number; schedule: Array<{ description: string; quantity: number; total: number | null }> } | null;
     legacyPaperworkPortalUrl: string | null;
     vehicles: {
       assetId: string;
@@ -1395,7 +1398,7 @@ export default function JobPortalPage() {
                         {/* Flagged certificate — they have to go back to the
                             broker, so give them the same tools as someone
                             who hasn't uploaded yet. */}
-                        <CoiRequirementsBlock />
+                        <CoiRequirementsBlock replacementValue={data.paperwork.replacementValue ?? null} />
                       </>
                     )}
                   </div>
@@ -1450,7 +1453,7 @@ export default function JobPortalPage() {
                         right certificate issued the first time — the
                         requirements, the sample, and a direct line to the
                         broker who writes it. */}
-                    <CoiRequirementsBlock />
+                    <CoiRequirementsBlock replacementValue={data.paperwork.replacementValue ?? null} />
                   </div>
                 )}
               </PaperworkRow>

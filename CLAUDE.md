@@ -380,6 +380,24 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   table). Until then every write/read of the table fails soft** — no
   suggestions, nothing else affected. `npm run test:job-change-signals`.
 
+## Replacement value for the client's COI (2026-09-11)
+- The insurance requirements ask brokers for "Misc Rental Equipment …
+  totaling the replacement value of rented equipment"; HQ now SAYS what
+  that value is. `src/lib/coi/replacementValue.ts` derives it on read
+  from VEHICLE + EQUIPMENT lines (kit pieces in; fees, discounts, labor,
+  EXPENDABLES out): reserved unit's `Asset.currentValue`/`purchasePrice`
+  → `InventoryItem.replacementCost` → max `InventoryUnit.replacementCost`
+  (RentalWorks register) → dearest active asset in the vehicle class.
+  `complete:false` means the total is a FLOOR and every surface says
+  "at least $X — N items still being valued". Never store it.
+- Surfaces: order page card + job page (inside the COI section, both
+  money-gated), portal `CoiRequirementsBlock` and the broker email
+  (`replacementValueSentence()` is the one wording). Action item
+  `replacement-cost-missing` is one row per CATALOG ROW (high = vehicle
+  row going out within 7 days); `/inventory?item=<id>` opens the drawer.
+- At launch no vehicle carried a value anywhere (0/81 assets, 0/12
+  VEHICLES rows) — price those 12 rows first. `npm run test:replacement-value`.
+
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
   Hill / Long Beach) is the second partner after King Kong, and rents
