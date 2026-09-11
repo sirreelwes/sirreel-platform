@@ -710,8 +710,8 @@ export async function GET(req: NextRequest) {
         (o) => (o as { status: OrderStatus }).status === 'APPROVED',
       ).length
 
-      // Quote out, no welcome yet → the tile reminds. Same inputs the
-      // job page's button reads (GET /api/jobs/[id]/welcome).
+      // Quote out, no welcome yet, pickup still ahead → the tile reminds.
+      // Same inputs the job page's button reads (GET /api/jobs/[id]/welcome).
       const welcomeSig = welcomeSignal({
         jobStatus: j.status,
         orders: j.orders.map((o) => ({
@@ -720,6 +720,11 @@ export async function GET(req: NextRequest) {
           quoteSentAt: (o as { quoteSentAt?: Date | null }).quoteSentAt ?? null,
         })),
         sentAt: welcomeSentByJob.get(j.id) ?? null,
+        pickupDates: [
+          ...liveOrders.map((o) => (o as { startDate?: Date | null }).startDate ?? null),
+          ...liveBookings.map((b) => b.startDate),
+        ],
+        today,
       })
       const welcome = {
         state: welcomeSig.state,

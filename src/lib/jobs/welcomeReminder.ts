@@ -15,19 +15,18 @@
  *               No new column: the send is a fact about a moment, exactly
  *               as the paperwork summary's is.
  *
- * The reminder is DUE while a quote is out and no welcome has gone. It
- * fades after WELCOME_REMINDER_WINDOW_DAYS: a job quoted five weeks ago
- * with no welcome is either lost or long past introductions, and a
- * reminder on 150 old quotes is wallpaper by Friday (the same rule the
- * /jobs list already lives by — nothing older than 30 days on the main
- * page). It also only counts quotes on orders that have NOT gone out
- * yet (QUOTE_SENT → LOADED_READY): once the gear is on the job the
- * welcome moment has passed, and "Welcome" on a truck that is already
- * on set is noise. Measured on ship day (2026-09-11): 52 jobs read DUE
- * — every client quoted in the last 30 days and never welcomed; that
- * is the backlog, not wallpaper, and it clears one send at a time. The
- * job page's button stays available either way; only the nag fades.
- * WRAPPED / LOST jobs never nag.
+ * The reminder is DUE while a quote is out, no welcome has gone, AND
+ * the client still has a pickup ahead of them (Wes 2026-09-11, an hour
+ * after the first cut: "only propose sending to future pickup date
+ * clients"). A pickup date is any live order's window start or any live
+ * booking's start; one of them on or after today makes the job a
+ * future-pickup client. No date on file → nothing to propose. It also
+ * fades after WELCOME_REMINDER_WINDOW_DAYS, only counts quotes on orders
+ * that have NOT gone out yet (QUOTE_SENT → LOADED_READY), and never nags
+ * a WRAPPED / LOST job. The first cut (52 jobs DUE on ship day) nagged
+ * for clients whose dates had already passed — a welcome to a shoot that
+ * wrapped last week is noise. The job page's button stays available
+ * either way; only the nag fades.
  */
 
 import { liveOrdersForRollup } from './liveOrders'
@@ -68,7 +67,31 @@ export interface WelcomeSignalInputs {
   orders: { status: string; archivedAt?: Date | string | null; quoteSentAt: Date | string | null }[]
   /** Newest `job.welcome_sent` audit row, or null. */
   sentAt: Date | string | null
+  /**
+   * Every pickup date on the job — live orders' window starts (the
+   * `Order.startDate` mirror syncOrderWindow keeps, a `@db.Date` at UTC
+   * midnight) and live bookings' starts. Dates or YYYY-MM-DD strings;
+   * nulls ignored. DUE needs at least one on or after `today`.
+   */
+  pickupDates: (Date | string | null | undefined)[]
+  /** YYYY-MM-DD, the same calendar day the cadence rollup compares
+   *  against (cadenceDays().today). */
+  today: string
   now?: Date
+}
+
+function ymd(v: Date | string | null | undefined): string | null {
+  if (!v) return null
+  if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null
+  return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10)
+}
+
+/** True when any pickup on the job is still ahead — today counts. */
+export function hasFuturePickup(pickupDates: WelcomeSignalInputs['pickupDates'], today: string): boolean {
+  return pickupDates.some((d) => {
+    const s = ymd(d)
+    return s !== null && s >= today
+  })
 }
 
 function asDate(v: Date | string | null | undefined): Date | null {
@@ -92,6 +115,7 @@ export function welcomeSignal(i: WelcomeSignalInputs): WelcomeSignal {
   if (sentAt) return { state: 'sent', quotedAt, sentAt }
   if (i.jobStatus === 'WRAPPED' || i.jobStatus === 'LOST') return { state: 'none', quotedAt, sentAt }
   if (!pendingQuotedAt) return { state: 'none', quotedAt, sentAt }
+  if (!hasFuturePickup(i.pickupDates, i.today)) return { state: 'none', quotedAt, sentAt }
   const cutoff = now.getTime() - WELCOME_REMINDER_WINDOW_DAYS * 86_400_000
   if (pendingQuotedAt.getTime() < cutoff) return { state: 'none', quotedAt, sentAt }
   return { state: 'due', quotedAt, sentAt }

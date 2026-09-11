@@ -271,11 +271,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   "Send welcome email" chip and the job header carries the button
   (`JobWelcomeButton`, beside + New quote), loud while DUE.
 - **DUE = a quote is out on a live order that has NOT gone out yet
-  (QUOTE_SENT → LOADED_READY), within 30 days, and no welcome sent;**
+  (QUOTE_SENT → LOADED_READY), within 30 days, no welcome sent, AND a
+  pickup date (order window start or booking start) is today or later**
+  (Wes: "only propose sending to future pickup date clients"; no date on
+  file = nothing proposed);
   `welcomeSignal()` in `src/lib/jobs/welcomeReminder.ts` is the ONE rule —
   the tile (`/api/jobs` → `welcome`), the button (`GET /api/jobs/[id]/welcome`)
   and the send all read it. "Sent" is AuditLog `job.welcome_sent` on the
-  Job (no column); a re-send is a newer row. 52 jobs read DUE on ship day.
+  Job (no column); a re-send is a newer row.
 - The email (`src/lib/email/templates/jobWelcome.ts`) is Wes's wording,
   verbatim, seeded into the review modal's box (`defaultJobWelcomeBody`) —
   edit or send as is; a blank box still sends it. The "Open your job"

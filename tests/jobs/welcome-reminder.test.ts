@@ -10,9 +10,11 @@
  * and the client's link.
  */
 import {
-  welcomeSignal,
+  welcomeSignal as welcomeSignalRaw,
+  hasFuturePickup,
   defaultJobWelcomeBody,
   WELCOME_REMINDER_WINDOW_DAYS,
+  type WelcomeSignalInputs,
 } from '../../src/lib/jobs/welcomeReminder'
 import { buildJobWelcomeEmail } from '../../src/lib/email/templates/jobWelcome'
 
@@ -26,6 +28,11 @@ function ok(cond: boolean, why: string): void { eq(cond, true, why) }
 
 const now = new Date('2026-09-11T18:00:00Z')
 const days = (n: number) => new Date(now.getTime() - n * 86_400_000)
+const TODAY = '2026-09-11'
+// Every quote/status case below is a future-pickup client unless it says
+// otherwise — the pickup rule has its own block further down.
+const welcomeSignal = (i: Omit<WelcomeSignalInputs, 'pickupDates' | 'today'> & Partial<Pick<WelcomeSignalInputs, 'pickupDates' | 'today'>>) =>
+  welcomeSignalRaw({ pickupDates: ['2026-09-20'], today: TODAY, ...i })
 
 console.log('welcomeSignal')
 eq(welcomeSignal({ jobStatus: 'NEW', orders: [], sentAt: null, now }).state, 'none', 'no orders → none')
@@ -142,6 +149,20 @@ eq(
   'sent',
   'a sent welcome still reads sent on a wrapped job',
 )
+
+console.log('pickup date (Wes: only future-pickup clients)')
+const quoted = [{ status: 'QUOTE_SENT', quoteSentAt: days(2) }]
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: ['2026-09-12'] }).state, 'due', 'pickup tomorrow → due')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: ['2026-09-11'] }).state, 'due', 'pickup today → still due (they have not picked up yet)')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: ['2026-09-10'] }).state, 'none', 'pickup yesterday → none')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: [] }).state, 'none', 'no pickup date on file → nothing to propose')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: [null, undefined] }).state, 'none', 'only nulls → none')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: ['2026-09-01', '2026-09-25'] }).state, 'due', 'one past pickup and one ahead → due (the add-on)')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: [new Date('2026-09-15T00:00:00Z')] }).state, 'due', 'a @db.Date (UTC midnight) ahead → due')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: null, now, pickupDates: [new Date('2026-09-10T00:00:00Z')] }).state, 'none', 'a @db.Date behind → none')
+eq(welcomeSignal({ jobStatus: 'NEW', orders: quoted, sentAt: days(1), now, pickupDates: ['2026-09-01'] }).state, 'sent', 'sent stays sent whatever the dates')
+eq(hasFuturePickup(['garbage', '2026-09-11'], TODAY), true, 'hasFuturePickup ignores unparseable strings and reads the rest')
+eq(hasFuturePickup(['garbage'], TODAY), false, 'hasFuturePickup: garbage alone is false')
 
 console.log('defaultJobWelcomeBody')
 const body = defaultJobWelcomeBody('Joelle')

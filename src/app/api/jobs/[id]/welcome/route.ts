@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { rankRecipients } from '@/lib/email/recipients'
+import { cadenceDays } from '@/lib/jobs/cadence'
+import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { WELCOME_SENT_ACTION, welcomeSignal } from '@/lib/jobs/welcomeReminder'
 
 export const dynamic = 'force-dynamic'
@@ -26,7 +28,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       select: {
         id: true,
         status: true,
-        orders: { select: { status: true, archivedAt: true, quoteSentAt: true, portalSlug: true } },
+        orders: {
+          select: { status: true, archivedAt: true, quoteSentAt: true, portalSlug: true, startDate: true },
+        },
+        bookings: {
+          where: { status: { not: 'CANCELLED' } },
+          select: { startDate: true },
+        },
         jobContacts: {
           orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }],
           select: {
@@ -45,7 +53,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   ])
   if (!job) return NextResponse.json({ ok: false, error: 'job not found' }, { status: 404 })
 
-  const signal = welcomeSignal({ jobStatus: job.status, orders: job.orders, sentAt: sent?.createdAt ?? null })
+  const signal = welcomeSignal({
+    jobStatus: job.status,
+    orders: job.orders,
+    sentAt: sent?.createdAt ?? null,
+    pickupDates: [
+      ...liveOrdersForRollup(job.orders).map((o) => o.startDate),
+      ...job.bookings.map((b) => b.startDate),
+    ],
+    today: cadenceDays().today,
+  })
   const to = rankRecipients({ jobContacts: job.jobContacts }, null)[0] ?? null
   const hasPortal = job.orders.some(
     (o) => o.status !== 'CANCELLED' && !o.archivedAt && !!o.portalSlug,
