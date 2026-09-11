@@ -1,13 +1,15 @@
 import { categoryNameForLine, catalogClientCode } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import {
   JOB_SESSION_COOKIE,
   buildJobSessionCookieHeader,
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
-import { portalTokenUrl } from '@/lib/portal/portalUrl'
+import { portalTokenUrl, portalV2Url } from '@/lib/portal/portalUrl'
+import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 import { findJobCoverage, coverageSentence } from '@/lib/orders/agreementCoverage'
 import {
@@ -255,18 +257,43 @@ export async function GET(req: NextRequest) {
     select: { id: true, name: true, email: true, phone: true, displayTitle: true, role: true },
   })
 
+  const paperworkRequestScopes: Prisma.PaperworkRequestWhereInput[] = []
+  if (order.bookingId) paperworkRequestScopes.push({ bookingId: order.bookingId })
+  if (order.jobId) {
+    paperworkRequestScopes.push({
+      booking: { jobId: order.jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
+    })
+  }
+
   const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
     // The certificate that governs this job: its own upload, else the
     // account's certificate on file carried forward (Wes, 2026-09-02 — annual
     // COIs). Resolving by jobId alone made an annual account look uninsured
     // on every job after the one they uploaded against.
     order.jobId ? resolveJobCoi(order.jobId) : Promise.resolve(null),
-    order.bookingId
-      ? prisma.paperworkRequest.findFirst({
-          where: { bookingId: order.bookingId },
-          orderBy: { sentAt: 'desc' },
-          select: { token: true },
-        })
+    // The card-authorization link HQ sent for this job. Booking-scoped, so
+    // the order's own booking first; but a rebook orphans Order.bookingId
+    // (paperwork-link-follows-rebook), so any live booking on the job is
+    // a fallback rather than "never asked". A row that already holds a
+    // card wins outright — that is the authorization, whichever booking it
+    // hangs off.
+    paperworkRequestScopes.length > 0
+      ? prisma.paperworkRequest
+          .findMany({
+            where: { OR: paperworkRequestScopes },
+            orderBy: { sentAt: 'desc' },
+            select: {
+              token: true, bookingId: true, sentAt: true, sentTo: true,
+              ccCardNumberEncrypted: true, ccCardLast4: true, ccCardType: true,
+              ccCardholderFirst: true, ccCardholderLast: true, ccAuthSignedAt: true,
+            },
+          })
+          .then((rows) =>
+            rows.find((r) => !!r.ccCardNumberEncrypted) ??
+            rows.find((r) => r.bookingId === order.bookingId) ??
+            rows[0] ??
+            null,
+          )
       : Promise.resolve(null),
     order.bookingId
       ? prisma.bookingAssignment.findMany({
@@ -315,6 +342,69 @@ export async function GET(req: NextRequest) {
   // "Active COI on file — but is it the right one for THIS job?" (Wes,
   // 2026-09-09). Only a CARRIED certificate raises the question; the
   // client's answer is bound to the document they were shown.
+  // Card authorization — the row Nancy (Happy Place, SR-JOB-0351,
+  // 2026-09-11) could not find: the job portal listed every other piece
+  // of paperwork and the card link only ever surfaced through the Rental
+  // Agreement row, which stops linking out the moment the agreement is
+  // signed. Both stores, always (jobCardOnFile.ts): the portal capture on
+  // the paperwork row, else the company wallet. 'REQUESTED' means HQ sent
+  // the link and nothing came back — the same condition that stops the
+  // yard checking the job out (cardGate.ts), so the client sees it here
+  // before the dock does.
+  const walletCard =
+    paperworkPortal?.ccCardNumberEncrypted || !order.jobId
+      ? null
+      : await resolveWalletCardForJob(order.company?.id, order.jobId)
+  // The v2 paperwork page — the one the card-authorization email itself
+  // opens — landed on the card step.
+  const cardCaptureUrl = paperworkPortal ? `${portalV2Url(paperworkPortal.token)}?open=cc` : null
+  const cardAuth: {
+    state: 'ON_FILE' | 'REQUESTED' | 'NOT_REQUESTED'
+    origin: 'job' | 'account' | null
+    last4: string | null
+    cardType: string | null
+    cardholderName: string | null
+    authorizedAt: string | null
+    requestedAt: string | null
+    requestedTo: string | null
+    captureUrl: string | null
+  } = paperworkPortal?.ccCardNumberEncrypted
+    ? {
+        state: 'ON_FILE',
+        origin: 'job',
+        last4: paperworkPortal.ccCardLast4,
+        cardType: paperworkPortal.ccCardType,
+        cardholderName:
+          [paperworkPortal.ccCardholderFirst, paperworkPortal.ccCardholderLast].filter(Boolean).join(' ') || null,
+        authorizedAt: paperworkPortal.ccAuthSignedAt?.toISOString() ?? null,
+        requestedAt: paperworkPortal.sentAt.toISOString(),
+        requestedTo: paperworkPortal.sentTo,
+        captureUrl: cardCaptureUrl,
+      }
+    : walletCard
+      ? {
+          state: 'ON_FILE',
+          origin: 'account',
+          last4: walletCard.last4,
+          cardType: walletCard.cardType,
+          cardholderName: walletCard.cardholderName,
+          authorizedAt: null,
+          requestedAt: paperworkPortal?.sentAt.toISOString() ?? null,
+          requestedTo: paperworkPortal?.sentTo ?? null,
+          captureUrl: cardCaptureUrl,
+        }
+      : {
+          state: paperworkPortal ? 'REQUESTED' : 'NOT_REQUESTED',
+          origin: null,
+          last4: null,
+          cardType: null,
+          cardholderName: null,
+          authorizedAt: null,
+          requestedAt: paperworkPortal?.sentAt.toISOString() ?? null,
+          requestedTo: paperworkPortal?.sentTo ?? null,
+          captureUrl: cardCaptureUrl,
+        }
+
   const coiConfirmation = order.jobId
     ? await getJobCoiConfirmation(order.jobId, latestCoi)
     : NO_CONFIRMATION
@@ -693,6 +783,7 @@ export async function GET(req: NextRequest) {
       legacyPaperworkPortalUrl: paperworkPortal
         ? portalTokenUrl(paperworkPortal.token)
         : null,
+      cardAuth,
       // Vehicles assigned to this order via the booking. Each entry carries
       // make/model/plate + registration + BIT links/expiries. Internal-only
       // fields are not in the source select.

@@ -156,6 +156,23 @@ export default function ClientPortalV2() {
   useEffect(() => {
     if (loading || initialised || !booking) return
     setInitialised(true)
+    // `?open=cc` (or any card key) lands the client on that card. The job
+    // portal's Card Authorization row links here this way (2026-09-11:
+    // Nancy at Happy Place, accounting, had a signed agreement and an
+    // approved COI and nothing on her page led to the card form). Read
+    // from the location rather than useSearchParams — no Suspense
+    // boundary to fight, and it is only a landing hint.
+    let wanted: OpenKey = null
+    try {
+      const q = new URLSearchParams(window.location.search).get('open')
+      if (q === 'details' || q === 'payment' || (docKeys as string[]).includes(q || '')) wanted = q as OpenKey
+    } catch {
+      /* no location — guided default below */
+    }
+    if (wanted && !locked) {
+      setOpenKey(wanted)
+      return
+    }
     if (allDone) return
     if ((!detailsDone || !intakePersisted) && !locked) {
       setOpenKey('details')

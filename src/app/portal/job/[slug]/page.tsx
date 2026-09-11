@@ -202,6 +202,21 @@ interface PortalData {
      *  a floor while `complete` is false (lib/coi/replacementValue). */
     replacementValue?: { total: number; complete: boolean; pendingCount: number; schedule: Array<{ description: string; quantity: number; total: number | null }> } | null;
     legacyPaperworkPortalUrl: string | null;
+    /** The card behind this job. ON_FILE from the portal capture (origin
+     *  'job') or the company wallet ('account'); REQUESTED once HQ sent the
+     *  secure link and nothing came back; NOT_REQUESTED before that.
+     *  captureUrl opens the card step of the paperwork link directly. */
+    cardAuth: {
+      state: 'ON_FILE' | 'REQUESTED' | 'NOT_REQUESTED';
+      origin: 'job' | 'account' | null;
+      last4: string | null;
+      cardType: string | null;
+      cardholderName: string | null;
+      authorizedAt: string | null;
+      requestedAt: string | null;
+      requestedTo: string | null;
+      captureUrl: string | null;
+    };
     vehicles: {
       assetId: string;
       unitName: string;
@@ -1457,6 +1472,16 @@ export default function JobPortalPage() {
                   </div>
                 )}
               </PaperworkRow>
+
+              {/* Card authorization. This row did not exist until
+                  2026-09-11 — the card link only reached the client through
+                  the Rental Agreement row's fallback, which disappears the
+                  moment the agreement is signed. Nancy (Happy Place
+                  accounting) had a signed agreement, an approved COI and no
+                  way to put a card down, on the morning of pickup. The link
+                  is the same secure paperwork link HQ sent; anyone on the
+                  production can complete it. */}
+              <CardAuthRow card={data.paperwork.cardAuth} />
             </div>
           </div>
 
@@ -1880,6 +1905,203 @@ function PaperworkRow({
 // helpers fell through to 'Sent' for PORTAL_GENERATED rows, which
 // was the dark-on-dark bug equivalent for badge copy: prepared isn't
 // delivered. The canonical mapping fixes it.
+function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | undefined }) {
+  // Older cached payloads (a tab left open across the deploy) carry no
+  // cardAuth — render nothing rather than a row that says "not requested"
+  // to a client who was asked yesterday.
+  if (!card) return null;
+  const fmt = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+  const cardWords = [card.cardType, card.last4 ? `ending ${card.last4}` : null].filter(Boolean).join(' ');
+  const openLink = (label: string, primary: boolean) =>
+    card.captureUrl ? (
+      <a
+        href={card.captureUrl}
+        target="_blank"
+        rel="noreferrer"
+        className={
+          primary
+            ? 'inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg'
+            : 'text-xs font-semibold text-gray-600 hover:text-gray-900 underline'
+        }
+      >
+        {label}
+      </a>
+    ) : null;
+
+  if (card.state === 'ON_FILE') {
+    return (
+      <PaperworkRow label="Card Authorization" status="On file" statusKind="success">
+        <div className="space-y-1.5">
+          <div className="text-xs text-gray-600 leading-relaxed">
+            {card.origin === 'job' ? (
+              <>
+                {cardWords ? `Card ${cardWords}` : 'A card'} authorized
+                {card.cardholderName ? ` by ${card.cardholderName}` : ''}
+                {fmt(card.authorizedAt) ? ` on ${fmt(card.authorizedAt)}` : ''} for this job.
+              </>
+            ) : (
+              <>
+                {cardWords ? `A card ${cardWords}` : 'A card'} is on file for your company
+                {card.cardholderName ? ` (${card.cardholderName})` : ''} and covers this job.
+              </>
+            )}
+          </div>
+          {openLink('Authorize a different card for this job →', false)}
+          {card.origin === 'account' && card.captureUrl && <CardAuthHandoff />}
+        </div>
+      </PaperworkRow>
+    );
+  }
+
+  if (card.state === 'REQUESTED') {
+    return (
+      <PaperworkRow label="Card Authorization" status="Needed" statusKind="warning">
+        <div className="space-y-2">
+          <div className="text-xs text-gray-600 leading-relaxed">
+            We sent a secure card authorization link
+            {card.requestedTo ? ` to ${card.requestedTo}` : ''}
+            {fmt(card.requestedAt) ? ` on ${fmt(card.requestedAt)}` : ''}, and it has not been
+            completed yet. Anyone on the production can complete it here — it is the same link.
+          </div>
+          {openLink('Add card authorization →', true)}
+          <CardAuthHandoff />
+          <div className="text-[11px] text-gray-400">
+            The card is entered on a secure form and is used for rental fees, deposits and any charges
+            under the rental agreement. Prefer to pay by check or bank transfer? Tell your rep — the
+            bank details are further down this page.
+          </div>
+        </div>
+      </PaperworkRow>
+    );
+  }
+
+  return (
+    <PaperworkRow label="Card Authorization" status="Not yet requested" statusKind="pending">
+      <div className="text-xs text-gray-500">
+        Your rep will send a secure card authorization link when it is needed. Once it is out, you
+        can hand it to your accounting team from here.
+      </div>
+    </PaperworkRow>
+  );
+}
+
+/**
+ * "This isn't mine to do" — the client names the colleague who holds the
+ * card (accounting, a line producer, the exec's office) and HQ emails them
+ * the same secure link, adds them to the job, and gives them their own
+ * portal seat. Wes 2026-09-11: the person who sends the card is often not
+ * the production contact; sharing that responsibility has to be one step.
+ */
+function CardAuthHandoff() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sentTo, setSentTo] = useState<{ name: string | null; email: string; portalIssued: boolean } | null>(null);
+
+  const submit = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const r = await fetch('/api/portal/job/card-auth/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, note }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body?.ok) {
+        setErr(body?.error || 'That did not go through — try again in a moment.');
+        return;
+      }
+      setSentTo({ name: body.name ?? null, email: body.email, portalIssued: !!body.portalIssued });
+      setOpen(false);
+    } catch {
+      setErr('That did not go through — try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sentTo) {
+    return (
+      <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 leading-relaxed">
+        Sent to {sentTo.name ? `${sentTo.name} (${sentTo.email})` : sentTo.email}. They have the secure
+        card link{sentTo.portalIssued ? ' and their own link to this page' : ''}, and your rep has been told.
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <div className="text-xs text-gray-500">
+        Not yours to handle?{' '}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="font-semibold text-gray-700 hover:text-gray-900 underline"
+        >
+          Hand this to your accounting team →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+      <div className="text-xs font-semibold text-gray-800">Who should complete the card authorization?</div>
+      <div className="text-[11px] text-gray-500 leading-relaxed">
+        We will email them the secure link, add them to this job as your accounting contact, and give
+        them their own link to this page.
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Their name"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+        />
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Their email"
+          type="email"
+          inputMode="email"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+        />
+      </div>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="A note for them (optional)"
+        maxLength={600}
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+      />
+      {err && <div className="text-xs text-red-700">{err}</div>}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || !email.trim()}
+          className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
+        >
+          {busy ? 'Sending…' : 'Send them the link'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={busy}
+          className="text-xs text-gray-500 hover:text-gray-800 underline"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function agreementStatusLabel(a: PortalData['paperwork']['agreement']): string {
   return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).label;
 }
