@@ -18,6 +18,7 @@ import { requireAssistantAccess } from '@/lib/assistant/requireAssistantAccess'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
 import { resolveTwilioConfig } from '@/lib/sms/sendSms'
+import { listRecognizedNumbers } from '@/lib/assistant/recognizedNumbers'
 
 export const dynamic = 'force-dynamic'
 const SINGLETON = 'singleton'
@@ -98,6 +99,10 @@ export async function GET() {
 
   const twilio = resolveTwilioConfig()
 
+  // The roster of numbers AHA recognises, read from the same facts the live
+  // checks read. Never fails the page: an empty list with a note beats a 500.
+  const recognized = await listRecognizedNumbers().catch((err) => { console.error('[admin/assistant] recognized roster failed:', err); return [] })
+
   const emergencyContacts = await prisma.user.findMany({
     where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
@@ -121,6 +126,7 @@ export async function GET() {
     // different actions, and guessing between them costs an evening.
     smsConfigured: twilio.config !== null,
     smsProblem: twilio.config === null ? twilio.reason : null,
+    recognized,
   })
 }
 

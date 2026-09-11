@@ -45,6 +45,20 @@ type Usage = {
   firstUsedAt: string | null
   lastUsedAt: string | null
 }
+type RecognizedNumber = {
+  tier: 'staff' | 'contact' | 'driver'
+  tail: string
+  phone: string
+  name: string
+  reason: string
+  grants: string
+  manageHref: string
+  manageLabel: string
+  until: string | null
+  jobCode?: string | null
+  jobName?: string | null
+  unit?: string | null
+}
 type Data = {
   gateCode: string
   gateCodeUpdatedAt: string | null
@@ -57,6 +71,7 @@ type Data = {
   smsConfigured?: boolean
   smsProblem?: string | null
   emergencyContacts: EmergencyContact[]
+  recognized?: RecognizedNumber[]
 }
 
 function fmt(d: string | null): string {
@@ -91,6 +106,124 @@ function auditLabel(a: AuditRow): string {
  * most of that traffic was people failing to get in — so the lockout rate
  * leads, and the reasons sit next to it because they are the fixable part.
  */
+const TIER_LABEL: Record<RecognizedNumber['tier'], { label: string; chip: string; blurb: string }> = {
+  staff: { label: 'Staff', chip: 'bg-amber-600/20 text-amber-300 border-amber-600/40', blurb: 'Fleet + job lookups by text' },
+  contact: { label: 'Production contact', chip: 'bg-sky-600/20 text-sky-300 border-sky-600/40', blurb: 'Own job, message to agent, that job’s truck codes' },
+  driver: { label: 'Checkout driver', chip: 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40', blurb: 'That truck’s codes' },
+}
+
+function fmtDay(d: string | null): string {
+  if (!d) return '—'
+  try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) } catch { return '—' }
+}
+
+function fmtTail(tail: string): string {
+  return `(${tail.slice(0, 3)}) ${tail.slice(3, 6)}-${tail.slice(6)}`
+}
+
+/**
+ * Who AHA recognises, by number — read from the same facts the live checks
+ * use, so this list IS the access. Nothing is granted here; each row says
+ * where the number lives and links there.
+ */
+function RecognizedSection({ rows }: { rows: RecognizedNumber[] }) {
+  const [q, setQ] = useState('')
+  const [tier, setTier] = useState<'all' | RecognizedNumber['tier']>('all')
+  const digits = q.replace(/\D/g, '')
+  const needle = q.trim().toLowerCase()
+  const shown = rows.filter((r) => {
+    if (tier !== 'all' && r.tier !== tier) return false
+    if (!needle) return true
+    if (digits.length >= 3 && r.tail.includes(digits)) return true
+    return r.name.toLowerCase().includes(needle) || (r.jobCode ?? '').toLowerCase().includes(needle) || (r.jobName ?? '').toLowerCase().includes(needle) || (r.unit ?? '').toLowerCase().includes(needle)
+  })
+  const counts = { staff: 0, contact: 0, driver: 0 } as Record<RecognizedNumber['tier'], number>
+  for (const r of rows) counts[r.tier]++
+  const distinct = new Set(rows.map((r) => r.tail)).size
+
+  return (
+    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Who AHA recognises</h2>
+          <p className="mt-1 max-w-3xl text-xs text-zinc-500">
+            Every number AHA treats as more than the public, right now, and why. Nothing is granted on this list — it
+            reads the same records the live checks read, so to change access, change the record it points to.
+            Any number not here gets the public tier: job-code verification, emergencies, gear setup. There is no
+            block list; STOP only stops our texts to a number.
+          </p>
+        </div>
+        <div className="text-right text-xs text-zinc-500">
+          <span className="text-zinc-300">{distinct}</span> number{distinct === 1 ? '' : 's'} · {rows.length} grant{rows.length === 1 ? '' : 's'}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {(['all', 'staff', 'contact', 'driver'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTier(t)}
+            className={`rounded-full border px-3 py-1 text-xs ${tier === t ? 'border-amber-500 bg-amber-600/20 text-amber-200' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+          >
+            {t === 'all' ? `All · ${rows.length}` : `${TIER_LABEL[t].label} · ${counts[t]}`}
+          </button>
+        ))}
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Number, name, job or unit"
+          className="ml-auto w-56 rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+        />
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
+              <th className="py-2 pr-3 font-medium">Number</th>
+              <th className="py-2 pr-3 font-medium">Who</th>
+              <th className="py-2 pr-3 font-medium">Tier</th>
+              <th className="py-2 pr-3 font-medium">Why AHA knows it</th>
+              <th className="py-2 pr-3 font-medium">Can ask for</th>
+              <th className="py-2 pr-3 font-medium">Until</th>
+              <th className="py-2 pr-3 font-medium">Change it</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r, i) => (
+              <tr key={`${r.tier}:${r.tail}:${r.jobCode ?? ''}:${r.unit ?? ''}:${i}`} className="border-t border-zinc-800 align-top">
+                <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-zinc-200" title={r.phone}>{fmtTail(r.tail)}</td>
+                <td className="py-2 pr-3 text-zinc-100">
+                  {r.name}
+                  {r.jobCode && <div className="text-[11px] text-zinc-500">{r.jobCode}{r.jobName ? ` · ${r.jobName}` : ''}</div>}
+                </td>
+                <td className="py-2 pr-3 whitespace-nowrap">
+                  <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${TIER_LABEL[r.tier].chip}`}>{TIER_LABEL[r.tier].label}</span>
+                </td>
+                <td className="py-2 pr-3 text-zinc-300">{r.reason}</td>
+                <td className="py-2 pr-3 text-xs text-zinc-400">{r.grants}</td>
+                <td className="py-2 pr-3 whitespace-nowrap text-zinc-400" title={r.until ? 'Lapses on its own after this date' : 'Until removed'}>
+                  {r.until ? fmtDay(r.until) : 'Until removed'}
+                </td>
+                <td className="py-2 pr-3 whitespace-nowrap">
+                  <a href={r.manageHref} className="text-xs font-semibold text-amber-300 hover:text-amber-200">{r.manageLabel} →</a>
+                </td>
+              </tr>
+            ))}
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-4 text-center text-zinc-500">
+                  {rows.length === 0 ? 'AHA recognises no numbers yet — add staff mobiles above, and contacts follow their jobs.' : 'Nothing matches.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 function UsageSection({ usage }: { usage: Usage }) {
   const { totals, last30Days, denialReasons, factorFailures, visits, byHour } = usage
   const lockoutPct = totals.lockoutRate == null ? null : Math.round(totals.lockoutRate * 100)
@@ -597,6 +730,8 @@ export default function AssistantAdminPage() {
               {(data.emergencyContacts || []).length === 0 && <div className="text-sm text-zinc-500">No eligible staff.</div>}
             </div>
           </section>
+
+          <RecognizedSection rows={data.recognized ?? []} />
 
           {/* Release log */}
           <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">

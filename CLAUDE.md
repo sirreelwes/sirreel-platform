@@ -204,6 +204,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `my_job_info` + free use of file_callback_request ("wide leeway", Wes).
   Lookups in `src/lib/assistant/lookups.ts`, read-only, never codes or
   pricing. Web chat gets none of this — there is no number to match.
+- **"Who AHA recognises" on /admin/assistant** (Wes 2026-09-11: "where do I
+  manage what numbers have access to what") — `listRecognizedNumbers()` in
+  `src/lib/assistant/recognizedNumbers.ts` lists every number in a tier
+  (staff / production contact / checkout driver) with the field it sits in,
+  what it unlocks, when it lapses, and a link to the record. It reads the
+  SAME predicates as `identifySender` / `verifyAndRelease` so the list is
+  the access — nothing is granted there. Change the record it points to.
+  `npm run test:recognized-numbers`.
 
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
