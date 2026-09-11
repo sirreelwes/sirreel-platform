@@ -2,7 +2,7 @@
 
 - Wes Bailey is CEO and owner (wes@sirreel.com).
 - Two backup CEOs, named by Wes on 2026-09-11. This is for the three of them; no one else on staff holds this knowledge.
-- **Greyson Bailey** — backup CEO.
+- **Greyson Bailey** — backup CEO (greyson@sirreel.com).
 - **Tamara Talbot** — backup CEO (tt@sirreel.com). Added 2026-09-11.
 
 ## What a backup CEO has
