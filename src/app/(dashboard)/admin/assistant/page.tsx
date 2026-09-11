@@ -822,65 +822,88 @@ export default function AssistantAdminPage() {
               their emergency (cell) number. Numbers are never shown to callers; every alert is logged below.
               <span className="block mt-1 text-zinc-600">SMS needs Twilio env keys; until then, alerts go out by email.</span>
             </p>
-            <div className="mt-3 space-y-2">
-              {(data.emergencyContacts || []).map((u) => (
-                <div key={u.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-800/40 p-3">
-                  <button
-                    role="switch"
-                    aria-checked={u.isEmergencyContact}
-                    onClick={async () => {
-                      await fetch('/api/admin/assistant', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, isEmergencyContact: !u.isEmergencyContact }),
-                      })
-                      load()
-                    }}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${u.isEmergencyContact ? 'bg-amber-600' : 'bg-zinc-700'}`}
-                    title="On-call for emergencies"
-                  >
-                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${u.isEmergencyContact ? 'left-6' : 'left-1'}`} />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-white">{u.name}</div>
-                    {/* On-call with no number is the silent half-state: the row
-                        reads as covered while the alert query skips them. */}
-                    {u.isEmergencyContact && !u.emergencyPhone ? (
-                      <div className="text-[10px] uppercase tracking-wider text-red-300">
-                        {u.role} · no number — will not be texted
-                      </div>
-                    ) : (
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</div>
-                    )}
-                  </div>
-                  <input
-                    defaultValue={u.phone ?? ''}
-                    placeholder="Mobile (texts AHA as staff)"
-                    title="Texts from this number are recognised as staff: AHA answers fleet and job questions for it"
-                    onBlur={(e) =>
-                      fetch('/api/admin/assistant', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'set-staff-phone', userId: u.id, phone: e.target.value }),
-                      })
-                    }
-                    className="w-44 rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm font-mono text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
-                  />
-                  <input
-                    defaultValue={u.emergencyPhone ?? ''}
-                    placeholder="Emergency phone"
-                    onBlur={(e) =>
-                      fetch('/api/admin/assistant', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, emergencyPhone: e.target.value }),
-                      })
-                    }
-                    className="w-44 rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm font-mono text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
-                  />
-                </div>
-              ))}
-              {(data.emergencyContacts || []).length === 0 && <div className="text-sm text-zinc-500">No eligible staff.</div>}
+            {/* Same shape as the other lists: one line per person, capped box,
+                sticky header. The switch and both phone fields keep their
+                handlers — only the card chrome went. */}
+            <div className="mt-3 max-h-[26rem] overflow-y-auto rounded-lg border border-zinc-800">
+              <table className="w-full table-fixed text-sm">
+                <thead className="sticky top-0 bg-zinc-900">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
+                    <th className="w-[4.5rem] px-2 py-1.5 font-medium">On call</th>
+                    <th className="px-2 py-1.5 font-medium">Who</th>
+                    <th className="w-[12rem] px-2 py-1.5 font-medium">Mobile</th>
+                    <th className="w-[12rem] px-2 py-1.5 font-medium">Emergency phone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.emergencyContacts || []).map((u) => (
+                    <tr key={u.id} className="border-t border-zinc-800 align-middle">
+                      <td className="px-2 py-1.5">
+                        <button
+                          role="switch"
+                          aria-checked={u.isEmergencyContact}
+                          onClick={async () => {
+                            await fetch('/api/admin/assistant', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, isEmergencyContact: !u.isEmergencyContact }),
+                            })
+                            load()
+                          }}
+                          className={`relative block h-5 w-9 rounded-full transition-colors ${u.isEmergencyContact ? 'bg-amber-600' : 'bg-zinc-700'}`}
+                          title="On-call for emergencies"
+                        >
+                          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${u.isEmergencyContact ? 'left-[18px]' : 'left-0.5'}`} />
+                        </button>
+                      </td>
+                      <td className="truncate px-2 py-1.5 text-white" title={`${u.name} · ${u.role}`}>
+                        {u.name}
+                        {/* On-call with no number is the silent half-state: the row
+                            reads as covered while the alert query skips them. */}
+                        {u.isEmergencyContact && !u.emergencyPhone ? (
+                          <span className="ml-2 text-[10px] uppercase tracking-wider text-red-300">{u.role} · no number — will not be texted</span>
+                        ) : (
+                          <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input
+                          defaultValue={u.phone ?? ''}
+                          placeholder="Texts AHA as staff"
+                          title="Texts from this number are recognised as staff: AHA answers fleet and job questions for it"
+                          onBlur={(e) =>
+                            fetch('/api/admin/assistant', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'set-staff-phone', userId: u.id, phone: e.target.value }),
+                            })
+                          }
+                          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-xs text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input
+                          defaultValue={u.emergencyPhone ?? ''}
+                          placeholder="Emergency phone"
+                          onBlur={(e) =>
+                            fetch('/api/admin/assistant', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, emergencyPhone: e.target.value }),
+                            })
+                          }
+                          className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-xs text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {(data.emergencyContacts || []).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-4 text-center text-zinc-500">No eligible staff.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </Panel>
 
