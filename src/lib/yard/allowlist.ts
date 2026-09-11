@@ -9,13 +9,14 @@
  * /api/picklists.
  *
  * Jose asked for the warehouse surface to walk the processes himself
- * (Wes, 2026-09-08). Why an address and not a role change:
+ * (Wes, 2026-09-08); Oliver got the same grant on the same terms
+ * (Wes, 2026-09-11). Why an address and not a role change:
  *   - MANAGER / WAREHOUSE / FLEET_TECH are all in isFleetYardRole(), which
  *     swaps the user onto the trimmed yard nav. Jose would lose the entire
  *     sales workspace to gain the board.
  *   - Flipping `fleet`/`warehouse` on the AGENT row would hand the pick
  *     floor and order-rewriting check-outs to every current and future
- *     sales agent.
+ *     sales agent — two named reps is not the whole AGENT row.
  *   - A per-user column would let an "edit user" form escalate silently.
  *     A code-reviewed constant changes via PR + deploy only.
  *
@@ -29,6 +30,7 @@
 
 const YARD_ALLOWLIST_BASE: ReadonlyArray<string> = [
   'jose@sirreel.com',
+  'oliver@sirreel.com',
 ]
 
 function normalizedAllowlist(): Set<string> {
