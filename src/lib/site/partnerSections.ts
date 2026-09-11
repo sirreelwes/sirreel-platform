@@ -25,6 +25,11 @@
  * mile from the first mile, calendar days with no weekly cap. That side lives
  * in `src/lib/pricing/specialtyVehicles.ts` — keep the two in step.
  *
+ * PHOTO SHOOT RENTALS (2026-09-11, Wes: "for VSM planet, photo shoot rentals is
+ * going to be a new class of rentals") is the second section that is also a
+ * billing class: it is a LineItemDepartment too, so a partner unit in it
+ * quotes under its own section and subtotal — see partnerUnitDepartment().
+ *
  * Plain module on purpose (no Prisma import): the roster page's <select>
  * and the partner panel are client components and read the same list.
  */
@@ -37,6 +42,7 @@ export type PartnerCatalogSectionKey =
   | 'LIFTS'
   | 'LIGHTING'
   | 'CARTS'
+  | 'PHOTO_SHOOT'
 
 export interface PartnerSectionMeta {
   key: PartnerCatalogSectionKey
@@ -122,6 +128,15 @@ export const PARTNER_SECTIONS: readonly PartnerSectionMeta[] = [
     noun: 'cart',
     order: 70,
   },
+  {
+    key: 'PHOTO_SHOOT',
+    title: 'Photo Shoot Rentals',
+    short: 'Photo shoot',
+    blurb: 'Strobes and light modifiers, cameras, seamless and painted backdrops, stands and grip for stills and studio shoots — packaged for the shoot and ready for pickup or delivery.',
+    anchor: 'photo-shoot',
+    noun: 'item',
+    order: 80,
+  },
 ] as const
 
 export const DEFAULT_PARTNER_SECTION: PartnerCatalogSectionKey = 'LOCATION_VEHICLES'
@@ -142,4 +157,18 @@ export function resolvePartnerSection(
   vendor: { catalogSection: string | null } | null | undefined,
 ): PartnerSectionMeta {
   return partnerSection(unit?.catalogSection ?? vendor?.catalogSection ?? null)
+}
+
+/**
+ * The quote department a partner's unit bills under. Partner units carry no
+ * LineItemDepartment of their own, so it is read off the section first —
+ * Photo Shoot Rentals is a department as well as a section (Wes 2026-09-11) —
+ * and otherwise off the partner's kind.
+ */
+export function partnerUnitDepartment(
+  unit: { catalogSection: string | null } | null | undefined,
+  vendor: { catalogSection: string | null; partnerKind: string | null } | null | undefined,
+): 'PHOTO_SHOOT' | 'GE' | 'VEHICLES' {
+  if (resolvePartnerSection(unit, vendor).key === 'PHOTO_SHOOT') return 'PHOTO_SHOOT'
+  return vendor?.partnerKind === 'EQUIPMENT' ? 'GE' : 'VEHICLES'
 }

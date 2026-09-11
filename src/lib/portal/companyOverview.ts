@@ -143,6 +143,7 @@ export const DEPARTMENT_PUBLIC_PATH: Record<string, string> = {
   GE: "/order/supplies",
   ART: "/order/supplies",
   WARDROBE_MAKEUP: "/order/supplies",
+  PHOTO_SHOOT: "/order/supplies",
 };
 
 export interface CompanyTermsSummary {

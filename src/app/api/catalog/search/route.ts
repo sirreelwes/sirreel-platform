@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { partnerUnitDepartment } from '@/lib/site/partnerSections'
 import { catalogItemSupportsLcdw } from '@/lib/pricing/lcdwEligibility'
 import { aliasesAnswerQuery } from '@/lib/sales/aliasMatch'
 import { prisma } from '@/lib/prisma'
@@ -147,7 +148,8 @@ export async function GET(req: NextRequest) {
         },
         select: {
           id: true, name: true, vehicleType: true, listDailyRate: true, listWeeklyRate: true,
-          vendor: { select: { name: true, partnerKind: true } },
+          catalogSection: true,
+          vendor: { select: { name: true, partnerKind: true, catalogSection: true } },
         },
         take: limit,
         orderBy: { name: 'asc' },
@@ -310,9 +312,9 @@ export async function GET(req: NextRequest) {
       id: v.id,
       type: 'SUB_VEHICLE' as const,
       name: v.name,
-      // Partner units carry no LineItemDepartment; the kind is the closest
-      // honest answer and is what the line should bill under.
-      department: v.vendor.partnerKind === 'EQUIPMENT' ? 'GE' : 'VEHICLES',
+      // Partner units carry no LineItemDepartment; the section decides (Photo
+      // Shoot Rentals is a department too), then the partner's kind.
+      department: partnerUnitDepartment(v, v.vendor),
       dailyRate: num(v.listDailyRate),
       weeklyRate: num(v.listWeeklyRate),
       listDailyRate: num(v.listDailyRate),

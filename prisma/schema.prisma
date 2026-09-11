@@ -2828,6 +2828,11 @@ enum LineItemDepartment {
   // scattered across PRO_SUPPLIES (the WAR-* cluster), EXPENDABLES
   // (hangers) and COMMUNICATIONS (a wardrobe Z-rack, plainly misfiled).
   WARDROBE_MAKEUP
+  // Photo Shoot Rentals (Wes 2026-09-11, for VSM Planet): strobes, modifiers,
+  // cameras, backings and grip for stills and studio shoots — its own section
+  // and subtotal on quotes. Added by additive SQL
+  // (scripts/add-photo-shoot-enum-values.ts), never db push.
+  PHOTO_SHOOT
 }
 
 // First-class order discounts (additive Phase). Coexists with legacy
@@ -4653,6 +4658,7 @@ enum PartnerCatalogSection {
   LIFTS
   LIGHTING
   CARTS
+  PHOTO_SHOOT
 }
 
 model Vendor {

@@ -64,6 +64,7 @@ export const WAREHOUSE_DEPARTMENTS: LineItemDepartment[] = [
   'GE',
   'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
 ]
 
 /** Order statuses past the quote — the client has said yes, or more. */

@@ -50,6 +50,7 @@ const VALID_DEPARTMENTS: LineItemDepartment[] = [
   'GE',
   'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
 ]
 
 export function buildSystemPrompt(catalogSnippet: string): string {
@@ -108,7 +109,7 @@ If the input is plain text without those header lines, treat it as a single mess
       "quantity": 1,
       "catalogProductId": "<UUID from catalog below, or null when uncertain>",
       "catalogType": "INVENTORY" | "ASSET_CATEGORY" | null,
-      "department": "VEHICLES" | "COMMUNICATIONS" | "STAGES" | "PRO_SUPPLIES" | "EXPENDABLES" | "GE" | "ART" | "WARDROBE_MAKEUP",
+      "department": "VEHICLES" | "COMMUNICATIONS" | "STAGES" | "PRO_SUPPLIES" | "EXPENDABLES" | "GE" | "ART" | "WARDROBE_MAKEUP" | "PHOTO_SHOOT",
       "qualifier": "Client modifier preserved verbatim, or null",
       "rateType": "DAILY" | "WEEKLY",
       "pickupDate": "YYYY-MM-DD",

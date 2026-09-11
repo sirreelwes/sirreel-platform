@@ -38,6 +38,7 @@ const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED', 'FLAT_TOTAL']
 const VALID_DEPTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'PRO_SUPPLIES', 'EXPENDABLES', 'GE', 'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
 ]
 
 type Params = { params: Promise<{ id: string }> }

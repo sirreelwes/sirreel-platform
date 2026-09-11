@@ -17,7 +17,7 @@
  * Run: npm run test:partner-kind
  */
 import { partnerVocab, defaultReceiveMethodFor } from '@/lib/sub-rentals/partnerKind'
-import { partnerSection, resolvePartnerSection, isPartnerSectionKey, PARTNER_SECTIONS } from '@/lib/site/partnerSections'
+import { partnerSection, resolvePartnerSection, isPartnerSectionKey, partnerUnitDepartment, PARTNER_SECTIONS } from '@/lib/site/partnerSections'
 import { groupPartnerUnits, type PublicVehicle } from '@/lib/site/vehicleCatalog'
 import { vendorAgreementFor } from '@/lib/contracts/vendorAgreementClauses'
 import { buildPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
@@ -43,6 +43,11 @@ eq('unit override beats the vendor kind', defaultReceiveMethodFor({ defaultRecei
 eq('default section is motorhomes & trailers', partnerSection(null).key, 'LOCATION_VEHICLES')
 eq('unknown key falls back, never throws', partnerSection('WIDGETS').key, 'LOCATION_VEHICLES')
 yes('POWER_GENERATORS is a section', isPartnerSectionKey('POWER_GENERATORS'))
+yes('PHOTO_SHOOT is a section', isPartnerSectionKey('PHOTO_SHOOT'))
+eq('a photo-shoot unit quotes under Photo Shoot Rentals', partnerUnitDepartment({ catalogSection: 'PHOTO_SHOOT' }, { catalogSection: 'LIGHTING', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
+eq('a photo-shoot partner’s units quote under Photo Shoot Rentals by default', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'PHOTO_SHOOT', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
+eq('other partner equipment quotes under G&E', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'POWER_GENERATORS', partnerKind: 'EQUIPMENT' }), 'GE')
+eq('partner vehicles quote under Vehicles', partnerUnitDepartment(null, { catalogSection: null, partnerKind: 'VEHICLES' }), 'VEHICLES')
 no('lowercase is not a section', isPartnerSectionKey('power_generators'))
 eq('unit override beats vendor default', resolvePartnerSection({ catalogSection: 'LIFTS' }, { catalogSection: 'POWER_GENERATORS' }).key, 'LIFTS')
 eq('vendor default when the unit has none', resolvePartnerSection({ catalogSection: null }, { catalogSection: 'POWER_GENERATORS' }).key, 'POWER_GENERATORS')

@@ -99,7 +99,7 @@ type LineItem = {
   // (Phase 1 step 4) Department drives the per-row lock check for
   // the post-BOOKED gate. Always present on rows from the GET; the
   // string union mirrors LineItemDepartment from Prisma.
-  department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART' | 'WARDROBE_MAKEUP';
+  department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART' | 'WARDROBE_MAKEUP' | 'PHOTO_SHOOT';
   inventoryItem: {
     id: string;
     code: string;
@@ -2512,6 +2512,7 @@ export default function OrderDetailPage() {
           <option value="GE">G&amp;E</option>
           <option value="PRO_SUPPLIES">Pro Supplies</option>
           <option value="WARDROBE_MAKEUP">Wardrobe &amp; Makeup</option>
+          <option value="PHOTO_SHOOT">Photo Shoot</option>
           <option value="EXPENDABLES">Expendables</option>
           <option value="ART">Art</option>
         </select>

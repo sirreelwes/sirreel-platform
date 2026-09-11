@@ -510,6 +510,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   on the Portals row; resolve via `sirreelContactFor()`. Column added by
   targeted ALTER.
 
+## Photo Shoot Rentals — a department AND a catalog section (2026-09-11 — Wes)
+- Wes: "for VSM planet, photo shoot rentals is going to be a new class of
+  rentals." It is both a `LineItemDepartment` (own section + subtotal on
+  quotes/invoices, department discounts, every picker) and a
+  `PartnerCatalogSection` (`#photo-shoot` on /vehicles), value `PHOTO_SHOOT`.
+- A partner unit's quote department comes from `partnerUnitDepartment()` in
+  `partnerSections.ts`: section PHOTO_SHOOT → PHOTO_SHOOT, else EQUIPMENT →
+  GE, else VEHICLES. Catalog search uses it; don't re-derive it inline.
+- Billing rule: 3-day week (CAP_PER_WEEK 3) for any gear SirReel owns there;
+  partner units bill calendar days regardless (partnerDaily.ts). Lane:
+  WAREHOUSE like every gear department — so a PARTNER line there creates a pick
+  task for gear SirReel doesn't hold (pre-existing for GE partners too; open).
+- Enum values went in by `scripts/add-photo-shoot-enum-values.ts` (additive
+  ALTER TYPE, before the code deploy); rows move to the value only after the
+  deploy (see memory "enum add before deploy"). A new department touches ~27
+  files — grep an existing one (WARDROBE_MAKEUP) and add beside every hit.
+
 ## Partner discount waterfall (2026-09-11 — Wes)
 - Wes, on VSM Planet (deal 35%, "willing to go to 40-43% off to keep a
   client"): a client discount on a partner's unit is **shared 50/50** until
@@ -541,7 +558,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Not guarded: a discount landing on a partner's ANCILLARY fee lines (paid
   to them in full) comes out of SirReel; a partner unit ADDED under an
   existing discount is caught at send/book, not at the add. VSM Planet is
-  not in the DB yet. The column went in by targeted `ALTER TABLE … ADD
+  in the DB (2026-09-11: 35% deal, 43% max). The column went in by targeted `ALTER TABLE … ADD
   COLUMN IF NOT EXISTS` — the live DB has drift, never `db push` blind.
 
 ## Active Roadmap

@@ -52,6 +52,7 @@ export const DEPARTMENT_QUOTE_TITLE: Record<string, string> = {
   GE: 'Grip & Electric Quote',
   ART: 'Art Department Quote',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup Quote',
+  PHOTO_SHOOT: 'Photo Shoot Rentals Quote',
 }
 
 export function departmentQuoteTitle(d: string): string {
