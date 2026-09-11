@@ -5291,6 +5291,15 @@ model SubcontractedVehiclePhoto {
   isPrimary Boolean              @default(false) @map("is_primary")
   createdAt DateTime             @default(now()) @map("created_at")
 
+  /// Set when the PARTNER put this photo up from their account page (Wes
+  /// 2026-09-11: partner photos go live at once, HQ is told). Null = HQ
+  /// uploaded it. Basis of the "new partner photos" action item.
+  uploadedByPartnerAt DateTime? @map("uploaded_by_partner_at")
+  /// HQ glanced at a partner photo and kept it ("Looks good"). Clears the
+  /// action item; removing the photo clears it too, by deletion.
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
+
   @@index([vehicleId])
   @@map("sub_contracted_vehicle_photos")
 }

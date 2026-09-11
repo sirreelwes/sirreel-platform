@@ -20,6 +20,10 @@ interface Photo {
   caption: string | null
   sortOrder: number
   isPrimary: boolean
+  /** Set when the PARTNER added it from their page; null = HQ did. */
+  uploadedByPartnerAt?: string | null
+  /** HQ pressed "Looks good". */
+  reviewedAt?: string | null
 }
 
 export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) {
@@ -99,14 +103,27 @@ export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) 
     }
   }
 
+  // Partner-added photos nobody at HQ has glanced at yet. They are LIVE
+  // already (Wes 2026-09-11); this is the glance, not a gate.
+  const unreviewed = photos.filter((p) => p.uploadedByPartnerAt && !p.reviewedAt)
+  const reviewAll = async () => {
+    for (const p of unreviewed) await mutate(p.id, { reviewed: true })
+  }
+  const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Photos</h2>
-          <p className="text-xs text-gray-500 mt-0.5">What you send a client who asks to see the unit.</p>
+          <p className="text-xs text-gray-500 mt-0.5">What you send a client who asks to see the unit. The partner can add their own from their page; they go live at once.</p>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex items-center gap-2">
+          {unreviewed.length > 0 && (
+            <button onClick={reviewAll} className="px-2.5 py-1 text-sm rounded bg-chip-warn-bg text-chip-warn-fg font-semibold hover:opacity-90">
+              {unreviewed.length} new from partner · all look good
+            </button>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -150,7 +167,15 @@ export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) 
                   Primary
                 </span>
               )}
+              {p.uploadedByPartnerAt && (
+                <span className={`absolute top-1.5 right-1.5 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${p.reviewedAt ? 'bg-chip-neutral-bg text-chip-neutral-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`} title={`Added by the partner ${fmtDay(p.uploadedByPartnerAt)}${p.reviewedAt ? ` · seen ${fmtDay(p.reviewedAt)}` : ' · not yet looked at'}`}>
+                  {p.reviewedAt ? 'Partner' : 'New · partner'}
+                </span>
+              )}
               <figcaption className="px-2 py-1.5 flex items-center justify-between gap-1 text-[11px]">
+                {p.uploadedByPartnerAt && !p.reviewedAt && (
+                  <button onClick={() => mutate(p.id, { reviewed: true })} className="text-emerald-700 hover:underline font-semibold">Looks good</button>
+                )}
                 {!p.isPrimary ? (
                   <button onClick={() => mutate(p.id, { isPrimary: true })} className="text-blue-700 hover:underline">
                     Make primary

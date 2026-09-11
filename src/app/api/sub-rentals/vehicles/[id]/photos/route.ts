@@ -29,11 +29,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const gate = await requireSubVehicleAccess()
   if (gate instanceof NextResponse) return gate
 
-  const photos = await prisma.subcontractedVehiclePhoto.findMany({
-    where: { vehicleId: params.id },
-    select: { id: true, caption: true, sortOrder: true, isPrimary: true, createdAt: true },
-    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-  })
+  const base = { id: true, caption: true, sortOrder: true, isPrimary: true, createdAt: true } as const
+  const order = [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }]
+  // The review fields (who added it, whether HQ has looked) arrive with
+  // scripts/add-partner-photo-columns.ts; until then, the pre-review shape.
+  const photos = await prisma.subcontractedVehiclePhoto
+    .findMany({ where: { vehicleId: params.id }, select: { ...base, uploadedByPartnerAt: true, reviewedAt: true }, orderBy: order })
+    .catch(async () => (await prisma.subcontractedVehiclePhoto.findMany({ where: { vehicleId: params.id }, select: base, orderBy: order })).map((p) => ({ ...p, uploadedByPartnerAt: null, reviewedAt: null })))
   return NextResponse.json({ photos })
 }
 

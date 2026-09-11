@@ -6,7 +6,9 @@
  * GET    — streams the image through the gated private-blob proxy.
  *          `<img src>` MUST point here, never at the raw blob URL.
  * PATCH  — { isPrimary: true } promotes (demoting the rest in the same
- *          transaction); { sortOrder } re-orders; { caption } relabels.
+ *          transaction); { sortOrder } re-orders; { caption } relabels;
+ *          { reviewed: true } is HQ's "Looks good" on a partner-added photo
+ *          (stamps reviewedAt, clears the action item).
  * DELETE — removes the row. Does NOT garbage-collect the blob, matching
  *          the inventory/claims/vehicle-catalog precedent. If the
  *          primary went, the next photo is promoted so a gallery is
@@ -54,7 +56,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'sortOrder must be a non-negative integer' }, { status: 400 })
   }
   const hasCaption = 'caption' in body
-  if (!wantsPrimary && sortOrder === undefined && !hasCaption) {
+  const wantsReviewed = body.reviewed === true
+  if (!wantsPrimary && sortOrder === undefined && !hasCaption && !wantsReviewed) {
     return NextResponse.json({ error: 'no editable fields provided' }, { status: 400 })
   }
 
@@ -73,6 +76,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(hasCaption
           ? { caption: typeof body.caption === 'string' && body.caption.trim() ? body.caption.trim() : null }
           : {}),
+        ...(wantsReviewed ? { reviewedAt: new Date(), reviewedById: gate.user.id } : {}),
       },
       select: { id: true, caption: true, sortOrder: true, isPrimary: true },
     })

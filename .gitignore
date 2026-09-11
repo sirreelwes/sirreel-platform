@@ -23,6 +23,7 @@ scripts/*
 !scripts/generate-canonical-agreement-pdf.ts
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
+!scripts/add-partner-photo-columns.ts
 !scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
 !scripts/import-annual-agreements.ts

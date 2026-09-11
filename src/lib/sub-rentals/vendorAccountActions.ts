@@ -24,6 +24,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { prisma } from '@/lib/prisma'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { shouldNotifyHq } from '@/lib/sub-rentals/partnerPhotos'
 
 async function tellHq(subject: string, line: string, href: string): Promise<void> {
   const to = await channelRecipients('vendor-portal')
@@ -163,6 +164,44 @@ export async function setUnitMarketing(vendorId: string, unitId: string, allowed
       : `${unit.vendor.name} withdrew permission to market their ${unit.name}. It is off sirreel.com now; do not quote it to clients.`,
     '/crm/portals#vendor',
   )
+}
+
+// ── Partner photos ─────────────────────────────────────────────────────
+
+/**
+ * A partner just put a photo on their unit. It is live already (Wes
+ * 2026-09-11: "live at once, HQ notified"); this records WHO added it and
+ * tells HQ once per burst, so someone glances at it and presses "Looks good"
+ * or removes it from the roster page.
+ *
+ * Fails soft on purpose: the stamp needs the uploaded_by_partner_at column
+ * (scripts/add-partner-photo-columns.ts). Until it exists the photo still
+ * lands and the email still goes; only the action item stays quiet.
+ */
+export async function notePartnerPhotoAdded(args: { vendorId: string; vendorName: string; unitId: string; unitName: string; photoId: string }): Promise<void> {
+  const now = new Date()
+  let previous: Date | null = null
+  try {
+    const prev = await prisma.subcontractedVehiclePhoto.findFirst({
+      where: { vehicleId: args.unitId, uploadedByPartnerAt: { not: null }, id: { not: args.photoId } },
+      orderBy: { uploadedByPartnerAt: 'desc' },
+      select: { uploadedByPartnerAt: true },
+    })
+    previous = prev?.uploadedByPartnerAt ?? null
+    await prisma.subcontractedVehiclePhoto.update({ where: { id: args.photoId }, data: { uploadedByPartnerAt: now } })
+  } catch (e) {
+    console.warn('[partner photo] could not stamp uploadedByPartnerAt (column missing? run scripts/add-partner-photo-columns.ts):', e instanceof Error ? e.message : e)
+  }
+  await prisma.auditLog.create({
+    data: { action: 'sub_vehicle.photo_added_by_partner', entityType: 'SubcontractedVehiclePhoto', entityId: args.photoId, newValues: { vehicleId: args.unitId, vendorId: args.vendorId, via: 'partner-page' } },
+  }).catch(() => {})
+  if (shouldNotifyHq(previous, now)) {
+    await tellHq(
+      `${args.vendorName} added photos to ${args.unitName}`,
+      `${args.vendorName} put new photos on their ${args.unitName} from their partner page. They are live wherever the unit is listed — have a look and press “Looks good”, or remove any that should not be public.`,
+      `/sub-rentals/vehicles/${args.unitId}`,
+    )
+  }
 }
 
 // ── Partner agreement ──────────────────────────────────────────────────

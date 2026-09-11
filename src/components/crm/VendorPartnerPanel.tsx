@@ -2,7 +2,7 @@
 /** Everything staff do for one partner from the Portals tab: logo, the
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
-import { Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Tag, Trash2, Upload, X } from 'lucide-react'
+import { Camera, Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Tag, Trash2, Upload, X } from 'lucide-react'
 import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
@@ -16,9 +16,11 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES' }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [] }: {
   vendorId: string
   hasLogo: boolean
+  /** Units with partner-added photos nobody at HQ has looked at. Live already. */
+  newPhotos?: { unitId: string; unitName: string; count: number; latestAt: string }[]
   /** What they rent us — picks the words everywhere and the agreement body. */
   kind?: PartnerKindKey
   /** Where their listed units sit on /vehicles by default. */
@@ -330,6 +332,22 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
           </button>
         </div>
       </div>
+
+      {/* New partner photos — live already (Wes 2026-09-11), this is the glance. */}
+      {newPhotos.length > 0 && (
+        <div className="border border-chip-warn-fg/40 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-lt-fg"><Camera className="w-4 h-4 text-lt-fg3" /> New photos from the partner · {newPhotos.reduce((n, g) => n + g.count, 0)}</div>
+          <div className="text-xs text-lt-fg2 mt-1">Already live wherever the unit is listed. Open each unit, look, and press “Looks good” or remove.</div>
+          <div className="mt-2 divide-y divide-lt-hairline">
+            {newPhotos.map((g) => (
+              <div key={g.unitId} className="py-1.5 flex items-center justify-between gap-2 text-xs">
+                <span className="text-lt-fg">{g.unitName} <span className="text-lt-fg3">· {g.count} photo{g.count === 1 ? '' : 's'} · {new Date(g.latestAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></span>
+                <a href={`/sub-rentals/vehicles/${g.unitId}`} className="font-semibold text-lt-fg underline">Open unit</a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Rate proposals */}
       <div className="border border-lt-hairline rounded-lg p-3">

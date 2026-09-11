@@ -330,6 +330,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   units or a minted link, not only ones with bookings.
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
   agreement variant and welcome-email wording.
+- **Partner photos are live at once, HQ is told (Wes 2026-09-11).** Evan adds
+  photos from his page (`UnitPhotosForm`, shipped in `41965af`); they reach
+  sirreel.com the moment the unit is listed and the agreement is signed, no
+  approval gate. `notePartnerPhotoAdded` stamps
+  `SubcontractedVehiclePhoto.uploadedByPartnerAt`, emails the vendor-portal
+  channel once per 10-minute burst, and the `partner-photos-added` action
+  item (one per unit) stays until HQ presses "Looks good" (`reviewedAt`) on
+  the roster unit page or removes the photo. Columns via
+  `scripts/add-partner-photo-columns.ts` (additive SQL); everything fails
+  soft until it has run. `npm run test:partner-photos`.
 - **Do NOT `prisma db push` for the next partner column.** 2026-09-10: the
   live DB carries `sr_job_locations` and nine `sub_rentals` columns that no
   schema file knows; a push from a checkout drops them. Add columns with

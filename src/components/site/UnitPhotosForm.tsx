@@ -128,6 +128,11 @@ export function UnitPhotosForm({ token, unitId, unitName, preview, noun }: {
           No photos yet — productions see this {noun} without one until you add some.
         </span>
       )}
+      {count > 0 && (
+        <span style={{ fontSize: 11, color: '#8a8272', marginLeft: 8 }}>
+          Your photos go live as soon as this {noun} is offered and the agreement is signed; SirReel is told each time you add some.
+        </span>
+      )}
       {err && <div style={{ fontSize: 12, color: '#a33a2e', marginTop: 4 }}>{err}</div>}
     </div>
   )
