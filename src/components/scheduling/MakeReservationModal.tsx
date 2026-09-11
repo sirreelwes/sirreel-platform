@@ -356,6 +356,19 @@ export function MakeReservationModal({
   const [pre, setPre] = useState<Record<string, Preflight>>({})
 
   const [submitting, setSubmitting] = useState(false)
+
+  // Esc closes the modal — but only when it's the top layer. The source
+  // drawer handles its own Escape without stopping propagation (one keypress
+  // would close both), and the job resolver must not lose its parent from
+  // under it.
+  useEffect(() => {
+    if (sourceOpen || resolverOpen || submitting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sourceOpen, resolverOpen, submitting, onClose])
   const [error, setError] = useState<string | null>(null)
   /** The line that tripped a capacity conflict, and who it steps on. */
   const [conflict, setConflict] = useState<{ rowKey: string; conflicts: Conflict[] } | null>(null)
@@ -1218,8 +1231,11 @@ export function MakeReservationModal({
               {prefill ? 'Reserve the request' : 'Make a reservation'}
             </h2>
             <button
+              type="button"
               onClick={onClose}
-              className="text-lt-fg3 hover:text-lt-fg"
+              disabled={submitting}
+              title="Close (Esc)"
+              className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md border border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner disabled:opacity-50"
               aria-label="Close"
             >
               <X size={16} aria-hidden />
