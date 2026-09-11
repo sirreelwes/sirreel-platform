@@ -22,6 +22,23 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-11
+
+### Barcode phase 3: a scanned label at the check-out desk is a unit on the order
+
+`616eac8` warehouse: scan a unit's barcode at check-out, and it is on the order
+
+Wes: "integrating the barcode scanners that we have to facilitate tracking high value items like CP 200 radios, generators, Hazers etc. The walkies have barcodes on them, and it makes checking out the orders so much quicker if they can just simply scan the barcode." Phases 1–2 (09-02) gave HQ the register (`InventoryUnit`, 1,831 RW units) and a resolver that reads `SR######`, but the only place a scan landed was `PickListItem.scannedCode` — one row per LINE, so a second walkie overwrote the first. Nothing said which unit was on which order.
+
+- **`OrderUnitScan` (`sr_order_unit_scans`, additive — `npx prisma db push` pending):** one row per physical unit per trip — order, the line it was counted against (null = went out unlisted), `outScannedAt/ById`, `inScannedAt/ById`, `inImplied`, void fields (voided, never deleted). One OPEN row per unit across all orders, enforced in `recordUnitScan`. `InventoryUnit` stays a read-only RW mirror; nothing writes back.
+- **The scanner lives on the check in/out report** (`/reports/orders/[id]`), because that is where the paper goes (Hugo) and where the yard board's Check out / Check in buttons land. `UnitScanPanel`: auto-focused box, Enter submits, focus returns; the line's Out/In number follows the scan count for lines the scanner touched (withdraw every scan and it goes back to the pre-fill). `LineUnitStrip` under a barcoded line: "3 of 6 scanned" / "4 of 6 back · 2 still out", the labels behind it, a withdraw ✕ each. Barcoded = the catalog row has ≥1 register unit (`unitTrackedItemIds`), NOT `trackingMode` (vehicles).
+- **Decisions are pure** (`unitScanRules.ts`, `npm run test:unit-scans`, 19 checks). Refused with no override: unknown label, catalog code ("scan the SR barcode on the piece"), register unit unmatched in the catalog. Refused with the one override the panel renders as a button: line full → `allowOver`; not on the order → `allowOver` records it unlisted and the report offers "Add as a row" in the Not-on-the-order card; still open on another order → refused NAMING that order, `closeOpen` marks it back from there (`inImplied`) and sends it here — `allowOver` alone never takes a unit off another order. IN of a unit never scanned out is recorded on the matching line, not refused. Double reads are 200 `duplicate`, never errors.
+- **`/warehouse/units` "Find a Unit"** (nav, all three yard branches): scan → register row (serial, shelf, replacement cost), the order it is open on with a link to that order's check-in sheet, recent trips. `GET /api/warehouse/units/lookup?code=`.
+- Routes: `GET/POST /api/orders/[id]/unit-scans`, `DELETE …/unit-scans/[scanId]` (void). Yard door (`requireYardAccess`) on all. AuditLog `order.unit_scanned_out` / `order.unit_scanned_in` / `order.unit_scan_voided`, entityType `OrderUnitScan`.
+- Fails soft until the push: `unitScanSummary` catches P2021 and the panel does not render; the sheet is typed exactly as before.
+- Not in this ship: the pick-list floor still writes only `scannedCode`; no RW write-back; keyboard-wedge only, no camera.
+- `npm run build` exit 0 (with a placeholder `RESEND_API_KEY` — the build container has no `.env.local`; `/api/client/auth` builds a Resend client at module load). `test:scan` and `test:unit-scans` green.
+
 ## 2026-09-10
 
 ### Partner portal: a second partner, and the first one that rents equipment
