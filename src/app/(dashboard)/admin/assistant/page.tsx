@@ -890,21 +890,23 @@ export default function AssistantAdminPage() {
 
           {/* Release log */}
           <Panel title="Recent access log" summary={`${data.audit.length} event${data.audit.length === 1 ? '' : 's'}`}>
-            <div className="max-h-[24rem] overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
-                    <th className="py-2 pr-3 font-medium">When</th>
-                    <th className="py-2 pr-3 font-medium">Event</th>
-                    <th className="py-2 pr-3 font-medium">IP</th>
+            {/* Same shape as the other two lists: one line per event, capped
+                box, sticky header. */}
+            <div className="max-h-[26rem] overflow-y-auto rounded-lg border border-zinc-800">
+              <table className="w-full table-fixed text-sm">
+                <thead className="sticky top-0 bg-zinc-900">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
+                    <th className="w-[11rem] px-2 py-1.5 font-medium">When</th>
+                    <th className="px-2 py-1.5 font-medium">Event</th>
+                    <th className="w-[9rem] px-2 py-1.5 font-medium">IP</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.audit.map((a) => (
-                    <tr key={a.id} className="border-t border-zinc-800">
-                      <td className="py-2 pr-3 whitespace-nowrap text-zinc-400">{fmt(a.createdAt)}</td>
-                      <td className="py-2 pr-3 text-zinc-200">{auditLabel(a)}</td>
-                      <td className="py-2 pr-3 font-mono text-xs text-zinc-500">{a.ipAddress || '—'}</td>
+                    <tr key={a.id} className="border-t border-zinc-800 align-middle">
+                      <td className="truncate px-2 py-1.5 text-xs text-zinc-400">{fmt(a.createdAt)}</td>
+                      <td className="truncate px-2 py-1.5 text-zinc-200" title={auditLabel(a)}>{auditLabel(a)}</td>
+                      <td className="truncate px-2 py-1.5 font-mono text-xs text-zinc-500">{a.ipAddress || '—'}</td>
                     </tr>
                   ))}
                   {data.audit.length === 0 && (
