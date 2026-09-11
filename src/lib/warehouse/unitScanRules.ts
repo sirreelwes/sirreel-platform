@@ -294,6 +294,11 @@ export interface UnitScanUnit {
   outAt: string | null
   inAt: string | null
   inImplied: boolean
+  /** The parent item's per-unit checks ("Antenna", "Battery"). */
+  checks: string[]
+  /** Which of those were NOT with the unit at each edge. */
+  missingOut: string[]
+  missingIn: string[]
 }
 
 export interface LineUnitSummary {
@@ -323,6 +328,41 @@ export interface SummaryRow {
   outScannedAt: Date | null
   inScannedAt: Date | null
   inImplied: boolean
+  checks?: string[]
+  missingOut?: string[]
+  missingIn?: string[]
+}
+
+/**
+ * The per-unit check names as stored on an item: trimmed, de-duplicated
+ * case-insensitively (first spelling wins), empties dropped. Used by the
+ * drawer's PUT, the seed script, and the missing-list validation, so
+ * "antenna" typed twice is one check and "Antenna" matches it.
+ */
+export function normalizeUnitChecks(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of input) {
+    const name = String(raw ?? '').trim().replace(/\s+/g, ' ')
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out
+}
+
+/**
+ * A missing-list from the desk, kept to names the unit actually has
+ * checks for (matched case-insensitively, returned in the item's
+ * spelling). Anything else is dropped rather than refused — the chips
+ * only ever offer the real list, so a stray name is a stale screen.
+ */
+export function clampMissing(checks: string[], missing: unknown): string[] {
+  const wanted = new Set(normalizeUnitChecks(missing).map((m) => m.toLowerCase()))
+  return checks.filter((c) => wanted.has(c.toLowerCase()))
 }
 
 export function summarizeUnitScans(lineIds: string[], rows: SummaryRow[]): UnitScanSummary {
@@ -333,6 +373,9 @@ export function summarizeUnitScans(lineIds: string[], rows: SummaryRow[]): UnitS
     outAt: r.outScannedAt ? r.outScannedAt.toISOString() : null,
     inAt: r.inScannedAt ? r.inScannedAt.toISOString() : null,
     inImplied: r.inImplied,
+    checks: r.checks ?? [],
+    missingOut: r.missingOut ?? [],
+    missingIn: r.missingIn ?? [],
   })
   const byLine = new Map<string, SummaryRow[]>()
   const unlisted: SummaryRow[] = []

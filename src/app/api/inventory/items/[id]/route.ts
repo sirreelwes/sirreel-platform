@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeUnitChecks } from '@/lib/warehouse/unitScanRules';
 import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -49,6 +50,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     vendorItemUrl,
     isActive,
     aliases,
+    unitChecks,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -60,6 +62,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       ? [...new Set(aliases.map((a: unknown) => String(a).trim().toLowerCase()).filter(Boolean))]
       : [];
   }
+  // Per-unit checks ("Antenna", "Battery") — what every copy must carry.
+  // Kept in the spelling typed; de-duped case-insensitively.
+  if (unitChecks !== undefined) data.unitChecks = normalizeUnitChecks(unitChecks);
   // Decimal-safe money writes (audit §7) — no parseFloat into Decimal
   // columns; parseMoney cent-rounds via Prisma.Decimal.
   if (dailyRate !== undefined) data.dailyRate = parseMoney(dailyRate) ?? new Prisma.Decimal(0);

@@ -318,6 +318,35 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - AuditLog: `order.unit_scanned_out`, `order.unit_scanned_in`
     (`implied` / `neverScannedOut` flags), `order.unit_scan_voided`,
     entityType `OrderUnitScan`.
+  - **Antenna + battery on every walkie** (Wes 2026-09-11: "add antenna
+    and battery to pick lists as part of the kit … each walkie needs to
+    confirm those"). Wes's RW sheet (order 304656) settles the SHAPE:
+    RW prints them as their OWN lines at the radio's quantity
+    (`102933 CP200 - Antenna 15`, `102930 CP200 - Battery 15` beside
+    `104387 … Radio 15`), which is what the floor counts. So they are
+    1:1 KIT PIECES — `scripts/seed-radio-parts-kit.ts --write` (FREE,
+    `clientVisible: false` so a quote doesn't grow three lines per
+    radio). Distinct from the walkie-kit RATIO pieces: the 1:1 battery
+    is the one IN the radio, `CP200-BATTERY` at 0.5 is the spare in the
+    case. The Surveillance Kit is NOT seeded — on that sheet it is what
+    the client ordered.
+  - **Per-unit checks** are the second half ("each walkie needs to
+    confirm those") and are a DIFFERENT mechanism, for parts that never
+    get their own line: `InventoryItem.unitChecks String[]` (drawer
+    field "Per-unit checks"; `scripts/seed-unit-checks.ts`). Printed
+    under the line as "Each unit: ( ) X × N" — but `renderPickListPdf`
+    SUPPRESSES a check whose name already appears as a line on the same
+    sheet, so seeding both antenna sources never prints it twice. At the
+    desk every landed scan shows the checks as chips
+    defaulting to present; a tap marks one missing → `PATCH
+    /api/orders/[id]/unit-scans/[scanId]/checks` → `OrderUnitScan.
+    missingOut / missingIn` (names, clamped to the item's list by
+    `clampMissing`). The report form writes the exceptions into the
+    line note behind a fixed prefix ("Came back without: SR004674
+    Antenna") so the agent sees it on the filed sheet; Find a Unit's
+    history shows them. **Columns via `scripts/add-unit-checks-columns.
+    ts` (additive SQL) — run BEFORE deploying: `unitScanSummary` treats
+    a missing column like a missing table and hides the panel.**
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).

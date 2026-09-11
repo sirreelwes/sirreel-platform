@@ -64,6 +64,10 @@ export interface PickListLine {
    *  nobody was billed for, which is precisely the gear that used to
    *  disappear without anyone noticing. */
   includedAccessory?: boolean
+  /** Per-unit checks off the catalog row ("Antenna", "Battery") — each
+   *  copy on this line must leave with them, so they print under the
+   *  line with a box per check for the picker to tick. */
+  unitChecks?: string[]
 }
 
 export interface PickListDocumentProps {
@@ -504,6 +508,15 @@ export function PickListDocument(props: PickListDocumentProps) {
                     <View style={styles.checkBox} />
                   </View>
                 </View>
+                {line.unitChecks && line.unitChecks.length > 0 ? (
+                  <View style={styles.notesRow}>
+                    <Text style={styles.notesText}>
+                      <Text style={styles.notesLabel}>Each unit: </Text>
+                      {line.unitChecks.map((c) => `( ) ${c}`).join('   ')}
+                      {`   \u00d7 ${line.ordered}`}
+                    </Text>
+                  </View>
+                ) : null}
                 {line.notes ? (
                   <View style={styles.notesRow}>
                     <Text style={styles.notesText}>

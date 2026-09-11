@@ -3102,6 +3102,14 @@ model InventoryItem {
   // Usage item triggers a sticky amber banner). Never printed on
   // client-facing PDFs.
   internalFlags     String[]           @default([]) @map("internal_flags")
+  // Per-UNIT accessories every copy of this item must leave with and
+  // come back with — "Antenna", "Battery" on a CP200 (Wes 2026-09-11:
+  // "each walkie needs to confirm those"). NOT a kit piece: a kit piece
+  // is a separate line at a ratio (spare batteries, a charger per 12);
+  // this is what is attached to the unit itself. Printed under the line
+  // on the pull sheet, and offered as tap-to-mark-missing chips on every
+  // scan at the check-out / check-in desk (OrderUnitScan.missingOut/In).
+  unitChecks        String[]           @default([]) @map("unit_checks")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -3840,6 +3848,13 @@ model OrderUnitScan {
   /// Set when the IN was implied rather than scanned — the unit was
   /// still open here when it was scanned OUT on another order.
   inImplied Boolean @default(false) @map("in_implied")
+
+  /// Which of the parent item's `unitChecks` were NOT with the unit when
+  /// it was scanned out / scanned back. Names as configured on the item
+  /// at the time ("Antenna"). Empty = everything present, which is the
+  /// default — the desk marks the exception, never the norm.
+  missingOut String[] @default([]) @map("missing_out")
+  missingIn  String[] @default([]) @map("missing_in")
 
   voidedAt   DateTime? @map("voided_at")
   voidedById String?   @map("voided_by_id")

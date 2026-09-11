@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { resolveScan, type ScanResolution } from '@/lib/warehouse/resolveScan'
 import {
-  decideIn, decideOut, isOpen, summarizeUnitScans,
+  clampMissing, decideIn, decideOut, isOpen, summarizeUnitScans,
   type LiveScan, type ScanEdge, type ScanLine, type UnitScanSummary,
 } from '@/lib/warehouse/unitScanRules'
 
@@ -43,6 +43,8 @@ export type RecordScanResult =
       scanId: string
       orderLineItemId: string | null
       unit: { barcode: string; description: string | null }
+      /** The parent item's per-unit checks, so the desk can mark one missing. */
+      checks: string[]
       summary: UnitScanSummary
     }
   | {
@@ -68,7 +70,9 @@ const summaryRowSelect = {
   outScannedAt: true,
   inScannedAt: true,
   inImplied: true,
-  inventoryUnit: { select: { description: true } },
+  missingOut: true,
+  missingIn: true,
+  inventoryUnit: { select: { description: true, inventoryItem: { select: { unitChecks: true } } } },
 } satisfies Prisma.OrderUnitScanSelect
 
 async function loadSummary(orderId: string, lineIds: string[]): Promise<UnitScanSummary> {
@@ -87,6 +91,9 @@ async function loadSummary(orderId: string, lineIds: string[]): Promise<UnitScan
       outScannedAt: r.outScannedAt,
       inScannedAt: r.inScannedAt,
       inImplied: r.inImplied,
+      checks: r.inventoryUnit.inventoryItem?.unitChecks ?? [],
+      missingOut: r.missingOut,
+      missingIn: r.missingIn,
     })),
   )
 }
@@ -202,6 +209,16 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
     openElsewhere = rows[0] ? toLive(rows[0]) : null
   }
 
+  // What every copy of this item must carry ("Antenna", "Battery") —
+  // returned with the scan so the desk can mark one missing.
+  const checks =
+    res.kind === 'unit'
+      ? (await prisma.inventoryItem.findUnique({
+          where: { id: res.inventoryItemId },
+          select: { unitChecks: true },
+        }))?.unitChecks ?? []
+      : []
+
   const ctx = { lines, thisOrder, openElsewhere, allowOver: args.allowOver, closeOpen: args.closeOpen }
   const now = new Date()
 
@@ -218,7 +235,7 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
 
     if (d.kind === 'duplicate') {
       return {
-        ok: true, outcome: 'duplicate', scanId: d.scanId, orderLineItemId: null, unit,
+        ok: true, outcome: 'duplicate', scanId: d.scanId, orderLineItemId: null, unit, checks,
         message: d.position
           ? `${res.scanned} is already counted on this order (${d.position.n} of ${d.position.of}).`
           : `${res.scanned} is already counted on this order.`,
@@ -280,7 +297,7 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
       : 'not on the order — recorded as an addition'
     const closed = d.closeOnOrderNumber ? ` Marked back from ${d.closeOnOrderNumber}.` : ''
     return {
-      ok: true, outcome: 'attached', scanId: created.id, orderLineItemId: d.orderLineItemId, unit,
+      ok: true, outcome: 'attached', scanId: created.id, orderLineItemId: d.orderLineItemId, unit, checks,
       message: `${res.scanned}${unit.description ? ` ${unit.description}` : ''} → ${where}.${closed}`,
       summary: await loadSummary(order.id, lineIds),
     }
@@ -299,7 +316,7 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
 
   if (d.kind === 'duplicate') {
     return {
-      ok: true, outcome: 'duplicate', scanId: d.scanId, orderLineItemId: null, unit,
+      ok: true, outcome: 'duplicate', scanId: d.scanId, orderLineItemId: null, unit, checks,
       message: `${res.scanned} is already marked back.`,
       summary: await loadSummary(order.id, lineIds),
     }
@@ -328,7 +345,7 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
     const line = thisOrder.find((s) => s.id === d.scanId)?.orderLineItemId
     const desc = line ? lines.find((l) => l.orderLineItemId === line)?.description : null
     return {
-      ok: true, outcome: 'closed', scanId: d.scanId, orderLineItemId: line ?? null, unit,
+      ok: true, outcome: 'closed', scanId: d.scanId, orderLineItemId: line ?? null, unit, checks,
       message: d.onThisOrder
         ? `${res.scanned}${unit.description ? ` ${unit.description}` : ''} is back${desc ? ` · ${desc}` : ''}.`
         : `${res.scanned} marked back from ${d.onOrderNumber}.`,
@@ -365,9 +382,63 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
     return r
   })
   return {
-    ok: true, outcome: 'attached-in', scanId: row.id, orderLineItemId: d.orderLineItemId, unit,
+    ok: true, outcome: 'attached-in', scanId: row.id, orderLineItemId: d.orderLineItemId, unit, checks,
     message: `${res.scanned}${unit.description ? ` ${unit.description}` : ''} is back — it was never scanned out, so it's recorded now.`,
     summary: await loadSummary(order.id, lineIds),
+  }
+}
+
+/**
+ * The desk marking a per-unit check missing (or present again) on one
+ * scan — "SR004674 went out without its antenna". Names are clamped to
+ * the parent item's list; the whole list is replaced, so the chips are
+ * the state.
+ */
+export async function setUnitScanMissing(args: {
+  orderId: string
+  scanId: string
+  edge: ScanEdge
+  missing: unknown
+  userId: string
+}): Promise<
+  | { ok: true; missing: string[]; checks: string[]; summary: UnitScanSummary }
+  | { ok: false; status: 404 | 409; reason: string }
+> {
+  const row = await prisma.orderUnitScan.findUnique({
+    where: { id: args.scanId },
+    select: {
+      id: true, orderId: true, voidedAt: true, barcode: true, missingOut: true, missingIn: true,
+      inventoryUnit: { select: { inventoryItem: { select: { unitChecks: true } } } },
+    },
+  })
+  if (!row || row.orderId !== args.orderId) return { ok: false, status: 404, reason: 'scan not found on this order' }
+  if (row.voidedAt) return { ok: false, status: 409, reason: 'that scan was withdrawn' }
+  const checks = row.inventoryUnit.inventoryItem?.unitChecks ?? []
+  const missing = clampMissing(checks, args.missing)
+  const before = args.edge === 'OUT' ? row.missingOut : row.missingIn
+  await prisma.$transaction(async (tx) => {
+    await tx.orderUnitScan.update({
+      where: { id: row.id },
+      data: args.edge === 'OUT' ? { missingOut: missing } : { missingIn: missing },
+    })
+    await tx.auditLog.create({
+      data: {
+        userId: args.userId,
+        action: 'order.unit_scan_checks',
+        entityType: 'OrderUnitScan',
+        entityId: row.id,
+        oldValues: { edge: args.edge, missing: before },
+        newValues: { edge: args.edge, missing, barcode: row.barcode, checks },
+      },
+    })
+  })
+  const order = await prisma.order.findUnique({
+    where: { id: args.orderId },
+    select: { lineItems: { select: { id: true }, orderBy: { sortOrder: 'asc' } } },
+  })
+  return {
+    ok: true, missing, checks,
+    summary: await loadSummary(args.orderId, (order?.lineItems ?? []).map((l) => l.id)),
   }
 }
 
@@ -444,6 +515,8 @@ export interface UnitLookup {
     inAt: string | null
     inImplied: boolean
     voided: boolean
+    missingOut: string[]
+    missingIn: string[]
   }>
   /** Null when the scan table is not there yet. */
   tracked: boolean
@@ -481,6 +554,7 @@ export async function lookupUnit(raw: string): Promise<UnitLookup> {
       where: { inventoryUnitId: unit.id },
       select: {
         id: true, orderId: true, outScannedAt: true, inScannedAt: true, inImplied: true, voidedAt: true,
+        missingOut: true, missingIn: true,
         orderLineItem: { select: { description: true } },
         order: { select: { orderNumber: true, job: { select: { name: true } }, company: { select: { name: true } } } },
       },
@@ -508,6 +582,8 @@ export async function lookupUnit(raw: string): Promise<UnitLookup> {
       inAt: r.inScannedAt ? r.inScannedAt.toISOString() : null,
       inImplied: r.inImplied,
       voided: !!r.voidedAt,
+      missingOut: r.missingOut,
+      missingIn: r.missingIn,
     }))
   } catch (err) {
     if (!isMissingTable(err)) throw err

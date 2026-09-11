@@ -31,6 +31,7 @@ export interface DrawerItem {
   code: string
   description: string | null
   aliases?: string[] | null
+  unitChecks?: string[] | null
   dailyRate: string
   weeklyRate: string
   qtyOwned: number
@@ -91,6 +92,8 @@ export function InventoryItemDrawer({
   // Client-facing search aliases — comma-separated in the editor, stored
   // as a normalized String[] on the item. Internal-only surface.
   const [aliasesInput, setAliasesInput] = useState('')
+  // Per-unit checks — what every copy must leave and come back with.
+  const [unitChecksInput, setUnitChecksInput] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
 
   const [vendors, setVendors] = useState<VendorOption[]>([])
@@ -123,6 +126,7 @@ export function InventoryItemDrawer({
     setPreferredVendorId(item.preferredVendorId ?? '')
     setVendorItemUrl(item.vendorItemUrl ?? '')
     setAliasesInput((item.aliases ?? []).join(', '))
+    setUnitChecksInput((item.unitChecks ?? []).join(', '))
     setImageUrl(item.imageUrl)
     setError('')
     setConfirmText('')
@@ -174,6 +178,7 @@ export function InventoryItemDrawer({
         preferredVendorId: preferredVendorId || null,
         vendorItemUrl: vendorItemUrl.trim() || null,
         aliases: aliasesInput.split(',').map((s) => s.trim()).filter(Boolean),
+        unitChecks: unitChecksInput.split(',').map((s) => s.trim()).filter(Boolean),
       })
       // After the item, so a kit that references a field the item edit
       // just changed can't land against a stale row. A kit failure
@@ -359,6 +364,19 @@ export function InventoryItemDrawer({
             />
             <p className="mt-1 text-[11px] text-gray-400">
               Comma-separated informal terms clients search by. Matched on the order form; never shown as the item name.
+            </p>
+          </div>
+
+          <div>
+            <label className={label}>Per-unit checks</label>
+            <input
+              className={field}
+              value={unitChecksInput}
+              onChange={(e) => setUnitChecksInput(e.target.value)}
+              placeholder="Antenna, Battery"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              What every unit of this item must leave with and come back with. Printed under the line on the pull sheet; the check-out desk marks one missing with a tap on each scan.
             </p>
           </div>
 

@@ -154,14 +154,42 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * pre-filled "it all went". Lines the scanner never touched are left
    * exactly as the supervisor typed them.
    */
+  // "SR004674 without Antenna" — the parts the desk marked missing on
+  // this edge, as one sentence the agent will read on the filed report.
+  // Owned by the scanner: it lives in the note behind a fixed prefix so
+  // the supervisor's own words stay and the sentence updates in place.
+  const MISSING_PREFIX = isOut ? 'Went out without: ' : 'Came back without: '
+  const missingSentence = (s: UnitScanSummary | null, lineId: string): string | null => {
+    const l = s?.lines.find((x) => x.orderLineItemId === lineId)
+    const parts = (l?.units ?? [])
+      .map((u) => ({ b: u.barcode, m: isOut ? u.missingOut : u.missingIn }))
+      .filter((x) => x.m.length > 0)
+      .map((x) => `${x.b} ${x.m.join(' + ')}`)
+    return parts.length ? `${MISSING_PREFIX}${parts.join('; ')}` : null
+  }
+  const withMissingNote = (note: string | null, sentence: string | null): string | null => {
+    const own = (note ?? '')
+      .split('\n')
+      .filter((line) => !line.startsWith(MISSING_PREFIX))
+      .join('\n')
+      .trim()
+    const joined = [own, sentence].filter(Boolean).join('\n')
+    return joined || null
+  }
   const applySummary = (next: UnitScanSummary) => {
     setRows((prev) =>
       prev.map((r) => {
         const before = scanCount(unitScans, r.orderLineItemId)
         const after = scanCount(next, r.orderLineItemId)
-        if (before === after) return r
-        if (after === null) return { ...r, actualQty: r.expectedQty }
-        return { ...r, actualQty: after, onSheet: true }
+        const sentence = missingSentence(next, r.orderLineItemId)
+        const prevSentence = missingSentence(unitScans, r.orderLineItemId)
+        const noteChanged = sentence !== prevSentence
+        const note = noteChanged ? withMissingNote(r.note, sentence) : r.note
+        // A missing part is something the agent has to see: open the row.
+        const open = noteChanged && sentence ? true : r.open
+        if (before === after) return noteChanged ? { ...r, note, open } : r
+        if (after === null) return { ...r, actualQty: r.expectedQty, note, open }
+        return { ...r, actualQty: after, onSheet: true, note, open }
       }),
     )
     setUnitScans(next)
