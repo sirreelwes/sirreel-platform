@@ -181,8 +181,11 @@ export function renderPartnerWelcome(a: {
   const logo = a.logoUrl
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="padding:0 0 16px;"><img src="${esc(a.logoUrl)}" alt="${esc(a.vendorName)}" height="44" style="display:block;height:44px;max-width:240px;border:0;" /></td></tr></table>`
     : ''
+  // The button is the link (Wes 2026-09-11: "can't we just have a button and
+  // not that url link written out?"). The raw address stays in the plain-text
+  // half, which has no buttons.
   const link = a.accountUrl
-    ? p(`Everything is on your partner page: the agreement to read and sign, your units and rates, and every booking we send you. <a href="${esc(a.accountUrl)}" style="color:${PARTNER_ACCENT};font-weight:700;">${esc(a.accountUrl)}</a>`)
+    ? p('Everything is on your partner page: the agreement to read and sign, your units and rates, and every booking we send you.')
     : ''
   return {
     html: renderEmailShell({
