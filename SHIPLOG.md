@@ -30,6 +30,20 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 Wes, asked "HQ approves before public" or "live at once, HQ notified": the second. `41965af` had already let a partner add photos from their page (Evan should not email pictures and wait); this is the other half. Each partner upload is stamped `uploadedByPartnerAt`, the vendor-portal channel gets ONE email per ten-minute burst (six photos, one mail), and a `partner-photos-added` Action Item (one per unit, low) points at the roster unit page, where every partner photo wears a "New · partner" chip with a "Looks good" button and a header "all look good". Removing the photo clears it too. The Portals partner panel lists the units with unlooked-at photos. Columns added with `scripts/add-partner-photo-columns.ts` — additive `ADD COLUMN IF NOT EXISTS`, never `db push` — and every read/write of them fails soft until it has run. `npm run test:partner-photos`. Also: the PowerTrip notes no longer say to run `prisma db push`.
 
+### Job welcome email: "here is your link", and the reminder to send it
+
+`a28de84c` jobs: send the client their welcome — hello + no-login job link — and the tile reminds until it goes
+
+Wes: "When a client sends a request and our team replies with a quote, there is a button for the portal. I would like that button to generate on the job tile or page or both to remind us to send the welcome email." The wording is his, verbatim.
+
+- **Rule** (`src/lib/jobs/welcomeReminder.ts`, pure, `npm run test:welcome-reminder`, 46 checks): DUE when a live order that has not gone out (QUOTE_SENT → LOADED_READY) was quoted in the last 30 days and no `job.welcome_sent` audit row exists on the job. Cancelled / archived-twin orders don't count (liveOrdersForRollup); WRAPPED / LOST never nag; a quote on gear already on set doesn't nag. Measured on ship day: 52 jobs DUE, 0 sent.
+- **Tile:** `/api/jobs` ships `welcome {state, quotedAt, sentAt}` from one batched AuditLog query; the /jobs tile's row 5 carries a "Send welcome email" chip (hover says when it was quoted and where to send from).
+- **Job page:** `JobWelcomeButton` beside "+ New quote" — filled turquoise + "not sent yet · quoted 2d ago" while DUE, "Welcome sent 3d ago · send again" after, disabled with "send the quote first" when no order has a portal yet. `GET /api/jobs/[id]/welcome` is its status read.
+- **Email:** `templates/jobWelcome.ts` — Wes's paragraphs, "Open your job" button (turquoise, no gold), "No login needed — the link is yours" note, rep sign-off. Goes through EmailReviewModal like every client send (kind `job-welcome`, gate entry in reviewGate.ts); the box opens PRE-SEEDED with the standard wording so what the rep sees is what goes, and a cleared box still sends it. Send mints the recipient's job-page magic link on the newest live order with a `portalSlug` (`refreshOrIssueJobMagicLink`, 7 days), CCs the sales-team channel, replies to the agent, records the delivery (label `job-welcome`) and stamps `job.welcome_sent`. No portal order → 409.
+- Verified against the live DB by importing the routes with a stubbed session: list (295 jobs, field on every row), status, preview (default body, custom body replaces it, bad override → 400). No email was sent.
+- Distinct from the pre-job Welcome / Job Begin invite (`/api/sales/welcome`), which is inquiry-scoped and mints the order on the client's click.
+
+
 ### The /jobs tile reads an annual agreement the way the job page does
 
 `db64f690` jobs: an annual account's tile stops saying "Agreement" is still needed
