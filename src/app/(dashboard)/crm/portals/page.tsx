@@ -28,6 +28,8 @@ import { canEditCompanyTerms } from '@/lib/portal/companyTermsEditors'
 import { CompanyDiscountsPanel } from '@/components/crm/CompanyDiscountsPanel'
 import { CompanyPortalAccessPanel } from '@/components/crm/CompanyPortalAccessPanel'
 import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalRow'
+import { CompanyCoiReviewList } from '@/components/crm/CompanyCoiReviewList'
+import { staffAccountCois, type StaffAccountCoiState } from '@/lib/portal/companyPortalCois'
 import { PortalsTabs } from '@/components/crm/PortalsTabs'
 import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
 import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
@@ -45,8 +47,18 @@ function fmtDay(d: Date): string {
  * COI chip. `Company.coiOnFile` + `coiExpiry` are the account-level facts
  * (the annual cert that carries forward to jobs). Expired reads RED even
  * when the flag is still on — a lapsed cert is the thing to notice.
+ *
+ * Those two columns are a hand-typed cache nothing writes, so an approved
+ * full certificate on file wins over them (`coveringThrough`, read from the
+ * certificates themselves — workers' comp alone never counts).
  */
-function coiChip(coiOnFile: boolean, coiExpiry: Date | null, now: Date): { tone: ChipTone; label: string } {
+function coiChip(
+  coiOnFile: boolean,
+  coiExpiry: Date | null,
+  now: Date,
+  coveringThrough: Date | null,
+): { tone: ChipTone; label: string } {
+  if (coveringThrough) return { tone: 'good', label: `COI through ${fmtDay(coveringThrough)}` }
   if (coiExpiry && coiExpiry.getTime() < now.getTime()) {
     return { tone: 'bad', label: `COI expired ${fmtDay(coiExpiry)}` }
   }
@@ -80,15 +92,20 @@ export default async function CompanyPortalsPage() {
     },
   })
 
+  const coiStates = await staffAccountCois(companies.map((c) => c.id), now)
+  const noCois: StaffAccountCoiState = { awaiting: [], approved: [], coveringThrough: null }
+
   const rows = await Promise.all(
     companies.map(async (c) => {
       const annual = await findCompanyAnnualCoverage(c.id)
+      const coiState = coiStates.get(c.id) ?? noCois
       return {
         ...c,
         annualChip: annual
           ? { tone: 'good' as ChipTone, label: annual.expiryDate ? `Annual through ${fmtDay(annual.expiryDate)}` : 'Annual agreement' }
           : { tone: 'neutral' as ChipTone, label: 'Per-job agreement' },
-        coiChip: coiChip(c.coiOnFile, c.coiExpiry, now),
+        coiChip: coiChip(c.coiOnFile, c.coiExpiry, now, coiState.coveringThrough),
+        coiState,
         peopleCount: c.portalAccesses.length,
         uninvited: c.portalAccesses.filter((a) => !a.invitedAt).length,
       }
@@ -325,9 +342,11 @@ export default async function CompanyPortalsPage() {
               hasLogo={!!c.logoUrl}
               annual={c.annualChip}
               coi={c.coiChip}
+              coiAwaiting={c.coiState.awaiting.length}
               peopleCount={c.peopleCount}
               uninvited={c.uninvited}
             >
+              <CompanyCoiReviewList state={c.coiState} />
               <CompanyDiscountsPanel companyId={c.id} canEdit={canEdit} />
               <CompanyPortalAccessPanel
                 companyId={c.id}

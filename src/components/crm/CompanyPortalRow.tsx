@@ -17,12 +17,13 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Eye, FileCheck2, ShieldCheck, Users } from 'lucide-react'
 
-export type ChipTone = 'good' | 'bad' | 'neutral'
+export type ChipTone = 'good' | 'bad' | 'neutral' | 'warn'
 
 const TONE: Record<ChipTone, string> = {
   good: 'bg-chip-good-bg text-chip-good-fg',
   bad: 'bg-chip-bad-bg text-chip-bad-fg',
   neutral: 'bg-chip-neutral-bg text-chip-neutral-fg',
+  warn: 'bg-chip-warn-bg text-chip-warn-fg',
 }
 
 export function CompanyPortalRow({
@@ -31,6 +32,7 @@ export function CompanyPortalRow({
   hasLogo,
   annual,
   coi,
+  coiAwaiting = 0,
   peopleCount,
   uninvited,
   children,
@@ -40,6 +42,9 @@ export function CompanyPortalRow({
   hasLogo: boolean
   annual: { tone: ChipTone; label: string }
   coi: { tone: ChipTone; label: string }
+  /** Certificates on the account still waiting on an HQ decision (Wes
+   *  2026-09-11: "if the COI needs approval why can't i see that?"). */
+  coiAwaiting?: number
   peopleCount: number
   uninvited: number
   children: ReactNode
@@ -100,6 +105,14 @@ export function CompanyPortalRow({
           >
             <ShieldCheck className="w-3.5 h-3.5" /> {coi.label}
           </span>
+          {coiAwaiting > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded ${TONE.warn}`}
+              title="Open the row to review"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> {coiAwaiting} COI awaiting approval
+            </span>
+          )}
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded ${
               uninvited > 0 ? TONE.neutral : TONE.good
