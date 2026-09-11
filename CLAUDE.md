@@ -263,6 +263,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Email never changes a job on its own (2026-09-11 — Wes)
+- Wes: "there can be nuance in a client's cancelling or changing of a
+  job — we want to make sure that any changes to HQ are gated with a
+  confirmation or suggestion." **Rule: no code path may change a Job,
+  Order, Booking, hold or assignment because of what an email SAYS.**
+  Email may raise a suggestion; a person applies the change through the
+  existing controls (Mark lost, status menu, order dates).
+- The suggestion is `JobEmailSignal` (`sr_job_email_signals`, kind
+  CANCEL / HOLD / DATE_CHANGE / EXTEND / RETURN_EARLY, status OPEN →
+  CONFIRMED / DISMISSED). `src/lib/email/jobChangeSignals.ts`:
+  `classifyChangeSignal()` is the pure read of the words + the reply
+  classifier + the extractor's messageNature, evidence quoted verbatim;
+  `detectJobChangeSignals(messageId)` ties the message to LIVE jobs
+  (thread.jobId / JobContact email / company website domain / order
+  number in the subject) and upserts one row per (job, message). Runs
+  from the pubsub ingest and again after extraction. Shown on the job
+  page (`JobEmailSignalsCard` — Mark lost… opens the same modal as the
+  menu; Handled / Not a change resolve the row, audited
+  `job.email_signal_*`) and in Action Items (`email-change-signal`).
+- `applyReplyClassificationToCadence` no longer marks an order LOST on
+  EXPLICIT_REJECTION — it pauses the cadence and leaves the LOST call to
+  the human. (It was dead anyway: `EmailMessage.companyId` is never
+  written at ingest, so the bridge always returned `no-company-link`.)
+- `scripts/brief-email-crosscheck.ts` is the manual version of the same
+  read: the jobs a "Today at SirReel" brief named, against the last N
+  days of client email, flagged with the same classifier. Read-only.
+- **Schema change: run `npx prisma db push` (additive: two enums + one
+  table). Until then every write/read of the table fails soft** — no
+  suggestions, nothing else affected. `npm run test:job-change-signals`.
+
 ## Partner portal — second partner, first EQUIPMENT partner (2026-09-10)
 - **PowerTrip Rentals** (Evan Crawford, CEO; powertriprentals.com; Signal
   Hill / Long Beach) is the second partner after King Kong, and rents

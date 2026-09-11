@@ -56,6 +56,7 @@ import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
 import { JobVehiclePickupPanel } from '@/components/jobs/JobVehiclePickupPanel';
+import { JobEmailSignalsCard } from '@/components/jobs/JobEmailSignalsCard';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
@@ -1856,6 +1857,11 @@ const driverTone = (d: any): string => {
             </div>
           </div>
         )}
+
+        {/* A client email that reads like a change of plan. The card is a
+            suggestion with the sentence quoted — Mark lost… is the same
+            modal as the menu; nothing is applied without the click. */}
+        <JobEmailSignalsCard jobId={job.id} onMarkLost={() => setMarkLostOpen(true)} />
 
         {/* Metadata — the four numbers an agent scans, one row. The
             production enum lives with its picker in the hero footer;

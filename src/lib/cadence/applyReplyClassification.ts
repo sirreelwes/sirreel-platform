@@ -22,7 +22,9 @@ const DISCUSSING_PAUSE_DAYS = 30
  *   - ACTIVE_DISCUSSION        → pause cadence (cadencePausedUntil = +30d)
  *   - BOOKING_SIGNAL           → log + emit operator alert; DO NOT
  *                                auto-transition (rep handles the booking)
- *   - EXPLICIT_REJECTION       → transition to LOST + lostReason
+ *   - EXPLICIT_REJECTION       → pause cadence only; the LOST call is a
+ *                                human's (JobEmailSignal suggestion —
+ *                                see src/lib/email/jobChangeSignals.ts)
  *   - UNCLEAR (post-floor: should be ACTIVE_DISCUSSION already, but defensive)
  *                              → pause cadence
  */
@@ -104,15 +106,21 @@ export async function applyReplyClassificationToCadence(
       return { applied: false, reason: 'booking-signal-alert-only', orderId: order.id }
     }
     case 'EXPLICIT_REJECTION': {
+      // Deliberately NOT auto-marked lost. Wes 2026-09-11: a client's
+      // cancelling or changing a job carries nuance ("cancel the cube" is
+      // not "cancel the job"; "project got cancelled" may be one of three
+      // orders), so any change to HQ from an email is gated behind a human.
+      // The suggestion is raised by src/lib/email/jobChangeSignals.ts
+      // (JobEmailSignal, shown on the job page + Action Items); the rep
+      // marks the order lost through the existing controls. Pause the
+      // cadence so no follow-up nudge goes out on a quote the client just
+      // declined.
+      const pausedUntil = new Date(Date.now() + DISCUSSING_PAUSE_DAYS * 86_400_000)
       await prisma.order.update({
         where: { id: order.id },
-        data: {
-          lostReason: 'EXPLICIT_REJECTION',
-          lostAt: new Date(),
-        },
+        data: { cadencePausedUntil: pausedUntil },
       })
-      await transitionCadenceState(order.id, 'LOST')
-      return { applied: true, reason: 'rejected-lost', orderId: order.id, newState: 'LOST' }
+      return { applied: false, reason: 'rejection-suggested-not-applied', orderId: order.id }
     }
     default: {
       const _exhaustive: never = action
