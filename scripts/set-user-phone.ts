@@ -8,7 +8,7 @@
  *
  * Run:
  *   export DATABASE_URL=$(grep '^DATABASE_URL=' .env.local | grep -v PRISMA | head -1 | cut -d'"' -f2)
- *   npx tsx scripts/set-user-phone.ts wes@sirreel.com "(818) 555-0100"
+ *   npx tsx scripts/set-user-phone.ts wes@sirreel.com "760-672-5522"
  *   npx tsx scripts/set-user-phone.ts wes@sirreel.com --clear
  *
  * Prints the row before and after. Refuses when the email has no User row —

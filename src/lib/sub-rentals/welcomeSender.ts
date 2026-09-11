@@ -81,11 +81,13 @@ export interface IntroDraft {
  * "SirReel", never "SirReel Production Vehicles" — the entity name belongs in
  * contract legal text and nowhere a partner reads.
  */
-/** "— Wes Bailey / SirReel / Cell (818) … · wes@sirreel.com" — whichever of
- *  the two contacts are known, on one line under the company. */
+/** "Wes Bailey / Cell 760-… · wes@sirreel.com" — his name, then whichever of
+ *  the two contacts are known on one line. No dash, no company line under
+ *  the name (Wes 2026-09-11: "Remove SirReel from below my name as well as
+ *  the pre dash") — the shell's footer already says SirReel. */
 export function signOff(name: string, phone?: string | null, email?: string | null): string {
   const contact = [phone?.trim() ? `Cell ${phone.trim()}` : null, email?.trim() || null].filter(Boolean).join(' · ')
-  return [`— ${name}`, 'SirReel', contact || null].filter(Boolean).join('\n')
+  return [name, contact || null].filter(Boolean).join('\n')
 }
 
 export function buildIntroDraft(a: {

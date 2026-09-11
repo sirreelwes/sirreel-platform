@@ -84,7 +84,7 @@ export async function draftFromPrompt(a: {
     `What the partner gets: their own page — their ${words.many}, their rates (theirs to change any time), their own photos, delivery contacts, and every booking in one place.`,
     `What SirReel needs back: the partner agreement signed, and a certificate of insurance naming SirReel.`,
     `The sender: ${a.senderName}, who owns SirReel — a Los Angeles company that has rented production vehicles to film and TV for 30 years.`,
-    `The sender's contact, for the sign-off under his name and "SirReel": ${[a.senderPhone?.trim() ? `cell ${a.senderPhone.trim()}` : null, a.senderEmail?.trim() ? `email ${a.senderEmail.trim()}` : null].filter(Boolean).join(', ') || 'none on file — sign off with his name and SirReel only'}. Keep it in the sign-off exactly as given; an email address is not a link.`,
+    `The sender's contact, for the line under his name in the sign-off: ${[a.senderPhone?.trim() ? `cell ${a.senderPhone.trim()}` : null, a.senderEmail?.trim() ? `email ${a.senderEmail.trim()}` : null].filter(Boolean).join(', ') || 'none on file — sign off with his name and SirReel only'}. Keep it in the sign-off exactly as given; an email address is not a link. The sign-off is his name on one line and the contact on the next — no dash before his name and no company line under it.`,
   ].join('\n')
 
   const system = [
