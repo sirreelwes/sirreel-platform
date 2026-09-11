@@ -58,7 +58,7 @@ import { readinessApplies } from '@/lib/jobs/readiness'
 import type { BlockerTone } from '@/lib/jobs/readiness'
 import { STAGE_HINT, STAGE_SHORT } from '@/lib/jobs/stage'
 import { STAGE_CHIP, STAGE_RAIL } from '@/lib/scheduling/statusTokens'
-import { AlertTriangle, Check, EyeOff, Truck, User, UserCircle } from 'lucide-react'
+import { AlertTriangle, Check, EyeOff, Mail, Truck, User, UserCircle } from 'lucide-react'
 
 export function JobsSidebar() {
   const { rows, loading, error, status } = useJobsList()
@@ -350,6 +350,9 @@ function JobTile({
   const readiness = readinessApplies(state) && j.readiness ? j.readiness : null
   const toBook = j.approvedUnbooked ?? 0
   const redlines = j.redlinePending ?? 0
+  // Quote out, welcome email not sent (Wes 2026-09-11: "remind us to send
+  // the welcome email"). The send lives on the job page — this is the nudge.
+  const welcomeDue = j.welcome?.state === 'due'
   const billing = j.billing && BILLING_WORDS[j.billing.state] ? j.billing : null
   // Fleet handed back (Wes 2026-09-08: "the job tile also needs to have
   // released clearly readable and may be a red outline"). It outranks the
@@ -523,7 +526,7 @@ function JobTile({
         {/* Row 5 — what's in the way, and what's owed. Each is a
             sentence-chip, not an abbreviation. Omitted entirely when
             there is nothing to say. */}
-        {(readiness || toBook > 0 || redlines > 0 || billing) && (
+        {(readiness || toBook > 0 || redlines > 0 || welcomeDue || billing) && (
           <span className="flex items-center gap-1.5 flex-wrap pt-0.5">
             {redlines > 0 && (
               <span
@@ -540,6 +543,15 @@ function JobTile({
                 className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white"
               >
                 Approved — book it{toBook > 1 ? ` ×${toBook}` : ''}
+              </span>
+            )}
+            {welcomeDue && (
+              <span
+                title={`Quoted${j.welcome?.quotedAt ? ` ${fmtRelative(j.welcome.quotedAt)}` : ''} and the client has not had their welcome email — the hello with their no-login link to the job. Open the job → Send welcome email.`}
+                className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded border border-amber-400 bg-amber-50 text-amber-800"
+              >
+                <Mail size={10} aria-hidden />
+                Send welcome email
               </span>
             )}
             {readiness && readiness.ready && (

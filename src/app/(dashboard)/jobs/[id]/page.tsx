@@ -35,6 +35,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
 const SHOW_AGREEMENT_ON_FILE = true;
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
+import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
@@ -1706,7 +1707,7 @@ const driverTone = (d: any): string => {
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               <JobQuickActions
                 job={{
                   id: job.id,
@@ -1719,6 +1720,10 @@ const driverTone = (d: any): string => {
                   endDate: isoDate(orderSpan.end),
                 }}
               />
+              {/* The client's welcome — hello + their no-login link to
+                  this job (Wes 2026-09-11). Loud while a quote is out and
+                  nothing has welcomed them; quiet once sent. */}
+              <JobWelcomeButton jobId={job.id} onSent={load} />
             </div>
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">

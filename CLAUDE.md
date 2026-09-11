@@ -265,6 +265,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Job welcome email — "here is your link" (2026-09-11)
+- Wes: after the team replies with a quote, "remind us to send the welcome
+  email" — on the job tile or page or both. Both: the /jobs tile carries a
+  "Send welcome email" chip and the job header carries the button
+  (`JobWelcomeButton`, beside + New quote), loud while DUE.
+- **DUE = a quote is out on a live order that has NOT gone out yet
+  (QUOTE_SENT → LOADED_READY), within 30 days, and no welcome sent;**
+  `welcomeSignal()` in `src/lib/jobs/welcomeReminder.ts` is the ONE rule —
+  the tile (`/api/jobs` → `welcome`), the button (`GET /api/jobs/[id]/welcome`)
+  and the send all read it. "Sent" is AuditLog `job.welcome_sent` on the
+  Job (no column); a re-send is a newer row. 52 jobs read DUE on ship day.
+- The email (`src/lib/email/templates/jobWelcome.ts`) is Wes's wording,
+  verbatim, seeded into the review modal's box (`defaultJobWelcomeBody`) —
+  edit or send as is; a blank box still sends it. The "Open your job"
+  button is the client's job-page magic link (per-contact, 7 days, no
+  login), minted at send on the newest live order with a `portalSlug`;
+  no portal order → 409 "send the quote first". Modal kind `job-welcome`,
+  routes under `/api/jobs/[id]/welcome/{,preview,send}`, delivery label
+  `job-welcome`. `npm run test:welcome-reminder`.
+- NOT the pre-job "Welcome / Job Begin" invite (`/api/sales/welcome`,
+  inquiry-scoped, mints the order on click) — that one is for leads
+  before a job exists; this one is for a quoted job.
+
 ## Email never changes a job on its own (2026-09-11 — Wes)
 - Wes: "there can be nuance in a client's cancelling or changing of a
   job — we want to make sure that any changes to HQ are gated with a
