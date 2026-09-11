@@ -321,8 +321,8 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     the vehicle document's structure and numbers; clause 4 is GL +
     inland-marine instead of auto, clause 7 is Delivery/Setup/Service
     instead of Drivers. Wes to read once before it goes to Evan.
-- **Onboarding:** `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]`
-  (after `prisma db push`) upserts the vendor, seeds a placeholder roster
+- **Onboarding (ran 2026-09-09, journal `journals/onboard-power-trip-*.json`):**
+  `npx tsx scripts/onboard-power-trip.ts [--email … --phone …]` upserts the vendor, seeds a placeholder roster
   across their categories (rates EMPTY — Evan proposes from his page;
   unlisted until photos + signature), mints the account link, journals ids.
   Then on /crm/portals#vendor: set the deal, file the standard agreement,
@@ -330,6 +330,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   units or a minted link, not only ones with bookings.
 - `npm run test:partner-kind` guards the vocabulary, section grouping,
   agreement variant and welcome-email wording.
+- **Do NOT `prisma db push` for the next partner column.** 2026-09-10: the
+  live DB carries `sr_job_locations` and nine `sub_rentals` columns that no
+  schema file knows; a push from a checkout drops them. Add columns with
+  additive SQL (see the specialty-vehicles commit `029d94e`).
 
 ## Active Roadmap
 1. AI fleet optimization
