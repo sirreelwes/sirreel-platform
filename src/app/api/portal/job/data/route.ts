@@ -44,12 +44,18 @@ export const dynamic = 'force-dynamic'
 // doesn't belong on any single User row.
 const AFTER_HOURS_LINE = '(888) 477-7335'
 
-// The senior-leadership card on the portal "Your SirReel Team" section
-// looks up this email in the User table at request time. The email itself
-// is a stable handle; everything client-visible (name, displayTitle, phone)
-// comes from the User row. Swap this string if leadership-visibility ever
-// rotates to another person.
-const LEADERSHIP_EMAIL = 'dani@sirreel.com'
+// Who a client sees when no rep has been established for their order — which
+// is most of them (5 of 107 live orders had a visible rep on 2026-09-12).
+//
+// This was the COO until Wes saw it on a real portal: "Dani shouldn't default
+// as the rep. If anyone defaults as rep it should be Jose." A client with a
+// question should land on sales, not on the COO, and a COO card on a hundred
+// portals reads as the account's relationship when it is only a placeholder.
+//
+// The email is a stable handle; everything client-visible (name, title, phone)
+// comes from the User row at request time. Swap this string if the default
+// ever rotates to someone else.
+const FALLBACK_REP_EMAIL = 'jose@sirreel.com'
 
 // Client-safe labels when User.displayTitle is null. Internal role names
 // ('ADMIN', 'AGENT') must never leak to the portal — these are the only
@@ -260,8 +266,8 @@ export async function GET(req: NextRequest) {
   // fields + display fields here; insuranceCardUrl, insurancePolicyNum,
   // and any other Asset internals are not in this select clause. This is
   // the audit checkpoint for CRH brief §7 "What is NEVER surfaced".
-  const leadership = await prisma.user.findUnique({
-    where: { email: LEADERSHIP_EMAIL },
+  const fallbackRep = await prisma.user.findUnique({
+    where: { email: FALLBACK_REP_EMAIL },
     select: { id: true, name: true, email: true, phone: true, displayTitle: true, role: true },
   })
 
@@ -692,19 +698,21 @@ export async function GET(req: NextRequest) {
      *  — the portal shows the card, the card links to the page. A boolean,
      *  not the codes: the codes have exactly one route and it audit-logs. */
     afterHoursReleased: !!order.job?.afterHoursReleasedAt,
-    leadership: leadership
+    /** Shown ONLY when `agent` is null — the person to ask when nobody has
+     *  taken the account yet. The page never renders both. */
+    defaultRep: fallbackRep
       ? {
-          id: leadership.id,
-          name: leadership.name,
-          email: leadership.email,
-          phone: leadership.phone,
+          id: fallbackRep.id,
+          name: fallbackRep.name,
+          email: fallbackRep.email,
+          phone: fallbackRep.phone,
           // displayTitle is the canonical client-facing label. The role
           // fallback is defense-in-depth — every @sirreel.com User has a
           // displayTitle as of May 2026, but a new admin-created row with
           // no displayTitle shouldn't blank out the badge in the portal.
           // Internal role names ('ADMIN', 'AGENT') are never exposed —
           // we map to client-safe labels here.
-          displayTitle: leadership.displayTitle || defaultDisplayTitleForRole(leadership.role),
+          displayTitle: fallbackRep.displayTitle || defaultDisplayTitleForRole(fallbackRep.role),
         }
       : null,
     // CLIENT-FACING — sub-rental fields (vendor, vendor*, PO #, status,

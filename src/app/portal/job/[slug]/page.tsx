@@ -109,7 +109,7 @@ interface PortalData {
   /** A rep has released this job's after-hours instructions. Gates the
    *  card that links to /after-hours; the codes live only on that page. */
   afterHoursReleased: boolean;
-  leadership: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
+  defaultRep: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
   countdown: { msUntilPickup: number } | null;
   lineItems: {
     id: string;
@@ -1793,21 +1793,24 @@ export default function JobPortalPage() {
               <div className="space-y-1.5">
                 {/* Same rule as the contact card above — a named REP only
                     when one has actually been established for this order. */}
-                {data.agent && (
+                {data.agent ? (
                   <ContactRow
                     name={data.agent.name}
                     email={data.agent.email}
                     badge="REP"
                     detail={data.agent.phone || undefined}
                   />
-                )}
-                {data.leadership && (
-                  <ContactRow
-                    name={data.leadership.name}
-                    email={data.leadership.email}
-                    badge={data.leadership.displayTitle || ''}
-                    detail={data.leadership.phone || undefined}
-                  />
+                ) : (
+                  // Nobody has taken this account yet, so the client gets
+                  // sales rather than a second name to guess between.
+                  data.defaultRep && (
+                    <ContactRow
+                      name={data.defaultRep.name}
+                      email={data.defaultRep.email}
+                      badge={data.defaultRep.displayTitle || 'REP'}
+                      detail={data.defaultRep.phone || undefined}
+                    />
+                  )
                 )}
                 <ContactRow
                   name="After-hours line"
