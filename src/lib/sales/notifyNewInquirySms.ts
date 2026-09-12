@@ -55,6 +55,7 @@ import { prisma } from '@/lib/prisma'
 import { sendTracked } from '@/lib/sms/threads'
 import {
   composeAlert,
+  composeNudge,
   composeTestAlert,
   inTextingWindow,
   WINDOW_CLOSE_HOUR,
@@ -62,7 +63,7 @@ import {
   type AlertSubject,
 } from '@/lib/sales/newInquiryAlertText'
 
-export { composeAlert, inTextingWindow } from '@/lib/sales/newInquiryAlertText'
+export { composeAlert, composeNudge, inTextingWindow } from '@/lib/sales/newInquiryAlertText'
 
 /** The only person this feature texts. Wes 2026-09-11, explicitly. */
 export const NEW_INQUIRY_SMS_RECIPIENT = 'wes@sirreel.com'
@@ -92,6 +93,13 @@ export async function listPendingInquiries(now: Date = new Date()): Promise<Pend
     where: {
       smsNotifiedAt: null,
       status: 'NEW',
+      // status=NEW is NOT "untouched". Replying stamps respondedAt and
+      // leaves the status alone — it only becomes CONVERTED / DISMISSED
+      // when someone explicitly works the row. Measured 2026-09-12: ALL
+      // FIVE open NEW inquiries had already been replied to. Without this
+      // clause the 8am release announces "new incoming" about a lead a rep
+      // answered at 6am. Wes 2026-09-12 chose to skip those.
+      respondedAt: null,
       source: { in: ['WEB_FORM', 'MANUAL'] },
       createdAt: { gte: new Date(now.getTime() - MAX_AGE_HOURS * 3_600_000) },
     },
@@ -115,6 +123,69 @@ export async function listPendingInquiries(now: Date = new Date()): Promise<Pend
       companyName: r.company?.name ?? null,
       personName: [r.person?.firstName, r.person?.lastName].filter(Boolean).join(' ').trim() || null,
       createdAt: r.createdAt,
+    }))
+}
+
+/**
+ * How long a lead may sit unanswered after Wes was told before the ONE
+ * follow-up goes out. Wes 2026-09-12: "one nudge after 1 hr".
+ *
+ * Measured from smsNotifiedAt, not createdAt. An overnight lead is first
+ * announced at 8am; counting from arrival would make it already "6 hours
+ * unanswered" and fire the nudge in the same breath as the alert.
+ */
+const NUDGE_AFTER_HOURS = 1
+
+/**
+ * And a bound on the other end: something announced days ago and still
+ * unanswered is a backlog problem, not a nudge. It stays on the board and
+ * in the hourly hq@ escalation.
+ */
+const NUDGE_GIVE_UP_HOURS = 48
+
+export interface PendingNudge extends PendingInquiry {
+  notifiedAt: Date
+}
+
+/**
+ * Told, still unanswered, not yet nudged. One per inquiry, ever — the
+ * smsNudgedAt stamp is what stops this becoming a loop.
+ */
+export async function listPendingNudges(now: Date = new Date()): Promise<PendingNudge[]> {
+  const rows = await prisma.inquiry.findMany({
+    where: {
+      smsNotifiedAt: {
+        not: null,
+        lte: new Date(now.getTime() - NUDGE_AFTER_HOURS * 3_600_000),
+        gte: new Date(now.getTime() - NUDGE_GIVE_UP_HOURS * 3_600_000),
+      },
+      smsNudgedAt: null,
+      respondedAt: null,
+      status: 'NEW',
+      source: { in: ['WEB_FORM', 'MANUAL'] },
+    },
+    select: {
+      id: true,
+      title: true,
+      source: true,
+      createdAt: true,
+      smsNotifiedAt: true,
+      company: { select: { name: true } },
+      person: { select: { firstName: true, lastName: true } },
+    },
+    orderBy: { smsNotifiedAt: 'asc' },
+    take: 25,
+  })
+  return rows
+    .filter((r) => !EXCLUDED_TITLES.has(r.title.trim()))
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      source: r.source,
+      companyName: r.company?.name ?? null,
+      personName: [r.person?.firstName, r.person?.lastName].filter(Boolean).join(' ').trim() || null,
+      createdAt: r.createdAt,
+      notifiedAt: r.smsNotifiedAt as Date,
     }))
 }
 
@@ -172,6 +243,38 @@ export async function sweepNewInquirySms(
   await prisma.inquiry.updateMany({
     where: { id: { in: pending.map((p) => p.id) } },
     data: { smsNotifiedAt: now },
+  })
+  return { pending: pending.length, sent: true, status: r.status, inquiryIds: pending.map((p) => p.id) }
+}
+
+/**
+ * The follow-up pass. Same window, same batching, same stamp-after-send
+ * discipline as the alert — and the stamp goes on whether or not a lead is
+ * ever answered, so no inquiry can produce a second nudge.
+ */
+export async function sweepNewInquiryNudges(
+  now: Date = new Date(),
+  opts: { force?: boolean } = {},
+): Promise<SweepResult> {
+  const pending = await listPendingNudges(now)
+  if (pending.length === 0) return { pending: 0, sent: false, skipped: 'nothing to nudge' }
+  if (!opts.force && !inTextingWindow(now)) {
+    return { pending: pending.length, sent: false, skipped: `outside ${WINDOW_OPEN_HOUR}:00–${WINDOW_CLOSE_HOUR}:00 Pacific — held` }
+  }
+
+  const to = await recipientPhone()
+  if (!to.phone) return { pending: pending.length, sent: false, skipped: to.reason ?? 'no recipient' }
+
+  // The oldest one sets the number in the sentence — "still unanswered
+  // after N hours" should describe the worst case, not the newest arrival.
+  const waitedHours = (now.getTime() - pending[0].notifiedAt.getTime()) / 3_600_000
+
+  const r = await sendTracked({ to: to.phone, body: composeNudge(pending, HQ_APP_URL, waitedHours), source: 'staff' })
+  if (!r.ok) return { pending: pending.length, sent: false, status: r.status, error: r.error }
+
+  await prisma.inquiry.updateMany({
+    where: { id: { in: pending.map((p) => p.id) } },
+    data: { smsNudgedAt: now },
   })
   return { pending: pending.length, sent: true, status: r.status, inquiryIds: pending.map((p) => p.id) }
 }

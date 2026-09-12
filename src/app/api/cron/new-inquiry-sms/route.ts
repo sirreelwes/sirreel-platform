@@ -18,10 +18,12 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
-import { composeAlert, inTextingWindow } from '@/lib/sales/newInquiryAlertText'
+import { composeAlert, composeNudge, inTextingWindow } from '@/lib/sales/newInquiryAlertText'
 import {
   listPendingInquiries,
+  listPendingNudges,
   sendNewInquirySmsTest,
+  sweepNewInquiryNudges,
   sweepNewInquirySms,
   NEW_INQUIRY_SMS_RECIPIENT,
 } from '@/lib/sales/notifyNewInquirySms'
@@ -53,15 +55,27 @@ export async function GET(req: NextRequest) {
   }
 
   if (preview) {
-    const pending = await listPendingInquiries()
+    const now = new Date()
+    const [pending, nudges] = await Promise.all([listPendingInquiries(now), listPendingNudges(now)])
+    const waited = nudges.length ? (now.getTime() - nudges[0].notifiedAt.getTime()) / 3_600_000 : 0
     return NextResponse.json({
       ok: true,
       recipient: NEW_INQUIRY_SMS_RECIPIENT,
-      inTextingWindow: inTextingWindow(),
-      pending: pending.map((p) => ({ id: p.id, title: p.title, source: p.source, createdAt: p.createdAt })),
-      wouldSend: pending.length ? composeAlert(pending, HQ_APP_URL) : null,
+      inTextingWindow: inTextingWindow(now),
+      alert: {
+        pending: pending.map((p) => ({ id: p.id, title: p.title, source: p.source, createdAt: p.createdAt })),
+        wouldSend: pending.length ? composeAlert(pending, HQ_APP_URL) : null,
+      },
+      nudge: {
+        pending: nudges.map((p) => ({ id: p.id, title: p.title, notifiedAt: p.notifiedAt })),
+        wouldSend: nudges.length ? composeNudge(nudges, HQ_APP_URL, waited) : null,
+      },
     })
   }
 
-  return NextResponse.json({ ok: true, ...(await sweepNewInquirySms()) })
+  // The alert runs first: a lead that arrives and is announced on this same
+  // pass must not also be eligible to be nudged on it.
+  const alert = await sweepNewInquirySms()
+  const nudge = await sweepNewInquiryNudges()
+  return NextResponse.json({ ok: true, alert, nudge })
 }

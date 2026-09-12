@@ -1,9 +1,12 @@
 /**
- * Additive column for the "new incoming" SMS alert (Wes 2026-09-11:
+ * Additive columns for the "new incoming" SMS alert (Wes 2026-09-11:
  * "Can [HQ] text me when there's a new incoming and drop a link in the
  * text to open that response?").
  *
  *   sr_inquiries.sms_notified_at — the alert queue. NULL = not texted yet.
+ *   sr_inquiries.sms_nudged_at   — the follow-up queue (Wes 2026-09-12:
+ *                                  "one nudge after 1 hr"). NULL = not
+ *                                  nudged yet.
  *
  * ADDITIVE SQL, not `prisma db push`: the live DB carries sr_job_locations
  * and nine sub_rentals address columns that exist in no schema file, so a
@@ -29,24 +32,33 @@ import { NEW_INQUIRY_SMS_RECIPIENT } from '../src/lib/sales/notifyNewInquirySms'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('Adding sr_inquiries.sms_notified_at (IF NOT EXISTS — additive only)…')
+  console.log('Adding columns (IF NOT EXISTS — additive only)…')
   await prisma.$executeRawUnsafe(
     `ALTER TABLE sr_inquiries ADD COLUMN IF NOT EXISTS sms_notified_at TIMESTAMP(3)`,
   )
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE sr_inquiries ADD COLUMN IF NOT EXISTS sms_nudged_at TIMESTAMP(3)`,
+  )
 
-  // Prove it landed rather than trusting the ALTER's exit code.
+  // Prove they landed rather than trusting the ALTERs' exit codes.
   const cols = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
     `SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'sr_inquiries' AND column_name = 'sms_notified_at'`,
+      WHERE table_name = 'sr_inquiries' AND column_name IN ('sms_notified_at', 'sms_nudged_at')`,
   )
-  if (cols.length !== 1) throw new Error('sr_inquiries.sms_notified_at is still missing — the ALTER did not take')
-  console.log('information_schema confirms sr_inquiries.sms_notified_at')
+  if (cols.length !== 2) throw new Error(`expected both columns; information_schema has: ${cols.map((c) => c.column_name).join(', ') || 'neither'}`)
+  console.log('information_schema confirms sms_notified_at + sms_nudged_at')
 
-  // Backfill: everything that already exists is not "new".
+  // Backfill: everything that already exists is not "new", and must not be
+  // nudged about either — the nudge queue reads rows that HAVE been notified,
+  // so leaving these NULL would fire a follow-up about every old lead.
   const stamped = await prisma.$executeRawUnsafe(
     `UPDATE sr_inquiries SET sms_notified_at = NOW() WHERE sms_notified_at IS NULL`,
   )
   console.log(`Backfilled ${stamped} existing inquiries as already-notified.`)
+  const nudged = await prisma.$executeRawUnsafe(
+    `UPDATE sr_inquiries SET sms_nudged_at = NOW() WHERE sms_nudged_at IS NULL`,
+  )
+  console.log(`Backfilled ${nudged} existing inquiries as already-nudged.`)
 
   const who = await prisma.user.findFirst({
     where: { email: NEW_INQUIRY_SMS_RECIPIENT, isActive: true },

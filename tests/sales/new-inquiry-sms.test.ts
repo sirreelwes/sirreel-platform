@@ -18,6 +18,7 @@
 import {
   clip,
   composeAlert,
+  composeNudge,
   composeTestAlert,
   inTextingWindow,
   splitTitle,
@@ -134,6 +135,25 @@ console.log('\nthe window — 8am to 10pm Pacific')
   ok(!inTextingWindow(new Date('2026-01-15T15:59:00Z')), '7:59am PST — held through the DST change')
   ok(inTextingWindow(new Date('2026-01-15T16:00:00Z')), '8:00am PST — sends through the DST change')
   ok(!inTextingWindow(new Date('2026-01-15T06:00:00Z')), '10:00pm PST — held through the DST change')
+}
+
+console.log('\nthe nudge — one follow-up when nobody replied (Wes 2026-09-12)')
+{
+  const one = composeNudge([lead()], APP, 1)
+  ok(one.includes('still no reply after an hour'), 'an hour reads as words, not "1 hours"')
+  ok(one.includes('Jane Doe · Acme Pictures'), 'names who is waiting')
+  ok(one.includes(`${APP}/inquiries/clx123`), 'a single nudge still links that lead')
+  ok(one.startsWith('AHA') && one.includes('SirReel'), 'name and brand, same as the alert')
+  ok(!one.includes('new incoming'), 'it does not repeat the pitch — what is new is the waiting')
+
+  const many = composeNudge([lead(), lead({ id: 'b', personName: 'Bob Smith', companyName: 'Netflix' })], APP, 3.4)
+  ok(many.includes('2 still unanswered after 3 hours'), 'a batch counts them and rounds the wait')
+  ok(many.includes(`${APP}/jobs?panel=incoming`), 'a batch links the Incoming panel')
+
+  const three = composeNudge([lead(), lead({ id: 'b' }), lead({ id: 'c' })], APP, 2)
+  ok(three.includes('+1 more'), 'first two named, the rest counted')
+  ok(composeNudge([lead()], APP, 1.9).includes('an hour'), 'under two hours still reads "an hour"')
+  ok(composeNudge([lead()], APP, 2).includes('2 hours'), 'two hours reads as a number')
 }
 
 console.log(failures.length ? `\n${failures.length} FAILED\n` : '\nall passed\n')

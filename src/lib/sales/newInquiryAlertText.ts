@@ -122,6 +122,27 @@ export function composeAlert(pending: AlertSubject[], appUrl: string): string {
   return `${lead} — ${pending.length} new incoming: ${named}${rest > 0 ? `; +${rest} more` : ''} ${base}/jobs?panel=incoming`
 }
 
+/**
+ * The one follow-up, an hour after the first text, when nobody has replied.
+ *
+ * It names the wait rather than repeating the pitch — Wes already read the
+ * first text; what is new is that it is still sitting there. Same batching
+ * rule as the alert: over one, the links collapse to the Incoming panel.
+ */
+export function composeNudge(pending: AlertSubject[], appUrl: string, waitedHours: number): string {
+  const base = appUrl.replace(/\/$/, '')
+  const lead = `${ASSISTANT_NAME} · SirReel HQ`
+  const waited = waitedHours < 2 ? 'an hour' : `${Math.round(waitedHours)} hours`
+
+  if (pending.length === 1) {
+    const i = pending[0]
+    return `${lead} — still no reply after ${waited}: ${who(i)} ${base}/inquiries/${i.id}`
+  }
+  const named = pending.slice(0, 2).map(who).join('; ')
+  const rest = pending.length - 2
+  return `${lead} — ${pending.length} still unanswered after ${waited}: ${named}${rest > 0 ? `; +${rest} more` : ''} ${base}/jobs?panel=incoming`
+}
+
 /** What the on-demand proof text says. */
 export function composeTestAlert(appUrl: string): string {
   const base = appUrl.replace(/\/$/, '')

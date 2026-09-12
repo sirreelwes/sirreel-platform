@@ -6366,6 +6366,13 @@ model Inquiry {
   // the alert. See src/lib/sales/notifyNewInquirySms.ts.
   smsNotifiedAt DateTime? @map("sms_notified_at")
 
+  // The ONE follow-up text, an hour after the first, when nobody has
+  // replied yet (Wes 2026-09-12: "one nudge after 1 hr"). Measured from
+  // smsNotifiedAt, not createdAt — an overnight lead is first announced at
+  // 8am, and counting from arrival would fire the nudge in the same breath.
+  // One per inquiry, ever: a stamp, not a schedule.
+  smsNudgedAt   DateTime? @map("sms_nudged_at")
+
   // Welcome / Job Begin invite (client click-to-create) — at most one per
   // inquiry (@unique on WelcomeInvite.inquiryId).
   welcomeInvite WelcomeInvite?
