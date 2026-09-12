@@ -52,6 +52,7 @@
     "test:scan": "tsx tests/warehouse/scan-normalize.test.ts",
     "test:pdf-hyphenation": "tsx tests/pdf/hyphenation.test.ts",
     "test:pick-list-pdf": "tsx tests/warehouse/pick-list-pdf.test.ts",
+    "test:unit-labels": "tsx tests/warehouse/unit-labels.test.ts",
     "test:unit-scans": "tsx tests/warehouse/unit-scans.test.ts",
     "test:yard": "tsx tests/yard/board-grouping.test.ts",
     "test:check-report": "tsx tests/orders/check-report-classify.test.ts",

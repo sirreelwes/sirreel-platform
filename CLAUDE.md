@@ -382,6 +382,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## HQ prints its own SR labels (2026-09-12 — Oliver asked, Wes: "build it")
+- Every label on the gear was a RentalWorks label (RW prints `SR######` on
+  receipt; the nightly sync mirrors it). RW is going away and the desk only
+  counts what it can scan, so `/warehouse/labels` ("Print Labels", beside
+  Find a Unit in all three yard branches) mints numbers and prints sheets.
+- **Numbering: HQ owns SR900000–SR999999; RW numbers upward from ~SR004674.**
+  `nextHqBarcodes()` in `src/lib/warehouse/unitLabels.ts` (pure) continues
+  after the highest HQ number and REFUSES if an RW unit is ever seen inside
+  the block. Same `SR` + 6 digits shape, so the resolver, the desk, Find a
+  Unit and the "barcoded line" rule need no change.
+- **A minted unit is a real `InventoryUnit` row**: `source = 'HQ'`,
+  `rwItemId = 'HQ:<barcode>'` (required + unique; no RW ItemId looks like
+  that), `mintedById`, `labelPrintedAt`. The RW sync filters `HQ:` rows out
+  of its stale count by the prefix, not the column. `mintUnits()` in
+  `mintUnits.ts` (transaction, one retry on a unique clash, AuditLog
+  `inventory.units_minted` with the barcodes). The numbers are taken at
+  mint whether or not the sheet prints.
+- **Columns by additive SQL, not db push:** `npx tsx
+  scripts/add-hq-unit-columns.ts` once, BEFORE deploying. Until then minting
+  returns 503 naming the script; reprints of RW labels work regardless.
+- **The sheet** (`LabelSheetDocument.tsx`, `GET /api/warehouse/units/labels?
+  codes=…&stock=…&skip=…`) is Code 39 (what every RW label and scanner
+  already uses) on Avery-compatible letter stock: 5160 (30/sheet, default),
+  5163 (10), 5167 (80, barcode + number only). `skip` leaves cells empty so
+  a part-used sheet goes back through; print at 100%, never fit-to-page.
+  Unknown codes are refused by name (404) rather than left off. Reprinting
+  an RW label is the same sheet. `npm run test:unit-labels`.
+- Yard door on the page and both routes. Sales (AGENT) cannot mint — the
+  warehouse labels gear, sales asks.
+
 ## Pick list item codes fold, with no hyphen added (2026-09-12)
 - Wes's photo of S260902-008: `CAT_CUBE_TRUCK` printed straight over
   "SuperCube Truck". Two causes. (1) `src/lib/pdf/hyphenation.ts` only

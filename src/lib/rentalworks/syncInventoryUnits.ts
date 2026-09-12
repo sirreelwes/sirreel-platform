@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
+import { HQ_RW_ITEM_PREFIX } from '@/lib/warehouse/unitLabels'
 
 /**
  * Mirror RentalWorks' per-unit register into `sr_inventory_units`
@@ -156,8 +157,14 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   //       the complexity of a batched raw INSERT ... ON CONFLICT, and a
   //       per-row failure here should not roll back the whole register.
   const runAt = new Date()
+  // HQ-minted units (rwItemId "HQ:SR9xxxxx", /warehouse/labels) are never
+  // in RW's feed — they are ours, not stale. Filtered by the prefix, not
+  // the `source` column, so the sync cannot break before that column
+  // exists.
   const existing = new Set(
-    (await prisma.inventoryUnit.findMany({ select: { rwItemId: true } })).map((r) => r.rwItemId),
+    (await prisma.inventoryUnit.findMany({ select: { rwItemId: true } }))
+      .map((r) => r.rwItemId)
+      .filter((id) => !id.startsWith(HQ_RW_ITEM_PREFIX)),
   )
 
   let written = 0

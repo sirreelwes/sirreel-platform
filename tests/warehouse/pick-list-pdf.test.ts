@@ -27,7 +27,7 @@ const failures: string[] = []
 function line(department: PickListLine['department'], code: string, description: string): PickListLine {
   return {
     department, code, description, notes: null, type: 'RENT', ordered: 1, out: 0,
-    picked: false, includedAccessory: false, unitChecks: [],
+    picked: false, includedAccessory: false,
   }
 }
 

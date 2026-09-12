@@ -3268,6 +3268,16 @@ model InventoryUnit {
 
   inactive Boolean @default(false)
 
+  // HQ-printed labels (2026-09-12). `source` RW = mirrored from
+  // RentalWorks (the sync owns the row); HQ = minted on /warehouse/labels
+  // with a number from the SR900000+ block, rwItemId "HQ:<barcode>". The
+  // sync never sees an HQ row in RW's feed and must not count it stale.
+  // Columns by `scripts/add-hq-unit-columns.ts` (additive SQL), never
+  // `db push`.
+  source         String    @default("RW")
+  mintedById     String?   @map("minted_by_id")
+  labelPrintedAt DateTime? @map("label_printed_at")
+
   // `lastSeenAt` is stamped on every sync that returns this unit. Rows
   // are never deleted — RW retires rather than removes, and a unit that
   // drops out of the feed is a question, not a licence to delete audit
