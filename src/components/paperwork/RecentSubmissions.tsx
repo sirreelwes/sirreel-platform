@@ -61,7 +61,7 @@ interface Submission {
   href: string | null
   documentHref: string | null
   downloadHref: string | null
-  reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
+  reviewState: 'PENDING' | 'APPROVED' | 'COUNTERED' | 'REJECTED' | null
   flag: { label: string; detail: string } | null
   needsReview: boolean
   dismissal: { at: string; by: string | null; reason: string | null; note: string | null } | null
@@ -491,10 +491,16 @@ function SubmissionRow({
             className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
               r.reviewState === 'APPROVED'
                 ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-rose-100 text-rose-700'
+                : r.reviewState === 'COUNTERED'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-rose-100 text-rose-700'
             }`}
           >
-            {r.reviewState === 'APPROVED' ? 'Approved' : 'Rejected'}
+            {r.reviewState === 'APPROVED'
+              ? 'Approved'
+              : r.reviewState === 'COUNTERED'
+                ? 'Fix requested'
+                : 'Rejected'}
           </span>
         )}
         {r.kind === 'COI' ? (

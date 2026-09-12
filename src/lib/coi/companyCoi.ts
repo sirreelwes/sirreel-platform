@@ -45,6 +45,8 @@ export const COI_SELECT = {
   fileUrl: true,
   originalFilename: true,
   humanDecision: true,
+  // When the desk decided — the portal dates a correction request by it.
+  humanDecisionAt: true,
   aiRiskLevel: true,
   namedInsured: true,
   policyExpiryDate: true,

@@ -33,6 +33,7 @@ import {
 } from '@/lib/coi/jobCoiConfirmation'
 import { LCDW_DAILY_RATE } from '@/lib/contracts/fees'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { coiClientDecision } from '@/lib/coi/coiState'
 import { loadOrderReplacementValue, toClientReplacementValue } from '@/lib/coi/replacementValue'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
@@ -820,6 +821,15 @@ export async function GET(req: NextRequest) {
             fileUrl: governingCoi.coi.fileUrl,
             originalFilename: governingCoi.coi.originalFilename,
             humanDecision: governingCoi.coi.humanDecision,
+            // The badge word, its colour and the sentence under it — ONE
+            // derivation (lib/coi/coiState). A fix request (COUNTERED) used
+            // to fall through the portal's APPROVED/REJECTED check and read
+            // "Reviewing" while the desk showed it as rejected.
+            decision: coiClientDecision(
+              governingCoi.coi.humanDecision,
+              governingCoi.coi.coverageVerified,
+              governingCoi.coi.humanDecisionAt,
+            ),
             aiRiskLevel: governingCoi.coi.aiRiskLevel,
             policyExpiryDate: governingCoi.coi.policyExpiryDate,
             coverageVerified: governingCoi.coi.coverageVerified,

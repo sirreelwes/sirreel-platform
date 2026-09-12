@@ -82,3 +82,52 @@ export const COI_STATE_WORD: Record<CoiRollupState, string> = {
   EXPIRED: 'Expired',
   ISSUE: 'Rejected',
 }
+
+/**
+ * What the CLIENT is told about the desk's decision on their certificate.
+ *
+ * 2026-09-12: Wes clicked "Request fix" on No Slate's certificate. The desk
+ * parks that as COUNTERED (the fix email went out, we are waiting on the
+ * broker), the paperwork feed painted it with the REJECTED chip — and the
+ * client portal, which only knew APPROVED and REJECTED, kept saying
+ * "Reviewing". Three surfaces, three stories about one row. The portal's
+ * badge and sentence now come from here, and the feed names the state
+ * honestly ("Fix requested"), so nobody reads a request as a verdict.
+ *
+ * Empty sentence = nothing to add beyond the badge.
+ */
+export type CoiClientDecisionKind = 'success' | 'pending' | 'warning' | 'failed'
+
+export function coiClientDecision(
+  humanDecision: string,
+  coverageVerified: boolean,
+  decidedAt: Date | string | null = null,
+): { label: string; kind: CoiClientDecisionKind; notice: string } {
+  if (humanDecision === 'APPROVED') return { label: 'Approved', kind: 'success', notice: '' }
+  if (humanDecision === 'REJECTED') {
+    return {
+      label: 'Rejected',
+      kind: 'failed',
+      notice:
+        'This certificate did not meet the requirements below. Have your broker issue a ' +
+        'corrected one and upload it here — it replaces this one for this job.',
+    }
+  }
+  if (humanDecision === 'COUNTERED') {
+    const d = decidedAt ? new Date(decidedAt) : null
+    const when =
+      d && !isNaN(d.getTime())
+        ? ` on ${d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'America/Los_Angeles' })}`
+        : ''
+    return {
+      label: 'Correction needed',
+      kind: 'warning',
+      notice:
+        `We reviewed this certificate and emailed you${when} with what your broker needs to ` +
+        'change. Once they issue the corrected certificate, upload it here — it replaces this ' +
+        'one for this job.',
+    }
+  }
+  if (coverageVerified) return { label: 'Received', kind: 'success', notice: '' }
+  return { label: 'Reviewing', kind: 'pending', notice: '' }
+}

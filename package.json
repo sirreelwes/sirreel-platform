@@ -76,6 +76,7 @@
     "test:export-gate": "tsx tests/exports/export-gate.test.ts",
     "test:discount-expendables": "tsx tests/orders/discount-expendables.test.ts",
     "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",
+    "test:coi-client-decision": "tsx tests/coi/client-decision.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts",
     "test:coi-checks": "tsx tests/coi/checks.test.ts",
     "test:coi-scope": "tsx tests/coi/vehicle-scope.test.ts",

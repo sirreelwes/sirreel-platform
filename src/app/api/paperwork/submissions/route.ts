@@ -63,7 +63,7 @@ export interface PaperworkSubmission {
   /** Same document, attachment disposition. */
   downloadHref: string | null
   /** Review state, for the kinds that HAVE a review (COI today). */
-  reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
+  reviewState: 'PENDING' | 'APPROVED' | 'COUNTERED' | 'REJECTED' | null
   /** Set when this submission needs a human to look at it for a reason
    *  the feed can state in a few words — currently a COI whose named
    *  insured doesn't match the production company. The feed doubles as a
@@ -283,7 +283,9 @@ export async function GET(req: NextRequest) {
       href: jobHref('COI', c.job?.id ?? null),
       documentHref: null,
       downloadHref: null,
-      reviewState: c.humanDecision as 'PENDING' | 'APPROVED' | 'REJECTED',
+      // COUNTERED = the desk emailed a fix request and is waiting on the
+      // broker. It was cast away here and painted REJECTED downstream.
+      reviewState: c.humanDecision as 'PENDING' | 'APPROVED' | 'COUNTERED' | 'REJECTED',
       flag: coiFlag,
       needsReview: !coiDismissal && coiNeedsReview(c.humanDecision, !!coiFlag),
       dismissal: coiDismissal,

@@ -178,6 +178,10 @@ interface PortalData {
       fileUrl: string;
       originalFilename: string;
       humanDecision: string;
+      /** Badge word + colour + the sentence to show under it, derived once
+       *  server-side (lib/coi/coiState). `notice` is '' when there is
+       *  nothing to add beyond the badge. */
+      decision: { label: string; kind: 'success' | 'pending' | 'warning' | 'failed'; notice: string };
       aiRiskLevel: string | null;
       policyExpiryDate: string | null;
       coverageVerified: boolean;
@@ -1671,16 +1675,32 @@ export default function JobPortalPage() {
                         here, plainly, because the client is the only one who
                         can tell us which company is actually renting — and
                         finding out at pickup is too late. */}
+                    {/* The desk asked for a correction, or rejected it.
+                        Said here in the client's words — the badge alone
+                        left Justin (No Slate, 2026-09-12) looking at
+                        "Reviewing" the day after the fix email went out. */}
+                    {data.paperwork.coi.decision.notice && (
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+                          data.paperwork.coi.decision.kind === 'failed'
+                            ? 'border-rose-200 bg-rose-50 text-rose-900'
+                            : 'border-amber-200 bg-amber-50 text-amber-900'
+                        }`}
+                      >
+                        {data.paperwork.coi.decision.notice}
+                      </div>
+                    )}
                     {data.paperwork.coi.insuredNotice && (
-                      <>
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
-                          {data.paperwork.coi.insuredNotice}
-                        </div>
-                        {/* Flagged certificate — they have to go back to the
-                            broker, so give them the same tools as someone
-                            who hasn't uploaded yet. */}
-                        <CoiRequirementsBlock replacementValue={data.paperwork.replacementValue ?? null} />
-                      </>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
+                        {data.paperwork.coi.insuredNotice}
+                      </div>
+                    )}
+                    {/* Flagged, countered or rejected certificate — they
+                        have to go back to the broker, so give them the same
+                        tools as someone who hasn't uploaded yet. Rendered
+                        once, whichever of the notices applies. */}
+                    {(data.paperwork.coi.insuredNotice || data.paperwork.coi.decision.notice) && (
+                      <CoiRequirementsBlock replacementValue={data.paperwork.replacementValue ?? null} />
                     )}
                     {/* Wes 2026-09-11: "Upload a COI for your teams" — always
                         an option, on the job portal too. Until now the
@@ -2443,18 +2463,14 @@ function agreementIsReleased(a: PortalData['paperwork']['agreement']): boolean {
 function agreementStatusKind(a: PortalData['paperwork']['agreement']): PaperworkStatusKind {
   return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).kind;
 }
+// Badge word and colour come from the server's one derivation
+// (lib/coi/coiState — coiClientDecision). This file used to keep its own
+// APPROVED/REJECTED check, so a fix request (COUNTERED) read "Reviewing".
 function coiStatusLabel(c: PortalData['paperwork']['coi']): string {
-  if (!c) return 'Pending';
-  if (c.humanDecision === 'APPROVED') return 'Approved';
-  if (c.humanDecision === 'REJECTED') return 'Rejected';
-  if (c.coverageVerified) return 'Received';
-  return 'Reviewing';
+  return c ? c.decision.label : 'Pending';
 }
 function coiStatusKind(c: PortalData['paperwork']['coi']): PaperworkStatusKind {
-  if (!c) return 'pending';
-  if (c.humanDecision === 'APPROVED' || c.coverageVerified) return 'success';
-  if (c.humanDecision === 'REJECTED') return 'failed';
-  return 'warning';
+  return c ? c.decision.kind : 'pending';
 }
 
 function VehiclePaperworkRow({ vehicle }: { vehicle: PortalData['paperwork']['vehicles'][number] }) {
