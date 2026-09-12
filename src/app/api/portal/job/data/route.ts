@@ -36,6 +36,7 @@ import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { loadOrderReplacementValue, toClientReplacementValue } from '@/lib/coi/replacementValue'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
+import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
 
 export const dynamic = 'force-dynamic'
 
@@ -355,12 +356,40 @@ export async function GET(req: NextRequest) {
                 registrationExpiresAt: true,
                 bitCertificateUrl: true,
                 bitCertificateExpiresAt: true,
+                // The class, for the client-facing name ("SuperCube") and to
+                // find the catalog photo of it. Both are things we publish.
+                category: { select: { id: true, name: true } },
               },
             },
           },
         })
       : Promise.resolve([]),
   ])
+
+  // A catalog photo per reserved vehicle class, for the client's "Assets
+  // reserved" tiles (Wes 2026-09-12: "possibly with little icon pictures of
+  // the vehicles"). Same PUBLIC proxy the account portal uses — the blob URL
+  // itself never reaches a browser (companyOverview.ts). No photo on the
+  // class simply means no tile image; the tile still renders.
+  const reservedCategoryIds = [
+    ...new Set(vehicleAssignments.map((va) => va.asset.category?.id).filter((id): id is string => !!id)),
+  ]
+  // PUBLIC_VEHICLE_VISIBLE_WHERE is the same gate the proxy enforces, and it
+  // already means "has an image" — gallery photo, the row's own photoUrl, or
+  // the linked Fleet Pricing category's. Measured 2026-09-12: all nine live
+  // classes get theirs from the LAST of those, so testing only the first two
+  // (as the first cut did) left every tile a grey placeholder.
+  const vehiclePhotoByCategory = new Map<string, string>()
+  if (reservedCategoryIds.length > 0) {
+    const cats = await prisma.vehicleCategory.findMany({
+      where: { assetCategoryId: { in: reservedCategoryIds }, ...PUBLIC_VEHICLE_VISIBLE_WHERE },
+      select: { id: true, assetCategoryId: true },
+    })
+    for (const vc of cats) {
+      if (!vc.assetCategoryId || vehiclePhotoByCategory.has(vc.assetCategoryId)) continue
+      vehiclePhotoByCategory.set(vc.assetCategoryId, `/api/public/catalog-image/vehicle/${vc.id}`)
+    }
+  }
 
   // "Active COI on file — but is it the right one for THIS job?" (Wes,
   // 2026-09-09). Only a CARRIED certificate raises the question; the
@@ -848,6 +877,8 @@ export async function GET(req: NextRequest) {
           assetId: va.asset.id,
           unitName: va.asset.unitName,
           title: titleParts || va.asset.unitName,
+          categoryName: va.asset.category?.name ?? null,
+          photoPath: va.asset.category?.id ? vehiclePhotoByCategory.get(va.asset.category.id) ?? null : null,
           licensePlate: va.asset.licensePlate,
           assignmentStartDate: va.startDate,
           assignmentEndDate: va.endDate,

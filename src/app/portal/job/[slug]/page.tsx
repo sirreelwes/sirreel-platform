@@ -11,7 +11,7 @@ import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSec
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
 import { JobCoiUpload } from '@/components/portal/JobCoiUpload';
 import { JobPortalShell, chromeFromPortalData } from '@/components/portal/JobPortalChrome';
-import { FileText, Lock, Send, Upload } from 'lucide-react';
+import { ChevronDown, FileText, Lock, Send, Truck, Upload } from 'lucide-react';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -233,6 +233,10 @@ interface PortalData {
       assetId: string;
       unitName: string;
       title: string;
+      /** The class ("SuperCube") and its catalog photo, for the reserved-asset
+       *  tiles at the top of the page. Both are published facts. */
+      categoryName?: string | null;
+      photoPath?: string | null;
       licensePlate: string | null;
       registrationUrl: string | null;
       registrationExpiresAt: string | null;
@@ -819,66 +823,119 @@ export default function JobPortalPage() {
             Wes 2026-09-12: "assets reserved at top, just below should be
             orders, everything else below." What they are getting comes
             before what it costs — and both come before the paperwork. */}
+        {/* Wes 2026-09-12, on the first cut: "If there are vehicles, will they
+            be in the assets reserved? That box could get too big for a very
+            large order. Better just to have the reserved assets at the top,
+            possibly with little icon pictures of the vehicles, and the order
+            assets collapsed below." So the top of the page is the TRUCKS —
+            a handful of tiles however long the order runs — and the full
+            line list (gear, fees, labour, sub-rentals) folds away beneath. */}
         <section>
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500">Assets reserved</h2>
-            <span className="text-xs text-zinc-400 font-mono">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
+            {data.paperwork.vehicles.length > 0 && (
+              <span className="text-xs text-zinc-400 font-mono">
+                {data.paperwork.vehicles.length} vehicle{data.paperwork.vehicles.length === 1 ? '' : 's'}
+              </span>
+            )}
           </div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-3">
-          {data.lineItems.length === 0 ? (
-            <div className="text-xs text-zinc-500">
-              {data.order.awaitingConfirmation
-                ? 'Nothing here yet — your equipment and pricing appear once your rep has confirmed availability.'
-                : 'Your equipment list will appear here once it’s finalized.'}
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {data.lineItems.map((li) => (
-                <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-zinc-900 truncate">{li.description}</div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5">
-                      {li.categoryName && <span>{li.categoryName} · </span>}
-                      Qty {li.quantity}
-                      {/* FLAT lines (partner ancillaries, one-off charges) bill
-                          one period, not one day — printing "1 day" beside a
-                          mileage charge reads as a daily rate. */}
-                      {li.days != null && li.rateType !== 'FLAT' && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4">
+          {data.paperwork.vehicles.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {data.paperwork.vehicles.map((v) => (
+                <div key={v.assetId} className="rounded-lg border border-zinc-200 overflow-hidden">
+                  {v.photoPath ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={v.photoPath}
+                      alt={v.categoryName || v.title}
+                      className="block w-full h-20 object-cover bg-zinc-100"
+                    />
+                  ) : (
+                    <div className="w-full h-20 bg-zinc-50 flex items-center justify-center text-zinc-300">
+                      <Truck size={22} aria-hidden />
                     </div>
-                    {/* Client-facing small print. On a partner ancillary this
-                        is the estimate wording — the client has to see it
-                        here, not only on the quote PDF. */}
-                    {li.notes && (
-                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-zinc-500'}`}>
-                        {li.notes}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 text-right flex-shrink-0">
-                    {li.isIncluded && Number(li.rate) === 0 ? (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                        Included
-                      </span>
-                    ) : (
-                      <>
-                        {fmtCurrency(li.rate)}
-                        <div className="text-[10px] text-zinc-400">{li.rateType.toLowerCase()}</div>
-                      </>
-                    )}
+                  )}
+                  <div className="px-2.5 py-2">
+                    <div className="text-[13px] font-semibold text-zinc-900 truncate">
+                      {v.categoryName || v.title}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 truncate">{v.unitName}</div>
                   </div>
                 </div>
               ))}
             </div>
+          ) : (
+            <div className="text-xs text-zinc-500">
+              {data.order.awaitingConfirmation
+                ? 'Nothing reserved yet — your vehicles and pricing appear once your rep has confirmed availability.'
+                : data.lineItems.length === 0
+                  ? 'Your list will appear here once it’s finalized.'
+                  : 'No vehicles on this order — everything on it is below.'}
+            </div>
           )}
-          <div className="border-t border-zinc-100 pt-3 flex items-center justify-between text-sm">
-            <span className="text-zinc-500 font-semibold">Total</span>
-            <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
-          </div>
+
           {/* How it leaves the building. Wes 2026-09-12: "orders have a drop
               down — Load on Asset 1, Load on Asset 2, Will Call, Delivery."
               It sits with the assets because the load-on options ARE those
               assets. Hidden until there is something to send out. */}
           {data.lineItems.length > 0 && <GearHandoffPicker initial={data.gearHandoff} />}
+
+          {/* Everything on the order, folded away. A forty-line supply order
+              should not push the quote off the screen. */}
+          {data.lineItems.length > 0 && (
+            <details className="border-t border-zinc-100 pt-3 group">
+              <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-sm">
+                <span className="text-zinc-600 font-semibold">
+                  Everything on this order
+                  <span className="text-zinc-400 font-normal">
+                    {' '}· {data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
+                  <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" aria-hidden />
+                </span>
+              </summary>
+              <div className="mt-3 divide-y divide-zinc-100">
+                {data.lineItems.map((li) => (
+                  <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-zinc-900 truncate">{li.description}</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        {li.categoryName && <span>{li.categoryName} · </span>}
+                        Qty {li.quantity}
+                        {/* FLAT lines (partner ancillaries, one-off charges) bill
+                            one period, not one day — printing "1 day" beside a
+                            mileage charge reads as a daily rate. */}
+                        {li.days != null && li.rateType !== 'FLAT' && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
+                      </div>
+                      {/* Client-facing small print. On a partner ancillary this
+                          is the estimate wording — the client has to see it
+                          here, not only on the quote PDF. */}
+                      {li.notes && (
+                        <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-zinc-500'}`}>
+                          {li.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 text-right flex-shrink-0">
+                      {li.isIncluded && Number(li.rate) === 0 ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                          Included
+                        </span>
+                      ) : (
+                        <>
+                          {fmtCurrency(li.rate)}
+                          <div className="text-[10px] text-zinc-400">{li.rateType.toLowerCase()}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
           </div>
         </section>
 
