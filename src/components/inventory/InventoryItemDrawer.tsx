@@ -25,6 +25,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { uploadInventoryItemImage, ACCEPT_IMAGE, MAX_IMAGE_BYTES } from '@/lib/inventory/resizeImage'
 import { KitPiecesEditor, type KitPiecesHandle } from './KitPiecesEditor'
+import { PrintBarcodesButton } from '@/components/warehouse/PrintBarcodesButton'
 
 export interface DrawerItem {
   id: string
@@ -376,6 +377,10 @@ export function InventoryItemDrawer({
               onChange={(e) => setUnitChecksInput(e.target.value)}
               placeholder="Antenna, Battery"
             />
+            <div className="mt-2">
+              <PrintBarcodesButton itemId={item.id} compact />
+              <span className="ml-2 text-[11px] text-gray-400">Mint SR labels for new pieces of this item.</span>
+            </div>
             <p className="mt-1 text-[11px] text-gray-400">
               What every unit of this item must leave with and come back with. Printed under the line on the pull sheet; the check-out desk marks one missing with a tap on each scan.
             </p>

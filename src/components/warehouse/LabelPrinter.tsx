@@ -59,11 +59,11 @@ function StockPicker({
   )
 }
 
-export function LabelPrinter() {
+export function LabelPrinter({ initialItem = null }: { initialItem?: CatalogHit | null }) {
   // ── New labels ──────────────────────────────────────────────────
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<CatalogHit[]>([])
-  const [item, setItem] = useState<CatalogHit | null>(null)
+  const [item, setItem] = useState<CatalogHit | null>(initialItem)
   const [count, setCount] = useState(1)
   const [serials, setSerials] = useState('')
   const [stock, setStock] = useState<LabelStockId>(DEFAULT_STOCK)
@@ -73,7 +73,7 @@ export function LabelPrinter() {
   const [minted, setMinted] = useState<{ item: CatalogHit; units: Minted[] } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { searchRef.current?.focus() }, [])
+  useEffect(() => { if (!initialItem) searchRef.current?.focus() }, [initialItem])
 
   useEffect(() => {
     if (item || q.trim().length < 2) { setHits([]); return }

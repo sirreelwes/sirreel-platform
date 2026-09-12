@@ -19,6 +19,7 @@
  */
 
 import Link from 'next/link'
+import { PrintBarcodesButton } from '@/components/warehouse/PrintBarcodesButton'
 import { Lock, ArrowRight } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { yardBoardFor, pacificYmd } from '@/lib/yard/board'
@@ -46,14 +47,17 @@ export default async function YardPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-1 py-2">
-      <header className="mb-5">
-        <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Yard</div>
-        <h1 className="text-lt-fg text-2xl font-bold">
-          Hi {user.name?.split(' ')[0] || 'there'}
-        </h1>
-        <p className="text-lt-fg2 text-sm mt-0.5">
-          Everything going out and coming back — trucks and gear together.
-        </p>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Yard</div>
+          <h1 className="text-lt-fg text-2xl font-bold">
+            Hi {user.name?.split(' ')[0] || 'there'}
+          </h1>
+          <p className="text-lt-fg2 text-sm mt-0.5">
+            Everything going out and coming back — trucks and gear together.
+          </p>
+        </div>
+        <PrintBarcodesButton className="flex-none mt-1" />
       </header>
 
       <YardBoard initial={board} today={today} />

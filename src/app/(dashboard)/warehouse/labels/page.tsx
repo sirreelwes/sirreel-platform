@@ -12,12 +12,13 @@
 
 import { Lock } from 'lucide-react'
 import Link from 'next/link'
+import { prisma } from '@/lib/prisma'
 import { getLabelUser } from '@/lib/warehouse/labelAccess'
 import { LabelPrinter } from '@/components/warehouse/LabelPrinter'
 
 export const dynamic = 'force-dynamic'
 
-export default async function WarehouseLabelsPage() {
+export default async function WarehouseLabelsPage({ searchParams }: { searchParams?: { item?: string } }) {
   const user = await getLabelUser()
   if (!user) {
     return (
@@ -29,6 +30,16 @@ export default async function WarehouseLabelsPage() {
     )
   }
 
+  // A "Print barcodes" button on an item (inventory drawer) lands here
+  // with the item already picked.
+  const itemId = searchParams?.item?.trim()
+  const initialItem = itemId
+    ? await prisma.inventoryItem.findUnique({
+        where: { id: itemId },
+        select: { id: true, code: true, description: true },
+      })
+    : null
+
   return (
     <div className="max-w-2xl mx-auto px-1 py-2">
       <header className="mb-5">
@@ -39,7 +50,7 @@ export default async function WarehouseLabelsPage() {
           <Link href="/warehouse/units" className="text-amber-700 hover:text-amber-600 font-semibold">Find a unit</Link> reads them.
         </p>
       </header>
-      <LabelPrinter />
+      <LabelPrinter initialItem={initialItem ? { ...initialItem, description: initialItem.description ?? initialItem.code } : null} />
     </div>
   )
 }

@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PrintBarcodesButton } from '@/components/warehouse/PrintBarcodesButton'
 import { Printer, Camera } from 'lucide-react'
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
@@ -122,6 +123,8 @@ function WarehousePickQueuePageInner() {
             <Link href="/yard" className="text-amber-700 hover:text-amber-600">yard board</Link>.
           </p>
         </div>
+        <div className="flex flex-col items-end gap-2 flex-none">
+        <PrintBarcodesButton compact />
         <label className="flex items-center gap-2 text-xs text-lt-fg2 select-none cursor-pointer">
           <input
             type="checkbox"
@@ -131,6 +134,7 @@ function WarehousePickQueuePageInner() {
           />
           Show completed
         </label>
+        </div>
       </div>
 
       {error && (

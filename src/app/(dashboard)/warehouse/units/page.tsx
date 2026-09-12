@@ -13,6 +13,7 @@
 import { Lock } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { UnitLookup } from '@/components/warehouse/UnitLookup'
+import { PrintBarcodesButton } from '@/components/warehouse/PrintBarcodesButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,12 +31,15 @@ export default async function WarehouseUnitsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-1 py-2">
-      <header className="mb-5">
-        <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Warehouse</div>
-        <h1 className="text-lt-fg text-2xl font-bold">Find a unit</h1>
-        <p className="text-lt-fg2 text-sm mt-0.5">
-          Scan a label to see what it is, which order it is out on, and where it has been.
-        </p>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Warehouse</div>
+          <h1 className="text-lt-fg text-2xl font-bold">Find a unit</h1>
+          <p className="text-lt-fg2 text-sm mt-0.5">
+            Scan a label to see what it is, which order it is out on, and where it has been.
+          </p>
+        </div>
+        <PrintBarcodesButton className="flex-none mt-1" />
       </header>
       <UnitLookup />
     </div>
