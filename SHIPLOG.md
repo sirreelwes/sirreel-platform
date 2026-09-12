@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### Partial returns: check gear in more than once, and "still out" is not "missing"
 
-(this commit) check-in: a short count asks "still out or missing?", and orders on rental stay in the check-in list
+`f7e9a30` check-in: partial returns — a short count asks "still out or missing?", and orders on rental stay listed
 
 Oliver: "sometimes partial returns come back at different days along the rental and warehouse makes multiple check in contracts. Once they check in items on HQ and click submit, it removes the order from their check in tab. This means a partial return is going to look like the job is done and a whole bunch of stuff is missing."
 
