@@ -189,7 +189,33 @@ export function inQuietHours(now = new Date()): boolean {
   return h >= 21 || h < 6
 }
 
-const STATUS_CALLBACK = `${(process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')}/api/public/sms/status`
+/**
+ * Where Twilio posts queued → sent → delivered / undelivered.
+ *
+ * The `?key=` matters. /api/public/sms/status accepts a callback two ways:
+ * an X-Twilio-Signature checked against TWILIO_AUTH_TOKEN, or this key
+ * matching TWILIO_WEBHOOK_SECRET. **This account has no auth token** —
+ * it authenticates with an API key pair, and `vercel env ls production`
+ * confirms TWILIO_AUTH_TOKEN is not set — so without the key every
+ * callback was rejected 403 and every outbound row stayed 'queued'
+ * forever. The inbound webhook has always carried the key (it is
+ * configured that way by hand in the Twilio console); this is the same
+ * arrangement for the leg HQ sets programmatically.
+ *
+ * Found 2026-09-11, the day the REST path sent its first message: the
+ * bug could not surface while every outbound was a TwiML reply, because
+ * TwiML carries no status callback at all.
+ *
+ * Without the secret we send no key rather than an empty one — an empty
+ * `?key=` fails the comparison anyway and only makes the logs lie about
+ * what was attempted.
+ */
+export function statusCallbackUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const base = (env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
+  const url = `${base}/api/public/sms/status`
+  const secret = env.TWILIO_WEBHOOK_SECRET?.trim()
+  return secret ? `${url}?key=${encodeURIComponent(secret)}` : url
+}
 
 /**
  * Send a text and log it. Refuses opted-out numbers, holds automated sends
@@ -216,7 +242,7 @@ export async function sendTracked(args: {
   if (thread.optedOutAt) { await log('skipped-opted-out'); return { ok: false, status: 'skipped-opted-out', error: 'number opted out' } }
   if (args.source !== 'staff' && !args.overrideQuietHours && inQuietHours()) { await log('skipped-quiet'); return { ok: false, status: 'skipped-quiet', error: 'quiet hours' } }
 
-  const r = await sendSms(thread.phone, text, { statusCallback: STATUS_CALLBACK })
+  const r = await sendSms(thread.phone, text, { statusCallback: statusCallbackUrl() })
   if (r.ok) { await log('queued', { twilioSid: r.sid ?? null }); return { ok: true, status: 'queued' } }
   if (r.skipped) { await log('skipped-unconfigured'); return { ok: false, status: 'skipped-unconfigured', error: 'SMS not configured' } }
   await log('failed', { errorText: r.error ?? null })
