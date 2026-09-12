@@ -21,6 +21,13 @@ import {
   type AssignmentWindow,
   type ServiceableAsset,
 } from '@/lib/scheduling/availability'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+
+/** Two date ranges touching at all. Inclusive both ends: a return on the
+ *  22nd and a pickup on the 22nd are the same day on this board. */
+function overlaps(a: { startDate: Date; endDate: Date }, start: Date, end: Date): boolean {
+  return a.startDate <= end && a.endDate >= start
+}
 
 export interface AssignUnitArgs {
   bookingItemId: string
@@ -62,18 +69,66 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       status: true,
       holdRank: true,
       booking: { select: { id: true, jobId: true, startDate: true, endDate: true } },
-      assignments: { select: { id: true, assetId: true } },
+      // Live ones only, with their dates: a released or swapped assignment
+      // occupies nothing, and one for another date block is not in the way.
+      assignments: {
+        where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
+        select: { id: true, assetId: true, startDate: true, endDate: true },
+      },
     },
   })
   if (!bookingItem) return refuse(404, { error: 'booking item not found' })
 
-  if (bookingItem.assignments.some((a) => a.assetId === args.assetId)) {
-    return refuse(409, { error: 'this asset is already assigned to this booking item' })
+  // ── Which order, and therefore which window? ──────────────────────
+  // The caller may name an order (a booking can carry lines from more than
+  // one); it is verified against the job so a stray id cannot attach a unit
+  // to somebody else's order. With exactly one live order it is stamped
+  // rather than asked.
+  const candidateOrders = await prisma.order.findMany({
+    where: { jobId: bookingItem.booking.jobId ?? undefined, status: { notIn: ['CANCELLED'] }, archivedAt: null },
+    select: { id: true },
+  })
+  const candidateIds = new Set(candidateOrders.map((o) => o.id))
+  const requestedOrderId = typeof args.orderId === 'string' ? args.orderId : null
+  if (requestedOrderId && !candidateIds.has(requestedOrderId)) {
+    return refuse(400, { ok: false, error: 'order-not-on-job', reason: 'that order does not belong to this booking’s job' })
   }
-  if (bookingItem.assignments.length >= bookingItem.quantity) {
+  const attachOrderId = requestedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
+
+  // The BOOKING ENVELOPE spans every order on the job: quote a truck for
+  // Sep 22–24 and another for Oct 6–10 and the envelope is Sep 22 → Oct 10.
+  // Binding against that holds a truck for eighteen days to cover three —
+  // and, worse, makes the shared item read "already fully assigned" for the
+  // second block, so that order could never get a unit by ANY route: not
+  // the line-add, not the quote send, not the picker on the order page.
+  // Oliver hit exactly that on SR-JOB-0364 (2026-09-12): he chose Cube 35,
+  // got nothing, and the reservation board showed no truck for his dates.
+  // The ORDER's own window is the truth; the envelope is the fallback when
+  // no order is named (a gantt drag on a bare hold).
+  const orderForWindow = attachOrderId
+    ? await prisma.order.findUnique({
+        where: { id: attachOrderId },
+        select: {
+          startDate: true,
+          endDate: true,
+          lineItems: { select: { pickupDate: true, returnDate: true } },
+          booking: { select: { startDate: true, endDate: true, status: true } },
+        },
+      })
+    : null
+  const derivedWindow = orderForWindow ? deriveOrderWindow({ ...orderForWindow, job: { bookings: [] } }) : null
+  const windowStart = derivedWindow?.start ?? bookingItem.booking.startDate
+  const windowEnd = derivedWindow?.end ?? bookingItem.booking.endDate
+
+  // Only the assignments that TOUCH this window occupy it.
+  const occupying = bookingItem.assignments.filter((a) => overlaps(a, windowStart, windowEnd))
+  if (occupying.some((a) => a.assetId === args.assetId)) {
+    return refuse(409, { error: 'this asset is already assigned to this booking item for those dates' })
+  }
+  if (occupying.length >= bookingItem.quantity) {
     return refuse(409, {
       error: 'booking item is already fully assigned',
-      assignedCount: bookingItem.assignments.length,
+      assignedCount: occupying.length,
       quantity: bookingItem.quantity,
     })
   }
@@ -94,7 +149,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // and never touch Asset.status, so the check above passes a truck the
   // fleet has greyed. The refusal belongs on the write.
   {
-    const oos = await outOfServiceByAsset([asset.id], bookingItem.booking.startDate, bookingItem.booking.endDate)
+    const oos = await outOfServiceByAsset([asset.id], windowStart, windowEnd)
     const entry = oos.get(asset.id)
     if (entry) {
       return refuse(409, {
@@ -105,9 +160,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     }
   }
 
-  // Re-check conflict on this specific asset for the booking window.
-  const windowStart = bookingItem.booking.startDate
-  const windowEnd = bookingItem.booking.endDate
+  // Re-check conflict on this specific asset for the window resolved above.
   const lookaround = Math.max(1, bufferDays + 1)
   const queryStart = new Date(windowStart.getTime() - lookaround * 86_400_000)
   const queryEnd = new Date(windowEnd.getTime() + lookaround * 86_400_000)
@@ -176,22 +229,6 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     })
   }
 
-  // ── Which order does this unit belong to? ─────────────────────────
-  // The caller may name one (a booking can carry lines from more than
-  // one order); it is verified against the job so a stray id cannot
-  // attach a unit to somebody else's order. With exactly one live order
-  // on the job it is stamped rather than asked.
-  const candidateOrders = await prisma.order.findMany({
-    where: { jobId: bookingItem.booking.jobId ?? undefined, status: { notIn: ['CANCELLED'] }, archivedAt: null },
-    select: { id: true },
-  })
-  const candidateIds = new Set(candidateOrders.map((o) => o.id))
-  const requestedOrderId = typeof args.orderId === 'string' ? args.orderId : null
-  if (requestedOrderId && !candidateIds.has(requestedOrderId)) {
-    return refuse(400, { ok: false, error: 'order-not-on-job', reason: 'that order does not belong to this booking’s job' })
-  }
-  const attachOrderId = requestedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
-
   const result = await prisma.$transaction(async (tx) => {
     const created = await tx.bookingAssignment.create({
       data: {
@@ -210,7 +247,9 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         asset: { select: { id: true, unitName: true, tier: true } },
       },
     })
-    const newAssignedCount = bookingItem.assignments.length + 1
+    // Counted for THIS window — the item is "assigned" when the block being
+    // booked has its trucks, not when some other date block does.
+    const newAssignedCount = occupying.length + 1
     let updatedItemStatus: string = bookingItem.status
     if (newAssignedCount >= bookingItem.quantity && bookingItem.status === 'REQUESTED') {
       await tx.bookingItem.update({ where: { id: bookingItem.id }, data: { status: 'ASSIGNED' } })

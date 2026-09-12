@@ -32,6 +32,7 @@
  * OrderLineItem, and the quote PDF reads lines only.
  */
 import { prisma } from '@/lib/prisma'
+import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { assignUnitToBookingItem } from '@/lib/scheduling/assignUnit'
 
@@ -81,7 +82,16 @@ export async function assignUnitsForLine(args: {
   try {
     const order = await prisma.order.findUnique({
       where: { id: args.orderId },
-      select: { id: true, bookingId: true },
+      select: {
+        id: true,
+        bookingId: true,
+        // This order's OWN window — not the booking envelope, which spans
+        // every order on the job (see assignUnit.ts for what that cost).
+        startDate: true,
+        endDate: true,
+        lineItems: { select: { pickupDate: true, returnDate: true } },
+        booking: { select: { startDate: true, endDate: true, status: true } },
+      },
     })
     if (!order?.bookingId) {
       out.note = 'No hold was minted for this line, so there is nothing to put a unit on.'
@@ -96,7 +106,10 @@ export async function assignUnitsForLine(args: {
         quantity: true,
         holdRank: true,
         booking: { select: { startDate: true, endDate: true } },
-        assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } }, select: { assetId: true } },
+        assignments: {
+          where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
+          select: { assetId: true, startDate: true, endDate: true },
+        },
         category: { select: { name: true } },
       },
     })
@@ -112,11 +125,23 @@ export async function assignUnitsForLine(args: {
       return out
     }
 
-    const remaining = Math.max(0, item.quantity - item.assignments.length)
+    // THIS order's window, falling back to the booking envelope.
+    const derived = deriveOrderWindow({ ...order, job: { bookings: [] } })
+    const windowStart = derived.start ?? item.booking.startDate
+    const windowEnd = derived.end ?? item.booking.endDate
+
+    // Only units already booked ACROSS THIS WINDOW use up the item's
+    // quantity. A second date block on the same job shares the item (the
+    // hold is the peak concurrent need, so two sequential weeks still want
+    // one truck) — counting the other block's assignment left `remaining`
+    // at zero, so nothing was bound for the new dates and the rep's chosen
+    // unit was silently dropped. Oliver, SR-JOB-0364, 2026-09-12.
+    const occupying = item.assignments.filter((a) => a.startDate <= windowEnd && a.endDate >= windowStart)
+    const remaining = Math.max(0, item.quantity - occupying.length)
     const want = Math.min(Math.max(1, Math.floor(args.quantity)), remaining)
     if (want === 0) return out
 
-    const taken = new Set(item.assignments.map((a) => a.assetId))
+    const taken = new Set(occupying.map((a) => a.assetId))
 
     // Named units first, in the order picked. A deliberate human choice
     // carries the buffer override the next-available pass withholds.
@@ -144,8 +169,8 @@ export async function assignUnitsForLine(args: {
     while (out.assigned.length < want) {
       const availability = await getCategoryAvailability(
         args.categoryId,
-        item.booking.startDate,
-        item.booking.endDate,
+        windowStart,
+        windowEnd,
         1,
         item.id,
       )
