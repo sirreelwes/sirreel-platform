@@ -39,7 +39,6 @@ export type Department =
   | 'GE'
   | 'ART'
   | 'WARDROBE_MAKEUP'
-  | 'PHOTO_SHOOT'
 
 export interface PickListLine {
   department: Department
@@ -65,10 +64,6 @@ export interface PickListLine {
    *  nobody was billed for, which is precisely the gear that used to
    *  disappear without anyone noticing. */
   includedAccessory?: boolean
-  /** Per-unit checks off the catalog row ("Antenna", "Battery") — each
-   *  copy on this line must leave with them, so they print under the
-   *  line with a box per check for the picker to tick. */
-  unitChecks?: string[]
 }
 
 export interface PickListDocumentProps {
@@ -112,7 +107,6 @@ const DEPT_LABELS: Record<Department, string> = {
   GE: 'Grip & Electric',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
-  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 
 const DEPT_ORDER: Department[] = [
@@ -122,7 +116,6 @@ const DEPT_ORDER: Department[] = [
   'EXPENDABLES',
   'ART',
   'WARDROBE_MAKEUP',
-  'PHOTO_SHOOT',
   'STAGES',
   'VEHICLES',
 ]
@@ -303,22 +296,32 @@ const styles = StyleSheet.create({
   // Columns sum to 100
   colCode:      { width: '12%', fontSize: 8.5, paddingRight: 3 },
   colDesc:      { width: '38%', fontSize: 8.5, paddingRight: 4 },
-  colType:      { width: '8%',  fontSize: 8.5 },
-  colOrdered:   { width: '9%',  fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
-  colOut:       { width: '8%',  fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
-  colRemaining: { width: '10%', fontFamily: 'Helvetica-Bold', fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
-  colPicked:    { width: '7.5%', alignItems: 'center' },
-  colVerified:  { width: '7.5%', alignItems: 'center' },
-  // Handwriting box for Picked / Verified
-  checkBox: {
-    width: 14,
-    height: 12,
-    borderWidth: 0.5,
+  colType:      { width: '5%',  fontSize: 8.5 },
+  colOrdered:   { width: '8%',  fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
+  colOut:       { width: '7%',  fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
+  colRemaining: { width: '9%',  fontFamily: 'Helvetica-Bold', fontSize: 8.5, textAlign: 'right', paddingRight: 6 },
+  colPicked:    { width: '10.5%', alignItems: 'center' },
+  colVerified:  { width: '10.5%', alignItems: 'center' },
+  // Write-in box for Picked / Verified. Oliver, 2026-09-11: "make the
+  // boxes bigger and wider, the guys need more room to write numbers —
+  // numbers > check boxes." The floor writes the COUNT it pulled, not a
+  // tick, so this is sized for two handwritten digits (the old 14x12
+  // box fit a pen stroke and nothing else). The 4% that pays for it
+  // comes off Type / Ordered / Out / Remaining, which are printed 1-2
+  // character values with far more room than they use — Description keeps
+  // its 38%, so item names do not start wrapping to pay for the boxes.
+  // Column widths must still sum to 100, and totalValue / totalSpacer
+  // have to track Remaining and the two boxes or the section totals stop
+  // lining up under the Remaining column.
+  writeBox: {
+    width: 52,
+    height: 24,
+    borderWidth: 0.6,
     borderColor: C.muted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkMark: { fontSize: 9, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
+  writeBoxText: { fontSize: 12, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -329,8 +332,8 @@ const styles = StyleSheet.create({
     backgroundColor: C.band,
   },
   totalLabel: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, marginRight: 14 },
-  totalValue: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, width: '10%', textAlign: 'right', paddingRight: 6 },
-  totalSpacer: { width: '15%' },
+  totalValue: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, width: '9%', textAlign: 'right', paddingRight: 6 },
+  totalSpacer: { width: '21%' },
   grandTotalRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -340,7 +343,7 @@ const styles = StyleSheet.create({
     borderBottomColor: C.ink,
   },
   grandTotalLabel: { fontFamily: 'Helvetica-Bold', fontSize: 10, marginRight: 14 },
-  grandTotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 10, width: '10%', textAlign: 'right', paddingRight: 6 },
+  grandTotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 10, width: '9%', textAlign: 'right', paddingRight: 6 },
   // Signature
   signatureRow: {
     flexDirection: 'row',
@@ -503,23 +506,16 @@ export function PickListDocument(props: PickListDocumentProps) {
                   <Text style={styles.colOut}>{line.out}</Text>
                   <Text style={styles.colRemaining}>{line.ordered - line.out}</Text>
                   <View style={styles.colPicked}>
-                    <View style={styles.checkBox}>
-                      {line.picked ? <Text style={styles.checkMark}>X</Text> : null}
+                    <View style={styles.writeBox}>
+                      {line.picked ? (
+                        <Text style={styles.writeBoxText}>{line.out || line.ordered}</Text>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.colVerified}>
-                    <View style={styles.checkBox} />
+                    <View style={styles.writeBox} />
                   </View>
                 </View>
-                {line.unitChecks && line.unitChecks.length > 0 ? (
-                  <View style={styles.notesRow}>
-                    <Text style={styles.notesText}>
-                      <Text style={styles.notesLabel}>Each unit: </Text>
-                      {line.unitChecks.map((c) => `( ) ${c}`).join('   ')}
-                      {`   \u00d7 ${line.ordered}`}
-                    </Text>
-                  </View>
-                ) : null}
                 {line.notes ? (
                   <View style={styles.notesRow}>
                     <Text style={styles.notesText}>
