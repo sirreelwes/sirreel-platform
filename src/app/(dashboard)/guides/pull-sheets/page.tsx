@@ -311,9 +311,24 @@ export default function PullSheetsGuidePage() {
                 bills the job a week later.
               </p>
             </Step>
-            <Step n={3} title="File it">
+            <Step n={3} title="Part of it came back? Count it, mark the rest still out">
               <p>
-                Filing the check-in stamps the gear <strong>Checked in</strong>, moves the order to{' '}
+                Gear comes home on different days of a rental. Type what is here — <em>5</em> of the 10
+                walkies — and the line asks whether the rest is <strong>still out</strong> or{' '}
+                <strong>missing</strong>. Still out keeps the order open: nothing is marked returned,
+                nothing is flagged, and the order stays under Check in (and on the board as{' '}
+                <em>Partial — still out</em>) until everything is in. Come back for the next delivery,
+                type the new total, and file again. Only when you say <strong>missing</strong> does a
+                shortfall reach the agent.
+              </p>
+              <p>
+                An order that is not due back yet is under <strong>Out on rental</strong> at the foot of
+                the page — open it from there when an early return arrives.
+              </p>
+            </Step>
+            <Step n={4} title="File it">
+              <p>
+                Filing a complete check-in stamps the gear <strong>Checked in</strong>, moves the order to{' '}
                 <strong>Returned</strong>, and when everything on the job is back it marks the{' '}
                 <strong>job returned</strong>. That is what clears a job off the board — a job whose gear
                 is physically back but never checked in reads <em>Not returned</em> forever.
@@ -328,9 +343,9 @@ export default function PullSheetsGuidePage() {
           <Note tone="stop" label="A check-in never changes what was rented">
             Short counts here are recorded and flagged to the agent — the order is not reduced. Cutting a
             booked line because a case didn&rsquo;t come back would credit the client for losing our
-            equipment. What a shortfall costs is the agent&rsquo;s call, not the sheet&rsquo;s. A short
-            sheet still marks the order returned: short means it came back short, not that it is still
-            out.
+            equipment. What a shortfall costs is the agent&rsquo;s call, not the sheet&rsquo;s. A sheet
+            with a line marked <em>missing</em> still marks the order returned: missing means it came
+            back short, not that it is still out — which is why the line asks you which it is.
           </Note>
         </section>
 

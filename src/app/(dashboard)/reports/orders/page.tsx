@@ -70,7 +70,14 @@ export default async function OrderReportsPage() {
   }
 
   const today = pacificYmd(0)
-  const [out, back] = await Promise.all([reportListFor('OUT'), reportListFor('IN')])
+  const [out, backAll] = await Promise.all([reportListFor('OUT'), reportListFor('IN')])
+  // Oliver, 2026-09-12: partial returns arrive on any day of the rental,
+  // and the day list had no row for an order whose end date was still a
+  // week off. Those orders are listed apart, below the days, so the day
+  // list stays the day list. A partial count already on file is NOT
+  // apart — it is work in progress and sits under its day.
+  const back = backAll.filter((r) => !r.onRental)
+  const onRental = backAll.filter((r) => r.onRental)
 
   return (
     <div className="max-w-4xl mx-auto px-1 py-2">
@@ -99,7 +106,71 @@ export default async function OrderReportsPage() {
         today={today}
         edge="IN"
       />
+      <OnRental rows={onRental} today={today} />
     </div>
+  )
+}
+
+/**
+ * Orders whose gear is out but which are not due back in the window —
+ * where a partial return lands when a case comes home on day 3 of 7.
+ * Collapsed: on most days nothing here needs anyone, and a long-term
+ * rental would otherwise sit on this screen for months. Opening an
+ * order here is the same check-in screen; a short count on it asks
+ * "still out or missing?" per line, and filing a partial keeps the
+ * order listed (under its day, as in progress) until the rest is back.
+ */
+function OnRental({ rows, today }: { rows: ReportListRow[]; today: string }) {
+  if (rows.length === 0) return null
+  return (
+    <details className="mb-8 group">
+      <summary className="cursor-pointer list-none text-lt-fg text-[15px] font-semibold uppercase tracking-wide mb-2 flex items-center gap-2">
+        <span className="inline-block transition-transform group-open:rotate-90 text-lt-fg3">▸</span>
+        Out on rental · {rows.length}
+        <span className="text-lt-fg3 normal-case tracking-normal font-normal text-[13px]">
+          — check in something that came back early
+        </span>
+      </summary>
+      <p className="text-lt-fg2 text-[13px] mb-2 max-w-[70ch]">
+        Not due back yet. Open one when part of it comes home mid-rental: count what is here, mark the
+        rest <b>still out</b>, and the order stays on this page until everything is in — nothing is
+        marked returned or missing until you say so.
+      </p>
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <Link
+            key={r.orderId}
+            href={`/reports/orders/${r.orderId}?edge=IN`}
+            className="border border-lt-hairline rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-lt-card hover:bg-lt-inner hover:border-lt-fg3 transition-colors"
+          >
+            <ClipboardList size={16} aria-hidden className="text-lt-fg3 flex-none" />
+            <div className="min-w-0 flex-1">
+              <div className="text-lt-fg text-[16px] font-semibold truncate">
+                {r.jobName}
+                <span className="text-lt-fg3 font-mono font-normal text-[13px] ml-2">{r.orderNumber}</span>
+              </div>
+              <div className="text-lt-fg2 text-[13px] truncate">
+                {r.company}
+                <span className="text-lt-fg3"> · {r.lineCount} line{r.lineCount === 1 ? '' : 's'}</span>
+                {r.preBooked && (
+                  <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wider text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded px-1.5 py-0.5">
+                    Quote
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className={`text-[12px] font-semibold rounded-md px-2 py-1 border ${
+              r.ymd && r.ymd < today
+                ? 'text-chip-warn-fg border-chip-warn-fg/30 bg-chip-warn-bg'
+                : 'text-lt-fg2 border-lt-hairline bg-lt-inner'
+            }`}>
+              {r.ymd ? (r.ymd < today ? `Was due ${fmtDay(r.ymd)}` : `Due back ${fmtDay(r.ymd)}`) : 'No end date'}
+            </span>
+            <ArrowRight size={14} aria-hidden className="text-lt-fg3 flex-none" />
+          </Link>
+        ))}
+      </div>
+    </details>
   )
 }
 

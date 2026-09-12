@@ -382,6 +382,39 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Partial returns — check gear in more than once (2026-09-12 — Oliver)
+- Oliver: "partial returns come back at different days along the rental
+  and warehouse makes multiple check in contracts. Once they check in
+  items on HQ and click submit, it removes the order from their check in
+  tab… a partial return is going to look like the job is done and a whole
+  bunch of stuff is missing." Two causes: a short count on the IN sheet
+  filed as SHORT (= missing), and a sheet with no line left off it is
+  COMPLETE, so it closed the pick list, stamped `Job.returnedAt` and moved
+  the order to RETURNED; and the IN list only showed orders whose
+  `endDate` was within −3/+4 days, so a mid-rental return had no row.
+- **No schema change.** On the IN edge an off-sheet line (`onSheet false`)
+  now CARRIES ITS COUNT: `actualQty` = how much is back so far, change
+  NONE. Every reader of "partial" (board "N still out", list chip, Ana's
+  queue, `settleGearAfterReport`'s early return) keys on onSheet/partial
+  and already treats it as unfinished. OUT is untouched (off-sheet =
+  actual set to expected). `settleSheetLine()` in `checkLineChange.ts` is
+  the one rule; "all back but still out" is read as on the sheet.
+- **A short IN count must be CALLED** — the row asks "still out, or
+  missing?" and the form will not file until every short line has an
+  answer (`countEdit()`; a line already short-and-decided keeps its
+  answer when the count moves). Still out → order stays open, nothing
+  flagged; Missing → SHORT, flagged to the agent, closes as before.
+  Photo reads and scanner counts go through the same rule.
+- **IN list scope** (`reportListFor('IN')`): due in the window ∪ partial
+  IN report on file (any date) ∪ out on rental (ON_JOB, or OUT sheet
+  filed and start day passed, no complete IN sheet). On-rental rows
+  carry `onRental` and render in a collapsed "Out on rental · N" section
+  under the days on /reports/orders. Yard board unchanged (day view).
+- `describeCheckChange(line, change, edge)` speaks return words on IN
+  ("5 of 10 back — 5 missing", "none of 10 came back"); default OUT
+  wording unchanged. `SubmitResult.stillOut` + audit `stillOut` list the
+  running totals. `npm run test:partial-return`.
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a

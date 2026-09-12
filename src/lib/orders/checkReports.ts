@@ -30,7 +30,9 @@ import type {
   LineItemPickStatus, OrderCheckEdge, OrderCheckLineChange, OrderStatus, PickListStatus, Prisma,
 } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import {
+  classifyCheckLine, describeCheckChange, describeStillOut, settleSheetLine,
+} from '@/lib/orders/checkLineChange'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
@@ -105,6 +107,15 @@ export interface ReportListRow {
     /** How many lines were left off it. */
     offSheet: number
   } | null
+  /**
+   * IN only. The order is not due back in the window and has no partial
+   * count on file — it is listed because its gear is OUT (on the job, or
+   * a check-out sheet is filed and the start day has passed) and a
+   * partial return can arrive any day of the rental. The page shows
+   * these apart from the due-back days so the day list stays the day
+   * list. Always false on the OUT edge.
+   */
+  onRental: boolean
 }
 
 function dayWindow(): string[] {
@@ -118,21 +129,49 @@ function dayWindow(): string[] {
  * window. Reads Order.startDate/endDate, which are a maintained mirror
  * of the line dates (syncOrderWindow) — never typed by a person, so
  * matching a day against them is safe. Same rule the yard board uses.
+ *
+ * The IN edge reaches further, because a return does not wait for the
+ * end date. Oliver, 2026-09-12: "partial returns come back at different
+ * days along the rental … They don't currently have the ability to
+ * check in equipment on an order multiple times throughout the rental
+ * period and the day after." A window keyed on the end date had no row
+ * for a case that came home on day 3 of 7, and a partial count filed
+ * on the end day fell off the list three days later with the rest
+ * still out. So the inbound list is the union of:
+ *   - due back in the window (as before);
+ *   - a PARTIAL check-in on file, whatever the date — the count is in
+ *     progress and stays until it is finished;
+ *   - out on rental: ON_JOB, or a check-out sheet filed and the start
+ *     day passed, with no complete check-in on file. These carry
+ *     `onRental` so the page can set them apart.
  */
 export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow[]> {
   const days = dayWindow()
   const dbDates = days.map(ymdToDbDate)
+  const todayDb = ymdToDbDate(pacificYmd(0))
+
+  const alive: Prisma.OrderWhereInput = {
+    status: { in: [...REPORTABLE_ORDER_STATUSES] },
+    // A lost quote is not on a truck. This lives on the sales axis
+    // (OrderQuoteStatus), not the lifecycle one, so it needs its own
+    // clause rather than a status omission.
+    quoteStatus: { not: 'LOST' },
+    archivedAt: null,
+  }
+  const where: Prisma.OrderWhereInput = edge === 'OUT'
+    ? { ...alive, startDate: { in: dbDates } }
+    : {
+        ...alive,
+        OR: [
+          { endDate: { in: dbDates } },
+          { checkReports: { some: { edge: 'IN', partial: true } } },
+          { status: 'ON_JOB' },
+          { checkReports: { some: { edge: 'OUT' } }, startDate: { lte: todayDb } },
+        ],
+      }
 
   const orders = await prisma.order.findMany({
-    where: {
-      status: { in: [...REPORTABLE_ORDER_STATUSES] },
-      // A lost quote is not on a truck. This lives on the sales axis
-      // (OrderQuoteStatus), not the lifecycle one, so it needs its own
-      // clause rather than a status omission.
-      quoteStatus: { not: 'LOST' },
-      archivedAt: null,
-      ...(edge === 'OUT' ? { startDate: { in: dbDates } } : { endDate: { in: dbDates } }),
-    },
+    where,
     select: {
       id: true,
       orderNumber: true,
@@ -154,9 +193,29 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
     orderBy: edge === 'OUT' ? { startDate: 'asc' } : { endDate: 'asc' },
   })
 
-  return orders.map((o) => {
+  const rows: ReportListRow[] = []
+  for (const o of orders) {
     const d = edge === 'OUT' ? o.startDate : o.endDate
-    return {
+    // @db.Date is stored at UTC midnight — format in UTC or it prints
+    // the previous day west of Greenwich.
+    const ymd = d ? d.toISOString().slice(0, 10) : ''
+    const rep = o.checkReports[0]
+    const filed = rep
+      ? {
+          submittedAt: rep.submittedAt,
+          preppedBy: rep.preppedBy,
+          changedOrder: rep.changedOrder,
+          partial: rep.partial,
+          offSheet: rep.lines.length,
+        }
+      : null
+    const dueInWindow = days.includes(ymd)
+    const onRental = edge === 'IN' && !dueInWindow && !filed?.partial
+    // Out on rental AND fully counted back already (a complete sheet
+    // filed early, or an ON_JOB order whose status advance failed) —
+    // finished work, and outside the window it has no day to sit under.
+    if (onRental && filed && !filed.partial) continue
+    rows.push({
       orderId: o.id,
       orderNumber: o.orderNumber,
       jobId: o.jobId,
@@ -164,21 +223,13 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       company: o.company?.name || 'Unknown company',
       status: o.status,
       preBooked: PRE_BOOKED_STATUSES.has(o.status),
-      // @db.Date is stored at UTC midnight — format in UTC or it prints
-      // the previous day west of Greenwich.
-      ymd: d ? d.toISOString().slice(0, 10) : '',
+      ymd,
       lineCount: o._count.lineItems,
-      filed: o.checkReports[0]
-        ? {
-            submittedAt: o.checkReports[0].submittedAt,
-            preppedBy: o.checkReports[0].preppedBy,
-            changedOrder: o.checkReports[0].changedOrder,
-            partial: o.checkReports[0].partial,
-            offSheet: o.checkReports[0].lines.length,
-          }
-        : null,
-    }
-  })
+      filed,
+      onRental,
+    })
+  }
+  return rows
 }
 
 export interface DraftLine {
@@ -187,12 +238,16 @@ export interface DraftLine {
   qualifier: string | null
   lane: string | null
   expectedQty: number
-  /** What a previously filed report recorded, when re-opening one. */
+  /** What a previously filed report recorded, when re-opening one. On
+   *  an inbound line that is still out (`onSheet` false) this is how
+   *  much of it is back so far — the running total the next count
+   *  starts from. */
   actualQty: number
   change: OrderCheckLineChange
   substituteFor: string | null
   note: string | null
-  /** False when a previous partial pull left this line off the sheet.
+  /** False when a previous partial pull left this line off the sheet
+   *  (OUT), or a previous count recorded it as still coming back (IN).
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
   inventoryItemId: string | null
@@ -357,13 +412,17 @@ export interface SubmitLineInput {
   substituteFor?: string | null
   note?: string | null
   /**
-   * False = this line was NOT part of this pull. Defaults true.
+   * False = this line was NOT part of this pull (OUT), or has not
+   * finished coming back (IN). Defaults true.
    *
    * The distinction it draws is the whole point of partial sheets: a
    * line at zero because it stayed on the shelf for tomorrow is not a
    * line the client didn't get. Without it the only way to file a half
    * pull was to type zeros, which classifies as REMOVED, zeroes the
    * quantity on the order and emails the client a shrunken quote.
+   *
+   * On the inbound edge `actualQty` still counts: it is how much of the
+   * line is back so far (Oliver's partial return — see settleSheetLine).
    */
   onSheet?: boolean
 }
@@ -383,6 +442,9 @@ export interface SubmitResult {
   partial: boolean
   /** Lines left off it — still to pull, or still to come back. */
   offSheet: number
+  /** IN only: the lines still coming back, with their running totals
+   *  ("Walkie CP200: 5 of 10 back"). Empty on the OUT edge. */
+  stillOut: string[]
 }
 
 // The classifier and its wording now live in checkLineChange.ts, with no
@@ -421,19 +483,15 @@ export async function submitCheckReport(opts: {
   // A line that was not on this sheet is not a count at all — it is
   // silence about that line. Classify only what the paper actually
   // spoke to; everything else is recorded as untouched (change NONE,
-  // actual = expected) so nothing downstream reads a zero and
-  // concludes the client didn't get it.
-  const classified = lines.map((l) => {
-    const onSheet = l.onSheet !== false
-    return {
-      ...l,
-      onSheet,
-      actualQty: onSheet ? l.actualQty : l.expectedQty,
-      change: onSheet ? classifyCheckLine(l) : ('NONE' as OrderCheckLineChange),
-    }
-  })
+  // and on the OUT edge actual = expected) so nothing downstream reads
+  // a zero and concludes the client didn't get it. On the IN edge an
+  // off-sheet line keeps its count: it is still coming back, and the
+  // number is how much of it is home so far. settleSheetLine is the
+  // one place that rule lives.
+  const classified = lines.map((l) => ({ ...l, ...settleSheetLine(edge, l) }))
   const offSheet = classified.filter((l) => !l.onSheet).length
   const partial = offSheet > 0
+  const stillOut = edge === 'IN' ? classified.filter((l) => !l.onSheet).map(describeStillOut) : []
   const differing = classified.filter((l) => l.change !== 'NONE')
   // `changedOrder` has to carry the AGENT flag — an added row needs
   // pricing just as much as a moved quantity — but it was also being
@@ -448,7 +506,7 @@ export async function submitCheckReport(opts: {
   const orderLinesChanged = edge === 'OUT' && differing.some((l) => l.orderLineItemId)
   const applyToOrder = edge === 'OUT' && differing.length > 0
 
-  const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
+  const changes: string[] = differing.map((l) => describeCheckChange(l, l.change, edge))
 
   const reportId = await prisma.$transaction(async (tx) => {
     // Replace-in-place: one current report per edge (see the @@unique).
@@ -536,6 +594,7 @@ export async function submitCheckReport(opts: {
           partial,
           offSheet,
           changes,
+          ...(stillOut.length ? { stillOut } : {}),
         },
       },
     })
@@ -548,7 +607,7 @@ export async function submitCheckReport(opts: {
   // own terms.
   if (orderLinesChanged) await recalcOrderTotals(orderId)
 
-  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet }
+  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet, stillOut }
 }
 
 /**

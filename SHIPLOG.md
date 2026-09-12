@@ -22,6 +22,21 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-12
+
+### Partial returns: check gear in more than once, and "still out" is not "missing"
+
+(this commit) check-in: a short count asks "still out or missing?", and orders on rental stay in the check-in list
+
+Oliver: "sometimes partial returns come back at different days along the rental and warehouse makes multiple check in contracts. Once they check in items on HQ and click submit, it removes the order from their check in tab. This means a partial return is going to look like the job is done and a whole bunch of stuff is missing."
+
+Both halves were true. An inbound line at 5 of 10 filed as SHORT — which is "5 missing" to the agent, Ana's queue and the board — and a sheet with no line left off it is COMPLETE, so `settleGearAfterReport` closed the pick list, stamped the job returned and moved the order to RETURNED on the first delivery. And the check-in list only knew an order by its end date (−3/+4 days), so a case coming home on day 3 of 7 had no row to be counted against.
+
+- **An inbound line still out keeps its count.** `onSheet false` on the IN edge now means "not finished coming back" and `actualQty` is how much is home so far — no new column. Everything downstream that reads "partial" (board, list chip, billing queue, the settle early-return) keys on onSheet/partial and already treats it as open work. `settleSheetLine()` is the rule; the OUT edge is untouched.
+- **The row asks.** A short inbound count is ambiguous and the two readings file very differently, so the form refuses to file until each short line is called <em>Still out</em> (order stays open, nothing flagged) or <em>Missing</em> (SHORT, flagged, closes as before). `countEdit()` keeps a line's answer when its count moves later; typed, photo-read and scanner counts all go through it.
+- **The check-in list reaches the whole rental.** Due-in-window ∪ partial count on file ∪ out on rental (ON_JOB, or a check-out sheet filed and the start day passed, no complete check-in). On-rental orders sit in a collapsed "Out on rental" section under the days; a partial in progress sits under its day.
+- IN-edge read-backs speak in return words ("5 of 10 back — 5 missing", "none of 10 came back") instead of "did not send". `npm run test:partial-return` (18 checks) pins the two rules and the wording.
+
 ## 2026-09-11
 
 ### AHA texts Wes when a new incoming lands

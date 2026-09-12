@@ -53,6 +53,7 @@
     "test:unit-scans": "tsx tests/warehouse/unit-scans.test.ts",
     "test:yard": "tsx tests/yard/board-grouping.test.ts",
     "test:check-report": "tsx tests/orders/check-report-classify.test.ts",
+    "test:partial-return": "tsx tests/orders/check-report-partial-return.test.ts",
     "test:annual-coverage": "tsx tests/agreements/annual-coverage.test.ts",
     "test:card-expiry": "tsx tests/payments/company-card-expiry.test.ts",
     "test:manual-payment": "tsx tests/payments/manual-received-at.test.ts",

@@ -27,7 +27,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
-import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import {
+  classifyCheckLine, countEdit, describeCheckChange, describeStillOut,
+} from '@/lib/orders/checkLineChange'
 import { UnitScanPanel, LineUnitStrip } from '@/components/reports/UnitScanPanel'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
@@ -51,7 +53,29 @@ const OUT_BLOCKED_MESSAGE: Record<OutBlockedReason, string> = {
     'The gear side is done. The truck still has to be checked out — that walk-around is what puts the job On rental.',
 }
 
-type Row = DraftLine & { open: boolean }
+/**
+ * `decided` is the inbound edge's answer to a short count: "5 of 10" is
+ * either five back with five still on the truck, or five back with five
+ * lost, and the two file very differently. False = the supervisor has
+ * not said which yet, and the form will not file until they have. See
+ * countEdit. Always true on the outbound edge.
+ */
+type Row = DraftLine & { open: boolean; decided: boolean }
+
+// ── Inbound line states ─────────────────────────────────────────────
+// Oliver, 2026-09-12: partial returns come back on different days, and
+// filing what came back so far read as "the job is done and a whole
+// bunch of stuff is missing". So a short count on the way back is one
+// of three things, and the row says which:
+//   still out  — off the sheet, count = back so far; the order stays
+//                open here and on the board, nothing is flagged;
+//   missing    — on the sheet, classified SHORT, flagged to the agent;
+//   undecided  — the supervisor has not said, and cannot file yet.
+// Module-level so the memo below can list its real dependencies.
+const isShort = (r: Row) => r.actualQty < r.expectedQty
+const isStillOut = (isOut: boolean, r: Row) => !isOut && !r.onSheet
+const isMissing = (isOut: boolean, r: Row) => !isOut && r.onSheet && isShort(r) && r.decided
+const isUndecided = (isOut: boolean, r: Row) => !isOut && r.onSheet && isShort(r) && !r.decided
 type Extra = {
   key: string
   description: string
@@ -80,8 +104,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     draft.lines.map((l) => ({
       ...l,
       // A line a previous report marked up opens already expanded, so a
-      // correction shows what was said rather than hiding it.
-      open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
+      // correction shows what was said rather than hiding it. A line
+      // still coming back is not marked up — its count is a running
+      // total, not a difference.
+      open: (l.onSheet && l.actualQty !== l.expectedQty) || !!l.substituteFor || !!l.note,
+      // Whatever the filed report says was decided when it was filed;
+      // the pre-fill ("it all came back") needs no decision.
+      decided: true,
     })),
   )
   const [extras, setExtras] = useState<Extra[]>(() =>
@@ -132,10 +161,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     /** The sheet covered only part of the order. */
     partial: boolean
     offSheet: number
+    /** IN: the lines still coming back, with what is back so far. */
+    stillOut: string[]
   } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.orderLineItemId === id ? { ...r, ...next } : r)))
+  /** A new count on a line, through the one rule that decides whether
+   *  it needs a still-out / missing answer (countEdit). Every way a
+   *  number lands — typed, read off the photo, counted by the scanner —
+   *  goes through here. */
+  const setCount = (id: string, qty: number) =>
+    setRows((prev) => prev.map((r) => (r.orderLineItemId === id ? { ...r, ...countEdit(draft.edge, r, qty) } : r)))
 
   // ── Barcode phase 3: the scanner counts the line ──────────────────
   // Null when the scan table is not there yet (schema not pushed): the
@@ -188,8 +225,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         // A missing part is something the agent has to see: open the row.
         const open = noteChanged && sentence ? true : r.open
         if (before === after) return noteChanged ? { ...r, note, open } : r
-        if (after === null) return { ...r, actualQty: r.expectedQty, note, open }
-        return { ...r, actualQty: after, onSheet: true, note, open }
+        if (after === null) return { ...r, actualQty: r.expectedQty, onSheet: true, decided: true, note, open }
+        // The scanner's count lands like a typed one: on the way back a
+        // short scan count asks "still out or missing?" unless the line
+        // already had its answer (countEdit). Outbound, a scanned unit
+        // puts its line back on the sheet — as it always has.
+        return { ...r, ...countEdit(draft.edge, r, after), ...(isOut ? { onSheet: true } : {}), note, open }
       }),
     )
     setUnitScans(next)
@@ -206,12 +247,14 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     const out: Array<{ key: string; text: string; added: boolean; alreadyFiled: boolean }> = []
     for (const r of rows) {
       // A line left off this pull says nothing about itself — it is not
-      // a change, it is a line that has not happened yet.
-      if (!r.onSheet) continue
+      // a change, it is a line that has not happened yet. Nor does a
+      // short count nobody has called yet: it is not "missing" until
+      // the supervisor says so, and the form will not file it before.
+      if (!r.onSheet || isUndecided(isOut, r)) continue
       const change = classifyCheckLine(r)
       if (change === 'NONE') continue
       out.push({
-        key: r.orderLineItemId, text: describeCheckChange(r, change), added: false, alreadyFiled: false,
+        key: r.orderLineItemId, text: describeCheckChange(r, change, draft.edge), added: false, alreadyFiled: false,
       })
     }
     for (const e of extras) {
@@ -221,7 +264,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         key: e.key,
         text: describeCheckChange({
           orderLineItemId: null, description, expectedQty: 0, actualQty: e.actualQty,
-        }),
+        }, 'ADDED', draft.edge),
         added: true,
         // Untouched since it was filed → already on the report and
         // already in front of the agent. Not outstanding work.
@@ -230,7 +273,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       })
     }
     return out
-  }, [rows, extras])
+  }, [rows, extras, isOut, draft.edge])
   /** Outstanding work — what filing would actually change. An addition
    *  the last submission already recorded is NOT outstanding: it cannot
    *  be reconciled against the order by design, so counting it here is
@@ -253,6 +296,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    */
   const offSheet = rows.filter((r) => !r.onSheet)
   const onSheetIds = rows.filter((r) => r.onSheet).map((r) => r.orderLineItemId)
+  /** Inbound lines whose short count has no answer yet. Blocks filing. */
+  const undecided = rows.filter((r) => isUndecided(isOut, r))
   /**
    * Which lines the printer should give them, which flips once a
    * partial sheet is already on file:
@@ -351,7 +396,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           const swap = hit.note?.startsWith('SWAP: ') ? hit.note.slice(6) : null
           return {
             ...r,
-            actualQty: hit.actualQty,
+            // Through countEdit: a short count read off a return sheet
+            // still has to be called still-out or missing by a person.
+            ...countEdit(draft.edge, r, hit.actualQty),
             substituteFor: swap ?? r.substituteFor,
             note: swap ? r.note : (hit.note ?? r.note),
             // Open anything that differs or that the reader was unsure
@@ -436,6 +483,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         gear: data.gear ?? null,
         partial: !!data.partial,
         offSheet: data.offSheet ?? 0,
+        stillOut: Array.isArray(data.stillOut) ? data.stillOut : [],
       })
       router.refresh()
     } catch (e) {
@@ -490,11 +538,30 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               say so, because the next question a supervisor has is
               whether anyone still has to mark the job returned. */}
           {done.partial && (
-            <p className="mt-3 text-[14px] text-pill-quoted-fg">
-              {done.offSheet} line{done.offSheet === 1 ? '' : 's'} weren&rsquo;t on this sheet — the
-              order is unchanged there, and the job stays open on the board until they
-              {isOut ? ' go out' : ' come back'}.
-            </p>
+            isOut ? (
+              <p className="mt-3 text-[14px] text-pill-quoted-fg">
+                {done.offSheet} line{done.offSheet === 1 ? '' : 's'} weren&rsquo;t on this sheet — the
+                order is unchanged there, and the job stays open on the board until they go out.
+              </p>
+            ) : (
+              /* The partial return. Say what is still out and, just as
+                 plainly, what did NOT happen: nothing was marked
+                 returned, nobody was told anything is missing, and the
+                 order is still in the check-in list for the next count. */
+              <div className="mt-3 text-[14px] text-pill-quoted-fg">
+                <p>
+                  <b>Partial return</b> — {done.offSheet} line{done.offSheet === 1 ? ' is' : 's are'} still
+                  out. Nothing is marked returned or missing; the order stays under Check in and on the
+                  board until the rest comes back. Open it again for the next count and it starts from
+                  these totals.
+                </p>
+                {done.stillOut.length > 0 && (
+                  <ul className="mt-1.5 space-y-0.5 text-lt-fg2">
+                    {done.stillOut.map((s, i) => <li key={i}>{s}</li>)}
+                  </ul>
+                )}
+              </div>
+            )
           )}
           {done.gear?.jobReturned && (
             <p className="mt-3 text-[14px] text-chip-good-fg">
@@ -582,12 +649,20 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             Already filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}
             {draft.filed.preppedBy ? ` · prepped by ${draft.filed.preppedBy}` : ''}.{' '}
             {draft.filed.partial ? (
-              <>
-                That was a <b>partial</b> {isOut ? 'pull' : 'count'} — the lines below marked
-                &ldquo;{isOut ? 'stays on the shelf' : 'still out'}&rdquo; are what is left. Print
-                those, then put them back and count them here; filing again keeps the counts already
-                on record.
-              </>
+              isOut ? (
+                <>
+                  That was a <b>partial</b> pull — the lines below marked &ldquo;stays on the
+                  shelf&rdquo; are what is left. Print those, then put them back and count them here;
+                  filing again keeps the counts already on record.
+                </>
+              ) : (
+                <>
+                  That was a <b>partial</b> return — the lines below marked &ldquo;still out&rdquo;
+                  show how much is back so far. When more arrives, type the new total on the line
+                  (or &ldquo;All back&rdquo;); filing again keeps the counts already on record and the
+                  order stays here until everything is in.
+                </>
+              )
             ) : (
               'Submitting again replaces it.'
             )}
@@ -715,7 +790,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           </span>
           <span className="text-[12px] text-lt-fg3">
             {offSheet.length
-              ? `${onSheetIds.length} of ${rows.length} lines on this pull`
+              ? isOut
+                ? `${onSheetIds.length} of ${rows.length} lines on this pull`
+                : `${offSheet.length} of ${rows.length} lines still out`
               : `${rows.length} lines · pre-filled from the order`}
           </span>
         </div>
@@ -727,9 +804,15 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         {rows.map((r) => {
           const differs =
             r.onSheet && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+          const stillOut = isStillOut(isOut, r)
+          const undecided = isUndecided(isOut, r)
+          const missing = isMissing(isOut, r)
+          const notBack = Math.max(0, r.expectedQty - r.actualQty)
           // A line held back for a later pull: dimmed, no count, and no
-          // controls that would imply something happened to it.
-          if (!r.onSheet) {
+          // controls that would imply something happened to it. Outbound
+          // only — an inbound line still out KEEPS its count (how much is
+          // back so far) and renders below with the others.
+          if (!r.onSheet && isOut) {
             return (
               <div
                 key={r.orderLineItemId}
@@ -756,7 +839,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           return (
             <div
               key={r.orderLineItemId}
-              className={`px-3 py-2.5 border-b border-lt-hairline last:border-b-0 ${differs ? 'bg-chip-warn-bg' : ''}`}
+              className={`px-3 py-2.5 border-b border-lt-hairline last:border-b-0 ${
+                stillOut ? 'bg-lt-inner' : differs ? 'bg-chip-warn-bg' : ''
+              }`}
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
@@ -786,9 +871,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     min={0}
                     inputMode="numeric"
                     value={r.actualQty}
-                    onChange={(e) => patch(r.orderLineItemId, { actualQty: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => setCount(r.orderLineItemId, Number(e.target.value) || 0)}
                     className={`w-20 text-center bg-lt-inner border rounded-lg px-2 py-1.5 text-[16px] text-lt-fg ${
-                      differs ? 'border-amber-500' : 'border-lt-hairline'
+                      differs || undecided ? 'border-amber-500' : stillOut ? 'border-pill-quoted-fg/40' : 'border-lt-hairline'
                     }`}
                   />
                 </label>
@@ -815,16 +900,96 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   {r.open ? 'Hide' : 'Swap / note'}
                 </button>
                 {/* NOT a zero. Zero means the client didn't get it and
-                    rewrites the order; this means it hasn't gone yet. */}
-                <button
-                  type="button"
-                  title={isOut ? 'Leave this line off this pull' : 'This line has not come back yet'}
-                  onClick={() => patch(r.orderLineItemId, { onSheet: false, open: false })}
-                  className="text-[12px] font-semibold text-lt-fg3 hover:text-amber-600 px-2 py-1.5 flex-none"
-                >
-                  {isOut ? 'Not this pull' : 'Still out'}
-                </button>
+                    rewrites the order; this means it hasn't gone yet.
+                    Inbound, the same button says nothing on the line is
+                    back yet — count 0, still out — and once a line is
+                    still out it flips to the quick "All back". */}
+                {isOut ? (
+                  <button
+                    type="button"
+                    title="Leave this line off this pull"
+                    onClick={() => patch(r.orderLineItemId, { onSheet: false, open: false })}
+                    className="text-[12px] font-semibold text-lt-fg3 hover:text-amber-600 px-2 py-1.5 flex-none"
+                  >
+                    Not this pull
+                  </button>
+                ) : stillOut ? (
+                  <button
+                    type="button"
+                    title="Everything on this line is back"
+                    onClick={() => patch(r.orderLineItemId, { actualQty: r.expectedQty, onSheet: true, decided: true })}
+                    className="text-[12px] font-semibold text-lt-fg3 hover:text-amber-600 px-2 py-1.5 flex-none"
+                  >
+                    All back
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    title="Nothing on this line has come back yet — it stays open, nothing is flagged"
+                    onClick={() => patch(r.orderLineItemId, { actualQty: 0, onSheet: false, decided: true, open: false })}
+                    className="text-[12px] font-semibold text-lt-fg3 hover:text-amber-600 px-2 py-1.5 flex-none"
+                  >
+                    Still out
+                  </button>
+                )}
               </div>
+
+              {/* ── The inbound question ──────────────────────────────
+                  A short count on the way back is ambiguous, and the
+                  two readings file very differently: "still out" keeps
+                  the order open for the next count; "missing" closes
+                  the count on this line and flags the agent. The row
+                  asks, then says which it is and offers the other. */}
+              {undecided && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+                  <span className="text-chip-warn-fg font-semibold">
+                    {notBack} of {r.expectedQty} not back — still out, or missing?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => patch(r.orderLineItemId, { onSheet: false, decided: true })}
+                    className="text-[12px] font-bold px-2.5 py-1.5 rounded-lg bg-lt-fg text-white hover:opacity-90"
+                  >
+                    Still out — coming back later
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => patch(r.orderLineItemId, { onSheet: true, decided: true, open: true })}
+                    className="text-[12px] font-bold px-2.5 py-1.5 rounded-lg border border-chip-warn-fg/40 text-chip-warn-fg hover:bg-chip-warn-bg"
+                  >
+                    Missing
+                  </button>
+                </div>
+              )}
+              {stillOut && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-pill-quoted-fg">
+                  <span>
+                    {r.actualQty > 0 ? `${r.actualQty} of ${r.expectedQty} back` : 'Nothing back yet'} ·{' '}
+                    <b>{notBack} still out</b> — the order stays open for the next count.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => patch(r.orderLineItemId, { onSheet: true, decided: true, open: true })}
+                    className="text-[12px] font-semibold underline hover:text-chip-warn-fg"
+                  >
+                    It&rsquo;s missing instead
+                  </button>
+                </div>
+              )}
+              {missing && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-chip-warn-fg">
+                  <span>
+                    <b>{notBack} missing</b> — recorded and flagged to {draft.agentName || 'the agent'}.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => patch(r.orderLineItemId, { onSheet: false, decided: true })}
+                    className="text-[12px] font-semibold underline hover:text-pill-quoted-fg"
+                  >
+                    Still out instead
+                  </button>
+                </div>
+              )}
 
               {r.open && (
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -982,13 +1147,39 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           supervisor should know the order is untouched and because
           somebody still has to pull the rest. */}
       {offSheet.length > 0 && !confirming && (
-        <p className="mb-3 text-[14px] text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded-lg px-3 py-2">
-          <b>Partial {isOut ? 'pull' : 'return'}.</b> {offSheet.length} line
-          {offSheet.length === 1 ? ' is' : 's are'}{' '}
-          {isOut ? 'not on this sheet' : 'still out'} — {isOut ? 'they stay' : 'nothing is'} on the
-          order untouched, and this job stays open on the yard board until the rest{' '}
-          {isOut ? 'goes out' : 'comes back'}. Re-open this screen for the next{' '}
-          {isOut ? 'pull' : 'count'} and it picks up where this one stopped.
+        isOut ? (
+          <p className="mb-3 text-[14px] text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded-lg px-3 py-2">
+            <b>Partial pull.</b> {offSheet.length} line{offSheet.length === 1 ? ' is' : 's are'} not on
+            this sheet — they stay on the order untouched, and this job stays open on the yard board
+            until the rest goes out. Re-open this screen for the next pull and it picks up where this
+            one stopped.
+          </p>
+        ) : (
+          <div className="mb-3 text-[14px] text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded-lg px-3 py-2">
+            <p>
+              <b>Partial return.</b> {offSheet.length} line{offSheet.length === 1 ? ' is' : 's are'} still
+              out. Filing records what is back so far and nothing more — the order is not marked
+              returned, nothing is flagged as missing, and it stays under Check in and on the board
+              until the rest comes back. Open it again for the next count and it starts from these
+              totals.
+            </p>
+            <ul className="mt-1.5 space-y-0.5 text-[13px]">
+              {offSheet.map((r) => <li key={r.orderLineItemId}>{describeStillOut(r)}</li>)}
+            </ul>
+          </div>
+        )
+      )}
+
+      {/* The file button is off until every short inbound count has
+          been called. Saying why, beside it, beats a dead button. */}
+      {undecided.length > 0 && !confirming && (
+        <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
+          <span>
+            {undecided.length === 1
+              ? `${undecided[0].description} came back short — say whether the rest is still out or missing before filing.`
+              : `${undecided.length} lines came back short — say on each whether the rest is still out or missing before filing.`}
+          </span>
         </p>
       )}
 
@@ -1118,18 +1309,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         <div className="flex items-center gap-3 pb-8">
           <button
             onClick={() => {
+              if (undecided.length > 0) return
               // Nothing differs → nothing to read back. One tap, as before.
               if (diffs > 0) { setConfirming(true); return }
               void submit()
             }}
-            disabled={saving}
+            disabled={saving || undecided.length > 0}
             className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
           >
             {saving
               ? 'Filing…'
               : diffs > 0
                 ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
-                : draft.filed ? 'Replace the filed report' : 'File the report'}
+                : !isOut && offSheet.length > 0
+                  ? `File the partial return · ${offSheet.length} still out`
+                  : draft.filed ? 'Replace the filed report' : 'File the report'}
           </button>
           <Link href="/reports/orders" className="text-[14px] text-lt-fg2 hover:text-lt-fg">
             Cancel
