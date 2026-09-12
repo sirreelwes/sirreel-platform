@@ -37,6 +37,8 @@ export function buildPartnerWelcome(a: {
   senderName: string
   /** SirReel's share of the vehicle rental rate, when the deal is set. */
   sharePercent: number | null
+  /** How far SirReel's share may rise to keep a client (discount waterfall). */
+  maxSharePercent?: number | null
   /** VEHICLES (drivers, hours, mileage) or EQUIPMENT (delivered and set up).
    *  Picks the nouns and swaps the driver ask for a delivery-contact ask. */
   kind?: PartnerKindKey
@@ -53,7 +55,11 @@ export function buildPartnerWelcome(a: {
   const keep = a.sharePercent == null ? null : Math.round((100 - a.sharePercent) * 100) / 100
   const deal = a.sharePercent == null
     ? null
-    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the ${w.rateNoun} and you receive ${keep}%, invoiced to SirReel after each booking returns. Each ${w.one} on your page shows what that comes to per day.`
+    : `Our deal, in plain numbers: your listed rate is what the production pays. SirReel keeps ${a.sharePercent}% of the ${w.rateNoun} and you receive ${keep}%, invoiced to SirReel after each booking returns. Each ${w.one} on your page shows what that comes to per day. ${
+        a.maxSharePercent != null && a.maxSharePercent > a.sharePercent
+          ? `If a production needs a discount to book, it is shared equally with SirReel until SirReel's share reaches ${a.maxSharePercent}%; past that, SirReel covers the rest.`
+          : `If a production needs a discount to book, it comes out of SirReel's share, not yours.`
+      }`
 
   // Plain-text bullets are the source; HTML wraps them. Kept as data so the
   // two versions of the email cannot drift.
@@ -160,21 +166,57 @@ export function buildPartnerWelcome(a: {
  * Wes approves on screen is byte-for-byte what leaves — a preview built by a
  * second code path is a preview of something else.
  */
-export function renderPartnerWelcome(a: { vendorName: string; subject: string; body: string; logoUrl?: string | null }): { html: string; text: string } {
+export function renderPartnerWelcome(a: {
+  vendorName: string
+  subject: string
+  body: string
+  /** Their partner page. Included from 2026-09-11 (Wes: "I think the sooner we
+   *  get info to them the better"), which reverses the 09-10 rule that the
+   *  introduction carried no link. Added by the renderer, never by the model —
+   *  welcomeAiDraft still strips links out of anything it writes. */
+  accountUrl?: string | null
+  /** Their own mark for the masthead — `partnerLogoEmailUrl()`, or null, in
+   *  which case the lockup carries their name in type. */
+  logoUrl?: string | null
+}): { html: string; text: string } {
   // His paragraphs, his line breaks — escaped, never interpreted as HTML.
   const paragraphs = a.body.trim().split(/\n{2,}/).map((para) => p(esc(para).replace(/\n/g, '<br />')))
+  // The button IS the link (Wes 2026-09-11: "can't we just have a button and
+  // not that url link written out?"). The raw address stays in the plain-text
+  // half, which has no buttons.
+  const link = a.accountUrl
+    ? p('Everything is on your partner page: the agreement to read and sign, your units and rates, and every booking we send you.')
+    : ''
   return {
     html: renderEmailShell({
       eyebrow: 'An introduction',
       heading: `SirReel & ${a.vendorName}`,
       preheader: a.subject,
-      bodyHtml: paragraphs.join(''),
+      bodyHtml: paragraphs.join('') + link,
       accent: PARTNER_ACCENT,
+      cta: a.accountUrl ? { label: 'Open your partner page', href: a.accountUrl } : undefined,
       // Both marks, side by side, above his first sentence — the mail says
       // "partnership" before anyone reads a word of it (Wes 2026-09-11).
       lockup: { partnerName: a.vendorName, logoUrl: a.logoUrl ?? null },
     }),
-    text: renderEmailText(a.body.trim().split('\n')),
+    text: renderEmailText([
+      ...a.body.trim().split('\n'),
+      ...(a.accountUrl ? ['', `Your partner page: ${a.accountUrl}`] : []),
+    ]),
+  }
+}
+
+/**
+ * What the introduction carries besides his words: their page link (minted if
+ * they have none — minting is not an invite, and this mail IS the invite) and
+ * their mark. Preview and send both read it, so the preview is the mail.
+ */
+export async function partnerWelcomeExtras(vendorId: string): Promise<{ accountUrl: string; logoUrl: string | null }> {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { id: true, logoUrl: true, logoSvg: true } })
+  const token = await ensureVendorPortalToken(vendorId)
+  return {
+    accountUrl: vendorAccountUrl(token),
+    logoUrl: v ? partnerLogoEmailUrl(v) : null,
   }
 }
 
@@ -189,8 +231,13 @@ export function renderPartnerWelcome(a: { vendorName: string; subject: string; b
  *
  * The BODY IS HIS. `buildIntroDraft` offers a starting point; whatever he
  * actually typed is what sends, wrapped in the partner shell so it looks like
- * every other partner-facing mail. No account link here on purpose — the link
- * is the second conversation.
+ * every other partner-facing mail.
+ *
+ * 2026-09-11 (Wes): "I think we should include the partner's logos in the intro
+ * email as well as the portal link … the sooner we get info to them the
+ * better!" So the introduction carries their mark and their page link, and
+ * stamps portalInvitedAt — the link HAS gone out, and the Portals tab must not
+ * say otherwise. The separate account-link mail stays, for resending.
  */
 export async function sendPartnerWelcome(args: {
   vendorId: string
@@ -215,7 +262,7 @@ export async function sendPartnerWelcome(args: {
   if (!subject) throw Object.assign(new Error('The subject is empty.'), { status: 400 })
   if (!body) throw Object.assign(new Error('The message is empty.'), { status: 400 })
 
-  const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, logoUrl: partnerLogoEmailUrl(v) })
+  const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, ...(await partnerWelcomeExtras(v.id)) })
 
   // CC'd like every other partner-facing send, and replies go to him.
   const cc = (await channelRecipients('sub-rental-conduit-cc')).filter(
@@ -232,9 +279,15 @@ export async function sendPartnerWelcome(args: {
   }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : 'send threw' }))
   if (!res.ok) return { ok: false, reason: 'reason' in res ? res.reason : 'not sent' }
 
+  // The introduction carried the link, so it IS the invite — stamp it, or the
+  // Portals tab reads "never sent" for a link already in their inbox.
+  const now = new Date()
   await prisma.vendor.update({
     where: { id: v.id },
-    data: { welcomeSentAt: new Date(), welcomeSentTo: to, welcomeSubject: subject.slice(0, 300) },
+    data: {
+      welcomeSentAt: now, welcomeSentTo: to, welcomeSubject: subject.slice(0, 300),
+      portalInvitedAt: now, portalInvitedTo: to,
+    },
   })
   return { ok: true }
 }
@@ -262,7 +315,7 @@ export async function partnerIntroDraft(vendorId: string, sender: { name: string
 export async function sendVendorInvite(args: { vendorId: string; to: string; sender: { email: string; name: string | null } }): Promise<{ ok: boolean; reason?: string; url: string }> {
   const v = await prisma.vendor.findUnique({
     where: { id: args.vendorId },
-    select: { id: true, name: true, contactName: true, isActive: true, welcomeSentAt: true, partnerSharePercent: true, partnerKind: true, logoUrl: true, logoSvg: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
+    select: { id: true, name: true, contactName: true, isActive: true, welcomeSentAt: true, partnerSharePercent: true, partnerMaxSharePercent: true, partnerKind: true, logoUrl: true, logoSvg: true, _count: { select: { subcontractedVehicles: true } }, agreements: { where: { deletedAt: null }, select: { signedAt: true }, take: 1 } },
   })
   if (!v || !v.isActive) throw Object.assign(new Error('Vendor not found'), { status: 404 })
   // The introduction comes first (Wes 2026-09-10). A link to a page of rates
@@ -287,6 +340,7 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
     agreementWaiting: v.agreements.length > 0 && !v.agreements[0].signedAt,
     senderName,
     sharePercent: v.partnerSharePercent == null ? null : Number(v.partnerSharePercent),
+    maxSharePercent: v.partnerMaxSharePercent == null ? null : Number(v.partnerMaxSharePercent),
     kind: v.partnerKind,
     logoUrl: partnerLogoEmailUrl(v),
   })
