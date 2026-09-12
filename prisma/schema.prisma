@@ -2651,6 +2651,18 @@ model PaperworkRequest {
   studioContractSigned Boolean       @default(false) @map("studio_contract_signed")
   creditCardAuth       Boolean       @default(false) @map("credit_card_auth")
 
+  /// Set when the CLIENT asked for this card-authorization link themselves
+  /// from the job portal, rather than a rep sending the CCA.
+  ///
+  /// Wes 2026-09-12, on Oliver's "why can't I upload my card? I want to get
+  /// ahead of the paperwork": a client may open the card form at any time —
+  /// but `cardGate.ts` treats the existence of a PaperworkRequest as "HQ
+  /// asked for a card, so no card means no keys". A client clicking "add a
+  /// card" and not finishing must never block their own pickup, so the gate
+  /// counts only rep-sent requests. Cleared the moment a rep does send the
+  /// CCA on this row — from then on it gates like any other.
+  clientInitiatedAt DateTime? @map("client_initiated_at")
+
   // Workers' Comp certificate — the client's separate WC proof when it
   // isn't carried on the main COI (payroll companies like EP / Cast &
   // Crew issue their own). Stored in the PRIVATE blob store exactly like

@@ -107,6 +107,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: { bookingId: ensured.bookingId, sentTo: '' },
         select: { id: true, token: true },
       })
+    } else {
+      // HQ is sending this link out, so a row the client opened for itself
+      // stops being a head start and starts gating the yard like any other
+      // CCA ask (schema: clientInitiatedAt; lib/payments/cardGate.ts).
+      await prisma.paperworkRequest
+        .updateMany({ where: { id: pr.id, clientInitiatedAt: { not: null } }, data: { clientInitiatedAt: null } })
+        .catch(() => null)
     }
     links = { home: portalV2Url(pr.token), jobPage: false, lcdw: null }
   }

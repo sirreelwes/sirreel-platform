@@ -52,6 +52,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       data: { bookingId: booking.id, sentTo },
       select: { token: true },
     })
+  } else {
+    // HQ is handing this link out now, so it stops being the client's own
+    // head start and starts gating the yard like any other CCA ask
+    // (schema: PaperworkRequest.clientInitiatedAt; lib/payments/cardGate.ts).
+    await prisma.paperworkRequest
+      .updateMany({ where: { token: pr.token, clientInitiatedAt: { not: null } }, data: { clientInitiatedAt: null } })
+      .catch(() => null)
   }
 
   const origin = _req.nextUrl.origin

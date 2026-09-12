@@ -56,7 +56,7 @@ export async function cardGateForJob(jobId: string): Promise<CardGate> {
         select: {
           paperworkRequests: {
             orderBy: { sentAt: 'asc' },
-            select: { sentAt: true, sentTo: true, ccCardNumberEncrypted: true },
+            select: { sentAt: true, sentTo: true, ccCardNumberEncrypted: true, clientInitiatedAt: true },
           },
         },
       },
@@ -69,10 +69,19 @@ export async function cardGateForJob(jobId: string): Promise<CardGate> {
   if (!job) return none
 
   const requests = job.bookings.flatMap((b) => b.paperworkRequests)
-  const required = requests.length > 0
+  // Only a request HQ sent makes the card required. A client who opened the
+  // card form themselves from the portal — "I want to get ahead of the
+  // paperwork" (Oliver, 2026-09-12) — must never be able to block their own
+  // pickup by not finishing it. Wes's ruling the same day: the client link is
+  // not a gate. The moment a rep sends the CCA on that row the marker clears
+  // and it gates like any other (schema: PaperworkRequest.clientInitiatedAt).
+  const hqRequests = requests.filter((r) => !r.clientInitiatedAt)
+  const required = hqRequests.length > 0
+  // A card captured through a client-started link still counts as ON FILE —
+  // where the link came from says nothing about the card behind it.
   const portalCard = requests.some((r) => !!r.ccCardNumberEncrypted)
   const onFile = portalCard || !!(await resolveWalletCardForJob(job.companyId, jobId))
-  const first = requests[0] ?? null
+  const first = hqRequests[0] ?? null
 
   return {
     required,

@@ -114,7 +114,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   await prisma.paperworkRequest.update({
     where: { id: pr.id },
-    data: { sentTo: composition.to.email, sentAt: new Date() },
+    // clientInitiatedAt clears here: the client may have opened this form
+    // themselves first (their head start, which does not gate the yard), but
+    // HQ has now asked for the card, so it gates like any other CCA from this
+    // moment on (lib/payments/cardGate.ts).
+    data: { sentTo: composition.to.email, sentAt: new Date(), clientInitiatedAt: null },
   })
 
   return NextResponse.json({

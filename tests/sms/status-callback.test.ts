@@ -27,16 +27,16 @@ function eq(got: unknown, want: unknown, why: string): void {
 console.log('\nthe key is on the URL — without it the callback 403s')
 {
   eq(
-    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: 'PNabc123' } as NodeJS.ProcessEnv),
+    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: 'PNabc123' } as unknown as NodeJS.ProcessEnv),
     'https://hq.sirreel.com/api/public/sms/status?key=PNabc123',
     'secret present → ?key= appended',
   )
   ok(
-    statusCallbackUrl({ TWILIO_WEBHOOK_SECRET: 'PNabc123' } as NodeJS.ProcessEnv).startsWith('https://hq.sirreel.com/'),
+    statusCallbackUrl({ TWILIO_WEBHOOK_SECRET: 'PNabc123' } as unknown as NodeJS.ProcessEnv).startsWith('https://hq.sirreel.com/'),
     'no NEXT_PUBLIC_APP_URL → falls back to hq.sirreel.com',
   )
   eq(
-    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com/', TWILIO_WEBHOOK_SECRET: 'PNabc123' } as NodeJS.ProcessEnv),
+    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com/', TWILIO_WEBHOOK_SECRET: 'PNabc123' } as unknown as NodeJS.ProcessEnv),
     'https://hq.sirreel.com/api/public/sms/status?key=PNabc123',
     'a trailing slash on the base does not produce a double slash',
   )
@@ -45,12 +45,12 @@ console.log('\nthe key is on the URL — without it the callback 403s')
 console.log('\nno secret → no key at all, not an empty one')
 {
   eq(
-    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com' } as NodeJS.ProcessEnv),
+    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com' } as unknown as NodeJS.ProcessEnv),
     'https://hq.sirreel.com/api/public/sms/status',
     'unset secret → bare URL',
   )
   eq(
-    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: '   ' } as NodeJS.ProcessEnv),
+    statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: '   ' } as unknown as NodeJS.ProcessEnv),
     'https://hq.sirreel.com/api/public/sms/status',
     'whitespace-only secret → bare URL, never "?key="',
   )
@@ -58,7 +58,7 @@ console.log('\nno secret → no key at all, not an empty one')
 
 console.log('\nthe secret survives the query string intact')
 {
-  const url = statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: 'a b+c/d=e' } as NodeJS.ProcessEnv)
+  const url = statusCallbackUrl({ NEXT_PUBLIC_APP_URL: 'https://hq.sirreel.com', TWILIO_WEBHOOK_SECRET: 'a b+c/d=e' } as unknown as NodeJS.ProcessEnv)
   eq(new URL(url).searchParams.get('key'), 'a b+c/d=e', 'a secret with URL-significant characters round-trips')
 }
 

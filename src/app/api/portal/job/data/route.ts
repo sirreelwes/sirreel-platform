@@ -300,6 +300,9 @@ export async function GET(req: NextRequest) {
               token: true, bookingId: true, sentAt: true, sentTo: true,
               ccCardNumberEncrypted: true, ccCardLast4: true, ccCardType: true,
               ccCardholderFirst: true, ccCardholderLast: true, ccAuthSignedAt: true,
+              // The client opened this form themselves — the row must not
+              // tell them "we sent you a link" about their own click.
+              clientInitiatedAt: true,
             },
           })
           .then((rows) =>
@@ -373,7 +376,10 @@ export async function GET(req: NextRequest) {
   // opens — landed on the card step.
   const cardCaptureUrl = paperworkPortal ? `${portalV2Url(paperworkPortal.token)}?open=cc` : null
   const cardAuth: {
-    state: 'ON_FILE' | 'REQUESTED' | 'NOT_REQUESTED'
+    /** CLIENT_STARTED — the client opened the card form themselves from the
+     *  portal (Oliver, 2026-09-12). Same secure form, but nobody sent it and
+     *  it does not make the job card-required (lib/payments/cardGate.ts). */
+    state: 'ON_FILE' | 'REQUESTED' | 'CLIENT_STARTED' | 'NOT_REQUESTED'
     origin: 'job' | 'account' | null
     last4: string | null
     cardType: string | null
@@ -408,7 +414,11 @@ export async function GET(req: NextRequest) {
           captureUrl: cardCaptureUrl,
         }
       : {
-          state: paperworkPortal ? 'REQUESTED' : 'NOT_REQUESTED',
+          state: paperworkPortal
+            ? paperworkPortal.clientInitiatedAt
+              ? 'CLIENT_STARTED'
+              : 'REQUESTED'
+            : 'NOT_REQUESTED',
           origin: null,
           last4: null,
           cardType: null,

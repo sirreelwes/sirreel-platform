@@ -74,8 +74,11 @@ export function PortalPayPanel({
 }: {
   /** Lets the wrapping PaperworkRow label itself honestly — a row
    *  headed "Invoice · Issued" beside a pre-invoice is simply wrong
-   *  (Wes 2026-09-01). Optional: the panel works standalone. */
-  onStatus?: (s: { hasPreInvoice: boolean; awaitingReview: boolean }) => void
+   *  (Wes 2026-09-01), and a row headed "Invoice" at all before one
+   *  exists is a box about nothing (Oliver 2026-09-12). `hasAny` is
+   *  false until the fetch lands, so the row stays hidden rather than
+   *  flashing. Optional: the panel works standalone. */
+  onStatus?: (s: { hasAny: boolean; hasPreInvoice: boolean; awaitingReview: boolean }) => void
 } = {}) {
   const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -114,10 +117,11 @@ export function PortalPayPanel({
   // that render honest (no pre-invoice yet), which is also the state
   // the parent starts in, so there is no flicker.
   const pre = invoices?.find((i) => i.isPreInvoice) ?? null
+  const hasAny = (invoices?.length ?? 0) > 0
   useEffect(() => {
-    onStatus?.({ hasPreInvoice: !!pre, awaitingReview: !!pre && !pre.approvedAt })
+    onStatus?.({ hasAny, hasPreInvoice: !!pre, awaitingReview: !!pre && !pre.approvedAt })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pre?.id, pre?.approvedAt])
+  }, [hasAny, pre?.id, pre?.approvedAt])
 
   if (err) {
     return (

@@ -207,10 +207,12 @@ interface PortalData {
     legacyPaperworkPortalUrl: string | null;
     /** The card behind this job. ON_FILE from the portal capture (origin
      *  'job') or the company wallet ('account'); REQUESTED once HQ sent the
-     *  secure link and nothing came back; NOT_REQUESTED before that.
+     *  secure link and nothing came back; CLIENT_STARTED when the client
+     *  opened the form themselves (which never gates the yard);
+     *  NOT_REQUESTED before any of that.
      *  captureUrl opens the card step of the paperwork link directly. */
     cardAuth: {
-      state: 'ON_FILE' | 'REQUESTED' | 'NOT_REQUESTED';
+      state: 'ON_FILE' | 'REQUESTED' | 'CLIENT_STARTED' | 'NOT_REQUESTED';
       origin: 'job' | 'account' | null;
       last4: string | null;
       cardType: string | null;
@@ -353,9 +355,10 @@ export default function JobPortalPage() {
   // actually there — "Invoice · Issued" beside a pre-invoice awaiting
   // the client's approval is a lie the client would act on.
   const [invoiceRowState, setInvoiceRowState] = useState<{
+    hasAny: boolean
     hasPreInvoice: boolean
     awaitingReview: boolean
-  }>({ hasPreInvoice: false, awaitingReview: false });
+  }>({ hasAny: false, hasPreInvoice: false, awaitingReview: false });
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiUploading, setCoiUploading] = useState(false);
   const [coiConfirming, setCoiConfirming] = useState<'CONFIRMED' | 'SEPARATE_POLICY' | null>(null);
@@ -802,6 +805,191 @@ export default function JobPortalPage() {
               )}
               {' '}— we answer 24/7.
             </p>
+          </section>
+        )}
+
+        {/* ── Assets reserved ──────────────────────────────────────────────
+            Wes 2026-09-12: "assets reserved at top, just below should be
+            orders, everything else below." What they are getting comes
+            before what it costs — and both come before the paperwork. */}
+        <section>
+          <div className="flex items-baseline justify-between mb-3">
+            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500">Assets reserved</h2>
+            <span className="text-xs text-zinc-400 font-mono">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-3">
+          {data.lineItems.length === 0 ? (
+            <div className="text-xs text-zinc-500">
+              {data.order.awaitingConfirmation
+                ? 'Nothing here yet — your equipment and pricing appear once your rep has confirmed availability.'
+                : 'Your equipment list will appear here once it’s finalized.'}
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {data.lineItems.map((li) => (
+                <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-zinc-900 truncate">{li.description}</div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5">
+                      {li.categoryName && <span>{li.categoryName} · </span>}
+                      Qty {li.quantity}
+                      {/* FLAT lines (partner ancillaries, one-off charges) bill
+                          one period, not one day — printing "1 day" beside a
+                          mileage charge reads as a daily rate. */}
+                      {li.days != null && li.rateType !== 'FLAT' && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
+                    </div>
+                    {/* Client-facing small print. On a partner ancillary this
+                        is the estimate wording — the client has to see it
+                        here, not only on the quote PDF. */}
+                    {li.notes && (
+                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-zinc-500'}`}>
+                        {li.notes}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-zinc-500 text-right flex-shrink-0">
+                    {li.isIncluded && Number(li.rate) === 0 ? (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        Included
+                      </span>
+                    ) : (
+                      <>
+                        {fmtCurrency(li.rate)}
+                        <div className="text-[10px] text-zinc-400">{li.rateType.toLowerCase()}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="border-t border-zinc-100 pt-3 flex items-center justify-between text-sm">
+            <span className="text-zinc-500 font-semibold">Total</span>
+            <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
+          </div>
+          </div>
+        </section>
+
+        {/* ── Your quote ──────────────────────────────────────────────────
+            Oliver, testing the client side 2026-09-12: "why is my quote not
+            at the top of the portal? It kind of blends in with the other
+            boxes." It used to be one row among a dozen in SirReel paperwork,
+            below insurance and the card. It is the thing the client opened
+            the page to read, and approving it is the one action that moves
+            the job — so it sits directly under the header, in the same
+            attention colour as the "not booked yet" notice, and it is not
+            repeated in the paperwork list. */}
+        {(data.paperwork.quotePdfUrl || !data.order.awaitingConfirmation) && (
+          <section id="quote">
+            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Your quote</h2>
+            <div
+              className="rounded-xl border p-6"
+              style={
+                data.paperwork.quotePdfUrl && !quoteIsApproved
+                  ? { borderColor: '#E8D7A8', backgroundColor: '#FDF8EC' }
+                  : { borderColor: '#E4E4E7', backgroundColor: '#FFFFFF' }
+              }
+            >
+              {data.paperwork.quotePdfUrl ? (
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-2xl font-bold text-zinc-900 tabular-nums">
+                        ${Number(data.order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5 font-mono">{data.order.orderNumber}</div>
+                    </div>
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        quoteIsApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {quoteIsApproved ? 'Approved' : 'Ready for your approval'}
+                    </span>
+                  </div>
+
+                  <a
+                    href={data.paperwork.quotePdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-xs font-semibold text-amber-700 hover:text-amber-900"
+                  >
+                    Read the full quote (PDF)
+                  </a>
+
+                  {/* Approve — the client's yes. Releases the rental
+                      agreement into this same portal, so the row below
+                      turns signable without a rep in the loop. Hidden
+                      once the order is past the quote stage. */}
+                  {quoteIsApprovable && !approveConfirming && (
+                    <div>
+                      <button
+                        onClick={() => {
+                          setApproveError('');
+                          setApproveConfirming(true);
+                        }}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold rounded-lg"
+                      >
+                        Approve quote →
+                      </button>
+                      <p className="text-[11px] text-zinc-500 mt-1">
+                        Approving sends you the rental agreement to sign.
+                      </p>
+                    </div>
+                  )}
+
+                  {quoteIsApprovable && approveConfirming && (
+                    <div className="rounded-lg border border-zinc-200 bg-white p-3 space-y-2">
+                      <p className="text-[12px] text-zinc-700 leading-relaxed">
+                        Approve <strong>{data.order.orderNumber}</strong> for{' '}
+                        <strong>${Number(data.order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>?
+                        We&rsquo;ll send the rental agreement straight to this page for you to sign.
+                      </p>
+                      {approveError && <p className="text-[11px] text-red-600">{approveError}</p>}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={approveQuote}
+                          disabled={approving}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-lg"
+                        >
+                          {approving ? 'Approving…' : 'Yes, approve'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setApproveConfirming(false);
+                            setApproveError('');
+                          }}
+                          disabled={approving}
+                          className="px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {justApproved && (
+                    <p className="text-[11px] text-emerald-700 font-semibold">
+                      {agreementReady
+                        ? 'Approved — your rental agreement is ready to sign below.'
+                        : 'Approved — your rep is preparing your rental agreement.'}
+                    </p>
+                  )}
+                  {!justApproved && quoteIsApproved && (
+                    <p className="text-[11px] text-zinc-500">
+                      You approved this quote. Your rep has been notified.
+                    </p>
+                  )}
+                  {approveError && !approveConfirming && (
+                    <p className="text-[11px] text-red-600">{approveError}</p>
+                  )}
+                </div>
+              ) : (
+                <span className="text-sm text-zinc-500">
+                  {data.agent ? `${data.agent.name.split(' ')[0]} is finalizing your quote.` : 'Your SirReel rep is finalizing the quote.'}
+                </span>
+              )}
+            </div>
           </section>
         )}
 
@@ -1505,150 +1693,11 @@ export default function JobPortalPage() {
           <div className="border-t border-zinc-100 pt-5">
             <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">SirReel paperwork</div>
             <div className="space-y-3">
-              <PaperworkRow
-                label="Quote PDF"
-                status={
-                  quoteIsApproved ? 'Approved' : data.paperwork.quotePdfUrl ? 'Available' : 'Pending'
-                }
-                statusKind={data.paperwork.quotePdfUrl ? 'success' : 'pending'}
-              >
-                {data.paperwork.quotePdfUrl ? (
-                  <div className="space-y-2.5">
-                    <a
-                      href={data.paperwork.quotePdfUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block text-xs font-semibold text-amber-700 hover:text-amber-900"
-                    >
-                      Download quote PDF
-                    </a>
-
-                    {/* Approve — the client's yes. Releases the rental
-                        agreement into this same portal, so the row below
-                        turns signable without a rep in the loop. Hidden
-                        once the order is past the quote stage. */}
-                    {quoteIsApprovable && !approveConfirming && (
-                      <div>
-                        <button
-                          onClick={() => {
-                            setApproveError('');
-                            setApproveConfirming(true);
-                          }}
-                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg"
-                        >
-                          Approve quote →
-                        </button>
-                        <p className="text-[11px] text-zinc-400 mt-1">
-                          Approving sends you the rental agreement to sign.
-                        </p>
-                      </div>
-                    )}
-
-                    {quoteIsApprovable && approveConfirming && (
-                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-2">
-                        <p className="text-[12px] text-zinc-700 leading-relaxed">
-                          Approve <strong>{data.order.orderNumber}</strong> for{' '}
-                          <strong>${Number(data.order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>?
-                          We&rsquo;ll send the rental agreement straight to this page for you to sign.
-                        </p>
-                        {approveError && (
-                          <p className="text-[11px] text-red-600">{approveError}</p>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={approveQuote}
-                            disabled={approving}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-lg"
-                          >
-                            {approving ? 'Approving…' : 'Yes, approve'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setApproveConfirming(false);
-                              setApproveError('');
-                            }}
-                            disabled={approving}
-                            className="px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {justApproved && (
-                      <p className="text-[11px] text-emerald-700 font-semibold">
-                        {agreementReady
-                          ? 'Approved — your rental agreement is ready to sign below.'
-                          : 'Approved — your rep is preparing your rental agreement.'}
-                      </p>
-                    )}
-                    {!justApproved && quoteIsApproved && (
-                      <p className="text-[11px] text-zinc-400">
-                        You approved this quote. Your rep has been notified.
-                      </p>
-                    )}
-                    {approveError && !approveConfirming && (
-                      <p className="text-[11px] text-red-600">{approveError}</p>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-xs text-zinc-500">Your SirReel rep is finalizing the quote.</span>
-                )}
-              </PaperworkRow>
-              <PaperworkRow
-                label="DOT information"
-                status={data.paperwork.dotSheetUrl ? 'Available' : 'Pending'}
-                statusKind={data.paperwork.dotSheetUrl ? 'success' : 'pending'}
-              >
-                {data.paperwork.dotSheetUrl ? (
-                  <a
-                    href={data.paperwork.dotSheetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-                  >
-                    Download DOT info sheet (PDF)
-                  </a>
-                ) : (
-                  <span className="text-xs text-zinc-500">Year, make, VIN, plate &amp; latest BIT for your vehicles — your rep will send this.</span>
-                )}
-              </PaperworkRow>
-              <PaperworkRow label="Order PDF" status="Coming soon" statusKind="pending">
-                <span className="text-xs text-zinc-500">Available once your order is confirmed.</span>
-              </PaperworkRow>
-              {/* Phase 6 commit 2 — live invoices + portal card pay. The
-                  panel hides itself when there are no invoices (renders
-                  null), so the "Issued 24-48 hours" copy still applies
-                  in that case via the surrounding context — keeping the
-                  PaperworkRow as a fallback for the no-invoice state. */}
-              {/* "Issued" is the fallback when the pay panel finds no
-                  invoice at all, which reads as though one exists. On a job
-                  the client set up themselves — nothing priced, nothing
-                  confirmed — that flatly contradicts the "not booked yet"
-                  notice above it, so say what is actually true instead
-                  (Wes 2026-09-07). */}
-              <PaperworkRow
-                label={invoiceRowState.hasPreInvoice ? 'Pre-invoice' : 'Invoice'}
-                status={
-                  invoiceRowState.awaitingReview
-                    ? 'Needs your review'
-                    : invoiceRowState.hasPreInvoice
-                      ? 'Approved'
-                      : data.order.awaitingConfirmation
-                        ? 'Not yet'
-                        : 'Issued'
-                }
-                statusKind={
-                  invoiceRowState.awaitingReview
-                    ? 'pending'
-                    : !invoiceRowState.hasPreInvoice && data.order.awaitingConfirmation
-                      ? 'pending'
-                      : 'success'
-                }
-              >
-                <PortalPayPanel onStatus={setInvoiceRowState} />
-              </PaperworkRow>
+              {/* The quote has its own section at the top of the page now, and
+                  the invoice + DOT sheet moved to the quiet block at the
+                  bottom of this section (Oliver / Wes, 2026-09-12). The
+                  "Order PDF · Coming soon" row went entirely: it promised a
+                  document that does not exist yet. */}
               {/* Bank details live HERE, not in an email. See
                   api/portal/job/payment-details for why that ruling changed. */}
               <PaperworkRow label="Pay by bank transfer" status="No fee" statusKind="success">
@@ -1671,72 +1720,73 @@ export default function JobPortalPage() {
               </div>
             </div>
           )}
-          </div>
-        </section>
 
-        {/* ── Equipment ───────────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-baseline justify-between mb-3">
-            <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500">Equipment</h2>
-            <span className="text-xs text-zinc-400 font-mono">{data.lineItems.length} item{data.lineItems.length === 1 ? '' : 's'}</span>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-3">
-          {data.lineItems.length === 0 ? (
-            <div className="text-xs text-zinc-500">
-              {data.order.awaitingConfirmation
-                ? 'Nothing here yet — your equipment and pricing appear once your rep has confirmed availability.'
-                : 'Your equipment list will appear here once it\u2019s finalized.'}
+          {/* ── Later in the job ──────────────────────────────────────────
+              The invoice and the DOT sheet arrive at the END of a rental,
+              and at quote stage they were two full-size boxes about
+              nothing — Oliver, 2026-09-12: "there's too many boxes… an
+              empty invoice box and DOT box isn't necessary this early."
+              Wes: "if you want to have them on the portal the whole way,
+              I'd put them on the bottom so they're visible but not the
+              same size." So: always present, never full-weight, and below
+              the paperwork the client can actually act on. The pay panel
+              still mounts here, so a payable invoice appears in place. */}
+          <div className="border-t border-zinc-100 pt-4 mt-1">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold mb-2">
+              Later in the job
             </div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {data.lineItems.map((li) => (
-                <div key={li.id} className={`py-2 flex items-start justify-between gap-3${li.isSubItem ? ' pl-5' : ''}`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-zinc-900 truncate">{li.description}</div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5">
-                      {li.categoryName && <span>{li.categoryName} · </span>}
-                      Qty {li.quantity}
-                      {/* FLAT lines (partner ancillaries, one-off charges) bill
-                          one period, not one day — printing "1 day" beside a
-                          mileage charge reads as a daily rate. */}
-                      {li.days != null && li.rateType !== 'FLAT' && <> · {li.days} {li.days === 1 ? 'day' : 'days'}</>}
-                    </div>
-                    {/* Client-facing small print. On a partner ancillary this
-                        is the estimate wording — the client has to see it
-                        here, not only on the quote PDF. */}
-                    {li.notes && (
-                      <div className={`text-[11px] mt-1 italic ${li.usageEstimated ? 'text-amber-700' : 'text-zinc-500'}`}>
-                        {li.notes}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 text-right flex-shrink-0">
-                    {li.isIncluded && Number(li.rate) === 0 ? (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                        Included
-                      </span>
-                    ) : (
-                      <>
-                        {fmtCurrency(li.rate)}
-                        <div className="text-[10px] text-zinc-400">{li.rateType.toLowerCase()}</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-2">
+              <QuietRow
+                label={invoiceRowState.hasPreInvoice ? 'Pre-invoice' : 'Invoice'}
+                status={
+                  invoiceRowState.awaitingReview
+                    ? 'Needs your review'
+                    : invoiceRowState.hasPreInvoice
+                      ? 'Approved'
+                      : invoiceRowState.hasAny
+                        ? 'Issued'
+                        : 'Not yet'
+                }
+                // "Issued" used to be the fallback when no invoice existed at
+                // all, which read as though one was sitting there.
+                note={
+                  invoiceRowState.hasAny
+                    ? null
+                    : 'Issued after your gear comes back — nothing to pay yet.'
+                }
+              >
+                <PortalPayPanel onStatus={setInvoiceRowState} />
+              </QuietRow>
+              <QuietRow
+                label="DOT information"
+                status={data.paperwork.dotSheetUrl ? 'Available' : 'When vehicles are assigned'}
+                note={
+                  data.paperwork.dotSheetUrl
+                    ? null
+                    : 'Year, make, VIN, plate & latest BIT for your vehicles — for the cab, once your trucks are picked.'
+                }
+              >
+                {data.paperwork.dotSheetUrl ? (
+                  <a
+                    href={data.paperwork.dotSheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-900"
+                  >
+                    Download DOT info sheet (PDF)
+                  </a>
+                ) : null}
+              </QuietRow>
             </div>
-          )}
-          <div className="border-t border-zinc-100 pt-3 flex items-center justify-between text-sm">
-            <span className="text-zinc-500 font-semibold">Total</span>
-            <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
           </div>
           </div>
         </section>
 
         {/* ── Booking details ─────────────────────────────────────────────── */}
-        {/* Directly under Equipment: the client has just read WHAT they are
-            renting, and this is HOW it works. Same builder as the quote PDF,
-            so the page and the attachment cannot drift.
+        {/* The assets and the quote are up top now (Wes 2026-09-12), so this
+            sits with the rest of the detail: the client has read WHAT they
+            are renting, and this is HOW it works. Same builder as the quote
+            PDF, so the page and the attachment cannot drift.
 
             Guarded on length — `bookingTerms` is [] for an order with no
             lines, and an empty "Booking details" heading is worse than none. */}
@@ -1919,6 +1969,33 @@ function PaperworkRow({
 // helpers fell through to 'Sent' for PORTAL_GENERATED rows, which
 // was the dark-on-dark bug equivalent for badge copy: prepared isn't
 // delivered. The canonical mapping fixes it.
+/**
+ * A paperwork line that is real but not yet the client's business — the
+ * invoice before there is one, the DOT sheet before trucks are picked.
+ * Deliberately lighter than PaperworkRow: no card, no border, smaller type
+ * (Wes 2026-09-12: "visible but not the same size").
+ */
+function QuietRow({
+  label,
+  status,
+  note,
+  children,
+}: {
+  label: string;
+  status: string;
+  note?: string | null;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 flex-wrap">
+      <span className="text-[12px] font-semibold text-zinc-600">{label}</span>
+      <span className="text-[11px] text-zinc-400">· {status}</span>
+      {note && <span className="text-[11px] text-zinc-400 basis-full">{note}</span>}
+      {children && <div className="basis-full">{children}</div>}
+    </div>
+  );
+}
+
 function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | undefined }) {
   // Older cached payloads (a tab left open across the deploy) carry no
   // cardAuth — render nothing rather than a row that says "not requested"
@@ -1968,6 +2045,24 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
     );
   }
 
+  // They opened the form themselves and have not finished. Never "we sent
+  // you a link" — nobody did (Oliver, 2026-09-12).
+  if (card.state === 'CLIENT_STARTED') {
+    return (
+      <PaperworkRow label="Card Authorization" status="Whenever you're ready" statusKind="pending">
+        <div className="space-y-2">
+          <div className="text-xs text-zinc-600 leading-relaxed">
+            You opened the secure card form{fmt(card.requestedAt) ? ` on ${fmt(card.requestedAt)}` : ''} and
+            haven&rsquo;t finished. Pick up where you left off — the card is used for rental fees,
+            deposits and any charges under the rental agreement.
+          </div>
+          {openLink('Finish adding your card →', true)}
+          <CardAuthHandoff />
+        </div>
+      </PaperworkRow>
+    );
+  }
+
   if (card.state === 'REQUESTED') {
     return (
       <PaperworkRow label="Card Authorization" status="Needed" statusKind="warning">
@@ -1990,11 +2085,63 @@ function CardAuthRow({ card }: { card: PortalData['paperwork']['cardAuth'] | und
     );
   }
 
+  return <CardAuthSelfStart />;
+}
+
+/**
+ * "I want to get ahead of the paperwork" — Oliver, 2026-09-12, testing the
+ * client side at quote stage and finding no way to put a card down.
+ *
+ * Before this the row said "your rep will send a link when it is needed",
+ * which is a dead end for a coordinator who is ready now. The button mints
+ * the same secure form a rep would send (POST /api/portal/job/card-link);
+ * because the client asked for it, that request does NOT make the job
+ * card-required — see the route and lib/payments/cardGate.ts.
+ *
+ * Navigates in the same tab rather than window.open: the fetch has to land
+ * first, and a popup opened after an await is what browsers block.
+ */
+function CardAuthSelfStart() {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const open = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const r = await fetch('/api/portal/job/card-link', { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.url) {
+        setErr(body.error || 'Could not open the card form. Your rep can send you the link.');
+        setBusy(false);
+        return;
+      }
+      window.location.href = body.url;
+    } catch {
+      setErr('Could not open the card form. Check your connection and try again.');
+      setBusy(false);
+    }
+  };
+
   return (
-    <PaperworkRow label="Card Authorization" status="Not yet requested" statusKind="pending">
-      <div className="text-xs text-zinc-500">
-        Your rep will send a secure card authorization link when it is needed. Once it is out, you
-        can hand it to your accounting team from here.
+    <PaperworkRow label="Card Authorization" status="Whenever you're ready" statusKind="pending">
+      <div className="space-y-2">
+        <div className="text-xs text-zinc-600 leading-relaxed">
+          Put a card on file now and it is done — no one has to chase you for it later. The card is
+          entered on a secure form and is used for rental fees, deposits and any charges under the
+          rental agreement.
+        </div>
+        <button
+          onClick={open}
+          disabled={busy}
+          className="inline-block px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-semibold rounded-lg"
+        >
+          {busy ? 'Opening the secure form…' : 'Add a card now →'}
+        </button>
+        {err && <div className="text-[11px] text-red-600">{err}</div>}
+        <div className="text-[11px] text-zinc-400">
+          Prefer to pay by check or bank transfer? The bank details are further down this page.
+        </div>
       </div>
     </PaperworkRow>
   );
