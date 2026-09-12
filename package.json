@@ -87,6 +87,7 @@
     "test:partner-cancelled-lines": "tsx tests/orders/partner-cancelled-lines.test.ts",
     "test:vendor-contacts": "tsx tests/sub-rentals/vendor-contacts.test.ts",
     "test:partner-welcome": "tsx tests/sub-rentals/partner-welcome.test.ts",
+    "test:partner-action-code": "tsx tests/sub-rentals/partner-action-code.test.ts",
     "test:discount-waterfall": "tsx tests/sub-rentals/discount-waterfall.test.ts",
     "test:partner-lockup": "tsx tests/sub-rentals/partner-lockup.test.ts",
     "test:battery-candidates": "tsx tests/sub-rentals/battery-partner-candidates.test.ts",

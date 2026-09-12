@@ -33,6 +33,13 @@ import {
   updateVendorContactRow,
   type VendorContactInput,
 } from '@/lib/sub-rentals/vendorContacts'
+import {
+  maskEmail,
+  needsMailRoutingCode,
+  partnerActionCode,
+  PARTNER_CODE_TTL_MINUTES,
+  verifyPartnerActionCode,
+} from '@/lib/sub-rentals/partnerActionCode'
 
 async function tellHq(subject: string, line: string, href: string): Promise<void> {
   const to = await channelRecipients('vendor-portal')
@@ -45,6 +52,52 @@ async function tellHq(subject: string, line: string, href: string): Promise<void
     text: `${line}\n\n${base}${href}`,
     label: 'vendor-portal',
   }).catch(() => null)
+}
+
+/**
+ * Tell the PARTNER, at the address already on file, that something changed on
+ * their page. Wes 2026-09-11, on the account link being forwardable: "Is this
+ * a danger, a loop we should close?" HQ was already told about every change;
+ * nobody at the partner was, so a stranger acting looked like nothing at all.
+ * Now it lands in their own inbox, with what to do if it wasn't them.
+ */
+async function tellPartner(vendorId: string, subject: string, line: string, alsoTo: (string | null)[] = []): Promise<void> {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { email: true } })
+  const to = [v?.email ?? null, ...alsoTo]
+    .map((e) => (e ?? '').trim().toLowerCase())
+    .filter((e, i, a) => e && a.indexOf(e) === i)
+  if (to.length === 0) return
+  const foot =
+    'If this wasn’t you or someone at your company, reply to this email — we’ll issue a new page link and the old one stops working.'
+  await sendAgreementEmail({
+    to,
+    subject,
+    html: `<p>${line}</p><p>${foot}</p>`,
+    text: `${line}\n\n${foot}`,
+    label: 'vendor-portal-partner-notice',
+  }).catch(() => null)
+}
+
+/**
+ * Email the partner a short code, at the address already on file, for a change
+ * that would move where their mail goes. The code proves the person asking can
+ * read the inbox SirReel already writes to — the one thing a forwarded link
+ * cannot do. Returns the masked address, so the page can say where it went.
+ */
+export async function sendPartnerActionCode(vendorId: string): Promise<{ ok: true; sentTo: string } | { ok: false; error: string }> {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { name: true, email: true } })
+  const to = v?.email?.trim().toLowerCase()
+  if (!to) return { ok: false, error: 'There is no email on file for your company yet — ask SirReel to add one.' }
+  const code = partnerActionCode(vendorId, 'mail-routing')
+  const line = `Someone asked to change where SirReel’s mail for ${v!.name} goes. The code is ${code}. It is good for about ${PARTNER_CODE_TTL_MINUTES} minutes.`
+  await sendAgreementEmail({
+    to: [to],
+    subject: `Your code: ${code}`,
+    html: `<p>${line}</p><p>If you didn’t ask for this, ignore it — nothing changes without the code.</p>`,
+    text: `${line}\n\nIf you didn't ask for this, ignore it — nothing changes without the code.`,
+    label: 'vendor-portal-action-code',
+  }).catch(() => null)
+  return { ok: true, sentTo: maskEmail(to) }
 }
 
 /** Resolve a partner from their account token. Null on any miss. */
@@ -68,11 +121,20 @@ export async function updateVendorContact(
     phone: clean(data.phone, 30),
     lotAddress: clean(data.lotAddress, 400),
   }
+  const before = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { email: true } })
   const v = await prisma.vendor.update({
     where: { id: vendorId },
     data: Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined)),
     select: { name: true },
   })
+  if (patch.email !== undefined && patch.email !== before?.email) {
+    await tellPartner(
+      vendorId,
+      `The contact address for ${v.name} was changed`,
+      `SirReel’s mail for ${v.name} now goes to ${patch.email ?? '(cleared)'}. It was changed from your partner page.`,
+      [before?.email ?? null],
+    )
+  }
   await tellHq(
     `${v.name} updated their contact details`,
     `${v.name} changed their contact details from their partner page: ${Object.entries(patch)
@@ -94,9 +156,22 @@ export async function partnerListContacts(vendorId: string) {
   return listVendorContacts(prisma, vendorId)
 }
 
-export async function partnerAddContact(vendorId: string, vendorName: string, input: VendorContactInput) {
+export async function partnerAddContact(vendorId: string, vendorName: string, input: VendorContactInput, code?: unknown) {
+  // Adding a person is one click. Pointing SirReel's mail at them is not:
+  // that needs the code we email to the address already on file.
+  if (needsMailRoutingCode({ isPrimary: input.isPrimary === true, emailBookings: input.emailBookings === true })
+      && !verifyPartnerActionCode(vendorId, 'mail-routing', code)) {
+    return { ok: false as const, needsCode: true as const, error: 'Enter the code we email to the address on file — that is what moves where SirReel writes to you.' }
+  }
   const r = await addVendorContact(prisma, vendorId, input, { byPartner: true })
   if (r.ok) {
+    if (r.contact.isPrimary || r.contact.emailBookings) {
+      await tellPartner(
+        vendorId,
+        `${r.contact.name} was added to ${vendorName}’s SirReel page`,
+        `${r.contact.name} (${r.contact.email ?? 'no email'}) was added on your partner page.${r.contact.isPrimary ? ' They are now the main contact, so SirReel’s mail goes to them.' : ''}${r.contact.emailBookings ? ' They are copied on booking mail.' : ''}`,
+      )
+    }
     await tellHq(
       `${vendorName} added a contact: ${r.contact.name}`,
       `${vendorName} added ${r.contact.name} (${r.contact.roleLabel}) to their people on their partner page — ${r.contact.email ?? 'no email'}${r.contact.phone ? ` · ${r.contact.phone}` : ''}.${r.contact.isPrimary ? ' They are now the main contact, so partner mail goes to them.' : ''}${r.contact.emailBookings ? ' They asked to be copied on bookings.' : ''}`,
@@ -106,9 +181,24 @@ export async function partnerAddContact(vendorId: string, vendorName: string, in
   return r
 }
 
-export async function partnerUpdateContact(vendorId: string, vendorName: string, contactId: string, input: VendorContactInput) {
+export async function partnerUpdateContact(vendorId: string, vendorName: string, contactId: string, input: VendorContactInput, code?: unknown) {
+  const current = await prisma.vendorContact.findFirst({ where: { id: contactId, vendorId }, select: { isPrimary: true, emailBookings: true } })
+  if (needsMailRoutingCode(
+        { isPrimary: input.isPrimary === true, emailBookings: input.emailBookings === true },
+        { isPrimary: current?.isPrimary === true, emailBookings: current?.emailBookings === true },
+      )
+      && !verifyPartnerActionCode(vendorId, 'mail-routing', code)) {
+    return { ok: false as const, needsCode: true as const, error: 'Enter the code we email to the address on file — that is what moves where SirReel writes to you.' }
+  }
   const r = await updateVendorContactRow(prisma, vendorId, contactId, input)
   if (r.ok) {
+    if ((r.contact.isPrimary && !current?.isPrimary) || (r.contact.emailBookings && !current?.emailBookings)) {
+      await tellPartner(
+        vendorId,
+        `Where SirReel writes to ${vendorName} changed`,
+        `${r.contact.name} (${r.contact.email ?? 'no email'}) was changed on your partner page.${r.contact.isPrimary && !current?.isPrimary ? ' They are now the main contact.' : ''}${r.contact.emailBookings && !current?.emailBookings ? ' They are now copied on booking mail.' : ''}`,
+      )
+    }
     await tellHq(
       `${vendorName} updated a contact: ${r.contact.name}`,
       `${vendorName} changed ${r.contact.name} (${r.contact.roleLabel}) on their partner page — ${r.contact.email ?? 'no email'}${r.contact.phone ? ` · ${r.contact.phone}` : ''}.${r.contact.isPrimary ? ' They are the main contact.' : ''}${r.contact.emailBookings ? ' Copied on bookings.' : ''}`,
@@ -226,6 +316,13 @@ export async function setUnitMarketing(vendorId: string, unitId: string, allowed
       ? `${unit.vendor.name} re-allowed SirReel to offer their ${unit.name} to clients. It returns to sirreel.com only if it has a slug and photos.`
       : `${unit.vendor.name} withdrew permission to market their ${unit.name}. It is off sirreel.com now; do not quote it to clients.`,
     '/crm/portals#partners',
+  )
+  await tellPartner(
+    vendorId,
+    allowed ? `${unit.name} was offered to SirReel’s clients` : `${unit.name} was withdrawn from SirReel’s clients`,
+    allowed
+      ? `Someone on your partner page allowed SirReel to offer your ${unit.name} to clients.`
+      : `Someone on your partner page withdrew your ${unit.name} from SirReel’s client-facing listings.`,
   )
 }
 
@@ -414,6 +511,14 @@ export async function signVendorAgreement(i: SignVendorAgreementInput): Promise<
     `${row.vendor.name} signed the partner agreement`,
     `${i.signerName}${i.signerTitle ? ` (${i.signerTitle})` : ''} signed "${row.title}" for ${row.vendor.name} from their partner page.`,
     '/crm/portals#partners',
+  )
+  // Signing is the heaviest thing the page can do, and the page link is
+  // forwardable — so the address on file hears about it (Wes 2026-09-11).
+  await tellPartner(
+    i.vendorId,
+    `${row.title} was signed for ${row.vendor.name}`,
+    `${i.signerName}${i.signerTitle ? ` (${i.signerTitle})` : ''} signed "${row.title}" on your SirReel partner page, using the email ${i.signerEmail}.`,
+    [i.signerEmail],
   )
   return { signedAt }
 }

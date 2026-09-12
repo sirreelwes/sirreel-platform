@@ -37,6 +37,10 @@ const CHIP: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '2px
 
 const blank = { name: '', email: '', phone: '', role: 'OTHER', notes: '', isPrimary: false, emailBookings: false }
 
+/** Pointing SirReel's mail somewhere new needs a code sent to the address
+ *  already on file — the one thing a forwarded link cannot reach. */
+const MOVES_MAIL = (d: { isPrimary: boolean; emailBookings: boolean }) => d.isPrimary || d.emailBookings
+
 export function VendorContactsCard({ token, preview }: { token: string; preview: boolean }) {
   const [rows, setRows] = useState<Contact[] | null>(null)
   const [draft, setDraft] = useState({ ...blank })
@@ -44,6 +48,9 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null)
+  const [needsCode, setNeedsCode] = useState(false)
 
   const load = useCallback(() => {
     fetch(`/api/public/vendor-account/${token}/contacts`)
@@ -56,10 +63,11 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
   async function save(url: string, method: 'POST' | 'PATCH') {
     setBusy(true); setMsg(null)
     try {
-      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, code }) })
       const j = await r.json().catch(() => ({}))
+      if (r.status === 428 || j.needsCode) { setNeedsCode(true); setMsg(j.error || 'That change needs the code we email to the address on file.'); return }
       if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save')
-      setDraft({ ...blank }); setAdding(false); setEditing(null); setMsg('Saved — thank you.')
+      setDraft({ ...blank }); setAdding(false); setEditing(null); setCode(''); setNeedsCode(false); setCodeSentTo(null); setMsg('Saved — thank you.')
       load()
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Could not save')
@@ -77,6 +85,18 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
       load()
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Could not remove')
+    } finally { setBusy(false) }
+  }
+
+  async function emailCode() {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch(`/api/public/vendor-account/${token}/contacts/code`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Could not send the code')
+      setCodeSentTo(j.sentTo); setNeedsCode(true)
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Could not send the code')
     } finally { setBusy(false) }
   }
 
@@ -102,6 +122,21 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
         <input type="checkbox" checked={draft.emailBookings} onChange={(e) => setDraft({ ...draft, emailBookings: e.target.checked })} />
         Copy them on bookings — estimates, holds, go-aheads, cancellations
       </label>
+      {(needsCode || MOVES_MAIL(draft)) && (
+        <div style={{ border: '1px solid #e7c46a', background: '#fdf7e6', borderRadius: 8, padding: 10 }}>
+          <div style={{ fontSize: 13, color: '#3d392f' }}>
+            {codeSentTo
+              ? `We emailed a code to ${codeSentTo}. Enter it to change where SirReel’s mail goes.`
+              : 'Changing where SirReel’s mail goes needs a code — we send it to the address already on file.'}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+            <input style={{ ...INPUT, width: 150, letterSpacing: '2px' }} placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" />
+            <button type="button" disabled={busy || preview} onClick={emailCode} style={{ ...LINK, fontWeight: 600, color: '#111' }}>
+              {codeSentTo ? 'Send it again' : 'Email me a code'}
+            </button>
+          </div>
+        </div>
+      )}
       {msg && <div style={{ fontSize: 12, color: '#a33' }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button

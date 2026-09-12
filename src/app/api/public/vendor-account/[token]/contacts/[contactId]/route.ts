@@ -15,8 +15,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { token: str
   const v = await vendorByToken(params.token)
   if (!v) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
-  const r = await partnerUpdateContact(v.id, v.name, params.contactId, body)
-  if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 400 })
+  const r = await partnerUpdateContact(v.id, v.name, params.contactId, body, body.code)
+  if (!r.ok) {
+    const needsCode = 'needsCode' in r && r.needsCode === true
+    return NextResponse.json({ ok: false, error: r.error, needsCode }, { status: needsCode ? 428 : 400 })
+  }
   return NextResponse.json({ ok: true, contact: r.contact })
 }
 

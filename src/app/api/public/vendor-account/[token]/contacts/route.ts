@@ -30,7 +30,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const v = await vendorByToken(params.token)
   if (!v) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
-  const r = await partnerAddContact(v.id, v.name, body)
-  if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 400 })
+  const r = await partnerAddContact(v.id, v.name, body, body.code)
+  if (!r.ok) {
+    // 428: the change is fine, it just needs the code we email to the address
+    // already on file (partnerActionCode.ts).
+    const needsCode = 'needsCode' in r && r.needsCode === true
+    return NextResponse.json({ ok: false, error: r.error, needsCode }, { status: needsCode ? 428 : 400 })
+  }
   return NextResponse.json({ ok: true, contact: r.contact }, { status: 201 })
 }
