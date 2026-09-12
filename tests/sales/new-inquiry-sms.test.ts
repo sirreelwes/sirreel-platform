@@ -16,10 +16,11 @@
  *      not a copy tweak.
  */
 import {
+  clip,
   composeAlert,
   composeTestAlert,
   inTextingWindow,
-  trimTitle,
+  splitTitle,
   who,
   type AlertSubject,
 } from '../../src/lib/sales/newInquiryAlertText'
@@ -76,19 +77,48 @@ console.log('\nthe brand — filed with the carrier, not decoration')
   ok(composeTestAlert(APP).includes('SirReel'), 'the test text names SirReel')
 }
 
-console.log('\nwho — degrades without throwing')
+console.log('\nwho — the linked records, else the title (59% of real rows have neither)')
 {
   eq(who(lead()), 'Jane Doe · Acme Pictures', 'person and company')
   eq(who(lead({ companyName: null })), 'Jane Doe', 'person only')
   eq(who(lead({ personName: null })), 'Acme Pictures', 'company only')
-  eq(who(lead({ personName: null, companyName: null })), 'no name given', 'a bare web-form submission still sends')
+  eq(
+    who(lead({ personName: null, companyName: null, title: 'Production request — Halogen Cinema · Make You' })),
+    'Halogen Cinema · Make You',
+    'NOTHING linked → the identity out of the title, never "no name given"',
+  )
+  eq(who(lead({ personName: null, companyName: null, title: 'Contact — Drew' })), 'Drew', 'a bare contact form names Drew')
+  eq(who(lead({ personName: null, companyName: null, title: 'Bozoma' })), 'Bozoma', 'a title with no kind prefix is used whole (public/intake)')
 }
 
-console.log('\ntitle trimming')
+console.log('\nsplitTitle — the real shapes the forms produce')
 {
-  eq(trimTitle('  Need   a  truck \n soon '), 'Need a truck soon', 'whitespace collapsed')
-  const long = trimTitle('x'.repeat(200))
-  ok(long.length === 70 && long.endsWith('…'), 'a runaway subject is capped at 70 with an ellipsis')
+  eq(splitTitle('Production request — Halogen Cinema · Make You'), { kind: 'Production request', identity: 'Halogen Cinema · Make You' }, 'supply-request')
+  eq(splitTitle('Contact — Drew'), { kind: 'Contact', identity: 'Drew' }, 'public contact')
+  eq(splitTitle('Add-on request — Blue Yonder'), { kind: 'Add-on request', identity: 'Blue Yonder' }, 'portal add-on')
+  eq(splitTitle('After-hours assistant — Marco'), { kind: 'After-hours assistant', identity: 'Marco' }, "AHA's own callback")
+  eq(splitTitle('Bozoma'), { kind: null, identity: 'Bozoma' }, 'no em-dash → no kind')
+  eq(splitTitle('Some very long sentence that happens to contain an em-dash — and a tail'), { kind: null, identity: 'Some very long sentence that happens to contain an em-dash — and a tail' }, 'prose is not a kind label')
+  eq(splitTitle('Contact — '), { kind: null, identity: 'Contact —' }, 'an empty identity is not a split')
+}
+
+console.log('\nthe unlinked case reads properly end to end')
+{
+  const unlinked = lead({ personName: null, companyName: null, title: 'Production request — Halogen Cinema · Make You' })
+  const body = composeAlert([unlinked], APP)
+  ok(!body.includes('no name given'), 'never "no name given" when the title names them')
+  ok(body.includes('new incoming, Production request: Halogen Cinema · Make You'), 'kind says where it came from, identity says who')
+  ok(!body.includes('Halogen Cinema · Make You — Halogen'), 'and the identity is not printed twice')
+
+  const batch = composeAlert([unlinked, lead({ id: 'b', personName: null, companyName: null, title: 'Contact — Drew' })], APP)
+  ok(batch.includes('Halogen Cinema · Make You; Drew'), 'a batch of unlinked rows still names them')
+}
+
+console.log('\nclipping')
+{
+  eq(clip('  Need   a  truck \n soon '), 'Need a truck soon', 'whitespace collapsed')
+  const long = clip('x'.repeat(200))
+  ok(long.length === 70 && long.endsWith('…'), 'a runaway field is capped at 70 with an ellipsis')
 }
 
 console.log('\nthe window — 8am to 10pm Pacific')
