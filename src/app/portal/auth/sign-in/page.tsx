@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react'
+import { AHA_SMS_DISPLAY, AHA_SMS_HREF } from '@/lib/support/lines'
 import { PORTAL, PORTAL_SERIF } from '@/lib/brand/portalTokens'
 
 export default function PortalSignInPage() {
@@ -155,7 +156,7 @@ export default function PortalSignInPage() {
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
           <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
+            After hours, text AHA: <a href={AHA_SMS_HREF} style={{ color: PORTAL.gold }}>{AHA_SMS_DISPLAY}</a>
           </p>
         </div>
       </footer>

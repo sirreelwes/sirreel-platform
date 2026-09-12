@@ -716,8 +716,18 @@ export default function JobPortalPage() {
               </div>
             </div>
           </div>
+          {/* NOT the office line. Wes 2026-09-12: "After hours number should
+              not be office line but rather AHA — she can connect to Jose or
+              Wes in emergency." The 888 rings a desk nobody is sitting at. */}
           <div className="text-[11px] text-zinc-400 -mt-2">
-            After-hours line: <a href={`tel:${data.afterHoursLine}`} className="text-zinc-600 hover:text-zinc-900">{data.afterHoursLine}</a>
+            After hours, text AHA:{' '}
+            <a
+              href={`sms:${(data.support?.aha || '(747) 335-1665').replace(/\D/g, '')}`}
+              className="text-zinc-600 hover:text-zinc-900"
+            >
+              {data.support?.aha || '(747) 335-1665'}
+            </a>
+            {' — she answers any hour, and can reach Jose or Wes if it is urgent.'}
           </div>
 
           {/* After-hours access, once a rep has released it for this job.

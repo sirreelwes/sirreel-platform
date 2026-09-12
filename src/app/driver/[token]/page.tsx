@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AHA_SMS_DISPLAY } from '@/lib/support/lines'
 import { KeyRound } from 'lucide-react'
 
 type Side = 'front' | 'back'
@@ -125,7 +126,8 @@ export default function DriverPortalPage({ params }: { params: { token: string }
 
         <p className="mt-6 text-[12px] leading-relaxed text-zinc-500">
           Your license images are stored privately and are visible only to SirReel
-          staff. Questions? Call after-hours: (888) 477-7335.
+          staff. Questions? Text AHA, our after-hours assistant, at {AHA_SMS_DISPLAY} — any
+          hour, and she can reach a person if it is urgent.
         </p>
       </div>
     </main>

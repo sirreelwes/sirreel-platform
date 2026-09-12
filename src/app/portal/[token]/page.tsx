@@ -1,5 +1,6 @@
 'use client';
 import { formatCalendarDate } from '@/lib/dates/calendarDate';
+import { AHA_SMS_DISPLAY, AHA_SMS_HREF } from '@/lib/support/lines'
 import { LCDW_ELIGIBILITY_NOTE } from '@/components/portal-v2/terms'
 import { LcdwElection, useLcdwCoverage, lcdwApplies } from '@/components/portal-v2/LcdwElection'
 import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
@@ -1663,7 +1664,7 @@ export default function ClientPortal() {
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
           <p className="mt-2 text-[11px]" style={{ color: PORTAL.gold }}>
-            After-hours: <a href="tel:+18884777335" style={{ color: PORTAL.gold }}>(888) 477-7335</a>
+            After hours, text AHA: <a href={AHA_SMS_HREF} style={{ color: PORTAL.gold }}>{AHA_SMS_DISPLAY}</a>
           </p>
         </div>
       </footer>

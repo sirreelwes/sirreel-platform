@@ -132,7 +132,7 @@ A few things you can do anytime through your portal:
 
 [View your job portal]({{portalLink}})
 
-Reach me directly at {{repPhone}} if anything changes. After-hours line is {{afterHoursLine}} for any urgent issues.
+Reach me directly at {{repPhone}} if anything changes. After hours, {{afterHoursLine}} — she answers any hour and can reach us if it is urgent.
 
 Looking forward to it.
 
@@ -157,7 +157,7 @@ Quick rundown for pickup at {{pickupTime}} on {{pickupDate}}:
 • Address: {{pickupAddress}}
 • Parking: {{parkingInstructions}}
 • Your contact on-site: {{opsContactName}} at {{opsContactPhone}}
-• After-hours line: {{afterHoursLine}}
+• After hours: {{afterHoursLine}}
 
 Everything is also live in your [job portal]({{portalLink}}) if helpful.
 
@@ -179,7 +179,7 @@ Best,
     subject: "Today's the day — {{jobName}}",
     body: `Hi {{firstName}},
 
-We're ready when you are. {{opsContactName}} will be on-site at {{opsContactPhone}} if you need anything during pickup. After-hours line is {{afterHoursLine}}.
+We're ready when you are. {{opsContactName}} will be on-site at {{opsContactPhone}} if you need anything during pickup. After hours, {{afterHoursLine}}.
 
 Have a great shoot.
 
@@ -216,7 +216,7 @@ A few things you can do anytime through your portal:
 
 [View your job portal]({{portalLink}})
 
-If you need anything between now and pickup, I'm at {{repPhone}}. After-hours line is {{afterHoursLine}}.
+If you need anything between now and pickup, I'm at {{repPhone}}. After hours, {{afterHoursLine}}.
 
 See you {{pickupDayOfWeek}}.
 

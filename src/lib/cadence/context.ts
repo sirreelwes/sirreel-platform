@@ -1,10 +1,16 @@
 import { prisma } from '@/lib/prisma'
+import { ahaSmsNumber } from '@/lib/support/lines'
 import type { CadenceState, LostReason } from '@prisma/client'
 import type { CadenceTemplateContext } from '@/lib/email/templates/cadenceTemplates'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 
-const AFTER_HOURS_LINE = '(888) 477-7335'
+/** What a client should do after hours: text AHA, who answers any hour and can
+ *  reach Jose or Wes if it is urgent. NOT the 888 office line, which is only
+ *  staffed 7:30–5:30 weekdays (Wes 2026-09-12). */
+function afterHoursLineText(): string {
+  return `text AHA, our after-hours assistant, at ${ahaSmsNumber()}`
+}
 
 export interface CadenceOrderContext {
   order: {
@@ -148,7 +154,7 @@ export function buildTemplateContext(ctx: CadenceOrderContext): CadenceTemplateC
     repName: ctx.agent.name,
     repPhone: ctx.agent.phone || '',
     repEmail: ctx.agent.email,
-    afterHoursLine: AFTER_HOURS_LINE,
+    afterHoursLine: afterHoursLineText(),
     portalLink,
   }
 }
