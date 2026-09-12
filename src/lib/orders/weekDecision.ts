@@ -63,6 +63,27 @@ export interface WeekLine {
    *  test — see `weekCapExempt`. */
   catalogProductId?: string | null
   description?: string
+  /**
+   * "Is this row outside the week?" — answered by a caller that knows
+   * better than the name test below. When set it IS the answer, in both
+   * directions.
+   *
+   * The builder cannot answer it: it holds no catalog row, so
+   * `weekCapExempt` falls back to reading the description. The ORDER
+   * page can, and does, for the two rows a week must never be quoted on:
+   *
+   *   · Specialty vehicles — its rows carry `isSpecialtyVehicle`, their
+   *     SubRentals and their own createdAt, which is exactly what
+   *     `billsAsSpecialtyVehicle` reads and exactly what the bulk-days
+   *     route refuses the write by.
+   *   · FLAT rows — bulk-days skips them, so a week quoted with their
+   *     saving folded in would promise a number the write cannot
+   *     produce.
+   *
+   * Either way the rule is the same: never quote a discount the write
+   * would refuse.
+   */
+  weekExempt?: boolean
 }
 
 /**
@@ -74,11 +95,13 @@ export interface WeekLine {
  * dates/apply routes refuse to write one. The builder can only apply the
  * NAME rule: it holds no catalog row's `isSpecialtyVehicle`, so a
  * catalogued specialty unit (a restroom trailer) is invisible to it here.
- * That gap is the order page's to close, not this prompt's to guess at —
- * what matters is that the prompt never quotes a discount the write
- * would refuse.
+ * That gap is the order page's to close, and it closes it by passing
+ * `weekExempt` — the same `billsAsSpecialtyVehicle` verdict the
+ * bulk-days route writes by. What matters either way is that the prompt
+ * never quotes a discount the write would refuse.
  */
 export function weekCapExempt(line: WeekLine): boolean {
+  if (line.weekExempt != null) return line.weekExempt
   return !line.catalogProductId && matchesSpecialtyName(line.description)
 }
 
@@ -152,6 +175,19 @@ export interface WeekOption {
   isStandard: boolean
   /** True when the rows already price at this week. */
   isCurrent: boolean
+  /**
+   * The ONE per-row day count this week produces — or null when the
+   * section's rows carry different date ranges and therefore land on
+   * different counts.
+   *
+   * A week is per-row arithmetic (each row's own calendar range, capped),
+   * and the builder applies it that way. The order page cannot: it writes
+   * through `/line-items/bulk-days`, which sets a single number across
+   * the department. So it needs to know whether one number says the same
+   * thing as the week — and when it does not, say so rather than write a
+   * count that over-bills the short row and under-bills the long one.
+   */
+  uniformDays: number | null
 }
 
 export interface WeekSection {
@@ -195,10 +231,12 @@ export function weekSection(
   const options: WeekOption[] = weekCapChoices(department).map((cap) => {
     let days = 0
     let total = 0
+    const perRow = new Set<number>()
     for (const line of priced) {
       const d = computeBillableDays(span(line), cap)
       days += d
       total += totalAt(line, d)
+      perRow.add(d)
     }
     return {
       cap,
@@ -207,6 +245,7 @@ export function weekSection(
       delta: total - currentTotal,
       isStandard: cap === standard,
       isCurrent: current === cap,
+      uniformDays: perRow.size === 1 ? [...perRow][0] : null,
     }
   })
 
@@ -221,6 +260,47 @@ export function weekSection(
     skippedCount: rows.length - priced.length,
     calendarDays: priced.reduce((max, l) => Math.max(max, span(l)), 0),
   }
+}
+
+/**
+ * The weeks somebody already chose, read off the rows.
+ *
+ * `decided` is session memory: the builder fills it as the agent uses the
+ * section select, and within one build that is the whole story. The ORDER
+ * page has no such session — the quote it is about to send may have been
+ * priced days ago by someone else, and the only surviving record of that
+ * decision is the rows themselves.
+ *
+ * So a section already priced BELOW its department's standard week counts
+ * as answered. Somebody moved it off the default, which is as deliberate
+ * an act as typing the days by hand (already respected, as 'custom'), and
+ * the exposure Wes named — "it goes out full rate" — is not what this
+ * section is doing. Measured against 25 live quotes on 2026-09-11: this
+ * is the difference between asking about four sections on one order and
+ * asking about the one that is actually at full rate.
+ *
+ * Deliberately NOT applied inside `weekDecisionsPending`: the builder's
+ * rows can reach a short week without anyone choosing it (the extractor
+ * pre-fills days from the client's own email), and there "nobody has
+ * answered yet" is still true.
+ */
+export function weekDecisionsOnRecord(
+  lines: WeekLine[],
+): Partial<Record<LineItemDepartment, number>> {
+  const out: Partial<Record<LineItemDepartment, number>> = {}
+  for (const department of new Set(lines.map((l) => l.department))) {
+    // capInEffect reads whatever rows it is handed — the department
+    // filter is the CALLER's, as it is in weekSection. Handing it the
+    // whole order reads two departments' day counts as one section and
+    // answers 'custom' for both.
+    const rows = lines.filter((l) => l.department === department)
+    const current = capInEffect(department, rows)
+    const standard = defaultWeekCap(department)
+    if (typeof current === 'number' && standard != null && current < standard) {
+      out[department] = current
+    }
+  }
+  return out
 }
 
 /**

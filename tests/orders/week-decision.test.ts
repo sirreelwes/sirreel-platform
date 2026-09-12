@@ -28,6 +28,7 @@ import type { LineItemDepartment } from '@prisma/client'
 import {
   capInEffect,
   weekCapExempt,
+  weekDecisionsOnRecord,
   weekDecisionsPending,
   weekSection,
   type WeekLine,
@@ -173,6 +174,123 @@ check(
   deltasOf('VEHICLES', mixedVehicles),
   [[5, 0], [4, -200], [3, -400], [2, -600], [1, -800]],
   'the 5-day vehicles week, and what is under it',
+)
+
+// ── weekExempt: the caller that knows better gets the last word ───────
+// The order detail page holds what the builder does not — the catalog's
+// `isSpecialtyVehicle`, the line's SubRentals, its own createdAt — and
+// answers with `billsAsSpecialtyVehicle`, the same function the
+// bulk-days route refuses the write by. It also marks FLAT rows, which
+// that route skips. Both directions have to bite, or the prompt quotes a
+// saving the server will not produce.
+console.log('\nweekExempt — the order page answers for itself')
+const catalogued = line({
+  department: 'VEHICLES',
+  description: '2 Unit Restroom Trailer',
+  catalogProductId: 'inv-dlux',
+  quantity: 1,
+  rate: 900,
+  billableDays: 5,
+})
+check(weekCapExempt(catalogued), false, 'the name rule cannot see a catalogued specialty unit')
+check(
+  weekCapExempt({ ...catalogued, weekExempt: true }),
+  true,
+  'the order page says specialty — and that is the answer',
+)
+check(
+  weekSection('VEHICLES', [{ ...catalogued, weekExempt: true }]),
+  null,
+  'so no week is offered on it at all',
+)
+check(
+  weekCapExempt({ ...motorhome, weekExempt: false }),
+  false,
+  'and false bites too — a line the write would happily cap is not exempted by its name',
+)
+
+const withFlatFee = [
+  line({ department: 'VEHICLES', description: 'Cargo Van', quantity: 2, rate: 100, billableDays: 5 }),
+  line({
+    department: 'VEHICLES',
+    description: 'Delivery',
+    rateType: 'FLAT',
+    quantity: 1,
+    rate: 250,
+    billableDays: 5,
+    weekExempt: true,
+  }),
+]
+check(
+  weekSection('VEHICLES', withFlatFee)?.currentTotal,
+  1000,
+  'a FLAT row bulk-days will not touch is not priced into the offer',
+)
+check(weekSection('VEHICLES', withFlatFee)?.skippedCount, 1, 'it is counted as left alone')
+
+// ── uniformDays: what a department-wide write can honestly carry ──────
+// A week is per-row arithmetic; /line-items/bulk-days writes ONE number
+// across the department. They only say the same thing while the rows
+// share a calendar range — the order page reads this to know whether it
+// may write at all.
+console.log('\nuniformDays — one number, or none')
+const sameSpan = [
+  line({ quantity: 6, rate: 7, billableDays: 3 }),
+  line({ quantity: 2, rate: 40, billableDays: 3, description: 'Comms Kit' }),
+]
+check(
+  weekSection('COMMUNICATIONS', sameSpan)?.options.map((o) => [o.cap, o.uniformDays]),
+  [[3, 3], [2, 2], [1, 1]],
+  'rows on one 6-day range land on one day count per week',
+)
+
+const mixedSpans = [
+  line({ quantity: 6, rate: 7, billableDays: 3 }),
+  line({ quantity: 2, rate: 40, billableDays: 2, returnDate: '2026-09-15', description: 'Comms Kit' }),
+]
+check(
+  weekSection('COMMUNICATIONS', mixedSpans)?.options.map((o) => o.uniformDays),
+  [null, 2, 1],
+  'a 6-day row and a 2-day row share no single count at the 3-day week',
+)
+check(
+  weekSection('COMMUNICATIONS', mixedSpans)?.current,
+  3,
+  'they still read as the standard week — each from its own dates',
+)
+
+// ── The week already on the rows is an answer (the order page) ────────
+// A quote sent from /orders/[id] may have been priced days ago by someone
+// else; `decided` is empty there because this session never asked. A
+// section sitting BELOW its standard week was nonetheless chosen — and it
+// is not the thing Wes named, because it is not at full rate.
+console.log('\nweekDecisionsOnRecord — the rows remember')
+const alreadyShort = [line({ billableDays: 2 })] // 6 calendar days billing 2 = the 2-day week
+check(capInEffect('COMMUNICATIONS', alreadyShort), 2, 'the rows read as the 2-day week')
+check(
+  weekDecisionsOnRecord(alreadyShort),
+  { COMMUNICATIONS: 2 },
+  'someone moved this section off the standard week — that is the answer',
+)
+check(
+  weekDecisionsPending(alreadyShort, weekDecisionsOnRecord(alreadyShort)).length,
+  0,
+  'so the order page stays quiet about it',
+)
+check(
+  weekDecisionsPending(alreadyShort, {}).length,
+  1,
+  'and the builder, whose session memory is the whole story, is unchanged',
+)
+check(
+  weekDecisionsOnRecord(screenshot),
+  {},
+  'a section at the standard week has answered nothing — still asked',
+)
+check(
+  weekDecisionsPending(screenshot, weekDecisionsOnRecord(screenshot)).map((sec) => sec.department),
+  ['COMMUNICATIONS'],
+  'which is the full-rate section this whole prompt exists for',
 )
 
 // ── Ordering: the most exposed section is asked about first ────────────

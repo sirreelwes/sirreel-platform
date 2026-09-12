@@ -25,9 +25,15 @@
  * "Keep it" is right there. The point is that it becomes an answer
  * someone gave.
  *
- * Asked once per builder session, on the first action that produces
+ * Asked once per session, on the first action that produces
  * client-facing paper. A second quote for the same order is not a second
  * interrogation.
+ *
+ * Used from BOTH ends of a quote's life: the builder (/orders/new), where
+ * picking a week reprices the rows in memory, and the order detail page,
+ * where it writes through /line-items/bulk-days. That second caller is
+ * why `busy` and `error` exist — its picks are a round trip that can be
+ * refused, and a modal that swallows a refusal is worse than no modal.
  */
 
 import type { LineItemDepartment } from '@prisma/client'
@@ -52,6 +58,8 @@ export function WeekDecisionPrompt({
   onPick,
   onProceed,
   onCancel,
+  busy = null,
+  error = null,
 }: {
   /** The undecided sections, priced. Recomputed by the caller from live
    *  rows, so picking a week re-renders this list with the new numbers
@@ -63,6 +71,12 @@ export function WeekDecisionPrompt({
   onPick: (department: LineItemDepartment, cap: number) => void
   onProceed: () => void
   onCancel: () => void
+  /** A section whose pick is in flight — its buttons go quiet until the
+   *  write lands and the numbers come back from the server. */
+  busy?: LineItemDepartment | null
+  /** Why the last pick did not take. Shown where it was clicked, not in
+   *  an alert the agent dismisses on the way to sending anyway. */
+  error?: string | null
 }) {
   const exposure = sections.reduce(
     (sum, s) => sum + Math.min(0, ...s.options.map((o) => o.delta)),
@@ -116,11 +130,12 @@ export function WeekDecisionPrompt({
                   <button
                     key={o.cap}
                     type="button"
+                    disabled={busy != null}
                     onClick={() => onPick(s.department, o.cap)}
                     title={`Bill ${o.cap} day${o.cap === 1 ? '' : 's'} per 7-day week — ${dayWord(
                       o.days,
                     )} across this section`}
-                    className={`rounded-md border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
+                    className={`rounded-md border px-2.5 py-1.5 text-left text-[11px] font-semibold transition disabled:opacity-50 ${
                       o.isCurrent
                         ? 'border-amber-600 bg-amber-600 text-white'
                         : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:border-lt-fg3 hover:text-lt-fg'
@@ -140,9 +155,17 @@ export function WeekDecisionPrompt({
                     </span>
                   </button>
                 ))}
+                {busy === s.department && (
+                  <span className="self-center text-[11px] text-lt-fg3">Applying…</span>
+                )}
               </div>
             </section>
           ))}
+          {error && (
+            <p className="rounded-lg bg-chip-bad-bg px-3 py-2 text-[11px] font-medium text-chip-bad-fg">
+              {error}
+            </p>
+          )}
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-lt-hairline px-5 py-3">
@@ -160,7 +183,8 @@ export function WeekDecisionPrompt({
             <button
               type="button"
               onClick={onProceed}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500"
+              disabled={busy != null}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500 disabled:opacity-50"
             >
               {actionLabel} →
             </button>

@@ -27,6 +27,14 @@ import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lin
 import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence, clock12 } from "@/lib/orders/driverEstimate";
 import { driverPayBreakdown } from "@/lib/orders/driverRate";
 import { billsAsSpecialtyVehicle, specialtyShape, SPECIALTY_DAILY_NOTE } from "@/lib/pricing/specialtyVehicles";
+import {
+  weekDecisionsOnRecord,
+  weekDecisionsPending,
+  weekSection,
+  type WeekLine,
+  type WeekSection,
+} from "@/lib/orders/weekDecision";
+import { WeekDecisionPrompt } from "@/components/orders/WeekDecisionPrompt";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { SendToWarehouseModal, type SendToWarehouseResult } from "@/components/orders/SendToWarehouseModal";
@@ -76,6 +84,10 @@ type LineItem = {
   rateType: string;
   rate: string;
   quantity: number;
+  /** The LINE's own age, not the order's — the Specialty Vehicle catalog
+   *  rule only prices lines written on or after its cutover date, so a
+   *  line quoted in August keeps the week it was quoted at. */
+  createdAt?: string;
   // The GET returns the Prisma row verbatim, so these are the Prisma
   // field names. `days` (the column name) is NOT in the payload —
   // reading it silently yielded undefined and rendered "--" on every
@@ -110,11 +122,57 @@ type LineItem = {
     internalFlags: string[];
     slug: string | null;
     trackingMode: string;
+    /** Rule 1 of the Specialty Vehicle class — the flag an operator can
+     *  set without a deploy. Returned by the GET since 2026-09-10; it was
+     *  missing from this type, so every specialty test on this page was
+     *  quietly falling through to the partner/name nets and an OWNED
+     *  restroom trailer was still being offered a week cap. */
+    isSpecialtyVehicle?: boolean;
     /** The AssetCategory a unit-tracked catalog row holds against — how a
      *  VEHICLE line finds ITS hold on the booking. */
     legacyAssetCategoryId?: string | null;
   } | null;
 };
+
+/** This page's rows, in the shape `billsAsSpecialtyVehicle` reads. One
+ *  adapter: `createdAt` arrives as JSON and has to become a Date, and
+ *  forgetting that is how the cutover date silently stops applying. */
+const specialtyLineOf = (li: LineItem) =>
+  specialtyShape({ ...li, createdAt: li.createdAt ? new Date(li.createdAt) : null });
+
+/** ...and in the shape the billing-week arithmetic reads.
+ *
+ *  `weekExempt` is the whole reason this page can ask the question better
+ *  than the builder can: the builder guesses the Specialty class from the
+ *  description, this page KNOWS it (catalog flag, SubRental, the line's
+ *  own age) — and knows it by the same function `/line-items/bulk-days`
+ *  refuses the write by, so the prompt never offers a week the server
+ *  would decline to apply. */
+/** The three things this page can do that put a priced document in a
+ *  client's hands. Mirrors the builder's own list, minus "Save draft" —
+ *  which is exactly the gap this brings the question to. */
+type QuotePaperAction = 'preview' | 'download' | 'send';
+const QUOTE_PAPER_LABEL: Record<QuotePaperAction, string> = {
+  preview: 'Preview PDF',
+  download: 'Download PDF',
+  send: 'Send quote',
+};
+
+const weekLineOf = (li: LineItem, rows: ReturnType<typeof specialtyLineOf>[]): WeekLine => ({
+  department: li.department as LineItemDepartment,
+  quantity: li.quantity,
+  rate: Number(li.rate) || 0,
+  rateType: li.rateType as WeekLine['rateType'],
+  billableDays: li.billableDays,
+  pickupDate: li.pickupDate ?? '',
+  returnDate: li.returnDate ?? '',
+  catalogProductId: li.inventoryItem?.id ?? null,
+  description: li.description,
+  // The two rows /line-items/bulk-days will not write, so the two rows
+  // the prompt must not price a saving into: the Specialty class (which
+  // bills calendar days, no weekly reduction) and FLAT rows.
+  weekExempt: li.rateType === 'FLAT' || billsAsSpecialtyVehicle(specialtyLineOf(li), rows),
+});
 
 /** A hold on the job's booking — a CATEGORY line with a quantity — and
  *  the units bound to it. Shared by the order's own booking and the
@@ -1094,6 +1152,12 @@ export default function OrderDetailPage() {
     if (autoSendHandled) return;
     if (!order || !orderId) return;
     setAutoSendHandled(true);
+    // The builder asked the billing-week question on its way here (it
+    // gates its own "Send quote →"), so this hand-off is the tail of a
+    // session that has already been interrupted once. Asking again on
+    // the same click is how a prompt becomes something people click
+    // through without reading.
+    weekAskedRef.current = true;
     setEmailReviewTarget({ kind: 'quote', orderId });
     // Replace URL so future renders don't see ?send=1.
     if (typeof window !== 'undefined') {
@@ -1658,6 +1722,149 @@ export default function OrderDetailPage() {
       // the gate is never accidentally bypassed by a stale flag.
     }
     setEmailReviewTarget({ kind: 'quote', orderId });
+  };
+
+  // ── The billing week, asked here too ───────────────────────────────
+  //
+  // Wes 2026-09-11: "If a 3d 2d or 1d week isn't selected, it goes out
+  // full rate. I feel like we should prompt agents to select rather than
+  // risk losing work because our quote comes in so much higher."
+  //
+  // The builder asks before ITS paper leaves — but it deliberately does
+  // not ask on "Save Draft", and a parked draft is sent from HERE. That
+  // left the exact quote most likely to be under-considered (built one
+  // day, sent another, often by someone else) as the one nobody was
+  // asked about: this page had only the small per-row `Nd` chips, which
+  // name no money and are easy to never open.
+  //
+  // Same question, same arithmetic, read off the PERSISTED rows — with
+  // the one thing the builder cannot do: the Specialty class answered
+  // from the catalog flag rather than guessed from the description (see
+  // `weekLineOf`).
+  const [weekDecided, setWeekDecided] = useState<Partial<Record<LineItemDepartment, number>>>({});
+  const [weekPromptAction, setWeekPromptAction] = useState<QuotePaperAction | null>(null);
+  const [weekApplying, setWeekApplying] = useState<LineItemDepartment | null>(null);
+  const [weekError, setWeekError] = useState<string | null>(null);
+  const weekAskedRef = useRef(false);
+  const weekLines: WeekLine[] = useMemo(() => {
+    const lines = order?.lineItems ?? [];
+    const rows = lines.map(specialtyLineOf);
+    return lines.map((li) => weekLineOf(li, rows));
+  }, [order]);
+  const weekSections: WeekSection[] = useMemo(() => {
+    if (weekLines.length === 0 || !order) return [];
+    // Only departments this order can still be repriced in. On an
+    // INVOICED or CLOSED order the week is history, and the prompt would
+    // be offering a discount bulk-days answers with a 409.
+    // Sections already priced below their standard week were answered by
+    // whoever priced them — days ago, possibly by someone else. This page
+    // has no session memory of that ask; the rows are the memory.
+    return weekDecisionsPending(weekLines, {
+      ...weekDecisionsOnRecord(weekLines),
+      ...weekDecided,
+    }).filter((sec) => isLineItemEditableFn(order.status as OrderStatus, sec.department));
+  }, [weekLines, order, weekDecided]);
+
+  /** The sections the OPEN prompt is showing — pinned when it opened,
+   *  repriced from live rows on every render.
+   *
+   *  Not `weekSections`: answering a section drops it out of the pending
+   *  list, and a modal that deletes the row you just clicked (and closes
+   *  when it was the last one, sending nothing) reads like a crash. The
+   *  section stays, with its new numbers and the chosen week marked
+   *  "now", until the agent proceeds or backs out. */
+  const [weekPromptDepts, setWeekPromptDepts] = useState<LineItemDepartment[]>([]);
+  const weekPromptSections: WeekSection[] = useMemo(
+    () =>
+      weekPromptDepts
+        .map((dept) => weekSection(dept, weekLines))
+        .filter((sec): sec is WeekSection => sec != null),
+    [weekPromptDepts, weekLines],
+  );
+
+  /** Apply one section's week — through /line-items/bulk-days, the same
+   *  route the section control uses, which refuses specialty lines and
+   *  FLAT rows on its own.
+   *
+   *  A week is per-row arithmetic and bulk-days writes ONE number across
+   *  the department, so the two only say the same thing while the
+   *  section's rows share a date range (`uniformDays`). When they don't,
+   *  nothing is written and the agent is told to set it per row — a
+   *  single count there would over-bill the short row and under-bill the
+   *  long one, which is worse than the full rate this prompt exists to
+   *  prevent. Either way the section counts as ANSWERED: they were
+   *  asked, which is the whole point. */
+  const applyWeekCapToDept = async (department: LineItemDepartment, cap: number) => {
+    if (weekApplying) return;
+    setWeekError(null);
+    const section = weekPromptSections.find((sec) => sec.department === department);
+    const option = section?.options.find((o) => o.cap === cap);
+    if (!option) return;
+    if (option.uniformDays == null) {
+      setWeekDecided((prev) => ({ ...prev, [department]: cap }));
+      setWeekError(
+        `${lineItemSectionLabel(department)} rows carry different date ranges, so one ${cap}-day week isn't a single day count. Set the days on each row with its ${cap}d chip.`,
+      );
+      return;
+    }
+    setWeekApplying(department);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/line-items/bulk-days`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, days: option.uniformDays }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setWeekError(data.reason || data.error || `Could not apply that week (HTTP ${res.status}).`);
+        return;
+      }
+      // Answered, and the numbers in the modal now come back from the
+      // server rather than from what we hoped it wrote.
+      setWeekDecided((prev) => ({ ...prev, [department]: cap }));
+      // Re-cut the PDF NOW rather than leaving it to the 2.5s staleness
+      // debounce: the next thing this agent does is the thing we
+      // interrupted — and "Send quote" is disabled while the stored PDF
+      // is stale, so proceeding straight from the prompt would land on a
+      // dead button seconds after they answered the question.
+      const regenerated = order?.quotePdfUrl ? await regeneratePdf({ quiet: true }) : false;
+      if (!regenerated) await fetchOrder();
+    } catch (err) {
+      setWeekError(err instanceof Error ? err.message : 'Could not apply that week.');
+    } finally {
+      setWeekApplying(null);
+    }
+  };
+
+  /** The actions that put a NUMBER in front of a client. A downloaded
+   *  PDF is on its way to somebody as surely as a sent one, so all three
+   *  go through the gate — and all three share the ONE ask. */
+  const runQuotePaper = (action: QuotePaperAction) => {
+    if (action === 'send') {
+      openSendQuoteReview();
+      return;
+    }
+    const href = `/api/orders/${orderId}/quote-pdf${action === 'download' ? '?download=1' : ''}`;
+    if (typeof window === 'undefined') return;
+    if (action === 'download') window.location.href = href;
+    else window.open(href, '_blank', 'noopener,noreferrer');
+  };
+
+  /** True when the click was swallowed by the prompt. Asked ONCE per
+   *  page session: a second press is not a second interrogation, and
+   *  neither is cancelling — they have seen the numbers, which is what
+   *  the gate is for. */
+  const weekGateHolds = (action: QuotePaperAction): boolean => {
+    if (weekAskedRef.current || weekSections.length === 0) return false;
+    setWeekError(null);
+    setWeekPromptDepts(weekSections.map((sec) => sec.department));
+    setWeekPromptAction(action);
+    return true;
+  };
+
+  const requestQuotePaper = (action: QuotePaperAction) => {
+    if (weekGateHolds(action)) return;
+    runQuotePaper(action);
   };
 
   const cancelOrder = async () => {
@@ -2655,10 +2862,10 @@ export default function OrderDetailPage() {
               2026-09-10). No chips; say why. Mirrors the server rule in
               bulk-days and dates/apply, including its cutover date, so the
               chips never offer a cap the write would refuse. */}
-          {billsAsSpecialtyVehicle(specialtyShape(li), (order?.lineItems ?? []).map(specialtyShape)) && li.pickupDate && li.returnDate && (
+          {billsAsSpecialtyVehicle(specialtyLineOf(li), (order?.lineItems ?? []).map(specialtyLineOf)) && li.pickupDate && li.returnDate && (
             <div className="mt-1 text-center text-[10px] text-lt-fg3">{SPECIALTY_DAILY_NOTE}</div>
           )}
-          {!billsAsSpecialtyVehicle(specialtyShape(li), (order?.lineItems ?? []).map(specialtyShape)) && weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
+          {!billsAsSpecialtyVehicle(specialtyLineOf(li), (order?.lineItems ?? []).map(specialtyLineOf)) && weekCapChoices(editDept as any).length > 0 && li.pickupDate && li.returnDate && (
             <div className="mt-1 flex flex-wrap justify-center gap-0.5">
               {weekCapChoices(editDept as any).map((cap) => {
                 const suggested = computeBillableDays(
@@ -4554,16 +4761,28 @@ export default function OrderDetailPage() {
         <div className="flex gap-2 flex-wrap">
           {order.quotePdfUrl ? (
             <>
+              {/* Both still plain links — the billing-week gate only
+                  intercepts the FIRST one of these a session takes, and
+                  hands the click back (runQuotePaper) when the agent
+                  proceeds. A PDF opened here is one an agent reads to a
+                  client off their screen or forwards; that is paper
+                  leaving, same as a send. */}
               <a
                 href={`/api/orders/${orderId}/quote-pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  if (weekGateHolds('preview')) e.preventDefault();
+                }}
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Preview
               </a>
               <a
                 href={`/api/orders/${orderId}/quote-pdf?download=1`}
+                onClick={(e) => {
+                  if (weekGateHolds('download')) e.preventDefault();
+                }}
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Download
@@ -4590,7 +4809,7 @@ export default function OrderDetailPage() {
                     this is the same rule stated where the rep can act on
                     it, instead of a 400 after they've hit send. */}
                 <button
-                  onClick={openSendQuoteReview}
+                  onClick={() => requestQuotePaper('send')}
                   disabled={noRecipient || !!order.quotePdfStale}
                   className={
                     noRecipient || order.quotePdfStale
@@ -5369,6 +5588,31 @@ export default function OrderDetailPage() {
           <div className="border-t border-lt-hairline pt-3 text-[11px] text-lt-fg2">{inviteMsg}</div>
         )}
       </div>
+
+      {weekPromptAction && weekPromptSections.length > 0 && (
+        <WeekDecisionPrompt
+          sections={weekPromptSections}
+          actionLabel={QUOTE_PAPER_LABEL[weekPromptAction]}
+          busy={weekApplying}
+          error={weekError}
+          onPick={(department, cap) => void applyWeekCapToDept(department, cap)}
+          onProceed={() => {
+            weekAskedRef.current = true;
+            const action = weekPromptAction;
+            setWeekPromptAction(null);
+            setWeekError(null);
+            runQuotePaper(action);
+          }}
+          onCancel={() => {
+            // They have seen the numbers; the gate has done its job.
+            // Re-asking on the next press is how a prompt becomes
+            // something people click through without reading.
+            weekAskedRef.current = true;
+            setWeekPromptAction(null);
+            setWeekError(null);
+          }}
+        />
+      )}
 
       <EmailReviewModal
         target={emailReviewTarget}
