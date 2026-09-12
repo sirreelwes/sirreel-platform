@@ -58,6 +58,7 @@ import {
   type InvoiceLineSnapshotEntry,
 } from './InvoiceDocument'
 import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
+import { computeDays } from '@/lib/orders/days'
 
 export type GenerateRentalInvoiceResult =
   | {
@@ -75,12 +76,12 @@ export type GenerateRentalInvoiceResult =
       existingInvoiceId?: string
     }
 
-/** Calendar days a line covers — the fallback when computedDays was
- *  never backfilled. Both columns are @db.Date, so the arithmetic is
- *  done in UTC; doing it locally is how a west-coast render loses a
- *  day. */
+/** Calendar days a line covers (both ends included) — the fallback
+ *  when computedDays was never backfilled. computeDays() does the
+ *  arithmetic in UTC because both columns are @db.Date; doing it
+ *  locally is how a west-coast render loses a day. */
 function spanOf(pickup: Date, ret: Date): number {
-  return Math.max(1, Math.round((ret.getTime() - pickup.getTime()) / 86_400_000))
+  return computeDays(pickup, ret)
 }
 
 /**

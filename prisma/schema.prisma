@@ -4117,9 +4117,10 @@ model OrderLineItem {
   // Send Quote validator.
   billableDays    Int?                @default(1) @map("days")
   // ── Shoot-days claim (Wes ruling B) ────────────────────────────
-  // computedDays: server-derived max(1, returnDate − pickupDate) —
-  //   never client-writable; the reference number. Nullable only for
-  //   legacy rows pending backfill.
+  // computedDays: server-derived calendar days the line touches, both
+  //   ends included (Sep 14 → 16 = 3; see computeDays in
+  //   src/lib/orders/days.ts) — never client-writable; the reference
+  //   number. Was the exclusive gap until the 2026-09-12 backfill.
   // claimedDays: the client's shoot-days REQUEST from the public
   //   form. NEVER prices anything on its own.
   // Price resolution: billableDays ?? computedDays. billableDays is

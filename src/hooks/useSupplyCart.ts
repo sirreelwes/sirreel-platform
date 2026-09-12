@@ -34,6 +34,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { computeDays } from '@/lib/orders/days'
 
 export type ItemKind = 'SUPPLY' | 'VEHICLE'
 
@@ -349,16 +350,16 @@ export function applyUnmergeOrder(
   return next
 }
 
-/** Days inclusive between pickup and return (min 1). */
-// Ruled formula: computedDays = max(1, returnDate − pickupDate),
-// EXCLUSIVE count. Matches src/lib/orders/days.ts computeDays() and the
-// server snapshot in /api/public/supply-request — keep all three in
-// lockstep.
+/** Calendar days touched between pickup and return, both ends
+ *  included (min 1) — Sep 14 → 16 is 3. Delegates to the one
+ *  computeDays() in src/lib/orders/days.ts so the cart's estimate
+ *  matches the server snapshot in /api/public/supply-request and the
+ *  order line that gets created. */
 export function rentalDaysBetween(pickup: string, returnD: string): number {
   const s = new Date(`${pickup}T00:00:00Z`).getTime()
   const e = new Date(`${returnD}T00:00:00Z`).getTime()
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
-  return Math.max(1, Math.round((e - s) / 86_400_000))
+  return computeDays(`${pickup}T00:00:00Z`, `${returnD}T00:00:00Z`)
 }
 
 /** Per-line $ estimate — matches the server snapshot math in

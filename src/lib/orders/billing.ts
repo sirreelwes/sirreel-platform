@@ -37,14 +37,24 @@ export const BILLING_RULES: Record<LineItemDepartment, BillingRule> = {
 }
 
 /**
- * Calendar days between pickup and return (1-day floor).
+ * Calendar days a rental touches, both ends included (1-day floor):
+ * Sep 14 → Sep 16 is 3. Same count as computeDays() in days.ts and
+ * rentalDays() in orders.ts — keep them agreeing.
  *
- * Used for rate-type gating only. The total/breakdown math reads
- * billableDays directly — calendar duration is just the input that
- * decides which rate-type buckets the rep can choose from.
+ * Feeds the rate-type gate, the week-cap chips on the order page, the
+ * new-order day suggestion and the push-dates re-derivation. The
+ * total/breakdown math reads billableDays directly — calendar duration
+ * is only the input those suggestions start from.
+ *
+ * Was the exclusive gap until 2026-09-12 (Sep 14 → 16 = 2), so the 5d
+ * chip on a cargo van created with 3 billed days re-suggested 2, and a
+ * pushed window silently dropped a day. Inclusive matches what line
+ * create actually bills.
  */
 export function calendarDays(pickup: Date, returnDate: Date): number {
-  return Math.max(1, Math.ceil((returnDate.getTime() - pickup.getTime()) / 86400000))
+  const p = Date.UTC(pickup.getUTCFullYear(), pickup.getUTCMonth(), pickup.getUTCDate())
+  const r = Date.UTC(returnDate.getUTCFullYear(), returnDate.getUTCMonth(), returnDate.getUTCDate())
+  return Math.max(1, Math.round((r - p) / 86400000) + 1)
 }
 
 /**

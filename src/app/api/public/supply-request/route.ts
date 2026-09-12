@@ -37,6 +37,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
+import { computeDays } from '@/lib/orders/days'
 
 export const dynamic = 'force-dynamic'
 
@@ -127,14 +128,15 @@ async function verifyTurnstile(token: string | null, ip: string): Promise<boolea
   }
 }
 
-// Ruled formula (Wes, shoot-days claim build): computedDays =
-// max(1, returnDate − pickupDate) — EXCLUSIVE count. Matches
-// src/lib/orders/days.ts computeDays(); keep in lockstep.
+// Calendar days touched, both ends included (Sep 14 → 16 = 3) — the
+// same computeDays() the order line stores, so the client's estimate
+// counts the days they'll actually be billed. Was an exclusive copy
+// until 2026-09-12.
 function rentalDaysBetween(start: string, end: string): number {
   const s = new Date(`${start}T00:00:00Z`).getTime()
   const e = new Date(`${end}T00:00:00Z`).getTime()
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
-  return Math.max(1, Math.round((e - s) / 86_400_000))
+  return computeDays(`${start}T00:00:00Z`, `${end}T00:00:00Z`)
 }
 
 // Client shoot-days CLAIM — a REQUEST, never a price. Bounded sanity
