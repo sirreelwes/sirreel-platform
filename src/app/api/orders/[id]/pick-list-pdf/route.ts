@@ -13,6 +13,9 @@ export const maxDuration = 15
 // The rendering itself lives in lib/warehouse/renderPickListPdf.ts so
 // this route and the send-to-warehouse email produce the SAME sheet.
 // `?lines=<id,id,…>` renders a partial pull; `?download=1` attaches.
+// `?filed=OUT` renders the DRIVER'S COPY — the sheet with the counts the
+// filed check-out report recorded in the Picked column (Wes 2026-09-12:
+// "it's the driver's receipt"); 404 until that report is on file.
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -24,6 +27,7 @@ export async function GET(
 
   const rendered = await renderPickListPdf(params.id, {
     lineIds: (req.nextUrl.searchParams.get('lines') ?? '').split(','),
+    filed: req.nextUrl.searchParams.get('filed') === 'OUT' ? 'OUT' : undefined,
   })
   if (!rendered.ok) {
     return NextResponse.json({ error: rendered.error }, { status: rendered.status })

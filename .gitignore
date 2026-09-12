@@ -28,6 +28,7 @@ scripts/*
 !scripts/add-partner-photo-columns.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
+!scripts/add-warehouse-change-columns.ts
 !scripts/seed-unit-checks.ts
 !scripts/seed-radio-parts-kit.ts
 !scripts/add-hq-user.ts

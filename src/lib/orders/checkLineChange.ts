@@ -23,6 +23,13 @@ export interface CheckLineFacts {
   expectedQty: number
   actualQty: number
   substituteFor?: string | null
+  /** The catalog row the dock picked — the swap-in on a SUBSTITUTE, the
+   *  item on an ADDED row. Null / absent = typed by hand. */
+  inventoryItemId?: string | null
+  /** What the ORDER says right now (description + catalog row), so a
+   *  re-filed sheet can tell a swap it already applied from a new one.
+   *  Absent = unknown, which reads as "assume it moves". */
+  current?: { description: string; inventoryItemId: string | null } | null
 }
 
 /** What kind of difference this row records. Derived, never trusted from
@@ -36,6 +43,44 @@ export function classifyCheckLine(line: CheckLineFacts): OrderCheckLineChange {
   if (line.actualQty < line.expectedQty) return 'SHORT'
   if (line.actualQty > line.expectedQty) return 'EXTRA'
   return 'NONE'
+}
+
+/**
+ * Whether filing this row would actually CHANGE the order — as opposed to
+ * merely recording a difference the order already carries.
+ *
+ * `classifyCheckLine` says what the sheet SAYS; this says what filing it
+ * DOES. They came apart on 2026-09-12, when additions and swaps started
+ * being written onto the order (Wes: "the driver needs a copy of the
+ * exact order they're picking up"). Re-opening a filed sheet pre-fills
+ * the swap it recorded, so on a re-file the same row classifies
+ * SUBSTITUTE again — and without this the second filing would rename a
+ * line to its own name, re-flag the agent and email the client an
+ * "updated" quote identical to the last one. An addition the sheet
+ * already turned into a line comes back as an ordinary line (it has an
+ * id now), so it never re-adds itself.
+ */
+export function changeMovesOrder(
+  line: CheckLineFacts,
+  change: OrderCheckLineChange = classifyCheckLine(line),
+): boolean {
+  switch (change) {
+    case 'NONE':
+      return false
+    case 'ADDED':
+      // A row typed and then zeroed is nothing on the truck — recorded,
+      // never written.
+      return line.actualQty > 0
+    case 'SUBSTITUTE': {
+      if (line.actualQty !== line.expectedQty) return true
+      if (!line.current) return true
+      if (line.description.trim() !== line.current.description.trim()) return true
+      if (line.inventoryItemId && line.inventoryItemId !== line.current.inventoryItemId) return true
+      return false
+    }
+    default:
+      return true
+  }
 }
 
 /**
