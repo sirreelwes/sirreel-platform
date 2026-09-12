@@ -19,15 +19,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 import { afterHoursPayload } from '@/lib/afterHours/instructions'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) return NextResponse.json({ error: 'No session' }, { status: 401 })
+  const read = await resolveJobPortalRead(req)
+  if (!read) return NextResponse.json({ error: 'No session' }, { status: 401 })
 
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+  const resolved = read.resolved
   if (!resolved) return NextResponse.json({ error: 'No session' }, { status: 401 })
 
   const order = await prisma.order.findUnique({
@@ -88,7 +89,10 @@ export async function GET(req: NextRequest) {
       entityType: 'job',
       entityId: job.id,
       newValues: {
-        portalAccessId: session.portalAccessId,
+        portalAccessId: read.previewBy ? null : resolved.portalAccessId,
+        // A staff preview is not a client view — say so in the audit row
+        // rather than leaving a look that reads like the client's.
+        staffPreviewBy: read.previewBy,
         contactId: resolved.contactId,
         orderId: order.id,
       },
@@ -97,6 +101,8 @@ export async function GET(req: NextRequest) {
   })
 
   return NextResponse.json({
+    // Staff preview, so the shared masthead can wear its banner here too.
+    preview: read.previewBy ? { by: read.previewBy } : null,
     projectName: job.name,
     // Chrome facts for the job portal's shared masthead (JobPortalChrome).
     company: order?.company

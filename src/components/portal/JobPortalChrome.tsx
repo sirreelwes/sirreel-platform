@@ -29,6 +29,9 @@ export interface JobPortalChromeData {
   code: string
   rep: { name: string; email: string } | null
   afterHoursLine: string
+  /** Set when a staff member is looking at the client's page rather than the
+   *  client — the shell says so, loudly, at the top (Wes 2026-09-12). */
+  preview: { by: string } | null
 }
 
 /** Lift the chrome facts out of a /api/portal/job/data payload. Tolerant
@@ -46,6 +49,7 @@ export function chromeFromPortalData(d: any): JobPortalChromeData {
     code: d?.job?.jobCode || d?.order?.orderNumber || '',
     rep: d?.agent?.email ? { name: d.agent.name || d.agent.email, email: d.agent.email } : null,
     afterHoursLine: d?.afterHoursLine || '(888) 477-7335',
+    preview: d?.preview?.by ? { by: String(d.preview.by) } : null,
   }
 }
 
@@ -76,6 +80,23 @@ export function JobPortalShell({
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
+      {/* ── Staff preview ──────────────────────────────────────────────
+          Nothing here is a client. Every button below is inert: the write
+          routes refuse a preview cookie, so a mis-click cannot sign, approve
+          or pay on the client's behalf. */}
+      {chrome?.preview && (
+        <div className="w-full text-white" style={{ backgroundColor: PORTAL.gold }}>
+          <div className="max-w-5xl mx-auto px-6 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px]">
+            <span className="font-semibold uppercase tracking-[1.2px]">Staff preview</span>
+            <span className="text-white/85">
+              This is {chrome.company.name || 'the client'}&rsquo;s page as they see it. Nothing you press here is saved,
+              and they are not told you looked.
+            </span>
+            <span className="ml-auto text-white/70 truncate">{chrome.preview.by}</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Masthead ───────────────────────────────────────────────── */}
       <div className="w-full bg-white border-b border-zinc-200">
         <div className="max-w-5xl mx-auto px-6 py-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">

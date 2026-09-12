@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { resolveJobMagicLink } from '@/lib/portal/jobMagicLink'
 import {
   buildJobSessionCookieHeader,
   createJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
+import {
+  buildJobPreviewCookieHeader,
+  createJobPreviewCookieValue,
+  readJobPreviewToken,
+} from '@/lib/portal/jobPreview'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +28,30 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: NextRequest, { params }: { params: { slug: string } }) {
   const url = new URL(req.url)
+
+  // ?preview=… — a staff member looking at this page, handed over from HQ
+  // (jobPreview.ts). Same handshake as the client's: token in the URL, cookie
+  // in the response, token stripped by the page. The cookie it sets is a
+  // preview, not a session: no write route on this portal will accept it, and
+  // nothing about the client's own link is touched.
+  const previewToken = url.searchParams.get('preview') || ''
+  if (previewToken) {
+    const claim = readJobPreviewToken(previewToken)
+    if (!claim) {
+      return NextResponse.json({ error: 'This preview link has expired — open it again from the job page.' }, { status: 401 })
+    }
+    const order = await prisma.order.findUnique({
+      where: { id: claim.orderId },
+      select: { id: true, portalSlug: true, orderNumber: true, company: { select: { id: true, name: true } } },
+    })
+    if (!order || order.portalSlug !== params.slug) {
+      return NextResponse.json({ error: 'That preview is for a different job.' }, { status: 401 })
+    }
+    const res = NextResponse.json({ ok: true, preview: { by: claim.by }, order: { id: order.id, orderNumber: order.orderNumber, company: order.company } })
+    res.headers.append('Set-Cookie', buildJobPreviewCookieHeader(createJobPreviewCookieValue(order.id, claim.by)))
+    return res
+  }
+
   const token = url.searchParams.get('token') || ''
   const resolved = await resolveJobMagicLink({ slug: params.slug, token })
   if (!resolved) {

@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
 
 export const dynamic = 'force-dynamic'
@@ -34,11 +35,11 @@ export const dynamic = 'force-dynamic'
 const ALLOWED_TYPES = new Set(['RENTAL_AGREEMENT', 'STAGE_CONTRACT'])
 
 export async function GET(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) {
+  const read = await resolveJobPortalRead(req)
+  if (!read) {
     return NextResponse.json({ error: 'No session' }, { status: 401 })
   }
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+  const resolved = read.resolved
   if (!resolved) {
     return NextResponse.json({ error: 'Session no longer valid' }, { status: 401 })
   }

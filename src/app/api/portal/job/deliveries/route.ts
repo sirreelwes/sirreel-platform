@@ -23,16 +23,23 @@ import { prisma } from '@/lib/prisma'
 import { recordConsent } from '@/lib/sms/threads'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 import { loadDeliveries, parseReportTo } from '@/lib/portal/deliveries'
 import { liveSubRentalIdsForJob, notifyLogisticsChanged } from '@/lib/sub-rentals/conduit'
 
 export const dynamic = 'force-dynamic'
 
 /** Session → job id, or null. The single place the job is decided. */
-async function jobIdForSession(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) return null
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+async function jobIdForSession(req: NextRequest, opts: { allowPreview?: boolean } = {}) {
+  // allowPreview is passed by GET alone — saving a report-to address is a
+  // write, and a staff preview must never do one (jobPreview.ts).
+  const resolved = opts.allowPreview
+    ? (await resolveJobPortalRead(req))?.resolved ?? null
+    : await (async () => {
+        const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
+        if (!session) return null
+        return resolveJobSession({ portalAccessId: session.portalAccessId })
+      })()
   if (!resolved) return null
   const order = await prisma.order.findUnique({
     where: { id: resolved.orderId },
@@ -43,7 +50,7 @@ async function jobIdForSession(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const ctx = await jobIdForSession(req)
+  const ctx = await jobIdForSession(req, { allowPreview: true })
   if (!ctx) return NextResponse.json({ error: 'No session' }, { status: 401 })
   return NextResponse.json(await loadDeliveries(ctx.jobId))
 }

@@ -21,15 +21,16 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) {
+  const read = await resolveJobPortalRead(req)
+  if (!read) {
     return NextResponse.json({ error: 'No session' }, { status: 401 })
   }
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+  const resolved = read.resolved
   if (!resolved) {
     const res = NextResponse.json({ error: 'Session no longer valid' }, { status: 401 })
     res.headers.append('Set-Cookie', buildJobSessionCookieHeader('', { clear: true }))

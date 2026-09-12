@@ -38,6 +38,8 @@ export interface AfterHoursStepShape {
 }
 
 export interface AfterHoursViewData {
+  /** Set when a staff member is previewing the client's page. */
+  preview?: { by: string } | null;
   projectName: string;
   /** The agent's standing line for this job. */
   note: string | null;

@@ -8,6 +8,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 import { portalTokenUrl, portalV2Url } from '@/lib/portal/portalUrl'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
@@ -82,16 +83,15 @@ function defaultDisplayTitleForRole(role: string): string {
  * surfaced here must be reviewed against brief §7 "What is NEVER surfaced".
  */
 export async function GET(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) {
-    return NextResponse.json({ error: 'No session' }, { status: 401 })
-  }
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
-  if (!resolved) {
-    const res = NextResponse.json({ error: 'Session no longer valid' }, { status: 401 })
+  // A real client session, or a staff preview of one (jobPreview.ts). Reads
+  // only: a preview cookie cannot satisfy any write route on this portal.
+  const read = await resolveJobPortalRead(req)
+  if (!read) {
+    const res = NextResponse.json({ error: 'No session' }, { status: 401 })
     res.headers.append('Set-Cookie', buildJobSessionCookieHeader('', { clear: true }))
     return res
   }
+  const resolved = read.resolved
 
   // The session cookie names an order; the URL the client is standing on
   // names another. Until 2026-09-01 this route read the cookie ALONE, so a
@@ -115,9 +115,13 @@ export async function GET(req: NextRequest) {
   // filled / for negotiated / for signed rows) and best-effort so a blob or
   // render hiccup never breaks the portal read. Runs before the order read
   // below so the freshly-populated documentToSignUrl is picked up in-band.
-  await ensureBaselineRentalDocumentToSign(resolved.orderId).catch((err) => {
-    console.error('[portal/job/data] baseline doc-to-sign generation failed:', err)
-  })
+  // Not while previewing: looking at a client's page must not be the thing
+  // that generates their document.
+  if (!read.previewBy) {
+    await ensureBaselineRentalDocumentToSign(resolved.orderId).catch((err) => {
+      console.error('[portal/job/data] baseline doc-to-sign generation failed:', err)
+    })
+  }
 
   const [order, otherAccesses] = await Promise.all([
     prisma.order.findUnique({
@@ -606,6 +610,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     contact: resolved.contact,
     portalAccessId: resolved.portalAccessId,
+    /** Set only when a staff member is looking — the page wears a banner and
+     *  every action on it is inert, because the write routes refuse the
+     *  preview cookie. */
+    preview: read.previewBy ? { by: read.previewBy } : null,
     company: { id: order.company.id, name: order.company.name, hasLogo: !!(order.company.logoSvg || order.company.logoUrl) },
     standingAgreement,
     /** The annual-agreement option on this account: null when it doesn't

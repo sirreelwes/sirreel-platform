@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { Eye, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 
 export interface JobPortalPerson {
   /** Newest live link — what Resend regenerates from. */
@@ -132,7 +132,16 @@ export function JobPortalRow(props: JobPortalJobProps) {
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${o.invoicesVisible > 0 ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-neutral-bg text-chip-neutral-fg'}`}>
                 {o.invoicesVisible > 0 ? `${o.invoicesVisible} invoice${o.invoicesVisible === 1 ? '' : 's'}` : 'no invoices yet'}
               </span>
-              <Link href={`/orders/${o.orderId}`} className="ml-auto text-[11px] text-lt-fg2 hover:text-lt-fg underline">
+              <a
+                href={`/api/orders/${o.orderId}/portal-preview`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg underline"
+                title="Open this client's portal as they see it — read-only, and it does not touch their link or tell them you looked"
+              >
+                <Eye className="w-3 h-3" /> See what they see
+              </a>
+              <Link href={`/orders/${o.orderId}`} className="text-[11px] text-lt-fg2 hover:text-lt-fg underline">
                 change on the order
               </Link>
             </div>

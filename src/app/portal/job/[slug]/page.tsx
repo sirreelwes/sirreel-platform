@@ -333,6 +333,9 @@ export default function JobPortalPage() {
   const searchParams = useSearchParams();
   const slug = String(params?.slug || '');
   const tokenInUrl = searchParams?.get('token') || null;
+  // A staff member previewing this client's page (jobPreview.ts). Exchanged
+  // exactly like their token, and stripped from the URL the same way.
+  const previewInUrl = searchParams?.get('preview') || null;
 
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string>('');
@@ -380,16 +383,25 @@ export default function JobPortalPage() {
     async function run() {
       setLoading(true);
       try {
-        // Step 1 (first visit only): exchange ?token=... for a session cookie.
-        if (tokenInUrl) {
-          const r = await fetch(`/api/portal/job/${slug}?token=${encodeURIComponent(tokenInUrl)}`);
+        // Step 1 (first visit only): exchange ?token=... for a session cookie,
+        // or ?preview=... for a staff preview cookie.
+        if (tokenInUrl || previewInUrl) {
+          const q = previewInUrl
+            ? `preview=${encodeURIComponent(previewInUrl)}`
+            : `token=${encodeURIComponent(tokenInUrl as string)}`;
+          const r = await fetch(`/api/portal/job/${slug}?${q}`);
           if (!r.ok) {
-            setError('This link has expired or been revoked. Ask your SirReel rep for a new one.');
+            setError(
+              previewInUrl
+                ? 'This preview has expired — open "See what they see" again from the job page.'
+                : 'This link has expired or been revoked. Ask your SirReel rep for a new one.',
+            );
             return;
           }
           // Strip the token from the URL so it's not in browser history / referer.
           const next = new URLSearchParams(Array.from(searchParams?.entries() || []));
           next.delete('token');
+          next.delete('preview');
           const qs = next.toString();
           router.replace(qs ? `?${qs}` : '?', { scroll: false });
         }

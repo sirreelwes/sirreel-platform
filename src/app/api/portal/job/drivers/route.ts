@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
 import { inviteDriver } from '@/lib/drivers/inviteDriver'
 import { sumHours } from '@/lib/drivers/hoursEntry'
 import type { DriverAssignmentStatus } from '@prisma/client'
@@ -33,10 +34,16 @@ const CLIENT_CANCELLABLE: DriverAssignmentStatus[] = ['INVITED', 'VIEWED']
  * The client sees vehicle + dates + who they've named. Never a licence
  * image, licence number, or another client's driver.
  */
-async function resolveClientJobVehicles(req: NextRequest) {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (!session) return null
-  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+async function resolveClientJobVehicles(req: NextRequest, opts: { allowPreview?: boolean } = {}) {
+  // allowPreview is passed by GET alone: naming a driver is a write, and a
+  // staff preview must never do one (jobPreview.ts).
+  const resolved = opts.allowPreview
+    ? (await resolveJobPortalRead(req))?.resolved ?? null
+    : await (async () => {
+        const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
+        if (!session) return null
+        return resolveJobSession({ portalAccessId: session.portalAccessId })
+      })()
   if (!resolved) return null
 
   const order = await prisma.order.findUnique({
@@ -124,7 +131,7 @@ async function resolveClientJobVehicles(req: NextRequest) {
 
 /** GET — the client's own vehicles and who they've named so far. */
 export async function GET(req: NextRequest) {
-  const ctx = await resolveClientJobVehicles(req)
+  const ctx = await resolveClientJobVehicles(req, { allowPreview: true })
   if (!ctx) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   const assignments = ('assignments' in ctx ? ctx.assignments : []) ?? []
   return NextResponse.json({
