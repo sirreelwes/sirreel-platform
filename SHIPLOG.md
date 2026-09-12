@@ -24,6 +24,20 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-11
 
+### AHA texts Wes when a new incoming lands
+
+`ac85c41c` AHA texts Wes when a new incoming lands, with the link to open it
+
+Wes: "Can AHA text me when there's a new incoming and drop a link in the text to open that response?" — immediately between 8a and 10p, form / manual / portal inbound only, and "to be clear, this text message notification ONLY goes to Wes." The first text AHA sends FIRST; everything else outbound answers someone. It goes from AHA's number, so a reply lands in a real AHA conversation (Wes's phone resolves to the staff tier through `identifySender()`).
+
+- **`Inquiry.smsNotifiedAt` is the queue**, the way `AgreementEntry.teamNotifiedAt` is — a lead at 2am is left unstamped and the first sweep after 8am Pacific picks it up. No scheduled-send table to keep honest, and a missed cron run catches up on the following pass instead of dropping the alert.
+- **`/api/cron/new-inquiry-sms` every 5 minutes, a SWEEP rather than a call at each creation site.** Inquiry rows are written in nine places (four public forms, AHA's after-hours callback, the client agreement entry, the portal add-on, the payment-info routes, the manual POST); instrumenting nine means missing the tenth. `?preview=1` shows what would go out, `?test=1` sends a real one — both admin-gated, because a URL that texts a person must not be guessable.
+- **WEB_FORM + MANUAL only.** Not GMAIL: those rows are created by a rep pressing Capture on the suggestion stream, so the text would be reporting the rep's own click. Payment-info submissions are excluded by title — an ACH request is not a lead.
+- **One lead links its own `/inquiries/<id>` page** (the actual ask). Two or more collapse into ONE text linking the Incoming panel: overnight arrivals all come due at 8am, and five links in one SMS is a wall, not a link.
+- The body names both AHA and SirReel — the name so a reply is obviously possible, the brand because the carrier campaign filed that every message carries it.
+
+`scripts/add-new-inquiry-sms-columns.ts` adds the column by additive SQL (a `db push` from this tree still drops `sr_job_locations` and nine `sub_rentals` columns) and **backfills every existing inquiry as already-notified** — without that, the first sweep after deploy texts a backlog of old leads. Run against production: column confirmed in `information_schema`, 258 rows stamped. `npm run test:new-inquiry-sms` covers the link, the 8a–10p window across DST, and the brand string.
+
 ### Partners are not offered Utliiz
 
 `383fa42` partners: take Utliiz out of every partner surface

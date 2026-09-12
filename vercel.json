@@ -25,6 +25,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/new-inquiry-sms",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/admin/rw-invoice-sync",
       "schedule": "*/15 * * * *"
     },

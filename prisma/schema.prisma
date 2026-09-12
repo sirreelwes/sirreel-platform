@@ -6358,6 +6358,14 @@ model Inquiry {
   respondedAt DateTime? @map("responded_at")
   respondedBy String?   @map("responded_by")
 
+  // "AHA texted Wes about this one." The ABSENCE of the stamp is the queue
+  // (the pattern AgreementEntry.teamNotifiedAt established): a lead that
+  // lands at 2am is simply left unstamped, and the first sweep after 8am
+  // Pacific picks it up. No scheduled-send table to keep honest, and a
+  // missed cron run catches up on the following pass instead of dropping
+  // the alert. See src/lib/sales/notifyNewInquirySms.ts.
+  smsNotifiedAt DateTime? @map("sms_notified_at")
+
   // Welcome / Job Begin invite (client click-to-create) — at most one per
   // inquiry (@unique on WelcomeInvite.inquiryId).
   welcomeInvite WelcomeInvite?

@@ -23,6 +23,7 @@
     "test:alias-match": "tsx tests/sales/alias-match.test.ts",
     "test:public-query": "tsx tests/site/public-query-match.test.ts",
     "test:quick-reply-items": "tsx tests/sales/quick-reply-items.test.ts",
+    "test:new-inquiry-sms": "tsx tests/sales/new-inquiry-sms.test.ts",
     "test:cc": "tsx tests/email/cc-list.test.ts",
     "test:thread-participants": "tsx tests/email/thread-participants.test.ts",
     "test:client-email-body": "tsx tests/email/client-email-body.test.ts",
