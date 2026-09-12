@@ -48,6 +48,9 @@ export interface UnitAssignmentRequest {
 
 export interface UnitAssignmentOutcome {
   mode: UnitAssignmentMode
+  /** The fleet class this outcome is for — so a caller binding several
+   *  lines at once can tell which line each result belongs to. */
+  categoryId: string
   bookingItemId: string | null
   assigned: { assetId: string; unitName: string; assignmentId: string }[]
   /** Something worth telling the rep — no free unit, a queued hold, a
@@ -72,7 +75,7 @@ export async function assignUnitsForLine(args: {
   categoryLabel?: string | null
 }): Promise<UnitAssignmentOutcome> {
   const mode = args.request.mode ?? 'next'
-  const out: UnitAssignmentOutcome = { mode, bookingItemId: null, assigned: [], note: null }
+  const out: UnitAssignmentOutcome = { mode, categoryId: args.categoryId, bookingItemId: null, assigned: [], note: null }
   if (mode === 'none') return out
 
   try {
@@ -192,7 +195,16 @@ async function unitName(assetId: string): Promise<string> {
  * Quantity per class is the peak the hold was sized to, so the loop
  * asks for the whole hold and stops when it is covered.
  */
-export async function assignNextAvailableForOrder(orderId: string): Promise<UnitAssignmentOutcome[]> {
+/**
+ * Bind every vehicle line on a freshly created order. Next-available by
+ * default; a category listed in `named` binds the units the rep picked
+ * first (the order builder's Reservation section, 2026-09-12) and
+ * next-available covers whatever the names do not.
+ */
+export async function assignNextAvailableForOrder(
+  orderId: string,
+  named: Record<string, string[]> = {},
+): Promise<UnitAssignmentOutcome[]> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
@@ -220,7 +232,10 @@ export async function assignNextAvailableForOrder(orderId: string): Promise<Unit
   }
   const outcomes: UnitAssignmentOutcome[] = []
   for (const [categoryId, quantity] of byCategory) {
-    outcomes.push(await assignUnitsForLine({ orderId, categoryId, quantity, request: { mode: 'next' } }))
+    const picks = (named[categoryId] ?? []).filter((id) => typeof id === 'string' && id.length > 0)
+    const request: UnitAssignmentRequest =
+      picks.length > 0 ? { mode: 'named', assetIds: picks.slice(0, quantity) } : { mode: 'next' }
+    outcomes.push(await assignUnitsForLine({ orderId, categoryId, quantity, request }))
   }
   return outcomes
 }

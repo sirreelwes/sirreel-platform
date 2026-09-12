@@ -3647,6 +3647,17 @@ model Order {
   // other end of BookingAssignment.orderId. Drives the "Order attached"
   // indicator on the unit.
   unitAssignments    BookingAssignment[] @relation("AssignmentOrder")
+  // How the NON-vehicle lines leave the building (Wes 2026-09-12: the
+  // order form "asks if will call or loaded onto one of the assets
+  // reserved"). 'WILL_CALL' = the client picks the gear up at the
+  // warehouse; 'LOAD_ON' = it goes out on one of this order's reserved
+  // units, named by gearLoadsOnAssignmentId (a BookingAssignment id —
+  // no relation on purpose: the unit can be re-assigned later and the
+  // yard reads unitAssignments for the live truck). Null = never asked
+  // (orders with no vehicle, or older ones). Plain text, not an enum,
+  // so an old client never 500s on a value it has not heard of.
+  gearHandoff              String? @map("gear_handoff")
+  gearLoadsOnAssignmentId  String? @map("gear_loads_on_assignment_id")
   // Ana's ruling on this order in the collections billing queue — snoozed
   // to a date, or dismissed as "not billed out of HQ". Zero-or-one; the
   // queue itself is derived from check-in and invoice state.

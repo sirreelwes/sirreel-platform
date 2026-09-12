@@ -14,7 +14,7 @@
  * Two guides is not yet a docs system; if a fourth appears, generalise.
  *
  * Facts this page asserts, and where they live — keep them in lockstep:
- *   - "Make Reservation" / "New Order" + the duplicate check →
+ *   - "New Order / Rez" (Reservation / Order / Both) + the duplicate check →
  *     CreateLaunchers → MakeReservationModal / orders/new, both of
  *     which open JobResolverModal before a job is created.
  *   - "Send quote →" opens the email review gate → orders/new
@@ -102,8 +102,10 @@ export default function StartingAJobGuidePage() {
             <Step n={1} title="Go to Jobs and pick one of the two buttons">
               <p>
                 Left nav → <Link href="/jobs" className="font-semibold underline underline-offset-2">Jobs</Link>.
-                Top right, next to the search box: <strong>Make Reservation</strong> when they have named trucks
-                and dates, <strong>New Order</strong> when you are pricing a quote first.
+                Top right, next to the search box: <strong>New Order / Rez</strong>, which asks what you are
+                starting. <strong>New Reservation</strong> when they have named trucks and dates and nothing
+                else; <strong>New Order</strong> when you are pricing a quote first; <strong>Both</strong> to
+                reserve the vehicles and write the order that goes out on them in one form.
               </p>
             </Step>
             <Step n={2} title="Type what you know">

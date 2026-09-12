@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { quoteLcdw, LCDW_FEE_CODE } from '@/lib/pricing/lcdwEligibility';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -391,6 +391,14 @@ function NewQuotePageInner() {
   // "Order attached" indicator) so the warehouse knows which truck it
   // goes out on.
   const loadOnAssignmentId = search.get('loadOnAssignmentId');
+  // "Both" from the New Order / Rez chooser (Wes 2026-09-12): open in
+  // the builder with the Reservation section ready instead of on the
+  // paste/upload step. Nothing is held until save — the hold and the
+  // unit fall out of the vehicle lines, ORDER-FIRST, the same way they
+  // do for every quoted vehicle (see MakeReservationModal's header for
+  // why hold-first double-books).
+  const reserveFromUrl = search.get('reserve') === '1';
+  const [builderForced, setBuilderForced] = useState(reserveFromUrl);
   const [loadOn, setLoadOn] = useState<{
     id: string;
     unit: { id: string; unitName: string };
@@ -1678,7 +1686,11 @@ function NewQuotePageInner() {
   // and binds next-available on its own; this is the readout BEFORE the
   // quote goes out, per line, for its own dates. Cached per
   // product+window so typing elsewhere does not refetch.
-  type VehicleAvail = { status: 'loading' } | { status: 'na' } | { status: 'ok'; free: number; total: number; category: string | null };
+  type VehicleAvailUnit = { assetId: string; unitName: string; tier: 'PREMIUM' | 'STANDARD' | 'ECONOMY'; state: 'free' | 'buffer' | 'booked' };
+  type VehicleAvail =
+    | { status: 'loading' }
+    | { status: 'na' }
+    | { status: 'ok'; free: number; total: number; category: string | null; categoryId: string | null; units: VehicleAvailUnit[] };
   const [vehicleAvail, setVehicleAvail] = useState<Record<string, VehicleAvail>>({});
   const availKey = (it: ResolvedItem) =>
     it.department === 'VEHICLES' && it.catalogProductId && (it.catalogType === 'INVENTORY' || it.catalogType === 'ASSET_CATEGORY') && it.pickupDate && it.returnDate
@@ -1697,7 +1709,14 @@ function NewQuotePageInner() {
         .then((d) => {
           if (cancelled) return;
           const v: VehicleAvail = d?.ok && d.holdable !== false
-            ? { status: 'ok', free: Number(d.freeCount ?? 0), total: Number(d.serviceableCount ?? 0), category: d.category?.name ?? null }
+            ? {
+                status: 'ok',
+                free: Number(d.freeCount ?? 0),
+                total: Number(d.serviceableCount ?? 0),
+                category: d.category?.name ?? null,
+                categoryId: (typeof d.categoryId === 'string' ? d.categoryId : d.category?.id) ?? null,
+                units: Array.isArray(d.units) ? (d.units as VehicleAvailUnit[]) : [],
+              }
             : { status: 'na' };
           setVehicleAvail((prev) => ({ ...prev, [k]: v }));
         })
@@ -1726,6 +1745,222 @@ function NewQuotePageInner() {
     }
     return out;
   }, [items, vehicleAvail]);
+
+  // ── Reservation section (Wes 2026-09-12) ──────────────────────────
+  // "There is a reservation section at the top where you can reserve an
+  // asset, click to add another asset as many times as wanted and then
+  // add order — it asks if will call or loaded onto one of the assets
+  // reserved." The section IS the VEHICLES group, promoted above the
+  // rest of the order and given two things the group never had: a
+  // fleet-class picker that adds a bound line in one click, and a
+  // per-line "which unit" picker. The line is still a line — priced,
+  // dated and held on save exactly like a vehicle the parser found.
+
+  /** The fleet class a vehicle line will hold — the legacy category id
+   *  the scheduling routes key on. Known for a class pick outright; for
+   *  a merged-catalog (INVENTORY) row it arrives with the availability
+   *  read. */
+  const holdCategoryIdOf = (it: ResolvedItem): string | null => {
+    if (it.catalogType === 'ASSET_CATEGORY') return it.catalogProductId;
+    const k = availKey(it);
+    const a = k ? vehicleAvail[k] : null;
+    return a && a.status === 'ok' ? a.categoryId : null;
+  };
+
+  /** Which specific truck(s) the rep named per vehicle line, by localId.
+   *  Empty = next available. Never longer than the line's quantity. */
+  const [unitPicks, setUnitPicks] = useState<Record<string, string[]>>({});
+  const [openUnitPickers, setOpenUnitPickers] = useState<Record<string, boolean>>({});
+  const toggleUnitPick = (it: ResolvedItem, assetId: string) => {
+    setUnitPicks((prev) => {
+      const cur = prev[it.localId] ?? [];
+      const max = Math.max(1, it.quantity || 1);
+      const next = cur.includes(assetId) ? cur.filter((x) => x !== assetId) : cur.length >= max ? cur : [...cur, assetId];
+      return { ...prev, [it.localId]: next };
+    });
+  };
+  // A pick that outlives its line, its window or its quantity is dropped:
+  // the units offered are per (product, window), so moving the dates
+  // empties the choice rather than carrying a truck that is booked then.
+  useEffect(() => {
+    setUnitPicks((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const it of items) {
+        const cur = prev[it.localId];
+        if (!cur || cur.length === 0) continue;
+        const k = availKey(it);
+        const a = k ? vehicleAvail[k] : null;
+        if (!a || a.status !== 'ok') { next[it.localId] = cur; continue; } // still loading — keep
+        const offered = new Set(a.units.filter((u) => u.state !== 'booked').map((u) => u.assetId));
+        const kept = cur.filter((id) => offered.has(id)).slice(0, Math.max(1, it.quantity || 1));
+        if (kept.length > 0) next[it.localId] = kept;
+      }
+      return JSON.stringify(next) === JSON.stringify(prev) ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, vehicleAvail]);
+
+  /** The fleet classes a vehicle can be reserved from — the feed the
+   *  gantt's Make Reservation uses, VEHICLES only. */
+  const [fleetClasses, setFleetClasses] = useState<
+    { id: string; inventoryItemId: string | null; name: string; code: string | null; totalUnits: number; dailyRate: number | null; recentDemand: number }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/scheduling/categories')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !d?.ok) return;
+        const rows = (d.categories as {
+          id: string; inventoryItemId?: string | null; name: string; code?: string | null; totalUnits: number; department: string; dailyRate: number | null; recentDemand?: number;
+        }[])
+          .filter((c) => c.department === 'VEHICLES')
+          .map((c) => ({ id: c.id, inventoryItemId: c.inventoryItemId ?? null, name: c.name, code: c.code ?? null, totalUnits: c.totalUnits, dailyRate: c.dailyRate, recentDemand: c.recentDemand ?? 0 }));
+        setFleetClasses(rows);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const [classPickBusy, setClassPickBusy] = useState(false);
+  /** "+ Reserve a vehicle": one line per pick, bound to the merged
+   *  catalog row the way the combobox binds it (INVENTORY id) so the
+   *  hold, the unit and the rate card all find it — priced off the
+   *  client's negotiated rate when they have one, else list. */
+  const reserveClass = async (classId: string) => {
+    const c = fleetClasses.find((x) => x.id === classId);
+    if (!c) return;
+    setClassPickBusy(true);
+    try {
+      let bound: { id: string; type: CatalogType; dailyRate: number; weeklyRate: number } | null = null;
+      if (c.inventoryItemId) {
+        const cid = realCompanyId(selectedClientId);
+        try {
+          const r = await fetch(
+            `/api/catalog/search?q=${encodeURIComponent(c.name)}&limit=10&types=ASSET_CATEGORY${cid ? `&companyId=${encodeURIComponent(cid)}` : ''}`,
+          );
+          const d = r.ok ? await r.json() : null;
+          const hit = ((d?.results ?? []) as { id: string; dailyRate: number; weeklyRate: number }[]).find((h) => h.id === c.inventoryItemId);
+          if (hit) bound = { id: hit.id, type: 'INVENTORY', dailyRate: Number(hit.dailyRate) || 0, weeklyRate: Number(hit.weeklyRate) || 0 };
+        } catch { /* list price below */ }
+        if (!bound) bound = { id: c.inventoryItemId, type: 'INVENTORY', dailyRate: c.dailyRate ?? 0, weeklyRate: 0 };
+      } else {
+        bound = { id: c.id, type: 'ASSET_CATEGORY', dailyRate: c.dailyRate ?? 0, weeklyRate: 0 };
+      }
+      const localId = addRowToDept('VEHICLES', { focus: false });
+      const b = bound;
+      updateItem(localId, {
+        description: c.name,
+        catalogProductId: b.id,
+        catalogType: b.type,
+        department: 'VEHICLES',
+        rate: pickRate(b, 'DAILY'),
+        matchedProduct: { id: b.id, type: b.type, name: c.name },
+        matchSource: 'AI',
+      });
+    } finally {
+      setClassPickBusy(false);
+    }
+  };
+
+  /** Will call, or loaded on one of the reserved vehicles — asked once
+   *  the order carries both a vehicle that will hold a unit and a line
+   *  that is not a vehicle. Not asked on a warehouse order written FROM
+   *  a reservation: that one already knows its truck. */
+  const [gearHandoff, setGearHandoff] = useState<{ kind: 'WILL_CALL' } | { kind: 'LOAD_ON'; localId: string } | null>(null);
+  const vehicleRows = items.filter((it) => it.department === 'VEHICLES');
+  const gearRows = items.filter((it) => it.department !== 'VEHICLES' && (it.description.trim() || it.catalogProductId));
+  const holdableVehicleRows = vehicleRows.filter((it) => {
+    const k = availKey(it);
+    const a = k ? vehicleAvail[k] : null;
+    return !!a && a.status === 'ok';
+  });
+  const gearHandoffAsked = !loadOnAssignmentId && holdableVehicleRows.length > 0 && gearRows.length > 0;
+  useEffect(() => {
+    if (gearHandoff?.kind === 'LOAD_ON' && !holdableVehicleRows.some((it) => it.localId === gearHandoff.localId)) setGearHandoff(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, vehicleAvail]);
+
+  /** The "which unit" chips under a vehicle line — the Make Reservation
+   *  modal's picker, on the order. Free units pick; a buffer unit picks
+   *  with the turnaround warning (the human override next-available never
+   *  takes on its own); a booked one is shown and refused. */
+  const renderUnitPicker = (it: ResolvedItem) => {
+    const k = availKey(it);
+    const a = k ? vehicleAvail[k] : null;
+    if (!a || a.status !== 'ok' || a.units.length === 0) return null;
+    const chosen = unitPicks[it.localId] ?? [];
+    const open = chosen.length > 0 || !!openUnitPickers[it.localId];
+    const max = Math.max(1, it.quantity || 1);
+    if (!open) {
+      return (
+        <div className="px-3 py-1.5 flex items-center gap-2 text-[11px] bg-lt-card/30">
+          <span className="text-lt-fg3">Unit: next available on save</span>
+          <button
+            type="button"
+            onClick={() => setOpenUnitPickers((o) => ({ ...o, [it.localId]: true }))}
+            className="font-semibold text-lt-fg2 hover:text-lt-fg underline underline-offset-2"
+          >
+            Pick {max > 1 ? 'specific units' : 'a specific unit'}
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="px-3 py-2 bg-lt-card/30 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-lt-fg3">
+            Which {max > 1 ? `units (${chosen.length} of ${max})` : 'unit'} — never printed on the quote
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenUnitPickers((o) => ({ ...o, [it.localId]: false }));
+              setUnitPicks((prev) => ({ ...prev, [it.localId]: [] }));
+            }}
+            className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg"
+          >
+            Any unit
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {a.units.map((u) => {
+            const picked = chosen.includes(u.assetId);
+            const full = !picked && chosen.length >= max;
+            const disabled = u.state === 'booked' || full;
+            return (
+              <button
+                key={u.assetId}
+                type="button"
+                disabled={disabled}
+                onClick={() => toggleUnitPick(it, u.assetId)}
+                aria-pressed={picked}
+                title={
+                  u.state === 'booked'
+                    ? 'Booked over these dates'
+                    : full
+                      ? `Only ${max} on this line — unpick one first`
+                      : u.state === 'buffer'
+                        ? 'Inside the turnaround buffer of another rental — picking it is your call'
+                        : `${u.tier.toLowerCase()} tier · free ${it.pickupDate} – ${it.returnDate}`
+                }
+                className={`text-[12px] px-2 py-1 rounded-md border font-semibold ${
+                  picked
+                    ? 'bg-amber-600 border-amber-600 text-white'
+                    : u.state === 'booked'
+                      ? 'bg-lt-inner border-lt-hairline text-lt-fg3 line-through cursor-not-allowed'
+                      : u.state === 'buffer'
+                        ? 'bg-chip-warn-bg border-chip-warn-fg/30 text-chip-warn-fg hover:opacity-80'
+                        : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'
+                } disabled:opacity-60`}
+              >
+                {u.unitName}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   /** The waiver as money, for the vehicles section and the total. A fee,
    *  so it lands after discounts like every other fee. */
@@ -2059,6 +2294,10 @@ function NewQuotePageInner() {
         alert('Could not resolve a company for this order. Pick one, or choose "I don\'t know the company yet".');
         return;
       }
+      if (gearHandoffAsked && !gearHandoff) {
+        alert('Say how the gear leaves: will call, or loaded on one of the reserved vehicles. It is the question under the line items.');
+        return;
+      }
 
       // ATOMIC create — Order + ALL line items in ONE transaction via
       // /api/orders/from-parse (replaced the old create-order-then-loop-
@@ -2093,6 +2332,11 @@ function NewQuotePageInner() {
             // provenance (autoKitPieceId) and nests under its parent
             // instead of landing flat and unmanaged.
             matchSource: it.matchSource ?? null,
+            // The truck(s) the rep named in the Reservation section.
+            unitAssignment:
+              (unitPicks[it.localId] ?? []).length > 0
+                ? { categoryId: holdCategoryIdOf(it), assetIds: unitPicks[it.localId] }
+                : null,
             pickupDate: it.pickupDate,
             returnDate: it.returnDate,
             billableDays: it.billableDays,
@@ -2120,6 +2364,18 @@ function NewQuotePageInner() {
             // chain (Job name → typed production name → notes → generic).
             productionName: orderDescription,
           },
+          // Will call, or loaded on a reserved truck (Wes 2026-09-12). A
+          // warehouse order written from a reservation already knows.
+          gearHandoff: loadOnAssignmentId
+            ? { kind: 'LOAD_ON', assignmentId: loadOnAssignmentId }
+            : gearHandoffAsked && gearHandoff
+              ? gearHandoff.kind === 'WILL_CALL'
+                ? { kind: 'WILL_CALL' }
+                : {
+                    kind: 'LOAD_ON',
+                    categoryId: holdCategoryIdOf(items.find((it) => it.localId === gearHandoff.localId) ?? ({} as ResolvedItem)),
+                  }
+              : null,
         }),
       });
       if (!fromParseRes.ok) {
@@ -2131,6 +2387,7 @@ function NewQuotePageInner() {
       const created = (await fromParseRes.json()) as {
         orderId: string;
         unitAssignments?: { assigned: { unitName: string }[]; note: string | null }[];
+        gearHandoffNote?: string | null;
       };
       const orderId = created.orderId;
       const order = { id: orderId };
@@ -2140,6 +2397,7 @@ function NewQuotePageInner() {
       {
         const bound = (created.unitAssignments ?? []).flatMap((u) => u.assigned.map((a) => a.unitName));
         const gaps = (created.unitAssignments ?? []).map((u) => u.note).filter((n): n is string => !!n);
+        if (created.gearHandoffNote) gaps.push(created.gearHandoffNote);
         if (gaps.length > 0) {
           alert(`Reserved: ${bound.length ? bound.join(', ') : 'nothing'}\n\n${gaps.join('\n')}`);
         }
@@ -2299,6 +2557,42 @@ function NewQuotePageInner() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────
 
+  /** One department group, as the Reservation card (VEHICLES) and the
+   *  Line Items card (everything else) render it. */
+  const renderDeptGroup = (dept: LineItemDepartment, group: ResolvedItem[]) => (
+    <DepartmentGroup
+      companyId={realCompanyId(selectedClientId)}
+      key={dept}
+      department={dept}
+      rows={group}
+      notes={dept === 'VEHICLES' ? vehicleAvailNotes : undefined}
+      rowExtras={dept === 'VEHICLES' ? renderUnitPicker : undefined}
+      // The waiver shows as a line under the vehicles it covers
+      // (Wes 2026-09-10: "I don't see the fees adding to the
+      // line above") — derived, not a row the rep edits; the
+      // card below is where it is switched on or off.
+      derivedLine={
+        dept === 'VEHICLES' && lcdwOn && lcdwFee && lcdwEstimate.vehicleDays > 0
+          ? {
+              label: 'Damage waiver (LCDW)',
+              note: `${fmtMoney(lcdwFee.amount)}/day × ${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'} · ${lcdwEstimate.eligible} eligible line${lcdwEstimate.eligible === 1 ? '' : 's'}`,
+              rate: lcdwFee.amount,
+              amount: lcdwAmount,
+            }
+          : null
+      }
+      onChange={updateItem}
+      onDelete={removeItem}
+      onAdd={() => addRowToDept(dept)}
+      onBulkApply={setBulkForDept}
+      onApplyWeekCap={applyWeekCapToDept}
+      onAddToCatalog={openAddToCatalog}
+      onCommit={handleRowCommit}
+      onPickPackage={handlePickPackage}
+      registerDescriptionRef={registerDescriptionRef}
+    />
+  );
+
   // Rendered on BOTH steps — the banner that triggers it exists on both.
   const inquirySourceDrawer = inquiry ? (
     <InquirySourceDrawer
@@ -2309,7 +2603,7 @@ function NewQuotePageInner() {
   ) : null;
 
   // Step 1: Input
-  if (!parsed && items.length === 0) {
+  if (!parsed && items.length === 0 && !builderForced) {
     return (
       <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-3xl mx-auto space-y-4">
@@ -2476,7 +2770,7 @@ function NewQuotePageInner() {
   return (
     <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-5xl mx-auto space-y-4">
-      <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-lt-fg3 hover:text-lt-fg">
+      <button onClick={() => { setParsed(null); setItems([]); setBuilderForced(false); }} className="text-sm text-lt-fg3 hover:text-lt-fg">
         &larr; Start Over
       </button>
       {inquiry && (
@@ -2493,9 +2787,13 @@ function NewQuotePageInner() {
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-lt-fg">{loadOn ? 'Review Warehouse Order' : 'Review Quote'}</h1>
+        <h1 className="text-2xl font-semibold text-lt-fg">
+          {loadOn ? 'Review Warehouse Order' : builderForced && !parsed ? 'New Order / Rez' : 'Review Quote'}
+        </h1>
         <p className="text-sm text-lt-fg2 mt-1">
-          Adjust each line item. Departments, rates, and rate-types are editable per row.
+          {builderForced && !parsed
+            ? 'Reserve the vehicles at the top, then add the gear that goes out on them. Everything is held and priced when you save.'
+            : 'Adjust each line item. Departments, rates, and rate-types are editable per row.'}
         </p>
       </div>
         {(loadOn || loadOnError) && (
@@ -2936,13 +3234,33 @@ function NewQuotePageInner() {
       {/* People on this thread (AI-extracted contacts, human review) */}
       <PeopleSection contacts={contacts} setContacts={setContacts} />
 
-      {/* Line items grouped by department */}
+      {/* Reservation — the VEHICLES group, promoted to the top of the
+          order (Wes 2026-09-12). See the section's state above. */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-lt-fg">Line Items ({items.length})</h2>
-          <button onClick={addBlankItem} className="text-xs font-semibold text-lt-fg2 hover:text-lt-fg">
-            + Add line manually
-          </button>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-base font-bold text-lt-fg">Reservation ({vehicleRows.length})</h2>
+            <p className="text-xs text-lt-fg2 mt-0.5">
+              The vehicles on this order. Each is held on save and a unit is bound then — next available, or the one you pick. Unit numbers never print on the quote.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-lt-fg2">
+            <span>{vehicleRows.length === 0 ? '+ Reserve a vehicle' : '+ Add another vehicle'}</span>
+            <select
+              value=""
+              disabled={classPickBusy || fleetClasses.length === 0}
+              onChange={(e) => { const v = e.target.value; if (v) void reserveClass(v); }}
+              className="bg-lt-inner border border-lt-hairline rounded-lg px-2 py-1.5 text-xs text-lt-fg min-w-[220px] disabled:opacity-60"
+              title="Adds a vehicle line bound to this fleet class — held on save"
+            >
+              <option value="">{fleetClasses.length === 0 ? 'Loading fleet…' : 'Pick a class…'}</option>
+              {[...fleetClasses].sort((a, b) => b.recentDemand - a.recentDemand || a.name.localeCompare(b.name)).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.code ? ` (${c.code})` : ''} · {c.totalUnits} unit{c.totalUnits === 1 ? '' : 's'}{c.dailyRate != null ? ` · ${fmtMoney(c.dailyRate)}/day` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* The rental window. This used to sit in the Client Company /
@@ -2972,45 +3290,57 @@ function NewQuotePageInner() {
             />
           </div>
         </div>
-        {items.length === 0 ? (
+        {vehicleRows.length === 0 ? (
+          <div className="text-xs text-lt-fg3 text-center py-4">
+            No vehicles reserved. Pick a class above, or type one on a line below and the catalog match will move it here.
+          </div>
+        ) : (
+          renderDeptGroup('VEHICLES', vehicleRows)
+        )}
+      </div>
+
+      {/* Line items — everything that is not a vehicle */}
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-lt-fg">Line Items ({items.length - vehicleRows.length})</h2>
+          <button onClick={addBlankItem} className="text-xs font-semibold text-lt-fg2 hover:text-lt-fg">
+            + Add line manually
+          </button>
+        </div>
+        {items.length - vehicleRows.length === 0 ? (
           <div className="text-xs text-lt-fg3 text-center py-6">No line items.</div>
         ) : (
-          DEPARTMENTS.map((dept) => {
+          DEPARTMENTS.filter((d) => d !== 'VEHICLES').map((dept) => {
             const group = items.filter((it) => it.department === dept);
             if (group.length === 0) return null;
-            return (
-              <DepartmentGroup
-                companyId={realCompanyId(selectedClientId)}
-                key={dept}
-                department={dept}
-                rows={group}
-                notes={dept === 'VEHICLES' ? vehicleAvailNotes : undefined}
-                // The waiver shows as a line under the vehicles it covers
-                // (Wes 2026-09-10: "I don't see the fees adding to the
-                // line above") — derived, not a row the rep edits; the
-                // card below is where it is switched on or off.
-                derivedLine={
-                  dept === 'VEHICLES' && lcdwOn && lcdwFee && lcdwEstimate.vehicleDays > 0
-                    ? {
-                        label: 'Damage waiver (LCDW)',
-                        note: `${fmtMoney(lcdwFee.amount)}/day × ${lcdwEstimate.vehicleDays} vehicle-day${lcdwEstimate.vehicleDays === 1 ? '' : 's'} · ${lcdwEstimate.eligible} eligible line${lcdwEstimate.eligible === 1 ? '' : 's'}`,
-                        rate: lcdwFee.amount,
-                        amount: lcdwAmount,
-                      }
-                    : null
-                }
-                onChange={updateItem}
-                onDelete={removeItem}
-                onAdd={() => addRowToDept(dept)}
-                onBulkApply={setBulkForDept}
-                onApplyWeekCap={applyWeekCapToDept}
-                onAddToCatalog={openAddToCatalog}
-                onCommit={handleRowCommit}
-                onPickPackage={handlePickPackage}
-                registerDescriptionRef={registerDescriptionRef}
-              />
-            );
+            return renderDeptGroup(dept, group);
           })
+        )}
+
+        {/* Will call, or loaded on a reserved truck — asked only when
+            there is a truck to load and gear to load on it. */}
+        {gearHandoffAsked && (
+          <div className={`rounded-lg border p-3 space-y-2 ${gearHandoff ? 'border-lt-hairline bg-lt-inner/40' : 'border-chip-warn-fg/40 bg-chip-warn-bg'}`}>
+            <div className={`text-xs font-semibold ${gearHandoff ? 'text-lt-fg' : 'text-chip-warn-fg'}`}>
+              How does the gear leave?
+              {!gearHandoff && <span className="font-normal"> — needed before this order can be saved.</span>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className={`flex items-center gap-2 text-[12px] rounded-md border px-2.5 py-1.5 cursor-pointer ${gearHandoff?.kind === 'WILL_CALL' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}>
+                <input type="radio" name="gear-handoff" className="sr-only" checked={gearHandoff?.kind === 'WILL_CALL'} onChange={() => setGearHandoff({ kind: 'WILL_CALL' })} />
+                Will call — the client picks it up at the warehouse
+              </label>
+              {holdableVehicleRows.map((it) => (
+                <label
+                  key={it.localId}
+                  className={`flex items-center gap-2 text-[12px] rounded-md border px-2.5 py-1.5 cursor-pointer ${gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
+                >
+                  <input type="radio" name="gear-handoff" className="sr-only" checked={gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId} onChange={() => setGearHandoff({ kind: 'LOAD_ON', localId: it.localId })} />
+                  Loaded on {it.description || 'the vehicle'}{it.quantity > 1 ? ` (×${it.quantity} — first unit bound)` : ''}
+                </label>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -3256,7 +3586,7 @@ function NewQuotePageInner() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => { setParsed(null); setItems([]); }}
+            onClick={() => { setParsed(null); setItems([]); setBuilderForced(false); }}
             className="px-4 py-2 text-sm text-lt-fg2 hover:text-lt-fg"
           >
             Cancel
@@ -3335,10 +3665,13 @@ const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
-  companyId, derivedLine, notes,
+  companyId, derivedLine, notes, rowExtras,
 }: {
   department: LineItemDepartment;
   rows: ResolvedItem[];
+  /** Something to render under a row — the Reservation section's
+   *  "which unit" picker under each vehicle line. */
+  rowExtras?: (row: ResolvedItem) => ReactNode;
   /** Per-line availability readout (VEHICLES only) — rendered as a strip
    *  under the rows so the rep sees "none free" before the quote goes out. */
   notes?: { localId: string; tone: 'good' | 'bad' | 'muted'; text: string }[];
@@ -3522,17 +3855,19 @@ function DepartmentGroup({
       {/* Line item rows */}
       <div className="divide-y divide-lt-hairline/60">
         {rows.map((it) => (
-          <LineItemRow
-            companyId={companyId}
-            key={it.localId}
-            item={it}
-            onChange={onChange}
-            onAddToCatalog={onAddToCatalog}
-            onDelete={onDelete}
-            onCommit={onCommit}
-            onPickPackage={onPickPackage}
-            descriptionRef={registerDescriptionRef?.(it.localId)}
-          />
+          <div key={it.localId}>
+            <LineItemRow
+              companyId={companyId}
+              item={it}
+              onChange={onChange}
+              onAddToCatalog={onAddToCatalog}
+              onDelete={onDelete}
+              onCommit={onCommit}
+              onPickPackage={onPickPackage}
+              descriptionRef={registerDescriptionRef?.(it.localId)}
+            />
+            {rowExtras?.(it)}
+          </div>
         ))}
         {notes && notes.length > 0 && (
           <div className="px-3 py-2 border-t border-lt-hairline bg-lt-card/30 space-y-1">

@@ -143,7 +143,26 @@ interface ResolvedItemInput {
    *  cannot. Absent on older clients: those lines persist as before,
    *  and `suppressIfOrdered` keeps the reconciler from doubling them. */
   matchSource?: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null
+  /** Which truck(s) the rep named for a vehicle line — the builder's
+   *  Reservation section (2026-09-12). `categoryId` is the fleet class
+   *  the picks belong to (the availability read reports it, so a
+   *  unit-tracked INVENTORY row can name units too). Absent or empty =
+   *  next available, as before. */
+  unitAssignment?: { categoryId?: string | null; assetIds?: string[] } | null
 }
+
+/** How the non-vehicle lines leave the building. See Order.gearHandoff. */
+type GearHandoffInput =
+  | { kind: 'WILL_CALL' }
+  | {
+      kind: 'LOAD_ON'
+      /** The reserved class the gear rides on — resolved to the first
+       *  unit bound for it once the holds land. */
+      categoryId?: string | null
+      /** …or an assignment that already exists (a warehouse order
+       *  written from a reservation). */
+      assignmentId?: string | null
+    }
 
 interface FromParseBody {
   companyDecision: CompanyDecision
@@ -157,6 +176,8 @@ interface FromParseBody {
     productionName?: string | null
   }
   discount?: { amount: number; label?: string | null }
+  /** Will call, or loaded on a reserved unit. Omitted = not asked. */
+  gearHandoff?: GearHandoffInput | null
 }
 
 interface Warning {
@@ -193,7 +214,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid JSON' }, { status: 400 })
   }
 
-  const { companyDecision, jobDecision, contactsDecision, items, parsed, discount } = body
+  const { companyDecision, jobDecision, contactsDecision, items, parsed, discount, gearHandoff } = body
   if (!companyDecision || !jobDecision) {
     return NextResponse.json({ error: 'companyDecision + jobDecision required' }, { status: 400 })
   }
@@ -675,23 +696,65 @@ export async function POST(req: NextRequest) {
     // non-fatal: the order is committed and a hold hiccup must not
     // roll it back.
     let unitAssignments: UnitAssignmentOutcome[] = []
+    // Units the rep NAMED in the builder's Reservation section, by fleet
+    // class. Everything else binds next-available.
+    const namedUnits: Record<string, string[]> = {}
+    for (const raw of itemsSafe) {
+      const ua = raw.unitAssignment
+      const catId = ua?.categoryId || raw.assetCategoryId || null
+      const picks = Array.isArray(ua?.assetIds) ? ua!.assetIds!.filter((x) => typeof x === 'string' && x) : []
+      if (!catId || picks.length === 0) continue
+      namedUnits[catId] = [...(namedUnits[catId] ?? []), ...picks]
+    }
     try {
       const raised = await holdOnQuoteSend(result.orderId)
       if (raised.error) console.error('[orders/from-parse] immediate hold failed:', raised.error)
       else {
         await reconcileHoldFirmness(result.orderId)
         // And the TRUCKS (Wes 2026-09-10): a parsed order's vehicles bind
-        // next-available the same as a hand-added line does. Non-fatal.
-        unitAssignments = await assignNextAvailableForOrder(result.orderId)
+        // next-available the same as a hand-added line does — or the
+        // unit the rep picked, where one was picked. Non-fatal.
+        unitAssignments = await assignNextAvailableForOrder(result.orderId, namedUnits)
       }
     } catch (err) {
       console.error('[orders/from-parse] immediate hold threw:', err)
     }
 
+    // Will call, or loaded on a reserved truck (Wes 2026-09-12). Stored
+    // on the order for the yard and the order page; the LOAD_ON unit is
+    // the first one bound for the class the rep chose. Non-fatal, and
+    // guarded: the columns are added by an additive script that may not
+    // have run yet on a fresh environment.
+    let gearHandoffNote: string | null = null
+    if (gearHandoff && (gearHandoff.kind === 'WILL_CALL' || gearHandoff.kind === 'LOAD_ON')) {
+      let assignmentId: string | null = null
+      if (gearHandoff.kind === 'LOAD_ON') {
+        if (gearHandoff.assignmentId) assignmentId = gearHandoff.assignmentId
+        else if (gearHandoff.categoryId) {
+          const bound = unitAssignments.find(
+            (u) => u.categoryId === gearHandoff.categoryId && u.assigned.some((a) => !!a.assignmentId),
+          )
+          assignmentId = bound?.assigned.find((a) => !!a.assignmentId)?.assignmentId ?? null
+          if (!assignmentId) {
+            gearHandoffNote =
+              'The gear was marked to load on a reserved vehicle, but no unit was bound for that class — pick the unit on the order page and the yard will see it there.'
+          }
+        }
+      }
+      try {
+        await prisma.order.update({
+          where: { id: result.orderId },
+          data: { gearHandoff: gearHandoff.kind, gearLoadsOnAssignmentId: assignmentId },
+        })
+      } catch (err) {
+        console.warn('[orders/from-parse] gear handoff not stored (columns missing?):', err)
+      }
+    }
+
     await syncOrderWindowSafe(result.orderId)
 
     return NextResponse.json(
-      { orderId: result.orderId, warnings: result.warnings, unitAssignments },
+      { orderId: result.orderId, warnings: result.warnings, unitAssignments, gearHandoffNote },
       { status: 201 },
     )
   } catch (err) {

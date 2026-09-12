@@ -46,6 +46,7 @@ export async function GET() {
       assets: { some: {} },
     },
     select: {
+      id: true,
       legacyAssetCategoryId: true,
       description: true,
       code: true,
@@ -86,6 +87,9 @@ export async function GET() {
 
   const categories = rows.map((r) => ({
     id: r.legacyAssetCategoryId as string,
+    // The merged catalog row behind the class — what an ORDER LINE binds
+    // (the order builder's Reservation section adds a line from a class).
+    inventoryItemId: r.id,
     name: r.description || r.code,
     slug: r.slug,
     code: r.code,

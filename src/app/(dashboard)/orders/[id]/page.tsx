@@ -236,6 +236,11 @@ type Order = {
     asset: { id: string; unitName: string };
     bookingItem: { id: string; category: { name: string } | null; booking: { id: string; bookingNumber: string } };
   }>;
+  /** How the non-vehicle lines leave — will call at the warehouse, or
+   *  loaded on one of the reserved units (Order.gearHandoff). Null when
+   *  the builder never asked. */
+  gearHandoff?: 'WILL_CALL' | 'LOAD_ON' | string | null;
+  gearLoadsOnAssignmentId?: string | null;
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
   job: {
     id: string;
@@ -3317,6 +3322,23 @@ export default function OrderDetailPage() {
                 a Booking id to /jobs/[id], which 404s. */}
             {order.booking ? <a href="/gantt" title="View on the schedule" className="text-lt-fg hover:text-black hover:underline underline-offset-2">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
           </p>
+          {order.gearHandoff && (
+            <div className="mt-1.5 text-xs">
+              <span className="text-lt-fg3">Gear</span>{' '}
+              {order.gearHandoff === 'WILL_CALL' ? (
+                <span className="px-2 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg font-semibold" title="The client picks the gear up at the warehouse — nothing rides on a reserved unit">
+                  Will call
+                </span>
+              ) : (
+                <span className="text-lt-fg">
+                  loads on{' '}
+                  <span className="font-semibold">
+                    {(order.loadsOn ?? []).find((a) => a.id === order.gearLoadsOnAssignmentId)?.asset.unitName ?? 'a reserved vehicle (unit not bound yet)'}
+                  </span>
+                </span>
+              )}
+            </div>
+          )}
           {(order.loadsOn ?? []).length > 0 && (
             <div className="mt-1.5">
               <span className="text-lt-fg3 text-xs">Loads on</span>
