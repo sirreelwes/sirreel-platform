@@ -7,24 +7,24 @@
  * item and prints them as Code 39 on Avery-compatible stock, and
  * reprints any label the register knows.
  *
- * Yard door — the same crew that scans them.
+ * Yard staff and sales (Wes 2026-09-12: "let sales mint labels too").
  */
 
 import { Lock } from 'lucide-react'
 import Link from 'next/link'
-import { getYardUser } from '@/lib/yard/requireYardAccess'
+import { getLabelUser } from '@/lib/warehouse/labelAccess'
 import { LabelPrinter } from '@/components/warehouse/LabelPrinter'
 
 export const dynamic = 'force-dynamic'
 
 export default async function WarehouseLabelsPage() {
-  const user = await getYardUser()
+  const user = await getLabelUser()
   if (!user) {
     return (
       <div className="max-w-sm mx-auto text-center py-16 px-6">
         <Lock size={32} aria-hidden className="mx-auto mb-3 text-lt-fg3" />
-        <h1 className="text-lt-fg text-lg font-semibold mb-2">Yard access required</h1>
-        <p className="text-lt-fg2 text-sm">Label printing is for fleet and warehouse staff.</p>
+        <h1 className="text-lt-fg text-lg font-semibold mb-2">Staff access required</h1>
+        <p className="text-lt-fg2 text-sm">Label printing is for yard staff and sales.</p>
       </div>
     )
   }

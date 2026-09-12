@@ -409,8 +409,9 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   a part-used sheet goes back through; print at 100%, never fit-to-page.
   Unknown codes are refused by name (404) rather than left off. Reprinting
   an RW label is the same sheet. `npm run test:unit-labels`.
-- Yard door on the page and both routes. Sales (AGENT) cannot mint — the
-  warehouse labels gear, sales asks.
+- Door is `requireLabelAccess` (`src/lib/warehouse/labelAccess.ts`): yard
+  staff OR sales (Wes 2026-09-12: "let sales mint labels too"). Every AGENT
+  nav carries Print Labels under Ops. Find a Unit and the desk stay yard-only.
 
 ## Pick list item codes fold, with no hyphen added (2026-09-12)
 - Wes's photo of S260902-008: `CAT_CUBE_TRUCK` printed straight over

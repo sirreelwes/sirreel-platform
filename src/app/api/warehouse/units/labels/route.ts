@@ -1,7 +1,7 @@
 import React from 'react'
 import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
-import { requireYardAccess } from '@/lib/yard/requireYardAccess'
+import { requireLabelAccess } from '@/lib/warehouse/labelAccess'
 import { unitsForLabels, markLabelsPrinted } from '@/lib/warehouse/mintUnits'
 import { LabelSheetDocument } from '@/lib/warehouse/LabelSheetDocument'
 import { DEFAULT_STOCK, LABEL_STOCKS, isLabelStockId } from '@/lib/warehouse/unitLabels'
@@ -23,7 +23,7 @@ export const maxDuration = 60
  * JSON without rendering, for the page to preview.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireYardAccess()
+  const auth = await requireLabelAccess()
   if (!auth.ok) return auth.response
 
   const params = new URL(req.url).searchParams

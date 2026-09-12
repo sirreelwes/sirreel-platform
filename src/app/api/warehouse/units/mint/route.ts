@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireYardAccess } from '@/lib/yard/requireYardAccess'
+import { requireLabelAccess } from '@/lib/warehouse/labelAccess'
 import { mintUnits } from '@/lib/warehouse/mintUnits'
 import { MAX_MINT_PER_BATCH } from '@/lib/warehouse/unitLabels'
 
@@ -12,12 +12,12 @@ export const dynamic = 'force-dynamic'
  *
  *   { inventoryItemId, count, serialNumbers?: string[] }
  *
- * Yard door, like every unit route. Audited `inventory.units_minted`.
+ * Yard staff or sales (requireLabelAccess). Audited `inventory.units_minted`.
  * The register rows exist from this moment whether or not the sheet is
  * printed — print it from the response, or later by barcode.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireYardAccess()
+  const auth = await requireLabelAccess()
   if (!auth.ok) return auth.response
 
   let body: { inventoryItemId?: unknown; count?: unknown; serialNumbers?: unknown }

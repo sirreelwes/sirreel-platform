@@ -653,9 +653,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
                 { id: 'order-reports', label: 'Check In/Out Reports', icon: 'ClipboardList', href: '/reports/orders' },
                 { id: 'vehicle-reports', label: 'Vehicle Check In/Out', icon: 'Car', href: '/reports/vehicles' },
                 { id: 'warehouse-pick', label: 'All Pick Lists', icon: 'ListChecks', href: '/warehouse/pick' },
-                { id: 'unit-lookup', label: 'Find a Unit', icon: 'ScanLine', href: '/warehouse/units' }, { id: 'unit-labels', label: 'Print Labels', icon: 'Tag', href: '/warehouse/labels' },
+                { id: 'unit-lookup', label: 'Find a Unit', icon: 'ScanLine', href: '/warehouse/units' },
               ]
             : []),
+          // Every agent can mint and print SR labels (Wes 2026-09-12: "let
+          // sales mint labels too"); the door is requireLabelAccess.
+          { id: 'unit-labels', label: 'Print Labels', icon: 'Tag', href: '/warehouse/labels' },
         ],
       },
       // Collections was tacked onto the end of the sales list; with the
