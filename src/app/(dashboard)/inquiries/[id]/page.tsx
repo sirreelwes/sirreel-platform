@@ -318,10 +318,13 @@ export default function InquiryDetailPage() {
               )}
               <span className="text-[11px] text-zinc-500">submitted {fmtDateTime(inquiry.createdAt)}</span>
             </div>
-            <h1 className="text-xl font-semibold text-zinc-900 mt-2 break-words">{inquiry.title}</h1>
+            <h1 className="text-xl font-semibold text-zinc-100 mt-2 break-words">{inquiry.title}</h1>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* min-w-0 + flex-wrap so the four buttons fold onto a second
+              row at phone width instead of running off the card (the group
+              was flex-shrink-0 with no wrap — 2026-09-12 mobile report). */}
+          <div className="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
             {!isClosed && (
               <>
                 {!inquiry.assignedTo && (
@@ -370,7 +373,7 @@ export default function InquiryDetailPage() {
         </div>
 
         {!isClosed && !isPaymentInfo && (
-          <div className="mt-2 text-[11px] text-zinc-500 text-right">
+          <div className="mt-2 text-[11px] text-zinc-500 sm:text-right">
             Converting creates a Job in the sales pipeline and moves this inquiry to Converted.
           </div>
         )}
