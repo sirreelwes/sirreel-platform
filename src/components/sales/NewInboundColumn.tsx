@@ -62,6 +62,7 @@ import {
   readVehicleRequest,
   vehicleLineCount,
 } from '@/lib/sales/inquiryVehicleRequest'
+import type { EmailVehicleRequest } from '@/lib/sales/emailVehicleMatch'
 import {
   MakeReservationModal,
   type ReservationPrefill,
@@ -98,6 +99,11 @@ interface PersistentInquiry {
   // already an order in HQ even though nobody replied on its email
   // thread. Derived, never stored. See lib/sales/inquiryHandledInHq.
   handledInHq: HandledInHq | null
+  // The trucks the SOURCE EMAIL named, read off its AI extraction, for
+  // inquiries with no web-form cart to read. Null when the email named
+  // none, named one the fleet can't answer to, or was read with too
+  // little confidence to preload a hold.
+  emailVehicleRequest?: EmailVehicleRequest | null
 }
 
 interface HandledInHq {
@@ -150,6 +156,10 @@ interface SuggestionRecord {
   // words, and a one-line summary of what we said back.
   clientLatest?: { sentAt: string; subject: string; excerpt: string | null } | null
   ourReply?: { sentAt: string; fromAddress: string; summary: string | null } | null
+  // The reservation this email asked for, read off its AI extraction
+  // (src/lib/sales/emailVehicleMatch). Non-null flips the card
+  // reservation-first, exactly as a web-form cart does.
+  vehicleRequest?: EmailVehicleRequest | null
 }
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -179,6 +189,48 @@ function relativeAge(iso: string): string {
   if (days < 30) return `${days}d ago`
   if (days < 90) return `${Math.floor(days / 7)}w ago`
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
+/**
+ * An email-derived request, as the reservation desk's prefill.
+ *
+ * The desk's own fields stay editable — dates especially. The extraction
+ * reads "Sept 29 - Oct 1" off prose where one of those days may be a
+ * prep day the client said they "may need", so it opens the window, it
+ * does not decide it.
+ *
+ * The client's own words for the truck ride along in the notes: the
+ * matcher resolved "VTR Van" to ProScout / VideoVan, and whoever takes
+ * the hold should see what was actually written, not only what it was
+ * read as.
+ */
+/** Trucks on an email-read request — what the button counts. */
+function emailVehicleUnits(request: EmailVehicleRequest): number {
+  return request.vehicles.reduce((n, v) => n + v.quantity, 0)
+}
+
+function prefillFromEmailRequest(
+  request: EmailVehicleRequest,
+  inquiryId: string,
+  company: { id: string; name: string } | null,
+  person: { firstName?: string; lastName?: string; email?: string },
+): ReservationPrefill {
+  return {
+    inquiryId,
+    vehicles: request.vehicles,
+    supplies: [],
+    start: request.start,
+    end: request.end,
+    company,
+    companyName: request.companyName,
+    jobName: request.jobName,
+    contact:
+      request.contact ??
+      (person.firstName && person.lastName && person.email
+        ? { firstName: person.firstName, lastName: person.lastName, email: person.email }
+        : null),
+    notes: `Client asked for: ${request.requestedAs}`,
+  }
 }
 
 function fmtMoney(n: number | null): string | null {
@@ -361,6 +413,18 @@ export function NewInboundColumn({
    * detail read happens here, on the click, rather than on every card.
    */
   const openReservation = async (inquiry: PersistentInquiry) => {
+    // An email-born inquiry has no cart to resolve — the trucks were read
+    // off the message's AI extraction by /api/inquiries and are already
+    // fleet-category ids. Nothing to fetch; open on what we have.
+    const fromEmail = inquiry.emailVehicleRequest
+    if (fromEmail && vehicleLineCount(inquiry.sourceMetadata) === 0) {
+      setReservePrefill(prefillFromEmailRequest(fromEmail, inquiry.id, inquiry.company, {
+        firstName: inquiry.person?.firstName,
+        lastName: inquiry.person?.lastName,
+        email: inquiry.person?.email,
+      }))
+      return
+    }
     setBusyId(inquiry.id)
     try {
       const res = await fetch(`/api/inquiries/${encodeURIComponent(inquiry.id)}`)
@@ -428,6 +492,44 @@ export function NewInboundColumn({
       }
       load()
       onChange?.()
+    } catch (err) {
+      alert(`Failed to capture: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  /**
+   * Reserve & Quote on a GMAIL SUGGESTION.
+   *
+   * A suggestion is an email, not an Inquiry row, and the reservation
+   * desk closes an inquiry when the hold lands — so capture runs first
+   * and the modal opens on the id it returns. Capture is the same call
+   * the Capture & Quote button makes; the only difference is that we
+   * keep the operator here instead of sending them to /orders/new.
+   */
+  const openReservationFromSuggestion = async (suggestion: SuggestionRecord) => {
+    const request = suggestion.vehicleRequest
+    if (!request) return
+    setBusyId(suggestion.emailId)
+    try {
+      const res = await fetch('/api/sales/suggested-inquiries/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailId: suggestion.emailId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.inquiry?.id) {
+        alert(data?.error || `Failed to capture (HTTP ${res.status})`)
+        return
+      }
+      setReservePrefill(
+        prefillFromEmailRequest(request, data.inquiry.id, suggestion.company, {
+          firstName: suggestion.person?.firstName,
+          lastName: suggestion.person?.lastName,
+          email: suggestion.person?.email,
+        }),
+      )
     } catch (err) {
       alert(`Failed to capture: ${err instanceof Error ? err.message : 'network error'}`)
     } finally {
@@ -624,6 +726,7 @@ export function NewInboundColumn({
                     busy={busyId === item.row.emailId}
                     onOpen={() => setDrawerEmailId(item.row.emailId)}
                     onCapture={() => captureSuggestion(item.row.emailId)}
+                    onReserve={() => openReservationFromSuggestion(item.row)}
                     onQuickReply={() => setQuickReplyEmailId(item.row.emailId)}
                     onDismiss={() => dismissSuggestion(item.row.emailId)}
                   />
@@ -698,6 +801,7 @@ export function NewInboundColumn({
                         busy={busyId === item.row.emailId}
                         onOpen={() => setDrawerEmailId(item.row.emailId)}
                         onCapture={() => captureSuggestion(item.row.emailId)}
+                        onReserve={() => openReservationFromSuggestion(item.row)}
                         onQuickReply={() => setQuickReplyEmailId(item.row.emailId)}
                         onDismiss={() => dismissSuggestion(item.row.emailId)}
                       />
@@ -941,6 +1045,51 @@ function AddOnModal({
   )
 }
 
+/**
+ * What the matcher made of an email, shown BEFORE the rep clicks.
+ *
+ * The reserve button on a web-form card is backed by a cart the client
+ * built themselves; this one is backed by a read of their prose. The rep
+ * has to be able to see the read was right without opening the thread —
+ * so the card states the truck, the window, and the words the client
+ * actually used.
+ */
+function ReadAsRequest({ request }: { request: EmailVehicleRequest }) {
+  const window_ =
+    request.start && request.end && request.end !== request.start
+      ? `${fmtDay(request.start)} – ${fmtDay(request.end)}`
+      : request.start
+        ? fmtDay(request.start)
+        : 'no dates given'
+  return (
+    <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+        Reads as
+      </div>
+      <div className="text-[11px] text-gray-700 mt-0.5">
+        <span className="font-semibold">
+          {request.vehicles
+            .map((v) => (v.quantity > 1 ? `${v.name} × ${v.quantity}` : v.name))
+            .join(', ')}
+        </span>
+        {' · '}
+        {window_}
+      </div>
+      <div className="text-[10px] text-gray-500 mt-0.5">
+        they wrote &ldquo;{request.requestedAs}&rdquo;
+      </div>
+    </div>
+  )
+}
+
+/** "2026-09-29" → "Sep 29". Date-only text, never parsed into a Date —
+ *  a UTC-midnight day read with local getters lands a day early. */
+function fmtDay(day: string): string {
+  const [, m, d] = day.split('-')
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[Number(m) - 1] ?? m} ${Number(d)}`
+}
+
 // ─── Persistent-inquiry card ──────────────────────────────────────
 
 function PersistentCard({
@@ -976,10 +1125,16 @@ function PersistentCard({
     ? inquiry.sourceMetadata
     : null
   const handled = inquiry.handledInHq
-  // Vehicles on the request itself — a web-form cart, not a guess off
-  // the prose. Non-zero flips the card reservation-first: hold the
-  // trucks, write the quote on the order that comes back.
-  const vehicleUnits = vehicleLineCount(inquiry.sourceMetadata)
+  // Vehicles on the request itself — a web-form cart. Non-zero flips the
+  // card reservation-first: hold the trucks, write the quote on the order
+  // that comes back.
+  const cartUnits = vehicleLineCount(inquiry.sourceMetadata)
+  // No cart means an email-born inquiry, where the ask is prose. The
+  // trucks in it were resolved server-side off the message's AI
+  // extraction — same shape, same button, a different reader. The cart
+  // wins whenever there is one: structured data beats a read of prose.
+  const emailRequest = cartUnits === 0 ? inquiry.emailVehicleRequest ?? null : null
+  const vehicleUnits = cartUnits || (emailRequest ? emailVehicleUnits(emailRequest) : 0)
   // An inquiry past the first-response SLA — a client wrote in and
   // nobody has replied on any tracked channel. Red ring + wait badge.
   // A lead that is already a quoted order is answered, whatever the
@@ -1072,6 +1227,8 @@ function PersistentCard({
         </div>
       )}
 
+      {emailRequest && !handled && <ReadAsRequest request={emailRequest} />}
+
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
         {/* Capture & Quote opens a NEW job. On a lead that is already an
             order, that is the one thing not to offer first — the rep wants
@@ -1160,6 +1317,7 @@ function SuggestionCard({
   busy,
   onOpen,
   onCapture,
+  onReserve,
   onQuickReply,
   onDismiss,
 }: {
@@ -1167,12 +1325,18 @@ function SuggestionCard({
   busy: boolean
   onOpen: () => void
   onCapture: () => void
+  /** Only ever called when the email named a holdable vehicle. */
+  onReserve: () => void
   onQuickReply: () => void
   onDismiss: () => void
 }) {
   const contactName = suggestion.person
     ? `${suggestion.person.firstName} ${suggestion.person.lastName}`.trim()
     : null
+  // The truck this email asked for, read off its AI extraction. Non-null
+  // flips the card reservation-first, the same way a web-form cart does
+  // on the persistent card — the truck is the scarce thing.
+  const request = suggestion.vehicleRequest ?? null
   return (
     <div className="border border-gray-200 rounded-xl px-3.5 py-3 bg-white hover:border-gray-300 transition-colors">
       <div className="flex items-center gap-2 flex-wrap">
@@ -1250,14 +1414,41 @@ function SuggestionCard({
         )
       )}
 
+      {request && <ReadAsRequest request={request} />}
+
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-        <button
-          onClick={onCapture}
-          disabled={busy}
-          className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
-        >
-          {busy ? '…' : 'Capture & Quote →'}
-        </button>
+        {request ? (
+          /* The email named a truck we can hold. Same ordering as the
+             web-form card: hold first, price second — and Capture &
+             Quote stays for a lead the desk wants to build by hand, or
+             one where the read is wrong. */
+          <>
+            <button
+              onClick={onReserve}
+              disabled={busy}
+              title={`Hold ${request.vehicles.map((v) => `${v.quantity}× ${v.name}`).join(', ')} off this email, then quote`}
+              className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+            >
+              {busy ? '…' : `Reserve & Quote · ${emailVehicleUnits(request)} →`}
+            </button>
+            <button
+              onClick={onCapture}
+              disabled={busy}
+              title="Build the quote first; the hold follows when it is sent"
+              className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-gray-500 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+            >
+              Capture & Quote
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onCapture}
+            disabled={busy}
+            className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+          >
+            {busy ? '…' : 'Capture & Quote →'}
+          </button>
+        )}
         {/* Quick Reply — secondary/outline so Capture & Quote stays primary.
             Opens the SAME QuickReplyModal as the inquiry-mode ThreadDrawer
             (suggestion rows open that drawer in inquiry mode). */}

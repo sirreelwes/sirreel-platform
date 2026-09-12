@@ -105,6 +105,7 @@
     "test:payroll-clock": "tsx tests/payroll/clock.test.ts",
     "test:booking-terms": "tsx tests/sales/booking-terms.test.ts",
     "test:conduit": "tsx tests/sub-rentals/conduit.test.ts",
+    "test:email-vehicle": "tsx tests/sales/email-vehicle-match.test.ts",
     "test:auto-reply": "tsx tests/email/auto-reply.test.ts",
     "test:job-change-signals": "tsx tests/email/job-change-signals.test.ts",
     "rw:status": "tsx scripts/rw-sync-status.ts",

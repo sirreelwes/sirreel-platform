@@ -7,6 +7,9 @@ import {
   type InquiryClassification,
 } from '@/lib/email/classifyInquiryForPipeline';
 import { autoReplySubjectMarker } from '@/lib/email/autoReply';
+import { readEmailVehicleRequest } from '@/lib/sales/emailVehicleMatch';
+import { loadReservableCategories } from '@/lib/sales/reservableCategories';
+import { todayPacific } from '@/lib/sales/quoteUrgency';
 
 export const dynamic = 'force-dynamic';
 
@@ -436,6 +439,14 @@ export async function GET() {
     }),
   );
 
+  // What each email ASKED FOR, read as a reservation (Wes 2026-09-11).
+  // The card's reserve-first branch used to require a web-form cart, so
+  // an email naming a truck — "VTR Van - Sept 29-Oct 1" — could only ever
+  // offer Capture & Quote. One category read for the whole page; the
+  // extraction it matches against was already on every row.
+  const reservable = await loadReservableCategories();
+  const today = todayPacific();
+
   const toRecord = (e: EmailRow) => ({
     emailId: e.id,
     fromAddress: e.fromAddress,
@@ -447,6 +458,12 @@ export async function GET() {
     company: e.company,
     person: e.person,
     threadMessageCount: bestThread(e)?.messageCount ?? 1,
+    vehicleRequest: readEmailVehicleRequest(
+      e.extractedData,
+      e.extractionConfidence,
+      reservable,
+      today,
+    ),
   });
 
   const newInquiries = included.filter((c) => isFirstInThread(c.email)).slice(0, PAGE_SIZE).map((c) => toRecord(c.email));

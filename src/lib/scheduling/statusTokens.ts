@@ -172,7 +172,11 @@ export const CAT_LABELS: Record<string, string> = {
   pop: 'PopVan',
   cam: 'Cam Cube',
   dlux: 'DLUX',
-  scout: 'Scout',
+  // Wes 2026-09-11: the filter said "Scout", which reads as a plain scout
+  // van. The unit IS the video one — AssetCategory "ProScout / VideoVan",
+  // the thing clients write in about as "VTR Van". The short key stays
+  // `scout` (it is the value the board filters on); only the label moved.
+  scout: 'ProScout/VTR',
   studio: 'Studio',
   stakebed: 'Stakebed',
   general: 'Other',
