@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA texts Wes when a new incoming lands
 
-`377d9a86` AHA texts Wes when a new incoming lands, with the link to open it
+`08f1f988` AHA texts Wes when a new incoming lands, with the link to open it
 
 Wes: "Can AHA text me when there's a new incoming and drop a link in the text to open that response?" — immediately between 8a and 10p, form / manual / portal inbound only, and "to be clear, this text message notification ONLY goes to Wes." The first text AHA sends FIRST; everything else outbound answers someone. It goes from AHA's number, so a reply lands in a real AHA conversation (Wes's phone resolves to the staff tier through `identifySender()`).
 
