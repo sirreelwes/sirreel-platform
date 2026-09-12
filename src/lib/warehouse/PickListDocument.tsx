@@ -64,6 +64,29 @@ export interface PickListLine {
    *  nobody was billed for, which is precisely the gear that used to
    *  disappear without anyone noticing. */
   includedAccessory?: boolean
+  /** InventoryItem.unitChecks — parts attached to EACH unit that never
+   *  get their own line (Wes 2026-09-11: "each walkie needs to confirm
+   *  those"). Printed under the line as "Each unit: ( ) Antenna × 1".
+   *  A check whose name is already a line on this sheet is suppressed
+   *  at render (printableUnitChecks) — never counted twice. */
+  unitChecks?: string[]
+}
+
+/**
+ * The per-unit checks that PRINT under a line, given every description on
+ * the sheet. A check that is ALREADY its own line on this sheet must not
+ * also print under the parent — the RW sheet the floor knows shows
+ * "CP200 - Antenna  15" as a line, and a parent that then repeats
+ * "Each unit: ( ) Antenna" is the same thing counted twice. So seeding
+ * both antenna sources (kit piece + per-unit check) prints it once.
+ */
+export function printableUnitChecks(checks: string[], lineDescriptions: string[]): string[] {
+  const lineNames = lineDescriptions.map((d) => d.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim())
+  return checks.filter((c) => {
+    const key = c.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    if (!key) return false
+    return !lineNames.some((name) => name.includes(key))
+  })
 }
 
 export interface PickListDocumentProps {
@@ -293,6 +316,21 @@ const styles = StyleSheet.create({
   },
   notesText: { fontSize: 8, color: C.muted },
   notesLabel: { fontFamily: 'Helvetica-Bold' },
+  // "Each unit: ( ) Antenna × 1  ( ) Battery × 1" — same indent and rule
+  // as Notes, so it reads as part of the line above it. Ink, not muted:
+  // the picker has to tick these, so they must not read as a footnote.
+  checksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingVertical: 2.5,
+    paddingLeft: '14%',
+    borderBottomWidth: 0.25,
+    borderBottomColor: C.ruleSoft,
+    borderStyle: 'dashed',
+  },
+  checksLabel: { fontFamily: 'Helvetica-Bold', fontSize: 8, marginRight: 4 },
+  checkItem: { fontSize: 8.5, marginRight: 10 },
   // Columns sum to 100
   colCode:      { width: '12%', fontSize: 8.5, paddingRight: 3 },
   colDesc:      { width: '38%', fontSize: 8.5, paddingRight: 4 },
@@ -377,6 +415,7 @@ export function PickListDocument(props: PickListDocumentProps) {
   const generatedAt = props.generatedAt ?? new Date()
   const sections = groupByDepartment(props.lines)
   const grandTotal = props.lines.reduce((s, l) => s + l.ordered, 0)
+  const sheetDescriptions = props.lines.map((l) => l.description)
 
   return (
     <Document title={`Pick List ${props.orderNumber}`} author="SirReel Production Vehicles, Inc.">
@@ -493,7 +532,9 @@ export function PickListDocument(props: PickListDocumentProps) {
             <View style={styles.deptHeader}>
               <Text style={styles.deptHeaderText}>{DEPT_LABELS[section.dept]}</Text>
             </View>
-            {section.lines.map((line, idx) => (
+            {section.lines.map((line, idx) => {
+              const checks = printableUnitChecks(line.unitChecks ?? [], sheetDescriptions)
+              return (
               <View key={idx} wrap={false}>
                 <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
                   <Text style={styles.colCode}>{line.code ?? '—'}</Text>
@@ -524,8 +565,17 @@ export function PickListDocument(props: PickListDocumentProps) {
                     </Text>
                   </View>
                 ) : null}
+                {checks.length > 0 ? (
+                  <View style={styles.checksRow}>
+                    <Text style={styles.checksLabel}>Each unit:</Text>
+                    {checks.map((name) => (
+                      <Text key={name} style={styles.checkItem}>( ) {name} × 1</Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
-            ))}
+              )
+            })}
             <View style={styles.totalRow} wrap={false}>
               <Text style={styles.totalLabel}>Total for {DEPT_LABELS[section.dept]}</Text>
               <Text style={styles.totalValue}>{section.total}</Text>

@@ -84,20 +84,10 @@ export async function renderPickListPdf(
   const onSheet = selected.length > 0 ? selected : pickable
   const omittedLineCount = pickable.length - onSheet.length
 
-  // A check that is ALREADY its own line on this sheet must not also
-  // print under the parent — the RW sheet the floor knows shows
-  // "CP200 - Antenna  15" as a line, and a parent that then repeats
-  // "Each unit: ( ) Antenna" is the same thing counted twice.
-  const lineNames = new Set(
-    onSheet.map((li) => li.description.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()),
-  )
-  const printableChecks = (checks: string[]): string[] =>
-    checks.filter((c) => {
-      const key = c.toLowerCase().trim()
-      for (const name of lineNames) if (name.includes(key)) return false
-      return true
-    })
-
+  // Per-unit checks go through RAW. A check that is already its own line
+  // on this sheet is suppressed by the document itself
+  // (printableUnitChecks in PickListDocument), against the lines that
+  // actually print — so a partial pull judges by what is on ITS sheet.
   const lines: PickListLine[] = onSheet.map((li) => {
     // "Out" = already pulled. Warehouse lines advance through the
     // digital picking floor; fleet lines flip in bulk when the fleet
@@ -116,7 +106,7 @@ export async function renderPickListPdf(
       out: isOut ? li.quantity : 0,
       picked: warehousePicked,
       includedAccessory: !!li.autoKitPieceId,
-      unitChecks: printableChecks(li.inventoryItem?.unitChecks ?? []),
+      unitChecks: li.inventoryItem?.unitChecks ?? [],
     }
   })
 

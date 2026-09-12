@@ -366,9 +366,12 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     confirm those") and are a DIFFERENT mechanism, for parts that never
     get their own line: `InventoryItem.unitChecks String[]` (drawer
     field "Per-unit checks"; `scripts/seed-unit-checks.ts`). Printed
-    under the line as "Each unit: ( ) X × N" — but `renderPickListPdf`
-    SUPPRESSES a check whose name already appears as a line on the same
-    sheet, so seeding both antenna sources never prints it twice. At the
+    under the line as "Each unit: ( ) X × N" — but `printableUnitChecks`
+    in `PickListDocument.tsx` SUPPRESSES a check whose name already
+    appears as a line on the same sheet, so seeding both antenna sources
+    never prints it twice (2026-09-12: the row had never actually printed —
+    `PickListLine` lacked the field, so the renderer's value was dropped
+    untyped; `npm run test:pick-list-pdf` renders offline and pins it). At the
     desk every landed scan shows the checks as chips
     defaulting to present; a tap marks one missing → `PATCH
     /api/orders/[id]/unit-scans/[scanId]/checks` → `OrderUnitScan.
