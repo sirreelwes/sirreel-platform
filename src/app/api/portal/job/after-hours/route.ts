@@ -102,7 +102,12 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     // Staff preview, so the shared masthead can wear its banner here too.
-    preview: read.previewBy ? { by: read.previewBy } : null,
+    preview: read.previewBy
+      ? {
+          by: read.previewBy,
+          backUrl: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')}/jobs/${job.id}`,
+        }
+      : null,
     projectName: job.name,
     // Chrome facts for the job portal's shared masthead (JobPortalChrome).
     company: order?.company

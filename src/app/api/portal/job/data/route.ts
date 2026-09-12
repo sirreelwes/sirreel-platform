@@ -619,7 +619,18 @@ export async function GET(req: NextRequest) {
     /** Set only when a staff member is looking — the page wears a banner and
      *  every action on it is inert, because the write routes refuse the
      *  preview cookie. */
-    preview: read.previewBy ? { by: read.previewBy } : null,
+    preview: read.previewBy
+      ? {
+          by: read.previewBy,
+          // Where the staff member came from, so the banner can send them
+          // back (Wes 2026-09-12: "there is no back button or close button").
+          // Built here from ids we already hold — never from anything the
+          // request supplies, so it cannot become an open redirect.
+          backUrl: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')}${
+            order.jobId ? `/jobs/${order.jobId}` : `/orders/${order.id}`
+          }`,
+        }
+      : null,
     company: { id: order.company.id, name: order.company.name, hasLogo: !!(order.company.logoSvg || order.company.logoUrl) },
     standingAgreement,
     /** The annual-agreement option on this account: null when it doesn't

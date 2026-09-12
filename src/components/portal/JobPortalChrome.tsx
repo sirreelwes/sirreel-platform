@@ -34,7 +34,7 @@ export interface JobPortalChromeData {
   ahaSms: string
   /** Set when a staff member is looking at the client's page rather than the
    *  client — the shell says so, loudly, at the top (Wes 2026-09-12). */
-  preview: { by: string } | null
+  preview: { by: string; backUrl: string | null } | null
 }
 
 /** Lift the chrome facts out of a /api/portal/job/data payload. Tolerant
@@ -53,7 +53,9 @@ export function chromeFromPortalData(d: any): JobPortalChromeData {
     rep: d?.agent?.email ? { name: d.agent.name || d.agent.email, email: d.agent.email } : null,
     afterHoursLine: d?.support?.office || d?.afterHoursLine || '(888) 477-7335',
     ahaSms: d?.support?.aha || '(747) 335-1665',
-    preview: d?.preview?.by ? { by: String(d.preview.by) } : null,
+    preview: d?.preview?.by
+      ? { by: String(d.preview.by), backUrl: d.preview.backUrl ? String(d.preview.backUrl) : null }
+      : null,
   }
 }
 
@@ -96,7 +98,26 @@ export function JobPortalShell({
               This is {chrome.company.name || 'the client'}&rsquo;s page as they see it. Nothing you press here is saved,
               and they are not told you looked.
             </span>
-            <span className="ml-auto text-white/70 truncate">{chrome.preview.by}</span>
+            <span className="ml-auto text-white/70 truncate hidden sm:inline">{chrome.preview.by}</span>
+            {/* The way out. Clears the preview cookie before leaving, so the
+                next client link opened on this browser is theirs, not a
+                lingering preview (Wes 2026-09-12). */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await fetch('/api/portal/preview/end', { method: 'POST' })
+                } catch {
+                  // Leaving matters more than the cookie; it expires in an hour.
+                }
+                const back = chrome.preview?.backUrl
+                if (back) window.location.href = back
+                else window.history.back()
+              }}
+              className="ml-auto sm:ml-3 shrink-0 rounded border border-white/40 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-white/10"
+            >
+              Close preview
+            </button>
           </div>
         </div>
       )}

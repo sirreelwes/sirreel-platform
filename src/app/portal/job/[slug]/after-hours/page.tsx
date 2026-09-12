@@ -96,7 +96,9 @@ export default function AfterHoursPage() {
         rep: facts.agent?.email ? { name: facts.agent.name || facts.agent.email, email: facts.agent.email } : null,
         afterHoursLine: facts.support?.phone ?? '(888) 477-7335',
         ahaSms: facts.support?.aha ?? '(747) 335-1665',
-        preview: facts.preview?.by ? { by: facts.preview.by } : null,
+        preview: facts.preview?.by
+          ? { by: facts.preview.by, backUrl: facts.preview.backUrl ?? null }
+          : null,
       }
     : null;
 
