@@ -153,6 +153,12 @@ export async function GET(req: NextRequest) {
         dotSheetGeneratedAt: true,
         bookingId: true,
         jobId: true,
+        // How the non-vehicle lines leave the building. The client picks it
+        // themselves now (Wes 2026-09-12: "orders have a drop down — Load on
+        // Asset 1, Load on Asset 2, Will Call, Delivery").
+        gearHandoff: true,
+        gearLoadsOnAssignmentId: true,
+        deliveryRequested: true,
         // Blind handoff — client-facing self-service instructions.
         // Selected explicitly per the CRH §7 audit checkpoint: only
         // surface fields the client should see. Toggle gates whether
@@ -851,6 +857,26 @@ export async function GET(req: NextRequest) {
           bitCertificateExpiresAt: va.asset.bitCertificateExpiresAt,
         }
       }),
+    },
+    // How the gear leaves the building, and the reserved units it could ride
+    // on. Wes 2026-09-12: "orders have a drop down — Load on Asset 1, Load on
+    // Asset 2, Will Call, Delivery." DELIVERY is Order.deliveryRequested (the
+    // dispatch flag) and wins the read; the other two live on
+    // Order.gearHandoff, the same field the order builder writes.
+    gearHandoff: {
+      kind: order.deliveryRequested
+        ? ('DELIVERY' as const)
+        : ((order.gearHandoff as 'WILL_CALL' | 'LOAD_ON' | null) ?? null),
+      assignmentId: order.gearLoadsOnAssignmentId,
+      units: vehicleAssignments.map((va) => ({
+        assignmentId: va.id,
+        unitName: va.asset.unitName,
+        title:
+          [va.asset.year ? String(va.asset.year) : '', va.asset.make || '', va.asset.model || '']
+            .filter(Boolean)
+            .join(' ')
+            .trim() || va.asset.unitName,
+      })),
     },
     agreement: rentalAgreement,
     agreementCoverage,

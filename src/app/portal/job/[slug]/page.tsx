@@ -113,6 +113,13 @@ interface PortalData {
   /** Text AHA (24/7) and the office line (business hours). */
   support?: { aha: string; office: string } | null;
   countdown: { msUntilPickup: number } | null;
+  /** How the gear leaves, and the units reserved on this job it could ride on
+   *  (Wes 2026-09-12). null kind = nobody has said yet. */
+  gearHandoff: {
+    kind: 'LOAD_ON' | 'WILL_CALL' | 'DELIVERY' | null;
+    assignmentId: string | null;
+    units: { assignmentId: string; unitName: string; title: string }[];
+  };
   lineItems: {
     id: string;
     type: string;
@@ -867,6 +874,11 @@ export default function JobPortalPage() {
             <span className="text-zinc-500 font-semibold">Total</span>
             <span className="text-zinc-900 font-bold">{fmtCurrency(data.order.total)}</span>
           </div>
+          {/* How it leaves the building. Wes 2026-09-12: "orders have a drop
+              down — Load on Asset 1, Load on Asset 2, Will Call, Delivery."
+              It sits with the assets because the load-on options ARE those
+              assets. Hidden until there is something to send out. */}
+          {data.lineItems.length > 0 && <GearHandoffPicker initial={data.gearHandoff} />}
           </div>
         </section>
 
@@ -1969,6 +1981,100 @@ function PaperworkRow({
 // helpers fell through to 'Sent' for PORTAL_GENERATED rows, which
 // was the dark-on-dark bug equivalent for badge copy: prepared isn't
 // delivered. The canonical mapping fixes it.
+/**
+ * "How does this leave the building?" — the client's own answer.
+ *
+ * Wes 2026-09-12: "orders have a drop down — Load on Asset 1, Load on Asset 2,
+ * Will Call, Delivery." The order builder has asked the same question since
+ * that morning; this is the client end of it. Load-on options are the units
+ * actually reserved on the job, and the server re-checks the one they pick
+ * (POST /api/portal/job/gear-handoff).
+ *
+ * Saves on change rather than behind a button: it is one field, and a
+ * "Save" they forget to press is a lie on the order.
+ */
+function GearHandoffPicker({ initial }: { initial: PortalData['gearHandoff'] }) {
+  const [kind, setKind] = useState(initial.kind);
+  const [assignmentId, setAssignmentId] = useState(initial.assignmentId);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState('');
+
+  const value = kind === 'LOAD_ON' ? `LOAD_ON:${assignmentId ?? ''}` : (kind ?? '');
+
+  const choose = async (raw: string) => {
+    if (!raw) return;
+    const nextKind = raw.startsWith('LOAD_ON:') ? 'LOAD_ON' : (raw as 'WILL_CALL' | 'DELIVERY');
+    const nextAssignment = raw.startsWith('LOAD_ON:') ? raw.slice('LOAD_ON:'.length) : null;
+    const prev = { kind, assignmentId };
+    setKind(nextKind);
+    setAssignmentId(nextAssignment);
+    setSaving(true);
+    setErr('');
+    setSaved(false);
+    try {
+      const r = await fetch('/api/portal/job/gear-handoff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: nextKind, assignmentId: nextAssignment }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.ok) {
+        // Put the control back where it was — a select showing the choice
+        // the server rejected is the worst of both.
+        setKind(prev.kind);
+        setAssignmentId(prev.assignmentId);
+        setErr(body.error || 'Could not save that — try again, or tell your rep.');
+        return;
+      }
+      setSaved(true);
+    } catch {
+      setKind(prev.kind);
+      setAssignmentId(prev.assignmentId);
+      setErr('Could not save that — check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-zinc-100 pt-3 space-y-1.5">
+      <label htmlFor="gear-handoff" className="block text-[11px] uppercase tracking-widest text-zinc-400 font-semibold">
+        How your gear leaves
+      </label>
+      <select
+        id="gear-handoff"
+        value={value}
+        disabled={saving}
+        onChange={(e) => choose(e.target.value)}
+        className="w-full sm:w-auto text-sm border border-zinc-200 rounded-lg px-3 py-2 bg-white text-zinc-900 disabled:text-zinc-400"
+      >
+        {!kind && <option value="">Choose…</option>}
+        {initial.units.map((u) => (
+          <option key={u.assignmentId} value={`LOAD_ON:${u.assignmentId}`}>
+            Load on {u.unitName}
+          </option>
+        ))}
+        <option value="WILL_CALL">Will call — we collect it ourselves</option>
+        <option value="DELIVERY">Delivery — bring it to us</option>
+      </select>
+      {err ? (
+        <div className="text-[11px] text-red-600">{err}</div>
+      ) : (
+        <div className="text-[11px] text-zinc-400">
+          {saving
+            ? 'Saving…'
+            : saved
+              ? 'Saved — your rep has been told.'
+              : kind === 'DELIVERY'
+                ? 'Your rep will confirm the delivery address and any fee.'
+                : 'Change this any time before pickup.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * A paperwork line that is real but not yet the client's business — the
  * invoice before there is one, the DOT sheet before trucks are picked.
