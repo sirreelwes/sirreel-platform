@@ -47,6 +47,7 @@
 import type { JobEmailSignalKind, Prisma, ReplyClassification } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { domainOf, isMatchableDomain } from '@/lib/crm/domainCompanyMatch'
+import { SIRREEL_DOMAIN } from '@/lib/crm/captureConstants'
 
 // ── 1. Pure classification ───────────────────────────────────────────
 
@@ -222,6 +223,14 @@ export async function linkMessageToLiveJobs(msg: {
   subject: string
 }): Promise<LinkedJob[]> {
   const parties = Array.from(new Set([msg.fromAddress, ...msg.toAddresses].map(bareAddress).filter(Boolean)))
+  // OUR OWN addresses are on every thread, so matching a job by them ties a
+  // message to every live job that staffer happens to be a contact on. Wes
+  // asked what a backfill would produce (2026-09-12): of 1,138 candidate
+  // rows, 900 landed on SR-JOB-0345 "Oliver Test" alone — every message
+  // Oliver was ever on, because he is a contact there. The client is the
+  // other party; the domain path has excluded us all along (domainSkipReason
+  // → 'internal') and the contact path never did.
+  const clientParties = parties.filter((p) => domainOf(p) !== SIRREEL_DOMAIN)
   const domains = Array.from(new Set(parties.map(domainOf).filter((d) => d && isMatchableDomain(d))))
   const codes = Array.from(new Set(Array.from(msg.subject.matchAll(ORDER_OR_JOB_CODE_RE)).map((m) => m[1].toUpperCase())))
 
@@ -236,13 +245,13 @@ export async function linkMessageToLiveJobs(msg: {
     if (j) add(j.id, 'thread')
   }
 
-  if (parties.length) {
+  if (clientParties.length) {
     const byContact = await prisma.job.findMany({
       where: {
         ...LIVE_JOB_WHERE,
         OR: [
-          { jobContacts: { some: { person: { email: { in: parties, mode: 'insensitive' } } } } },
-          { company: { billingEmail: { in: parties, mode: 'insensitive' } } },
+          { jobContacts: { some: { person: { email: { in: clientParties, mode: 'insensitive' } } } } },
+          { company: { billingEmail: { in: clientParties, mode: 'insensitive' } } },
         ],
       },
       select: { id: true },
