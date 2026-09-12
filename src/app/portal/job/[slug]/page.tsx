@@ -413,7 +413,9 @@ export default function JobPortalPage() {
           // here, but the user-facing copy should match the actual cause
           // so we don't tell first-visit clients to "click again".
           setError(
-            tokenInUrl
+            previewInUrl
+              ? 'That preview did not open. Try "See what they see" again from the job page.'
+              : tokenInUrl
               ? 'Your session has expired. Click the magic link in your email again.'
               : 'This portal link is missing its access token. Reply to your SirReel email or ask your rep to resend the link.',
           );

@@ -176,18 +176,26 @@ export interface JobPortalRead {
 
 /**
  * What a READ-ONLY portal route should call instead of
- * `verifyJobSessionCookieValue` + `resolveJobSession`. A real client session
- * wins; a preview cookie is honoured only here. Write routes must keep using
+ * `verifyJobSessionCookieValue` + `resolveJobSession`. A preview cookie is
+ * honoured only here — and, when present, first. Write routes must keep using
  * the session pair directly, which is what makes them refuse a preview.
  */
 export async function resolveJobPortalRead(req: NextRequest): Promise<JobPortalRead | null> {
-  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
-  if (session) {
-    const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
-    return resolved ? { resolved, previewBy: null } : null
-  }
+  // The PREVIEW cookie is read first, and this order is load-bearing. Only
+  // staff ever hold one, and a staff member has usually opened a client
+  // portal before on the same browser — leaving an `sr_portal_session` for
+  // some other job, often revoked or expired. Checking that first made the
+  // preview fail for exactly the people the feature is for (Wes, minutes
+  // after it shipped: "This portal link is missing its access token"): the
+  // stale session verified, failed to resolve, and the preview was never
+  // reached. A client is unaffected — they never have this cookie.
   const preview = verifyJobPreviewCookieValue(req.cookies.get(JOB_PREVIEW_COOKIE)?.value)
-  if (!preview) return null
-  const resolved = await resolvePreviewAccess(preview.orderId)
-  return resolved ? { resolved, previewBy: preview.by } : null
+  if (preview) {
+    const resolved = await resolvePreviewAccess(preview.orderId)
+    if (resolved) return { resolved, previewBy: preview.by }
+  }
+  const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
+  if (!session) return null
+  const resolved = await resolveJobSession({ portalAccessId: session.portalAccessId })
+  return resolved ? { resolved, previewBy: null } : null
 }
