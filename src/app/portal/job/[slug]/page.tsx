@@ -110,6 +110,8 @@ interface PortalData {
    *  card that links to /after-hours; the codes live only on that page. */
   afterHoursReleased: boolean;
   defaultRep: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
+  /** Text AHA (24/7) and the office line (business hours). */
+  support?: { aha: string; office: string } | null;
   countdown: { msUntilPickup: number } | null;
   lineItems: {
     id: string;
@@ -1812,10 +1814,21 @@ export default function JobPortalPage() {
                     />
                   )
                 )}
+                {/* Which number, and when. The office line used to be
+                    labelled "After-hours", which is the one thing it is not
+                    (Wes 2026-09-12) — a client locked out at 11pm should be
+                    texting AHA, who answers. */}
                 <ContactRow
-                  name="After-hours line"
+                  name="Text AHA"
                   email=""
-                  detail={data.afterHoursLine}
+                  badge="24/7"
+                  detail={data.support?.aha || ''}
+                />
+                <ContactRow
+                  name="Office"
+                  email=""
+                  badge="business hours"
+                  detail={data.support?.office || data.afterHoursLine}
                 />
               </div>
             </div>

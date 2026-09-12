@@ -41,7 +41,7 @@ export default function AfterHoursSharePage() {
           if (!cancelled)
             setError(
               body.message ||
-                'This link is no longer active. Call (888) 477-7335 — the line is answered around the clock.',
+                'This link is no longer active. Text AHA at (747) 335-1665 — our after-hours assistant, answered any hour.',
             );
           return;
         }
@@ -50,7 +50,7 @@ export default function AfterHoursSharePage() {
       } catch {
         if (!cancelled)
           setError(
-            'We could not load the instructions. Call (888) 477-7335 — the line is answered around the clock.',
+            'We could not load the instructions. Text AHA at (747) 335-1665 — our after-hours assistant, answered any hour.',
           );
       } finally {
         if (!cancelled) setLoading(false);

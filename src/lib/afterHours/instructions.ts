@@ -30,6 +30,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { ahaSmsNumber } from '@/lib/support/lines'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { YARD_HOURS } from '@/lib/site/yardHours'
 
@@ -51,6 +52,26 @@ export const AFTER_HOURS_SUPPORT = {
   /** The 24/7 assistant — it can verify a caller and release codes itself. */
   helpUrl: `${PUBLIC_SITE_URL}/help`,
 } as const
+
+/**
+ * The same, plus AHA's text line — and this is the one to reach for on any
+ * after-hours surface. Wes 2026-09-12: "Text AHA (After Hours Assistant) 24/7
+ * and the number. The 888 line is really only during hours." Those surfaces
+ * had been telling people the office line is "answered around the clock",
+ * which is exactly backwards at 11pm.
+ *
+ * A function, not a const: the number is read from TWILIO_FROM_NUMBER at call
+ * time, so it cannot drift from the number that actually receives the text.
+ */
+export function afterHoursSupport() {
+  const aha = ahaSmsNumber()
+  return {
+    ...AFTER_HOURS_SUPPORT,
+    /** Text this, any hour. */
+    aha,
+    ahaHref: `sms:${aha.replace(/\D/g, '')}`,
+  }
+}
 
 export const AFTER_HOURS_LOCATION = {
   entity: PUBLIC_CONTACT.entity,
@@ -112,7 +133,7 @@ export function afterHoursStandingInfo() {
   return {
     location: AFTER_HOURS_LOCATION,
     schedule: AFTER_HOURS_SCHEDULE,
-    support: AFTER_HOURS_SUPPORT,
+    support: afterHoursSupport(),
     rules: AFTER_HOURS_RULES,
   }
 }

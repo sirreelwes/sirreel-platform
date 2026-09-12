@@ -21,6 +21,7 @@ import {
   AFTER_HOURS_LOCATION,
   AFTER_HOURS_SCHEDULE,
   AFTER_HOURS_SUPPORT,
+  afterHoursSupport,
 } from '@/lib/afterHours/instructions'
 
 export interface AfterHoursEmailInput {
@@ -67,7 +68,7 @@ export function buildAfterHoursEmail(input: AfterHoursEmailInput): BuiltAfterHou
       label: 'Yard hours',
       value: `${AFTER_HOURS_SCHEDULE.weekdays} · ${AFTER_HOURS_SCHEDULE.saturday}`,
     },
-    { label: 'Any trouble', value: `${AFTER_HOURS_SUPPORT.phone}, 24 hours` },
+    { label: 'Any trouble', value: `Text AHA ${afterHoursSupport().aha}, any hour` },
   ]
 
   const noteBlock = note
@@ -108,7 +109,7 @@ export function buildAfterHoursEmail(input: AfterHoursEmailInput): BuiltAfterHou
     ``,
     `Where: ${AFTER_HOURS_LOCATION.street}, ${AFTER_HOURS_LOCATION.cityStateZip} — ${AFTER_HOURS_LOCATION.gateName}`,
     `Yard hours: ${AFTER_HOURS_SCHEDULE.weekdays} · ${AFTER_HOURS_SCHEDULE.saturday}`,
-    `Any trouble: ${AFTER_HOURS_SUPPORT.phone}, 24 hours`,
+    `Any trouble: text AHA ${afterHoursSupport().aha}, any hour (office ${AFTER_HOURS_SUPPORT.phone}, ${AFTER_HOURS_SUPPORT.staffedHours})`,
     ``,
     ...(note ? [`For this job: ${note}`, ``] : []),
     `Your gate code, the storage-container code and the step-by-step are on this page —`,

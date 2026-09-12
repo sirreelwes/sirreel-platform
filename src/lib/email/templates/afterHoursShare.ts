@@ -17,6 +17,7 @@ import { renderEmailShell, renderEmailText, p, detailTable, calloutBox } from '.
 import {
   AFTER_HOURS_LOCATION,
   AFTER_HOURS_SUPPORT,
+  afterHoursSupport,
 } from '@/lib/afterHours/instructions'
 
 export interface AfterHoursShareEmailInput {
@@ -64,7 +65,7 @@ export function buildAfterHoursShareEmail(
       value: `${AFTER_HOURS_LOCATION.street}, ${AFTER_HOURS_LOCATION.cityStateZip}`,
     },
     { label: 'Entrance', value: AFTER_HOURS_LOCATION.gateName },
-    { label: 'Any trouble', value: `${AFTER_HOURS_SUPPORT.phone}, 24 hours` },
+    { label: 'Any trouble', value: `Text AHA ${afterHoursSupport().aha}, any hour` },
   ]
 
   const messageBlock = message
@@ -87,8 +88,9 @@ export function buildAfterHoursShareEmail(
         `code, and what to do once you&rsquo;re in. Open it on your phone when you get here.`,
     ),
     p(
-      `If a code doesn&rsquo;t work or the gear isn&rsquo;t where it should be, call ` +
-        `<strong>${AFTER_HOURS_SUPPORT.phone}</strong>. That line is answered around the clock.`,
+      `If a code doesn&rsquo;t work or the gear isn&rsquo;t where it should be, text AHA, our ` +
+        `after-hours assistant, at <strong>${afterHoursSupport().aha}</strong> — answered any hour. ` +
+        `The office line, ${AFTER_HOURS_SUPPORT.phone}, is ${AFTER_HOURS_SUPPORT.staffedHours}.`,
     ),
   ].join('\n')
 
@@ -107,7 +109,7 @@ export function buildAfterHoursShareEmail(
     ``,
     `Where: ${AFTER_HOURS_LOCATION.street}, ${AFTER_HOURS_LOCATION.cityStateZip}`,
     `Entrance: ${AFTER_HOURS_LOCATION.gateName}`,
-    `Any trouble: ${AFTER_HOURS_SUPPORT.phone}, 24 hours`,
+    `Any trouble: text AHA ${afterHoursSupport().aha}, any hour (office ${AFTER_HOURS_SUPPORT.phone}, ${AFTER_HOURS_SUPPORT.staffedHours})`,
     ``,
     ...(message ? [`${sender ? `${sender} says` : 'From the production'}: ${message}`, ``] : []),
     `The gate code, the container code and what to do once you're in are here —`,

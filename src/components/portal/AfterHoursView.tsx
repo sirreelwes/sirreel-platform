@@ -57,7 +57,7 @@ export interface AfterHoursViewData {
     mapsUrl: string;
   };
   schedule: { weekdays: string; saturday: string; sunday: string };
-  support: { phone: string; phoneHref: string; staffedHours: string; helpUrl: string };
+  support: { phone: string; phoneHref: string; staffedHours: string; helpUrl: string; aha?: string; ahaHref?: string };
   rules: { droppingOff: string; pickingUp: string };
   agent: { name: string | null; email: string | null; phone: string | null } | null;
   /** Client copy only (2026-09-11) — what the job portal's shared chrome
@@ -140,11 +140,12 @@ export function AfterHoursProblem({ message }: { message: string }) {
         className="mt-4 inline-block px-5 py-3 rounded-lg text-[15px] font-semibold text-white"
         style={{ backgroundColor: PORTAL.dark }}
       >
-        Call (888) 477-7335
+        Text AHA (747) 335-1665
       </a>
       <p className="mt-3 text-[12px] text-gray-500">
-        The line is answered around the clock — give them the production name and they can verify
-        you and get you in.
+        AHA is our after-hours assistant, answered any hour — give it the production name and it
+        can verify you and get you in. The office line, (888) 477-7335, is 7:30 AM – 5:30 PM,
+        Monday through Friday.
       </p>
     </div>
   );
@@ -252,15 +253,18 @@ export function AfterHoursBody({ data }: { data: AfterHoursViewData }) {
         </div>
         <p className="mt-1.5 text-[14px] text-white/80 leading-relaxed">
           A code that doesn&rsquo;t work, a container that won&rsquo;t open, gear that isn&rsquo;t
-          there — call us. The line is answered 24 hours.
+          there — text AHA, our after-hours assistant. Any hour, including right now.
         </p>
         <a
-          href={data.support.phoneHref}
+          href={data.support.ahaHref || data.support.phoneHref}
           className="mt-3 inline-block px-5 py-3 rounded-lg text-[15px] font-bold"
           style={{ backgroundColor: PORTAL.gold, color: PORTAL.dark }}
         >
-          Call {data.support.phone}
+          Text AHA {data.support.aha || data.support.phone}
         </a>
+        <p className="mt-2 text-[12px] text-white/55">
+          Office: {data.support.phone} · {data.support.staffedHours}
+        </p>
         {data.agent?.name && (
           <p className="mt-3 text-[13px] text-white/60">
             Your rep is {data.agent.name}

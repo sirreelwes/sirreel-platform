@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       {
         error: 'not_found',
         message:
-          'This link is no longer active. Call (888) 477-7335 — the line is answered around the clock and they can get you in.',
+          'This link is no longer active. Text AHA at (747) 335-1665 — our after-hours assistant, answered any hour, and it can get you in.',
       },
       { status: 404 },
     )

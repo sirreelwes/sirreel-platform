@@ -9,6 +9,7 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { resolveJobPortalRead } from '@/lib/portal/jobPreview'
+import { OFFICE_LINE, supportLines } from '@/lib/support/lines'
 import { portalTokenUrl, portalV2Url } from '@/lib/portal/portalUrl'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
@@ -38,11 +39,10 @@ import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingT
 
 export const dynamic = 'force-dynamic'
 
-// INTENTIONALLY HARDCODED — this is a real shared after-hours line, not a
-// per-person number. Unlike rep/ops contact info (which now comes from
-// the User table), this string is the canonical operations contact and
-// doesn't belong on any single User row.
-const AFTER_HOURS_LINE = '(888) 477-7335'
+// The office line and AHA's text line — see src/lib/support/lines.ts. Shared
+// numbers, not per-person ones, so they come from there rather than any User
+// row. Which is which matters: the 888 is business hours, AHA is 24/7.
+const AFTER_HOURS_LINE = OFFICE_LINE
 
 // Who a client sees when no rep has been established for their order — which
 // is most of them (5 of 107 live orders had a visible rep on 2026-09-12).
@@ -693,7 +693,12 @@ export async function GET(req: NextRequest) {
           catalogIsSpecialty: li.inventoryItem?.isSpecialtyVehicle ?? false,
         })),
     }),
+    /** @deprecated the office line, kept under its old name for anything
+     *  still reading it — say what it is with `support` instead. */
     afterHoursLine: AFTER_HOURS_LINE,
+    /** Which number to use, and when. AHA answers texts around the clock;
+     *  the office line only answers during the day (Wes 2026-09-12). */
+    support: supportLines(),
     /** True once an agent has released this job's after-hours instructions
      *  — the portal shows the card, the card links to the page. A boolean,
      *  not the codes: the codes have exactly one route and it audit-logs. */

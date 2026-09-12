@@ -28,7 +28,10 @@ export interface JobPortalChromeData {
   /** Job code, else the order number. */
   code: string
   rep: { name: string; email: string } | null
+  /** The office line — business hours. */
   afterHoursLine: string
+  /** AHA's text line, answered around the clock. */
+  ahaSms: string
   /** Set when a staff member is looking at the client's page rather than the
    *  client — the shell says so, loudly, at the top (Wes 2026-09-12). */
   preview: { by: string } | null
@@ -48,7 +51,8 @@ export function chromeFromPortalData(d: any): JobPortalChromeData {
     headline: d?.job?.name || d?.order?.orderNumber || '',
     code: d?.job?.jobCode || d?.order?.orderNumber || '',
     rep: d?.agent?.email ? { name: d.agent.name || d.agent.email, email: d.agent.email } : null,
-    afterHoursLine: d?.afterHoursLine || '(888) 477-7335',
+    afterHoursLine: d?.support?.office || d?.afterHoursLine || '(888) 477-7335',
+    ahaSms: d?.support?.aha || '(747) 335-1665',
     preview: d?.preview?.by ? { by: String(d.preview.by) } : null,
   }
 }
@@ -158,7 +162,11 @@ export function JobPortalShell({
             info@sirreel.com
           </a>
         )}{' '}
-        · After-hours{' '}
+        · Text AHA 24/7{' '}
+        <a href={`sms:${(chrome?.ahaSms ?? '(747) 335-1665').replace(/\D/g, '')}`} className="underline text-zinc-600">
+          {chrome?.ahaSms ?? '(747) 335-1665'}
+        </a>{' '}
+        · Office{' '}
         <a href={`tel:${chrome?.afterHoursLine ?? '(888) 477-7335'}`} className="underline text-zinc-600">
           {chrome?.afterHoursLine ?? '(888) 477-7335'}
         </a>{' '}
