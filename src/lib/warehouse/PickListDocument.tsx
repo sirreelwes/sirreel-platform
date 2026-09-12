@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, Svg, Rect, StyleSheet } from '@react-pdf/renderer'
 import { code39Geometry } from './code39'
+import { CodeText } from '@/lib/pdf/CodeText'
 
 // Shared hyphenation policy — registered once, see that module.
 import '@/lib/pdf/hyphenation'
@@ -496,7 +497,16 @@ export function PickListDocument(props: PickListDocumentProps) {
             {section.lines.map((line, idx) => (
               <View key={idx} wrap={false}>
                 <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
-                  <Text style={styles.colCode}>{line.code ?? '—'}</Text>
+                  {/* CodeText, not Text: a code wider than the 12% column
+                      ("CAT_CUBE_TRUCK") folds at its separators with no
+                      hyphen added — a plain Text either overprinted the
+                      description (S260902-008, 2026-09-12) or, once
+                      folding, printed "CAT_CUBE_-" / "TRUCK". */}
+                  {line.code ? (
+                    <CodeText code={line.code} style={styles.colCode} />
+                  ) : (
+                    <Text style={styles.colCode}>—</Text>
+                  )}
                   <Text style={styles.colDesc}>
                     {line.includedAccessory ? '\u2514 ' : ''}{line.description}
                     {line.includedAccessory ? ' (incl.)' : ''}

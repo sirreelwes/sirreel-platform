@@ -382,6 +382,21 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Pick list item codes fold, with no hyphen added (2026-09-12)
+- Wes's photo of S260902-008: `CAT_CUBE_TRUCK` printed straight over
+  "SuperCube Truck". Two causes. (1) `src/lib/pdf/hyphenation.ts` only
+  folded a code LONGER than 14 glyphs and that one is exactly 14 — the
+  gate is gone for separator-bearing codes (the callback only lists where
+  a word MAY break; the engine breaks only when it doesn't fit).
+  (2) @react-pdf/textkit inserts a HYPHEN glyph at every break it takes
+  inside a word, whatever the callback returned, so a folded code read
+  `CAT_CUBE_-` / `TRUCK` and `VEH---` / `STRAPS---`. The pick list's code
+  cell is now `CodeText` (`src/lib/pdf/CodeText.tsx`): each
+  separator-terminated part is its own Text in a wrapping row, so Yoga
+  folds it and nothing is added. Use it for any code in a narrow column;
+  a plain Text will get the engine's hyphen. `npm run test:pdf-hyphenation`
+  (policy) + `npm run test:pick-list-pdf` (renders and reads the text back).
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a

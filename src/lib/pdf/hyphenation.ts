@@ -24,8 +24,18 @@ import { Font } from '@react-pdf/renderer'
  *    the trailing glyph of each part so the wrapped lines read as the
  *    original code. Codes with no separators fold per-character as a
  *    last resort rather than overflowing the column.
+ *  - There is NO length gate on separator folding. The callback only
+ *    lists the places a word MAY break; the engine breaks only when the
+ *    word does not fit, so "CAT_VAN" stays whole and a code that outruns
+ *    the column folds. Until 2026-09-12 folding was gated on
+ *    `length > 14`, and "CAT_CUBE_TRUCK" — exactly 14 glyphs, ~11 wider
+ *    than the pick list's 12% code column — printed straight over
+ *    "SuperCube Truck" (order S260902-008). The gate stays only for
+ *    separator-less runs, where the break points are arbitrary.
  */
 const MAX_PART = 8 // longest un-splittable run — keeps every part inside the narrowest (11%) code column
+const CODE_SHAPE = /^[A-Z0-9_-]+$/
+const SEPARATOR = /[-_]/
 
 function chunk(part: string): string[] {
   if (part.length <= MAX_PART) return [part]
@@ -34,16 +44,22 @@ function chunk(part: string): string[] {
   return out
 }
 
-Font.registerHyphenationCallback((word) => {
-  if (word.length > 14 && /^[A-Z0-9_-]+$/.test(word)) {
-    const parts = /[-_]/.test(word) ? word.split(/(?<=[-_])/) : [word]
+/** Pure policy — exported so the test can pin it without rendering a PDF. */
+export function hyphenateWord(word: string): string[] {
+  if (!CODE_SHAPE.test(word)) return [word]
+  if (SEPARATOR.test(word)) {
     // A single segment can still outrun the column ("SUPERCUBE_" is 10
     // glyphs) — chunk anything longer than MAX_PART so no part can
     // touch the neighboring column.
-    return parts.flatMap(chunk)
+    // Break after a separator run, not inside it: "VEH--STRAPS--RATCHET"
+    // is VEH-- / STRAPS-- / RATCHET, never a lone "-" starting a line.
+    return word.split(/(?<=[-_])(?![-_])/).flatMap(chunk)
   }
+  if (word.length > 14) return chunk(word)
   return [word]
-})
+}
+
+Font.registerHyphenationCallback(hyphenateWord)
 
 /** Import target so the side-effect import is explicit at call sites. */
 export const pdfHyphenationRegistered = true
