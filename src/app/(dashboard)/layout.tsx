@@ -12,6 +12,7 @@ import InboxBell from '@/components/ui/InboxBell';
 import { NavList } from '@/components/shell/NavList';
 import { UserMenu, ROLE_LABELS } from '@/components/shell/UserMenu';
 import { MobileNav } from '@/components/shell/MobileNav';
+import { PAPERWORK_QUEUE_EVENT } from '@/lib/paperwork/reviewQueueClient';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,6 +22,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
   // Action Items unhandled-count badge — same engine as the tab.
   const [actionItemCount, setActionItemCount] = useState(0);
+  // Paperwork alert — COIs and client redlines nobody has ruled on
+  // (Wes 2026-09-11). Same derivation the /admin/paperwork feed renders.
+  const [paperworkCount, setPaperworkCount] = useState(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -44,6 +48,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .catch(() => {});
     return () => { cancelled = true; };
   }, [status, pathname]);
+
+  // Same poll for the paperwork queue.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let cancelled = false;
+    fetch('/api/paperwork/review-queue')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.ok) setPaperworkCount(d.count || 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [status, pathname]);
+
+  // …and a live drop when the paperwork page itself clears something. The
+  // page already knows the new number; without this the badge would keep
+  // claiming work that was just skipped until the next navigation.
+  useEffect(() => {
+    const onQueue = (e: Event) => {
+      const n = (e as CustomEvent<number>).detail;
+      if (typeof n === 'number') setPaperworkCount(n);
+    };
+    window.addEventListener(PAPERWORK_QUEUE_EVENT, onQueue);
+    return () => window.removeEventListener(PAPERWORK_QUEUE_EVENT, onQueue);
+  }, []);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -157,6 +185,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // thing the nav is: whether this role has Jobs at all.
   const canCreateJob = sections.some((s2) => s2.items.some((i) => i.id === 'jobs'));
 
+  // Keyed by nav item id — NavList badges whichever entries carry a count.
+  const badgeCounts: Record<string, number> = {
+    'action-items': actionItemCount,
+    paperwork: paperworkCount,
+  };
+
   return (
     // Column on a phone (top bar over content), row on desktop
     // (sidebar beside content). 100dvh where supported so iOS Safari's
@@ -169,7 +203,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         role={role}
         actualRole={actualRole}
         viewAsRole={viewAsRole}
-        actionItemCount={actionItemCount}
+        badgeCounts={badgeCounts}
         user={user}
         canCreateJob={canCreateJob}
       />
@@ -195,7 +229,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             sections={sections}
             activeHref={activeHref}
             role={role}
-            actionItemCount={actionItemCount}
+            badgeCounts={badgeCounts}
           />
         </nav>
 

@@ -2452,6 +2452,9 @@ model User {
   companyDiscountsCreated CompanyDiscount[]      @relation("CompanyDiscountCreator")
   annualRequestsResolved  CompanyAnnualRequest[] @relation("AnnualRequestResolver")
 
+  // Paperwork review-queue dismissals — "we looked, this one needs nothing".
+  paperworkDismissals     PaperworkDismissal[]   @relation("PaperworkDismisser")
+
   @@map("users")
 }
 
@@ -6680,6 +6683,46 @@ model ContractReview {
   @@index([createdAt])
   @@index([humanDecision])
   @@map("sr_contract_reviews")
+}
+
+/// One "skip" on the paperwork review queue.
+///
+/// The Paperwork nav entry carries an alert count: certificates and
+/// client redlines nobody has ruled on. A good share of that queue is
+/// not a decision waiting to be made — it is a resubmitted certificate
+/// that supersedes an earlier one, a document that was handled over the
+/// phone, a duplicate. Those had no exit: the only way to clear a COI
+/// off the count was to APPROVE it, which is a statement about the
+/// insurance, not about the queue.
+///
+/// So the dismissal lives OUTSIDE the source row. Skipping a COI leaves
+/// `humanDecision` PENDING — the job's readiness rollup, the hold gate
+/// and the client-facing paperwork state all keep telling the truth —
+/// and only the review queue stops asking. One row per (kind, sourceId);
+/// un-skipping deletes it.
+model PaperworkDismissal {
+  id String @id @default(uuid())
+
+  /// Which feed the sourceId belongs to: COI | CONTRACT_REVIEW | REDLINE.
+  /// A plain string rather than an enum on purpose — the feed grows a kind
+  /// more often than the DB should grow an enum value, and a value no
+  /// running client knows about 500s every read (see CLAUDE.md).
+  kind     String @map("kind")
+  /// Row id within that kind's own table.
+  sourceId String @map("source_id")
+
+  /// Why it needs nothing — RESUBMITTED | HANDLED | NOT_NEEDED | OTHER.
+  reason String? @map("reason")
+  note   String? @map("note") @db.Text
+
+  dismissedById String?  @map("dismissed_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  dismissedBy User? @relation("PaperworkDismisser", fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@unique([kind, sourceId])
+  @@index([kind])
+  @@map("sr_paperwork_dismissals")
 }
 
 model ReviewChangeDecision {

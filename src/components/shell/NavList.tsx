@@ -42,14 +42,17 @@ export function NavList({
   sections,
   activeHref,
   role,
-  actionItemCount,
+  badgeCounts,
   onNavigate,
   touch = false,
 }: {
   sections: NavSection[];
   activeHref: string | null;
   role: UserRole;
-  actionItemCount: number;
+  /** Alert counts keyed by nav item id. Any entry with a count > 0 gets a
+   *  badge — 'action-items' (unhandled items) and 'paperwork' (COIs and
+   *  client redlines nobody has ruled on) today. */
+  badgeCounts: Record<string, number>;
   onNavigate?: () => void;
   /** Sheet mount: pad rows out to a 44px tap target. */
   touch?: boolean;
@@ -108,13 +111,15 @@ export function NavList({
                   }`}
                 />
                 <span className="truncate">{item.label}</span>
-                {/* Unhandled-count badge, fed by the Action Items
-                    engine. Only the 'action-items' entry carries it. */}
-                {item.id === 'action-items' && actionItemCount > 0 && (
+                {/* Alert badge — work waiting inside that tab. Fed by the
+                    Action Items engine and, since 2026-09-11, by the
+                    paperwork review queue (COIs and client redlines nobody
+                    has ruled on; src/lib/paperwork/reviewQueue.ts). */}
+                {(badgeCounts[item.id] ?? 0) > 0 && (
                   <span className={`ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
                     isActive ? 'bg-[#1a1a1a] text-amber-400' : 'bg-red-500 text-white'
                   }`}>
-                    {actionItemCount > 99 ? '99+' : actionItemCount}
+                    {badgeCounts[item.id] > 99 ? '99+' : badgeCounts[item.id]}
                   </span>
                 )}
               </Link>

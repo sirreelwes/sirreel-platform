@@ -20,6 +20,14 @@
  * that doesn't match the production company), so the feed reads as a
  * triage queue rather than a log.
  *
+ * Rows that still want a human carry a Skip. Wes, 2026-09-11: a good part
+ * of the queue is resubmitted certificates and documents already handled
+ * on the phone, and the only way to clear one used to be APPROVING it —
+ * a statement about the insurance made to silence a badge. Skip writes a
+ * dismissal beside the document (src/lib/paperwork/reviewQueue.ts): the
+ * alert stops counting it, the document's own state is untouched, and
+ * Undo puts it back.
+ *
  * Agreement rows open the executed PDF. They used to send you to the job
  * page's #agreement section, which lists company-level standing agreements
  * and says nothing about an order-signed contract — so a rental agreement
@@ -27,12 +35,16 @@
  * it, Download saves it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Undo2 } from 'lucide-react'
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal'
+import { DISMISS_REASONS, PAPERWORK_QUEUE_EVENT } from '@/lib/paperwork/reviewQueueClient'
 
-type SubmissionKind = 'COI' | 'WC' | 'CC_AUTH' | 'AGREEMENT' | 'REDLINE'
+type SubmissionKind = 'COI' | 'WC' | 'CC_AUTH' | 'AGREEMENT' | 'CONTRACT_REVIEW' | 'REDLINE'
+
+/** Kinds a human can rule on — the only ones that carry a Skip. */
+const SKIPPABLE: SubmissionKind[] = ['COI', 'CONTRACT_REVIEW', 'REDLINE']
 
 interface Submission {
   key: string
@@ -51,6 +63,8 @@ interface Submission {
   downloadHref: string | null
   reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
   flag: { label: string; detail: string } | null
+  needsReview: boolean
+  dismissal: { at: string; by: string | null; reason: string | null; note: string | null } | null
 }
 
 const KIND_BADGE: Record<SubmissionKind, string> = {
@@ -58,6 +72,7 @@ const KIND_BADGE: Record<SubmissionKind, string> = {
   WC: 'bg-violet-100 text-violet-700',
   CC_AUTH: 'bg-emerald-100 text-emerald-700',
   AGREEMENT: 'bg-amber-100 text-amber-700',
+  CONTRACT_REVIEW: 'bg-rose-100 text-rose-700',
   REDLINE: 'bg-red-100 text-red-700',
 }
 
@@ -66,6 +81,7 @@ const KIND_SHORT: Record<SubmissionKind, string> = {
   WC: 'WC',
   CC_AUTH: 'Card auth',
   AGREEMENT: 'Agreement',
+  CONTRACT_REVIEW: 'Redline',
   REDLINE: 'Redline',
 }
 
@@ -79,16 +95,14 @@ const KIND_SHORT: Record<SubmissionKind, string> = {
  */
 const GROUPS: Array<{ kind: SubmissionKind; label: string }> = [
   { kind: 'COI', label: 'Certificates of Insurance' },
+  { kind: 'CONTRACT_REVIEW', label: 'Client redlines' },
   { kind: 'WC', label: 'Workers\u2019 comp' },
   { kind: 'AGREEMENT', label: 'Rental agreements' },
   { kind: 'CC_AUTH', label: 'Card authorizations' },
-  { kind: 'REDLINE', label: 'Redlines' },
+  { kind: 'REDLINE', label: 'Portal redlines' },
 ]
 
-/** Rows that still want a human verdict — surfaced on the group header. */
-function needsReview(r: Submission) {
-  return r.reviewState === 'PENDING' || !!r.flag
-}
+const REASON_LABEL = new Map(DISMISS_REASONS.map((r) => [r.value as string, r.label]))
 
 function fmtWhen(iso: string) {
   const d = new Date(iso)
@@ -114,15 +128,70 @@ export default function RecentSubmissions() {
   const [q, setQ] = useState('')
   const [reviewingCoiId, setReviewingCoiId] = useState<string | null>(null)
 
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+
+  // The nav badge counts the same thing this list does, so every load
+  // hands the shell the number it just computed.
+  const broadcast = useCallback((count: number) => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent(PAPERWORK_QUEUE_EVENT, { detail: count }))
+  }, [])
+
   const load = useCallback(() => {
     return fetch('/api/paperwork/submissions?limit=50')
       .then((r) => r.json())
       .then((d) => {
-        if (d?.ok) setRows(d.submissions || [])
-        else setError(d?.error || 'Could not load submissions')
+        if (d?.ok) {
+          setRows(d.submissions || [])
+          if (typeof d.reviewCount === 'number') broadcast(d.reviewCount)
+        } else setError(d?.error || 'Could not load submissions')
       })
       .catch(() => setError('Could not load submissions'))
-  }, [])
+  }, [broadcast])
+
+  /**
+   * Skip / un-skip. The row is updated in place from the response rather
+   * than re-fetching the whole feed — a 50-row reload to grey out one line
+   * loses the reader's scroll position mid-triage.
+   */
+  const setSkip = useCallback(
+    async (r: Submission, reason: string | null) => {
+      setBusyKey(r.key)
+      try {
+        const res = await fetch('/api/paperwork/dismiss', {
+          method: reason ? 'POST' : 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: r.kind, sourceId: r.sourceId, reason }),
+        })
+        const d = await res.json()
+        if (!d?.ok) {
+          setError(d?.error || 'Could not update that row')
+          return
+        }
+        setRows((prev) =>
+          prev.map((row) =>
+            row.key === r.key
+              ? {
+                  ...row,
+                  dismissal: reason ? d.dismissal : null,
+                  // Un-skipping restores whatever the row was asking for:
+                  // a PENDING verdict or a stated finding.
+                  needsReview: reason
+                    ? false
+                    : row.reviewState === 'PENDING' || !!row.flag,
+                }
+              : row,
+          ),
+        )
+        if (typeof d.count === 'number') broadcast(d.count)
+      } catch {
+        setError('Could not update that row')
+      } finally {
+        setBusyKey(null)
+      }
+    },
+    [broadcast],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -152,11 +221,15 @@ export default function RecentSubmissions() {
       return {
         ...g,
         items,
-        pending: items.filter(needsReview).length,
+        pending: items.filter((r) => r.needsReview).length,
         latest: items[0]?.submittedAt ?? null,
       }
     }).filter((g) => g.items.length > 0)
   }, [filtered])
+
+  // Across every group, unfiltered by the search box — this is the same
+  // number the nav badge carries.
+  const toReview = useMemo(() => rows.filter((r) => r.needsReview).length, [rows])
 
   const toggle = (k: SubmissionKind) =>
     setOpen((prev) => {
@@ -172,10 +245,16 @@ export default function RecentSubmissions() {
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Recent submissions</h2>
           <p className="text-[11px] text-gray-500 mt-0.5">
-            The last 50 pieces of client paperwork to land, across every job, grouped by type. Open a
-            group, then click a row to open it on its job.
+            The last 50 pieces of client paperwork to land — plus everything still waiting on a
+            verdict, however old — across every job, grouped by type. Open a group, then click a row
+            to open it on its job.
           </p>
         </div>
+        {toReview > 0 && (
+          <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-chip-warn-bg text-chip-warn-fg">
+            {toReview} to review
+          </span>
+        )}
         <input
           type="search"
           value={q}
@@ -239,7 +318,13 @@ export default function RecentSubmissions() {
                 {expanded && (
                   <ul className="divide-y divide-gray-100 border-t border-gray-100 bg-lt-inner/40">
                     {g.items.map((r) => (
-                      <SubmissionRow key={r.key} r={r} onReviewCoi={setReviewingCoiId} />
+                      <SubmissionRow
+                        key={r.key}
+                        r={r}
+                        onReviewCoi={setReviewingCoiId}
+                        onSkip={setSkip}
+                        busy={busyKey === r.key}
+                      />
                     ))}
                   </ul>
                 )}
@@ -263,10 +348,33 @@ export default function RecentSubmissions() {
 function SubmissionRow({
   r,
   onReviewCoi,
+  onSkip,
+  busy,
 }: {
   r: Submission
   onReviewCoi: (coiId: string) => void
+  onSkip: (r: Submission, reason: string | null) => void
+  busy: boolean
 }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
   const body = (
     <div className="flex items-start gap-3 pl-10 pr-4 py-3">
       <div className="min-w-0 flex-1">
@@ -296,6 +404,16 @@ function SubmissionRow({
             <span className="text-rose-600"> — {r.flag.detail}</span>
           </div>
         )}
+        {/* A skipped row stays in the list, greyed and labelled: the
+            document did not go anywhere, it just stopped asking. */}
+        {r.dismissal && (
+          <div className="mt-1 text-[11px] text-lt-fg3">
+            Skipped
+            {r.dismissal.reason && ` — ${REASON_LABEL.get(r.dismissal.reason) || r.dismissal.reason}`}
+            {r.dismissal.by && ` · ${r.dismissal.by}`}
+            <span className="text-lt-fg3"> · {fmtWhen(r.dismissal.at)}</span>
+          </div>
+        )}
       </div>
       <div className="shrink-0 text-right">
         <div className="text-[11px] text-gray-600">{fmtWhen(r.submittedAt)}</div>
@@ -303,8 +421,14 @@ function SubmissionRow({
       </div>
     </div>
   )
+  const skippable = SKIPPABLE.includes(r.kind)
+
   return (
-    <li className="flex items-stretch hover:bg-gray-50 transition-colors">
+    <li
+      className={`flex items-stretch hover:bg-gray-50 transition-colors ${
+        r.dismissal ? 'opacity-60' : ''
+      }`}
+    >
       <div className="min-w-0 flex-1">
         {r.href ? (
           <Link href={r.href} className="block">
@@ -317,6 +441,51 @@ function SubmissionRow({
       {/* Review lives OUTSIDE the link: the row still navigates to
           the job, but a COI can be judged without leaving here. */}
       <div className="shrink-0 flex items-center gap-2 pr-4 pl-1">
+        {/* Skip — for the resubmits and the ones handled elsewhere. It
+            writes a dismissal, never a verdict: the certificate stays
+            PENDING everywhere else in HQ. */}
+        {skippable &&
+          (r.dismissal ? (
+            <button
+              onClick={() => onSkip(r, null)}
+              disabled={busy}
+              title="Put this back on the review queue"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              <Undo2 size={12} />
+              Undo
+            </button>
+          ) : r.needsReview ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                disabled={busy}
+                aria-expanded={menuOpen}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Skip
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-xl border border-lt-hairline bg-white shadow-lg py-1">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-lt-fg3">
+                    Needs nothing because…
+                  </div>
+                  {DISMISS_REASONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onSkip(r, opt.value)
+                      }}
+                      className="block w-full text-left px-3 py-2 text-[12px] text-lt-fg hover:bg-lt-inner"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null)}
         {r.reviewState && r.reviewState !== 'PENDING' && (
           <span
             className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${

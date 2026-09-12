@@ -37,7 +37,7 @@ export function MobileNav({
   role,
   actualRole,
   viewAsRole,
-  actionItemCount,
+  badgeCounts,
   user,
   canCreateJob,
 }: {
@@ -46,12 +46,17 @@ export function MobileNav({
   role: UserRole;
   actualRole: UserRole;
   viewAsRole: UserRole | null;
-  actionItemCount: number;
+  /** Per-nav-item alert counts; see NavList. */
+  badgeCounts: Record<string, number>;
   user: { name?: string | null; email?: string | null; image?: string | null };
   canCreateJob: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  // The hamburger's own dot stands for everything waiting behind the
+  // sheet, whichever tab it's on.
+  const alertTotal = Object.values(badgeCounts).reduce((a, b) => a + b, 0);
 
   // Close on navigation — a Link inside the sheet also calls
   // onNavigate, but this catches Back/Forward and redirects too.
@@ -79,9 +84,9 @@ export function MobileNav({
             <span className="block w-5 h-[2px] rounded-full bg-white" />
             <span className="block w-5 h-[2px] rounded-full bg-white" />
           </span>
-          {actionItemCount > 0 && (
+          {alertTotal > 0 && (
             <span className="absolute top-1 right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
-              {actionItemCount > 99 ? '99+' : actionItemCount}
+              {alertTotal > 99 ? '99+' : alertTotal}
             </span>
           )}
         </button>
@@ -131,7 +136,7 @@ export function MobileNav({
                 sections={sections}
                 activeHref={activeHref}
                 role={role}
-                actionItemCount={actionItemCount}
+                badgeCounts={badgeCounts}
                 onNavigate={() => setOpen(false)}
                 touch
               />

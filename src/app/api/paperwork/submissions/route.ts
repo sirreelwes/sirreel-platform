@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL } from '@/lib/coi/insuredMatch'
+import {
+  coiNeedsReview,
+  dismissalKey,
+  loadDismissals,
+  type DismissalInfo,
+} from '@/lib/paperwork/reviewQueue'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +33,13 @@ export const dynamic = 'force-dynamic'
  * requireCollectionsUser; this feed is a findability index for everyone.
  */
 
-export type SubmissionKind = 'COI' | 'WC' | 'CC_AUTH' | 'AGREEMENT' | 'REDLINE'
+export type SubmissionKind =
+  | 'COI'
+  | 'WC'
+  | 'CC_AUTH'
+  | 'AGREEMENT'
+  | 'CONTRACT_REVIEW'
+  | 'REDLINE'
 
 export interface PaperworkSubmission {
   key: string
@@ -58,6 +70,12 @@ export interface PaperworkSubmission {
    *  triage queue, so the finding belongs in the row, not only behind a
    *  click. */
   flag: { label: string; detail: string } | null
+  /** True while this row is still asking for a human — see
+   *  src/lib/paperwork/reviewQueue.ts. What the nav badge counts. */
+  needsReview: boolean
+  /** Set once someone skipped it: who, when, why. A skip suppresses the
+   *  alert and nothing else — the document's own state is untouched. */
+  dismissal: DismissalInfo | null
 }
 
 // Where on the job page this kind of paperwork is reviewed. Anchors are
@@ -67,12 +85,18 @@ const ANCHOR: Record<SubmissionKind, string> = {
   WC: '#wc',
   CC_AUTH: '#card-auth',
   AGREEMENT: '#agreement',
+  // A contract review is opened on the review desk itself, not on the job
+  // — see the override in the CONTRACT_REVIEW loop below.
+  CONTRACT_REVIEW: '#agreement',
   REDLINE: '#agreement',
 }
 
 function jobHref(kind: SubmissionKind, jobId: string | null): string | null {
   return jobId ? `/jobs/${jobId}${ANCHOR[kind]}` : null
 }
+
+/** How long a skipped row stays pinned to the feed so its Undo is reachable. */
+const SKIP_VISIBLE_DAYS = 14
 
 function fullName(first?: string | null, last?: string | null): string | null {
   return [first, last].filter(Boolean).join(' ').trim() || null
@@ -120,23 +144,43 @@ export async function GET(req: NextRequest) {
   }
   const paperworkJob = (r: PaperworkRow) => r.booking?.job ?? r.booking?.orders?.[0]?.job ?? null
 
-  const [cois, wcs, ccAuths, agreements, redlines] = await Promise.all([
+  const coiSelect = {
+    id: true,
+    originalFilename: true,
+    createdAt: true,
+    source: true,
+    clientUploaderName: true,
+    humanDecision: true,
+    namedInsured: true,
+    job: { select: { ...jobSelect, company: { select: { name: true } } } },
+    company: { select: { name: true } },
+    uploadedBy: { select: { name: true } },
+  } as const
+
+  const [cois, openCois, wcs, ccAuths, agreements, contractReviews, redlines, dismissals] =
+    await Promise.all([
     prisma.coiCheck.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      select: {
-        id: true,
-        originalFilename: true,
-        createdAt: true,
-        source: true,
-        clientUploaderName: true,
-        humanDecision: true,
-        namedInsured: true,
-        job: { select: { ...jobSelect, company: { select: { name: true } } } },
-        company: { select: { name: true } },
-        uploadedBy: { select: { name: true } },
+      select: coiSelect,
+    }),
+    // The recent window is not enough for the ones that still need a
+    // verdict: 41 certificates sat PENDING on 2026-09-11, and the oldest
+    // was three months back — outside any window this page would render.
+    // The nav badge counts the whole backlog, so the feed has to be able
+    // to SHOW the whole backlog; a number you cannot click to is a number
+    // nobody can clear. `namedInsured` is pulled in because the mismatch
+    // flag is computed, not stored (src/lib/coi/insuredMatch.ts) — those
+    // rows are narrowed below.
+    prisma.coiCheck.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ humanDecision: 'PENDING' }, { namedInsured: { not: null } }],
       },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: coiSelect,
     }),
     prisma.paperworkRequest.findMany({
       // wcFileUrl (not wcReceived) decides: legacy rows carry wcReceived=true
@@ -172,17 +216,45 @@ export async function GET(req: NextRequest) {
         order: { select: { id: true, orderNumber: true, job: { select: jobSelect } } },
       },
     }),
+    // Client redlines on the review desk. These are the OTHER half of
+    // "something to review" and were missing from this feed entirely —
+    // ten of them were sitting PENDING, findable only by remembering the
+    // Contract Review History page existed.
+    prisma.contractReview.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: Math.max(limit, 200),
+      select: {
+        id: true,
+        originalFilename: true,
+        createdAt: true,
+        humanDecision: true,
+        aiRiskLevel: true,
+        job: { select: jobSelect },
+        company: { select: { name: true } },
+        uploadedBy: { select: { name: true } },
+      },
+    }),
     prisma.paperworkRequest.findMany({
       where: { contract_redline_uploaded_at: { not: null } },
       orderBy: { contract_redline_uploaded_at: 'desc' },
       take: limit,
       select: { ...paperworkSelect, contract_redline_uploaded_at: true, contract_redline_status: true },
     }),
+    loadDismissals(),
   ])
+
+  const dismissalFor = (kind: SubmissionKind, id: string): DismissalInfo | null =>
+    dismissals.get(dismissalKey(kind, id)) ?? null
 
   const submissions: PaperworkSubmission[] = []
 
-  for (const c of cois) {
+  // Recent window ∪ still-open, deduped by id.
+  const coiRows = [...cois, ...openCois].filter(
+    (c, i, arr) => arr.findIndex((o) => o.id === c.id) === i,
+  )
+
+  for (const c of coiRows) {
     // Named-insured vs production company. Computed here rather than read
     // off a stored verdict so a corrected production company clears the
     // flag on the next load — see src/lib/coi/insuredMatch.ts.
@@ -191,6 +263,10 @@ export async function GET(req: NextRequest) {
       c.company?.name,
       c.job?.name,
     ])
+    const coiFlag = match.needsAttention
+      ? { label: INSURED_MATCH_LABEL[match.verdict], detail: match.message }
+      : null
+    const coiDismissal = dismissalFor('COI', c.id)
     submissions.push({
       key: `COI:${c.id}`,
       sourceId: c.id,
@@ -208,9 +284,9 @@ export async function GET(req: NextRequest) {
       documentHref: null,
       downloadHref: null,
       reviewState: c.humanDecision as 'PENDING' | 'APPROVED' | 'REJECTED',
-      flag: match.needsAttention
-        ? { label: INSURED_MATCH_LABEL[match.verdict], detail: match.message }
-        : null,
+      flag: coiFlag,
+      needsReview: !coiDismissal && coiNeedsReview(c.humanDecision, !!coiFlag),
+      dismissal: coiDismissal,
     })
   }
 
@@ -235,6 +311,8 @@ export async function GET(req: NextRequest) {
       downloadHref: null,
       reviewState: null,
       flag: null,
+      needsReview: false,
+      dismissal: null,
     })
   }
 
@@ -258,6 +336,8 @@ export async function GET(req: NextRequest) {
       downloadHref: null,
       reviewState: null,
       flag: null,
+      needsReview: false,
+      dismissal: null,
     })
   }
 
@@ -288,11 +368,41 @@ export async function GET(req: NextRequest) {
       downloadHref: agreementDoc ? `${agreementDoc}&download=1` : null,
       reviewState: null,
       flag: null,
+      needsReview: false,
+      dismissal: null,
+    })
+  }
+
+  for (const cr of contractReviews) {
+    // The redline desk is where this one is actually judged — a job anchor
+    // would land the reviewer on a page that says a review exists and
+    // gives them no way to read it.
+    const crDismissal = dismissalFor('CONTRACT_REVIEW', cr.id)
+    submissions.push({
+      key: `CONTRACT_REVIEW:${cr.id}`,
+      sourceId: cr.id,
+      kind: 'CONTRACT_REVIEW',
+      label: 'Client redline',
+      detail: cr.originalFilename || null,
+      submittedAt: cr.createdAt.toISOString(),
+      submittedBy: cr.uploadedBy?.name || null,
+      jobId: cr.job?.id ?? null,
+      jobCode: cr.job?.jobCode ?? null,
+      jobName: cr.job?.name ?? null,
+      companyName: cr.company?.name ?? null,
+      href: `/tools/contract-review/${cr.id}`,
+      documentHref: null,
+      downloadHref: null,
+      reviewState: cr.humanDecision === 'PENDING' ? 'PENDING' : null,
+      flag: null,
+      needsReview: !crDismissal && cr.humanDecision === 'PENDING',
+      dismissal: crDismissal,
     })
   }
 
   for (const r of redlines) {
     const job = paperworkJob(r)
+    const rDismissal = dismissalFor('REDLINE', r.id)
     submissions.push({
       key: `REDLINE:${r.id}`,
       sourceId: r.id,
@@ -311,12 +421,37 @@ export async function GET(req: NextRequest) {
       href: jobHref('REDLINE', job?.id ?? null),
       documentHref: null,
       downloadHref: null,
-      reviewState: null,
+      reviewState: r.contract_redline_status === 'pending_review' ? 'PENDING' : null,
       flag: null,
+      needsReview: !rDismissal && r.contract_redline_status === 'pending_review',
+      dismissal: rDismissal,
     })
   }
 
   submissions.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
 
-  return NextResponse.json({ ok: true, submissions: submissions.slice(0, limit) })
+  // Everything still asking for a human, plus the recent window. The cap
+  // applies to the RECENT half only: truncating the open half would hide
+  // work the nav badge is still counting, which is the one thing this feed
+  // must never do.
+  //
+  // Just-skipped rows are pinned the same way for a fortnight. A skip on a
+  // three-month-old certificate would otherwise drop it straight out of the
+  // window it was skipped in — the row vanishes mid-click and its Undo goes
+  // with it. After that they fall back to the recent window like anything
+  // else; the queue is meant to shrink, not to accumulate a skipped pile.
+  const skipVisibleSince = Date.now() - SKIP_VISIBLE_DAYS * 86400_000
+  const pinned = submissions.filter(
+    (r) => r.needsReview || (r.dismissal && Date.parse(r.dismissal.at) >= skipVisibleSince),
+  )
+  const rest = submissions.filter((r) => !pinned.includes(r)).slice(0, limit)
+  const open = pinned
+  const rows = [...open, ...rest].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+
+  return NextResponse.json({
+    ok: true,
+    submissions: rows,
+    // What the nav badge shows, so the page never disagrees with it.
+    reviewCount: submissions.filter((r) => r.needsReview).length,
+  })
 }
