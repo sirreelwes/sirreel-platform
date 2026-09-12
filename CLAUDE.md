@@ -545,7 +545,12 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   --all [--dry] [--email slug=… --phone slug=…]` queues PROSPECTS ONLY (the
   Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#partners:
   introduction (Wes) → they reply → Mark as new partner → deal → standard
-  Partner Equipment Agreement → email the link. Nothing has been run yet.
+  Partner Equipment Agreement → email the link. **Ran 2026-09-11 (Wes):**
+  the columns script, then `--all` — all four sit on /crm/portals#vendor
+  as prospects (journals `journals/onboard-battery-partners-*.json`).
+  Saniset, Pig Pen and Greenwave have no email on file; set one on the
+  row before the introduction. Do NOT re-run the old 2026-09-10 recipe
+  (roster + link) for these — the mark does that.
 - The introduction (`buildIntroDraft`) is first contact in Wes's words
   ("It's Wes Bailey from SirReel…", feature / order / confirm / deliver /
   bill / pay, "both parties", "win/win!"), signed name / Founder & CEO |

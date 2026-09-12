@@ -15,6 +15,12 @@
  *   - Per cluster: side-by-side diff + an "After merge" column that
  *     shows the record that actually results, keep-picker, canonical-
  *     email selector, per-field value pickers, "not a dupe" / "merge".
+ *   - ONE merge button per cluster, whatever its size: the group is the
+ *     unit of the decision, and the "After merge" column already previews
+ *     every record landing. (Before 2026-09-11 a 3-record group grew a
+ *     button per loser, one of them disabled whenever the main address
+ *     came from a record being merged in.) The primitive still takes one
+ *     loser at a time, so the button walks them in mergeOrder.
  *   - Confirm summary before merge (refs to repoint, alias minted,
  *     snapshot kept). No silent merge.
  *   - "Recent merges" sidebar with one-click undo — the safety net.
@@ -180,8 +186,8 @@ export default function DedupPage() {
     )
   }, [clusters, showOffice])
 
-  const onMerged = () => {
-    setMergedThisSession((n) => n + 1)
+  const onMerged = (count: number) => {
+    setMergedThisSession((n) => n + count)
     load()
   }
 
@@ -268,7 +274,7 @@ export default function DedupPage() {
 
 function ClusterCard({ cluster, onMerged, onSuppressed }: {
   cluster: Cluster
-  onMerged: () => void
+  onMerged: (count: number) => void
   onSuppressed: () => void
 }) {
   const [survivorId, setSurvivorId] = useState<string>(
@@ -285,7 +291,7 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
   const [canonicalEmail, setCanonicalEmail] = useState<string>(
     survivor.email.trim().toLowerCase(),
   )
-  const [confirming, setConfirming] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // Which value wins for each field. `undefined` for a field means "no
@@ -296,7 +302,7 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
 
   useEffect(() => {
     setCanonicalEmail(survivor.email.trim().toLowerCase())
-    setConfirming(null)
+    setConfirming(false)
     const seeded: Partial<Record<FieldKey, { from: string; value: string }>> = {}
     for (const k of FIELD_KEYS) {
       const v = fieldValue(survivor, k)
@@ -317,6 +323,16 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
     return out
   }, [cluster.rows])
 
+  // The canonical email must belong to the survivor or to the row being
+  // merged in — mergePersons() rejects anything else with a 409. So when
+  // the reviewer borrows the main address from a record being merged in,
+  // that record goes FIRST; by the time the rest run, the survivor owns it.
+  const mergeOrder = useMemo(() => {
+    const owner = losers.find((l) => l.email.trim().toLowerCase() === canonicalEmail)
+    if (!owner) return losers
+    return [owner, ...losers.filter((l) => l.id !== owner.id)]
+  }, [losers, canonicalEmail])
+
   // What the kept record actually looks like after every merge in this
   // group lands — the reviewer should never have to model this in their head.
   const resolved = useCallback((k: FieldKey): { value: string; fromId: string | null } => {
@@ -325,43 +341,48 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
     const own = fieldValue(survivor, k)
     if (own) return { value: own, fromId: survivor.id }
     if (NULL_FILL_KEYS.includes(k)) {
-      const filler = losers.find((l) => fieldValue(l, k) !== '')
+      // First record merged in wins a blank column — so preview in the
+      // order the merges actually run.
+      const filler = mergeOrder.find((l) => fieldValue(l, k) !== '')
       if (filler) return { value: fieldValue(filler, k), fromId: filler.id }
     }
     return { value: '', fromId: null }
-  }, [overrides, survivor, losers])
+  }, [overrides, survivor, mergeOrder])
 
-  // The canonical email must belong to the survivor or to the row being
-  // merged in — mergePersons() rejects anything else with a 409. So a
-  // canonical borrowed from row C blocks merging row B until C is in.
-  const canonicalOwner = cluster.rows.find(
-    (r) => r.email.trim().toLowerCase() === canonicalEmail,
-  )
-  const canonicalIsSurvivors = canonicalOwner?.id === survivorId
-
-  const runMerge = async (loserId: string) => {
+  const runMerge = async () => {
     setBusy(true)
-    const body: Record<string, unknown> = {
-      survivorId,
-      loserId,
-      canonicalEmail,
-      fieldOverrides: Object.fromEntries(
-        Object.entries(overrides).map(([k, v]) => [k, v?.value ?? null]),
-      ),
+    const fieldOverrides = Object.fromEntries(
+      Object.entries(overrides).map(([k, v]) => [k, v?.value ?? null]),
+    )
+    // One request per record merged in — the primitive takes one loser at
+    // a time. mergeOrder puts the canonical-email owner first so the
+    // survivor already holds that address when the rest go in.
+    let done = 0
+    for (const loser of mergeOrder) {
+      const res = await fetch('/api/admin/dedup/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ survivorId, loserId: loser.id, canonicalEmail, fieldOverrides }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setBusy(false)
+        setConfirming(false)
+        alert(
+          `Merge failed on ${displayName(loser)}: ${data.error || res.statusText}` +
+          (done > 0
+            ? `\n\n${done} record${done === 1 ? '' : 's'} already merged in — that part stands, ` +
+              'and each one can be undone from "Recently merged".'
+            : ''),
+        )
+        if (done > 0) onMerged(done)
+        return
+      }
+      done += 1
     }
-    const res = await fetch('/api/admin/dedup/merge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json().catch(() => ({}))
     setBusy(false)
-    setConfirming(null)
-    if (!res.ok) {
-      alert(`Merge failed: ${data.error || res.statusText}`)
-      return
-    }
-    onMerged()
+    setConfirming(false)
+    onMerged(done)
   }
 
   const onSuppress = async () => {
@@ -564,7 +585,7 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
           <span className="text-lt-fg2">Main email address to keep:</span>
           <select
             value={canonicalEmail}
-            onChange={(e) => { setCanonicalEmail(e.target.value); setConfirming(null) }}
+            onChange={(e) => { setCanonicalEmail(e.target.value); setConfirming(false) }}
             className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-lt-fg"
           >
             {emailOptions.map((e) => (
@@ -574,79 +595,73 @@ function ClusterCard({ cluster, onMerged, onSuppressed }: {
           <span className="text-lt-fg3">the others stay on the record as alternates</span>
         </label>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {losers.map((loser) => {
-            // Blocked when the chosen main address belongs to a DIFFERENT
-            // row than this one — that address only arrives when its own
-            // row is merged in.
-            const blocked = !canonicalIsSurvivors && canonicalOwner?.id !== loser.id
-            return (
-              <button
-                key={loser.id}
-                onClick={() => setConfirming(confirming === loser.id ? null : loser.id)}
-                disabled={busy || blocked}
-                title={blocked && canonicalOwner
-                  ? `Merge ${displayName(canonicalOwner)} first — the main address you chose is on that record.`
-                  : `Merge ${displayName(loser)} into ${displayName(survivor)}`}
-                className="text-xs px-3 py-1.5 bg-lt-fg text-white rounded hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Merge <span className="font-semibold">{displayName(loser)}</span> into {displayName(survivor)}
-              </button>
-            )
-          })}
+          <button
+            onClick={() => setConfirming((c) => !c)}
+            disabled={busy}
+            title={`Merge ${mergeOrder.map(displayName).join(', ')} into ${displayName(survivor)}`}
+            className="text-xs px-3 py-1.5 bg-lt-fg text-white rounded hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {losers.length === 1
+              ? <>Merge <span className="font-semibold">{displayName(losers[0])}</span> into {displayName(survivor)}</>
+              : <>Merge <span className="font-semibold">the other {losers.length} records</span> into {displayName(survivor)}</>}
+          </button>
         </div>
       </div>
 
       {confirming && (() => {
-        const loser = cluster.rows.find((r) => r.id === confirming)
-        if (!loser) return null
-        const loserEmail = loser.email.trim().toLowerCase()
-        const aliasEmail = canonicalEmail === loserEmail
-          ? survivor.email.trim().toLowerCase()
-          : loserEmail
-        const aliasNeeded = aliasEmail !== canonicalEmail
-        const pickedFromLoser = FIELD_KEYS.filter((k) => overrides[k]?.from === loser.id)
+        const names = mergeOrder.map(displayName)
+        const refTotal = mergeOrder.reduce((n, l) => n + l.refCount, 0)
+        // Every address in the group that isn't the main one is kept as an
+        // alternate, so old mail still finds this person.
+        const aliasEmails = Array.from(
+          new Set(cluster.rows.map((r) => r.email.trim().toLowerCase())),
+        ).filter((e) => e && e !== canonicalEmail)
+        const pickedFromLosers = FIELD_KEYS.filter(
+          (k) => overrides[k] && overrides[k]!.from !== survivorId,
+        )
         return (
           <div className="px-4 py-3 border-t border-lt-hairline bg-chip-warn-bg/40 text-xs">
             <div className="font-semibold text-lt-fg text-sm mb-1">
-              Merge {displayName(loser)} into {displayName(survivor)}?
+              Merge {names.join(' and ')} into {displayName(survivor)}?
             </div>
             <ul className="space-y-0.5 text-lt-fg2">
               <li>
-                • The {loser.refCount} place{loser.refCount === 1 ? '' : 's'} that point at{' '}
-                {displayName(loser)} (jobs, orders, bookings, affiliations) will point at{' '}
-                {displayName(survivor)} instead.
+                • The {refTotal} place{refTotal === 1 ? '' : 's'} that point at{' '}
+                {names.length === 1 ? names[0] : `those ${names.length} records`} (jobs, orders,
+                bookings, affiliations) will point at {displayName(survivor)} instead.
               </li>
               <li>• Main email address becomes <span className="font-semibold">{canonicalEmail}</span>.</li>
-              {aliasNeeded && (
-                <li>• <span className="font-semibold">{aliasEmail}</span> is kept as an alternate address, so old mail still finds this person.</li>
-              )}
-              {pickedFromLoser.length > 0 && (
+              {aliasEmails.length > 0 && (
                 <li>
-                  • Values taken from {displayName(loser)}:{' '}
-                  {pickedFromLoser.map((k) => FIELD_LABELS[k].toLowerCase()).join(', ')}.
+                  • <span className="font-semibold">{aliasEmails.join(', ')}</span>{' '}
+                  {aliasEmails.length === 1 ? 'is' : 'are'} kept as alternate address
+                  {aliasEmails.length === 1 ? '' : 'es'}, so old mail still finds this person.
+                </li>
+              )}
+              {pickedFromLosers.length > 0 && (
+                <li>
+                  • Values taken from the records being merged in:{' '}
+                  {pickedFromLosers.map((k) => FIELD_LABELS[k].toLowerCase()).join(', ')}.
                 </li>
               )}
               <li>
-                • The {displayName(loser)} record is removed. A full copy is saved — undo it any
-                time from &ldquo;Recently merged&rdquo;.
+                • {names.length === 1
+                  ? `The ${names[0]} record is`
+                  : `Those ${names.length} records are`}{' '}
+                removed. A full copy of each is saved — undo them one at a time from
+                &ldquo;Recently merged&rdquo;.
               </li>
-              {losers.length > 1 && (
-                <li className="text-lt-fg3">
-                  • {losers.length - 1} more record{losers.length - 1 === 1 ? '' : 's'} in this
-                  group; merge them one at a time.
-                </li>
-              )}
             </ul>
             <div className="flex items-center gap-2 mt-2">
               <button
-                onClick={() => runMerge(loser.id)}
+                onClick={runMerge}
                 disabled={busy}
                 className="text-xs px-3 py-1.5 bg-chip-good-fg text-white rounded hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? 'Merging…' : 'Yes, merge them'}
               </button>
               <button
-                onClick={() => setConfirming(null)}
+                onClick={() => setConfirming(false)}
                 className="text-xs px-3 py-1.5 text-lt-fg2 hover:text-lt-fg"
               >
                 Cancel
