@@ -48,6 +48,18 @@ export interface EmailShellOptions {
    *  partner-facing mail passes the Utliiz turquoise (Wes 2026-09-06:
    *  "the turquoise that foreshadows Utliiz"). */
   accent?: string
+  /** Co-branded masthead — THEIR mark, a rule, OURS — in place of the
+   *  SirReel-only header. Partner mail wears it (Wes 2026-09-11: "the shared
+   *  logo header like we have for production companies … something that
+   *  communicates a partnership"), the same lockup the client account portal
+   *  and the partner account page carry.
+   *
+   *  `logoUrl` must be an ABSOLUTE, PUBLIC, RASTER url — see
+   *  `partnerLogoEmailUrl()`. No logo (or a vector-only one, which Gmail and
+   *  Outlook refuse to render) falls back to their NAME set in the display
+   *  weight, so the band still reads as theirs — and still reads with images
+   *  blocked, which is how a first-contact mail usually arrives. */
+  lockup?: { partnerName: string; logoUrl?: string | null }
 }
 
 function esc(s: string): string {
@@ -97,6 +109,57 @@ export function renderEmailShell(o: EmailShellOptions): string {
   // The S mark, balancing the footer opposite the address. Same host as
   // the header wordmark, so if one loads both do.
   const mark = `${PUBLIC_SITE_URL}/s-logo-white.png`
+  // The ink-on-transparent wordmark, for the white lockup band.
+  const darkLogo = `${PUBLIC_SITE_URL}/sirreel-logo.png`
+
+  // ── Masthead ───────────────────────────────────────────────────────────
+  // Two ways in: the SirReel wordmark centred on ink (every client mail), or
+  // the partnership lockup on white (partner mail). Their mark can be any
+  // format on any ground, and recolouring it white for the dark band turns a
+  // PNG-with-a-background into a white block — so the lockup gets its own
+  // white band and an accent rule beneath it, which is what anchors the top of
+  // the card once the ink is gone. Same reasoning as the client account portal
+  // masthead (CompanyPortalView).
+  const lockup = o.lockup
+    ? `
+          <tr>
+            <td style="background:#ffffff;border:1px solid ${HAIRLINE};border-bottom:0;border-radius:10px 10px 0 0;padding:20px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  ${/* Both outer cells claim half the row so the rule lands on the
+                       page's centre line whatever the two marks measure — Wes
+                       2026-09-04 on the client portal: "Center the vertical line
+                       between word marks on the page." */ ''}
+                  <td align="left" width="50%" style="width:50%;vertical-align:middle;">
+                    ${
+                      o.lockup.logoUrl
+                        ? `<img src="${esc(o.lockup.logoUrl)}" alt="${esc(o.lockup.partnerName)}" height="36" style="display:block;height:36px;max-height:36px;width:auto;max-width:190px;border:0;">`
+                        : `<span style="font-family:${FONT};font-size:21px;line-height:1.1;font-weight:800;letter-spacing:-0.01em;color:${INK};">${esc(o.lockup.partnerName)}</span>`
+                    }
+                  </td>
+                  <td width="44" align="center" style="width:44px;vertical-align:middle;">
+                    ${/* A hairline rule, not an "&" — Wes 2026-09-04, "use | instead of &". A
+                         1px div rather than a bordered cell: Outlook collapses a 1px-wide td. */ ''}
+                    <div style="width:1px;height:34px;background:#d6d1c4;font-size:1px;line-height:1px;margin:0 auto;">&#8203;</div>
+                  </td>
+                  <td align="right" width="50%" style="width:50%;vertical-align:middle;">
+                    <img src="${darkLogo}" alt="SirReel Studio Services" width="132"
+                         style="display:block;width:132px;max-width:132px;height:auto;border:0;margin-left:auto;">
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td height="3" style="height:3px;line-height:3px;font-size:0;background:${accent};border-left:1px solid ${HAIRLINE};border-right:1px solid ${HAIRLINE};">&#8203;</td>
+          </tr>`
+    : `
+          <tr>
+            <td align="center" style="background:${INK};border-radius:10px 10px 0 0;padding:22px 28px;text-align:center;">
+              <img src="${logo}" alt="SirReel Studio Services" width="150"
+                   style="display:block;width:150px;max-width:150px;height:auto;border:0;margin:0 auto;">
+            </td>
+          </tr>`
 
   const cta = o.cta
     ? `
@@ -126,17 +189,13 @@ export function renderEmailShell(o: EmailShellOptions): string {
 
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;">
 
-          <!-- header — wordmark centred. Belt and braces on purpose:
-               the align="center" ATTRIBUTE is what Outlook's Word engine
-               actually honours, text-align covers the rest, and
-               margin:0 auto centres the block-level img itself. Any one
-               of the three alone leaves it left-aligned somewhere. -->
-          <tr>
-            <td align="center" style="background:${INK};border-radius:10px 10px 0 0;padding:22px 28px;text-align:center;">
-              <img src="${logo}" alt="SirReel Studio Services" width="150"
-                   style="display:block;width:150px;max-width:150px;height:auto;border:0;margin:0 auto;">
-            </td>
-          </tr>
+          <!-- header — the SirReel wordmark centred, or the partnership
+               lockup (see the lockup option above). Centring is belt and braces on
+               purpose: the align="center" ATTRIBUTE is what Outlook's Word
+               engine actually honours, text-align covers the rest, and
+               margin:0 auto centres the block-level img itself. Any one of
+               the three alone leaves it left-aligned somewhere. -->
+${lockup}
 
           <!-- card -->
           <tr>

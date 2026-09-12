@@ -18,9 +18,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canSendPartnerWelcome, WES_SIGNATURE_TITLE } from '@/lib/sub-rentals/welcomeSender'
-import { partnerIntroDraft, partnerWelcomeExtras, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
+import { canSendPartnerWelcome } from '@/lib/sub-rentals/welcomeSender'
+import { partnerIntroDraft, renderPartnerWelcome, sendPartnerWelcome } from '@/lib/sub-rentals/vendorInvite'
 import { draftFromPrompt } from '@/lib/sub-rentals/welcomeAiDraft'
+import { partnerLogoEmailUrl } from '@/lib/sub-rentals/partnerLogo'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,9 +37,7 @@ async function wes() {
   // His cell lives on his User row (no other surface carries it) — the
   // sign-off wants it (Wes 2026-09-11: "Add my cell and email address").
   const u = await prisma.user.findUnique({ where: { email }, select: { name: true, phone: true } })
-  // The title line is the owner's; a delegated sender (PARTNER_WELCOME_SENDERS) signs with name and contact only.
-  const title = email.toLowerCase() === 'wes@sirreel.com' ? WES_SIGNATURE_TITLE : null
-  return { email, name: session?.user?.name ?? u?.name ?? null, phone: u?.phone ?? null, title }
+  return { email, name: session?.user?.name ?? u?.name ?? null, phone: u?.phone ?? null }
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -47,11 +46,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const v = await prisma.vendor.findUnique({
       where: { id },
-      select: { name: true, email: true, contactName: true, welcomeSentAt: true, welcomeSentTo: true, welcomeSubject: true },
+      select: { id: true, name: true, email: true, contactName: true, welcomeSentAt: true, welcomeSentTo: true, welcomeSubject: true, logoUrl: true, logoSvg: true },
     })
     if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-    const draft = await partnerIntroDraft(id, { name: g.name?.trim() || 'Wes Bailey', email: g.email, phone: g.phone, title: g.title })
-    const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body, ...(await partnerWelcomeExtras(id)) })
+    const draft = await partnerIntroDraft(id, { name: g.name?.trim() || 'Wes Bailey', email: g.email, phone: g.phone })
+    const { html } = renderPartnerWelcome({ vendorName: v.name, subject: draft.subject, body: draft.body, logoUrl: partnerLogoEmailUrl(v) })
     return NextResponse.json({
       draft,
       html,
@@ -91,14 +90,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         senderName: g.name?.trim() || 'Wes Bailey',
         senderPhone: g.phone,
         senderEmail: g.email,
-        senderTitle: g.title,
       })
       return NextResponse.json({ draft: out })
     }
     if (b.preview) {
-      const v = await prisma.vendor.findUnique({ where: { id }, select: { name: true } })
+      const v = await prisma.vendor.findUnique({ where: { id }, select: { id: true, name: true, logoUrl: true, logoSvg: true } })
       if (!v) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-      const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, ...(await partnerWelcomeExtras(id)) })
+      const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, logoUrl: partnerLogoEmailUrl(v) })
       // Nothing is sent and nothing is stamped on this path.
       return NextResponse.json({ preview: true, html, text })
     }
