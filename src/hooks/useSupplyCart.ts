@@ -31,6 +31,15 @@
  * (added itemKind/itemId/pickupDate/returnDate, renamed quantity →
  * qty). Stale v2 payloads are dropped on hydration — in-progress
  * carts on the same tab get reset.
+ *
+ * ONE STORE, MANY MOUNTS (2026-09-12): the cart is no longer read in a
+ * single place. The public nav's cart pill and the site-search "+" are
+ * separate mounts on the SAME page, and two useState copies over one
+ * sessionStorage key diverge on the first write — add from search, and
+ * the pill keeps reading 0 until a reload. So the Map lives at module
+ * scope with a subscriber set, and sessionStorage is written on change
+ * rather than from a per-instance effect. The hook's public API is
+ * unchanged; every mount re-renders off the same object.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -90,38 +99,103 @@ export interface AddToCartArgs extends CartLineDisplayInfo {
 
 const STORAGE_KEY = 'sr_supply_cart_v3'
 
+// ── Shared cross-mount store ──────────────────────────────────────
+// `store` is the one true cart for the tab. Never mutate it in place —
+// publish a new Map so subscribers see a changed reference.
+let store: Map<string, CartLine> = new Map()
+let hydratedFromStorage = false
+const subscribers = new Set<() => void>()
+
+/** Read the v3 payload out of sessionStorage, dropping malformed lines. */
+function readStoredCart(): Map<string, CartLine> {
+  const next = new Map<string, CartLine>()
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return next
+    const arr = JSON.parse(raw) as CartLine[]
+    for (const l of arr) {
+      // Defensive: drop any line that doesn't match the v3 shape.
+      if (l?.cartLineId && l.itemKind && l.itemId && l.pickupDate && l.returnDate && l.qty > 0) {
+        next.set(l.cartLineId, l)
+      }
+    }
+  } catch {}
+  return next
+}
+
+/** Swap the store and tell every mount. Persisting here (not in an
+ *  effect) means one write per change no matter how many mounts. */
+function publishCart(next: Map<string, CartLine>): void {
+  if (next === store) return
+  store = next
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...store.values()]))
+  } catch {}
+  for (const notify of [...subscribers]) notify()
+}
+
+/**
+ * Default dates for an add made where no dates have been entered yet —
+ * the site-search "+", and the order form before its date fields are
+ * touched. Today → today + 7, in PACIFIC time.
+ *
+ * The timezone is not incidental: cartLineId encodes the dates, so a
+ * UTC "today" (which rolls over at 5pm PT) would file an evening add
+ * under tomorrow and split it from the same item added minutes earlier
+ * on the other surface — two lines, one item, no explanation.
+ */
+export function defaultCartDates(now: Date = new Date()): {
+  pickupDate: string
+  returnDate: string
+} {
+  // en-CA formats as YYYY-MM-DD directly.
+  const ymd = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d)
+  return { pickupDate: ymd(now), returnDate: ymd(new Date(now.getTime() + 7 * 86_400_000)) }
+}
+
 export function cartLineKey(kind: ItemKind, itemId: string, pickup: string, returnD: string): string {
   return `${kind}:${itemId}:${pickup}:${returnD}`
 }
 
 export function useSupplyCart() {
-  const [cart, setCart] = useState<Map<string, CartLine>>(() => new Map())
-  const [hydrated, setHydrated] = useState(false)
+  // Seeded from the store so a mount that appears AFTER hydration (the
+  // cart pill re-rendering on a route change) has the lines on its very
+  // first paint instead of flashing an empty cart.
+  const [cart, setCartState] = useState<Map<string, CartLine>>(store)
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const arr = JSON.parse(raw) as CartLine[]
-        const next = new Map<string, CartLine>()
-        for (const l of arr) {
-          // Defensive: drop any line that doesn't match the v3 shape.
-          if (l?.cartLineId && l.itemKind && l.itemId && l.pickupDate && l.returnDate && l.qty > 0) {
-            next.set(l.cartLineId, l)
-          }
-        }
-        setCart(next)
-      }
-    } catch {}
-    setHydrated(true)
+    // Hydrate once per tab. Can't move into the useState initializer:
+    // sessionStorage doesn't exist during SSR, and reading it there
+    // would make the server and client first paints disagree.
+    if (!hydratedFromStorage) {
+      hydratedFromStorage = true
+      const restored = readStoredCart()
+      if (restored.size > 0) store = restored
+    }
+    const notify = () => setCartState(store)
+    subscribers.add(notify)
+    // Catch up on hydration, and on anything another mount published
+    // between this render and this subscribe.
+    notify()
+    return () => {
+      subscribers.delete(notify)
+    }
   }, [])
 
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...cart.values()]))
-    } catch {}
-  }, [cart, hydrated])
+  /** Same signature as the useState setter it replaces, so every call
+   *  site below is unchanged — it just writes through to the store. */
+  const setCart = useCallback(
+    (updater: Map<string, CartLine> | ((prev: Map<string, CartLine>) => Map<string, CartLine>)) => {
+      publishCart(typeof updater === 'function' ? updater(store) : updater)
+    },
+    [],
+  )
 
   /**
    * Add a line, or merge qty into an existing identical line
@@ -234,7 +308,7 @@ export function useSupplyCart() {
     try {
       sessionStorage.removeItem(STORAGE_KEY)
     } catch {}
-  }, [])
+  }, [setCart])
 
   const lines = useMemo(() => [...cart.values()], [cart])
   const totalUnits = useMemo(() => lines.reduce((s, l) => s + l.qty, 0), [lines])

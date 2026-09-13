@@ -11,6 +11,15 @@
  *
  * SUPPLY lines resolve against publicVisible=true InventoryItem rows;
  * VEHICLE lines resolve against active=true VehicleCategory rows.
+ *
+ * A vehicle's rate is the EFFECTIVE rate — pickEffectiveDailyRate, i.e.
+ * the linked Fleet Pricing row first, then the category's own fallback —
+ * exactly as /api/public/vehicle-categories and the public search index
+ * resolve it. It has to be the same rule: those are what the client saw
+ * when they built the cart, and this is what the agent reads back. Most
+ * owned categories carry a NULL dailyRate of their own and get their
+ * price entirely from Fleet Pricing (Cargo Van $150, w/ Liftgate $170),
+ * so reading the column alone recorded every van as price-on-quote.
  * Inquiry-level preferredStartDate / preferredEndDate are derived
  * server-side as min(pickupDate) / max(returnDate) across all lines.
  *
@@ -38,6 +47,7 @@ import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { computeDays } from '@/lib/orders/days'
+import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -260,7 +270,12 @@ export async function POST(req: NextRequest) {
             name: true,
             slug: true,
             subtitle: true,
+            // Both halves of the rate: the linked Fleet Pricing row WINS,
+            // the column is only the fallback. Selecting the column alone
+            // is what made every van price-on-quote.
             dailyRate: true,
+            catalogItem: { select: { dailyRate: true } },
+            assetCategory: { select: { dailyRate: true } },
           },
         })
       : Promise.resolve([]),
@@ -294,7 +309,10 @@ export async function POST(req: NextRequest) {
     const days = rentalDaysBetween(l.pickupDate, l.returnDate)
     if (l.itemKind === 'VEHICLE') {
       const row = vehicleById.get(l.itemId)!
-      const unitPrice = row.dailyRate == null ? 0 : Number(row.dailyRate)
+      // Same resolution the client's cart priced from. 0 = genuinely
+      // price-on-quote (nothing set anywhere), not "rate not selected".
+      const effective = pickEffectiveDailyRate(row)
+      const unitPrice = effective == null ? 0 : Number(effective)
       const lineTotal = unitPrice * l.qty * days
       return {
         itemKind: 'VEHICLE' as const,

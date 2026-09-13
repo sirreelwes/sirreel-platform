@@ -32,7 +32,7 @@ import {
   type FormEvent,
 } from 'react'
 import Link from 'next/link'
-import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
+import { useSupplyCart, defaultCartDates, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
 import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug, heroTitleForSection } from '@/lib/site/publicSupplySections'
 import { PUBLIC_CONTACT, PUBLIC_HOME_URL } from '@/lib/site/publicNav'
 
@@ -83,17 +83,21 @@ function variantGroupTitle(it: CatalogItem): string {
 // Default per-line dates when the agent hits Add. Reads from the
 // form-level pickupDate/returnDate when those are filled (legacy
 // step-2 inputs — to be removed in a later commit, kept as the
-// per-add default for now); otherwise today / today+7. Always
-// returns a YYYY-MM-DD string pair.
+// per-add default for now); otherwise today / today+7.
+//
+// The untouched-form case delegates to defaultCartDates so it matches the
+// site-search "+" EXACTLY. cartLineId encodes the dates, so a one-day
+// disagreement between the two surfaces would split one item across two
+// lines. (It also fixes a real bug on the way past: the old ymd() went
+// through toISOString, i.e. UTC, so every add after 5pm Pacific was filed
+// under tomorrow.)
 function defaultDatesForAdd(form: { pickupDate: string; returnDate: string }): {
   pickupDate: string
   returnDate: string
 } {
-  const today = new Date()
-  const inAWeek = new Date(today.getTime() + 7 * 86_400_000)
-  const ymd = (d: Date) => d.toISOString().slice(0, 10)
-  const pickup = form.pickupDate || ymd(today)
-  const returnD = form.returnDate || (form.pickupDate ? form.pickupDate : ymd(inAWeek))
+  const fallback = defaultCartDates()
+  const pickup = form.pickupDate || fallback.pickupDate
+  const returnD = form.returnDate || (form.pickupDate ? form.pickupDate : fallback.returnDate)
   return { pickupDate: pickup, returnDate: returnD }
 }
 
@@ -204,9 +208,19 @@ interface SupplyOrderAppProps {
    * form regardless of this flag.
    */
   focusMode?: boolean
+  /**
+   * Open the review panel on arrival (`?cart=1`) — set by the header's
+   * cart pill. Someone who built their list from the site search has
+   * already shopped; dropping them at the top of the catalog to hunt for
+   * the cart button is the wrong end of the page.
+   *
+   * Ignored when the cart is empty (a stale link, a new tab): an empty
+   * review sheet is nothing to open.
+   */
+  openCart?: boolean
 }
 
-export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign-in', focusMode = false }: SupplyOrderAppProps) {
+export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign-in', focusMode = false, openCart = false }: SupplyOrderAppProps) {
   // In focus mode, hide this element on MOBILE only (desktop keeps full form).
   const focusHideMobile = focusMode ? 'hidden md:block' : ''
 
@@ -601,6 +615,19 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // ── Panels (review / details / confirm) ───────────────────────
   const [panel, setPanel] = useState<'none' | 'sheet' | 'details' | 'confirm'>('none')
   const [form, setForm] = useState<DetailsForm>(EMPTY_FORM)
+
+  // `?cart=1` — arrive on the review sheet (header cart pill). Deferred to
+  // an effect rather than seeded into useState because the cart hydrates
+  // from sessionStorage in an effect of its own: on the first render
+  // `lines` is always empty, so an initializer would read "empty cart" and
+  // never open. The ref makes it a ONE-TIME arrival, not a panel that
+  // re-opens itself every time the client closes it.
+  const autoOpenedCart = useRef(false)
+  useEffect(() => {
+    if (!openCart || autoOpenedCart.current || lines.length === 0) return
+    autoOpenedCart.current = true
+    setPanel('sheet')
+  }, [openCart, lines.length])
 
   // Prefill contact details the moment the person-session verifies —
   // NOT only when a past order is tapped, which was the old trigger. A
