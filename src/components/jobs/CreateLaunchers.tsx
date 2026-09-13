@@ -22,8 +22,9 @@
  *                  with the Reservation section ready — reserve the
  *                  trucks, then add the gear that goes out on them.
  *
- * Renders in the /jobs toolbar (desktop) and the shell's mobile top
- * bar, which is why it carries its own modal state instead of leaning
+ * Renders in the /jobs toolbar (desktop), the schedule gantt's toolbar
+ * (2026-09-12 — it replaced "Make Reservation" + "Schedule
+ * Delivery/Pickup" there) and the shell's mobile top bar, which is why it carries its own modal state instead of leaning
  * on a page. `onCreated` lets the jobs list re-read; the modal's own
  * done screen links to the order it made.
  *
@@ -42,7 +43,15 @@ import { getPermissions } from '@/lib/permissions'
 import { MakeReservationModal } from '@/components/scheduling/MakeReservationModal'
 import { notifyJobsChanged } from '@/components/jobs/JobsListProvider'
 
-export function CreateLaunchers({ size = 'toolbar' }: { size?: 'toolbar' | 'mobile' }) {
+export function CreateLaunchers({
+  size = 'toolbar',
+  onCreated,
+}: {
+  size?: 'toolbar' | 'mobile'
+  /** Runs after a reservation is made, on top of the jobs-list nudge —
+   *  the gantt passes its timeline refresh so the new holds appear. */
+  onCreated?: () => void
+}) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [reserveOpen, setReserveOpen] = useState(false)
@@ -172,7 +181,10 @@ export function CreateLaunchers({ size = 'toolbar' }: { size?: 'toolbar' | 'mobi
         <MakeReservationModal
           canBindUnit={canReserve}
           onClose={() => setReserveOpen(false)}
-          onCreated={() => notifyJobsChanged()}
+          onCreated={() => {
+            notifyJobsChanged()
+            onCreated?.()
+          }}
         />
       )}
     </>

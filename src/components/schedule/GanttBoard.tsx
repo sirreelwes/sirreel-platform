@@ -6,9 +6,8 @@ import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2, Pencil, Search, Timer, Wrench, X } from 'lucide-react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
-import { MakeReservationModal } from '@/components/scheduling/MakeReservationModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
-import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
+import { CreateLaunchers } from '@/components/jobs/CreateLaunchers';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
 import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
@@ -499,10 +498,8 @@ export function GanttBoard() {
   // consolidation) — the task lands in this page's needs-assignment
   // lane, so the gantt is its natural entry point. Sales-gated same as
   // the endpoint.
-  const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Planyo-parity intake: one window that takes type + dates + client
   // + job and leaves an Order behind (Wes 2026-09-09).
-  const [makeResOpen, setMakeResOpen] = useState(false)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
   // What's WRONG with the unit — captured at the moment it's greyed so
@@ -1650,24 +1647,12 @@ export function GanttBoard() {
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
             ))}
           </div>
-          {canBindUnit && (
-            <button
-              onClick={() => setMakeResOpen(true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-semibold"
-              title="Book a vehicle type for a client and job — creates the order and holds the units"
-            >
-              Make Reservation
-            </button>
-          )}
-          {canBindUnit && (
-            <button
-              onClick={() => setNewTaskOpen(true)}
-              className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-semibold"
-              title="Schedule a delivery or pickup (no order) — lands in the needs-assignment lane"
-            >
-              Schedule Delivery/Pickup
-            </button>
-          )}
+          {/* The ONE create button, same chooser as the /jobs toolbar
+              (Wes 2026-09-12: "I only want the New Order/Rez button").
+              It replaced "Make Reservation" + "Schedule Delivery/Pickup"
+              here; a reservation made from it refreshes the board so
+              the new holds show without a reload. */}
+          <CreateLaunchers onCreated={() => refreshTimeline()} />
         </div>
       </div>
 
@@ -2652,30 +2637,6 @@ export function GanttBoard() {
           onClose={() => setHoldModal(null)}
           onCreated={() => {
             setHoldModal(null)
-            refreshTimeline()
-          }}
-        />
-      )}
-
-      {/* Reservation intake — the top-bar "Make Reservation" button.
-          Creates the Order first and lets the line-items route mint the
-          hold; see the modal header for why that ordering matters. */}
-      {makeResOpen && (
-        <MakeReservationModal
-          canBindUnit={canBindUnit}
-          onClose={() => setMakeResOpen(false)}
-          onCreated={() => refreshTimeline()}
-        />
-      )}
-
-      {/* Standalone task creation — rehomed from the retired top-bar
-          "+ New" menu. onCreated refreshes so the PENDING task shows
-          in the needs-assignment lane immediately. */}
-      {newTaskOpen && (
-        <NewTaskModal
-          onClose={() => setNewTaskOpen(false)}
-          onCreated={() => {
-            setNewTaskOpen(false)
             refreshTimeline()
           }}
         />
