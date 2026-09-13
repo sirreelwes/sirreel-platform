@@ -87,6 +87,9 @@ async function buildIndex(): Promise<IndexEntry[]> {
       select: {
         id: true, code: true, description: true, aliases: true, imageUrl: true,
         dailyRate: true, includedFree: true, publicVisible: true, qtyOwned: true,
+        // `type` is carried for the add-to-cart payload, not for display:
+        // it decides whether a line prices per-day (EQUIPMENT) or flat.
+        type: true,
         category: { select: { slug: true, name: true } },
       },
     }),
@@ -112,6 +115,11 @@ async function buildIndex(): Promise<IndexEntry[]> {
     const name = it.description ?? ''
     if (!name) continue
     const orderable = it.publicVisible
+    // A $0 row that survived hasPublicPrice is an intentional no-charge
+    // inclusion (recycle bins). The order form shows those as "Included"
+    // and refuses to add them — it comes WITH an order, it isn't a line —
+    // so search must not offer a "+" the form itself wouldn't.
+    const included = Number(it.dailyRate) === 0 && it.includedFree
     entries.push({
       id: `supply:${it.id}`,
       kind: 'supply',
@@ -125,6 +133,21 @@ async function buildIndex(): Promise<IndexEntry[]> {
         : contactPrefillHref(`Availability: ${name}`),
       image: it.imageUrl ? `/api/public/catalog-image/supply/${it.id}` : null,
       action: orderable ? 'order' : 'ask',
+      // Same gate as the row's href: if it isn't on the form, it can't be
+      // added from search either. Slug (not name) for `category` to match
+      // what /api/public/catalog hands the order form, so a line added
+      // here and one added there group together in the cart panel.
+      add:
+        orderable && !included
+          ? {
+              itemKind: 'SUPPLY',
+              itemId: it.id,
+              name,
+              price: Number(it.dailyRate),
+              type: it.type,
+              category: it.category?.slug ?? 'other',
+            }
+          : null,
       // Ranking inputs only — never rendered.
       inStock: it.qtyOwned > 0,
       haystack: norm(name, it.code, it.category?.name, it.aliases.join(' ')),
@@ -140,8 +163,27 @@ async function buildIndex(): Promise<IndexEntry[]> {
       href: `/vehicles/${v.slug}`,
       image: v.photoUrl,
       // Every vehicle is a conversation, owned or partner — the /vehicles
-      // page is where that starts.
+      // page is where that starts, and the click still goes there (the
+      // photos and specs are why a client clicks a truck). The "+" is the
+      // shortcut past it for someone who already knows what they need.
       action: 'ask',
+      // OWNED categories only. `getPublicVehicles` also returns listed
+      // partner units, whose `id` is a SubcontractedVehicle — and
+      // /api/public/supply-request resolves VEHICLE lines against
+      // VehicleCategory, so a partner "+" would blow up at submit, after
+      // the client had filled in the entire details form. Partner units
+      // keep their page, which works.
+      add: v.partner
+        ? null
+        : {
+            itemKind: 'VEHICLE',
+            itemId: v.id,
+            // Same name shape the order form's vehicle card adds.
+            name: v.name + (v.subtitle ? ` (${v.subtitle})` : ''),
+            price: v.dailyRate ?? 0,
+            type: 'VEHICLE',
+            category: 'Vehicle',
+          },
       inStock: true,
       haystack: norm(v.name, v.slug.replace(/-/g, ' '), v.subtitle, 'vehicle truck van'),
     })
@@ -157,6 +199,8 @@ async function buildIndex(): Promise<IndexEntry[]> {
       href: kind === 'standing-set' ? '/standing-sets' : '/stages',
       image: s.photos[0] ? `/api/public/catalog-image/space-photo/${s.photos[0].id}` : null,
       action: 'ask',
+      // A stage is a date negotiation, not a shelf item.
+      add: null,
       inStock: true,
       haystack: norm(s.name, s.description, kind === 'standing-set' ? 'standing set' : 'stage soundstage'),
     })
@@ -171,6 +215,7 @@ async function buildIndex(): Promise<IndexEntry[]> {
       href: p.href,
       image: null,
       action: 'order',
+      add: null,
       inStock: true,
       haystack: norm(p.label, p.keywords),
     })

@@ -22,6 +22,7 @@
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
     "test:alias-match": "tsx tests/sales/alias-match.test.ts",
     "test:public-query": "tsx tests/site/public-query-match.test.ts",
+    "test:vehicle-rate": "tsx tests/site/vehicle-rate.test.ts",
     "test:quick-reply-items": "tsx tests/sales/quick-reply-items.test.ts",
     "test:cc": "tsx tests/email/cc-list.test.ts",
     "test:thread-participants": "tsx tests/email/thread-participants.test.ts",

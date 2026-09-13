@@ -184,6 +184,14 @@ export const PUBLIC_NAV: NavEntry[] = [
  */
 export const PUBLIC_ORDER_CTA = { label: 'ORDER', href: ORDER_FORM_HREF }
 
+/**
+ * Where the header's cart pill goes: the order form with its review panel
+ * already open. `cart=1` is read by SupplyOrderApp on mount — a client who
+ * built a list from the site search arrives at the LIST, not at the top of
+ * a catalog they've already finished shopping.
+ */
+export const PUBLIC_CART_HREF = `${ORDER_FORM_HREF}?cart=1`
+
 /** Home target for SAME-HOST public links (nav, footer, tiles). Relative
  *  so it stays correct on whichever public host serves it (hq / orders /
  *  future sirreel.com) — and inherently safe across the DNS cutover. */

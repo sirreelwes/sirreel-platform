@@ -38,18 +38,23 @@ export const dynamic = 'force-dynamic'
 export default function PublicSupplyOrderPage({
   searchParams,
 }: {
-  searchParams?: { focus?: string; category?: string }
+  searchParams?: { focus?: string; category?: string; cart?: string }
 }) {
   // `focus=1` (set only on the mobile home-tile "Add Items" swipe path)
   // opts into the streamlined mobile focus mode. It's applied ONLY on
   // mobile via md: classes inside SupplyOrderApp — desktop is unaffected.
   const focusMode = searchParams?.focus === '1'
+  // `cart=1` — sent by the public header's cart pill, for a client who
+  // built their list from the site search and wants the list, not the
+  // catalog. Honoured only when the cart actually has lines (client-side).
+  const openCart = searchParams?.cart === '1'
   return (
     <div className={`${archivo.variable} ${hanken.variable}`}>
       <SupplyOrderApp
         submitEndpoint="/api/public/supply-request"
         signInHref="/portal/auth/sign-in"
         focusMode={focusMode}
+        openCart={openCart}
       />
     </div>
   )

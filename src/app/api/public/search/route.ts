@@ -3,8 +3,13 @@
  *
  * Unauthenticated. One ranked list across supplies/equipment, vehicles,
  * stages, standing sets and the static public pages. Every row is
- * public-safe: name, category, destination, image-proxy path. NO rates —
- * pricing stays on the pages that frame it.
+ * public-safe: name, category, destination, image-proxy path.
+ *
+ * Rows the client can add to the cart also carry an `add` payload with
+ * the same rate /api/public/catalog and /api/public/vehicle-categories
+ * already serve to the order form — it's what lets the "+" build a line
+ * without a second round trip. Nothing NEW is exposed, and the typeahead
+ * still renders no prices: pricing stays on the pages that frame it.
  *
  * Matching + visibility live in src/lib/site/publicSearch.ts (in-process
  * index, 60s TTL) so this route stays a thin, cacheable edge over it.

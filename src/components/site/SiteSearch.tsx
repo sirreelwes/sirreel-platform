@@ -20,12 +20,28 @@
  * bottom of the viewport where a downward list would open off-screen. The
  * Home hero no longer needs it — the pill moved to the top of the tile
  * band, so its list drops down over the tiles.
+ *
+ * ADD FROM SEARCH (2026-09-12): a row the client can order carries an
+ * `add` payload, and on those rows the PRIMARY action is add-to-cart, not
+ * navigate — type, Enter, type, Enter and a prep list is built without a
+ * single page load. That's the point: a client speccing a job shouldn't
+ * have to know which tile a thing lives behind, and shouldn't pay a
+ * round trip per item.
+ *
+ * Rows we can't put on a self-serve line (unpublished gear, stages,
+ * partner units, pages) keep the old navigate-on-click behaviour, and
+ * say so. A row that looks addable but isn't is worse than no row.
+ *
+ * Rows with a real destination page of their own — a vehicle's photos and
+ * specs — keep a separate View button, so "add it" and "show me it" are
+ * both one click and neither is a guess.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, X, CornerDownLeft, Loader2 } from 'lucide-react'
+import { Search, X, CornerDownLeft, Loader2, Plus, Check, ChevronRight } from 'lucide-react'
 import { KIND_LABEL, type PublicSearchHit } from '@/lib/site/publicSearchTypes'
+import { useSupplyCart, defaultCartDates } from '@/hooks/useSupplyCart'
 
 interface SiteSearchProps {
   /** Open the results list upward (hero placement near the fold bottom). */
@@ -33,6 +49,16 @@ interface SiteSearchProps {
   placeholder?: string
   /** Compact metrics for the mobile stack. */
   size?: 'md' | 'sm'
+  /** Take focus on mount — for the nav's search panel, which only exists
+   *  because the client just clicked the search icon. */
+  autoFocus?: boolean
+  /** Fired after an add, so a host can close its panel or nudge a pill.
+   *  The cart itself needs no callback: every mount shares one store. */
+  onAdded?: (hit: PublicSearchHit) => void
+  /** Escape pressed with nothing left for the field itself to close — no
+   *  results list open and no query. A host panel can dismiss on this
+   *  without stealing the first Escape, which belongs to the list. */
+  onEscape?: () => void
   className?: string
 }
 
@@ -48,6 +74,9 @@ export function SiteSearch({
   dropUp = false,
   placeholder = 'Search equipment, vehicles, stages…',
   size = 'md',
+  autoFocus = false,
+  onAdded,
+  onEscape,
   className = '',
 }: SiteSearchProps) {
   const router = useRouter()
@@ -59,6 +88,22 @@ export function SiteSearch({
   const abortRef = useRef<AbortController | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { addToCart, cart } = useSupplyCart()
+  // Hit ids showing their "Added" flash, with the timers that clear them.
+  const [flashed, setFlashed] = useState<Record<string, number>>({})
+  const flashTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const timers = flashTimers.current
+    return () => {
+      for (const t of timers.values()) clearTimeout(t)
+      timers.clear()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus()
+  }, [autoFocus])
 
   const allHref = useMemo(
     () => `/order/supplies?q=${encodeURIComponent(query.trim())}`,
@@ -115,10 +160,69 @@ export function SiteSearch({
     [router],
   )
 
+  /**
+   * Drop a hit into the cart. Dates default to today → today + 7 (Pacific)
+   * — the same defaults the order form uses before its date fields are
+   * touched, so an item added here and the same item added there land on
+   * ONE line instead of two. The client sets real dates in the cart.
+   *
+   * The query and the list stay put: pressing Enter again bumps the qty,
+   * and typing the next item is the natural next keystroke either way.
+   */
+  const add = useCallback(
+    (hit: PublicSearchHit) => {
+      if (!hit.add) return
+      const { pickupDate, returnDate } = defaultCartDates()
+      addToCart({ ...hit.add, pickupDate, returnDate })
+      const prev = flashTimers.current.get(hit.id)
+      if (prev) clearTimeout(prev)
+      flashTimers.current.set(
+        hit.id,
+        setTimeout(() => {
+          flashTimers.current.delete(hit.id)
+          setFlashed((f) => {
+            const { [hit.id]: _gone, ...rest } = f
+            return rest
+          })
+        }, 1600),
+      )
+      setFlashed((f) => ({ ...f, [hit.id]: (f[hit.id] ?? 0) + 1 }))
+      inputRef.current?.focus()
+      onAdded?.(hit)
+    },
+    [addToCart, onAdded],
+  )
+
+  /** Units of this hit's item currently on the cart, across every date
+   *  window — the honest answer to "did that go in?". */
+  const qtyInCart = useCallback(
+    (hit: PublicSearchHit): number => {
+      if (!hit.add) return 0
+      let n = 0
+      for (const line of cart.values()) {
+        if (line.itemKind === hit.add.itemKind && line.itemId === hit.add.itemId) n += line.qty
+      }
+      return n
+    },
+    [cart],
+  )
+
+  /** Addable rows ADD on click/Enter; everything else navigates. */
+  const activate = useCallback(
+    (hit: PublicSearchHit) => {
+      if (hit.add) add(hit)
+      else go(hit.href)
+    },
+    [add, go],
+  )
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
+      // Three steps, narrowest first: close the list, clear the query,
+      // then hand Escape to whatever is hosting the field.
       if (results.length && open) setOpen(false)
-      else setQuery('')
+      else if (query) setQuery('')
+      else onEscape?.()
       return
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -136,7 +240,7 @@ export function SiteSearch({
     }
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (open && active >= 0 && results[active]) go(results[active].href)
+      if (open && active >= 0 && results[active]) activate(results[active])
       else if (query.trim()) go(allHref)
     }
   }
@@ -213,52 +317,98 @@ export function SiteSearch({
             </div>
           ) : (
             <ul className="max-h-[52vh] overflow-y-auto py-1.5">
-              {results.map((r, i) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={i === active}
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => go(r.href)}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                      i === active ? 'bg-white/10' : 'hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/5">
-                      {r.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <Search size={14} className="text-white/35" aria-hidden />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14.5px] font-medium text-white">
-                        {r.label}
-                      </span>
-                      <span className="block truncate text-[12px] text-white/55">
-                        {r.sublabel}
-                        {/* Say what the click does. Search covers gear that
-                            isn't on the order form, and a row that looks
-                            orderable but isn't is worse than no row. */}
-                        {r.action === 'ask' && r.kind === 'supply' && (
-                          <span className="text-white/45">
-                            {r.sublabel ? ' · ' : ''}ask us about it
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${
-                        KIND_TINT[r.kind] ?? KIND_TINT.page
+              {results.map((r, i) => {
+                const inCart = qtyInCart(r)
+                const justAdded = flashed[r.id] !== undefined
+                // A vehicle has a page worth seeing; a supply's "page" is
+                // only the order form filtered to it, which is where the
+                // client already effectively is.
+                const viewable = r.add !== null && r.kind !== 'supply'
+                return (
+                  <li key={r.id} className="flex items-stretch">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={i === active}
+                      aria-label={r.add ? `Add ${r.label} to cart` : r.label}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => activate(r)}
+                      className={`flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 pr-2 text-left transition-colors ${
+                        i === active ? 'bg-white/10' : 'hover:bg-white/[0.06]'
                       }`}
                     >
-                      {KIND_LABEL[r.kind]}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                        {r.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <Search size={14} className="text-white/35" aria-hidden />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-medium text-white">
+                          {r.label}
+                        </span>
+                        <span className="block truncate text-[12px] text-white/55">
+                          {r.sublabel}
+                          {/* Say what the click does. Search covers gear that
+                              isn't on the order form, and a row that looks
+                              orderable but isn't is worse than no row. */}
+                          {r.action === 'ask' && r.kind === 'supply' && (
+                            <span className="text-white/45">
+                              {r.sublabel ? ' · ' : ''}ask us about it
+                            </span>
+                          )}
+                          {/* What's already on the cart, so a second Enter
+                              reads as "2" rather than as nothing happening. */}
+                          {inCart > 0 && (
+                            <span className="text-[#4DB1C6]">
+                              {r.sublabel ? ' · ' : ''}{inCart} in cart
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      {r.add ? (
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors ${
+                            justAdded
+                              ? 'bg-[#4DB1C6] text-[#0c0c0d]'
+                              : i === active
+                                ? 'bg-[#4DB1C6] text-[#0c0c0d]'
+                                : 'border border-[#4DB1C6]/50 text-[#4DB1C6]'
+                          }`}
+                        >
+                          {justAdded ? <Check size={13} aria-hidden /> : <Plus size={13} aria-hidden />}
+                          {justAdded ? 'Added' : 'Add'}
+                        </span>
+                      ) : (
+                        <span
+                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${
+                            KIND_TINT[r.kind] ?? KIND_TINT.page
+                          }`}
+                        >
+                          {KIND_LABEL[r.kind]}
+                        </span>
+                      )}
+                    </button>
+                    {/* Separate target, not nested — a button inside a button
+                        is invalid HTML and the inner one swallows the row. */}
+                    {viewable && (
+                      <button
+                        type="button"
+                        onClick={() => go(r.href)}
+                        aria-label={`View ${r.label}`}
+                        title="View details"
+                        className={`flex shrink-0 items-center border-l border-white/10 px-2.5 text-white/45 transition-colors hover:bg-white/10 hover:text-white ${
+                          i === active ? 'bg-white/10' : ''
+                        }`}
+                      >
+                        <ChevronRight size={16} aria-hidden />
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
           <button
