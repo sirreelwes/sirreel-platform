@@ -39,6 +39,7 @@ import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/Dis
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { SendToWarehouseModal, type SendToWarehouseResult } from "@/components/orders/SendToWarehouseModal";
 import { LineItemDescriptionCombobox, type CatalogHitType } from '@/components/orders/LineItemDescriptionCombobox';
+import { TentSandbagOffer, type SandbagCatalogItem } from '@/components/orders/TentSandbagOffer';
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
@@ -697,6 +698,11 @@ export default function OrderDetailPage() {
   const [bulkDaysValue, setBulkDaysValue] = useState("");
   const [bulkDaysSaving, setBulkDaysSaving] = useState(false);
   const [liQty, setLiQty] = useState("1");
+  // Sandbags the rep accepted alongside a tent they are adding (Wes
+  // 2026-09-13). STAGED, not posted: this modal builds one line, so the
+  // bags ride out as a second POST after the tent line lands — posting
+  // them first would leave sandbags on an order whose tent failed.
+  const [liSandbags, setLiSandbags] = useState<{ item: SandbagCatalogItem; qty: number } | null>(null);
   const [adding, setAdding] = useState(false);
   // Fee-catalog picker state (liType === "FEE"). The picker lists
   // active FeeItems from /api/fees (fetched lazily on first switch to
@@ -2078,7 +2084,7 @@ export default function OrderDetailPage() {
     setLiDays("");
     setLiRateType("DAILY"); setLiRate(""); setLiQty("1");
     setLiFeeId(""); setLiPercentBase("");
-    setInvSearch(""); setInvResults([]);
+    setInvSearch(""); setInvResults([]); setLiSandbags(null);
     lastAutoFilledDescRef.current = "";
   };
 
@@ -2255,6 +2261,29 @@ export default function OrderDetailPage() {
         );
       }
     } catch { /* payload already consumed or not JSON — the add succeeded either way */ }
+    // The sandbags the rep accepted with a tent. Posted AFTER the tent
+    // line, so a tent that failed never leaves its ballast behind on the
+    // order. A failure here is reported, not swallowed — the tent is
+    // already on, and silently dropping the bags is how a tent ships
+    // unweighted.
+    if (liSandbags) {
+      const bagRes = await fetch(`/api/orders/${orderId}/line-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "EQUIPMENT",
+          description: liSandbags.item.name,
+          inventoryItemId: liSandbags.item.id,
+          rateType: "DAILY",
+          rate: liSandbags.item.dailyRate,
+          quantity: liSandbags.qty,
+          ...(liCustomDates ? { startDate: liStartDate || null, endDate: liEndDate || null } : {}),
+        }),
+      });
+      if (!bagRes.ok) {
+        alert(`The tent was added, but the ${liSandbags.qty} sandbags were not — add them by hand.`);
+      }
+    }
     resetForm(); setAdding(false); fetchOrder();
   };
 
@@ -3868,6 +3897,7 @@ export default function OrderDetailPage() {
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
                   </select>
                 ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
+                  <>
                   <LineItemDescriptionCombobox
                     companyId={order?.company?.id ?? null}
                     value={invSearch}
@@ -3960,6 +3990,38 @@ export default function OrderDetailPage() {
                     placeholder="Type to search inventory..."
                     hideCustomChip
                   />
+                  {/* Sandbags with a tent (Wes 2026-09-13). Offered, never
+                      auto-added; accepted bags ride out as a second POST
+                      after the tent line lands. */}
+                  <TentSandbagOffer
+                    tentName={invSearch || liDesc}
+                    tentQuantity={parseInt(liQty) || 1}
+                    companyId={order?.company?.id ?? null}
+                    /* Ballast is per tent, so sandbags already on the order
+                       do NOT answer for the tent being added now — a second
+                       10x20 still needs its own eight. The offer is answered
+                       per add, by accepting or waving it off. */
+                    alreadyOnOrder={false}
+                    onAdd={(item, qty) => setLiSandbags({ item, qty })}
+                  />
+                  {/* The offer hides itself once pressed, so the staged bags
+                      need to stay visible — otherwise the rep presses Add and
+                      nothing on screen says the sandbags are coming. */}
+                  {liSandbags && (
+                    <div className="mt-1 flex items-center gap-2 text-xs text-chip-good-fg bg-chip-good-bg border border-lt-hairline rounded px-2 py-1">
+                      <span>
+                        + {liSandbags.qty} {liSandbags.item.name} will be added with this line
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLiSandbags(null)}
+                        className="font-semibold text-lt-fg3 hover:text-lt-fg2"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  </>
                 ) : (
                   <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)} placeholder="e.g. Day Player Grip, Delivery Fee..."
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
