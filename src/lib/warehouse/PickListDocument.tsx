@@ -58,6 +58,12 @@ export interface PickListLine {
    *  picked — prints a in the Picked box instead of leaving it
    *  blank for handwriting. */
   picked: boolean
+  /** The DRIVER'S COPY (Wes 2026-09-12): the count the check-out sheet
+   *  filed for this line, printed in the Picked box — zero included,
+   *  because "did not send" belongs on the receipt. Undefined on a
+   *  pull sheet; null on a filed copy for a line nobody counted (added
+   *  after the sheet), which leaves the box blank. */
+  pickedQty?: number | null
   /** An included accessory (InventoryKitPiece) — gear that rides along
    *  free with another line. Prefixed on the printed sheet so the
    *  picker pulls it and the checker counts it back: it is the gear
@@ -91,6 +97,18 @@ export interface PickListDocumentProps {
    * typed in.
    */
   omittedLineCount?: number
+  /**
+   * Set on the DRIVER'S COPY — the pick list printed AFTER the
+   * check-out sheet is filed, with the filed counts in the Picked
+   * column (Wes 2026-09-12: "it's the driver's receipt"). Changes the
+   * title, names the filing, and adds a RECEIVED BY line under PICKED
+   * BY so the driver can sign for what left.
+   */
+  filed?: {
+    at: Date
+    /** The associate named on the sheet, if any. */
+    preppedBy: string | null
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -352,6 +370,7 @@ const styles = StyleSheet.create({
     marginTop: 36,
   },
   signatureLabel: { fontFamily: 'Helvetica-Bold', fontSize: 10, marginRight: 8 },
+  signatureRowSecond: { marginTop: 22 },
   signatureLine: {
     width: 220,
     borderBottomWidth: 0.75,
@@ -411,6 +430,12 @@ export function PickListDocument(props: PickListDocumentProps) {
               {props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST'}
             </Text>
             <Text style={styles.titleSub}>No: {props.orderNumber}</Text>
+            {props.filed && (
+              <Text style={styles.partialNote}>
+                CHECKED OUT {fmtTimestamp(props.filed.at)}
+                {props.filed.preppedBy ? ` · prepped by ${props.filed.preppedBy}` : ''}
+              </Text>
+            )}
             {!!props.omittedLineCount && (
               <Text style={styles.partialNote}>
                 {props.lines.length} of {props.lines.length + props.omittedLineCount} lines ·{' '}
@@ -507,7 +532,12 @@ export function PickListDocument(props: PickListDocumentProps) {
                   <Text style={styles.colRemaining}>{line.ordered - line.out}</Text>
                   <View style={styles.colPicked}>
                     <View style={styles.writeBox}>
-                      {line.picked ? (
+                      {line.pickedQty !== undefined ? (
+                        // Driver's copy: the filed count, zero included.
+                        line.pickedQty !== null ? (
+                          <Text style={styles.writeBoxText}>{line.pickedQty}</Text>
+                        ) : null
+                      ) : line.picked ? (
                         <Text style={styles.writeBoxText}>{line.out || line.ordered}</Text>
                       ) : null}
                     </View>
@@ -546,6 +576,14 @@ export function PickListDocument(props: PickListDocumentProps) {
           <Text style={styles.signatureLabel}>PICKED BY:</Text>
           <View style={styles.signatureLine} />
         </View>
+        {/* The driver signs for what left. Only on the filed copy — a
+            pull sheet has nobody to receive anything yet. */}
+        {props.filed && (
+          <View style={[styles.signatureRow, styles.signatureRowSecond]} wrap={false}>
+            <Text style={styles.signatureLabel}>RECEIVED BY:</Text>
+            <View style={styles.signatureLine} />
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer} fixed>

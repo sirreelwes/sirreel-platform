@@ -18,7 +18,11 @@
  *     done and modify the order and flag back to the sales agent").
  *     Creating orders stays with sales — see canCreateOrders().
  *   - A changed line writes through to the OrderLineItem AND raises
- *     `changedOrder`, which is what puts it in front of the agent.
+ *     `changedOrder`, which is what puts it in front of the agent. Since
+ *     2026-09-12 that includes a SWAP (the line becomes the swapped-in
+ *     piece) and an ADDED row (it becomes a line) — Wes: "the driver
+ *     needs a copy of the exact order they're picking up." Both carry
+ *     the staff-only red flag, OrderLineItem.warehouseChange.
  *
  * Deliberately separate from PickList: that models a scan-driven pick
  * session, exists only for WAREHOUSE-lane lines on booked orders, and is
@@ -30,7 +34,8 @@ import type {
   LineItemPickStatus, OrderCheckEdge, OrderCheckLineChange, OrderStatus, PickListStatus, Prisma,
 } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { changeMovesOrder, classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { addLineFromDock, swapLineFromDock, type DockCatalogItem } from '@/lib/orders/dockLineWrites'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
@@ -196,6 +201,13 @@ export interface DraftLine {
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
   inventoryItemId: string | null
+  /** InventoryItem.code, for the picker chip. */
+  code: string | null
+  /** What the ORDER says now — the form compares a swap against it so a
+   *  re-opened sheet does not read its own applied swap as a new one. */
+  currentDescription: string
+  /** The red flag: the dock already ADDED or SWAPPED this line. */
+  warehouseChange: string | null
   /** The catalog row has barcoded units in the register — a scanner can
    *  count this line (barcode phase 3). Quantity-only gear is typed. */
   unitTracked: boolean
@@ -254,7 +266,8 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         select: {
           id: true, description: true, qualifier: true,
           quantity: true, fulfillmentLane: true, sortOrder: true,
-          inventoryItemId: true,
+          inventoryItemId: true, warehouseChange: true,
+          inventoryItem: { select: { code: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -333,15 +346,20 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,
         inventoryItemId: li.inventoryItemId,
+        code: li.inventoryItem?.code ?? null,
+        currentDescription: li.description,
+        warehouseChange: li.warehouseChange,
         unitTracked: !!li.inventoryItemId && tracked.has(li.inventoryItemId),
       }
     }),
-    // `filed: true` marks an addition the previous submission already
-    // recorded and already flagged to the agent. Without it the form
-    // reads its own filed additions back as fresh differences — and an
-    // addition can never be reconciled against the order, so the report
-    // never reaches a settled state: file, reopen, the same two rows
-    // still "differ", file again. That is the loop Jose hit.
+    // Rows a report ADDED that are NOT order lines. Since 2026-09-12 an
+    // addition on the OUT edge becomes a real line (its report row then
+    // carries the new line's id and it comes back above as a line), so
+    // this is the check-IN edge's additions plus anything filed before
+    // that change. `filed: true` marks one the previous submission
+    // already recorded and flagged; without it the form reads its own
+    // filed additions back as fresh differences forever — the loop Jose
+    // hit.
     extras: (prior?.lines ?? [])
       .filter((l) => !l.orderLineItemId)
       .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note, filed: true })),
@@ -356,6 +374,13 @@ export interface SubmitLineInput {
   actualQty: number
   substituteFor?: string | null
   note?: string | null
+  /** The catalog row the dock picked: the swap-in on an existing line,
+   *  the item on an added row. Validated by the route against the
+   *  warehouse-gear catalog (dockCatalogItems); null = typed by hand. */
+  inventoryItemId?: string | null
+  /** What the order says right now, for existing lines — so a re-filed
+   *  sheet can tell an applied swap from a new one (changeMovesOrder). */
+  current?: { description: string; inventoryItemId: string | null } | null
   /**
    * False = this line was NOT part of this pull. Defaults true.
    *
@@ -373,12 +398,17 @@ export interface SubmitResult {
   /** Something on the sheet needs the AGENT — a moved quantity OR an
    *  added row they have to price. Drives the action item. */
   changedOrder: boolean
-  /** The order's own lines were actually rewritten. Narrower than
-   *  `changedOrder`, because an added row never touches the order.
-   *  This is what may email the client, so it must not be widened. */
+  /** The order's lines were actually rewritten — a moved quantity, a
+   *  swap, or (since 2026-09-12) a row added at the dock. This is what
+   *  may email the client. */
   orderLinesChanged: boolean
   /** Human-readable list of what changed, for the audit row + the flag. */
   changes: string[]
+  /** Lines the dock added by NAME, with no catalog rate behind them: on
+   *  the order at $0 with the red flag. The client must not be sent a
+   *  quote while any of these stand — the route reads this to hold the
+   *  automatic re-send. */
+  unpriced: string[]
   /** The sheet covered only part of the order. */
   partial: boolean
   /** Lines left off it — still to pull, or still to come back. */
@@ -415,8 +445,13 @@ export async function submitCheckReport(opts: {
    *  in this is the only thing that still shows what was written. */
   sheetPhotoKey?: string | null
   sheetPhotoUrl?: string | null
+  /** The catalog rows referenced by `lines[].inventoryItemId`, already
+   *  validated (dockCatalogItems). An id not in here is treated as typed
+   *  by hand. */
+  catalog?: Map<string, DockCatalogItem>
 }): Promise<SubmitResult> {
   const { orderId, edge, submittedById, preppedBy, notes, lines } = opts
+  const catalog = opts.catalog ?? new Map<string, DockCatalogItem>()
 
   // A line that was not on this sheet is not a count at all — it is
   // silence about that line. Classify only what the paper actually
@@ -425,30 +460,33 @@ export async function submitCheckReport(opts: {
   // concludes the client didn't get it.
   const classified = lines.map((l) => {
     const onSheet = l.onSheet !== false
+    const change = onSheet ? classifyCheckLine(l) : ('NONE' as OrderCheckLineChange)
     return {
       ...l,
       onSheet,
       actualQty: onSheet ? l.actualQty : l.expectedQty,
-      change: onSheet ? classifyCheckLine(l) : ('NONE' as OrderCheckLineChange),
+      change,
+      // What the sheet SAYS (change) and what filing it DOES (moves) are
+      // different facts — see changeMovesOrder. A re-opened sheet
+      // pre-fills the swap it recorded; re-filing it must not rename a
+      // line to its own name and email the client about it.
+      moves: onSheet && changeMovesOrder(l, change),
     }
   })
   const offSheet = classified.filter((l) => !l.onSheet).length
   const partial = offSheet > 0
-  const differing = classified.filter((l) => l.change !== 'NONE')
-  // `changedOrder` has to carry the AGENT flag — an added row needs
-  // pricing just as much as a moved quantity — but it was also being
-  // read as "the order's lines were rewritten", and those are not the
-  // same fact. An ADDED row is deliberately never written onto the order
-  // (the yard cannot see rates), so a report whose only difference is an
-  // addition changed nothing, yet said it had: S260905-002 was filed
-  // three times on 2026-09-08, twice with changedOrder true and not one
-  // line moved. The client re-send is gated on it too, so a pre-booked
-  // order would have emailed the client an "updated quote" identical to
-  // the one they were already holding.
-  const orderLinesChanged = edge === 'OUT' && differing.some((l) => l.orderLineItemId)
+  const differing = classified.filter((l) => l.moves)
+  // Wes, 2026-09-12: additions and swaps are WRITTEN onto the order at
+  // the dock now ("the driver needs a copy of the exact order they're
+  // picking up"), so "the order changed" and "the agent has something
+  // to look at" are the same fact again. Both are OUT-only: a check-in
+  // is recorded and never applied.
   const applyToOrder = edge === 'OUT' && differing.length > 0
+  const orderLinesChanged = applyToOrder
 
   const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
+  const unpriced: string[] = []
+  const now = new Date()
 
   const reportId = await prisma.$transaction(async (tx) => {
     // Replace-in-place: one current report per edge (see the @@unique).
@@ -495,6 +533,38 @@ export async function submitCheckReport(opts: {
       select: { id: true },
     })
 
+    if (orderLinesChanged) {
+      for (const l of differing) {
+        const item = l.inventoryItemId ? catalog.get(l.inventoryItemId) ?? null : null
+        if (!l.orderLineItemId) {
+          // A row that was never on the order: it is now. Priced from the
+          // catalog when the dock picked a row, $0 + unpriced when it
+          // typed a name — and flagged either way (dockLineWrites.ts).
+          const added = await addLineFromDock(tx, {
+            orderId, description: l.description, quantity: l.actualQty,
+            item, userId: submittedById, at: now,
+          })
+          // The report row points at the line it became, so re-opening
+          // the sheet shows it as a line and never re-adds it.
+          l.orderLineItemId = added.lineItemId
+          if (!added.priced) unpriced.push(added.description)
+          continue
+        }
+        if (l.change === 'SUBSTITUTE') {
+          // A substitution keeps the line — rate, dates, history, id —
+          // and changes what it is; the report holds what it used to say.
+          await swapLineFromDock(tx, {
+            lineItemId: l.orderLineItemId, description: l.description, quantity: l.actualQty,
+            item, substituteFor: l.substituteFor?.trim() || l.current?.description || '',
+            userId: submittedById, at: now,
+          })
+          continue
+        }
+        const data: Prisma.OrderLineItemUpdateInput = { quantity: l.actualQty }
+        await tx.orderLineItem.update({ where: { id: l.orderLineItemId }, data })
+      }
+    }
+
     await tx.orderCheckReportLine.createMany({
       data: classified.map((l) => ({
         reportId: report.id,
@@ -508,18 +578,6 @@ export async function submitCheckReport(opts: {
         note: l.note?.trim() || null,
       })),
     })
-
-    if (orderLinesChanged) {
-      for (const l of differing) {
-        if (!l.orderLineItemId) continue
-        const data: Prisma.OrderLineItemUpdateInput = { quantity: l.actualQty }
-        // A substitution renames the line rather than deleting and
-        // re-adding it: the line keeps its rate, its dates and its
-        // history, and the report holds what it used to say.
-        if (l.change === 'SUBSTITUTE') data.description = l.description
-        await tx.orderLineItem.update({ where: { id: l.orderLineItemId }, data })
-      }
-    }
 
     await tx.auditLog.create({
       data: {
@@ -536,6 +594,7 @@ export async function submitCheckReport(opts: {
           partial,
           offSheet,
           changes,
+          unpriced,
         },
       },
     })
@@ -548,7 +607,7 @@ export async function submitCheckReport(opts: {
   // own terms.
   if (orderLinesChanged) await recalcOrderTotals(orderId)
 
-  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet }
+  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, unpriced, partial, offSheet }
 }
 
 /**

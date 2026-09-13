@@ -22,6 +22,22 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-12
+
+### The dock makes the swap, adds the row, and the driver leaves with the receipt
+
+`(this commit)` warehouse: the check-out sheet writes swaps and additions onto the order, flags them, and prints the driver's copy
+
+Wes: "On RW they had the ability to actually make the swap and/or add a line item. This is crucial, because the driver needs a copy of the exact order they're picking up." And: "when they enter all of the picked quantities and make the out contract, they don't have the ability to print the pick list with the completed quantities to give to the driver … it's the driver's receipt." Until now an added row was recorded on the report and flagged to the agent, never written (the yard cannot see rates); a swap renamed the line. So the paper the driver left with was the pull sheet, not the order.
+
+- **Additions become lines** (`dockLineWrites.ts`). Picked from the catalog → the catalog day rate, the company's rate card honoured, lane routed like a sales add; typed by name → on the order at $0 and named in `unpriced`, which HOLDS the automatic client re-send until the agent prices it. The report row then carries the new line's id, so re-opening the sheet shows it as a line and never re-adds it.
+- **Swaps keep the line and change what it is** — description, and the catalog row when the supervisor picked one (so the sheet prints the right code and a barcoded swap-in scans against the right line). The first swap's "from" is kept on a second.
+- **The red flag** is `OrderLineItem.warehouseChange` ('ADDED' / 'SWAPPED') + at / by / from — on the order page rows and the report form, never on the portal, quote or invoice. Columns by `scripts/add-warehouse-change-columns.ts` (additive SQL, run BEFORE deploy — no fail-soft on a hot table).
+- **`changeMovesOrder`** beside `classifyCheckLine`: what filing DOES vs what the sheet SAYS. A re-opened sheet pre-fills its swap; re-filing it must not rename a line to its own name and email the client. `npm run test:check-report` (20 checks).
+- **`GET /api/warehouse/catalog`** — the catalog as the dock sees it: yard door, QUANTITY gear only, names and codes, no rates. `DockCatalogPicker` on the swap and the added row.
+- **Driver's copy**: `pick-list-pdf?filed=OUT` — the filed counts in the Picked column (zero included, blank for a line nobody counted), partial-pull lines off it, CHECKED OUT stamp, RECEIVED BY line. `driverCopy.ts` + `npm run test:driver-copy`. Button on the report's done screen and filed banner.
+- Not in this ship: kit expansion on a dock-added radio; vehicle/stage swaps from the sheet; `PickListDocument` still does not print `unitChecks` (the renderer passes them, the document ignores them — pre-existing).
+
 ## 2026-09-11
 
 ### AHA texts Wes when a new incoming lands

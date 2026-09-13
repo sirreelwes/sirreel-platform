@@ -4216,6 +4216,27 @@ model OrderLineItem {
   packageId         String?  @map("package_id")
   package           Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
+  /// The warehouse changed this line AT PICKUP (Wes 2026-09-12: RW showed
+  /// "a little red flag by the item on the order to denote this item was
+  /// added or swapped by warehouse at the time of pickup"). Written only
+  /// by the check-out report (checkReports.ts) — 'ADDED' for a row the
+  /// dock put on the order, 'SWAPPED' for a line whose piece was
+  /// exchanged; `warehouseChangeFrom` keeps what a swap replaced. TEXT,
+  /// not an enum, so a third kind needs no two-deploy dance.
+  ///
+  /// STAFF-ONLY. The client sees the line as it now reads and never the
+  /// flag: the portal, quote PDF and invoice PDF map lines per field and
+  /// must not pick these up. Provenance, never cleared — the agent's
+  /// "seen it" lives on OrderCheckReport.agentAckedAt.
+  ///
+  /// Columns added by scripts/add-warehouse-change-columns.ts (additive
+  /// SQL — never `db push` from this tree). Run it BEFORE deploying:
+  /// Prisma selects every scalar, so an order read fails until they exist.
+  warehouseChange     String?   @map("warehouse_change")
+  warehouseChangeAt   DateTime? @map("warehouse_change_at")
+  warehouseChangeById String?   @map("warehouse_change_by_id")
+  warehouseChangeFrom String?   @map("warehouse_change_from") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

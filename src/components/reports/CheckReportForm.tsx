@@ -20,15 +20,23 @@
  * that will need to be done to the order based on the check out report.
  * This should be done and modify the order and flag back to the sales
  * agent."
+ *
+ * Wes, 2026-09-12: the dock makes the swap or adds the row ITSELF — "the
+ * driver needs a copy of the exact order they're picking up." A swap-in
+ * or an added row can be picked from the warehouse catalog so the rate
+ * follows (DockCatalogPicker); typed by hand it goes on at $0 with the
+ * red flag and the agent prices it. And once the sheet is filed, the
+ * completed pick list — the driver's receipt — prints from here.
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer, Flag } from 'lucide-react'
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
-import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { changeMovesOrder, classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import { UnitScanPanel, LineUnitStrip } from '@/components/reports/UnitScanPanel'
+import { DockCatalogPicker } from '@/components/reports/DockCatalogPicker'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
 /**
@@ -51,12 +59,20 @@ const OUT_BLOCKED_MESSAGE: Record<OutBlockedReason, string> = {
     'The gear side is done. The truck still has to be checked out — that walk-around is what puts the job On rental.',
 }
 
-type Row = DraftLine & { open: boolean }
+type Bound = { id: string; code: string }
+type Row = DraftLine & {
+  open: boolean
+  /** The catalog row swapped IN, when the supervisor picked one. Null =
+   *  the name was typed (or nothing was swapped). */
+  swapItem: Bound | null
+}
 type Extra = {
   key: string
   description: string
   actualQty: number
   note: string
+  /** The catalog row this addition is, when picked. Null = typed name. */
+  item: Bound | null
   /** What the FILED report already records for this row, if it came from
    *  one. An addition is never written onto the order, so it stays a
    *  "difference" forever; this is how the form tells an addition it has
@@ -82,6 +98,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       // A line a previous report marked up opens already expanded, so a
       // correction shows what was said rather than hiding it.
       open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
+      swapItem: null,
     })),
   )
   const [extras, setExtras] = useState<Extra[]>(() =>
@@ -90,6 +107,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       description: e.description,
       actualQty: e.actualQty,
       note: e.note ?? '',
+      item: null,
       filedAs: e.filed ? { description: e.description, actualQty: e.actualQty } : undefined,
     })),
   )
@@ -119,6 +137,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
      *  is recorded and flagged, but never written onto the order. */
     orderLinesChanged: boolean
     changes: string[]
+    /** Rows added by NAME — on the order at $0 with the flag, waiting on
+     *  the agent for a price. Names, for the screen. */
+    unpriced: string[]
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
     /** What filing this sheet settled in the yard. */
@@ -202,45 +223,68 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * the server runs, so the confirm step cannot promise one thing and
    * file another.
    */
+  // The facts the server classifies — same shape, same functions
+  // (checkLineChange.ts), so the read-back cannot promise one thing and
+  // the filing do another.
+  const facts = (r: Row) => ({
+    orderLineItemId: r.orderLineItemId,
+    description: r.description,
+    expectedQty: r.expectedQty,
+    actualQty: r.actualQty,
+    substituteFor: r.substituteFor,
+    inventoryItemId: r.swapItem?.id ?? null,
+    current: { description: r.currentDescription, inventoryItemId: r.inventoryItemId },
+  })
   const changeList = useMemo(() => {
-    const out: Array<{ key: string; text: string; added: boolean; alreadyFiled: boolean }> = []
+    const out: Array<{ key: string; text: string; added: boolean; unpriced: boolean; alreadyFiled: boolean }> = []
     for (const r of rows) {
       // A line left off this pull says nothing about itself — it is not
       // a change, it is a line that has not happened yet.
       if (!r.onSheet) continue
-      const change = classifyCheckLine(r)
-      if (change === 'NONE') continue
+      const f = facts(r)
+      const change = classifyCheckLine(f)
+      // A re-opened sheet pre-fills the swap it already applied; that is
+      // the order as it stands, not a change to it.
+      if (change === 'NONE' || !changeMovesOrder(f, change)) continue
       out.push({
-        key: r.orderLineItemId, text: describeCheckChange(r, change), added: false, alreadyFiled: false,
+        key: r.orderLineItemId, text: describeCheckChange(f, change), added: false, unpriced: false, alreadyFiled: false,
       })
     }
     for (const e of extras) {
       const description = e.description.trim()
-      if (!description) continue
+      if (!description || e.actualQty === 0) continue
       out.push({
         key: e.key,
         text: describeCheckChange({
           orderLineItemId: null, description, expectedQty: 0, actualQty: e.actualQty,
         }),
         added: true,
-        // Untouched since it was filed → already on the report and
-        // already in front of the agent. Not outstanding work.
+        unpriced: isOut && !e.item,
+        // Check-IN only: an addition there is recorded, never written, so
+        // one untouched since it was filed is already on the report and
+        // already in front of the agent — not outstanding work. On the
+        // check-OUT a filed addition became a LINE and comes back above
+        // as one; anything still down here is going onto the order.
         alreadyFiled:
-          !!e.filedAs && e.filedAs.description === description && e.filedAs.actualQty === e.actualQty,
+          !isOut && !!e.filedAs && e.filedAs.description === description && e.filedAs.actualQty === e.actualQty,
       })
     }
     return out
-  }, [rows, extras])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, extras, isOut])
   /** Outstanding work — what filing would actually change. An addition
    *  the last submission already recorded is NOT outstanding: it cannot
    *  be reconciled against the order by design, so counting it here is
    *  what made the report re-demand a read-back forever. */
   const diffs = changeList.filter((c) => !c.alreadyFiled).length
   const pendingAdditions = changeList.filter((c) => c.alreadyFiled)
-  /** Of the outstanding work, what would actually rewrite the order.
-   *  Additions never do — so a sheet whose only difference is an added
-   *  row must not promise the client a corrected quote. */
-  const orderLineDiffs = changeList.filter((c) => !c.added && !c.alreadyFiled).length
+  /** Of the outstanding work, what would actually rewrite the order —
+   *  on the check-OUT, all of it, additions included (they become
+   *  lines). A check-IN rewrites nothing. */
+  const orderLineDiffs = isOut ? diffs : 0
+  /** Additions typed by name: they go on at $0 with the flag, and the
+   *  client is NOT sent a quote until the agent prices them. */
+  const unpricedAdds = changeList.filter((c) => c.unpriced && !c.alreadyFiled)
 
   /**
    * The partial pull (Wes, 2026-09-04: "we should have the ability to
@@ -277,6 +321,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const sheetHref = offSheet.length
     ? `/api/orders/${draft.orderId}/pick-list-pdf?lines=${printIds.join(',')}`
     : `/api/orders/${draft.orderId}/pick-list-pdf`
+  /** The driver's receipt: the pick list with the FILED counts in the
+   *  Picked column (Wes 2026-09-12). Rendered from the filed OUT report,
+   *  so it exists only once one is on file. */
+  const driverCopyHref = `/api/orders/${draft.orderId}/pick-list-pdf?filed=OUT`
 
   // Any edit reopens the question. Without this, a supervisor who hits
   // File, spots a wrong digit in the read-back, fixes it behind the panel
@@ -370,6 +418,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               description: e.description,
               actualQty: e.actualQty,
               note: e.note ?? '',
+              item: null,
             }),
           ),
         ])
@@ -410,6 +459,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               actualQty: r.actualQty,
               substituteFor: (r.substituteFor ?? '').trim() || null,
               note: (r.note ?? '').trim() || null,
+              inventoryItemId: r.swapItem?.id ?? null,
               onSheet: r.onSheet,
             })),
             ...extras
@@ -419,6 +469,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                 description: e.description.trim(),
                 actualQty: e.actualQty,
                 note: e.note.trim() || null,
+                inventoryItemId: e.item?.id ?? null,
               })),
           ],
         }),
@@ -432,6 +483,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         changedOrder: !!data.changedOrder,
         orderLinesChanged: !!data.orderLinesChanged,
         changes: data.changes ?? [],
+        unpriced: data.unpriced ?? [],
         resend: data.resend ?? null,
         gear: data.gear ?? null,
         partial: !!data.partial,
@@ -457,12 +509,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             <>
               <p className="text-lt-fg2 text-[15px] max-w-[52ch] mx-auto">
                 {done.orderLinesChanged
-                  ? `The order has been updated and ${draft.agentName || 'the agent'} has been flagged to review what changed.`
-                  : `${draft.agentName || 'The agent'} has been flagged to price what went out. The order is unchanged until they do — an added row is never written onto it here.`}
+                  ? `The order has been updated — swaps and added rows are on it now, each with the warehouse flag — and ${draft.agentName || 'the agent'} has been flagged to review what changed.`
+                  : `${draft.agentName || 'The agent'} has been flagged to review what came back. A check-in never changes what was rented.`}
               </p>
               <ul className="mt-3 text-[14px] text-chip-warn-fg space-y-0.5">
                 {done.changes.map((c, i) => <li key={i}>{c}</li>)}
               </ul>
+              {done.unpriced.length > 0 && (
+                <p className="mt-3 text-[14px] text-chip-warn-fg">
+                  {done.unpriced.join(', ')} went on at $0 with no
+                  catalog rate — {draft.agentName || 'the agent'} has to price {done.unpriced.length === 1 ? 'it' : 'them'} before the client is sent anything.
+                </p>
+              )}
               {/* Say plainly whether the client was told. A supervisor
                   who does not know the email went out will send their
                   own — or worse, assume one went and nothing did. */}
@@ -524,6 +582,27 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {done.gear?.orderReturned && (
             <p className="mt-3 text-[14px] text-chip-good-fg">
               The order is marked <b>Returned</b> — it&rsquo;s ready to invoice. Nothing else to do.
+            </p>
+          )}
+
+          {/* The driver's receipt (Wes 2026-09-12): the pick list with
+              the counts just filed printed in the Picked column, and the
+              swapped / added rows on it as the order now reads. A plain
+              anchor — it is an API route streaming a PDF. */}
+          {isOut && !done.partial && (
+            <a
+              href={driverCopyHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-flex items-center gap-2 text-[15px] font-bold px-4 py-2.5 rounded-lg bg-lt-fg hover:opacity-90 text-white"
+            >
+              <Printer size={16} aria-hidden />
+              Print the driver&rsquo;s copy
+            </a>
+          )}
+          {isOut && done.partial && (
+            <p className="mt-3 text-[13px] text-lt-fg2">
+              The driver&rsquo;s copy prints once the whole order has gone — a partial pull would hand the driver a receipt for gear still on the shelf.
             </p>
           )}
 
@@ -590,6 +669,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               </>
             ) : (
               'Submitting again replaces it.'
+            )}
+            {isOut && !draft.filed.partial && (
+              <>
+                {' '}
+                <a
+                  href={driverCopyHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-lt-fg hover:text-amber-600"
+                >
+                  <Printer size={13} aria-hidden />
+                  Print the driver&rsquo;s copy
+                </a>
+                {' '}— the pick list with the filed counts.
+              </>
             )}
           </p>
         )}
@@ -726,7 +820,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
         {rows.map((r) => {
           const differs =
-            r.onSheet && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+            r.onSheet && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim() || !!r.swapItem)
           // A line held back for a later pull: dimmed, no count, and no
           // controls that would imply something happened to it.
           if (!r.onSheet) {
@@ -760,9 +854,24 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-lt-fg text-[16px] font-medium truncate">{r.description}</div>
+                  <div className="text-lt-fg text-[16px] font-medium truncate">
+                    {r.description}
+                    {/* The red flag, as it reads on the order: this line
+                        was added or swapped at the dock on an earlier
+                        filing. Staff only — never on the client's copy. */}
+                    {r.warehouseChange && (
+                      <span
+                        title={r.warehouseChange === 'ADDED' ? 'Added by the warehouse at pickup' : 'Swapped by the warehouse at pickup'}
+                        className="ml-2 inline-flex items-center gap-1 align-middle text-[11px] font-bold uppercase tracking-wider text-chip-bad-fg"
+                      >
+                        <Flag size={12} aria-hidden fill="currentColor" />
+                        {r.warehouseChange === 'ADDED' ? 'added at pickup' : 'swapped at pickup'}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-lt-fg2 text-[13px] truncate">
                     {r.qualifier && <span>{r.qualifier} · </span>}
+                    {r.code && <span className="font-mono">{r.code} · </span>}
                     ordered {r.expectedQty}
                     {r.lane && <span className="text-lt-fg3"> · {r.lane.toLowerCase()}</span>}
                   </div>
@@ -842,7 +951,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                         its rate and dates, and the report holds the
                         original wording. */}
                     <span className="text-[11px] text-lt-fg3 mt-0.5 block">
-                      Put the swapped-in item in the line name above; this field records what it replaced.
+                      {isOut
+                        ? 'Put the swapped-in item in the line name below — pick it from the catalog so the code follows; this field records what it replaced.'
+                        : 'Put the swapped-in item in the line name below; this field records what it replaced.'}
                     </span>
                   </label>
                   <label className="block">
@@ -858,11 +969,30 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     <span className="text-[11px] uppercase tracking-wide text-lt-fg2 font-semibold">
                       Line name
                     </span>
-                    <input
-                      value={r.description}
-                      onChange={(e) => patch(r.orderLineItemId, { description: e.target.value })}
-                      className="mt-1 w-full bg-lt-inner border border-lt-hairline rounded-lg px-2.5 py-1.5 text-[14px] text-lt-fg"
-                    />
+                    {isOut ? (
+                      <DockCatalogPicker
+                        className="mt-1"
+                        value={r.description}
+                        onChange={(next) => patch(r.orderLineItemId, { description: next })}
+                        bound={r.swapItem}
+                        onBind={(hit) =>
+                          patch(r.orderLineItemId, {
+                            description: hit.description,
+                            swapItem: { id: hit.id, code: hit.code },
+                            // Picking a catalog row IS the swap — record what
+                            // it replaced unless the supervisor already said.
+                            substituteFor: (r.substituteFor ?? '').trim() || r.currentDescription,
+                          })
+                        }
+                        onUnbind={() => patch(r.orderLineItemId, { swapItem: null })}
+                      />
+                    ) : (
+                      <input
+                        value={r.description}
+                        onChange={(e) => patch(r.orderLineItemId, { description: e.target.value })}
+                        className="mt-1 w-full bg-lt-inner border border-lt-hairline rounded-lg px-2.5 py-1.5 text-[14px] text-lt-fg"
+                      />
+                    )}
                   </label>
                 </div>
               )}
@@ -871,16 +1001,20 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         })}
       </div>
 
-      {/* Things that went that were never on the order. Recorded and
-          flagged, never priced here — the yard cannot see rates, and a
-          line added at $0 would silently under-bill the job. */}
+      {/* Things that went that were never on the order. On the check-OUT
+          they go ONTO the order as lines (Wes 2026-09-12: the driver's
+          copy has to be the exact order) — priced from the catalog when
+          picked, $0 + flagged when typed. On the check-IN, recorded and
+          flagged, as before. */}
       <div className="border border-lt-hairline bg-lt-card rounded-xl overflow-hidden mb-4">
         <div className="px-3 py-2 bg-lt-inner border-b border-lt-hairline">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
-            Not on the order
+            {isOut ? 'Added at pickup' : 'Not on the order'}
           </span>
           <span className="text-[12px] text-lt-fg3 ml-2">
-            Flagged to the agent to price — nothing is added to the order here.
+            {isOut
+              ? 'Goes onto the order as a line with the warehouse flag. Pick it from the catalog so the rate follows; a typed name goes on at $0 for the agent to price.'
+              : 'Flagged to the agent — nothing is added to the order on a check-in.'}
           </span>
         </div>
         {/* Units the scanner recorded that matched no line. Each one is
@@ -906,7 +1040,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                         onClick={() =>
                           setExtras((prev) => [
                             ...prev,
-                            { key: `scan-${u.scanId}`, description: `${name} (${u.barcode})`, actualQty: 1, note: '' },
+                            { key: `scan-${u.scanId}`, description: `${name} (${u.barcode})`, actualQty: 1, note: '', item: null },
                           ])
                         }
                         className="underline font-semibold hover:text-amber-700"
@@ -921,15 +1055,34 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           </div>
         )}
         {extras.map((e, i) => (
-          <div key={e.key} className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 flex items-center gap-2">
-            <input
-              value={e.description}
-              onChange={(ev) =>
-                setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))
-              }
-              placeholder="What went out that isn't on the order"
-              className="flex-1 min-w-0 bg-lt-inner border border-lt-hairline rounded-lg px-2.5 py-1.5 text-[14px] text-lt-fg placeholder:text-lt-fg3"
-            />
+          <div key={e.key} className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 flex items-start gap-2">
+            {isOut ? (
+              <DockCatalogPicker
+                className="flex-1 min-w-0"
+                value={e.description}
+                autoFocus={e.key.startsWith('new-')}
+                onChange={(next) =>
+                  setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, description: next } : x)))
+                }
+                bound={e.item}
+                onBind={(hit) =>
+                  setExtras((prev) =>
+                    prev.map((x, j) => (j === i ? { ...x, description: hit.description, item: { id: hit.id, code: hit.code } } : x)),
+                  )
+                }
+                onUnbind={() => setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, item: null } : x)))}
+                placeholder="What went out that isn't on the order — start typing to search the catalog"
+              />
+            ) : (
+              <input
+                value={e.description}
+                onChange={(ev) =>
+                  setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))
+                }
+                placeholder="What came back that isn't on the order"
+                className="flex-1 min-w-0 bg-lt-inner border border-lt-hairline rounded-lg px-2.5 py-1.5 text-[14px] text-lt-fg placeholder:text-lt-fg3"
+              />
+            )}
             <input
               type="number"
               min={0}
@@ -955,7 +1108,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         <button
           type="button"
           onClick={() =>
-            setExtras((prev) => [...prev, { key: `new-${Date.now()}`, description: '', actualQty: 1, note: '' }])
+            setExtras((prev) => [...prev, { key: `new-${Date.now()}`, description: '', actualQty: 1, note: '', item: null }])
           }
           className="w-full px-3 py-2.5 text-[13px] font-semibold text-lt-fg2 hover:text-amber-600 inline-flex items-center justify-center gap-1.5"
         >
@@ -1015,12 +1168,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             {diffs} line{diffs === 1 ? '' : 's'} differ from the order.
             {!isOut
               ? ' A check-in is recorded and flagged, but never changes what was rented — the agent decides what a shortfall costs.'
-              : orderLineDiffs > 0
-                ? ` Filing this updates the order and flags ${draft.agentName || 'the agent'} to review it.` +
-                  (draft.preBooked
-                    ? ' The client is emailed the corrected quote automatically, copying the office.'
-                    : '')
-                : ` Nothing on the order moves — added rows are flagged to ${draft.agentName || 'the agent'} to price.`}
+              : ` Filing this updates the order — swaps and added rows go on it with the warehouse flag — and flags ${draft.agentName || 'the agent'} to review it.` +
+                (draft.preBooked
+                  ? unpricedAdds.length > 0
+                    ? ' The client is NOT emailed while a typed row has no rate; the agent prices it and sends.'
+                    : ' The client is emailed the corrected quote automatically, copying the office.'
+                  : '')}
           </span>
         </p>
       )}
@@ -1058,11 +1211,20 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           {changeList.some((c) => c.added) && (
             <>
               <p className="mt-3 text-[13px] font-semibold text-chip-warn-fg">
-                Flagged to {draft.agentName || 'the agent'} to price — not added to the order:
+                {isOut
+                  ? 'Added to the order as new lines, with the warehouse flag:'
+                  : `Flagged to ${draft.agentName || 'the agent'} — not added to the order:`}
               </p>
               <ul className="mt-1 space-y-1">
                 {changeList.filter((c) => c.added).map((c) => (
-                  <li key={c.key} className="text-[15px] text-lt-fg font-medium">{c.text}</li>
+                  <li key={c.key} className="text-[15px] text-lt-fg font-medium">
+                    {c.text}
+                    {c.unpriced && (
+                      <span className="ml-2 text-[12px] font-semibold text-chip-bad-fg">
+                        typed name · $0 until {draft.agentName || 'the agent'} prices it
+                      </span>
+                    )}
+                  </li>
                 ))}
               </ul>
             </>
@@ -1070,21 +1232,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
           <p className="mt-3 text-[13px] text-chip-warn-fg leading-relaxed">
             {isOut ? (
-              orderLineDiffs > 0 ? (
-                <>
-                  Filing this changes what {draft.company} is billed for and flags{' '}
-                  {draft.agentName || 'the agent'} to review it.
-                  {draft.preBooked
-                    ? ' The corrected quote is emailed to the client automatically, copying the office.'
-                    : ''}
-                </>
-              ) : (
-                <>
-                  Nothing on the order moves — an added row is never written onto it, because the
-                  yard cannot see rates and a line at $0 would under-bill the job. This records what
-                  went out and flags {draft.agentName || 'the agent'} to price it.
-                </>
-              )
+              <>
+                Filing this changes what {draft.company} is billed for and flags{' '}
+                {draft.agentName || 'the agent'} to review it. The driver&rsquo;s copy prints with
+                these counts once it is filed.
+                {draft.preBooked
+                  ? unpricedAdds.length > 0
+                    ? ' The client is not emailed while a typed row has no rate — the agent prices it and sends the corrected quote.'
+                    : ' The corrected quote is emailed to the client automatically, copying the office.'
+                  : ''}
+              </>
             ) : (
               <>
                 A check-in never changes what was rented — this is recorded and flagged to{' '}

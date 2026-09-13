@@ -58,7 +58,8 @@ import {
   groupLineItemsByDepartment,
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
-import { AlertTriangle, Send, Sparkles } from 'lucide-react'
+import { AlertTriangle, Flag, Send, Sparkles } from 'lucide-react'
+import { describeWarehouseChange } from '@/lib/orders/warehouseChange'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
 
@@ -80,6 +81,13 @@ type LineItem = {
    *  quantity changes and removes them when the parent goes. Editing the
    *  quantity by hand is pointless — the next parent edit overwrites it. */
   autoKitPieceId?: string | null;
+  /** The red flag (Wes 2026-09-12): the WAREHOUSE added ('ADDED') or
+   *  swapped ('SWAPPED') this line at pickup, from the check-out report.
+   *  Staff-only — the portal, quote and invoice never carry it. See
+   *  src/lib/orders/warehouseChange.ts. */
+  warehouseChange?: string | null;
+  warehouseChangeAt?: string | null;
+  warehouseChangeFrom?: string | null;
   description: string;
   rateType: string;
   rate: string;
@@ -2558,6 +2566,18 @@ export default function OrderDetailPage() {
           title="Included accessory — quantity is derived from the parent line and re-derived whenever it changes"
         >
           incl
+        </span>
+      )}
+      {/* RW's little red flag: the warehouse added or swapped this line
+          at pickup. Provenance, not a to-do — it stays. The client's
+          documents never carry it. */}
+      {(li.warehouseChange === 'ADDED' || li.warehouseChange === 'SWAPPED') && (
+        <span
+          className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg align-middle"
+          title={describeWarehouseChange(li) ?? undefined}
+        >
+          <Flag size={10} aria-hidden fill="currentColor" />
+          {li.warehouseChange === 'ADDED' ? 'added at pickup' : 'swapped at pickup'}
         </span>
       )}
     </td>

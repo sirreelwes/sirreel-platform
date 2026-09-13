@@ -4,9 +4,12 @@
  *   GET  ?edge=OUT|IN  → the draft: the order's lines with actuals
  *                        pre-filled, plus anything a prior report said
  *   POST               → submit; on the OUT edge this also writes the
- *                        differences onto the order, flags the agent, and
- *                        re-sends the corrected quote to the client when
- *                        the order is still in quote form
+ *                        differences onto the order — moved counts, swaps
+ *                        (the line becomes the swapped-in piece) and rows
+ *                        added at the dock (they become lines; Wes
+ *                        2026-09-12) — flags the agent, and re-sends the
+ *                        corrected quote to the client when the order is
+ *                        still in quote form and nothing added is unpriced
  *   PATCH              → the agent acknowledging what changed
  *
  * Gates. Filing is YARD work (requireYardAccess — the fleet-or-warehouse
@@ -30,6 +33,7 @@ import {
   reportDraft, settleGearAfterReport, submitCheckReport,
   type GearSettleResult, type SubmitLineInput,
 } from '@/lib/orders/checkReports'
+import { dockCatalogItems } from '@/lib/orders/dockLineWrites'
 import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
 
 export const dynamic = 'force-dynamic'
@@ -78,38 +82,70 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // a stale form cannot rewrite history by claiming a different baseline.
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, lineItems: { select: { id: true, description: true, quantity: true } } },
+    select: {
+      id: true,
+      lineItems: { select: { id: true, description: true, quantity: true, inventoryItemId: true } },
+    },
   })
   if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
   const byId = new Map(order.lineItems.map((l) => [l.id, l]))
 
+  // The catalog rows the sheet names — a swap-in or an added row picked
+  // from the warehouse catalog. Resolved once, against warehouse gear
+  // only (QUANTITY, active); an id that does not resolve is refused
+  // rather than silently downgraded to a typed name, because the
+  // supervisor picked it precisely so the rate would follow.
+  const rawLines = body.lines as Array<Record<string, unknown>>
+  const wantedIds = rawLines
+    .map((r) => (typeof r.inventoryItemId === 'string' && r.inventoryItemId ? r.inventoryItemId : null))
+    .filter((v): v is string => !!v)
+  const catalog = await dockCatalogItems(prisma, wantedIds)
+  for (const wid of wantedIds) {
+    if (!catalog.has(wid)) {
+      return NextResponse.json(
+        { error: 'unknown catalog item', reason: 'That catalog item is not warehouse gear, or is no longer active — pick it again or type the name.' },
+        { status: 400 },
+      )
+    }
+  }
+
   const lines: SubmitLineInput[] = []
-  for (const raw of body.lines as Array<Record<string, unknown>>) {
+  for (const raw of rawLines) {
     const lineId = typeof raw.orderLineItemId === 'string' ? raw.orderLineItemId : null
     const actual = Number(raw.actualQty)
     if (!Number.isInteger(actual) || actual < 0) {
       return NextResponse.json({ error: 'every actualQty must be a non-negative whole number' }, { status: 400 })
     }
     const description = typeof raw.description === 'string' ? raw.description.trim() : ''
+    const inventoryItemId = typeof raw.inventoryItemId === 'string' && raw.inventoryItemId ? raw.inventoryItemId : null
     if (lineId) {
       const li = byId.get(lineId)
       if (!li) return NextResponse.json({ error: `line ${lineId} is not on this order` }, { status: 400 })
+      let substituteFor = typeof raw.substituteFor === 'string' ? raw.substituteFor : null
+      // A catalog row picked on an existing line IS a swap, whether or
+      // not the "what it replaced" box was filled — the order's own name
+      // for the line is what it replaced.
+      if (inventoryItemId && inventoryItemId !== li.inventoryItemId && !substituteFor?.trim()) {
+        substituteFor = li.description
+      }
       lines.push({
         orderLineItemId: li.id,
         description: description || li.description,
         expectedQty: li.quantity,
         actualQty: actual,
-        substituteFor: typeof raw.substituteFor === 'string' ? raw.substituteFor : null,
+        substituteFor,
         note: typeof raw.note === 'string' ? raw.note : null,
+        inventoryItemId: inventoryItemId && inventoryItemId !== li.inventoryItemId ? inventoryItemId : null,
+        current: { description: li.description, inventoryItemId: li.inventoryItemId },
         // Off-sheet = this line was not part of this pull. Absent means
         // on-sheet, so every existing caller keeps filing full counts.
         onSheet: raw.onSheet !== false,
       })
     } else {
       // An ADDED row — something on the truck that was never on the
-      // order. Recorded, and flagged to the agent to price; NOT added as
-      // an order line here, because the yard cannot see rates and a line
-      // at $0 would quietly under-bill the job.
+      // order. On the OUT edge submitCheckReport turns it into a line
+      // (priced from the catalog when one was picked, $0 + flagged when
+      // typed); on the IN edge it is recorded and flagged, as before.
       if (!description) continue
       lines.push({
         orderLineItemId: null,
@@ -118,6 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         actualQty: actual,
         substituteFor: null,
         note: typeof raw.note === 'string' ? raw.note : null,
+        inventoryItemId,
       })
     }
   }
@@ -131,6 +168,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     lines,
     sheetPhotoKey: typeof body.sheetPhotoKey === 'string' ? body.sheetPhotoKey : null,
     sheetPhotoUrl: typeof body.sheetPhotoUrl === 'string' ? body.sheetPhotoUrl : null,
+    catalog,
   })
 
   // The sheet is also the gear lane's status, on BOTH edges. Advancing
@@ -159,16 +197,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // fetch or a PDF render. The outcome comes back so the screen can say
   // what happened instead of leaving the supervisor guessing.
   let resend: ResendOutcome | null = null
-  // Gated on orderLinesChanged, NOT changedOrder: a report whose only
-  // difference is an added row leaves the order exactly as the client
-  // last saw it, and re-sending an identical "updated quote" teaches
-  // them to ignore the next one that is real.
+  // Gated on orderLinesChanged: a sheet that moved nothing must not
+  // re-send an identical "updated quote" — that teaches the client to
+  // ignore the next one that is real. And a line the dock added by NAME
+  // sits on the order at $0 with the flag: the client is not sent a
+  // quote carrying a free line. The agent prices it and sends it.
   if (edge === 'OUT' && result.orderLinesChanged) {
-    try {
-      resend = await resendQuoteAfterCheckOut({ orderId: id, changes: result.changes })
-    } catch (err) {
-      console.error('[check-report] quote re-send failed:', err)
-      resend = { sent: false, reason: err instanceof Error ? err.message : 'the re-send failed' }
+    if (result.unpriced.length > 0) {
+      resend = {
+        sent: false,
+        reason: `${result.unpriced.join(', ')} ${result.unpriced.length === 1 ? 'was' : 'were'} added without a catalog rate and still ${result.unpriced.length === 1 ? 'needs' : 'need'} a price`,
+      }
+    } else {
+      try {
+        resend = await resendQuoteAfterCheckOut({ orderId: id, changes: result.changes })
+      } catch (err) {
+        console.error('[check-report] quote re-send failed:', err)
+        resend = { sent: false, reason: err instanceof Error ? err.message : 'the re-send failed' }
+      }
     }
   }
 

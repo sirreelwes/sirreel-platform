@@ -24,6 +24,7 @@ import {
   type Department,
   type PickListLine,
 } from '@/lib/warehouse/PickListDocument'
+import { applyFiledSheet } from '@/lib/warehouse/driverCopy'
 
 export interface RenderPickListResult {
   pdf: Buffer
@@ -38,7 +39,18 @@ export type RenderPickListFailure =
 
 export async function renderPickListPdf(
   orderId: string,
-  opts: { lineIds?: string[] } = {},
+  opts: {
+    lineIds?: string[]
+    /**
+     * The DRIVER'S COPY (Wes 2026-09-12): render the sheet from the FILED
+     * check-out report — the Picked column carries the counts the
+     * supervisor typed in, a swapped line reads as the swapped-in piece,
+     * a row added at the dock is on it, and lines a partial pull left on
+     * the shelf are off it. 404s when no OUT report is filed: there is
+     * nothing to receipt yet. Pure derivation in driverCopy.ts.
+     */
+    filed?: 'OUT'
+  } = {},
 ): Promise<RenderPickListFailure | { ok: true; result: RenderPickListResult }> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -57,6 +69,19 @@ export async function renderPickListPdf(
     },
   })
   if (!order) return { ok: false, error: 'Order not found', status: 404 }
+  const filedReport = opts.filed
+    ? await prisma.orderCheckReport.findUnique({
+        where: { orderId_edge: { orderId, edge: opts.filed } },
+        select: {
+          submittedAt: true,
+          preppedBy: true,
+          lines: { select: { orderLineItemId: true, actualQty: true, onSheet: true } },
+        },
+      })
+    : null
+  if (opts.filed && !filedReport) {
+    return { ok: false, error: 'No check-out report is filed for this order yet', status: 404 }
+  }
 
   // Physical goods only — fees, discounts, and labor have nothing to
   // pull off a shelf.
@@ -81,8 +106,14 @@ export async function renderPickListPdf(
   // blank sheet is worse than a complete one.
   const wanted = new Set((opts.lineIds ?? []).map((v) => v.trim()).filter(Boolean))
   const selected = wanted.size > 0 ? pickable.filter((li) => wanted.has(li.id)) : pickable
-  const onSheet = selected.length > 0 ? selected : pickable
-  const omittedLineCount = pickable.length - onSheet.length
+  // The driver's copy takes its line set and its counts from the filed
+  // sheet instead: what a partial pull left on the shelf is off it.
+  const filedSheet = filedReport ? applyFiledSheet(pickable, filedReport.lines) : null
+  const onSheet = filedSheet
+    ? filedSheet.onSheet.map((x) => x.line)
+    : selected.length > 0 ? selected : pickable
+  const pickedQtyById = new Map(filedSheet?.onSheet.map((x) => [x.line.id, x.pickedQty]) ?? [])
+  const omittedLineCount = filedSheet ? filedSheet.omittedLineCount : pickable.length - onSheet.length
 
   // A check that is ALREADY its own line on this sheet must not also
   // print under the parent — the RW sheet the floor knows shows
@@ -106,6 +137,9 @@ export async function renderPickListPdf(
     const warehousePicked = li.pickStatus != null && li.pickStatus !== 'PENDING_PICK'
     const fleetOut = li.fulfillmentLane === 'FLEET' && order.fleetReadyAt != null
     const isOut = warehousePicked || fleetOut
+    // On the driver's copy the filed count IS the out count: Remaining
+    // reads ordered − picked, so a short line shows what did not go.
+    const pickedQty = filedSheet ? (pickedQtyById.get(li.id) ?? null) : undefined
     return {
       department: li.department as Department,
       code: li.inventoryItem?.code ?? null,
@@ -113,8 +147,9 @@ export async function renderPickListPdf(
       notes: li.notes,
       type: li.type === 'EXPENDABLE' ? 'SALE' : 'RENT',
       ordered: li.quantity,
-      out: isOut ? li.quantity : 0,
+      out: filedSheet ? (pickedQty ?? 0) : isOut ? li.quantity : 0,
       picked: warehousePicked,
+      ...(filedSheet ? { pickedQty } : {}),
       includedAccessory: !!li.autoKitPieceId,
       unitChecks: printableChecks(li.inventoryItem?.unitChecks ?? []),
     }
@@ -136,16 +171,17 @@ export async function renderPickListPdf(
       lines,
       generatedAt: new Date(),
       omittedLineCount,
+      ...(filedReport
+        ? { filed: { at: filedReport.submittedAt, preppedBy: filedReport.preppedBy } }
+        : {}),
     }) as React.ReactElement<DocumentProps>
     const pdf = await renderToBuffer(element)
+    const base = filedReport ? `PickList-${order.orderNumber}-checked-out` : `PickList-${order.orderNumber}`
     return {
       ok: true,
       result: {
         pdf,
-        stem:
-          omittedLineCount > 0
-            ? `PickList-${order.orderNumber}-partial`
-            : `PickList-${order.orderNumber}`,
+        stem: omittedLineCount > 0 ? `${base}-partial` : base,
         orderNumber: order.orderNumber,
         omittedLineCount,
       },

@@ -382,6 +382,57 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## The dock changes the order at pickup, and the driver leaves with the receipt (2026-09-12 — Wes)
+- Wes: RW let warehouse "actually make the swap and/or add a line item.
+  This is crucial, because the driver needs a copy of the exact order
+  they're picking up" — and "a little red flag by the item on the order
+  to denote this item was added or swapped by warehouse at the time of
+  pickup. The client doesn't see this red flag, nor should they."
+- **The check-OUT report WRITES swaps and additions onto the order**
+  (`submitCheckReport` → `src/lib/orders/dockLineWrites.ts`, the only
+  path that may). A SUBSTITUTE keeps the line (id, rate, dates) and
+  changes what it is — description, and the catalog row when one was
+  picked. An ADDED row becomes an OrderLineItem: priced at the catalog
+  day rate (company rate card honoured) when picked from the catalog,
+  **$0 and `unpriced`** when typed by name. Check-IN is unchanged —
+  recorded, never applied.
+- **The red flag is `OrderLineItem.warehouseChange`** ('ADDED' |
+  'SWAPPED', TEXT not enum) + `warehouseChangeAt/ById/From`. Provenance,
+  never cleared. STAFF ONLY: rendered on the order page rows and the
+  report form; the portal, quote PDF and invoice PDF map lines per field
+  and must not pick it up. Vocabulary in `src/lib/orders/warehouseChange.ts`.
+  **Columns by `npx tsx scripts/add-warehouse-change-columns.ts` — run
+  BEFORE deploying.** No fail-soft here: Prisma selects every scalar on
+  the line, so an order read 500s until the columns exist.
+- **The dock picks from the catalog through `GET /api/warehouse/catalog`**
+  (yard door, QUANTITY gear only, names + codes, NO rates — WAREHOUSE has
+  `seePricing:false`; `/api/catalog/search` returns rates and is the
+  wrong door). `DockCatalogPicker` on the form; an id that does not
+  resolve is a 400, never a silent downgrade to a typed name.
+- **`changeMovesOrder()`** (`checkLineChange.ts`) is what filing DOES,
+  beside `classifyCheckLine` (what the sheet SAYS). A re-opened sheet
+  pre-fills the swap it recorded; without it the re-file renamed the line
+  to its own name, re-flagged the agent and emailed the client an
+  identical "updated" quote. `changedOrder` and `orderLinesChanged` are
+  the same fact again (OUT + at least one move).
+- **The automatic client re-send is held while any added line is
+  unpriced** (route reads `result.unpriced`); the agent prices it and
+  sends. Flags still raise.
+- **Driver's copy:** `GET /api/orders/[id]/pick-list-pdf?filed=OUT` —
+  the same PickListDocument, Picked column = the filed counts (zero
+  included; a line nobody counted prints blank), lines a partial pull
+  left on the shelf are off it (PARTIAL title), "CHECKED OUT … prepped
+  by" under the title, a RECEIVED BY line. 404 until an OUT report is
+  filed. Pure derivation `src/lib/warehouse/driverCopy.ts`, `npm run
+  test:driver-copy`. Linked from the report's done screen and the filed
+  banner (not while partial).
+- AuditLog `order.line_added_at_dock` / `order.line_swapped_at_dock`
+  (entityType OrderLineItem) beside the report's own row.
+- NOT done: no kit expansion on a dock-added radio (the dock adds the
+  battery row itself); vehicles/stages are not swappable from the sheet
+  (dispatch's assignment flow); the `/reports/orders` list has no
+  driver's-copy link (rows are one anchor).
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a
