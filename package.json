@@ -20,6 +20,7 @@
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:planyo-names": "tsx tests/scheduling/planyoNameNormalizer.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
+    "test:tent-first": "tsx tests/sales/tent-first.test.ts",
     "test:alias-match": "tsx tests/sales/alias-match.test.ts",
     "test:public-query": "tsx tests/site/public-query-match.test.ts",
     "test:vehicle-rate": "tsx tests/site/vehicle-rate.test.ts",

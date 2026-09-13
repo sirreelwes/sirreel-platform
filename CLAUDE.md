@@ -265,6 +265,38 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Tent first, accessories next (2026-09-13 — Wes)
+- Wes: "Whenever tent, Canopy, pop-up are entered. The order form should
+  offer the tent first and the accessories like side walls next." Three
+  things buried the tents at once: a sidewall is literally named "Canopy
+  Tent Sidewall - 10' Black" so it hit the query on its NAME while the
+  seeded "Caravan Canopy, 10x10" hit only via an alias (name evidence wins
+  the relevance pass); the tiebreak is "shorter name wins" and the
+  accessory names are shorter; and the dropdown caps at 10, so ranking the
+  ~30 canopy rows up would push every accessory off the end.
+- **One rule, both order forms: `src/lib/sales/tentFirst.ts`** (pure, no
+  prisma — the client-facing form bundles it). `isTentFamilyQuery` is the
+  gate (tent/canopy/pop-up/ez-up/marquee, however spelled); `tentRole`
+  splits SHELTER / ACCESSORY / OTHER off the NAME, testing accessory words
+  FIRST because every sidewall row also says canopy and tent;
+  `orderTentFirst` reorders and holds `TENT_ACCESSORY_SLOTS` (3) back so
+  the accessories survive the slice — "next" only means something if they
+  are still on the list. Stable within a tier, so "10x10 tent" still puts
+  the 10x10 sidewall at the front of the accessories.
+- **Naming the accessory is NOT a tent query.** "tent sidewall" /
+  "canopy sandbags" is a rep who already knows what they want; lifting the
+  canopies over their answer is the same burial in the other direction.
+- Staff typeahead (`/api/catalog/search`) also does the two things the
+  pure rule can't: over-fetches to `TENT_OVERFETCH` (the default
+  `limit * 3` stopped inside the canopies), and pulls the
+  `tents-accessories` category along on a tent query — "Sidewalls, 10x15"
+  is alias-matched on "tent sidewall", and an alias only answers a query
+  that COVERS it, so a bare "tent" could never reach it. Companions merge
+  in BEFORE the relevance pass and dedupe by id. Client-facing form:
+  `rankSearchResults` in `publicSupplySections.ts` takes the tier as its
+  primary sort key. Every other search is byte-for-byte unchanged.
+- `npm run test:tent-first`.
+
 ## AHA sends the lock box photo (2026-09-13 — Wes)
 - May, a contact on Miki's job, could not get the vehicle lock box open; Jose
   hand-typed the steps and texted her a photo of the keypad with the two
