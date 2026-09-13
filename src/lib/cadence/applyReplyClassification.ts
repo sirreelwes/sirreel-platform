@@ -23,8 +23,7 @@ const DISCUSSING_PAUSE_DAYS = 30
  *   - BOOKING_SIGNAL           → log + emit operator alert; DO NOT
  *                                auto-transition (rep handles the booking)
  *   - EXPLICIT_REJECTION       → pause cadence only; the LOST call is a
- *                                human's (JobEmailSignal suggestion —
- *                                see src/lib/email/jobChangeSignals.ts)
+ *                                human's, made from the email itself
  *   - UNCLEAR (post-floor: should be ACTIVE_DISCUSSION already, but defensive)
  *                              → pause cadence
  */
@@ -110,11 +109,10 @@ export async function applyReplyClassificationToCadence(
       // cancelling or changing a job carries nuance ("cancel the cube" is
       // not "cancel the job"; "project got cancelled" may be one of three
       // orders), so any change to HQ from an email is gated behind a human.
-      // The suggestion is raised by src/lib/email/jobChangeSignals.ts
-      // (JobEmailSignal, shown on the job page + Action Items); the rep
-      // marks the order lost through the existing controls. Pause the
-      // cadence so no follow-up nudge goes out on a quote the client just
-      // declined.
+      // Nothing is suggested on the job either (Wes 2026-09-13 retired the
+      // email-signal cards as clutter); the rep reads the email and marks
+      // the order lost through the existing controls. Pause the cadence
+      // so no follow-up nudge goes out on a quote the client just declined.
       const pausedUntil = new Date(Date.now() + DISCUSSING_PAUSE_DAYS * 86_400_000)
       await prisma.order.update({
         where: { id: order.id },
