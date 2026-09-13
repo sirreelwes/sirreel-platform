@@ -16,7 +16,6 @@ import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { ingestHrEmail, HR_INBOX } from "@/lib/hr/ingestHrEmail"
 import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
-import { detectJobChangeSignals } from "@/lib/email/jobChangeSignals"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -398,20 +397,13 @@ async function syncInbox(email: string) {
       }
     }
 
-    // Change-of-plan suggestion — a client email that reads like a
-    // cancellation / hold / moved dates / extension / early return on a
-    // LIVE job becomes an OPEN JobEmailSignal on that job. A suggestion,
-    // never a change: nothing here touches the job, its orders or its
-    // holds (Wes 2026-09-11 — "any changes to HQ are gated with a
-    // confirmation or suggestion"). Runs on every inbound, first-touch
-    // included, since the phrase match needs no prior thread. Extraction
-    // re-runs it once messageNature is known; the row is idempotent.
-    if (createdMessage && direction === 'INBOUND' && !duplicateOfId && !autoReply) {
-      const messageId = createdMessage.id
-      void detectJobChangeSignals(messageId).catch((err) => {
-        console.warn('[pubsub] job change signal failed:', messageId, err instanceof Error ? err.message : err)
-      })
-    }
+    // No change-of-plan suggestions are filed from email any more (Wes
+    // 2026-09-13: the AI guessing what a client email means and proposing
+    // an action "clutters up the screen" and would confuse the team). The
+    // rule that email never changes a job on its own still stands — the
+    // rep reads the email and applies any change by hand. The classifier
+    // in src/lib/email/jobChangeSignals.ts is kept for the manual
+    // brief-email-crosscheck script only.
 
     // Per-message AI extraction — fire-and-forget so we don't block the
     // pubsub batch on a Haiku call. The /api/cron/run-message-extraction

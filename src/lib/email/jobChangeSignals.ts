@@ -14,10 +14,14 @@
  *      the evidence quoted. It does not decide whether the change is real.
  *   2. `detectJobChangeSignals` — ties an inbound message to the live jobs
  *      it could be about and writes one OPEN JobEmailSignal per job. The
- *      job, its orders, its holds, its bookings: untouched. A person
- *      confirms on the job page (and makes the change through the
- *      existing controls — Mark lost, order dates, status menu) or
- *      dismisses it.
+ *      job, its orders, its holds, its bookings: untouched.
+ *
+ *      NOT CALLED since 2026-09-13. Wes retired the suggestion cards and
+ *      the action item ("unnecessary … clutters up the screen … confusing"),
+ *      and with them both ingest-time call sites. Kept, with its table,
+ *      so the rows already written stay readable and the manual
+ *      scripts/brief-email-crosscheck.ts can use `classifyChangeSignal`.
+ *      Do not wire it back into ingest or a screen.
  *
  * Why not act on a high-confidence EXPLICIT_REJECTION? "Project got
  * cancelled" from the PC can mean the whole show, one of three orders,

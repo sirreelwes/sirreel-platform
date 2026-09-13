@@ -409,6 +409,18 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   before a job exists; this one is for a quoted job.
 
 ## Email never changes a job on its own (2026-09-11 — Wes)
+- **2026-09-13 (Wes): the SUGGESTIONS are gone too.** "All of these AI trying
+  to figure out what the emails are about and suggesting actions is
+  unnecessary. It clutters up the screen and … it'll lead to this being
+  confusing." Removed: `JobEmailSignalsCard` on the job page, the
+  `email-change-signal` action item, the `/api/jobs/[id]/email-signals`
+  routes, and BOTH `detectJobChangeSignals` call sites (pubsub ingest +
+  post-extraction) — no new `sr_job_email_signals` rows are written. The
+  table, enums, `classifyChangeSignal()` and its test stay, used only by the
+  manual `scripts/brief-email-crosscheck.ts`. Do not re-surface AI readings
+  of client email as cards or action items. The rule below still holds: a
+  person reads the email and applies any change through the existing
+  controls.
 - Wes: "there can be nuance in a client's cancelling or changing of a
   job — we want to make sure that any changes to HQ are gated with a
   confirmation or suggestion." **Rule: no code path may change a Job,
