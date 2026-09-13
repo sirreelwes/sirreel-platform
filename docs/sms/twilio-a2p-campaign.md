@@ -61,6 +61,28 @@ and https://sirreel.com/privacy. Both must stay reachable without login.
 
 ---
 
+## MMS — AHA sends a photo (2026-09-13)
+
+AHA texts a photo of a vehicle lock box keypad when someone cannot get the
+box open (`src/lib/assistant/lockboxHelp.ts`). That is an MMS, and MMS is a
+**per-number capability**, not something the campaign grants.
+
+- Twilio FETCHES the attachment from the URL we give it, unauthenticated,
+  from its own servers. Only a public `https://` URL works — the photo is a
+  static file at `/help/lockbox-keypad.jpg`, deliberately not behind the
+  private blob proxy. Nothing with a code in it may ever be attached.
+- **Check the capability:** `GET /api/admin/a2p-campaign` (admin) now reports
+  `service.mmsCapable` — whether any number in the sender pool can send MMS.
+  `false` means every photo silently degrades to its text fallback.
+  Console → Phone Numbers → the number → Capabilities says the same thing.
+- **If the media cannot go, the message still does.** The caption carries the
+  link to `/help/lockbox`, and a refused MMS is re-sent immediately as plain
+  text (`sendLockboxHowTo`). A driver at a locked truck never gets nothing.
+- Content-wise this stays inside the filed campaign: it is a customer-care
+  reply to their own inbound text, on an existing conversation.
+- MMS is billed per message at a higher rate than SMS, and only US
+  numbers carry it — the fallback covers anything else.
+
 ## Campaign description
 
 ```

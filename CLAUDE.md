@@ -265,6 +265,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## AHA sends the lock box photo (2026-09-13 — Wes)
+- May, a contact on Miki's job, could not get the vehicle lock box open; Jose
+  hand-typed the steps and texted her a photo of the keypad with the two
+  buttons arrowed. Wes: "I think we should incorporate this into AHA's
+  capabilities. Is she able to send a photo like this to the Driver?" She can,
+  by MMS.
+- **One source of truth `src/lib/site/lockboxGuide.ts`** — Jose's sentence
+  verbatim (`LOCKBOX_STEPS`), the photo, the troubleshooting. AHA's prompt,
+  the MMS caption and the public page all read it, so they cannot drift.
+- **The photo is PUBLIC on purpose** (`public/help/lockbox-keypad.jpg`, served
+  at `/help/lockbox-keypad.jpg`). Twilio fetches an MMS attachment itself,
+  unauthenticated, so a private-blob proxy URL 403s and the picture silently
+  never arrives. Safe because the image is a keypad with arrows — **no code
+  may ever be baked into it, rendered on `/help/lockbox`, or put in a
+  caption.** Codes still come only from `verifyAndRelease`, one per message.
+- **Two triggers, both server-side.** `send_lockbox_photo` (SMS channel only,
+  no arguments, releases nothing) is offered to the model for "it won't
+  open"; and a RELEASED lock box code over text is followed by the photo
+  automatically, at most once per number per 24h — deduped off the
+  `[photo: lock box keypad]` marker `sendTracked` writes into the recorded
+  body. The model never picks a URL. Audited `assistant.lockbox_howto`.
+- **The caption carries the link, always.** MMS on a 10DLC number is a
+  per-number capability and a carrier may drop media on a message it still
+  delivers; a refused MMS is re-sent at once as plain text. `GET
+  /api/admin/a2p-campaign` reports `service.mmsCapable`.
+- `sendSms`/`sendTracked` take `mediaUrls` (non-`https://` entries are
+  DROPPED — a bad MediaUrl fails the whole message, text included).
+  `/help/lockbox` is a static segment, so it wins over `/help/[slug]` and
+  needs no SetupGuide row. `npm run test:lockbox-howto`.
+
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
   `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING

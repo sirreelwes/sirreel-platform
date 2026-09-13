@@ -22,6 +22,22 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-13
+
+### AHA texts the lock box photo
+
+`ef55c7d` AHA texts the lock box photo, and a /help/lockbox page behind it
+
+May, a contact on Miki's job, could not get the vehicle lock box open. Jose hand-typed the steps and texted her a photo of the keypad with the two buttons arrowed. Wes: "I think we should incorporate this into AHA's capabilities. Is she able to send a photo like this to the Driver in the future?" She can — by MMS — and there is a page carrying the same photo for anyone who would rather have a link.
+
+- **`src/lib/site/lockboxGuide.ts` is the one source** — Jose's sentence verbatim ("Start by sliding down the clear button, enter code and then push down at the top button to open."), the photo, the troubleshooting. AHA's prompt, the MMS caption and `/help/lockbox` all read it, the way `setupGuides.ts` keeps the gear pages and the assistant in step.
+- **The photo is public on purpose.** Twilio FETCHES an MMS attachment from the URL we hand it, from its own servers with no credentials — a private-blob proxy URL 403s and the picture silently never arrives, which is the failure mode worth designing against when the reader is standing at a truck in the dark. It is a static file at `/help/lockbox-keypad.jpg`, and it is a keypad with two arrows on it: **no code may ever be baked into it, rendered on the page, or written into a caption.** Codes still come only from `verifyAndRelease`, one to a message — which is why the photo is a SECOND message and not an attachment on the code reply.
+- **Two triggers, both server-side.** `send_lockbox_photo` (SMS channel only, no arguments, releases nothing) is offered to the model for "it won't open"; and a RELEASED lock box code over text is followed by the picture unprompted, at most once per number per 24h, deduped off the `[photo: lock box keypad]` marker `sendTracked` writes into the recorded body. Not sent to staff — the yard pulls codes all day and knows the box. The model never picks a URL. Audited `assistant.lockbox_howto`.
+- **The caption carries the link, always.** MMS on a 10DLC long code is a per-number capability, and a carrier can drop media on a message it still delivers; if Twilio refuses the MMS outright the same words go straight back out as plain text. So the worst case is the instruction plus a link, never silence. `GET /api/admin/a2p-campaign` now reports `service.mmsCapable`, because a photo path that degrades every time would otherwise be invisible.
+- `sendSms` / `sendTracked` take `mediaUrls`; a non-`https://` entry is DROPPED rather than sent, since one bad MediaUrl fails the whole message, text included. `/help/lockbox` is a static segment so it wins over `/help/[slug]` without needing a SetupGuide row (a keypad on a mirror has no kit list or placement). `npm run test:lockbox-howto` pins the wording, the absolute public URL, the link in the caption, the https filter and the "no 3+ digit run anywhere" rule.
+
+**Open for Wes:** the page copy beyond Jose's sentence is a first draft — worth a read from him or Jose before it is linked anywhere client-facing. And `service.mmsCapable` has not been read against production yet; if (747) 335-1665 is not MMS-capable, every photo falls back to the text and the number needs the capability enabled.
+
 ## 2026-09-11
 
 ### AHA texts Wes when a new incoming lands

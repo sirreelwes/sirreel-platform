@@ -131,9 +131,19 @@ export function toE164(raw: string): string | null {
  */
 export function buildMessageParams(
   config: Pick<TwilioConfig, 'from' | 'messagingServiceSid'>,
-  args: { to: string; body: string; statusCallback?: string },
+  args: { to: string; body: string; statusCallback?: string; mediaUrls?: string[] },
 ): URLSearchParams {
   const params = new URLSearchParams({ To: args.to, Body: args.body.slice(0, 1500) })
+  // MMS. Twilio FETCHES each URL itself, from its own servers with no
+  // credentials, so only a publicly reachable https link works — a private
+  // blob proxy 403s and the picture silently never arrives. Repeated
+  // MediaUrl keys is Twilio's own shape for more than one attachment; the
+  // carrier cap is 10. Anything that is not https is dropped rather than
+  // sent, because a bad media URL fails the WHOLE message, text included.
+  for (const raw of (args.mediaUrls ?? []).slice(0, 10)) {
+    const url = (raw || '').trim()
+    if (url.startsWith('https://')) params.append('MediaUrl', url)
+  }
   if (config.messagingServiceSid) params.set('MessagingServiceSid', config.messagingServiceSid)
   // The From number is env-configured by hand too, and Twilio rejects it in
   // the same way as a bad destination — normalised so a dashed number in
@@ -149,6 +159,8 @@ export async function sendSms(
   opts: {
     /** Twilio posts delivery status here (see /api/public/sms/status). */
     statusCallback?: string
+    /** Public https image/PDF URLs to attach — turns the send into an MMS. */
+    mediaUrls?: string[]
   } = {},
 ): Promise<{ ok: boolean; skipped?: boolean; error?: string; sid?: string }> {
   const resolved = resolveTwilioConfig()
@@ -172,7 +184,7 @@ export async function sendSms(
         Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64'),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: buildMessageParams(resolved.config, { to: dest, body, statusCallback: opts.statusCallback }).toString(),
+      body: buildMessageParams(resolved.config, { to: dest, body, statusCallback: opts.statusCallback, mediaUrls: opts.mediaUrls }).toString(),
     })
     if (!res.ok) {
       const t = await res.text().catch(() => '')

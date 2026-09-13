@@ -31,6 +31,8 @@ import { atLeast } from '@/lib/assistant/access'
 import { platformMemory, recentActivity } from '@/lib/assistant/memory'
 import { NO_IDENTITY, describeSender, type SenderIdentity } from '@/lib/assistant/senderIdentity'
 import { contactJobInfo, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
+import { noteLockboxHowTo, sendLockboxHowTo } from '@/lib/assistant/lockboxHelp'
+import { LOCKBOX_STEPS, lockboxGuideUrl } from '@/lib/site/lockboxGuide'
 
 
 // Native fetch — the SDK 0.39 node-fetch shim read-ETIMEDOUTs on
@@ -84,6 +86,8 @@ AFTER-HOURS ACCESS (lot gate code + vehicle lockbox code) — your most importan
 5. On NOT_VERIFIED **with atVehicle true**: they are standing at one of our vehicles but we could not confirm their booking. Do NOT say their VIN "checked out" or confirm anything about the vehicle or a booking — just say you can't release codes without confirming the booking, and OFFER to have someone from the on-call team contact them. If they accept, ask for their name and a callback number and call alert_stranded_driver with the VIN last 4 they already gave. On ALERTED, tell them our on-call team has been texted and to stay with the vehicle; mention ${REACH_US} if they'd rather reach someone themselves. On ALREADY_ALERTED, tell them the team already has their request and to try ${REACH_US} if nobody has reached them. On NO_ONCALL, give them ${REACH_US}. Never release a code on this path.
 5b. On NOT_VERIFIED otherwise: do NOT reveal whether any job/vehicle exists or who is on the booking. Say you couldn't verify them and point them to ${REACH_US}. Do NOT promise that an agent will "reach out," call them back, or respond "ASAP," and NEVER hand out an individual person's phone number. Do NOT offer to file a callback as a routine option. ONLY if the caller clearly states it is a genuine emergency (a safety issue, or a time-critical, on-the-clock production that is blocked right now) may you offer to file a callback with file_callback_request — and even then make clear that after-hours callbacks are not immediate, so for anything urgent, ${REACH_US}. If they mention a QR code sticker in the vehicle's glove box, tell them to call the number printed with it.
 
+THE LOCK BOX WILL NOT OPEN — you can help with this yourself, and by text you can send a photo. The lock box is the small keypad box hanging on the mirror or door handle with the vehicle's key inside. The steps are: ${LOCKBOX_STEPS} The clear button is the sliding one in the middle and it has to go down FIRST every time, which is the single most common reason a correct code does not open the box. There is a page with a photo of the keypad and more troubleshooting at ${lockboxGuideUrl()} — link it on web chat. BY TEXT, call send_lockbox_photo: it texts them the photo of the keypad with the two buttons arrowed. Use it whenever someone says the box will not open, cannot find the buttons, or asks how it works — you do not need to check with anyone. Say the steps in your own reply too; do not make them wait for the picture. The photo contains NO code, and sending it is never a substitute for verifying someone before releasing one.
+
 EMERGENCIES: If — and ONLY if — the caller clearly states a GENUINE emergency (a safety issue, or a blocked, time-critical, on-the-clock production that cannot wait): first collect their name, a callback number, and a short description of what's wrong, then call alert_on_call_team with those. On ALERTED, tell them our on-call team has been texted their request and will call back if it warrants one — for immediate help, ${REACH_US}. On NO_ONCALL, give them ${REACH_US}. NEVER promise a specific callback time and NEVER give out anyone's number. Don't use this for routine lost codes or general questions — those go to ${REACH_US}.
 
 GEAR SETUP HELP — you may walk clients through setting up rented gear using the knowledge below. Work the fixes in the order given, one step at a time, and link the full guide when it helps. NEVER state a Wi-Fi password or any access credential from this section — you do not have them; they are printed on the case label and the setup card in the kit. If a client can't find theirs, point them to ${REACH_US}.
@@ -135,6 +139,12 @@ const TOOLS: Anthropic.Tool[] = [
       },
       required: ['callerName', 'callbackNumber', 'emergency'],
     },
+  },
+  {
+    name: 'send_lockbox_photo',
+    description:
+      "TEXT CHANNEL ONLY. Text the person a photo of a SirReel vehicle lock box keypad, with the clear button and the open button arrowed, plus the written steps and a link to the troubleshooting page. Contains no codes and releases nothing — it only shows how the box opens. Use it whenever someone cannot get a lock box open, cannot work out the buttons, or asks how the box works. Takes no arguments. Tell them the steps in your own words as well; the picture is a second message.",
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
   },
   {
     name: 'alert_stranded_driver',
@@ -275,7 +285,9 @@ export async function runAssistant(args: {
   const sender = args.channel === 'web' ? NO_IDENTITY : args.sender ?? NO_IDENTITY
   const level = sender.level
   const tools: Anthropic.Tool[] = [
-    ...TOOLS,
+    // send_lockbox_photo needs a number to text; web chat and the HQ page
+    // have none, and there the prompt links the page instead.
+    ...TOOLS.filter((t) => t.name !== 'send_lockbox_photo' || args.channel === 'sms'),
     ...(atLeast(level, 'staff') && sender.staff ? STAFF_TOOLS : []),
     ...(level === 'contact' && sender.contactJobs.length ? CONTACT_TOOLS : []),
     ...(level === 'admin' ? ADMIN_TOOLS : []),
@@ -338,6 +350,46 @@ export async function runAssistant(args: {
             senderPhone: args.channel === 'sms' ? args.senderPhone ?? null : null,
             ip,
           })
+          // A lock box code is no use to someone who cannot work the box —
+          // which is the whole reason this exists (Wes 2026-09-13, after
+          // Jose had to hand-type the steps and photograph a keypad for a
+          // contact who was standing at the truck). So the picture follows
+          // the code by itself, at most once a day per number, in its own
+          // message: the SMS rule is that a code shares a message with
+          // nothing else. Decided here, server-side — the model is told it
+          // happened, it does not choose it.
+          // Not to staff: Julian and the yard pull codes all day and know
+          // the box. Anyone AT a truck for a job — driver, contact, public —
+          // is who Jose was writing the instruction for.
+          const released = resultPayload as { result?: string; lockboxCode?: string | null }
+          const auto = args.channel === 'sms' && args.senderPhone && !atLeast(level, 'staff')
+          if (auto && args.senderPhone && released?.result === 'RELEASED' && released.lockboxCode) {
+            const howTo = await sendLockboxHowTo({ phone: args.senderPhone, trigger: 'code-released' }).catch(
+              () => ({ sent: false, reason: 'not-delivered' }) as Awaited<ReturnType<typeof sendLockboxHowTo>>,
+            )
+            if (howTo.sent) {
+              toolsUsed.push('lockbox_photo_auto')
+              await noteLockboxHowTo({ phone: args.senderPhone, trigger: 'code-released', result: howTo })
+              resultPayload = {
+                ...(resultPayload as object),
+                lockboxHowToSent: howTo.withPhoto
+                  ? 'A photo of the lock box keypad and the opening steps have already been texted to them separately. Mention it briefly; do not call send_lockbox_photo again.'
+                  : 'The opening steps and a link to the lock box page have already been texted to them separately. Mention it briefly; do not call send_lockbox_photo again.',
+              }
+            }
+          }
+        } else if (block.name === 'send_lockbox_photo') {
+          if (args.channel !== 'sms' || !args.senderPhone) {
+            resultPayload = { sent: false, reason: 'no-phone', tell: `There is no phone number in this conversation, so no photo can be sent. Give them the steps and the link ${lockboxGuideUrl()}.` }
+          } else {
+            const howTo = await sendLockboxHowTo({ phone: args.senderPhone, trigger: 'asked' })
+            await noteLockboxHowTo({ phone: args.senderPhone, trigger: 'asked', result: howTo })
+            resultPayload = howTo.sent
+              ? { sent: true, withPhoto: howTo.withPhoto, tell: howTo.withPhoto
+                  ? 'The photo is on its way as a separate message. Tell them a picture of the keypad is coming, and give them the steps now.'
+                  : `The picture could not be attached, so the steps and the link went as a text. Give them the steps now and mention ${lockboxGuideUrl()}.` }
+              : { sent: false, reason: howTo.reason, tell: `Nothing could be sent. Give them the steps in your reply and the link ${lockboxGuideUrl()}.` }
+          }
         } else if (block.name === 'file_callback_request') {
           const inp = block.input as { name?: string; contact?: string; message?: string }
           resultPayload =
