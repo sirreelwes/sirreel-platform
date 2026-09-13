@@ -134,6 +134,54 @@ export async function identifyNumber(phone: string): Promise<{ context: string |
   if (digits.length < 10) return { context: null, personId: null, subRentalId: null, firstName: null }
   const like = `%${digits.slice(0, 3)}%${digits.slice(3, 6)}%${digits.slice(6)}%`
 
+  // SirReel's OWN named driver on a live assignment — the person the
+  // driver intro email reaches. Until 2026-09-13 this function knew
+  // partner drivers and CRM contacts and nobody else, so an HQ driver
+  // texting AHA was a stranger to it. Prefiltered on the last four
+  // digits (phones are stored as typed), then tail-matched exactly.
+  const hqDrivers = await prisma.driver.findMany({
+    where: { phone: { contains: digits.slice(-4) } },
+    select: {
+      firstName: true,
+      lastName: true,
+      phone: true,
+      driverAssignments: {
+        where: { status: { not: 'CANCELLED' } },
+        orderBy: { invitedAt: 'desc' },
+        take: 3,
+        select: {
+          status: true,
+          bookingAssignment: {
+            select: {
+              startDate: true,
+              endDate: true,
+              asset: { select: { unitName: true } },
+              bookingItem: { select: { booking: { select: { jobName: true, job: { select: { jobCode: true, name: true } } } } } },
+            },
+          },
+        },
+      },
+    },
+  }).catch(() => [])
+  const cutoff = new Date(Date.now() - 2 * 86_400_000)
+  for (const d of hqDrivers) {
+    if (!(d.phone ?? '').replace(/\D/g, '').endsWith(digits)) continue
+    const live = d.driverAssignments.find((da) => !da.bookingAssignment.endDate || da.bookingAssignment.endDate >= cutoff)
+    if (!live) continue
+    const ba = live.bookingAssignment
+    const b = ba.bookingItem.booking
+    const name = [d.firstName, d.lastName].filter(Boolean).join(' ').trim() || 'A driver'
+    const jobName = b.jobName || b.job?.name || null
+    const ymd = (x: Date | null) => (x ? x.toISOString().slice(0, 10) : null)
+    const window = ymd(ba.startDate) ? ` — pickup ${ymd(ba.startDate)}${ymd(ba.endDate) ? `, drop-off ${ymd(ba.endDate)}` : ''}` : ''
+    return {
+      context: `${name} — SirReel's named driver for ${ba.asset.unitName}${jobName ? ` on ${jobName}` : ''}${b.job?.jobCode ? ` (job ${b.job.jobCode})` : ''}${window}. Driver status: ${live.status}.`,
+      personId: null,
+      subRentalId: null,
+      firstName: d.firstName || null,
+    }
+  }
+
   // A partner's driver or delivery contact on a live sub-rental.
   const sub = await prisma.$queryRaw<Array<{ id: string; driver_name: string | null; item: string | null; job_code: string | null; start_date: Date | null; vendor: string }>>`
     SELECT s.id, s.driver_name, COALESCE(v2.name, s.item_description) AS item, j.job_code, s.start_date, v.name AS vendor

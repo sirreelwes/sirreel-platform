@@ -13,6 +13,7 @@
  */
 
 import { renderEmailShell, renderEmailText, p, detailTable, calloutBox } from './shell'
+import { supportLines } from '@/lib/support/lines'
 
 export interface DriverAssignmentEmailInput {
   driverFirstName?: string | null
@@ -54,6 +55,14 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
     : input.unitName
 
   const subject = `You're driving ${input.unitName} for ${input.productionName}`
+  // Introduced 2026-09-13 (Wes). The promise is deliberately narrow — codes
+  // and the on-call team — because that is what AHA can actually do for a
+  // driver today; she cannot answer call-time or address changes.
+  const lines = supportLines()
+  const ahaLine =
+    `Questions before the day, or stuck at the yard? Text AHA, our after-hours assistant, at ` +
+    `${lines.aha} — any hour. Once she confirms who you are she can send the gate and lockbox codes ` +
+    `and reach the on-call team. The office line ${lines.office} is answered weekdays 7:30am–5:30pm.`
 
   const rows: Array<{ label: string; value: string }> = [
     { label: 'Vehicle', value: unit },
@@ -95,6 +104,7 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
         `drop-off instructions, what&rsquo;s loaded on the vehicle, and how to reach someone ` +
         `if anything goes sideways. Keep the link; it stays current if plans change.`,
     ),
+    p(ahaLine.replace(/—/g, '&mdash;').replace(/'/g, '&rsquo;')),
   ].join('\n')
 
   const html = renderEmailShell({
@@ -140,6 +150,8 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
     `Your driver page has pickup and drop-off instructions, what's loaded on the vehicle,`,
     `and how to reach someone if anything goes sideways:`,
     input.jobLink,
+    ``,
+    ahaLine,
     ``,
     `This link is personal to you. Please don't forward it.`,
   ])

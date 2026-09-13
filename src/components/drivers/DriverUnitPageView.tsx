@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { KeyRound, MapPin, Clock, CheckCircle2, MessageSquare } from 'lucide-react'
 import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
+import { AHA_SMS_DISPLAY, AHA_SMS_HREF, OFFICE_LINE } from '@/lib/support/lines'
 
 interface Logistics {
   leavingFrom: string | null
@@ -328,11 +329,19 @@ export function DriverUnitPageView({ token, initialData = null, preview = false 
           </Section>
         )}
 
-        <a href="tel:+18884777335"
+        {/* The 888 is the OFFICE line and nobody answers it at night — this
+            button used to send a driver at the gate at 5am to voicemail
+            (Wes 2026-09-12). After hours the route is a text to AHA. */}
+        <a href={AHA_SMS_HREF}
           className="mt-4 flex min-h-[48px] items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-[15px] font-semibold text-white active:bg-zinc-800">
-          Problem on the day? Call SirReel dispatch
+          Problem on the day? Text AHA — any hour
         </a>
-        <p className="mt-3 text-center text-[12px] text-zinc-500">(888) 477-7335 · This link is personal to you.</p>
+        <p className="mt-3 text-center text-[12px] leading-relaxed text-zinc-500">
+          AHA ({AHA_SMS_DISPLAY}) is SirReel&rsquo;s after-hours assistant: she can release your codes once
+          you&rsquo;re verified and reach the on-call team. Office line{' '}
+          <a href={`tel:+1${OFFICE_LINE.replace(/\D/g, '')}`} className="text-zinc-400 underline">{OFFICE_LINE}</a>, weekdays 7:30am&ndash;5:30pm.
+          This link is personal to you.
+        </p>
       </div>
     </Root>
   )

@@ -259,6 +259,11 @@ export async function verifyAndRelease(input: {
         },
       },
       checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true, phone: true } } } },
+      // The PLANNED driver (DriverAssignment) as well as whoever took the
+      // keys (CheckoutRecord): before pickup there is no checkout record
+      // yet, so the driver the intro email was sent to could give their
+      // own name and still fail the name factor (2026-09-13).
+      driverAssignments: { where: { status: { not: 'CANCELLED' } }, select: { driver: { select: { firstName: true, lastName: true, phone: true } } } },
     },
   })
 
@@ -272,6 +277,7 @@ export async function verifyAndRelease(input: {
         const numbers: Array<string | null | undefined> = [b.person?.phone, b.person?.mobile]
         for (const jc of b.job?.jobContacts ?? []) numbers.push(jc.person.phone, jc.person.mobile)
         for (const cr of asg.checkoutRecords) numbers.push(cr.driver?.phone)
+        for (const da of asg.driverAssignments) numbers.push(da.driver?.phone)
         return phoneOnFile(senderTail, numbers)
       })
     : []
@@ -321,6 +327,9 @@ export async function verifyAndRelease(input: {
       }
       for (const cr of asg.checkoutRecords) {
         if (cr.driver) cands.push(`${cr.driver.firstName} ${cr.driver.lastName}`)
+      }
+      for (const da of asg.driverAssignments) {
+        if (da.driver) cands.push(`${da.driver.firstName} ${da.driver.lastName}`.trim())
       }
       if (cands.some((c) => nameMatches(driverName, c))) {
         nameOk = true
