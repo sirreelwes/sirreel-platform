@@ -19,10 +19,25 @@
  * quote pull started failing it did so in total silence for twelve days, the
  * identical hole to the one this file was written to close. Every RW mirror
  * now reports through here.
+ *
+ * GATED 2026-09-13. "Every time" was too literal: RentalWorks answers a bare
+ * 503 a few times a week, the invoice cron runs every 15 minutes, and each
+ * one-off miss raised a HIGH alert titled "sync is failing — data is stale"
+ * plus an email — five of them between 09-05 and 09-13, every one against a
+ * mirror that was minutes old and synced fine on the next run (Wes, 09-13:
+ * "RW sync is failing"; it wasn't). And the alert never cleared, so the page
+ * kept saying "failing" days after recovery.
+ *
+ * So: a TRANSIENT reason (5xx, network) against a mirror still inside its
+ * freshness limit is logged, not alerted — the hourly freshness cron catches
+ * it if it persists. Auth, shape and database failures still alert at once,
+ * because a dead credential must never look like jitter (Wes 2026-09-02,
+ * "fail loud"). And a successful sync expires the open alert for its mirror.
  */
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { THRESHOLDS } from '@/lib/rentalworks/mirrorFreshness'
 
 const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const ALERT_TYPE = 'rw_sync_failure'
@@ -58,14 +73,63 @@ async function mirrorSyncedAt(mirror: RwMirror): Promise<Date | null> {
   return (await prisma.rwOrderRef.aggregate({ _max: { syncedAt: true } }))._max.syncedAt
 }
 
+/** Open = not expired. A cleared alert (see clearRwSyncFailure) must not
+ *  suppress a NEW failure later the same day. */
 async function alreadyAlertedToday(type: string): Promise<boolean> {
   const since = new Date()
   since.setHours(0, 0, 0, 0)
   const existing = await prisma.alert.findFirst({
-    where: { type, created_at: { gte: since } },
+    where: {
+      type,
+      created_at: { gte: since },
+      OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
+    },
     select: { id: true },
   })
   return !!existing
+}
+
+/**
+ * A reason that says RentalWorks (or the wire) hiccuped, as opposed to one
+ * that says something is WRONG: a rejected token, an unexpected response
+ * shape, a Prisma pool timeout, an unknown error. Only the first kind is
+ * eligible for the freshness gate — everything else alerts immediately.
+ * Phrasings come from syncInvoices ("RW HTTP 503", "network: …"),
+ * pagedSync ("page 7: RW HTTP 503 on GET …") and the cron catch blocks
+ * ("TypeError: fetch failed").
+ */
+export function isTransientRwFailure(reason: string): boolean {
+  return /RW HTTP 5\d\d|\bnetwork:|fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|UND_ERR_/i.test(reason)
+}
+
+/** "0.2h" under two days, "3 days" past it — "0 days old" read as fresh
+ *  and stale at once. */
+function ageText(syncedAt: Date, now: number): string {
+  const hours = (now - syncedAt.getTime()) / 3_600_000
+  if (hours < 48) return `${hours.toFixed(1)}h old`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} old`
+}
+
+/**
+ * The mirror synced: expire the open failure alert for it, so the Action
+ * Queue and the admin page stop saying "failing" once it isn't. Expire,
+ * not delete — the row stays as the record that it happened.
+ */
+export async function clearRwSyncFailure(mirror: RwMirror): Promise<void> {
+  try {
+    const now = new Date()
+    const r = await prisma.alert.updateMany({
+      where: {
+        type: `${ALERT_TYPE}:${mirror}`,
+        OR: [{ expires_at: null }, { expires_at: { gt: now } }],
+      },
+      data: { expires_at: now, updated_at: now },
+    })
+    if (r.count > 0) console.log(`[rw-sync-alert] ${mirror} sync recovered; cleared ${r.count} open alert(s)`)
+  } catch (err) {
+    console.error('[rw-sync-alert] could not clear the failure alert:', err)
+  }
 }
 
 /**
@@ -76,14 +140,25 @@ export async function reportRwSyncFailure(reason: string, mirror: RwMirror = 'in
   try {
     const m = MIRRORS[mirror]
     const syncedAt = await mirrorSyncedAt(mirror)
-    const ageDays = syncedAt
-      ? Math.floor((Date.now() - syncedAt.getTime()) / 86_400_000)
-      : null
+    const now = Date.now()
+    const ageHours = syncedAt ? (now - syncedAt.getTime()) / 3_600_000 : null
+
+    // The gate. A 503 against a mirror synced twenty minutes ago is not
+    // "data is stale" — it is one missed run of many. Say so in the log
+    // and let the next run (or the freshness cron, if it keeps failing)
+    // decide. Same limit the freshness cron uses, so the two agree.
+    const limitHours = THRESHOLDS[mirror].hours
+    if (ageHours != null && ageHours < limitHours && isTransientRwFailure(reason)) {
+      console.warn(
+        `[rw-sync-alert] ${mirror}: transient failure (${reason}) with the mirror ${ageHours.toFixed(2)}h old (limit ${limitHours}h) — not alerting`,
+      )
+      return
+    }
 
     const staleness =
-      ageDays == null
+      ageHours == null
         ? `The ${m.label} mirror has never been populated.`
-        : `The ${m.label} mirror is ${ageDays} day${ageDays === 1 ? '' : 's'} old (last synced ${syncedAt!.toISOString().slice(0, 10)}).`
+        : `The ${m.label} mirror is ${ageText(syncedAt!, now)} (last synced ${syncedAt!.toISOString().slice(0, 16).replace('T', ' ')} UTC).`
 
     // Per-mirror dedupe key: three mirrors failing on the same day are
     // three different problems and each needs saying.

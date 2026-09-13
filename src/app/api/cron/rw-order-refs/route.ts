@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { syncRwOrderRefs } from '@/lib/rentalworks/orderRef'
-import { reportRwSyncFailure } from '@/lib/rentalworks/syncAlert'
+import { reportRwSyncFailure, clearRwSyncFailure } from '@/lib/rentalworks/syncAlert'
 import { isRwAuthError } from '@/lib/rentalworks/rwClient'
 
 export const dynamic = 'force-dynamic'
@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
     }
     // An incomplete cycle is NOT a failure — it is the design. Say so in
     // the response so a human reading it manually can see progress.
+    // A budget stop is a successful run too — the cursor advanced.
+    await clearRwSyncFailure('orderRef')
     return NextResponse.json({
       ...result,
       note: result.complete

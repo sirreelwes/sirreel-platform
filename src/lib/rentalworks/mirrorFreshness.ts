@@ -88,7 +88,7 @@ export interface MirrorHealth {
  * it is supposed to, and an alarm that cries wolf is worse than none.
  * Do not "tighten" these without re-deriving the peak above.
  */
-const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
+export const THRESHOLDS: Record<RwMirror, { label: string; hours: number; cycleHours: number | null }> = {
   // Every 15 minutes (since 2026-09-05 — Ana asked for the balances to
   // keep up with her as she works), all-or-nothing, ~110s a run. Healthy
   // peak row age is ~0.3h, so 1h is about four missed runs. Not tighter:

@@ -59,7 +59,15 @@ export async function GET(req: NextRequest) {
   const stale = health.filter((h) => h.stale)
 
   if (stale.length === 0) {
-    return NextResponse.json({ ok: true, stale: 0, health })
+    // Every mirror is inside its limit: expire the open stale alert so the
+    // Action Queue stops saying so once it isn't (2026-09-13 — it used to
+    // sit there until someone dismissed it, days after recovery).
+    const now = new Date()
+    const cleared = await prisma.alert.updateMany({
+      where: { type: ALERT_TYPE, OR: [{ expires_at: null }, { expires_at: { gt: now } }] },
+      data: { expires_at: now, updated_at: now },
+    })
+    return NextResponse.json({ ok: true, stale: 0, health, cleared: cleared.count })
   }
 
   const lines = health.map(describeMirror)

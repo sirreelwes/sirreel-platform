@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { syncRwInvoices } from '@/lib/rentalworks/syncInvoices'
-import { reportRwSyncFailure } from '@/lib/rentalworks/syncAlert'
+import { reportRwSyncFailure, clearRwSyncFailure } from '@/lib/rentalworks/syncAlert'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
       // nightly for over two weeks unnoticed. Raise something a human sees.
       console.error('[rw-invoice-sync cron] failed:', result.error)
       await reportRwSyncFailure(result.error ?? 'unknown error')
+    } else {
+      await clearRwSyncFailure('invoice')
     }
     // Quotes used to ride along here (2026-08-22 → 2026-09-03). They no
     // longer do: the two pulls together cannot fit one 300s function.
@@ -69,6 +71,8 @@ export async function POST(req: NextRequest) {
     console.error('[rw-invoice-sync] failed:', result.error)
     return NextResponse.json({ ...result }, { status: 502 })
   }
+  // A manual run that succeeds is recovery too.
+  await clearRwSyncFailure('invoice')
   // Quotes are a separate job now — see the cron branch above.
   return NextResponse.json(result)
 }
