@@ -39,6 +39,9 @@ export function JobQuickActions({
     jobCode: string
     name: string
     company: { id: string; name: string }
+    /** The job's primary contact — seeds the hold modal so the rep
+     *  isn't asked for the person again. Null on a job with no contacts. */
+    contact?: { personId: string; name: string; email: string; phone: string | null } | null
     startDate: string | null
     endDate: string | null
   }
@@ -140,6 +143,7 @@ export function JobQuickActions({
             companyId: job.company.id,
             companyName: job.company.name,
           }}
+          defaultContact={job.contact ?? undefined}
           onClose={() => setHoldCategory(null)}
           onCreated={() => {
             setHoldCategory(null)

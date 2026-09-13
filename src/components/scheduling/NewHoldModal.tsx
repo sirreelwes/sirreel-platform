@@ -107,6 +107,12 @@ interface NewHoldModalProps {
    *  this Job. Used by the top-bar QuickCreate flow when the agent
    *  invokes "+ New Hold" from a saved Order/Job page. */
   defaultJob?: { id: string; jobCode: string; name: string; companyId: string; companyName: string }
+  /** Optional pre-seed contact (an existing CRM Person). The job page
+   *  passes its primary contact so adding an asset to a job that already
+   *  knows who to call back doesn't ask for the person a second time
+   *  (Wes 2026-09-12). Opens the ContactPicker in selected_existing mode
+   *  with its "Change" affordance, so a different person is one click. */
+  defaultContact?: { personId: string; name: string; email: string; phone: string | null }
   /** Optional pre-seed quantity. Used by the QuickCreate flow when
    *  the source order line item already specifies qty (e.g. an
    *  order with `Cube Truck × 2` → modal opens with quantity=2).
@@ -137,6 +143,7 @@ export function NewHoldModal({
   canBindUnit = true,
   defaultCompany,
   defaultJob,
+  defaultContact,
   defaultQuantity,
   onClose,
   onCreated,
@@ -149,7 +156,19 @@ export function NewHoldModal({
   const [company, setCompany] = useState<{ id: string; name: string } | null>(
     defaultCompany ?? (defaultJob ? { id: defaultJob.companyId, name: defaultJob.companyName } : null),
   )
-  const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT)
+  const [contact, setContact] = useState<ContactPickerValue>(
+    defaultContact
+      ? {
+          personId: defaultContact.personId,
+          name: defaultContact.name,
+          email: defaultContact.email,
+          phone: defaultContact.phone ?? '',
+          mode: 'selected_existing',
+          company: null,
+          originalPhone: defaultContact.phone ?? '',
+        }
+      : EMPTY_CONTACT,
+  )
   // Inline "+ New company" mini-form. nearMatch carries the 409 body
   // from /api/crm/companies so the agent explicitly chooses "use
   // existing" or "create anyway" — never an auto-merge.

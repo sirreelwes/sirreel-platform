@@ -1430,6 +1430,16 @@ const driverTone = (d: any): string => {
       : 'Awaiting review';
 
   const primaryContact = job.jobContacts.find((c) => c.isPrimary) ?? job.jobContacts[0] ?? null;
+  // Seeds the hold modal's contact so "+ Add asset" / "+ New reservation"
+  // don't ask for the person the job already has (Wes 2026-09-12).
+  const holdContact = primaryContact
+    ? {
+        personId: primaryContact.person.id,
+        name: `${primaryContact.person.firstName} ${primaryContact.person.lastName}`.trim(),
+        email: primaryContact.person.email,
+        phone: primaryContact.person.phone,
+      }
+    : null;
   const extraContacts = Math.max(0, job.jobContacts.length - 1);
   const cardOnFile = job.cardAuth?.onFile;
   const cardSecurityOnly = job.cardAuth?.paymentPreference === 'CHECK_WIRE';
@@ -1724,6 +1734,7 @@ const driverTone = (d: any): string => {
                   jobCode: job.jobCode,
                   name: job.name,
                   company: job.company,
+                  contact: holdContact,
                   // Derived from the orders — a job carries no dates of
                   // its own (lib/jobs/dateRange). Seeds the hold pickers.
                   startDate: isoDate(orderSpan.start),
@@ -2910,7 +2921,7 @@ const driverTone = (d: any): string => {
               // job.startDate/endDate, which the API stopped sending long
               // before the columns were dropped — so the hold picker was
               // silently defaulting to today on every job.
-              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
+              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, contact: holdContact, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
               onCreated={load}
             />
           </div>
