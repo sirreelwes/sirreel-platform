@@ -41,6 +41,7 @@ export function MobileNav({
   actualRole,
   viewAsRole,
   badgeCounts,
+  badgeHrefs,
   user,
   canCreateJob,
 }: {
@@ -51,6 +52,8 @@ export function MobileNav({
   viewAsRole: UserRole | null;
   /** Per-nav-item alert counts; see NavList. */
   badgeCounts: Record<string, number>;
+  /** Where a badged row links in the sheet; see NavList. */
+  badgeHrefs?: Record<string, string>;
   user: { name?: string | null; email?: string | null; image?: string | null };
   canCreateJob: boolean;
 }) {
@@ -140,6 +143,7 @@ export function MobileNav({
                 activeHref={activeHref}
                 role={role}
                 badgeCounts={badgeCounts}
+                badgeHrefs={badgeHrefs}
                 onNavigate={() => setOpen(false)}
                 touch
               />

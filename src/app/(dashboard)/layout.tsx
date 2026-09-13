@@ -187,9 +187,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const canCreateJob = sections.some((s2) => s2.items.some((i) => i.id === 'jobs'));
 
   // Keyed by nav item id — NavList badges whichever entries carry a count.
+  // Action Items live on the /jobs LANDING panel (folded in 2026-08-27;
+  // there is no 'action-items' nav entry), so their count sits on Jobs.
+  // Until 2026-09-12 it was keyed 'action-items' — the hamburger summed
+  // it, but nothing inside the sheet carried it, so the phone showed a
+  // number with no row to explain it.
   const badgeCounts: Record<string, number> = {
-    'action-items': actionItemCount,
+    jobs: actionItemCount,
     paperwork: paperworkCount,
+  };
+  // Where a badged row should land on a PHONE: plain /jobs is the list
+  // there, and the landing panel (Action Items included) only shows
+  // behind ?panel=incoming. Desktop /jobs shows the panel already.
+  const badgeHrefs: Record<string, string> = {
+    jobs: '/jobs?panel=incoming',
   };
 
   return (
@@ -205,6 +216,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         actualRole={actualRole}
         viewAsRole={viewAsRole}
         badgeCounts={badgeCounts}
+        badgeHrefs={badgeHrefs}
         user={user}
         canCreateJob={canCreateJob}
       />
