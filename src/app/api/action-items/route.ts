@@ -1,6 +1,7 @@
 /**
  * GET /api/action-items?view=mine|all[&count=1] — the Action Items
- * engine, per signed-in user. `count=1` returns just the badge count.
+ * engine, per signed-in user. `count=1` returns just the badge count
+ * (HIGH-priority items only — see getActionItemCount).
  */
 
 import { NextRequest, NextResponse } from 'next/server'

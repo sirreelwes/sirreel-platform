@@ -210,10 +210,18 @@ export async function getActionItemsForUser(
   return { items, canSeeAll, role }
 }
 
-/** Unhandled count for the current user (nav badge) — always 'mine'. */
+/**
+ * Nav-badge count for the current user — always 'mine', and ONLY the
+ * 'high' priority items. The badge used to be the whole list, which
+ * read "99+" on the phone hamburger every day (2026-09-12: 123 items
+ * for Wes, 24 of them high) — a number that never changes is not a
+ * signal. Medium/low items still show on the Action Items panel; they
+ * just don't light the red dot. (Wes: the badge is for critical
+ * warnings only.)
+ */
 export async function getActionItemCount(userEmail: string): Promise<number> {
   const { items } = await getActionItemsForUser(userEmail, 'mine')
-  return items.length
+  return items.filter((it) => it.priority === 'high').length
 }
 
 /**

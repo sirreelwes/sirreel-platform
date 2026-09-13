@@ -12,8 +12,11 @@
  * viewports and a new nav entry appears on phones for free.
  *
  * The two things that must not hide behind the hamburger:
- *   - the Action Items unhandled count — mirrored onto the hamburger
- *     as a badge, so the number is legible with the sheet shut;
+ *   - the alert counts (Action Items HIGH-priority + paperwork
+ *     awaiting a ruling) — summed onto the hamburger as a badge, so the
+ *     number is legible with the sheet shut. High only for Action
+ *     Items: the full list is triple digits and a permanent "99+" is
+ *     noise, not a warning (Wes 2026-09-12);
  *   - Make Reservation + New Order — the app's create entry points
  *     ("+ New Job" retired 2026-09-10), which live in the /jobs
  *     toolbar. On a phone that toolbar yields the viewport whenever a

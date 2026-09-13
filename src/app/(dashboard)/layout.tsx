@@ -20,7 +20,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession();
   const [aiOpen, setAiOpen] = useState(false);
   const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
-  // Action Items unhandled-count badge — same engine as the tab.
+  // Action Items badge — same engine as the tab, HIGH priority only
+  // (the full count sat at 99+ and meant nothing; Wes 2026-09-12).
   const [actionItemCount, setActionItemCount] = useState(0);
   // Paperwork alert — COIs and client redlines nobody has ruled on
   // (Wes 2026-09-11). Same derivation the /admin/paperwork feed renders.

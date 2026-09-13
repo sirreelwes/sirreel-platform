@@ -50,8 +50,9 @@ export function NavList({
   activeHref: string | null;
   role: UserRole;
   /** Alert counts keyed by nav item id. Any entry with a count > 0 gets a
-   *  badge — 'action-items' (unhandled items) and 'paperwork' (COIs and
-   *  client redlines nobody has ruled on) today. */
+   *  badge — 'action-items' (HIGH-priority items only, so the badge is a
+   *  warning rather than a backlog) and 'paperwork' (COIs and client
+   *  redlines nobody has ruled on) today. */
   badgeCounts: Record<string, number>;
   onNavigate?: () => void;
   /** Sheet mount: pad rows out to a 44px tap target. */
