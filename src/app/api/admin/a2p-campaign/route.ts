@@ -139,6 +139,15 @@ export async function GET(req: NextRequest) {
     serviceNumbers,
     envFromNumber: envFrom,
     fromNumberInService: envFrom ? serviceNumbers.some((n) => n.phoneNumber === envFrom) : null,
+    // Can this service send a PICTURE? AHA texts a photo of the lock box
+    // keypad (2026-09-13), and MMS on a 10DLC number is a per-number
+    // capability, not a given. False means the photo path quietly degrades
+    // to its text fallback every time and nobody would otherwise know —
+    // the caption carries the link, so it still helps, but the picture is
+    // the point. Null = the number list could not be read.
+    mmsCapable: numberRows.length
+      ? serviceNumbers.some((n) => Boolean((n.capabilities as { mms?: boolean } | null)?.mms))
+      : null,
   }
 
   const compliances = Array.isArray(body.compliances) ? (body.compliances as Array<Record<string, unknown>>) : []

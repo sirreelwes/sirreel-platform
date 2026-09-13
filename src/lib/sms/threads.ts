@@ -280,17 +280,29 @@ export async function sendTracked(args: {
   sentById?: string | null
   /** Staff pressing send may text at any hour. */
   overrideQuietHours?: boolean
+  /**
+   * Public https URLs to attach as MMS. The recorded body carries a
+   * "[photo: …]" line naming each one, so the thread on the job page — and
+   * the turns the model is shown — say a picture went out. Without that the
+   * transcript reads as a bare caption and AHA would offer the photo again
+   * on the next message.
+   */
+  mediaUrls?: string[]
+  /** Short words for the recorded "[photo: …]" line, e.g. "lock box keypad". */
+  mediaLabel?: string
 }): Promise<{ ok: boolean; status: string; error?: string }> {
   const thread = await getOrCreateThread(args.to)
   if (!thread) return { ok: false, status: 'bad-number', error: `unusable number: ${args.to}` }
   const text = args.body.endsWith('Reply STOP to opt out.') ? args.body : `${args.body.trim()} Reply STOP to opt out.`
+  const media = (args.mediaUrls ?? []).filter((u) => (u || '').trim().startsWith('https://'))
+  const logged = media.length ? `${text}\n[photo: ${args.mediaLabel || 'attached'}]` : text
   const log = (status: string, extra: { twilioSid?: string | null; errorText?: string | null } = {}) =>
-    recordOutbound({ threadId: thread.id, body: text, source: args.source, status, jobId: args.jobId, subRentalId: args.subRentalId, sentById: args.sentById, ...extra })
+    recordOutbound({ threadId: thread.id, body: logged, source: args.source, status, jobId: args.jobId, subRentalId: args.subRentalId, sentById: args.sentById, ...extra })
 
   if (thread.optedOutAt) { await log('skipped-opted-out'); return { ok: false, status: 'skipped-opted-out', error: 'number opted out' } }
   if (args.source !== 'staff' && !args.overrideQuietHours && inQuietHours()) { await log('skipped-quiet'); return { ok: false, status: 'skipped-quiet', error: 'quiet hours' } }
 
-  const r = await sendSms(thread.phone, text, { statusCallback: statusCallbackUrl() })
+  const r = await sendSms(thread.phone, text, { statusCallback: statusCallbackUrl(), mediaUrls: media })
   if (r.ok) { await log('queued', { twilioSid: r.sid ?? null }); return { ok: true, status: 'queued' } }
   if (r.skipped) { await log('skipped-unconfigured'); return { ok: false, status: 'skipped-unconfigured', error: 'SMS not configured' } }
   await log('failed', { errorText: r.error ?? null })

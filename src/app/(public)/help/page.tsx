@@ -5,6 +5,7 @@ import { HelpAssistantPanel } from '@/components/site/HelpAssistantPanel'
 import { HELP_VIDEOS } from '@/lib/site/helpVideos'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { LOCKBOX_GUIDE_PATH } from '@/lib/site/lockboxGuide'
 
 /**
  * Public /help — the SirReel help hub referenced on the after-hours line.
@@ -69,6 +70,25 @@ export default function HelpPage() {
           </h2>
 
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Not a SetupGuide — a keypad on a mirror has no kit list or
+                placement — but it is the thing people are standing in a dark
+                lot unable to do, so it leads the row. */}
+            <Link
+              href={LOCKBOX_GUIDE_PATH}
+              className="group rounded-2xl border border-[#e2ddd0] bg-[#f6f4ef] p-5 transition-colors hover:border-[#0F7A93] hover:bg-[#4DB1C6]/[0.06]"
+            >
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#0F7A93]">Vehicle access</div>
+              <h3 className="mt-1 text-[18px] font-black" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Opening the lock box
+              </h3>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f]">
+                The keypad box on the mirror, with a photo of the two buttons that matter and what to
+                try when your code will not open it.
+              </p>
+              <span className="mt-3 inline-block text-[13px] font-bold text-[#1b1a17] group-hover:text-[#0C657A] transition-colors" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Read the guide →
+              </span>
+            </Link>
             {SETUP_GUIDES.map((g) => (
               <Link
                 key={g.slug}
