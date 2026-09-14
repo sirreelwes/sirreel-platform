@@ -46,6 +46,50 @@ export const metadata: Metadata = {
   // already disallows those hosts wholesale, and this is the belt to that
   // braces. Public pages override it below via the (public) layout.
   robots: { index: false, follow: false },
+  // Link-preview card for hq.sirreel.com and tsx.sirreel.com.
+  //
+  // These two hosts carried NO og: tags at all, so a texted HQ link or a
+  // client's portal link rendered as a bare blue URL in iMessage — the
+  // preview fetcher followed the redirect to a sign-in page and found
+  // nothing to draw. `robots: noindex` above does not conflict: it keeps
+  // search engines out, while og: tags are what a messaging app reads.
+  //
+  // Title and description are set EXPLICITLY rather than inherited from
+  // `title`/`description` above, for two reasons: those read as internal
+  // tool copy ("fleet management platform") and this card lands on
+  // clients' phones; and without an explicit og:title Next falls back to
+  // each page's own resolved title, which on a portal page would put the
+  // job in the preview. One stable brand card on every gated page.
+  //
+  // og:url is deliberately absent — metadataBase is the marketing origin,
+  // so a relative og:url here would claim every HQ page lives on
+  // sirreel.com. The image is absolute against that origin on purpose:
+  // the card must be fetchable by a preview bot that has no session, and
+  // sirreel.com is the one host that serves assets to anyone.
+  openGraph: {
+    type: 'website',
+    siteName: 'SirReel',
+    title: 'SirReel Studio Services',
+    description:
+      'Production vehicles, sound stages and standing sets for film and television in Los Angeles.',
+    locale: 'en_US',
+    images: [
+      {
+        url: '/og-card.jpg',
+        width: 1200,
+        height: 630,
+        type: 'image/jpeg',
+        alt: 'SirReel Studio Services',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SirReel Studio Services',
+    description:
+      'Production vehicles, sound stages and standing sets for film and television in Los Angeles.',
+    images: ['/og-card.jpg'],
+  },
 };
 
 // Explicit, app-wide. Next injects a width=device-width default, but

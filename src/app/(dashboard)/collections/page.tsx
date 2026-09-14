@@ -18,5 +18,10 @@ export const metadata = { title: 'SirReel HQ · Collections' }
 export default async function CollectionsPage() {
   const user = await requireCollectionsUser()
   if (!user) redirect('/')
-  return <CollectionsWorkspace operatorName={user.name} />
+  return (
+    <CollectionsWorkspace
+      operatorName={user.name}
+      canSeeDesk={user.role === 'ADMIN' || user.role === 'BILLING'}
+    />
+  )
 }

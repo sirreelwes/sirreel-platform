@@ -272,7 +272,15 @@ function cardOptionLabel(a: Authorization): string {
   return bits.join(' · ')
 }
 
-export function CollectionsWorkspace({ operatorName }: { operatorName: string }) {
+export function CollectionsWorkspace({
+  operatorName,
+  canSeeDesk = false,
+}: {
+  operatorName: string
+  /** May this viewer read the live desk? ADMIN + BILLING only — see
+   *  requireDeskViewer. */
+  canSeeDesk?: boolean
+}) {
   const [auths, setAuths] = useState<Authorization[]>([])
   const [invoices, setInvoices] = useState<RwInvoice[]>([])
   const [finals, setFinals] = useState<FinalInvoice[]>([])
@@ -891,13 +899,27 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             in the nav. Sits beside the title rather than in the body so
             it is findable on the first visit and ignorable on the
             hundredth. */}
-        <Link
-          href="/guides/collecting"
-          className="flex-none inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
-        >
-          How to collect
-          <span aria-hidden="true">→</span>
-        </Link>
+        <div className="flex-none flex items-center gap-2">
+          {/* The live desk — money in and outreach out as it happens, for the
+              people who may read it (ADMIN + BILLING). Hidden rather than
+              redirect-on-click for everyone else. */}
+          {canSeeDesk && (
+            <Link
+              href="/collections/desk"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Live desk
+            </Link>
+          )}
+          <Link
+            href="/guides/collecting"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+          >
+            How to collect
+            <span aria-hidden="true">→</span>
+          </Link>
+        </div>
       </div>
 
       {/* ── tracker stats — stamped rows only, no vibes ─────────────── */}

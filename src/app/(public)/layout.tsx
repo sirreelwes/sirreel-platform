@@ -65,11 +65,26 @@ export const metadata: Metadata = {
     siteName: 'SirReel Studio Services',
     locale: 'en_US',
     url: '/',
-    images: [{ url: '/full-logo.jpg', alt: 'SirReel Studio Services' }],
+    // /og-card.jpg, not /full-logo.jpg. The logo file is 1518x1412 — near
+    // square — and `summary_large_image` (and iMessage's own card) wants
+    // roughly 1.91:1. A square image there is letterboxed down to a small
+    // thumbnail or centre-cropped through the wordmark, which is why a
+    // texted sirreel.com link never looked like the old Wix one. og-card
+    // is the same lockup on a 1200x630 canvas; regenerate it with
+    // `python3 scripts/make-og-card.py` after any logo change.
+    images: [
+      {
+        url: '/og-card.jpg',
+        width: 1200,
+        height: 630,
+        type: 'image/jpeg',
+        alt: 'SirReel Studio Services',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    images: ['/full-logo.jpg'],
+    images: ['/og-card.jpg'],
   },
 }
 
