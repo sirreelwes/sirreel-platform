@@ -290,18 +290,21 @@ export function LineUnitStrip({
   const stillOut = line?.stillOut ?? 0
   const missingCount = (line?.units ?? []).filter((u) => (isOut ? u.missingOut : u.missingIn).length > 0).length
 
+  // The chip is a COUNTER from the first moment, not an instruction.
+  // Wes, 2026-09-14, on a first aid kit line: it "say scan to count but
+  // it's greyed out… they want it starting at zero and then scan items
+  // into that field". A grey sentence where a number belongs reads as a
+  // disabled control — the desk has nothing to watch climb. So the
+  // count is always `n of N`, starting at `0 of 3`.
   let label: string
   let tone: 'good' | 'warn' | 'neutral' | 'bad'
   if (isOut) {
-    if (out === 0) {
-      label = 'scan to count'
-      tone = 'neutral'
-    } else {
-      label = `${out} of ${expectedQty} scanned${missingCount ? ` · ${missingCount} missing parts` : ''}`
-      tone = missingCount ? 'bad' : out === expectedQty ? 'good' : 'warn'
-    }
+    label = `${out} of ${expectedQty} scanned${missingCount ? ` · ${missingCount} missing parts` : ''}`
+    tone = missingCount ? 'bad' : out === 0 ? 'neutral' : out === expectedQty ? 'good' : 'warn'
   } else if (out === 0 && back === 0) {
-    label = 'nothing scanned out'
+    // Nothing was scanned out either, so there is no out-count to come
+    // back against — the ordered quantity is the only denominator.
+    label = `0 of ${expectedQty} back · none scanned out`
     tone = 'neutral'
   } else {
     label = `${back} of ${out || expectedQty} back${stillOut ? ` · ${stillOut} still out` : ''}${missingCount ? ` · ${missingCount} missing parts` : ''}`

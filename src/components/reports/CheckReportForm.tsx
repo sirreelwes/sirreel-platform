@@ -982,7 +982,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                       differs
                         ? 'border-amber-500 bg-lt-inner text-lt-fg'
                         : awaiting
-                          ? 'border-dashed border-lt-hairline bg-lt-page text-lt-fg3'
+                          // Uncounted, not disabled. The DASHED border is
+                          // what says nobody has counted this line — the
+                          // zero itself stays full-strength, because a
+                          // greyed-out number reads as a field you are not
+                          // allowed to touch (Wes, 2026-09-14).
+                          ? 'border-dashed border-lt-fg3 bg-lt-inner text-lt-fg'
                           : 'border-lt-hairline bg-lt-inner text-lt-fg'
                     }`}
                   />
