@@ -48,7 +48,7 @@ import { WalkieSupplyNotice } from "@/components/orders/WalkieSupplyNotice";
 import EnterRedlineModal from "@/components/orders/EnterRedlineModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
-import type { AgreementStatus, LineItemDepartment, OrderStatus } from "@prisma/client";
+import type { AgreementStatus, LineItemDepartment, LineItemType, OrderStatus } from "@prisma/client";
 import {
   isOrderEditable as isOrderEditableFn,
   isMoneyEditable as isMoneyEditableFn,
@@ -463,7 +463,18 @@ function computeRecipients(order: Order): RecipientChoice {
 
 // Unit-tracked catalog rows (vehicles + stages). Named for the picker
 // it feeds; the id is an InventoryItem id since the Aug 2026 merge.
-type AssetCat = { id: string; name: string; slug: string | null; dailyRate: string; weeklyRate: string | null };
+type AssetCat = {
+  id: string;
+  name: string;
+  slug: string | null;
+  dailyRate: string;
+  weeklyRate: string | null;
+  // The catalog row's own department + LineItemType, so picking one
+  // derives the line's type through the shared rule rather than the
+  // dropdown's label. /api/orders/lookups sends both.
+  department?: LineItemDepartment | null;
+  lineType?: LineItemType | null;
+};
 type InvItem = {
   id: string;
   code: string;
@@ -2113,6 +2124,10 @@ export default function OrderDetailPage() {
     // frozen table on every new vehicle line.
     setLiInvItemId(cat.id);
     setLiAssetCatId("");
+    // The row says what it is. The list is vehicles today, but the type a
+    // line is STORED as must never depend on which control was used to
+    // pick it — that is the bug this rule exists for (lineType.ts).
+    setLiType(resolveLineType('INVENTORY', (cat.department || 'VEHICLES') as LineItemDepartment, cat.lineType ?? 'VEHICLE'));
     maybeAutoFillDesc(cat.name);
     setLiRate(String(Number(cat.dailyRate)));
     setLiRateType("DAILY");
@@ -4060,11 +4075,26 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 ) : liType === "VEHICLE" ? (
+                  <>
                   <select value={assetCats.some((c) => c.id === liInvItemId) ? liInvItemId : ""} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                     <option value="">Select vehicle...</option>
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
                   </select>
+                  {/* An empty picker has to SAY it is empty. This list was
+                      silently empty from 2026-08-02 to 2026-09-14 — the
+                      lookups query carried a publicVisible gate that is
+                      false on every unit-tracked row — and all a rep saw
+                      was a dropdown with one placeholder in it. Nobody
+                      filed it; they used the search box instead. */}
+                  {assetCats.length === 0 && (
+                    <p className="mt-1 text-xs text-chip-warn-fg">
+                      No vehicle classes came back — the fleet catalog list is empty.
+                      Search for the vehicle under Equipment instead, and tell whoever
+                      runs HQ: /api/orders/lookups is returning nothing.
+                    </p>
+                  )}
+                  </>
                 ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
                   <>
                   <LineItemDescriptionCombobox
