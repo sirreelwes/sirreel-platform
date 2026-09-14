@@ -32,6 +32,7 @@ import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalR
 import { CompanyCoiReviewList } from '@/components/crm/CompanyCoiReviewList'
 import { staffAccountCois, type StaffAccountCoiState } from '@/lib/portal/companyPortalCois'
 import { PortalsTabs } from '@/components/crm/PortalsTabs'
+import { PortalFilterList } from '@/components/crm/PortalSearch'
 import { JobPortalRow, type JobPortalJobProps } from '@/components/crm/JobPortalRow'
 import { VendorAccountLinkButton } from '@/components/crm/VendorAccountLinkButton'
 import { VendorPartnerPanel } from '@/components/crm/VendorPartnerPanel'
@@ -359,20 +360,23 @@ export default async function CompanyPortalsPage() {
         counts={{ company: rows.length, job: jobRows.length, client: clientPeople.length, partner: vendorAccounts.length, vendor: serviceVendors.length }}
         panes={{
           company: (
-            <div>
-      {rows.length === 0 ? (
-        <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
-          <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
-          <p className="text-sm text-lt-fg2">
-            No client has a portal yet. Open a company under Clients and use &ldquo;Account portal
-            access&rdquo; to add their executives.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((c) => (
+            <PortalFilterList
+              className="space-y-2"
+              noun="production company"
+              empty={
+                <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+                  <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                  <p className="text-sm text-lt-fg2">
+                    No client has a portal yet. Open a company under Clients and use &ldquo;Account
+                    portal access&rdquo; to add their executives.
+                  </p>
+                </div>
+              }
+              items={rows.map((c) => ({
+                key: c.id,
+                text: c.name,
+                node: (
             <CompanyPortalRow
-              key={c.id}
               companyId={c.id}
               name={c.name}
               hasLogo={!!c.logoUrl}
@@ -391,35 +395,50 @@ export default async function CompanyPortalsPage() {
                 canEdit={canEdit}
               />
             </CompanyPortalRow>
-          ))}
-        </div>
-      )}
-
-            </div>
+                ),
+              }))}
+            />
           ),
           job: (
-            <div className="space-y-3">
-              {jobRows.length === 0 ? (
+            <PortalFilterList
+              className="space-y-3"
+              noun="job portal"
+              empty={
                 <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
                   <Link2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
                   <p className="text-sm text-lt-fg2">No job portal links have been issued yet.</p>
                 </div>
-              ) : (
-                jobRows.map((j) => <JobPortalRow key={j.jobId} {...j} />)
-              )}
-            </div>
+              }
+              items={jobRows.map((j) => ({
+                key: j.jobId,
+                // A show is found by its name, but the desk also arrives
+                // holding an order number or a contact's email.
+                text: [
+                  j.jobName,
+                  j.jobCode,
+                  j.companyName ?? '',
+                  ...j.orders.map((o) => o.orderNumber),
+                  ...j.orders.flatMap((o) => o.people.flatMap((p) => [p.name, p.email])),
+                ].join(' '),
+                node: <JobPortalRow {...j} />,
+              }))}
+            />
           ),
           client: (
-            <div>
-              {clientPeople.length === 0 ? (
+            <PortalFilterList
+              className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline"
+              noun="person"
+              empty={
                 <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
                   <Users className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
                   <p className="text-sm text-lt-fg2">Nobody has signed in to a portal yet.</p>
                 </div>
-              ) : (
-                <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
-                  {clientPeople.map((c) => (
-                    <div key={c.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+              }
+              items={clientPeople.map((c) => ({
+                key: c.id,
+                text: `${c.name} ${c.email}`,
+                node: (
+                    <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <Link href={`/crm/people/${c.id}`} className="text-sm font-medium text-lt-fg hover:underline">{c.name || c.email}</Link>
                         <div className="text-xs text-lt-fg2 truncate">{c.email}</div>
@@ -438,10 +457,9 @@ export default async function CompanyPortalsPage() {
                         </Link>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                ),
+              }))}
+            />
           ),
           partner: (
             <div>
@@ -451,9 +469,20 @@ export default async function CompanyPortalsPage() {
               <h3 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
                 Partner accounts · {vendorAccounts.length}
               </h3>
-              <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8">
-                {vendorAccounts.map((va) => (
-                  <details key={va.id} className="group">
+              <PortalFilterList
+                className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8"
+                noun="partner"
+                empty={
+                  <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center mb-8">
+                    <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                    <p className="text-sm text-lt-fg2">No partner accounts yet.</p>
+                  </div>
+                }
+                items={vendorAccounts.map((va) => ({
+                  key: va.id,
+                  text: [va.name, va.contactName ?? '', va.email ?? '', va.catalogSection ?? ''].join(' '),
+                  node: (
+                  <details className="group">
                   <summary className="list-none cursor-pointer px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 [&::-webkit-details-marker]:hidden">
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-lt-fg truncate">
@@ -512,27 +541,33 @@ export default async function CompanyPortalsPage() {
                     />
                   </div>
                   </details>
-                ))}
-              </div>
+                  ),
+                }))}
+              />
               <h3 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">
                 Unit links · latest {vendorPortals.length}
               </h3>
       {/* ── Vendor portals ───────────────────────────────────────────
           Wes 2026-09-05: "Will Vendor portals also fold into that tab?"
           Yes. A partner's link for a sub-rental: sent, opened, acted. */}
-      {vendorPortals.length === 0 ? (
-        <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
-          <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
-          <p className="text-sm text-lt-fg2">No partner unit links have been issued yet.</p>
-        </div>
-      ) : (
-        <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
-          {vendorPortals.map((v) => {
+      <PortalFilterList
+        className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline"
+        noun="unit link"
+        empty={
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+            <Truck className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+            <p className="text-sm text-lt-fg2">No partner unit links have been issued yet.</p>
+          </div>
+        }
+        items={vendorPortals.map((v) => {
             const job = v.order?.job ?? v.job
             const opened = !!v.vendorViewedAt
             const acted = !!v.vendorHoldRequestedAt
-            return (
-              <div key={v.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+            return {
+              key: v.id,
+              text: [v.vendor.name, v.subcontractedVehicle?.name ?? '', job?.name ?? '', job?.jobCode ?? '', v.order?.orderNumber ?? '', v.driverName ?? ''].join(' '),
+              node: (
+              <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium text-lt-fg truncate">{v.vendor.name}</span>
@@ -589,10 +624,10 @@ export default async function CompanyPortalsPage() {
                   )}
                 </div>
               </div>
-            )
+              ),
+            }
           })}
-        </div>
-      )}
+      />
             </div>
           ),
           vendor: (
@@ -602,15 +637,20 @@ export default async function CompanyPortalsPage() {
                 with us, are under Partners. Vendors don&apos;t have a portal link yet; this is who to call.{' '}
                 <Link href="/admin/vendors" className="underline hover:text-lt-fg">Edit vendors</Link>
               </p>
-              {serviceVendors.length === 0 ? (
-                <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
-                  <Wrench className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
-                  <p className="text-sm text-lt-fg2">No vendors on file.</p>
-                </div>
-              ) : (
-                <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline">
-                  {serviceVendors.map((sv) => (
-                    <div key={sv.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
+              <PortalFilterList
+                className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline"
+                noun="vendor"
+                empty={
+                  <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
+                    <Wrench className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
+                    <p className="text-sm text-lt-fg2">No vendors on file.</p>
+                  </div>
+                }
+                items={serviceVendors.map((sv) => ({
+                  key: sv.id,
+                  text: [sv.name, sv.supplies ?? '', sv.contactName ?? '', sv.email ?? '', sv.poEmail ?? '', sv.phone ?? ''].join(' '),
+                  node: (
+                    <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
                       <div className="min-w-0 sm:w-[38%]">
                         <div className="text-sm font-medium text-lt-fg truncate">{sv.name}</div>
                         {sv.supplies && <div className="text-xs text-lt-fg2 truncate">{sv.supplies}</div>}
@@ -619,9 +659,9 @@ export default async function CompanyPortalsPage() {
                         <ContactLine name={sv.contactName} email={sv.email ?? sv.poEmail} phone={sv.phone} />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ),
+                }))}
+              />
             </div>
           ),
         }}

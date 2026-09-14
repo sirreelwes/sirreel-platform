@@ -19,10 +19,20 @@
  * a shared link lands on the same pane.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
-import { Building2, Clapperboard, Handshake, Users, Wrench } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Building2, Clapperboard, Handshake, Search, Users, Wrench, X } from 'lucide-react'
+import { PortalSearchProvider } from '@/components/crm/PortalSearch'
 
 export type PortalKind = 'company' | 'job' | 'client' | 'partner' | 'vendor'
+
+/** Wes 2026-09-14: one field, and it searches the pane he is looking at. */
+const PLACEHOLDER: Record<PortalKind, string> = {
+  company: 'Search production companies…',
+  job: 'Search jobs — show, job code, order number, client, contact…',
+  client: 'Search people — name or email…',
+  partner: 'Search partners — partner, unit, job…',
+  vendor: 'Search vendors — name, contact, trade…',
+}
 
 const TABS: { key: PortalKind; label: string; icon: typeof Users; hint: string }[] = [
   { key: 'company', label: 'Production Companies', icon: Building2, hint: 'Executives who see the whole account' },
@@ -50,10 +60,27 @@ export function PortalsTabs({
   panes: Record<PortalKind, ReactNode>
 }) {
   const [active, setActive] = useState<PortalKind>('company')
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const h = FROM_HASH[window.location.hash.replace('#', '')]
     if (h) setActive(h)
+  }, [])
+
+  // "/" from anywhere on the page puts the cursor in the field. The point
+  // of this is not scrolling to find a job, so it shouldn't cost a mouse
+  // trip to the top either.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   function pick(k: PortalKind) {
@@ -86,7 +113,32 @@ export function PortalsTabs({
           )
         })}
       </div>
-      {panes[active]}
+
+      <div className="relative mb-4">
+        <Search className="w-4 h-4 text-lt-fg3 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
+          placeholder={PLACEHOLDER[active]}
+          aria-label={PLACEHOLDER[active]}
+          className="w-full bg-lt-card border border-lt-hairline rounded-lg pl-9 pr-9 py-2.5 text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => { setQuery(''); searchRef.current?.focus() }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded text-lt-fg3 hover:text-lt-fg"
+            aria-label="Clear search"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      <PortalSearchProvider query={query}>{panes[active]}</PortalSearchProvider>
     </div>
   )
 }
