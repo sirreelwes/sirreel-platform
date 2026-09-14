@@ -34,11 +34,21 @@ export interface RequestDriverResult {
   emailOk: boolean
   emailError: string | null
   vehicles: string[]
+  /** True when dryRun stopped short of the magic link, the send and the stamp. */
+  previewOnly?: boolean
 }
 
 const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
-export async function requestDriverFromClient(args: { jobId: string; contactId?: string | null }): Promise<RequestDriverResult> {
+/**
+ * `dryRun` runs every gate and resolves the exact contact and vehicle
+ * list, then returns WITHOUT refreshing the magic link, sending, or
+ * stamping the job. It exists so the 48-hour sweep can be shown to a
+ * human before it mails anybody — a preview that skipped the gates
+ * would be worth nothing, so it deliberately shares this code path
+ * rather than re-deriving the candidates somewhere else.
+ */
+export async function requestDriverFromClient(args: { jobId: string; contactId?: string | null; dryRun?: boolean }): Promise<RequestDriverResult> {
   const job = await prisma.job.findUnique({
     where: { id: args.jobId },
     select: {
@@ -106,6 +116,11 @@ export async function requestDriverFromClient(args: { jobId: string; contactId?:
   })
   const pickupDate = needing.map((a) => a.startDate).sort((a, b) => a.getTime() - b.getTime())[0]?.toISOString().slice(0, 10) ?? null
 
+  const contactName = `${contact.person.firstName} ${contact.person.lastName}`.trim()
+  if (args.dryRun) {
+    return { sentTo: email, contactName, sentAt: new Date(), emailOk: false, emailError: null, vehicles, previewOnly: true }
+  }
+
   const orderRow = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, select: { portalSlug: true } })
   const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: contact.person.id })
   const portalLink = `${portalJobUrl(orderRow.portalSlug!, link.token)}#drivers`
@@ -142,7 +157,7 @@ export async function requestDriverFromClient(args: { jobId: string; contactId?:
   }
   return {
     sentTo: email,
-    contactName: `${contact.person.firstName} ${contact.person.lastName}`.trim(),
+    contactName,
     sentAt,
     emailOk: result.ok,
     emailError: result.ok ? null : result.reason,
