@@ -496,17 +496,28 @@ const STATUS_COLORS: Record<string, string> = {
 // there's only one way to add a new discount going forward.
 const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE"] as const;
 
-/** What the TYPE column says. LineItemType has no STAGE member — every
- *  AssetCategory-backed line is stored VEHICLE — so a stage day read
- *  "VEHICLE" on the row while its own department select said Stages. The
- *  stored enum is untouched (lane routing and day-billing key off
- *  department already); this is the label only. */
+/** What the TYPE column says.
+ *
+ *  LineItemType has no STAGE member, and a stage day answers to BOTH of the
+ *  goods types depending on which door it came in: Make Reservation posts
+ *  every AssetCategory row as VEHICLE, while a line picked from the catalog
+ *  combobox re-derives to EQUIPMENT on save. All three stage lines in the
+ *  DB on 2026-09-14 read EQUIPMENT; the row Wes asked about read VEHICLE
+ *  until he saved it. Either way "Lankershim Studios" is a stage.
+ *
+ *  Goods types only — a stage cleaning FEE or a stagehand LABOR line under
+ *  the STAGES department is still a fee and still labor. The stored enum is
+ *  untouched (lane routing, day-billing and hold matching key off
+ *  department already, and `type` is what binds a line to its hold); this
+ *  is the label only. */
+const STAGE_LABELLED_TYPES = new Set(["VEHICLE", "EQUIPMENT"]);
+
 function lineTypeLabel(li: { type: string; department?: string | null; fulfillmentLane?: string | null }): string {
   // Department / lane only — isStageLineItem's legacy name fallback is a
   // /stage/i test on the catalog row, which is fine for "does this order
   // need the stage contract" and wrong for labelling one row.
   const stage = isStageLineItem({ department: li.department, fulfillmentLane: li.fulfillmentLane });
-  return stage && li.type === "VEHICLE" ? "STAGE" : li.type;
+  return stage && STAGE_LABELLED_TYPES.has(li.type) ? "STAGE" : li.type;
 }
 
 // Status transitions exposed as buttons on the order detail page.
