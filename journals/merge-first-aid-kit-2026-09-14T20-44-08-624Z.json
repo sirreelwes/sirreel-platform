@@ -1,0 +1,24 @@
+{
+  "ranAt": "2026-09-14T20:44:08.618Z",
+  "keeper": {
+    "id": "22de4d9f-cd3c-41e0-bd1f-ecb52a7cc21c",
+    "code": "SAF-1ST-AID-KIT-50-PERSON",
+    "qtyOwned": 12
+  },
+  "twin": {
+    "id": "e0855ec2-cdeb-4306-8aed-186d86111564",
+    "code": "First Aid Kit \"50 Person\"",
+    "qtyOwned": 12,
+    "isActive": true,
+    "archivedAt": null
+  },
+  "lines": [
+    {
+      "id": "4a3c595f-c659-43b5-9819-e06f632a41dc",
+      "lineInventoryItemIdBefore": "e0855ec2-cdeb-4306-8aed-186d86111564",
+      "orderNumber": "S260908-003",
+      "description": "First Aid Kit \"50 Person\"",
+      "rate": "25"
+    }
+  ]
+}
