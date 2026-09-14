@@ -154,6 +154,10 @@ export async function GET(
                 sortOrder: true,
                 type: true,
                 department: true,
+                // Kit pieces / ancillaries hang off a parent line; the
+                // order-row summary has to skip them so a coach's mileage
+                // never reads as a second unit on the job page.
+                parentLineItemId: true,
                 description: true,
                 quantity: true,
                 rate: true,
