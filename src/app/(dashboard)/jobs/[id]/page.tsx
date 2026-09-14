@@ -712,10 +712,14 @@ export default function JobDetailPage() {
     }
   };
 
+  // Returns the fetch so callers can `await load()` and know the screen
+  // is showing the new state before they do anything else. It used to
+  // return undefined, which made the two `await load()` sites no-ops
+  // that only looked like they waited.
   const load = () => {
     setLoading(true);
     setError(null);
-    fetch(`/api/jobs/${id}`)
+    return fetch(`/api/jobs/${id}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.job) {
@@ -1075,6 +1079,17 @@ export default function JobDetailPage() {
           // "could not file" gives the operator nothing to report or act on.
           : d?.error || `Could not file that agreement (HTTP ${r.status}).`,
       );
+      // Re-read the job, or the card keeps showing what it showed before
+      // the upload — the badge still reads Pending, the row still reads
+      // "not signed yet" and "No executed PDF filed for this one", all
+      // directly under a green line saying it was filed. The write had
+      // worked every time; nothing on screen had been told.
+      //
+      // "Send for signature" and "Link agreement" both already do this
+      // (and the comment on the first one says exactly why). This was
+      // the one mutation on the page that skipped it — see the note on
+      // openedRef, which states the rule it was breaking.
+      if (d?.ok) await load();
     } catch {
       setFileSignedMsg('Could not file that agreement.');
     } finally {
