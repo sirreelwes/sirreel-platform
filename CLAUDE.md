@@ -307,8 +307,13 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/lib/sales/tentSandbags.ts` is a TABLE, not arithmetic: no formula
   over width × length gives all three AND an 8x8 (4 legs, not 3.2). An
   unlisted size offers NOTHING rather than a guess — a rep who sees no
-  offer asks; a wrong count ships. **8x8 = 4 is the one assumption** (Wes
-  didn't state it); it is a single line to change.
+  offer asks; a wrong count ships.
+- **All four counts are CONFIRMED (Wes 2026-09-14: "10x10 is four, 8x8 is
+  four — confirmed").** Two of them shipped as inferences and are worth
+  knowing about: the 10x10 arrived dictated as "it's for sandbags" and was
+  read as FOUR, and the 8x8 Wes never named — it was inferred from the four
+  legs it shares with a 10x10. Both turned out right. Nothing in
+  `SANDBAGS_BY_SIZE` is an open assumption now.
 - **OFFERED, never auto-added.** Sandbags are billable and tents get staked
   instead on some locations, so the count is computed for the rep and the
   decision stays theirs. This is deliberately NOT `InventoryKitPiece`

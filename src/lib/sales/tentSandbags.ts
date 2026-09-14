@@ -7,6 +7,12 @@
  * 10 x 10 tent and six sandbags per 10 x 15 tent, and eight sandbags per
  * 10 x 20 tent."
  *
+ * The 10x10 count arrived as "it's for sandbags" and was read as FOUR;
+ * the 8x8 he did not name at all. Both were shipped as inferences and
+ * both were CONFIRMED by Wes on 2026-09-14 ("10x10 is four, 8x8 is four
+ * — confirmed"), so every number in the table below is now his, not a
+ * reading of his.
+ *
  * ONE PER LEG is the real rule behind those numbers — a 10x10 pop-up
  * stands on 4 legs, a 10x15 on 6, a 10x20 on 8 — which is why this is a
  * table and not arithmetic. No formula over the width and length
@@ -29,9 +35,9 @@ import { tentRole } from '@/lib/sales/tentFirst'
  * Sandbags per tent, by footprint. Keys are normalized "WxL" with the
  * smaller number first, so "10 x 15" and "15x10" are one entry.
  *
- * 8x8 is the one number Wes did not state. It carries 4 because an 8x8
- * pop-up stands on the same four legs as a 10x10 — change this line if
- * the yard says otherwise; it is the only assumption in the table.
+ * Every value is Wes's, confirmed 2026-09-14. The 8x8 was originally
+ * inferred from the leg count it shares with a 10x10; he has since
+ * confirmed the four, so it is no longer an assumption to revisit.
  */
 export const SANDBAGS_BY_SIZE: Record<string, number> = {
   '8x8': 4,
