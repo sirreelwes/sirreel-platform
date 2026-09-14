@@ -26,6 +26,7 @@ import { prisma } from '@/lib/prisma'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 import { haystack as buildHaystack, matchesQuery, placement, queryVariants } from '@/lib/site/publicTextMatch'
+import { TENT_ACCESSORY_SLOTS, orderTentFirst } from '@/lib/sales/tentFirst'
 import { PUBLISHABLE_CANDIDATE_WHERE, hasPublicPrice } from '@/lib/catalog/publicVisibility'
 import { contactPrefillHref } from '@/lib/site/publicNav'
 import type { PublicSearchHit, PublicSearchKind } from '@/lib/site/publicSearchTypes'
@@ -253,7 +254,7 @@ export async function searchPublicSite(query: string, limit = 8): Promise<Public
     vehicle: 0, supply: 0, stage: 1, 'standing-set': 1, page: 2,
   }
 
-  return matched
+  const ranked = matched
     .map((e) => ({
       e,
       // Summed placement across every token, so a row that has all of them
@@ -273,8 +274,23 @@ export async function searchPublicSite(query: string, limit = 8): Promise<Public
         kindRank[a.e.kind] - kindRank[b.e.kind] ||
         a.e.label.localeCompare(b.e.label),
     )
+    .map(({ e }) => e)
+
+  // Tent first, accessories next (Wes 2026-09-14) — the THIRD ranking path
+  // that needed this, after the staff typeahead and the supply order form.
+  // A sidewall is named "Canopy Tent Sidewall - 10' Blue", so on "tent" it
+  // scores a name hit AND wins the shorter-name tiebreak above, which put
+  // seven sidewalls above the first canopy in the site-wide box. Same rule
+  // as the other two, so all three boxes answer "tent" the same way; the
+  // reserve keeps the sidewalls reachable inside a limit of 8 rather than
+  // letting ~30 canopy rows bury them. A no-op on every other query.
+  return orderTentFirst(ranked, q, {
+    name: (e) => e.label,
+    limit,
+    minAccessories: TENT_ACCESSORY_SLOTS,
+  })
     .slice(0, limit)
-    .map(({ e }) => {
+    .map((e) => {
       const { haystack: _haystack, inStock: _inStock, ...hit } = e
       return hit
     })
