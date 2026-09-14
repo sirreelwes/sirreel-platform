@@ -24,6 +24,10 @@
  *     it rewrites the order and emails the client a smaller quote, and
  *     on the way in it is gear that did not come home. Uncounted is NOT
  *     that, and never reaches the server as a count.
+ *   - VEHICLES are not on this sheet's hook at all. A FLEET-lane line is
+ *     listed so the floor knows what else is going, with no count box —
+ *     it leaves on the driver's check-out and comes back through the yard
+ *     walk-around (Wes, 2026-09-14).
  *   - A line only opens its exchange/note fields when its count differs
  *     or the supervisor asks for them. The sheet stays scannable.
  *   - The consequences are stated on screen BEFORE submitting, not
@@ -94,6 +98,20 @@ type Extra = {
   filedAs?: { description: string; actualQty: number }
 }
 
+/**
+ * A vehicle is not warehouse work.
+ *
+ * Wes, 2026-09-14: "it's making warehouse check out the vehicles on the
+ * order to complete the check out. The vehicles should be separate check
+ * in/out." A FLEET-lane line leaves through the driver's check-out and its
+ * 22-slot walk-around, and comes back through the yard walking it — which
+ * is what `settleGearAfterReport` already believes (it only ever advances
+ * WAREHOUSE lines). The sheet still SHOWS the truck, because the floor
+ * loading it wants to know it is going; it just never asks them to count
+ * it, and a van nobody typed a number into no longer holds the pull.
+ */
+const isFleetLine = (l: { lane: string | null }) => l.lane === 'FLEET'
+
 const fmtDay = (ymd: string | null) => {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-').map(Number)
@@ -112,7 +130,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * and re-opening one is a correction, not a re-count from nothing.
    */
   const startsCounted = (l: DraftLine) =>
-    !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
+    isFleetLine(l) || !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
   const [rows, setRows] = useState<Row[]>(() =>
     draft.lines.map((l) => {
       const counted = startsCounted(l)
@@ -320,8 +338,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * "the client didn't get it", which rewrites the order and emails
    * them a smaller quote.
    */
-  const offSheet = rows.filter((r) => !r.onSheet)
-  const onSheetIds = rows.filter((r) => r.onSheet).map((r) => r.orderLineItemId)
+  const offSheet = rows.filter((r) => !r.onSheet && !isFleetLine(r))
+  const onSheetIds = rows.filter((r) => r.onSheet && !isFleetLine(r)).map((r) => r.orderLineItemId)
   /**
    * Lines nobody can pull from as written — a bundle with no piece count
    * ("10' x 10' Pop-Ups with Sides"), or a line booked against a catalog
@@ -343,9 +361,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     return out
   }, [draft.lines])
 
-  /** On this pull and still without a count — the sheet cannot file. */
-  const uncounted = rows.filter((r) => r.onSheet && !r.counted)
-  const countedRows = rows.filter((r) => r.onSheet && r.counted).length
+  /** On this pull and still without a count — the sheet cannot file.
+   *  Vehicles are never in here: they are the driver's check-out. */
+  const uncounted = rows.filter((r) => r.onSheet && !r.counted && !isFleetLine(r))
+  const countedRows = rows.filter((r) => r.onSheet && r.counted && !isFleetLine(r)).length
   /** The one-tap day: everything came off the shelf exactly as ordered. */
   const countEverything = () =>
     setRows((prev) =>
@@ -510,7 +529,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               actualQty: r.actualQty,
               substituteFor: (r.substituteFor ?? '').trim() || null,
               note: (r.note ?? '').trim() || null,
-              onSheet: r.onSheet,
+              // A vehicle is never "left on the shelf for a later pull" —
+              // off-sheet is what makes a report PARTIAL, and a partial
+              // report settles no gear at all.
+              onSheet: isFleetLine(r) ? true : r.onSheet,
             })),
             ...extras
               .filter((e) => e.description.trim())
@@ -883,6 +905,15 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           <p className="px-3 py-6 text-center text-[15px] text-lt-fg3">This order has no line items.</p>
         )}
 
+        {/* Every line is a vehicle: there is nothing here for the floor to
+            count, and saying so beats an empty-looking sheet with a live
+            File button under it. */}
+        {rows.length > 0 && onSheetIds.length === 0 && offSheet.length === 0 && (
+          <p className="px-3 py-4 text-center text-[15px] text-lt-fg3">
+            Nothing on this order is warehouse gear — the {isOut ? 'vehicle leaves on the driver’s check-out' : 'vehicle comes back through the yard walk-around'}.
+          </p>
+        )}
+
         {rows.map((r) => {
           const differs =
             r.onSheet && r.counted && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
@@ -890,6 +921,31 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           // that is what has been handled so far, NOT because the client
           // is losing the line or the gear is missing (Wes, 2026-09-14).
           const awaiting = r.onSheet && !r.counted
+          // The truck. Shown so the floor knows what else is leaving with
+          // this order, with no count box and no controls — typing a
+          // number here would be the warehouse signing for a walk-around
+          // it did not do.
+          if (isFleetLine(r)) {
+            return (
+              <div
+                key={r.orderLineItemId}
+                className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 bg-lt-inner flex items-center gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-lt-fg2 text-[16px] font-medium truncate">{r.description}</div>
+                  <div className="text-lt-fg3 text-[13px] truncate">
+                    {r.qualifier && <span>{r.qualifier} · </span>}
+                    ordered {r.expectedQty} · {isOut
+                      ? 'goes out on the driver’s check-out, not this sheet'
+                      : 'comes back through the yard walk-around, not this sheet'}
+                  </div>
+                </div>
+                <span className="flex-none text-[12px] font-semibold px-2 py-1 rounded bg-chip-neutral-bg text-chip-neutral-fg">
+                  vehicle
+                </span>
+              </div>
+            )
+          }
           // A line held back for a later pull: dimmed, no count, and no
           // controls that would imply something happened to it.
           if (!r.onSheet) {
