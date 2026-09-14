@@ -113,6 +113,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/sirreel-logo',
   '/s-logo',
   '/full-logo',
+  '/og-card',          // 1200x630 link-preview card (iMessage/Slack og:image)
   '/images/',          // static marketing images (stages heroes, etc.)
   '/guides/',          // client gear setup PDFs linked from /help/[slug]
   '/site-404',         // branded-404 rewrite target; listed so a rewrite that
@@ -153,6 +154,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/sirreel-logo',
   '/s-logo',
   '/full-logo',
+  '/og-card',          // 1200x630 link-preview card (iMessage/Slack og:image)
   '/images/',          // static marketing images (stages heroes, etc.)
   '/guides/',          // client gear setup PDFs linked from /help/[slug]
   '/site-404',         // branded-404 rewrite target; listed so a rewrite that
@@ -204,6 +206,10 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/sirreel-logo',     // logos referenced by inline-image emails
   '/s-logo',           // ditto
   '/full-logo',        // ditto
+  '/og-card',          // link-preview card. metadataBase points og:image at
+                       // sirreel.com, so this host is not normally asked for
+                       // it — listed alongside the other logos so a hardcoded
+                       // or copied reference can't 404 on the client host
   '/public/',          // static files
   '/api/health',       // upstream probe (if/when one exists)
   // robots.txt MUST be reachable here. It was missing, so tsx.sirreel.com
