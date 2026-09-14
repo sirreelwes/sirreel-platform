@@ -35,6 +35,7 @@
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:closed-day": "tsx tests/orders/closed-day-handoff.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
+    "test:driver-sweep-window": "tsx tests/drivers/request-sweep-window.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:cadence": "tsx tests/jobs/cadence.test.ts",
     "test:job-stage": "tsx tests/jobs/stage.test.ts",
