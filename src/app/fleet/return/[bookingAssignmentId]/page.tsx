@@ -201,6 +201,15 @@ export default async function FleetReturnPage({ params }: Params) {
               <FileText size={12} aria-hidden />
               Condition report (out vs back)
             </a>
+            {/* The filed record on screen, slot by slot against the
+                check-out. Read-only, and still reachable months later
+                when this screen is long out of anyone's week. */}
+            <Link
+              href={`/reports/vehicles/${returnRow.id}`}
+              className="text-zinc-400 text-xs hover:text-amber-500"
+            >
+              See what was filed
+            </Link>
           </div>
         </div>
       </Shell>

@@ -123,6 +123,16 @@ export default async function FleetInspectionPage({ params }: Params) {
             >
               Hand over to driver →
             </a>
+            {/* This card used to be the end of the road: it said the
+                walk-around was done and showed nothing that was
+                captured. The record is read-only and keeps the photos
+                reachable long after the truck is back (Wes, 2026-09-14). */}
+            <a
+              href={`/reports/vehicles/${existing.id}`}
+              className="mt-3 block text-xs text-zinc-400 hover:text-amber-500"
+            >
+              See what was filed — photos, mileage, condition
+            </a>
           </div>
         ) : (
           <InspectionCheckoutForm bookingAssignmentId={assignment.id} />

@@ -22,7 +22,7 @@
  */
 
 import Link from 'next/link'
-import { Lock, Car, ArrowRight, Check, ClipboardList, KeyRound } from 'lucide-react'
+import { Lock, Car, ArrowRight, Check, ClipboardList, KeyRound, History } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { CheckEdgeTabs } from '@/components/reports/CheckEdgeTabs'
 import { fleetMovementsOn, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
@@ -81,7 +81,19 @@ export default async function VehicleReportsPage() {
     <div className="max-w-4xl mx-auto px-1 py-2">
       <header className="mb-5">
         <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Vehicles</div>
-        <h1 className="text-lt-fg text-2xl font-bold">Check In/Out</h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h1 className="text-lt-fg text-2xl font-bold">Check In/Out</h1>
+          {/* This list is a work queue eight days wide. Every walk-around
+              ever filed lives in the record (Wes, 2026-09-14: "they need
+              to be able to go back and see previous check in check out
+              forms"). */}
+          <Link
+            href="/reports/vehicles/history"
+            className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-lt-fg2 hover:text-lt-fg border border-lt-hairline rounded-lg px-3 py-1.5"
+          >
+            <History size={15} aria-hidden /> Past walk-arounds
+          </Link>
+        </div>
         <p className="text-lt-fg2 text-sm mt-0.5 max-w-[70ch]">
           The walk-around at both ends of a rental, one end at a time. Check out is the condition
           report plus the handover to the driver; check in is the return, compared side by side
@@ -209,8 +221,11 @@ function VehicleRow({ row, edge }: { row: Row; edge: 'out' | 'back' }) {
       <div className="flex items-center gap-1.5 flex-none">
         {edge === 'out' ? (
           <>
+            {/* Once a walk-around is filed, "view" means the read-only
+                record of what was captured — the capture screen only
+                says it is done and shows none of it. */}
             <Link
-              href={`/fleet/inspection/${row.assignmentId}`}
+              href={done && stamp ? `/reports/vehicles/${stamp.id}` : `/fleet/inspection/${row.assignmentId}`}
               className="inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white"
             >
               <ClipboardList size={13} aria-hidden />
@@ -229,7 +244,7 @@ function VehicleRow({ row, edge }: { row: Row; edge: 'out' | 'back' }) {
           </>
         ) : (
           <Link
-            href={`/fleet/return/${row.assignmentId}`}
+            href={done && stamp ? `/reports/vehicles/${stamp.id}` : `/fleet/return/${row.assignmentId}`}
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-md px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white"
           >
             {done ? 'View report' : 'Check in'}

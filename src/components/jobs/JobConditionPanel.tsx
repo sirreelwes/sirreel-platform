@@ -108,6 +108,16 @@ function Side({ label, insp }: { label: 'Out' | 'Back'; insp: Inspection | undef
           {missing.length > 4 ? ` +${missing.length - 4} more` : ''}
         </p>
       )}
+      {/* The whole filed form — every slot, the readings, the damage
+          rows, and the other end of the rental beside it. This card is a
+          summary; the argument is usually settled on the form. */}
+      <Link
+        href={`/reports/vehicles/${insp.id}`}
+        className="inline-flex items-center gap-1 text-[12px] font-semibold text-lt-fg2 hover:text-amber-600 mt-2"
+      >
+        Open the filed walk-around
+        <ArrowRight size={11} aria-hidden />
+      </Link>
     </div>
   )
 }
