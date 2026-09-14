@@ -14,6 +14,11 @@
  */
 
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+// Footer mark: the S, not the wordmark (Wes 2026-09-14). Black-on-transparent,
+// the companion to /s-logo-white.png — s-logo.jpg is opaque white-backed and
+// would show a box against the #fafaf8 footer ground. Same mark quoteSend.ts
+// and bookingWelcome.ts already carry, so client mail signs off one way.
+const ABSOLUTE_S_MARK_URL_BLACK = 'https://hq.sirreel.com/s-logo-black.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
 const ACCENT = '#0F7A93'
@@ -169,7 +174,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 
           <tr>
             <td style="background-color:#fafaf8;padding:20px 36px;text-align:center;border-top:1px solid #ececec;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1;color:#777777;letter-spacing:0.5px;">SirReel</div>
+              <img src="${ABSOLUTE_S_MARK_URL_BLACK}" alt="SirReel" width="30" style="display:inline-block;width:30px;max-width:30px;height:auto;border:0;outline:none;text-decoration:none;" />
               <p style="margin:8px 0 0;font-size:10px;line-height:1.6;color:#888888;letter-spacing:0.3px;">
                 SirReel Studio Rentals<br />
                 ${FOOTER_ADDRESS} &middot; ${FOOTER_PHONE}
