@@ -49,6 +49,7 @@ export type NotificationChannelKey =
   | 'portal-opens'
   | 'portal-people'
   | 'portal-cards'
+  | 'portal-payments'
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
   | 'driver-checkouts'
@@ -112,6 +113,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'One email when a client adds a colleague to their own company portal from inside it (Wes 2026-09-06: "if she wants to add people she can do so in her portal"). Says who added whom, so the desk knows a new name is looking at the account before that person ever writes in. Defaults to the hq@ feed.',
     defaults: () => [hqNotifyInbox()],
+  },
+  {
+    key: 'portal-payments',
+    label: 'Client paid in the portal',
+    description:
+      'One email the moment a client pays an HQ invoice from their own portal — card or ACH — with the amount, the invoice, who clicked pay, and what is still owed on it (Ana 2026-09-14: "a notification sent to me if client pays through the portal. That way I can keep track of payments easier"). Before this a portal payment was silent, so a client who paid on Saturday could still be chased on Monday. An ACH row says plainly that the money is pending, not cleared. Defaults to billing plus the hq@ feed.',
+    defaults: () => [...COPY_RECIPIENTS.billing, hqNotifyInbox()],
   },
   {
     key: 'portal-cards',

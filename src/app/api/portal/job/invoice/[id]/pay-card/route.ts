@@ -42,6 +42,7 @@ import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { chargeCard, isApproved, appliedAmounts } from '@/lib/cardpointe/client'
 import { recordPortalPayment } from '@/lib/invoices/recordPortalPayment'
 import { surchargeBreakdown, CARD_SURCHARGE_LABEL } from '@/lib/payments/surcharge'
+import { notifyPortalPayment } from '@/lib/payments/notifyPortalPayment'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -215,6 +216,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 500 },
     )
   }
+
+  // Tell the desk. Awaited rather than floated — a serverless function can
+  // be frozen the instant it responds, and a dangling promise is how a
+  // notification silently never sends. It cannot fail the request: the
+  // notifier swallows its own errors.
+  await notifyPortalPayment({
+    invoiceId: invoice.id,
+    portalAccessId: resolved.portalAccessId,
+    amount: base,
+    surcharge: surcharge,
+    kind: 'CARD',
+    reference: last4 ? `••${last4}` : null,
+  })
 
   return NextResponse.json({
     ok: true,

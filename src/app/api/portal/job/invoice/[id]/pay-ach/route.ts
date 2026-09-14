@@ -41,6 +41,7 @@ import {
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { originateAch, isApproved } from '@/lib/cardpointe/client'
 import { recordPortalPayment } from '@/lib/invoices/recordPortalPayment'
+import { notifyPortalPayment } from '@/lib/payments/notifyPortalPayment'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -235,6 +236,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 500 },
     )
   }
+
+  // Heads-up to the desk. Awaited, not floated — see the card route. The
+  // email says PENDING in its own words: an ACH origination is a promise,
+  // and marking the invoice settled off it is exactly the mistake the
+  // remittance/collected split exists to prevent.
+  await notifyPortalPayment({
+    invoiceId: invoice.id,
+    portalAccessId: resolved.portalAccessId,
+    amount,
+    kind: 'ACH',
+    reference: last4 ? `····${last4}` : null,
+  })
 
   return NextResponse.json({
     ok: true,
