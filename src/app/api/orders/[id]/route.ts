@@ -259,7 +259,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const {
       status, description, startDate, endDate, taxRate, notes, companyId, agentId, bookingId,
       blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions,
-      deliveryRequested, pickupRequested,
+      deliveryRequested, pickupRequested, warehouseOrderExpected,
     } = body;
 
     const data: Record<string, unknown> = {};
@@ -370,6 +370,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (blindReturnInstructions !== undefined) {
       data.blindReturnInstructions = blindReturnInstructions || null;
     }
+    // "A warehouse order is coming on this reservation" (Wes 2026-09-14).
+    // A note about what is still to be written, not a fact about lines —
+    // any session that can edit the order can set or clear it.
+    if (warehouseOrderExpected !== undefined) data.warehouseOrderExpected = !!warehouseOrderExpected;
 
     // Delivery/pickup marking is a SALES action (canCreateBooking). Gate ONLY
     // these two fields so the rest of the PUT (status, dates, blind*) keeps its

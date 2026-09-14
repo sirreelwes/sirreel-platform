@@ -77,6 +77,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     select: { id: true, order: { select: { id: true, orderNumber: true } } },
   })
 
+  // The reservation said a warehouse order was coming, and one just took
+  // the unit — so the expectation has been met (Wes 2026-09-14). Clearing
+  // it here is what stops the note outliving the thing it was waiting for.
+  //
+  // Only a GEAR order counts. Moving the unit onto another vehicle order
+  // is not the warehouse order anyone was waiting on, and a detach never
+  // is; both leave the note where it was. The order page can always set
+  // or clear it by hand.
+  if (nextOrderId && assignment.orderId && assignment.orderId !== nextOrderId) {
+    try {
+      const gearLines = await prisma.orderLineItem.count({
+        where: { orderId: nextOrderId, department: { not: 'VEHICLES' }, type: { not: 'FEE' } },
+      })
+      if (gearLines > 0) {
+        await prisma.order.updateMany({
+          where: { id: assignment.orderId, warehouseOrderExpected: true },
+          data: { warehouseOrderExpected: false },
+        })
+      }
+    } catch {
+      /* additive column — never fail the attach over the note */
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       userId: user.id,

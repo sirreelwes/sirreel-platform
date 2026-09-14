@@ -178,6 +178,9 @@ interface FromParseBody {
   discount?: { amount: number; label?: string | null }
   /** Will call, or loaded on a reserved unit. Omitted = not asked. */
   gearHandoff?: GearHandoffInput | null
+  /** Sales is fairly sure gear follows this reservation, and the list is
+   *  not written yet (Wes 2026-09-14). See Order.warehouseOrderExpected. */
+  warehouseOrderExpected?: boolean
   /** The closed-day handoff answers (the yard is dark on Sunday), as the
    *  order columns they set. Omitted = the window never touched one. */
   blindPickup?: boolean
@@ -219,6 +222,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { companyDecision, jobDecision, contactsDecision, items, parsed, discount, gearHandoff } = body
+  const warehouseOrderExpected = body.warehouseOrderExpected === true
   const { blindPickup, blindReturn } = body
   if (!companyDecision || !jobDecision) {
     return NextResponse.json({ error: 'companyDecision + jobDecision required' }, { status: 400 })
@@ -726,6 +730,21 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[orders/from-parse] immediate hold threw:', err)
+    }
+
+    // The reservation that is only half the job — the rep says a warehouse
+    // order is coming before there is a list to write (Wes 2026-09-14).
+    // Guarded like the handoff below: additive column, and a note is never
+    // worth failing a created order over.
+    if (warehouseOrderExpected) {
+      try {
+        await prisma.order.update({
+          where: { id: result.orderId },
+          data: { warehouseOrderExpected: true },
+        })
+      } catch (err) {
+        console.warn('[orders/from-parse] warehouse-order-expected not stored (column missing?):', err)
+      }
     }
 
     // Will call, or loaded on a reserved truck (Wes 2026-09-12). Stored

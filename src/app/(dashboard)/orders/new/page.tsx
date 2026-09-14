@@ -1925,7 +1925,51 @@ function NewQuotePageInner() {
     const a = k ? vehicleAvail[k] : null;
     return !!a && a.status === 'ok';
   });
-  const gearHandoffAsked = !loadOnAssignmentId && holdableVehicleRows.length > 0 && gearRows.length > 0;
+  /** "A warehouse order is coming on this reservation" (Wes 2026-09-14:
+   *  "if we are fairly certain that there will be a warehouse order on an
+   *  asset reservation, it would be nice to be able to indicate that
+   *  here"). Only worth asking on a reservation that carries NO gear yet
+   *  — once the gear is on the order the expectation is the order. */
+  const [warehouseExpected, setWarehouseExpected] = useState(false);
+  const warehouseExpectedAsked = !loadOnAssignmentId && vehicleRows.length > 0 && gearRows.length === 0;
+  /** Gear on the order has to say how it leaves before the order saves.
+   *  Gear that is only EXPECTED may say it, and usually can — the truck
+   *  it rides is the one being reserved right now — but a guess must
+   *  never block the save. */
+  const gearHandoffRequired = !loadOnAssignmentId && holdableVehicleRows.length > 0 && gearRows.length > 0;
+  const gearHandoffAsked =
+    gearHandoffRequired || (warehouseExpectedAsked && warehouseExpected && holdableVehicleRows.length > 0);
+  /** The will-call / loaded-on chips. Rendered under the line items when
+   *  the gear is ON the order, and in the Reservation card when it is
+   *  only expected — one definition, so the two can never drift apart. */
+  const gearHandoffChoices = (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="How does the gear leave?">
+      <button
+        type="button"
+        role="radio"
+        aria-checked={gearHandoff?.kind === 'WILL_CALL'}
+        onClick={() => setGearHandoff({ kind: 'WILL_CALL' })}
+        className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${gearHandoff?.kind === 'WILL_CALL' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
+      >
+        Will call — the client picks it up at the warehouse
+      </button>
+      {holdableVehicleRows.map((it) => {
+        const picked = gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId;
+        return (
+          <button
+            key={it.localId}
+            type="button"
+            role="radio"
+            aria-checked={picked}
+            onClick={() => setGearHandoff({ kind: 'LOAD_ON', localId: it.localId })}
+            className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${picked ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
+          >
+            Loaded on {it.description || 'the vehicle'}{it.quantity > 1 ? ` (×${it.quantity} — first unit bound)` : ''}
+          </button>
+        );
+      })}
+    </div>
+  );
   useEffect(() => {
     if (gearHandoff?.kind === 'LOAD_ON' && !holdableVehicleRows.some((it) => it.localId === gearHandoff.localId)) setGearHandoff(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2389,7 +2433,7 @@ function NewQuotePageInner() {
         alert('Could not resolve a company for this order. Pick one, or choose "I don\'t know the company yet".');
         return;
       }
-      if (gearHandoffAsked && !gearHandoff) {
+      if (gearHandoffRequired && !gearHandoff) {
         alert('Say how the gear leaves: will call, or loaded on one of the reserved vehicles. It is the question under the line items.');
         return;
       }
@@ -2469,6 +2513,8 @@ function NewQuotePageInner() {
           },
           // Sunday pickup / return, answered under the rental window.
           ...blindFlagsFor(handoffWindow.start, handoffWindow.end, closedDay),
+          // Gear is coming, the list is not written yet (Wes 2026-09-14).
+          warehouseOrderExpected: warehouseExpectedAsked && warehouseExpected,
           // Will call, or loaded on a reserved truck (Wes 2026-09-12). A
           // warehouse order written from a reservation already knows.
           gearHandoff: loadOnAssignmentId
@@ -3412,6 +3458,49 @@ function NewQuotePageInner() {
         ) : (
           renderDeptGroup('VEHICLES', vehicleRows)
         )}
+
+        {/* "A warehouse order is coming" — the reservation that is only
+            half the job (Wes 2026-09-14). A vehicle-only order reads as
+            finished to everyone downstream; this is how the rep says it
+            is not, at the moment they know it. It holds nothing and
+            prices nothing — the gear list is written later, from the
+            reserved unit's tile on the job page.
+
+            Asked only while there is no gear on the order: once a gear
+            line is here, the expectation IS the order. */}
+        {warehouseExpectedAsked && (
+          <div className={`rounded-lg border p-3 ${warehouseExpected ? 'border-chip-warn-fg/40 bg-chip-warn-bg' : 'border-lt-hairline bg-lt-inner/40'}`}>
+            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={warehouseExpected}
+                onChange={(e) => setWarehouseExpected(e.target.checked)}
+                className="accent-amber-600 mt-0.5"
+              />
+              <span className="min-w-0">
+                <span className={`block text-xs font-semibold ${warehouseExpected ? 'text-chip-warn-fg' : 'text-lt-fg'}`}>
+                  A warehouse order is coming on this reservation
+                </span>
+                <span className="block text-[12px] text-lt-fg2 mt-0.5">
+                  Tick it when gear is near certain but the list is not written yet. Nothing is held and nothing is
+                  priced — the order page and the unit&rsquo;s tile on the job page keep saying the reservation is not
+                  the whole job, until the warehouse order is written from that unit.
+                </span>
+              </span>
+            </label>
+            {warehouseExpected && holdableVehicleRows.length > 0 && (
+              <div className="mt-2.5 pl-[26px] space-y-1.5">
+                <div className="text-xs font-semibold text-lt-fg">
+                  How will it leave?{' '}
+                  <span className="font-normal text-lt-fg2">
+                    {gearHandoff ? '— recorded; the warehouse order starts from it.' : '— optional, if you already know.'}
+                  </span>
+                </div>
+                {gearHandoffChoices}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Line items — everything that is not a vehicle */}
@@ -3444,7 +3533,7 @@ function NewQuotePageInner() {
             computes that clipped box to be. The two prompts directly
             above this one (closed-day, week decision) are plain button
             chips for the same reason. */}
-        {gearHandoffAsked && (
+        {gearHandoffRequired && (
           <div className={`rounded-lg border p-3 space-y-2 ${gearHandoff ? 'border-lt-hairline bg-lt-inner/40' : 'border-chip-warn-fg/40 bg-chip-warn-bg'}`}>
             <div className={`text-xs font-semibold ${gearHandoff ? 'text-lt-fg' : 'text-chip-warn-fg'}`}>
               How does the gear leave?
@@ -3455,32 +3544,7 @@ function NewQuotePageInner() {
                 {gearHandoff ? ' — recorded; change it any time before you save.' : ' — needed before this order can be saved.'}
               </span>
             </div>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="How does the gear leave?">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={gearHandoff?.kind === 'WILL_CALL'}
-                onClick={() => setGearHandoff({ kind: 'WILL_CALL' })}
-                className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${gearHandoff?.kind === 'WILL_CALL' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
-              >
-                Will call — the client picks it up at the warehouse
-              </button>
-              {holdableVehicleRows.map((it) => {
-                const picked = gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId;
-                return (
-                  <button
-                    key={it.localId}
-                    type="button"
-                    role="radio"
-                    aria-checked={picked}
-                    onClick={() => setGearHandoff({ kind: 'LOAD_ON', localId: it.localId })}
-                    className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${picked ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
-                  >
-                    Loaded on {it.description || 'the vehicle'}{it.quantity > 1 ? ` (×${it.quantity} — first unit bound)` : ''}
-                  </button>
-                );
-              })}
-            </div>
+            {gearHandoffChoices}
           </div>
         )}
       </div>

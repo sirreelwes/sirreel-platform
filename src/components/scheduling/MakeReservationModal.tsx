@@ -387,6 +387,12 @@ export function MakeReservationModal({
    *  unit is open regardless — the picks have to stay visible. */
   const [openPickers, setOpenPickers] = useState<Record<string, boolean>>({})
   const [notes, setNotes] = useState(prefill?.notes ?? '')
+  /** "A warehouse order is coming on this reservation" (Wes 2026-09-14).
+   *  This window only ever writes vehicles, so the order it leaves behind
+   *  reads as the whole job to everyone downstream; this is how the rep
+   *  says the gear list is still to come. Holds nothing, prices nothing —
+   *  see Order.warehouseOrderExpected. */
+  const [warehouseExpected, setWarehouseExpected] = useState(false)
   /** Out-of-hours handoffs. Sunday is dark and Saturday closes at 3:30,
    *  so a pickup or return in either is blind unless someone opens up —
    *  asked here, answered onto the order's blindPickup/blindReturn (see
@@ -884,6 +890,8 @@ export function MakeReservationModal({
             startDate: envelope.start,
             endDate: envelope.end,
             description: notes.trim() || null,
+            // Gear is coming, the list is not written yet.
+            warehouseOrderExpected: warehouseExpected,
             // Weekend handoff, answered above. False on every window the
             // yard is open for — the order page owns turning one on later.
             ...orderBlindFlags(),
@@ -2110,6 +2118,26 @@ export function MakeReservationModal({
                   className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
                 />
               </div>
+
+              {/* Gear still to come. A reservation made here is vehicles
+                  only by construction, so "is this the whole job?" has no
+                  other way to be answered (Wes 2026-09-14). */}
+              <label className="flex items-start gap-2 text-[12px] text-lt-fg2">
+                <input
+                  type="checkbox"
+                  checked={warehouseExpected}
+                  onChange={(e) => setWarehouseExpected(e.target.checked)}
+                  className="mt-0.5 accent-amber-600"
+                />
+                <span>
+                  A warehouse order is coming on this reservation
+                  <span className="block text-[11px] text-lt-fg3">
+                    Tick it when gear is near certain but the list isn&apos;t written yet. Nothing is
+                    held and nothing is priced — the order and the unit&apos;s tile on the job page say
+                    so until the warehouse order is written from that unit.
+                  </span>
+                </span>
+              </label>
 
               {/* Assign */}
               {canBindUnit && (

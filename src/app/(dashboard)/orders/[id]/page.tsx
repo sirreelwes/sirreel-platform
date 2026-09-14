@@ -245,6 +245,9 @@ type Order = {
    *  the builder never asked. */
   gearHandoff?: 'WILL_CALL' | 'LOAD_ON' | string | null;
   gearLoadsOnAssignmentId?: string | null;
+  /** The rep said a warehouse order is coming on this reservation and the
+   *  gear list is not written yet (Order.warehouseOrderExpected). */
+  warehouseOrderExpected?: boolean;
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
   job: {
     id: string;
@@ -1045,6 +1048,32 @@ export default function OrderDetailPage() {
       setDispatchSaving(false);
     }
   }, [orderId, deliveryRequested, pickupRequested, fetchOrder]);
+
+  // "A warehouse order is coming on this reservation" (Wes 2026-09-14) —
+  // set in the order builder's Reservation section, and settable or
+  // clearable here for as long as it is still true. Writing the warehouse
+  // order onto one of the reserved units clears it on its own; see
+  // PATCH /api/scheduling/assignments/[id]/order.
+  const [warehouseExpectedSaving, setWarehouseExpectedSaving] = useState(false);
+  const saveWarehouseExpected = useCallback(async (next: boolean) => {
+    setWarehouseExpectedSaving(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ warehouseOrderExpected: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.reason || data.error || `Save failed (${res.status})`);
+      }
+      await fetchOrder();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWarehouseExpectedSaving(false);
+    }
+  }, [orderId, fetchOrder]);
 
   const openTaskForm = useCallback((type: "DELIVERY" | "PICKUP") => {
     if (!order) return;
@@ -3410,6 +3439,73 @@ export default function OrderDetailPage() {
               )}
             </div>
           )}
+          {/* The reservation that is only half the job (Wes 2026-09-14:
+              "if we are fairly certain that there will be a warehouse
+              order on an asset reservation, it would be nice to be able
+              to indicate that here"). A vehicle-only order reads as
+              finished everywhere downstream; this is the line that says
+              it is not, with the way to write the missing order right
+              next to it. */}
+          {(() => {
+            const gearOnOrder = order.lineItems.some((l) => l.type !== 'FEE' && l.department !== 'VEHICLES');
+            const hasVehicleLine = order.lineItems.some((l) => l.department === 'VEHICLES');
+            const expected = !!order.warehouseOrderExpected;
+            // Nothing is coming on an order that is over, so the offer to
+            // set the note stops there. An expectation already set still
+            // shows — it explains what happened to a rental that went out
+            // without the gear it was waiting on.
+            const stillOpen = !['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED', 'CANCELLED'].includes(order.status);
+            if (!expected && (gearOnOrder || !hasVehicleLine || !stillOpen)) return null;
+            // Somewhere to start it: the first unit this order holds.
+            const unit = (order.loadsOn ?? [])[0] ?? null;
+            const writeHref =
+              order.job && unit
+                ? `/orders/new?jobId=${encodeURIComponent(order.job.id)}&loadOnAssignmentId=${encodeURIComponent(unit.id)}`
+                : null;
+            if (!expected) {
+              return (
+                <div className="mt-1.5 text-xs">
+                  <button
+                    type="button"
+                    disabled={warehouseExpectedSaving}
+                    onClick={() => void saveWarehouseExpected(true)}
+                    className="text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-60"
+                    title="Say that gear is coming on this reservation, before there is a list to write"
+                  >
+                    + Expect a warehouse order
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <div className="mt-1.5 text-xs">
+                <span
+                  className={`px-2 py-0.5 rounded font-semibold ${gearOnOrder ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}
+                  title={gearOnOrder
+                    ? 'Gear is on this order now — the note can come off'
+                    : 'Sales expects a warehouse order on this reservation; the list is not written yet'}
+                >
+                  {gearOnOrder ? 'Warehouse order expected — gear is on this order' : 'Warehouse order expected — not written yet'}
+                </span>{' '}
+                {!gearOnOrder && writeHref && (
+                  <>
+                    <Link href={writeHref} className="text-amber-700 hover:text-amber-800 hover:underline font-semibold">
+                      Write it
+                    </Link>{' '}
+                  </>
+                )}
+                <button
+                  type="button"
+                  disabled={warehouseExpectedSaving}
+                  onClick={() => void saveWarehouseExpected(false)}
+                  className="text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-60"
+                  title="Take the note off — no warehouse order is coming after all"
+                >
+                  Clear
+                </button>
+              </div>
+            );
+          })()}
           {(order.loadsOn ?? []).length > 0 && (
             <div className="mt-1.5">
               <span className="text-lt-fg3 text-xs">Loads on</span>

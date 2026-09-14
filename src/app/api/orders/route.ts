@@ -152,6 +152,10 @@ export async function POST(req: NextRequest) {
       // order page's Blind handoff card writes; instructions are typed
       // there, not here.
       blindPickup, blindReturn,
+      // "A warehouse order is coming on this reservation" (Wes
+      // 2026-09-14) — a vehicle-only reservation saying it is not the
+      // whole job. See Order.warehouseOrderExpected.
+      warehouseOrderExpected,
     } = body;
     let { agentId } = body;
 
@@ -233,6 +237,7 @@ export async function POST(req: NextRequest) {
           taxRate: taxRate ?? 0,
           blindPickup: !!blindPickup,
           blindReturn: !!blindReturn,
+          warehouseOrderExpected: !!warehouseOrderExpected,
         },
         include: {
           company: { select: { id: true, name: true } },

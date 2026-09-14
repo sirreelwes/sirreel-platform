@@ -1341,7 +1341,7 @@ const driverTone = (d: any): string => {
 }
 
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; attachedOrder: { id: string; orderNumber: string } | null; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; attachedOrder: { id: string; orderNumber: string; warehouseOrderExpected: boolean } | null; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -1360,7 +1360,16 @@ const driverTone = (d: any): string => {
               startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
               bookingAssignmentId: a.id,
               // The order this unit goes out ON (BookingAssignment.orderId).
-              attachedOrder: (a as any).order ? { id: (a as any).order.id, orderNumber: (a as any).order.orderNumber } : null,
+              attachedOrder: (a as any).order
+                ? {
+                    id: (a as any).order.id,
+                    orderNumber: (a as any).order.orderNumber,
+                    // "A warehouse order is coming on this reservation"
+                    // (Wes 2026-09-14) — the tile is where it gets acted
+                    // on, because "+ Warehouse order" is right there.
+                    warehouseOrderExpected: !!(a as any).order.warehouseOrderExpected,
+                  }
+                : null,
               drivers: (a as any).driverAssignments ?? [],
               currentDriverId: (a as any).checkoutRecords?.[0]?.driverId ?? null,
               unitReturned: !!(a as any).checkoutRecords?.[0]?.returnTime,
@@ -3023,13 +3032,27 @@ const driverTone = (d: any): string => {
                   the saved order to THIS unit. */}
               <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200 pt-2 text-[11px]">
                 {a.attachedOrder ? (
-                  <Link
-                    href={`/orders/${a.attachedOrder.id}`}
-                    className="inline-flex items-center gap-1 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 font-mono font-semibold text-violet-700 hover:bg-violet-100"
-                    title="This unit goes out on this order"
-                  >
-                    {a.attachedOrder.orderNumber}
-                  </Link>
+                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <Link
+                      href={`/orders/${a.attachedOrder.id}`}
+                      className="inline-flex items-center gap-1 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 font-mono font-semibold text-violet-700 hover:bg-violet-100"
+                      title="This unit goes out on this order"
+                    >
+                      {a.attachedOrder.orderNumber}
+                    </Link>
+                    {/* The reservation said gear was coming and it still
+                        has not been written (Wes 2026-09-14). The tile is
+                        where it belongs: "+ Warehouse order" is the next
+                        control along. */}
+                    {a.attachedOrder.warehouseOrderExpected && (
+                      <span
+                        className="shrink-0 rounded border border-chip-warn-fg/30 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg"
+                        title="Sales said a warehouse order is coming on this reservation — the gear list is not written yet"
+                      >
+                        gear to come
+                      </span>
+                    )}
+                  </span>
                 ) : (
                   <span className="text-zinc-500">No order on this unit</span>
                 )}

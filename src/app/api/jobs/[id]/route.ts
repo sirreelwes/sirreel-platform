@@ -258,7 +258,7 @@ export async function GET(
                     // "Order attached" link, and what the Reserved
                     // assets tile shows beside "+ Warehouse order".
                     orderId: true,
-                    order: { select: { id: true, orderNumber: true, status: true } },
+                    order: { select: { id: true, orderNumber: true, status: true, warehouseOrderExpected: true } },
                     // Who's been named to drive this unit. Licence state
                     // rides along so the job page can show a rep whether
                     // the vehicle can actually leave — booleans only, no

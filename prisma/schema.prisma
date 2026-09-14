@@ -3670,6 +3670,16 @@ model Order {
   // so an old client never 500s on a value it has not heard of.
   gearHandoff              String? @map("gear_handoff")
   gearLoadsOnAssignmentId  String? @map("gear_loads_on_assignment_id")
+  // Sales is fairly sure a warehouse order is coming on this
+  // reservation, and the gear list is not written yet (Wes 2026-09-14:
+  // "if we are fairly certain that there will be a warehouse order on an
+  // asset reservation, it would be nice to be able to indicate that
+  // here"). An INTENTION, not a fact about lines — it says the
+  // reservation is not the whole job, so nobody reads a vehicle-only
+  // order as finished. Cleared by hand on the order page, and
+  // automatically when a warehouse order takes one of its reserved units
+  // (PATCH /api/scheduling/assignments/[id]/order).
+  warehouseOrderExpected   Boolean @default(false) @map("warehouse_order_expected")
   // Ana's ruling on this order in the collections billing queue — snoozed
   // to a date, or dismissed as "not billed out of HQ". Zero-or-one; the
   // queue itself is derived from check-in and invoice state.
