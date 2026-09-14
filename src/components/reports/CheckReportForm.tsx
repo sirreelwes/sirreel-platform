@@ -7,9 +7,20 @@
  * holding: a marked-up sheet, a pen, and forty lines of which two are
  * wrong. So:
  *
- *   - Every line arrives pre-filled with what the order says. Doing
- *     nothing and hitting Submit records "it all went as written",
- *     which is the truth on most days and should take one tap.
+ *   - On the way BACK, every line arrives pre-filled with what the
+ *     order says: doing nothing and hitting Submit records "it all came
+ *     back as written", which is the truth on most days.
+ *   - On the way OUT it does NOT. Wes, 2026-09-14: "The pull list OUT
+ *     numbers should start at zero because they haven't pulled anything
+ *     yet. The quantity ordered should be next to the box so they know
+ *     the quantity they need to pull. If three walkies are ordered, the
+ *     quantity out should say zero until three walkies are scanned out."
+ *     A pre-filled number is indistinguishable from a counted one — the
+ *     same reason the photo reader is told to omit blank lines rather
+ *     than echo the order. So an outbound line is UNCOUNTED until
+ *     somebody scans it, types it, or taps its ordered quantity, and the
+ *     sheet will not file while any line on it is still uncounted.
+ *     "Everything as ordered" keeps the one-tap day one tap.
  *   - A line only opens its exchange/note fields when its count differs
  *     or the supervisor asks for them. The sheet stays scannable.
  *   - The consequences are stated on screen BEFORE submitting, not
@@ -34,6 +45,7 @@ import {
   describeParents,
   type CountedQuantities,
 } from '@/lib/orders/kitCompleteness'
+import { pullGapsForLine, type PullGap } from '@/lib/orders/pullAmbiguity'
 import { UnitScanPanel, LineUnitStrip } from '@/components/reports/UnitScanPanel'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
@@ -57,7 +69,16 @@ const OUT_BLOCKED_MESSAGE: Record<OutBlockedReason, string> = {
     'The gear side is done. The truck still has to be checked out — that walk-around is what puts the job On rental.',
 }
 
-type Row = DraftLine & { open: boolean }
+type Row = DraftLine & {
+  open: boolean
+  /**
+   * Somebody has said what happened to this line. FALSE is not "zero
+   * went out" — it is "nobody has pulled this yet", which is why a zero
+   * here may never reach the server as a count (a real zero rewrites the
+   * order and emails the client a smaller quote).
+   */
+  counted: boolean
+}
 type Extra = {
   key: string
   description: string
@@ -82,13 +103,25 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const router = useRouter()
   const isOut = draft.edge === 'OUT'
 
+  /**
+   * A fresh OUTBOUND sheet starts empty — see the header. A sheet that is
+   * already on file, and every inbound sheet, keeps the pre-filled
+   * behaviour: those numbers were counted by a person.
+   */
+  const startsCounted = (l: DraftLine) =>
+    !isOut || !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
   const [rows, setRows] = useState<Row[]>(() =>
-    draft.lines.map((l) => ({
-      ...l,
-      // A line a previous report marked up opens already expanded, so a
-      // correction shows what was said rather than hiding it.
-      open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
-    })),
+    draft.lines.map((l) => {
+      const counted = startsCounted(l)
+      return {
+        ...l,
+        // A line a previous report marked up opens already expanded, so a
+        // correction shows what was said rather than hiding it.
+        open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
+        counted,
+        actualQty: counted ? l.actualQty : 0,
+      }
+    }),
   )
   const [extras, setExtras] = useState<Extra[]>(() =>
     draft.extras.map((e, i) => ({
@@ -194,8 +227,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         // A missing part is something the agent has to see: open the row.
         const open = noteChanged && sentence ? true : r.open
         if (before === after) return noteChanged ? { ...r, note, open } : r
-        if (after === null) return { ...r, actualQty: r.expectedQty, note, open }
-        return { ...r, actualQty: after, onSheet: true, note, open }
+        // Every scan of this line withdrawn → back to where it started:
+        // uncounted on a fresh outbound sheet, pre-filled otherwise.
+        if (after === null) {
+          const counted = startsCounted(r)
+          return { ...r, actualQty: counted ? r.expectedQty : 0, counted, note, open }
+        }
+        return { ...r, actualQty: after, counted: true, onSheet: true, note, open }
       }),
     )
     setUnitScans(next)
@@ -211,9 +249,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const changeList = useMemo(() => {
     const out: Array<{ key: string; text: string; added: boolean; alreadyFiled: boolean }> = []
     for (const r of rows) {
-      // A line left off this pull says nothing about itself — it is not
-      // a change, it is a line that has not happened yet.
-      if (!r.onSheet) continue
+      // A line left off this pull — or one nobody has counted yet — says
+      // nothing about itself. It is not a change, it is a line that has
+      // not happened yet.
+      if (!r.onSheet || !r.counted) continue
       const change = classifyCheckLine(r)
       if (change === 'NONE') continue
       out.push({
@@ -263,7 +302,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const shortfalls = useMemo(() => {
     if (!isOut || draft.kitExpectations.length === 0) return []
     const counted: CountedQuantities = {}
-    for (const r of rows) counted[r.orderLineItemId] = r.onSheet ? r.actualQty : null
+    for (const r of rows) counted[r.orderLineItemId] = r.onSheet && r.counted ? r.actualQty : null
     return kitShortfalls(draft.kitExpectations, counted)
   }, [isOut, draft.kitExpectations, rows])
   /** Lines the desk has to add — the yard cannot fix these from here. */
@@ -280,6 +319,35 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    */
   const offSheet = rows.filter((r) => !r.onSheet)
   const onSheetIds = rows.filter((r) => r.onSheet).map((r) => r.orderLineItemId)
+  /**
+   * Lines nobody can pull from as written — a bundle with no piece count
+   * ("10' x 10' Pop-Ups with Sides"), or a line booked against a catalog
+   * row that is a different thing. Said on the sheet because this is the
+   * last screen before the truck leaves; fixing it is the agent's, since
+   * the line carries a rate the client agreed to.
+   */
+  const pullGaps = useMemo(() => {
+    const all = draft.lines.map((l) => ({
+      description: l.description,
+      quantity: l.expectedQty,
+      catalogName: l.catalogName,
+    }))
+    const out = new Map<string, PullGap[]>()
+    draft.lines.forEach((l, i) => {
+      const gaps = pullGapsForLine(all[i], all)
+      if (gaps.length) out.set(l.orderLineItemId, gaps)
+    })
+    return out
+  }, [draft.lines])
+
+  /** On this pull and still without a count — the sheet cannot file. */
+  const uncounted = rows.filter((r) => r.onSheet && !r.counted)
+  const countedRows = rows.filter((r) => r.onSheet && r.counted).length
+  /** The one-tap day: everything came off the shelf exactly as ordered. */
+  const countEverything = () =>
+    setRows((prev) =>
+      prev.map((r) => (r.onSheet && !r.counted ? { ...r, counted: true, actualQty: r.expectedQty } : r)),
+    )
   /**
    * Which lines the printer should give them, which flips once a
    * partial sheet is already on file:
@@ -379,6 +447,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           return {
             ...r,
             actualQty: hit.actualQty,
+            // Somebody wrote a number on the paper — that is a count.
+            counted: true,
             substituteFor: swap ?? r.substituteFor,
             note: swap ? r.note : (hit.note ?? r.note),
             // Open anything that differs or that the reader was unsure
@@ -786,11 +856,26 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
             {isOut ? 'What actually went out' : 'What actually came back'}
           </span>
-          <span className="text-[12px] text-lt-fg3">
-            {offSheet.length
-              ? `${onSheetIds.length} of ${rows.length} lines on this pull`
-              : `${rows.length} lines · pre-filled from the order`}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] text-lt-fg3">
+              {isOut
+                ? `${countedRows} of ${onSheetIds.length} lines counted${offSheet.length ? ` · ${offSheet.length} off this pull` : ''}`
+                : offSheet.length
+                  ? `${onSheetIds.length} of ${rows.length} lines on this pull`
+                  : `${rows.length} lines · pre-filled from the order`}
+            </span>
+            {/* Hugo's day: the whole sheet came off the shelf as written.
+                Still a deliberate tap, so nothing is counted by default. */}
+            {isOut && uncounted.length > 0 && (
+              <button
+                type="button"
+                onClick={countEverything}
+                className="text-[12px] font-semibold text-lt-fg2 hover:text-amber-600 border border-lt-hairline rounded-lg px-2.5 py-1"
+              >
+                Everything as ordered
+              </button>
+            )}
+          </div>
         </div>
 
         {rows.length === 0 && (
@@ -799,7 +884,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
 
         {rows.map((r) => {
           const differs =
-            r.onSheet && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+            r.onSheet && r.counted && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+          // Nobody has pulled this line yet. The box reads zero because
+          // that is what is on the truck, NOT because the client is
+          // losing the line (Wes, 2026-09-14).
+          const awaiting = r.onSheet && !r.counted
           // A line held back for a later pull: dimmed, no count, and no
           // controls that would imply something happened to it.
           if (!r.onSheet) {
@@ -836,9 +925,26 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   <div className="text-lt-fg text-[16px] font-medium truncate">{r.description}</div>
                   <div className="text-lt-fg2 text-[13px] truncate">
                     {r.qualifier && <span>{r.qualifier} · </span>}
-                    ordered {r.expectedQty}
+                    {isOut ? (
+                      awaiting ? <span className="text-lt-fg3">not pulled yet</span> : <span>counted</span>
+                    ) : (
+                      <span>ordered {r.expectedQty}</span>
+                    )}
                     {r.lane && <span className="text-lt-fg3"> · {r.lane.toLowerCase()}</span>}
                   </div>
+                  {/* Nobody can pull "2 pop-ups with sides" — say what is
+                      missing where the count is being typed, not on a
+                      screen the floor never opens. */}
+                  {(pullGaps.get(r.orderLineItemId) ?? []).map((g, i) => (
+                    <div
+                      key={i}
+                      className="mt-1 text-[13px] text-chip-warn-fg bg-chip-warn-bg border border-chip-warn-fg/25 rounded px-2 py-1 flex items-start gap-1.5"
+                    >
+                      <AlertTriangle size={13} aria-hidden className="flex-none mt-0.5" />
+                      <span>{g.message}</span>
+                    </div>
+                  ))}
+
                   {/* A line the scanner can count, or already has. */}
                   {unitScans && (r.unitTracked || unitScans.lines.some((l) => l.orderLineItemId === r.orderLineItemId)) && (
                     <LineUnitStrip
@@ -850,6 +956,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     />
                   )}
                 </div>
+                {/* The count, with the number they are pulling TO right
+                    beside it: "OUT [ 0 ] of 3". Wes, 2026-09-14 — the
+                    ordered quantity used to sit in the grey sub-line
+                    while the box itself was already filled in with it. */}
                 <label className="flex items-center gap-1.5 flex-none">
                   <span className="text-[12px] text-lt-fg3 uppercase tracking-wide">
                     {isOut ? 'Out' : 'In'}
@@ -859,12 +969,35 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     min={0}
                     inputMode="numeric"
                     value={r.actualQty}
-                    onChange={(e) => patch(r.orderLineItemId, { actualQty: Math.max(0, Number(e.target.value) || 0) })}
-                    className={`w-20 text-center bg-lt-inner border rounded-lg px-2 py-1.5 text-[16px] text-lt-fg ${
-                      differs ? 'border-amber-500' : 'border-lt-hairline'
+                    onChange={(e) =>
+                      patch(r.orderLineItemId, {
+                        actualQty: Math.max(0, Number(e.target.value) || 0),
+                        // Typing IS counting — including typing a zero,
+                        // which is how "the client didn't get it" is said.
+                        counted: true,
+                      })
+                    }
+                    className={`w-20 text-center border rounded-lg px-2 py-1.5 text-[16px] ${
+                      differs
+                        ? 'border-amber-500 bg-lt-inner text-lt-fg'
+                        : awaiting
+                          ? 'border-dashed border-lt-hairline bg-lt-page text-lt-fg3'
+                          : 'border-lt-hairline bg-lt-inner text-lt-fg'
                     }`}
                   />
+                  <span className="text-[13px] text-lt-fg2 whitespace-nowrap">of {r.expectedQty}</span>
                 </label>
+                {/* This line came off the shelf whole — one tap rather
+                    than typing the number that is already on screen. */}
+                {awaiting && (
+                  <button
+                    type="button"
+                    onClick={() => patch(r.orderLineItemId, { counted: true, actualQty: r.expectedQty })}
+                    className="flex-none text-[12px] font-semibold text-lt-fg2 hover:text-amber-600 border border-lt-hairline rounded-lg px-2.5 py-1.5"
+                  >
+                    All {r.expectedQty}
+                  </button>
+                )}
                 {/* Where a number came from matters more than what it
                     is: a low-confidence read is exactly the line a
                     supervisor should look at twice. */}
@@ -1049,6 +1182,30 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           className="mt-1 w-full bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 text-[15px] text-lt-fg placeholder:text-lt-fg3 leading-relaxed"
         />
       </label>
+
+      {/* Nothing files while a line on this pull has no count. A blank
+          line cannot be submitted as a zero: a zero rewrites the order
+          and emails the client a smaller quote, and "nobody has pulled
+          it yet" is not that. Naming the lines is the point — this is
+          the last screen before the truck leaves. */}
+      {isOut && uncounted.length > 0 && !confirming && (
+        <div className="mb-3 rounded-lg border border-pill-quoted-fg/25 bg-pill-quoted-bg px-3 py-2.5">
+          <p className="text-[14px] text-pill-quoted-fg">
+            <b>
+              {uncounted.length === 1
+                ? 'One line has no count yet.'
+                : `${uncounted.length} lines have no count yet.`}
+            </b>{' '}
+            Scan or type what came off the shelf, tap <b>All n</b> on a line that went whole, or
+            mark it <b>Not this pull</b>. Use <b>Everything as ordered</b> above if the sheet went
+            out exactly as written.
+          </p>
+          <p className="mt-1.5 text-[13px] text-pill-quoted-fg/80 truncate">
+            {uncounted.slice(0, 6).map((r) => r.description).join(' · ')}
+            {uncounted.length > 6 ? ` · +${uncounted.length - 6} more` : ''}
+          </p>
+        </div>
+      )}
 
       {/* A partial pull is the one case where filing does LESS than it
           looks like it does — say so plainly, both because the
@@ -1248,16 +1405,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               if (diffs > 0 || shortfalls.length > 0) { setConfirming(true); return }
               void submit()
             }}
-            disabled={saving}
+            disabled={saving || (isOut && uncounted.length > 0)}
             className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
           >
             {saving
               ? 'Filing…'
-              : shortfalls.length > 0
-                ? 'Review the short kit and file'
-                : diffs > 0
-                  ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
-                  : draft.filed ? 'Replace the filed report' : 'File the report'}
+              : isOut && uncounted.length > 0
+                ? `${uncounted.length} line${uncounted.length === 1 ? '' : 's'} still to count`
+                : shortfalls.length > 0
+                  ? 'Review the short kit and file'
+                  : diffs > 0
+                    ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
+                    : draft.filed ? 'Replace the filed report' : 'File the report'}
           </button>
           <Link href="/reports/orders" className="text-[14px] text-lt-fg2 hover:text-lt-fg">
             Cancel

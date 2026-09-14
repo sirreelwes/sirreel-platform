@@ -17,6 +17,7 @@
 
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
+import { pullGapsForLine } from '@/lib/orders/pullAmbiguity'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import {
@@ -68,7 +69,7 @@ export async function renderPickListPdf(
       pickList: { select: { assignedTo: { select: { name: true } } } },
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true, unitChecks: true } },
+          inventoryItem: { select: { code: true, description: true, unitChecks: true } },
           subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
         },
         orderBy: { sortOrder: 'asc' },
@@ -178,6 +179,25 @@ export async function renderPickListPdf(
       return true
     })
 
+  // Lines nobody can pull from as written — a bundle with no piece count
+  // ("10' x 10' Pop-Ups with Sides"), or a line booked against a catalog
+  // row that is a different thing. Printed with the line, because the
+  // paper is what the floor is holding when the question comes up. Never
+  // on a RECEIPT: that document records what went out, and the question
+  // was either answered before the truck left or it wasn't.
+  const gapNotes = new Map<string, string>()
+  if (!receipt) {
+    const all = onSheet.map((li) => ({
+      description: li.description,
+      quantity: li.quantity,
+      catalogName: li.inventoryItem?.description || li.inventoryItem?.code || null,
+    }))
+    onSheet.forEach((li, i) => {
+      const gaps = pullGapsForLine(all[i], all)
+      if (gaps.length) gapNotes.set(li.id, gaps.map((g) => g.message).join(' '))
+    })
+  }
+
   const lines: PickListLine[] = onSheet.map((li) => {
     // "Out" = already pulled. Warehouse lines advance through the
     // digital picking floor; fleet lines flip in bulk when the fleet
@@ -198,7 +218,9 @@ export async function renderPickListPdf(
       // A receipt is a record, so it carries what the floor wrote next
       // to the line — but never the unchecked pull boxes, which ask a
       // question this document has already answered.
-      notes: sheet ? (sheet.note ?? li.notes) : li.notes,
+      notes: sheet
+        ? (sheet.note ?? li.notes)
+        : [gapNotes.get(li.id), li.notes].filter(Boolean).join(' — ') || null,
       type: li.type === 'EXPENDABLE' ? 'SALE' : 'RENT',
       ordered: sheet ? sheet.expectedQty : li.quantity,
       out: sheet ? sheet.actualQty : (isOut ? li.quantity : 0),

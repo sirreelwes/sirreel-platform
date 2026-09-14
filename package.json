@@ -19,6 +19,7 @@
     "test:clause-diff": "tsx tests/contracts/clause-diff.test.ts",
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:assign-window": "tsx tests/scheduling/assign-window.test.ts",
+    "test:pull-ambiguity": "tsx tests/orders/pull-ambiguity.test.ts",
     "test:planyo-names": "tsx tests/scheduling/planyoNameNormalizer.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
     "test:tent-first": "tsx tests/sales/tent-first.test.ts",

@@ -198,6 +198,11 @@ export interface DraftLine {
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
   inventoryItemId: string | null
+  /** The catalog row's own name. Carried so the sheet can say when a
+   *  line and the row it is booked against are different things —
+   *  "10' x 10' Pop-Ups with Sides" against *Sidewalls, 10x10*
+   *  (src/lib/orders/pullAmbiguity.ts). */
+  catalogName: string | null
   /** The catalog row has barcoded units in the register — a scanner can
    *  count this line (barcode phase 3). Quantity-only gear is typed. */
   unitTracked: boolean
@@ -263,6 +268,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           id: true, description: true, qualifier: true,
           quantity: true, fulfillmentLane: true, sortOrder: true,
           inventoryItemId: true,
+          inventoryItem: { select: { description: true, code: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -347,6 +353,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,
         inventoryItemId: li.inventoryItemId,
+        catalogName: li.inventoryItem?.description || li.inventoryItem?.code || null,
         unitTracked: !!li.inventoryItemId && tracked.has(li.inventoryItemId),
       }
     }),
