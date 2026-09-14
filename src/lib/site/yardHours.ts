@@ -42,21 +42,38 @@ export const YARD_HOURS = {
 export const YARD_HOURS_ONE_LINE =
   'Mon–Fri 6:00 AM – 6:00 PM · Sat 7:00 AM – 3:30 PM · Closed Sunday'
 
-/* ── Which days the yard is dark, as a fact code can ask about ─────────
+/* ── When the yard is shut, as a fact code can ask about ──────────────
  *
- * YARD_HOURS.sunday has said "Closed Sunday" since these values were
- * lifted off the flyer, but only in prose — nothing could branch on it.
- * Wes 2026-09-13: "We are closed on sundays, so all pickups and returns
- * on that day should be asked: Is this a blind pickup/dropoff?" A handoff
- * booked for a closed day happens with nobody at the gate, so the desk
- * has to decide which one it is at the moment the date is picked, not
- * discover it when the client is standing there.
+ * YARD_HOURS has said "Closed Sunday" and "7:00 AM – 3:30 PM, Saturday"
+ * since these values were lifted off the flyer, but only in prose —
+ * nothing could branch on either. Wes 2026-09-13: "We are closed on
+ * sundays, so all pickups and returns on that day should be asked: Is
+ * this a blind pickup/dropoff?" and, 2026-09-14, "Also ask on Saturday
+ * after 3:30". A handoff nobody is there for is the same handoff whether
+ * the day is dark or the clock has run past closing, so the desk decides
+ * which one it is when the date is picked rather than discovering it
+ * with the client standing at a locked gate.
  *
- * One list, so a second dark day (a holiday) lands on every surface at
- * once instead of being re-derived per form. */
+ * Two shapes, because they are genuinely different questions:
+ *   CLOSED_ALL_DAY — Sunday. Nobody, at any hour.
+ *   AFTER_CLOSE    — Saturday. Staffed until 3:30 PM, nobody after.
+ *
+ * One place, so a second dark day (a holiday) or a change to Saturday's
+ * closing time lands on every surface at once instead of being
+ * re-derived per form. */
 
-/** Closed days as `Date#getUTCDay` numbers. Sunday (0) today. */
+/** Days the yard is dark all day, as `Date#getUTCDay` numbers. */
 export const CLOSED_WEEKDAYS: readonly number[] = [0]
+
+/** Days that are staffed but end early, and when they end. Saturday's
+ *  3:30 PM is the corrected hour Wes confirmed 2026-09-03 (the flyer's
+ *  own closing time), and is the same fact YARD_HOURS.saturday prints. */
+export const EARLY_CLOSE_WEEKDAYS: Readonly<Record<number, string>> = { 6: '3:30 PM' }
+
+/** How the yard is shut on a calendar day — or null on a normal one. */
+export type YardClosure =
+  | { kind: 'CLOSED_ALL_DAY' }
+  | { kind: 'AFTER_CLOSE'; closesAt: string }
 
 const WEEKDAY_NAMES = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
@@ -87,11 +104,21 @@ export function weekdayOfCalendarDay(value: string | Date | null | undefined): n
   return Number.isFinite(d.getTime()) ? d.getUTCDay() : null
 }
 
-/** True when the yard is closed that day — nobody at the gate, so a
- *  pickup or a return on it is blind unless someone opens up for it. */
-export function isClosedDay(value: string | Date | null | undefined): boolean {
+/** How the yard is shut on this day, or null when it works a full one.
+ *  A pickup or return inside a closure is blind unless someone opens up
+ *  for it — which is the question `closedDayHandoff` asks. */
+export function closureOn(value: string | Date | null | undefined): YardClosure | null {
   const wd = weekdayOfCalendarDay(value)
-  return wd != null && CLOSED_WEEKDAYS.includes(wd)
+  if (wd == null) return null
+  if (CLOSED_WEEKDAYS.includes(wd)) return { kind: 'CLOSED_ALL_DAY' }
+  const closesAt = EARLY_CLOSE_WEEKDAYS[wd]
+  return closesAt ? { kind: 'AFTER_CLOSE', closesAt } : null
+}
+
+/** True only when the yard is dark for the WHOLE day. A Saturday is not
+ *  closed — it closes — so ask `closureOn` when the difference matters. */
+export function isClosedDay(value: string | Date | null | undefined): boolean {
+  return closureOn(value)?.kind === 'CLOSED_ALL_DAY'
 }
 
 /** "Sunday, September 20" — the day named back to whoever is being asked

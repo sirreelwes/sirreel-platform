@@ -1888,7 +1888,8 @@ function NewQuotePageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, vehicleAvail]);
 
-  /** Is a Sunday pickup or return blind? The yard is closed, so the desk
+  /** Is a weekend pickup or return blind? Sunday is dark and Saturday
+   *  closes at 3:30, so the desk
    *  answers it here and the answer lands on the order's blindPickup /
    *  blindReturn (ClosedDayHandoffPrompt). The window read is the one
    *  deriveOrderWindow would read — LINES first, header as the fallback
@@ -2329,8 +2330,9 @@ function NewQuotePageInner() {
       }
       if (closedDayStillNeeded.length > 0) {
         alert(
-          `We are closed Sunday — ${closedDayStillNeeded.join(' ')} Answer it under the rental window, ` +
-            'so the client is either told how to let themselves in or met by someone.',
+          `The yard isn't staffed then — ${closedDayStillNeeded.join(' ')} Answer it under the ` +
+            'rental window, so the client is either told how to let themselves in or met by someone. ' +
+            'Closed Sunday; Saturday closes at 3:30.',
         );
         return;
       }
@@ -3329,8 +3331,9 @@ function NewQuotePageInner() {
           </div>
         </div>
 
-        {/* Closed-day handoff — renders only when the window (lines
-            first, header as the fallback) lands on a Sunday. */}
+        {/* Out-of-hours handoff — renders only when the window (lines
+            first, header as the fallback) lands on a Sunday or a
+            Saturday. */}
         <ClosedDayHandoffPrompt
           start={handoffWindow.start}
           end={handoffWindow.end}

@@ -336,9 +336,10 @@ export function MakeReservationModal({
    *  unit is open regardless — the picks have to stay visible. */
   const [openPickers, setOpenPickers] = useState<Record<string, boolean>>({})
   const [notes, setNotes] = useState(prefill?.notes ?? '')
-  /** Sunday handoffs. The yard is closed, so a pickup or return on one
-   *  is blind unless someone opens up — asked here, answered onto the
-   *  order's blindPickup/blindReturn (see ClosedDayHandoffPrompt). */
+  /** Out-of-hours handoffs. Sunday is dark and Saturday closes at 3:30,
+   *  so a pickup or return in either is blind unless someone opens up —
+   *  asked here, answered onto the order's blindPickup/blindReturn (see
+   *  ClosedDayHandoffPrompt). */
   const [closedDayAnswers, setClosedDayAnswers] = useState<ClosedDayHandoff>(NO_CLOSED_DAY_ANSWERS)
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
@@ -562,9 +563,9 @@ export function MakeReservationModal({
     jobContacts?.find((c) => c.email.trim().toLowerCase() === contactEmail.trim().toLowerCase()) ?? null
   const contactReady = jobHasContact || contactTyped
 
-  /** Derived, not stored: an answer given for a Sunday is dropped the
-   *  moment the rep moves that date to a weekday, so a stale "blind"
-   *  can never ride along to the order. */
+  /** Derived, not stored: an answer the new dates can no longer carry is
+   *  dropped the moment the rep moves them, so a stale "blind" can never
+   *  ride along to the order. */
   const closedDay = pruneClosedDayAnswers(start, end, closedDayAnswers)
 
   /**
@@ -751,8 +752,8 @@ export function MakeReservationModal({
             startDate: start,
             endDate: end,
             description: notes.trim() || null,
-            // Sunday handoff, answered above. False on every other
-            // window — the order page owns turning one on later.
+            // Weekend handoff, answered above. False on every window the
+            // yard is open for — the order page owns turning one on later.
             ...blindFlagsFor(start, end, closedDay),
           }),
         })
@@ -1621,8 +1622,8 @@ export function MakeReservationModal({
                 reservation.
               </p>
 
-              {/* Closed-day handoff. Renders only when an end of the
-                  window lands on a Sunday. */}
+              {/* Out-of-hours handoff. Renders only when an end of the
+                  window lands on a Sunday or a Saturday. */}
               <ClosedDayHandoffPrompt
                 start={start}
                 end={end}
