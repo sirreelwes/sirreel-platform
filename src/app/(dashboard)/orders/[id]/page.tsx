@@ -15,6 +15,7 @@ import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
+import { WarehouseLineFlag, WarehouseAddedLines, type OrderWarehouseFlags } from "@/components/orders/WarehouseLineFlag";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -281,6 +282,10 @@ type Order = {
   /** Server-computed: the stored PDF predates the order's current line
    *  items / discounts. See lib/orders/quotePdfFreshness.ts. */
   quotePdfStale?: boolean;
+  /** What the warehouse changed at pickup, per line — STAFF ONLY, never
+   *  on a client-facing surface (lib/orders/warehouseLineFlags.ts).
+   *  Null when no check-out sheet is filed or nothing differed. */
+  warehouseFlags?: OrderWarehouseFlags | null;
   /** The rented gear's replacement value — the client's broker's equipment
    *  limit — and the lines nothing on file could value (lib/coi/replacementValue). */
   replacementValue?: ReplacementValueData | null;
@@ -2741,6 +2746,17 @@ export default function OrderDetailPage() {
     ) : (
       <td className="px-4 py-3 text-lt-fg">
         {li.description}
+        {/* The warehouse's red flag (Oliver, 2026-09-13) — this line was
+            swapped, shortened or dropped at pickup. Staff-only; the
+            client's quote and portal build their lines from the order's
+            own rows and never see this. */}
+        {order?.warehouseFlags && (
+          <WarehouseLineFlag
+            flag={order.warehouseFlags.byLineId[li.id]}
+            filedAt={order.warehouseFlags.filedAt}
+            preppedBy={order.warehouseFlags.preppedBy}
+          />
+        )}
         {(() => {
           // WHICH truck this vehicle line is on (Wes 2026-09-10). The unit
           // lives on the hold, never on the line and never on the quote —
@@ -3430,6 +3446,20 @@ export default function OrderDetailPage() {
                 >
                   Print pull sheet ↗
                 </a>
+                {/* The same sheet with the counts filled in — the copy
+                    the driver signs for (Oliver, 2026-09-13). Only once
+                    a check-out sheet is filed, because until then there
+                    are no counts and the route would 400. */}
+                {order.warehouseFlags && (
+                  <a
+                    href={`/api/orders/${orderId}/pick-list-pdf?receipt=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+                  >
+                    Print driver&rsquo;s copy ↗
+                  </a>
+                )}
                 <Link
                   href={`/reports/orders/${orderId}?edge=OUT`}
                   className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
@@ -4241,6 +4271,20 @@ export default function OrderDetailPage() {
           </tbody>
         </table>
         </div>
+
+        {/* Gear the warehouse wrote onto the sheet that was never on the
+            order. It is never added as a line here (the yard cannot see
+            rates and a $0 line would under-bill the job), so this is the
+            only place on the order it appears at all. */}
+        {!!order?.warehouseFlags?.added.length && (
+          <div className="px-6 pb-2">
+            <WarehouseAddedLines
+              added={order.warehouseFlags.added}
+              filedAt={order.warehouseFlags.filedAt}
+              preppedBy={order.warehouseFlags.preppedBy}
+            />
+          </div>
+        )}
 
         {/* Discounts panel — first-class. Renders null when there's no
             line content AND no existing discounts ("no discounts =

@@ -554,10 +554,41 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             </p>
           )}
 
-          <div className="mt-5 flex items-center justify-center gap-2">
+          {/* The driver's receipt (Oliver, 2026-09-13: "they don't have
+              the ability to print the pick list with the completed
+              quantities to give to the driver. This is an important
+              feature, as it's the driver's receipt").
+
+              First action and primary on the OUT edge, because this is
+              the moment it is needed: the counts are in, the truck is
+              loading, and the driver is standing there. It prints from
+              the sheet that was just filed, so a swap or a shortfall
+              reads as Ordered vs Went out — none of the staff-only
+              "the warehouse changed this" flagging goes on the paper.
+
+              Not offered on the IN edge: a check-in is a count of what
+              came back, and nobody is driving away with it. */}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {isOut && (
+              // A plain anchor, not next/link — it is an API route that
+              // streams a PDF, and the router must not prefetch it.
+              <a
+                href={`/api/orders/${draft.orderId}/pick-list-pdf?receipt=1`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] font-bold px-3 py-2 rounded-lg bg-amber-600 hover:bg-chip-warn-bg0 text-white inline-flex items-center gap-1.5"
+              >
+                <Printer size={14} aria-hidden />
+                Print the driver&rsquo;s copy
+              </a>
+            )}
             <Link
               href="/reports/orders"
-              className="text-[13px] font-bold px-3 py-2 rounded-lg bg-amber-600 hover:bg-chip-warn-bg0 text-white"
+              className={`text-[13px] px-3 py-2 rounded-lg ${
+                isOut
+                  ? 'font-semibold border border-lt-hairline text-lt-fg2 hover:bg-lt-inner'
+                  : 'font-bold bg-amber-600 hover:bg-chip-warn-bg0 text-white'
+              }`}
             >
               Back to reports
             </Link>
@@ -692,6 +723,21 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             <Printer size={14} aria-hidden />
             {sheetLabel}
           </a>
+          {/* Reprinting the driver's copy after the fact — a lost
+              receipt, a second driver, a supervisor who filed it and
+              then found the printer empty. Only on OUT, and only once a
+              sheet is on file: the counts are the document. */}
+          {isOut && draft.filed && (
+            <a
+              href={`/api/orders/${draft.orderId}/pick-list-pdf?receipt=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[13px] font-semibold text-lt-fg2 hover:text-amber-600 inline-flex items-center gap-1.5"
+            >
+              <Printer size={14} aria-hidden />
+              Driver&rsquo;s copy
+            </a>
+          )}
         </div>
         {photo && !readWarn && (
           <p className="mt-2 text-[13px] text-chip-good-fg">Photo attached to this report.</p>
