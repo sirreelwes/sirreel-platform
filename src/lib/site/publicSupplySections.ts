@@ -18,6 +18,7 @@
  */
 
 import { placement, queryVariants } from '@/lib/site/publicTextMatch'
+import { isTentFamilyQuery, tentTier } from '@/lib/sales/tentFirst'
 
 export interface PublicSupplySection {
   label: string
@@ -218,6 +219,15 @@ export function mapCatalogToSections<T extends { id: string; name: string; categ
  * query ("walkies") to tier 3 and hand back an alphabetical list with
  * the actual walkies buried in it.
  * Alphabetical within each score.
+ *
+ * TENTS override the tiering entirely (Wes 2026-09-13: tent first, the
+ * accessories like side walls next). A sidewall is named "Canopy Tent
+ * Sidewall - 10' Black", so on "tent" or "canopy" it scores a
+ * starts-with/word-boundary hit and lands ABOVE the canopy it hangs off.
+ * The rule is src/lib/sales/tentFirst.ts, shared with the staff
+ * typeahead so the two order forms offer the same thing in the same
+ * order. Non-tent queries are untouched — tentTier is constant across
+ * them, so the placement score still decides.
  */
 export function rankSearchResults<T extends { id: string; name: string }>(
   items: T[],
@@ -228,10 +238,11 @@ export function rankSearchResults<T extends { id: string; name: string }>(
   const variants = queryVariants(q)
   const score = (name: string): number =>
     variants.reduce((sum, vs) => sum + placement(name, vs), 0)
+  const tents = isTentFamilyQuery(q)
   const seen = new Set<string>()
   return items
     .filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)))
-    .map((it) => ({ it, t: score(it.name) }))
-    .sort((a, b) => a.t - b.t || a.it.name.localeCompare(b.it.name))
+    .map((it) => ({ it, tent: tents ? tentTier(it.name) : 0, t: score(it.name) }))
+    .sort((a, b) => a.tent - b.tent || a.t - b.t || a.it.name.localeCompare(b.it.name))
     .map((x) => x.it)
 }

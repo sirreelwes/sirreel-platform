@@ -2,11 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { partnerUnitDepartment } from '@/lib/site/partnerSections'
 import { catalogItemSupportsLcdw } from '@/lib/pricing/lcdwEligibility'
 import { aliasesAnswerQuery } from '@/lib/sales/aliasMatch'
+import {
+  TENT_ACCESSORY_SLOTS,
+  TENT_CATEGORY_SLUG,
+  isTentFamilyQuery,
+  orderTentFirst,
+} from '@/lib/sales/tentFirst'
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
 import { negotiated } from '@/lib/pricing/companyRate'
 
 export const dynamic = 'force-dynamic'
+
+// Candidate-set size on a tent query. The whole tent family is ~45 rows
+// (every canopy size in every color, the sidewalls, the sandbags), so this
+// takes all of it and lets the ranking decide; the default `limit * 3`
+// stopped inside the canopies.
+const TENT_OVERFETCH = 150
+// The tent category is a few dozen rows and only the accessories in it
+// survive the ordering, so there is nothing to gain from taking more.
+const TENT_COMPANION_TAKE = 60
 
 /**
  * Phase 2 sales pipeline — unified catalog typeahead for the quote
@@ -98,6 +113,17 @@ export async function GET(req: NextRequest) {
   const tokens = mergeMeasureTokens(q.split(/\s+/).filter(Boolean))
   const variants = tokens.map(tokenVariants)
 
+  // ── Tents ─────────────────────────────────────────────────────────
+  //
+  // Wes 2026-09-13: "Whenever tent, Canopy, pop-up are entered. The order
+  // form should offer the tent first and the accessories like side walls
+  // next." The rule itself is src/lib/sales/tentFirst.ts (shared with the
+  // client-facing order form); this flag turns on the two things the rule
+  // cannot do from outside the query — over-fetching far enough that the
+  // accessories are IN the candidate set, and pulling the ones that only a
+  // tent knows to ask for. Everything below is a no-op on any other query.
+  const tentQuery = isTentFamilyQuery(q)
+
   // ── Multi-word aliases ────────────────────────────────────────────
   //
   // `aliases: { has: v }` is EXACT array-element equality, and the query
@@ -156,7 +182,34 @@ export async function GET(req: NextRequest) {
       })
     : Promise.resolve([])
 
-  const [invItems, packages, subVehicles] = await Promise.all([
+  // The accessories a tent query has to OFFER even though the rep never
+  // typed their name. "Sidewalls, 10x15" carries the aliases "tent wall"
+  // and "tent sidewall", and an alias only answers a query that COVERS it
+  // (aliasMatch.ts) — so a bare "tent" reaches the alias and stops, and
+  // the sidewalls were unreachable until the rep already knew to type
+  // "wall". "Next" only means something if they are on the list, so the
+  // tent category comes along on a tent query and the ordering below
+  // decides where it lands. Quantity-tracked gear, so it rides the same
+  // trackingFilter the caller asked for and is skipped outright when the
+  // caller wants unit-tracked rows only (the package builder, /orders/new's
+  // vehicle pass).
+  const tentCompanionsP = tentQuery && wantsQuantity
+    ? prisma.inventoryItem.findMany({
+        where: {
+          isActive: true,
+          ...(trackingFilter ? { trackingMode: trackingFilter } : {}),
+          category: { slug: TENT_CATEGORY_SLUG },
+        },
+        select: {
+          id: true, code: true, description: true, trackingMode: true,
+          department: true, dailyRate: true, weeklyRate: true,
+        },
+        take: TENT_COMPANION_TAKE,
+        orderBy: [{ trackingMode: 'asc' }, { qtyOwned: 'desc' }],
+      })
+    : Promise.resolve([])
+
+  const [invItems, tentCompanions, packages, subVehicles] = await Promise.all([
     wantsQuantity || wantsUnitTracked
       ? prisma.inventoryItem.findMany({
           where: {
@@ -183,12 +236,17 @@ export async function GET(req: NextRequest) {
           },
           // Over-fetch so the name-relevance pass below has something to
           // rank; the slice back to `limit` happens after sorting.
-          take: limit * 3,
+          // On a tent query the candidate set has to be wide enough to
+          // still hold the accessories after ~30 canopy rows (every size
+          // in every color) have matched — `limit * 3` cut them off before
+          // the ranking ever saw them.
+          take: tentQuery ? TENT_OVERFETCH : limit * 3,
           // Unit-tracked rows (vehicles, stages) are the headline answers;
           // warehouse gear ranks under them by how much of it we own.
           orderBy: [{ trackingMode: 'asc' }, { qtyOwned: 'desc' }],
         })
       : Promise.resolve([]),
+    tentCompanionsP,
     types.has('PACKAGE')
       ? prisma.package.findMany({
           where: {
@@ -230,7 +288,17 @@ export async function GET(req: NextRequest) {
     const n = name.toLowerCase()
     return variants.reduce((sum, vs) => sum + (vs.some((v) => n.includes(v)) ? 1 : 0), 0)
   }
-  const ranked = [...invItems].sort((a, b) => {
+  // Companions merge in BEFORE the relevance pass so they are ranked by
+  // the rest of the query like anything else — "10x10 tent" puts the
+  // 10x10 sidewall at the front of the accessory tier — and deduped
+  // against the rows the query found on its own.
+  const seenIds = new Set(invItems.map((i) => i.id))
+  const candidates = [
+    ...invItems,
+    ...tentCompanions.filter((i) => !seenIds.has(i.id)),
+  ]
+
+  const ranked = [...candidates].sort((a, b) => {
     const an = a.description || a.code
     const bn = b.description || b.code
     // Unit-tracked rows keep their headline position.
@@ -240,14 +308,26 @@ export async function GET(req: NextRequest) {
     return an.length - bn.length
   })
 
+  // Tent first, accessories next (Wes 2026-09-13). A no-op on every other
+  // query. Applied HERE — after relevance, before the rate-card lookup —
+  // so the reserve is decided on the list that will actually be shown and
+  // the negotiated-rate query only prices rows that survive it. The budget
+  // is what the final slice leaves the catalog rows: packages are the
+  // "best" answer and keep their slots ahead of this.
+  const ordered = orderTentFirst(ranked, q, {
+    name: (i) => i.description || i.code,
+    limit: Math.max(0, limit - packages.length),
+    minAccessories: TENT_ACCESSORY_SLOTS,
+  })
+
   // Client rate card, one query for every hit on screen. Packages are
   // priced by their own `pricePerDay` row and have no catalog item to
   // hang a negotiated rate off, so they stay at list — a negotiated
   // package price would be its own kind of row.
   const negotiatedById = new Map<string, { daily: number | null; weekly: number | null }>()
-  if (companyId && ranked.length) {
+  if (companyId && ordered.length) {
     const rows = await prisma.companyRate.findMany({
-      where: { companyId, inventoryItemId: { in: ranked.map((i) => i.id) } },
+      where: { companyId, inventoryItemId: { in: ordered.map((i) => i.id) } },
       select: { inventoryItemId: true, dailyRate: true, weeklyRate: true },
     })
     for (const r of rows) {
@@ -283,7 +363,7 @@ export async function GET(req: NextRequest) {
     })),
     // Every catalog hit is an InventoryItem now, so callers bind
     // inventoryItemId and never assetCategoryId.
-    ...ranked.map((i) => {
+    ...ordered.map((i) => {
       const deal = negotiatedById.get(i.id)
       // Whether the damage waiver may be offered alongside this item —
       // computed here so the agent builder and the client-facing one

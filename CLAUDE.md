@@ -265,6 +265,74 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   ADMIN --phone …` (sign-in requires the row to exist + an allowed domain).
   `npm run test:memory-search`.
 
+## Tent first, accessories next (2026-09-13 — Wes)
+- Wes: "Whenever tent, Canopy, pop-up are entered. The order form should
+  offer the tent first and the accessories like side walls next." Three
+  things buried the tents at once: a sidewall is literally named "Canopy
+  Tent Sidewall - 10' Black" so it hit the query on its NAME while the
+  seeded "Caravan Canopy, 10x10" hit only via an alias (name evidence wins
+  the relevance pass); the tiebreak is "shorter name wins" and the
+  accessory names are shorter; and the dropdown caps at 10, so ranking the
+  ~30 canopy rows up would push every accessory off the end.
+- **One rule, both order forms: `src/lib/sales/tentFirst.ts`** (pure, no
+  prisma — the client-facing form bundles it). `isTentFamilyQuery` is the
+  gate (tent/canopy/pop-up/ez-up/marquee, however spelled); `tentRole`
+  splits SHELTER / ACCESSORY / OTHER off the NAME, testing accessory words
+  FIRST because every sidewall row also says canopy and tent;
+  `orderTentFirst` reorders and holds `TENT_ACCESSORY_SLOTS` (3) back so
+  the accessories survive the slice — "next" only means something if they
+  are still on the list. Stable within a tier, so "10x10 tent" still puts
+  the 10x10 sidewall at the front of the accessories.
+- **Naming the accessory is NOT a tent query.** "tent sidewall" /
+  "canopy sandbags" is a rep who already knows what they want; lifting the
+  canopies over their answer is the same burial in the other direction.
+- Staff typeahead (`/api/catalog/search`) also does the two things the
+  pure rule can't: over-fetches to `TENT_OVERFETCH` (the default
+  `limit * 3` stopped inside the canopies), and pulls the
+  `tents-accessories` category along on a tent query — "Sidewalls, 10x15"
+  is alias-matched on "tent sidewall", and an alias only answers a query
+  that COVERS it, so a bare "tent" could never reach it. Companions merge
+  in BEFORE the relevance pass and dedupe by id. Client-facing form:
+  `rankSearchResults` in `publicSupplySections.ts` takes the tier as its
+  primary sort key. Every other search is byte-for-byte unchanged.
+- `npm run test:tent-first`.
+
+## Sandbags with every tent (2026-09-13 — Wes)
+- Wes: "Whenever we rent tents, we want to offer sandbags. So if someone is
+  using the order form and chooses tents, make sure the sandbags show in
+  the options. Typically it's [four] sandbags per 10 x 10 tent and six
+  sandbags per 10 x 15 tent, and eight sandbags per 10 x 20 tent."
+- **ONE PER LEG is the rule behind those numbers** — a 10x10 pop-up stands
+  on 4 legs, a 10x15 on 6, a 10x20 on 8 — so `SANDBAGS_BY_SIZE` in
+  `src/lib/sales/tentSandbags.ts` is a TABLE, not arithmetic: no formula
+  over width × length gives all three AND an 8x8 (4 legs, not 3.2). An
+  unlisted size offers NOTHING rather than a guess — a rep who sees no
+  offer asks; a wrong count ships. **8x8 = 4 is the one assumption** (Wes
+  didn't state it); it is a single line to change.
+- **OFFERED, never auto-added.** Sandbags are billable and tents get staked
+  instead on some locations, so the count is computed for the rep and the
+  decision stays theirs. This is deliberately NOT `InventoryKitPiece`
+  (which would auto-add and bill, even though it supports `CHARGED`).
+- `tentFootprint()` reads the six ways the catalog spells one size
+  ("10' x 15'", "10x15", "-10' x 10'", "10' x 20," and the typo'd "8' x '8").
+  Gated on `tentRole() === 'SHELTER'` from tentFirst.ts, which is what keeps
+  "Sidewalls, 10x15" — a footprint that is NOT a tent — from asking for its
+  own ballast.
+- WHICH bag is a catalog question, resolved server-side by
+  `GET /api/catalog/tent-sandbags` (never a pinned code): prefers the
+  `tents-accessories` category, cheapest daily rate first, so the 25 lb is
+  the default and the 35 is a retype. Applies `companyId=` negotiated rates
+  like /api/catalog/search does.
+- UI is `src/components/orders/TentSandbagOffer.tsx`, silent unless there is
+  something to offer. `/orders/new` renders it through the existing
+  `rowExtras` hook and splices the line directly UNDER its tent with that
+  tent's dates; `/orders/[id]`'s add-line modal STAGES it and posts it as a
+  second line only after the tent line lands.
+- **Ballast is per tent, so suppression is per tent** — sandbags already on
+  the quote do not answer for a second tent. /orders/new tests the row
+  directly below (where the offer inserts); the modal asks per add.
+- `npm run test:tent-sandbags`.
+
 ## AHA sends the lock box photo (2026-09-13 — Wes)
 - May, a contact on Miki's job, could not get the vehicle lock box open; Jose
   hand-typed the steps and texted her a photo of the keypad with the two

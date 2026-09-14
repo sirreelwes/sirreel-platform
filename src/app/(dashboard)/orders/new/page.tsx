@@ -66,6 +66,8 @@ import {
   type WeekSection,
 } from '@/lib/orders/weekDecision';
 import { WeekDecisionPrompt } from '@/components/orders/WeekDecisionPrompt';
+import { TentSandbagOffer, type SandbagCatalogItem } from '@/components/orders/TentSandbagOffer';
+import { isSandbagItem } from '@/lib/sales/tentSandbags';
 
 /** What each create action is called, for the prompt's primary button —
  *  the agent pressed one of these and should be handed it back, not a
@@ -1610,6 +1612,47 @@ function NewQuotePageInner() {
     });
   }, []);
 
+  /**
+   * Sandbags for a tent line (Wes 2026-09-13: "we want to offer
+   * sandbags"). Inserted directly UNDER the tent it ballasts, carrying
+   * that tent's dates, so the two read as one thing on the quote and the
+   * bags can never sit on a window the tent isn't out for.
+   *
+   * An ordinary catalog line, not a managed kit piece — the rep asked for
+   * it, so they can edit or delete it like anything else.
+   */
+  const handleAddSandbags = useCallback((
+    tentLocalId: string,
+    sandbag: SandbagCatalogItem,
+    quantity: number,
+  ) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((it) => it.localId === tentLocalId);
+      if (idx < 0) return prev;
+      const tent = prev[idx];
+      const row: ResolvedItem = {
+        localId: newLocalId(),
+        description: sandbag.name,
+        quantity,
+        catalogProductId: sandbag.id,
+        catalogType: 'INVENTORY',
+        department: sandbag.department as LineItemDepartment,
+        qualifier: null,
+        rateType: 'DAILY',
+        pickupDate: tent.pickupDate,
+        returnDate: tent.returnDate,
+        billableDays: tent.billableDays,
+        rate: sandbag.dailyRate,
+        matchedProduct: { id: sandbag.id, type: 'INVENTORY', name: sandbag.name },
+        matchSource: 'AI',
+        warnings: [],
+      };
+      const next = [...prev];
+      next.splice(idx + 1, 0, row);
+      return next;
+    });
+  }, []);
+
   const handleRowCommit = useCallback((committedId: string) => {
     const committedIdx = items.findIndex((it) => it.localId === committedId);
     if (committedIdx < 0) return;
@@ -1887,6 +1930,28 @@ function NewQuotePageInner() {
     if (gearHandoff?.kind === 'LOAD_ON' && !holdableVehicleRows.some((it) => it.localId === gearHandoff.localId)) setGearHandoff(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, vehicleAvail]);
+
+  /** Sandbags under a tent row. Renders nothing on every other line —
+   *  the offer decides for itself (TentSandbagOffer).
+   *
+   *  "Already handled" is THIS TENT's bags, not the quote's: ballast is
+   *  per tent, so a 10x20 still needs its eight even though the 10x10
+   *  above it just got four. The test is the row directly below, which is
+   *  where the offer inserts them — and unlike the component's own state
+   *  that survives a re-render, a draft restore, or a reordered list. */
+  const tentIsBallasted = (localId: string): boolean => {
+    const i = items.findIndex((it) => it.localId === localId);
+    return i >= 0 && i + 1 < items.length && isSandbagItem(items[i + 1].description);
+  };
+  const renderSandbagOffer = (it: ResolvedItem) => (
+    <TentSandbagOffer
+      tentName={it.description}
+      tentQuantity={it.quantity}
+      companyId={realCompanyId(selectedClientId)}
+      alreadyOnOrder={tentIsBallasted(it.localId)}
+      onAdd={(sandbag, qty) => handleAddSandbags(it.localId, sandbag, qty)}
+    />
+  );
 
   /** Is a weekend pickup or return blind? Sunday is dark and Saturday
    *  closes at 3:30, so the desk
@@ -2606,7 +2671,7 @@ function NewQuotePageInner() {
       department={dept}
       rows={group}
       notes={dept === 'VEHICLES' ? vehicleAvailNotes : undefined}
-      rowExtras={dept === 'VEHICLES' ? renderUnitPicker : undefined}
+      rowExtras={dept === 'VEHICLES' ? renderUnitPicker : renderSandbagOffer}
       // The waiver shows as a line under the vehicles it covers
       // (Wes 2026-09-10: "I don't see the fees adding to the
       // line above") — derived, not a row the rep edits; the
