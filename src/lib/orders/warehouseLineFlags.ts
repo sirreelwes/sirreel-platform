@@ -32,13 +32,20 @@ import { describeCheckChange } from '@/lib/orders/checkLineChange'
 
 /** The differences that are a fact about an ORDER LINE. NONE is not a
  *  flag, and ADDED has no line to hang on — it comes back separately. */
-export type WarehouseFlagKind = 'SUBSTITUTE' | 'SHORT' | 'EXTRA' | 'REMOVED'
+export type WarehouseFlagKind =
+  | 'SUBSTITUTE' | 'SHORT' | 'EXTRA' | 'REMOVED'
+  // As of 2026-09-14 a written-in row BECOMES an order line, so ADDED is
+  // a per-line flag too — and UNPRICED is the one that matters, because
+  // that line is holding the invoice.
+  | 'ADDED' | 'UNPRICED'
 
 const FLAG_LABELS: Record<WarehouseFlagKind, string> = {
   SUBSTITUTE: 'Swapped at pickup',
   SHORT: 'Went out short',
   EXTRA: 'Extra went out',
   REMOVED: 'Did not go out',
+  ADDED: 'Added at pickup',
+  UNPRICED: 'Added — needs a price',
 }
 
 export interface WarehouseLineFlag {
@@ -50,6 +57,8 @@ export interface WarehouseLineFlag {
   detail: string
   /** What the floor wrote next to the line, if anything. */
   note: string | null
+  /** Nobody has priced this line and it is blocking the invoice. */
+  unpriced?: boolean
 }
 
 /** A row the warehouse wrote in that was never on the order. It is
@@ -70,7 +79,12 @@ export interface OrderWarehouseFlags {
   preppedBy: string | null
   /** Keyed by OrderLineItem id. */
   byLineId: Record<string, WarehouseLineFlag>
+  /** Written-in rows that never became order lines. Only reports filed
+   *  BEFORE 2026-09-14 have these — see the note in the loader. */
   added: WarehouseAddedLine[]
+  /** Lines on this order with no price, which is what blocks the
+   *  invoice and the client's corrected quote. */
+  unpricedCount: number
 }
 
 /**
@@ -104,24 +118,46 @@ export async function loadOrderWarehouseFlags(
       },
     },
   })
-  if (!report) return null
+  // Lines the warehouse PUT ON the order (2026-09-14). Read from the
+  // LINE, not the report, because the report is not durable about this:
+  // re-filing a corrected sheet sees an ordinary order line by then and
+  // reclassifies the row to NONE, so the fact that the yard added it
+  // would vanish on the second filing. `warehouseAddedAt` does not.
+  //
+  // Also read independently of the report existing at all — an unpriced
+  // line has to stay visible even if someone later deletes the sheet.
+  const warehouseLines = await prisma.orderLineItem.findMany({
+    where: {
+      orderId,
+      OR: [{ warehouseAddedAt: { not: null } }, { pricingPendingAt: { not: null } }],
+    },
+    select: {
+      id: true, description: true, quantity: true, notes: true,
+      warehouseAddedAt: true, warehouseAddedBy: true, pricingPendingAt: true,
+    },
+  })
+
+  if (!report && warehouseLines.length === 0) return null
 
   const byLineId: Record<string, WarehouseLineFlag> = {}
   const added: WarehouseAddedLine[] = []
 
-  for (const l of report.lines) {
+  for (const l of report?.lines ?? []) {
     // A line left OFF a partial pull says nothing about itself — it was
     // not counted, not changed. Its `change` is already forced to NONE
     // on write, but read it defensively: a stale row from before
     // partial pulls existed must not print as a difference.
     if (!l.onSheet || l.change === 'NONE') continue
 
+    // A written-in row with no order line behind it. Since 2026-09-14
+    // every one of these becomes a line, so this is the LEGACY path: the
+    // nine sheets filed before that date, which are deliberately left
+    // alone rather than back-filled onto orders that may already be
+    // invoiced. They still show on the order, just not as lines.
     if (l.change === 'ADDED' || !l.orderLineItemId) {
-      added.push({
-        description: l.description,
-        quantity: l.actualQty,
-        note: l.note,
-      })
+      if (!l.orderLineItemId) {
+        added.push({ description: l.description, quantity: l.actualQty, note: l.note })
+      }
       continue
     }
 
@@ -142,10 +178,37 @@ export async function loadOrderWarehouseFlags(
     }
   }
 
+  // The line's own provenance WINS over the report row — it is the
+  // durable fact, and on an unpriced line it is also the more urgent
+  // one. Written after the report loop for exactly that reason.
+  let unpricedCount = 0
+  for (const l of warehouseLines) {
+    const unpriced = l.pricingPendingAt != null
+    if (unpriced) unpricedCount += 1
+    const kind: WarehouseFlagKind = unpriced ? 'UNPRICED' : 'ADDED'
+    byLineId[l.id] = {
+      kind,
+      label: FLAG_LABELS[kind],
+      detail: unpriced
+        ? `${l.quantity}× ${l.description} went out with no price — the warehouse added it at check-out and could not name it from the catalog. The order cannot be invoiced until it has a rate.`
+        : `added ${l.description} ×${l.quantity} at check-out`,
+      note: l.notes,
+      unpriced,
+    }
+  }
+
   return {
-    filedAt: report.submittedAt.toISOString(),
-    preppedBy: report.preppedBy,
+    // A sheet may have been deleted out from under an unpriced line; the
+    // line's own stamp is then the only date there is.
+    filedAt: (
+      report?.submittedAt ??
+      warehouseLines[0]?.warehouseAddedAt ??
+      warehouseLines[0]?.pricingPendingAt ??
+      new Date()
+    ).toISOString(),
+    preppedBy: report?.preppedBy ?? warehouseLines[0]?.warehouseAddedBy ?? null,
     byLineId,
     added,
+    unpricedCount,
   }
 }

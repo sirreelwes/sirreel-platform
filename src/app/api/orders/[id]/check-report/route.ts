@@ -121,12 +121,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
     } else {
       // An ADDED row — something on the truck that was never on the
-      // order. Recorded, and flagged to the agent to price; NOT added as
-      // an order line here, because the yard cannot see rates and a line
-      // at $0 would quietly under-bill the job.
+      // order. As of 2026-09-14 it BECOMES an order line (Oliver's ask),
+      // priced off the client's rate card when `inventoryItemId` names
+      // the catalog row and left explicitly unpriced when it does not.
+      // The unpriced case blocks the invoice and the client's corrected
+      // quote rather than billing $0 — see lib/orders/unpricedLines.ts.
       if (!description) continue
+      // Verify the pick rather than trust it: this id is what prices a
+      // line, and the browser is not allowed to name an arbitrary row.
+      // An unknown or archived id degrades to unpriced, which is the
+      // safe direction — it stops the invoice instead of mispricing it.
+      let invId: string | null = null
+      if (typeof raw.inventoryItemId === 'string' && raw.inventoryItemId) {
+        const inv = await prisma.inventoryItem.findFirst({
+          where: { id: raw.inventoryItemId, isActive: true },
+          select: { id: true },
+        })
+        invId = inv?.id ?? null
+      }
       lines.push({
         orderLineItemId: null,
+        inventoryItemId: invId,
         description,
         expectedQty: 0,
         actualQty: actual,

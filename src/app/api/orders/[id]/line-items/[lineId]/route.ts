@@ -323,6 +323,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Pricing an unpriced line IS how it stops being unpriced (2026-09-14).
+    // A warehouse-added line the floor could not name off the catalog
+    // lands with no rate and blocks the invoice; the moment somebody
+    // puts a real number on it, the block lifts. Keyed on the rate the
+    // update is actually writing, so saving an unrelated edit (a note, a
+    // quantity) leaves the line stuck — which is right: nobody priced it.
+    //
+    // A deliberate $0 does NOT clear it. Zero is the state being flagged,
+    // and "the agent looked and decided it is free" needs its own
+    // gesture rather than being indistinguishable from never looking.
+    if (data.rate !== undefined && new Prisma.Decimal(String(data.rate)).greaterThan(0)) {
+      data.pricingPendingAt = null;
+    }
+
     const lineItem = await prisma.orderLineItem.update({
       where: { id: lineId },
       data,

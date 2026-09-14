@@ -52,6 +52,7 @@ import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from '
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
 import { sameCount } from '@/lib/orders/checkPasses'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { ExtraItemPicker } from '@/components/reports/ExtraItemPicker'
 import {
   kitShortfalls,
   describeShortfall,
@@ -95,6 +96,11 @@ type Row = DraftLine & {
 type Extra = {
   key: string
   description: string
+  /** The catalog row the supervisor named, when they could. It is what
+   *  prices the order line this row becomes; null means the line lands
+   *  unpriced and an agent has to set a rate before the order can be
+   *  invoiced. */
+  inventoryItemId: string | null
   actualQty: number
   note: string
   /** What the FILED report already records for this row, if it came from
@@ -172,6 +178,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
     draft.extras.map((e, i) => ({
       key: `prior-${i}`,
       description: e.description,
+      inventoryItemId: null,
       actualQty: e.actualQty,
       note: e.note ?? '',
       filedAs: e.filed ? { description: e.description, actualQty: e.actualQty } : undefined,
@@ -210,10 +217,14 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
   const [done, setDone] = useState<{
     /** Something here is the agent's to act on. */
     changedOrder: boolean
-    /** The order's own lines actually moved. Narrower — an added row
-     *  is recorded and flagged, but never written onto the order. */
+    /** The order's own lines actually moved — a rewritten line, or a
+     *  row the warehouse wrote in that became one. */
     orderLinesChanged: boolean
     changes: string[]
+    /** Lines this filing put ON the order (2026-09-14). */
+    added: Array<{ description: string; quantity: number; rate: number | null; unpriced: boolean }>
+    /** How many of those have no price, and so are holding the invoice. */
+    unpriced: number
     /** Whether the corrected quote went back to the client, and why not. */
     resend: { sent: true; to: string; cc: string[] } | { sent: false; reason: string } | null
     /** What filing this sheet settled in the yard. */
@@ -386,6 +397,10 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
    * "the client didn't get it", which rewrites the order and emails
    * them a smaller quote.
    */
+  /** Written-in rows with no catalog item behind them — each becomes an
+   *  unpriced order line that holds the invoice. */
+  const unnamedExtras = extras.filter((e) => e.description.trim() && !e.inventoryItemId).length
+
   const offSheet = rows.filter((r) => !r.onSheet && !isFleetLine(r))
   const onSheetIds = rows.filter((r) => r.onSheet && !isFleetLine(r)).map((r) => r.orderLineItemId)
   /**
@@ -536,6 +551,9 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
             (e, i) => ({
               key: `photo-${Date.now()}-${i}`,
               description: e.description,
+              // Read off handwriting — nobody named a catalog row, so the
+              // line it becomes lands unpriced until someone does.
+              inventoryItemId: null,
               actualQty: e.actualQty,
               note: e.note ?? '',
             }),
@@ -599,6 +617,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               .filter((e) => e.description.trim())
               .map((e) => ({
                 orderLineItemId: null,
+                inventoryItemId: e.inventoryItemId,
                 description: e.description.trim(),
                 actualQty: e.actualQty,
                 note: e.note.trim() || null,
@@ -614,6 +633,8 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
       setDone({
         changedOrder: !!data.changedOrder,
         orderLinesChanged: !!data.orderLinesChanged,
+        added: data.added ?? [],
+        unpriced: data.unpriced ?? 0,
         changes: data.changes ?? [],
         resend: data.resend ?? null,
         gear: data.gear ?? null,
@@ -650,11 +671,39 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               <p className="text-lt-fg2 text-[15px] max-w-[52ch] mx-auto">
                 {done.orderLinesChanged
                   ? `The order has been updated and ${draft.agentName || 'the agent'} has been flagged to review what changed.`
-                  : `${draft.agentName || 'The agent'} has been flagged to price what went out. The order is unchanged until they do — an added row is never written onto it here.`}
+                  : `${draft.agentName || 'The agent'} has been flagged to review what went out.`}
               </p>
               <ul className="mt-3 text-[14px] text-chip-warn-fg space-y-0.5">
                 {done.changes.map((c, i) => <li key={i}>{c}</li>)}
               </ul>
+              {/* What went ON the order, and at what price. A supervisor
+                  who has just changed what a client is billed should be
+                  told so in numbers, not left to infer it. */}
+              {done.added.length > 0 && (
+                <div className="mt-3 text-[14px]">
+                  <p className="text-lt-fg2">
+                    {done.added.length === 1 ? 'One row is' : `${done.added.length} rows are`} now on
+                    the order:
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {done.added.map((a, i) => (
+                      <li key={i} className={a.unpriced ? 'text-chip-bad-fg font-semibold' : 'text-lt-fg'}>
+                        {a.quantity}× {a.description} —{' '}
+                        {a.unpriced
+                          ? 'no price yet'
+                          : `$${a.rate?.toLocaleString('en-US')} ea.`}
+                      </li>
+                    ))}
+                  </ul>
+                  {done.unpriced > 0 && (
+                    <p className="mt-1.5 text-[13px] text-chip-bad-fg">
+                      The order cannot be invoiced until {draft.agentName || 'the agent'} prices{' '}
+                      {done.unpriced === 1 ? 'that line' : `those ${done.unpriced} lines`} — that is
+                      deliberate, so nothing goes out billed at zero.
+                    </p>
+                  )}
+                </div>
+              )}
               {/* Say plainly whether the client was told. A supervisor
                   who does not know the email went out will send their
                   own — or worse, assume one went and nothing did. */}
@@ -1286,7 +1335,13 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                         onClick={() =>
                           setExtras((prev) => [
                             ...prev,
-                            { key: `scan-${u.scanId}`, description: `${name} (${u.barcode})`, actualQty: 1, note: '' },
+                            {
+                              key: `scan-${u.scanId}`,
+                              description: `${name} (${u.barcode})`,
+                              inventoryItemId: null,
+                              actualQty: 1,
+                              note: '',
+                            },
                           ])
                         }
                         className="underline font-semibold hover:text-amber-700"
@@ -1301,14 +1356,15 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
           </div>
         )}
         {extras.map((e, i) => (
-          <div key={e.key} className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 flex items-center gap-2">
-            <input
-              value={e.description}
-              onChange={(ev) =>
-                setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))
+          <div key={e.key} className="px-3 py-2.5 border-b border-lt-hairline last:border-b-0 flex items-start gap-2">
+            {/* Naming the item off the catalog is what prices the
+                order line this row becomes. Free text still files — it
+                just lands unpriced and holds the invoice. */}
+            <ExtraItemPicker
+              value={{ description: e.description, inventoryItemId: e.inventoryItemId }}
+              onChange={(next) =>
+                setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, ...next } : x)))
               }
-              placeholder="What went out that isn't on the order"
-              className="flex-1 min-w-0 bg-lt-inner border border-lt-hairline rounded-lg px-2.5 py-1.5 text-[14px] text-lt-fg placeholder:text-lt-fg3"
             />
             <input
               type="number"
@@ -1335,7 +1391,10 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
         <button
           type="button"
           onClick={() =>
-            setExtras((prev) => [...prev, { key: `new-${Date.now()}`, description: '', actualQty: 1, note: '' }])
+            setExtras((prev) => [
+              ...prev,
+              { key: `new-${Date.now()}`, description: '', inventoryItemId: null, actualQty: 1, note: '' },
+            ])
           }
           className="w-full px-3 py-2.5 text-[13px] font-semibold text-lt-fg2 hover:text-amber-600 inline-flex items-center justify-center gap-1.5"
         >
@@ -1457,6 +1516,23 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
         </div>
       )}
 
+      {/* Written-in rows that nobody named off the catalog. Said before
+          filing, because the supervisor is the last person who can fix
+          it cheaply — afterwards it is an agent chasing a rate for gear
+          that is already on a job. */}
+      {isOut && unnamedExtras > 0 && !confirming && (
+        <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
+          <span>
+            {unnamedExtras === 1 ? 'One written-in row is' : `${unnamedExtras} written-in rows are`}{' '}
+            not named from the catalog. {unnamedExtras === 1 ? 'It goes' : 'They go'} onto the order
+            with <b>no price</b>, which stops the invoice until an agent sets one. Naming{' '}
+            {unnamedExtras === 1 ? 'it' : 'them'} here prices {unnamedExtras === 1 ? 'it' : 'them'}{' '}
+            automatically.
+          </span>
+        </p>
+      )}
+
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && !confirming && (
         <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
@@ -1470,7 +1546,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                   (draft.preBooked
                     ? ' The client is emailed the corrected quote automatically, copying the office.'
                     : '')
-                : ` Nothing on the order moves — added rows are flagged to ${draft.agentName || 'the agent'} to price.`}
+                : ` The written-in rows go onto the order and ${draft.agentName || 'the agent'} is flagged.`}
           </span>
         </p>
       )}
@@ -1549,9 +1625,11 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                 </>
               ) : (
                 <>
-                  Nothing on the order moves — an added row is never written onto it, because the
-                  yard cannot see rates and a line at $0 would under-bill the job. This records what
-                  went out and flags {draft.agentName || 'the agent'} to price it.
+                  The written-in rows go onto the order as lines, so the order matches the truck.
+                  Anything you named from the catalog prices itself at{' '}
+                  {draft.company}&rsquo;s rate; anything you didn&rsquo;t goes on with{' '}
+                  <b>no price</b>, which holds the invoice until{' '}
+                  {draft.agentName || 'the agent'} sets one.
                 </>
               )
             ) : (

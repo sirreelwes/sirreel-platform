@@ -131,6 +131,9 @@ export async function renderPickListPdf(
   }
 
   let receipt: PickListReceipt | null = null
+  /** Order lines that exist only because the warehouse wrote them in —
+   *  printed in their own block, so they are not part of the pull. */
+  const addedLineIds = new Set<string>()
   /** What the sheet counted, keyed by order line. Null off receipt mode. */
   let counted: Map<string, { expectedQty: number; actualQty: number; note: string | null }> | null = null
   if (opts.receipt && filedOut) {
@@ -140,6 +143,12 @@ export async function renderPickListPdf(
       if (!l.onSheet) continue
       if (!l.orderLineItemId || l.change === 'ADDED') {
         addedLines.push({ description: l.description, quantity: l.actualQty, note: l.note })
+        // Since 2026-09-14 a written-in row is ALSO an order line. It
+        // still prints once, under "Added at the warehouse" — but the
+        // line it became has to be taken out of the ordinary set, or the
+        // sheet counts it as a line that was left off the pull and
+        // stamps the whole receipt PARTIAL.
+        if (l.orderLineItemId) addedLineIds.add(l.orderLineItemId)
         continue
       }
       counted.set(l.orderLineItemId, {
@@ -155,7 +164,10 @@ export async function renderPickListPdf(
   const onSheet = counted
     ? pickable.filter((li) => counted!.has(li.id))
     : (selected.length > 0 ? selected : pickable)
-  const omittedLineCount = pickable.length - onSheet.length
+  // Written-in lines are accounted for in their own block, so they are
+  // neither on the pull nor missing from it.
+  const omittedLineCount =
+    pickable.filter((li) => !addedLineIds.has(li.id)).length - onSheet.length
 
   if (onSheet.length === 0) {
     return {

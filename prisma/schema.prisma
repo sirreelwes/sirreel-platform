@@ -4233,6 +4233,40 @@ model OrderLineItem {
   autoKitPieceId String?            @map("auto_kit_piece_id")
   autoKitPiece   InventoryKitPiece? @relation(fields: [autoKitPieceId], references: [id], onDelete: SetNull)
 
+  /// This line was put on the order BY THE WAREHOUSE, at check-out —
+  /// gear the floor added to the load that nobody had quoted (Oliver,
+  /// 2026-09-13: "on RW they had the ability to actually add a line
+  /// item... the driver needs a copy of the exact order they're picking
+  /// up").
+  ///
+  /// Provenance, not inference. It drives the staff-only red flag on the
+  /// order and it is DURABLE in a way the check report is not: re-filing
+  /// a corrected sheet reclassifies the report row (it is an ordinary
+  /// order line by then, so it counts as NONE), and the fact that the
+  /// yard put it there would otherwise disappear on the second filing.
+  warehouseAddedAt DateTime? @map("warehouse_added_at")
+  /// The associate named on the paper. Free text for the same reason
+  /// OrderCheckReport.preppedBy is: the floor crew are not all HQ users.
+  warehouseAddedBy String?   @map("warehouse_added_by")
+
+  /// NOBODY HAS PRICED THIS LINE YET, and it must not be billed until
+  /// someone does.
+  ///
+  /// The yard cannot see rates ([[project-yard-single-view]]), which is
+  /// why a warehouse-added row was refused outright until 2026-09-14: a
+  /// line at /bin/zsh under-bills the job silently, and silently is the whole
+  /// problem. The line now lands on the order — which is what makes the
+  /// driver's paperwork match the truck — but it lands UNPRICED and
+  /// LOUD instead of quietly free.
+  ///
+  /// Set only when the floor could not name the item from the catalog.
+  /// A catalog pick prices itself off the client's rate card through the
+  /// same resolveLineRate every other line uses, so the common case
+  /// needs nobody. While this is set the order cannot be invoiced and
+  /// the corrected quote is not emailed — see lib/orders/unpricedLines.
+  /// Cleared by pricing the line (the rate edit clears it).
+  pricingPendingAt DateTime? @map("pricing_pending_at")
+
   /// Provenance for lines created from a partner's ancillary fee schedule
   /// (src/lib/sub-rentals/orderFees.ts). Deliberately its own column rather
   /// than a marker in `qualifier` — qualifier prints on the quote in italics,
