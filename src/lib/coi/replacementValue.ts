@@ -40,7 +40,9 @@
  * VEHICLE and EQUIPMENT lines, including included accessories (the client is
  * accountable for bringing a kit's batteries back). Not counted: fees,
  * discounts, labor, and EXPENDABLES — consumables are sold to the production,
- * not rented, and are not "rented equipment" on anyone's policy.
+ * not rented, and are not "rented equipment" on anyone's policy. Nor are
+ * STAGES lines: a stage day is real property we rent them time on, not gear
+ * that leaves with them.
  *
  * A partner-fulfilled line (a sub-rented unit) IS rented equipment the
  * client is accountable for, but its value lives with the partner. It counts
@@ -60,6 +62,10 @@ export interface ReplacementLineInput {
   id: string
   orderId?: string | null
   type?: string | null
+  /** LineItemType has no STAGE member, so a stage day is written
+   *  type=VEHICLE. Department is what tells the two apart. */
+  department?: string | null
+  fulfillmentLane?: string | null
   description: string
   quantity: number
   parentLineItemId?: string | null
@@ -129,6 +135,7 @@ export interface ReplacementValueSummary {
 }
 
 const COUNTED_TYPES = new Set(['VEHICLE', 'EQUIPMENT'])
+const STAGES = 'STAGES'
 const LIVE_ASSIGNMENT_STATUSES = new Set(['ASSIGNED', 'CHECKED_OUT'])
 
 function money(v: MoneyLike): number | null {
@@ -141,9 +148,20 @@ function assetValue(a: { currentValue?: MoneyLike; purchasePrice?: MoneyLike }):
   return money(a.currentValue) ?? money(a.purchasePrice)
 }
 
-/** Does this line count toward the figure at all? */
-export function countsTowardReplacementValue(li: Pick<ReplacementLineInput, 'type'>): boolean {
-  return !!li.type && COUNTED_TYPES.has(li.type)
+/** Does this line count toward the figure at all?
+ *
+ *  A stage day is not rented equipment — nobody's Misc Rental Equipment
+ *  limit covers a sound stage, and no stage AssetCategory carries a
+ *  replacement cost. Left in, it counted as a VEHICLE line (every
+ *  asset-category line is written type=VEHICLE), found nothing to value
+ *  itself with, and pinned `complete` to false forever — so every client
+ *  surface read "at least $X, 1 item still being valued" on an order whose
+ *  gear was fully priced. */
+export function countsTowardReplacementValue(
+  li: Pick<ReplacementLineInput, 'type' | 'department' | 'fulfillmentLane'>,
+): boolean {
+  if (!li.type || !COUNTED_TYPES.has(li.type)) return false
+  return li.department !== STAGES && li.fulfillmentLane !== 'STAGE'
 }
 
 /** The AssetCategory a vehicle line holds against — how it finds its units. */
@@ -297,6 +315,8 @@ export const REPLACEMENT_LINE_SELECT = {
   id: true,
   orderId: true,
   type: true,
+  department: true,
+  fulfillmentLane: true,
   description: true,
   quantity: true,
   parentLineItemId: true,
@@ -322,6 +342,8 @@ type LoadedLine = {
   id: string
   orderId: string
   type: string
+  department: string
+  fulfillmentLane: string | null
   description: string
   quantity: number
   parentLineItemId: string | null

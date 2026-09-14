@@ -106,6 +106,64 @@ check(
   }).hasVehicles === false,
 )
 
+// LineItemType has no STAGE member, so a stage day is written type=VEHICLE
+// with department STAGES (MakeReservationModal posts exactly that). Reading
+// the type alone put a stage-only production back in the MITU NGL email.
+check(
+  'a stage day is not a vehicle, even though its line type says VEHICLE',
+  deriveVehicleScope({
+    orders: [
+      {
+        status: 'APPROVED',
+        lineItems: [{ type: 'VEHICLE', department: 'STAGES', fulfillmentLane: 'STAGE' }],
+      },
+    ],
+  }).hasVehicles === false,
+)
+
+check(
+  'a stage line booked before the lane was stamped is still not a vehicle',
+  deriveVehicleScope({
+    orders: [
+      {
+        status: 'APPROVED',
+        lineItems: [{ type: 'VEHICLE', department: 'STAGES', fulfillmentLane: null }],
+      },
+    ],
+  }).hasVehicles === false,
+)
+
+check(
+  'a stage line does not suppress the truck on the same order',
+  deriveVehicleScope({
+    orders: [
+      {
+        status: 'APPROVED',
+        lineItems: [
+          { type: 'VEHICLE', department: 'STAGES', fulfillmentLane: 'STAGE' },
+          { type: 'VEHICLE', department: 'VEHICLES', fulfillmentLane: 'FLEET' },
+        ],
+      },
+    ],
+  }).hasVehicles === true,
+)
+
+// Contradictory rows err toward requiring the coverage: an explicit VEHICLES
+// department or FLEET lane wins over a stage signal from the catalog row.
+check(
+  'a VEHICLES-department line whose catalog row reads STAGES still counts',
+  deriveVehicleScope({
+    orders: [
+      {
+        status: 'APPROVED',
+        lineItems: [
+          { type: 'VEHICLE', department: 'VEHICLES', assetCategory: { department: 'STAGES' } },
+        ],
+      },
+    ],
+  }).hasVehicles === true,
+)
+
 check(
   'a sub-rented partner truck is still a truck',
   deriveVehicleScope({

@@ -38,6 +38,14 @@ const VEHICLES: LineItemDepartment = 'VEHICLES'
  *  client is not hiring the auto, so it must not drag in the auto checks. */
 const GOODS_LINE_TYPES = new Set(['VEHICLE', 'EQUIPMENT', 'EXPENDABLE'])
 
+/** `type === 'VEHICLE'` does NOT mean "a truck". LineItemType has no STAGE
+ *  member, so every AssetCategory-backed line is written VEHICLE — a stage
+ *  day on Lankershim included (MakeReservationModal posts type: 'VEHICLE'
+ *  with the category's real department). Department is the honest signal,
+ *  and a stage line must not re-impose the auto checks on a job that rents
+ *  no vehicle — the exact MITU NGL email this module exists to prevent. */
+const STAGES: LineItemDepartment = 'STAGES'
+
 /** A booking item in one of these is not going out on this job. */
 const DEAD_ITEM_STATUSES = new Set(['SUBSTITUTED', 'UNFULFILLED'])
 const DEAD_BOOKING_STATUSES = new Set(['CANCELLED', 'ARCHIVED'])
@@ -94,12 +102,20 @@ export function deriveVehicleScope(input: VehicleScopeInput): VehicleScope {
     if (order.status === 'CANCELLED') continue
     for (const li of order.lineItems ?? []) {
       if (li.type && !GOODS_LINE_TYPES.has(li.type)) continue
+      const stage =
+        li.department === STAGES ||
+        li.fulfillmentLane === 'STAGE' ||
+        li.assetCategory?.department === STAGES ||
+        li.inventoryItem?.department === STAGES
       const vehicle =
-        li.type === 'VEHICLE' ||
         li.department === VEHICLES ||
         li.fulfillmentLane === 'FLEET' ||
         li.assetCategory?.department === VEHICLES ||
-        li.inventoryItem?.department === VEHICLES
+        li.inventoryItem?.department === VEHICLES ||
+        // Only the type-derived fallback yields to the stage signals: an
+        // explicit VEHICLES department or FLEET lane still wins, so a
+        // contradictory row errs toward requiring the coverage.
+        (li.type === 'VEHICLE' && !stage)
       if (vehicle) reasons.push('a vehicle line on an order')
     }
   }

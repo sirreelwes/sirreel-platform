@@ -496,6 +496,19 @@ const STATUS_COLORS: Record<string, string> = {
 // there's only one way to add a new discount going forward.
 const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE"] as const;
 
+/** What the TYPE column says. LineItemType has no STAGE member — every
+ *  AssetCategory-backed line is stored VEHICLE — so a stage day read
+ *  "VEHICLE" on the row while its own department select said Stages. The
+ *  stored enum is untouched (lane routing and day-billing key off
+ *  department already); this is the label only. */
+function lineTypeLabel(li: { type: string; department?: string | null; fulfillmentLane?: string | null }): string {
+  // Department / lane only — isStageLineItem's legacy name fallback is a
+  // /stage/i test on the catalog row, which is fine for "does this order
+  // need the stage contract" and wrong for labelling one row.
+  const stage = isStageLineItem({ department: li.department, fulfillmentLane: li.fulfillmentLane });
+  return stage && li.type === "VEHICLE" ? "STAGE" : li.type;
+}
+
 // Status transitions exposed as buttons on the order detail page.
 // Buttons whose `endpoint` is set POST to that path (the book action
 // is the first non-PUT lifecycle transition). Buttons without
@@ -2586,7 +2599,7 @@ export default function OrderDetailPage() {
         li.type === "DISCOUNT" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
         li.type === "FEE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
         "bg-lt-inner text-lt-fg2"
-      }`}>{li.type}</span>
+      }`}>{lineTypeLabel(li)}</span>
       {li.autoKitPieceId && (
         <span
           className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg"

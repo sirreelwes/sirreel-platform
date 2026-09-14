@@ -49,6 +49,32 @@ const item = (id: string, replacementCost: number | null, extra: Partial<ItemInp
   check(s.complete, 'a fully priced order is complete')
 }
 
+// ── A stage day is not rented equipment ─────────────────────────────────────
+// LineItemType has no STAGE member, so a stage line is stored type=VEHICLE.
+// Counted, it could never value itself (no stage carries a replacement cost)
+// and every client surface read "1 item still being valued" forever.
+{
+  const s = deriveReplacementValue([
+    { id: 'l1', type: 'EQUIPMENT', description: 'CP200 Radio', quantity: 10, inventoryItem: item('radio', 350) },
+    { id: 'l2', type: 'VEHICLE', department: 'STAGES', fulfillmentLane: 'STAGE', description: 'Lankershim Studios', quantity: 1 },
+  ])
+  check(s.counted === 1, 'a stage day is not counted', s.counted)
+  check(s.complete, 'and does not hold the figure open', s.missing)
+  check(s.total === 3500, 'the gear is still valued', s.total)
+}
+{
+  const s = deriveReplacementValue([
+    { id: 'l1', type: 'VEHICLE', department: 'STAGES', description: 'Lankershim Studios', quantity: 1 },
+  ])
+  check(s.counted === 0, 'a stage-only order has nothing to insure as rented equipment', s.counted)
+}
+{
+  const s = deriveReplacementValue(
+    [{ id: 'l1', type: 'VEHICLE', department: 'VEHICLES', description: 'Cube Truck', quantity: 1, assetCategoryId: 'cube', inventoryItem: item('cube-row', 60000) }],
+  )
+  check(s.counted === 1 && s.total === 60000, 'a real truck still counts', s.total)
+}
+
 // ── Kit pieces ride along ───────────────────────────────────────────────────
 {
   const s = deriveReplacementValue([
