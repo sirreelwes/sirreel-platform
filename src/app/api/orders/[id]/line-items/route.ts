@@ -664,6 +664,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         quantity: Number(quantity),
         request: parseUnitAssignment(unitAssignment),
         categoryLabel: effectiveDescription,
+        // THIS line's days. An order that quotes the same class twice —
+        // a van from the 28th, two more from the 29th — must not bind
+        // either block to the order's whole span.
+        lineWindow: { start: lineItem.pickupDate, end: lineItem.returnDate },
       });
     }
 

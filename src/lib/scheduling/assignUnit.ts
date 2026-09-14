@@ -22,6 +22,9 @@ import {
   type ServiceableAsset,
 } from '@/lib/scheduling/availability'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+import { quotedBlocks, resolveAssignWindow, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
+import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
+import { formatCalendarDate, formatCalendarRange } from '@/lib/dates/calendarDate'
 
 /** Two date ranges touching at all. Inclusive both ends: a return on the
  *  22nd and a pickup on the 22nd are the same day on this board. */
@@ -37,6 +40,12 @@ export interface AssignUnitArgs {
   /** Which order this unit goes out on. With exactly one live order on
    *  the job it is stamped without asking. */
   orderId?: string | null
+  /** The DATE BLOCK this unit is filling — the days the picker checked,
+   *  or the line that was just added. Honoured when it falls inside what
+   *  the order and the hold cover; otherwise the block is resolved from
+   *  the quoted lines. See assignWindow.ts. */
+  windowStart?: Date | string | null
+  windowEnd?: Date | string | null
 }
 
 export interface AssignedUnit {
@@ -53,6 +62,8 @@ export type AssignUnitResult =
       assignment: AssignedUnit
       bookingItem: { id: string; quantity: number; status: string; assignedCount: number; remaining: number }
       bufferOverrideUsed: boolean
+      /** The days the unit was actually bound for, and why those days. */
+      window: { start: string; end: string; source: ResolvedWindow['source'] }
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 
@@ -95,16 +106,13 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   }
   const attachOrderId = requestedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
 
-  // The BOOKING ENVELOPE spans every order on the job: quote a truck for
-  // Sep 22–24 and another for Oct 6–10 and the envelope is Sep 22 → Oct 10.
-  // Binding against that holds a truck for eighteen days to cover three —
-  // and, worse, makes the shared item read "already fully assigned" for the
-  // second block, so that order could never get a unit by ANY route: not
-  // the line-add, not the quote send, not the picker on the order page.
-  // Oliver hit exactly that on SR-JOB-0364 (2026-09-12): he chose Cube 35,
-  // got nothing, and the reservation board showed no truck for his dates.
-  // The ORDER's own window is the truth; the envelope is the fallback when
-  // no order is named (a gantt drag on a bare hold).
+  // ── Which DAYS? ───────────────────────────────────────────────────
+  // Not the booking envelope (it spans every order on the job) and not
+  // the order span either (one order carries two date blocks of the same
+  // class as a matter of routine). The block being filled is the truth;
+  // `resolveAssignWindow` is the one place that decides it, shared with
+  // the picker so the list and the button cannot disagree. See
+  // assignWindow.ts for what each wider window cost.
   const orderForWindow = attachOrderId
     ? await prisma.order.findUnique({
         where: { id: attachOrderId },
@@ -116,9 +124,28 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         },
       })
     : null
-  const derivedWindow = orderForWindow ? deriveOrderWindow({ ...orderForWindow, job: { bookings: [] } }) : null
-  const windowStart = derivedWindow?.start ?? bookingItem.booking.startDate
-  const windowEnd = derivedWindow?.end ?? bookingItem.booking.endDate
+  const orderWindow = orderForWindow ? deriveOrderWindow({ ...orderForWindow, job: { bookings: [] } }) : null
+  const blocks = quotedBlocks(
+    await quotedLinesForHold({
+      categoryId: bookingItem.categoryId,
+      jobId: bookingItem.booking.jobId,
+      orderId: attachOrderId,
+    }),
+  )
+  const asDate = (v: Date | string | null | undefined): Date | null => {
+    if (!v) return null
+    const d = v instanceof Date ? v : new Date(v)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  const resolved = resolveAssignWindow({
+    hold: { start: bookingItem.booking.startDate, end: bookingItem.booking.endDate },
+    orderWindow,
+    blocks,
+    assignments: bookingItem.assignments,
+    requested: { start: asDate(args.windowStart), end: asDate(args.windowEnd) },
+  })
+  const windowStart = resolved.start
+  const windowEnd = resolved.end
 
   // Only the assignments that TOUCH this window occupy it.
   const occupying = bookingItem.assignments.filter((a) => overlaps(a, windowStart, windowEnd))
@@ -175,7 +202,12 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       startDate: { lte: queryEnd },
       endDate: { gte: queryStart },
     },
-    select: { assetId: true, startDate: true, endDate: true, bookingItem: { select: { holdRank: true } } },
+    select: {
+      assetId: true,
+      startDate: true,
+      endDate: true,
+      bookingItem: { select: { holdRank: true, booking: { select: { jobName: true } } } },
+    },
   })
 
   const serviceable: ServiceableAsset[] = [{ id: asset.id, unitName: asset.unitName, tier: asset.tier }]
@@ -201,12 +233,23 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // rather than let a new primary jump the queue.
   const isPrimaryItem = bookingItem.holdRank === 1
 
+  // A refusal has to say WHAT is in the way. "asset has a hard overlap on
+  // this window" sent Oliver to Wes with a screenshot on 2026-09-14 — the
+  // van he was told about came back the day BEFORE his dates, and nothing
+  // on screen said which dates HQ thought it was checking. Name the unit,
+  // the days it is out, the job it is out on, and the window being filled.
+  const windowLabel = formatCalendarRange(windowStart, windowEnd)
+  const whereItIs = (a: (typeof overlappingActive)[number]): string => {
+    const on = a.bookingItem.booking?.jobName
+    return `${formatCalendarRange(a.startDate, a.endDate)}${on ? ` on ${on}` : ''}`
+  }
+
   if (state === 'booked' && isPrimaryItem) {
     if (!hasPrimaryHolder && backupCountOnUnit > 0) {
       return refuse(409, {
         ok: false,
         error: 'backup-has-dibs',
-        reason: `this unit has a ${backupCountOnUnit === 1 ? '2nd hold' : `${backupCountOnUnit} backup hold(s)`} waiting; promote or release ${backupCountOnUnit === 1 ? 'it' : 'one'} first`,
+        reason: `${asset.unitName} has a ${backupCountOnUnit === 1 ? '2nd hold' : `${backupCountOnUnit} backup hold(s)`} waiting on ${windowLabel}; promote or release ${backupCountOnUnit === 1 ? 'it' : 'one'} first`,
         state,
         backupCountOnUnit,
       })
@@ -214,18 +257,38 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     return refuse(409, {
       ok: false,
       error: 'over-capacity',
-      reason: 'asset has a hard overlap on this window; promote any existing backup instead of stacking a new primary',
+      reason: `${asset.unitName} is already out ${overlappingActive.map(whereItIs).join('; ')} — those days overlap ${windowLabel}. Promote an existing backup instead of stacking a new primary.`,
       state,
       backupCountOnUnit,
+      window: { start: windowStart, end: windowEnd, source: resolved.source },
+      conflicts: overlappingActive.map((a) => ({
+        start: a.startDate,
+        end: a.endDate,
+        jobName: a.bookingItem.booking?.jobName ?? null,
+      })),
     })
   }
   if (state === 'buffer' && isPrimaryItem && !args.bufferOverride) {
+    // The adjacent rental, not an overlapping one — that is what "tight"
+    // means: it comes back (or goes out) with no clear turnaround day.
+    const before = assignmentsDetailed
+      .filter((a) => a.endDate < windowStart)
+      .sort((a, b) => b.endDate.getTime() - a.endDate.getTime())[0]
+    const after = assignmentsDetailed
+      .filter((a) => a.startDate > windowEnd)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0]
+    const detail = before
+      ? `${asset.unitName} comes back ${formatCalendarDate(before.endDate)}${before.bookingItem.booking?.jobName ? ` from ${before.bookingItem.booking.jobName}` : ''}, with no clear day before this ${formatCalendarDate(windowStart)} pickup.`
+      : after
+        ? `${asset.unitName} goes back out ${formatCalendarDate(after.startDate)}${after.bookingItem.booking?.jobName ? ` on ${after.bookingItem.booking.jobName}` : ''}, with no clear day after this ${formatCalendarDate(windowEnd)} return.`
+        : `${asset.unitName} has no clear turnaround day around ${windowLabel}.`
     return refuse(409, {
       ok: false,
       error: 'buffer-encroachment',
-      reason: 'asset is in buffer state for this window; pass bufferOverride=true to proceed',
+      reason: `${detail} Assign it anyway if the turnaround is covered.`,
       needsOverride: true,
       state,
+      window: { start: windowStart, end: windowEnd, source: resolved.source },
     })
   }
 
@@ -269,5 +332,10 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       remaining: Math.max(0, bookingItem.quantity - result.newAssignedCount),
     },
     bufferOverrideUsed: state === 'buffer' && Boolean(args.bufferOverride),
+    window: {
+      start: windowStart.toISOString().slice(0, 10),
+      end: windowEnd.toISOString().slice(0, 10),
+      source: resolved.source,
+    },
   }
 }

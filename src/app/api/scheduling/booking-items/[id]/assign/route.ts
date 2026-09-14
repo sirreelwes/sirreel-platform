@@ -4,8 +4,8 @@
  * Chunk 5 of native-scheduling-v1-brief.md — assign one specific
  * Asset to a BookingItem. Two block modes:
  *
- *   409 over-capacity            — the asset has a hard overlap on
- *                                   the booking window. No override.
+ *   409 over-capacity            — the asset is already out across the
+ *                                   date block being filled. No override.
  *   409 buffer-encroachment      — asset is in buffer state for this
  *                                   window. Requires bufferOverride.
  *
@@ -29,6 +29,10 @@ interface AssignBody {
   /** Which order this unit goes out on. Optional: with one candidate
    *  order on the job we stamp it without asking. */
   orderId?: string
+  /** The date block being filled (YYYY-MM-DD), as shown in the picker.
+   *  Optional — resolved from the quoted lines when absent. */
+  windowStart?: string
+  windowEnd?: string
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -59,6 +63,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     bufferDays: body.bufferDays,
     bufferOverride: body.bufferOverride,
     orderId: body.orderId,
+    windowStart: body.windowStart,
+    windowEnd: body.windowEnd,
   })
   if (!result.ok) return NextResponse.json(result.body, { status: result.status })
 
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       assignment: result.assignment,
       bookingItem: result.bookingItem,
       bufferOverrideUsed: result.bufferOverrideUsed,
+      window: result.window,
     },
     { status: 201 },
   )

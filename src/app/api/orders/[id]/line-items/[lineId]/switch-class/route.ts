@@ -177,7 +177,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       rateOverridden: rateRes.rateOverridden,
       lineTotal: Math.round(lineTotal * 100) / 100,
     },
-    select: { id: true, description: true, rate: true, resolvedRate: true, rateOverridden: true, lineTotal: true, quantity: true },
+    select: {
+      id: true, description: true, rate: true, resolvedRate: true, rateOverridden: true, lineTotal: true, quantity: true,
+      // The days the unit is bound for — this line's, not the order's span.
+      pickupDate: true, returnDate: true,
+    },
   })
   if (rateRes.rateOverridden && rateRes.resolvedRate) {
     try {
@@ -237,6 +241,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     quantity: qty,
     request: parseUnitAssignment(body.unitAssignment),
     categoryLabel: updated.description,
+    lineWindow: { start: updated.pickupDate, end: updated.returnDate },
   })
 
   const kitSync = await syncOrderKitPieces(prisma, orderId)

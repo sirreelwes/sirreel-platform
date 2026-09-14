@@ -32,6 +32,18 @@ interface Candidate {
   unitName: string
   tier: 'PREMIUM' | 'STANDARD' | 'ECONOMY'
   state: UnitState
+  /** Why it isn't free — the rental in the way, or the one crowding the
+   *  turnaround. A badge with nothing beside it makes the operator go
+   *  and ask a person (Oliver, 2026-09-14). */
+  conflict?: { start: string; end: string; jobName?: string | null } | null
+}
+
+/** One distinct pickup → return pair quoted against this class. */
+interface DateBlock {
+  start: string
+  end: string
+  quantity: number
+  assignedCount: number
 }
 
 interface CurrentAssignment {
@@ -73,6 +85,12 @@ interface PickerData {
   }[]
   /** Live orders on this booking's job — what a unit may be attached to. */
   candidateOrders?: CandidateOrder[]
+  /** The days these states were computed for — the same window the
+   *  Assign button checks and stamps. */
+  window: { start: string; end: string; source: string; orderId: string | null }
+  /** The date blocks quoted against this class, when there is more than
+   *  one the agent has to say which one they are filling. */
+  dateBlocks?: DateBlock[]
   currentAssignments: CurrentAssignment[]
   candidates: Candidate[]
   /** In the shop for these dates — listed, never assignable. */
@@ -161,6 +179,15 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
    * which truck belonged to which.
    */
   const [attachOrderId, setAttachOrderId] = useState<string>('')
+  /**
+   * Which DATE BLOCK is being filled. An order quotes the same class on
+   * two sets of days often enough — a van from the 28th, two more from
+   * the 29th — that "which days" is a real question, and answering it
+   * wrong is what made HQ refuse a van that was standing in the yard
+   * (Oliver, ADV Carrera, 2026-09-14). Empty = let the server pick the
+   * block still short of units.
+   */
+  const [blockKey, setBlockKey] = useState<string>('')
   // DOT paperwork (Phase 2): generate the per-vehicle DOT info packet for the
   // order's assigned units + publish it to the client portal.
   type Incomplete = { unitName: string; missing: string[] }
@@ -202,7 +229,13 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/available-units?bufferDays=${bufferDays}`)
+      const qs = new URLSearchParams({ bufferDays: String(bufferDays) })
+      if (attachOrderId) qs.set('orderId', attachOrderId)
+      if (blockKey) {
+        const [start, end] = blockKey.split('|')
+        if (start && end) { qs.set('start', start); qs.set('end', end) }
+      }
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/available-units?${qs.toString()}`)
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.error || `request failed (${res.status})`)
       setData(json)
@@ -211,7 +244,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     } finally {
       setLoading(false)
     }
-  }, [bookingItemId, bufferDays])
+  }, [bookingItemId, bufferDays, attachOrderId, blockKey])
 
   useEffect(() => {
     void refresh()
@@ -318,6 +351,10 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
           // Which order this unit goes out on. null lets the server
           // decide when the job has exactly one candidate.
           orderId: attachOrderId || null,
+          // And which days — the block whose availability is on screen,
+          // so the button can never check a window the list didn't.
+          windowStart: data?.window?.start?.slice(0, 10),
+          windowEnd: data?.window?.end?.slice(0, 10),
         }),
       })
       const json = await res.json()
@@ -417,9 +454,44 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 </div>
               )}
 
-              <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm flex items-center gap-2">
+              {/* WHICH DAYS everything below is about. Left unsaid, the
+                  list and the Assign button could be answering about
+                  different windows — and for a year they were. */}
+              {(data.dateBlocks?.length ?? 0) > 1 && (
+                <div className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1.5">
+                    Which dates are you filling?
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.dateBlocks!.map((b) => {
+                      const key = `${b.start.slice(0, 10)}|${b.end.slice(0, 10)}`
+                      const active = `${data.window.start.slice(0, 10)}|${data.window.end.slice(0, 10)}` === key
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => { setBlockKey(key); setPendingBuffer(null); setError(null); setErrorAssetId(null) }}
+                          className={`text-[13px] px-2.5 py-1.5 rounded border ${
+                            active
+                              ? 'bg-amber-600 border-amber-600 text-white font-semibold'
+                              : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                          }`}
+                        >
+                          {fmtDay(b.start)} → {fmtDay(b.end)}
+                          <span className={active ? 'ml-1.5 text-white/80' : 'ml-1.5 text-zinc-500'}>
+                            {b.assignedCount} of {b.quantity}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-zinc-900">{Math.max(0, data.summary.availableToHold)}</span>
-                <span className="text-zinc-600">of {data.summary.serviceableCount} units available these dates</span>
+                <span className="text-zinc-600">
+                  of {data.summary.serviceableCount} units available {fmtDay(data.window.start)} → {fmtDay(data.window.end)}
+                </span>
                 <span className="ml-auto text-xs text-zinc-500">
                   available {data.summary.freeCount} · tight {data.summary.bufferCount} · booked {data.summary.bookedCount}
                 </span>
@@ -428,6 +500,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-zinc-700">
                   <span className="font-semibold">{data.bookingItem.assignedCount}</span> of {data.bookingItem.quantity} assigned
+                  {(data.dateBlocks?.length ?? 0) > 1 && (
+                    <span className="text-zinc-500"> for {fmtDay(data.window.start)} → {fmtDay(data.window.end)}</span>
+                  )}
                 </div>
                 <div className="ml-auto">
                   <span
@@ -446,9 +521,15 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 <section className="rounded border border-rose-200 bg-rose-50 px-3 py-2 flex items-start gap-3 flex-wrap">
                   <div className="text-xs text-rose-900 flex-1 min-w-[12rem]">
                     <span className="font-semibold">
-                      {data.bookingItem.remaining === 1
-                        ? 'One slot on this line has no unit.'
-                        : `${data.bookingItem.remaining} slots on this line have no unit.`}
+                      {(() => {
+                        const where =
+                          (data.dateBlocks?.length ?? 0) > 1
+                            ? ` for ${fmtDay(data.window.start)} → ${fmtDay(data.window.end)}`
+                            : ' on this line'
+                        return data.bookingItem.remaining === 1
+                          ? `One slot${where} has no unit.`
+                          : `${data.bookingItem.remaining} slots${where} have no unit.`
+                      })()}
                     </span>{' '}
                     If the job doesn&rsquo;t need {data.bookingItem.remaining === 1 ? 'it' : 'them'}, release
                     {data.bookingItem.remaining === 1 ? ' it' : ' them'} — the hold stops counting against
@@ -550,7 +631,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
 
               {data.bookingItem.remaining === 0 ? (
                 <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  This hold is fully assigned.
+                  {(data.dateBlocks?.length ?? 0) > 1
+                    ? `Every unit for ${fmtDay(data.window.start)} → ${fmtDay(data.window.end)} is assigned. Pick another set of dates above to fill those.`
+                    : 'This hold is fully assigned.'}
                 </div>
               ) : (
                 <section>
@@ -559,7 +642,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                   </div>
                   <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
                     {data.candidates.length === 0 && (
-                      <li className="px-3 py-3 text-sm text-zinc-500">No units available for these dates.</li>
+                      <li className="px-3 py-3 text-sm text-zinc-500">
+                        No units available {fmtDay(data.window.start)} → {fmtDay(data.window.end)}.
+                      </li>
                     )}
                     {data.candidates.map((c) => {
                       const isBooked = c.state === 'booked'
@@ -575,6 +660,12 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                               <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
                                 {STATE_LABEL[c.state] ?? c.state}
                               </span>
+                              {c.conflict && (
+                                <span className="text-xs text-zinc-500">
+                                  {c.state === 'booked' ? 'out' : 'back'} {fmtDay(c.conflict.start)} → {fmtDay(c.conflict.end)}
+                                  {c.conflict.jobName ? ` · ${c.conflict.jobName}` : ''}
+                                </span>
+                              )}
                             </div>
                             <button
                               onClick={() => assign(c, false)}

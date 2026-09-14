@@ -35,6 +35,8 @@ import { prisma } from '@/lib/prisma'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { assignUnitToBookingItem } from '@/lib/scheduling/assignUnit'
+import { quotedBlocks, resolveAssignWindow } from '@/lib/scheduling/assignWindow'
+import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 
 export type UnitAssignmentMode = 'next' | 'named' | 'none'
 
@@ -74,6 +76,10 @@ export async function assignUnitsForLine(args: {
   quantity: number
   request: UnitAssignmentRequest
   categoryLabel?: string | null
+  /** The days THIS line covers. An order carries two date blocks of the
+   *  same class often enough that the order span is the wrong answer —
+   *  the line that was just added knows its own pickup and return. */
+  lineWindow?: { start: Date | string | null; end: Date | string | null } | null
 }): Promise<UnitAssignmentOutcome> {
   const mode = args.request.mode ?? 'next'
   const out: UnitAssignmentOutcome = { mode, categoryId: args.categoryId, bookingItemId: null, assigned: [], note: null }
@@ -125,10 +131,26 @@ export async function assignUnitsForLine(args: {
       return out
     }
 
-    // THIS order's window, falling back to the booking envelope.
+    // THE DAYS THIS LINE COVERS — not the order span, which spreads over
+    // every block on the order, and not the booking envelope, which
+    // spreads over every order on the job. See assignWindow.ts.
     const derived = deriveOrderWindow({ ...order, job: { bookings: [] } })
-    const windowStart = derived.start ?? item.booking.startDate
-    const windowEnd = derived.end ?? item.booking.endDate
+    const toDate = (v: Date | string | null | undefined): Date | null => {
+      if (!v) return null
+      const d = v instanceof Date ? v : new Date(v)
+      return Number.isNaN(d.getTime()) ? null : d
+    }
+    const window = resolveAssignWindow({
+      hold: { start: item.booking.startDate, end: item.booking.endDate },
+      orderWindow: derived,
+      blocks: quotedBlocks(
+        await quotedLinesForHold({ categoryId: args.categoryId, orderId: order.id }),
+      ),
+      assignments: item.assignments,
+      requested: { start: toDate(args.lineWindow?.start), end: toDate(args.lineWindow?.end) },
+    })
+    const windowStart = window.start
+    const windowEnd = window.end
 
     // Only units already booked ACROSS THIS WINDOW use up the item's
     // quantity. A second date block on the same job shares the item (the
@@ -153,6 +175,8 @@ export async function assignUnitsForLine(args: {
           assetId,
           bufferOverride: true,
           orderId: order.id,
+          windowStart,
+          windowEnd,
         })
         if (!res.ok) {
           const reason = (res.body.reason as string | undefined) || (res.body.error as string | undefined) || `HTTP ${res.status}`
@@ -190,7 +214,13 @@ export async function assignUnitsForLine(args: {
             : `${label}: only ${out.assigned.length} of ${want} could be assigned — no other unit is free.`
         return out
       }
-      const res = await assignUnitToBookingItem({ bookingItemId: item.id, assetId: next.assetId, orderId: order.id })
+      const res = await assignUnitToBookingItem({
+        bookingItemId: item.id,
+        assetId: next.assetId,
+        orderId: order.id,
+        windowStart,
+        windowEnd,
+      })
       if (!res.ok) {
         // Somebody grabbed it between the read and the write. Skip it and
         // try the next one rather than giving up on the whole line.
@@ -239,28 +269,53 @@ export async function assignNextAvailableForOrder(
           type: true,
           department: true,
           quantity: true,
+          pickupDate: true,
+          returnDate: true,
           assetCategoryId: true,
           inventoryItem: { select: { legacyAssetCategoryId: true, department: true } },
         },
+        orderBy: { pickupDate: 'asc' },
       },
     },
   })
   if (!order?.bookingId) return []
-  const byCategory = new Map<string, number>()
+  // Grouped by class AND by date block. Two vans from the 28th and two
+  // more from the 29th is FOUR trucks across two windows, not four
+  // trucks across one — binding the lot to a single span holds each of
+  // them days it isn't needed and burns availability that isn't gone.
+  const byBlock = new Map<string, { categoryId: string; start: Date; end: Date; quantity: number }>()
   for (const li of order.lineItems) {
     if (li.type === 'FEE' || li.type === 'DISCOUNT' || li.type === 'LABOR' || li.type === 'EXPENDABLE') continue
     const dept = li.inventoryItem?.department ?? li.department
     if (dept !== 'VEHICLES') continue
     const categoryId = li.assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null
     if (!categoryId) continue
-    byCategory.set(categoryId, (byCategory.get(categoryId) ?? 0) + Math.max(1, li.quantity))
+    const key = `${categoryId}|${li.pickupDate.toISOString().slice(0, 10)}|${li.returnDate.toISOString().slice(0, 10)}`
+    const existing = byBlock.get(key)
+    if (existing) existing.quantity += Math.max(1, li.quantity)
+    else byBlock.set(key, { categoryId, start: li.pickupDate, end: li.returnDate, quantity: Math.max(1, li.quantity) })
   }
   const outcomes: UnitAssignmentOutcome[] = []
-  for (const [categoryId, quantity] of byCategory) {
-    const picks = (named[categoryId] ?? []).filter((id) => typeof id === 'string' && id.length > 0)
+  // Named picks are per class, so they are handed out in date order and
+  // each block takes what the earlier ones did not.
+  const remainingPicks = new Map<string, string[]>()
+  for (const [categoryId, ids] of Object.entries(named)) {
+    remainingPicks.set(categoryId, ids.filter((id) => typeof id === 'string' && id.length > 0))
+  }
+  for (const block of byBlock.values()) {
+    const pool = remainingPicks.get(block.categoryId) ?? []
+    const picks = pool.splice(0, block.quantity)
     const request: UnitAssignmentRequest =
-      picks.length > 0 ? { mode: 'named', assetIds: picks.slice(0, quantity) } : { mode: 'next' }
-    outcomes.push(await assignUnitsForLine({ orderId, categoryId, quantity, request }))
+      picks.length > 0 ? { mode: 'named', assetIds: picks } : { mode: 'next' }
+    outcomes.push(
+      await assignUnitsForLine({
+        orderId,
+        categoryId: block.categoryId,
+        quantity: block.quantity,
+        request,
+        lineWindow: { start: block.start, end: block.end },
+      }),
+    )
   }
   return outcomes
 }

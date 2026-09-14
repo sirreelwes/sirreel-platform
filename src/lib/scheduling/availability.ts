@@ -134,6 +134,10 @@ export interface AssignmentWindow {
   assetId: string
   startDate: Date // inclusive, UTC-midnight Date
   endDate: Date // inclusive, UTC-midnight Date
+  /** Whose rental it is — carried only so a picker can SAY why a unit is
+   *  not free. A badge reading "booked" with nothing beside it is what
+   *  sent Oliver looking for a person to ask (2026-09-14). */
+  jobName?: string | null
 }
 
 export interface AvailabilityUnit {
@@ -141,6 +145,9 @@ export interface AvailabilityUnit {
   unitName: string
   tier: AssetTier
   state: UnitState
+  /** The rental behind a non-free state: the overlapping one for
+   *  'booked', the adjacent one for 'buffer'. Null when free. */
+  conflict?: { start: Date; end: Date; jobName?: string | null } | null
 }
 
 export interface CategoryAvailability {
@@ -188,15 +195,25 @@ export function computeUnitStates(
     byAsset.set(a.assetId, list)
   }
 
+  const toConflict = (a: AssignmentWindow) => ({ start: a.startDate, end: a.endDate, jobName: a.jobName ?? null })
+
   return serviceableAssets.map((asset) => {
     const my = byAsset.get(asset.id) ?? []
 
-    const hard = my.some((a) => a.startDate <= windowEnd && a.endDate >= windowStart)
-    if (hard) {
-      return { assetId: asset.id, unitName: asset.unitName, tier: asset.tier, state: 'booked' as const }
+    const overlapping = my
+      .filter((a) => a.startDate <= windowEnd && a.endDate >= windowStart)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+    if (overlapping.length > 0) {
+      return {
+        assetId: asset.id,
+        unitName: asset.unitName,
+        tier: asset.tier,
+        state: 'booked' as const,
+        conflict: toConflict(overlapping[0]),
+      }
     }
 
-    const buffer = my.some((a) => {
+    const crowding = my.filter((a) => {
       // assignment ends before the window starts
       if (a.endDate < windowStart) {
         return clearDaysBetween(a.endDate, windowStart) < bufferDays
@@ -213,7 +230,8 @@ export function computeUnitStates(
       assetId: asset.id,
       unitName: asset.unitName,
       tier: asset.tier,
-      state: buffer ? ('buffer' as const) : ('free' as const),
+      state: crowding.length > 0 ? ('buffer' as const) : ('free' as const),
+      conflict: crowding.length > 0 ? toConflict(crowding[0]) : null,
     }
   })
 }
@@ -304,11 +322,27 @@ export async function getCategoryAvailability(
           // Exclude this hold's own assignments when editing it.
           ...(excludeBookingItemId ? { bookingItemId: { not: excludeBookingItemId } } : {}),
         },
-        select: { assetId: true, startDate: true, endDate: true },
+        select: {
+          assetId: true,
+          startDate: true,
+          endDate: true,
+          bookingItem: { select: { booking: { select: { jobName: true } } } },
+        },
       })
     : []
 
-  const units = computeUnitStates(assets, assignments, startDate, endDate, bufferDays)
+  const units = computeUnitStates(
+    assets,
+    assignments.map((a) => ({
+      assetId: a.assetId,
+      startDate: a.startDate,
+      endDate: a.endDate,
+      jobName: a.bookingItem?.booking?.jobName ?? null,
+    })),
+    startDate,
+    endDate,
+    bufferDays,
+  )
 
   const bookedCount = units.filter((u) => u.state === 'booked').length
   const bufferCount = units.filter((u) => u.state === 'buffer').length
