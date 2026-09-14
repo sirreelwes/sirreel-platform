@@ -912,6 +912,15 @@ export function CollectionsWorkspace({
               Live desk
             </Link>
           )}
+          {/* Ana, 2026-09-14: "Do we have a tool to create weekly collections
+              projections?" Beside the desk rather than in the nav — it is
+              read from here, while looking at the queue. */}
+          <Link
+            href="/collections/projections"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+          >
+            Projections
+          </Link>
           <Link
             href="/guides/collecting"
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-900"
