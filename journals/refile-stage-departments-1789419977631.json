@@ -1,0 +1,25 @@
+{
+  "ranAt": "2026-09-14T21:06:17.628Z",
+  "assetCategories": [
+    {
+      "id": "dbd045b9-fc0d-4006-ace6-53183a9640bd",
+      "name": "Lankershim Studios",
+      "from": "VEHICLES",
+      "to": "STAGES"
+    }
+  ],
+  "inventoryItems": [
+    {
+      "id": "aafd81f6-7ffc-49cc-af01-86281300a4cb",
+      "code": "LANKERSHIM_LED_VOLUME",
+      "from": "PRO_SUPPLIES",
+      "to": "STAGES"
+    },
+    {
+      "id": "8d432526-d301-4890-9584-914bfafc242d",
+      "code": "LANKERSHIM_BLACK_BOX",
+      "from": "PRO_SUPPLIES",
+      "to": "STAGES"
+    }
+  ]
+}
