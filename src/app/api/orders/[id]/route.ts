@@ -5,6 +5,7 @@ import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { loadOrderReplacementValue } from '@/lib/coi/replacementValue';
+import { loadOrderWarehouseFlags } from "@/lib/orders/warehouseLineFlags";
 import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
@@ -234,7 +235,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // desk can price the catalog row (lib/coi/replacementValue).
   const replacementValue = await loadOrderReplacementValue(id);
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue });
+  // What the warehouse changed at pickup, per line (Oliver, 2026-09-13).
+  // STAFF ONLY — the middleware gates this route to an HQ session and no
+  // client-facing surface reads it. See lib/orders/warehouseLineFlags.
+  const warehouseFlags = await loadOrderWarehouseFlags(id);
+
+  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

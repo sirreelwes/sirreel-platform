@@ -15,6 +15,7 @@ import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
+import { WarehouseLineFlag, WarehouseAddedLines, type OrderWarehouseFlags } from "@/components/orders/WarehouseLineFlag";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -62,6 +63,7 @@ import {
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
+import { isClosedDay, calendarDayLabel } from '@/lib/site/yardHours';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -282,6 +284,10 @@ type Order = {
   /** Server-computed: the stored PDF predates the order's current line
    *  items / discounts. See lib/orders/quotePdfFreshness.ts. */
   quotePdfStale?: boolean;
+  /** What the warehouse changed at pickup, per line — STAFF ONLY, never
+   *  on a client-facing surface (lib/orders/warehouseLineFlags.ts).
+   *  Null when no check-out sheet is filed or nothing differed. */
+  warehouseFlags?: OrderWarehouseFlags | null;
   /** The rented gear's replacement value — the client's broker's equipment
    *  limit — and the lines nothing on file could value (lib/coi/replacementValue). */
   replacementValue?: ReplacementValueData | null;
@@ -2770,6 +2776,17 @@ export default function OrderDetailPage() {
     ) : (
       <td className="px-4 py-3 text-lt-fg">
         {li.description}
+        {/* The warehouse's red flag (Oliver, 2026-09-13) — this line was
+            swapped, shortened or dropped at pickup. Staff-only; the
+            client's quote and portal build their lines from the order's
+            own rows and never see this. */}
+        {order?.warehouseFlags && (
+          <WarehouseLineFlag
+            flag={order.warehouseFlags.byLineId[li.id]}
+            filedAt={order.warehouseFlags.filedAt}
+            preppedBy={order.warehouseFlags.preppedBy}
+          />
+        )}
         {(() => {
           // WHICH truck this vehicle line is on (Wes 2026-09-10). The unit
           // lives on the hold, never on the line and never on the quote —
@@ -3459,6 +3476,20 @@ export default function OrderDetailPage() {
                 >
                   Print pull sheet ↗
                 </a>
+                {/* The same sheet with the counts filled in — the copy
+                    the driver signs for (Oliver, 2026-09-13). Only once
+                    a check-out sheet is filed, because until then there
+                    are no counts and the route would 400. */}
+                {order.warehouseFlags && (
+                  <a
+                    href={`/api/orders/${orderId}/pick-list-pdf?receipt=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
+                  >
+                    Print driver&rsquo;s copy ↗
+                  </a>
+                )}
                 <Link
                   href={`/reports/orders/${orderId}?edge=OUT`}
                   className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline text-lt-fg hover:bg-lt-inner"
@@ -4304,6 +4335,20 @@ export default function OrderDetailPage() {
         </table>
         </div>
 
+        {/* Gear the warehouse wrote onto the sheet that was never on the
+            order. It is never added as a line here (the yard cannot see
+            rates and a $0 line would under-bill the job), so this is the
+            only place on the order it appears at all. */}
+        {!!order?.warehouseFlags?.added.length && (
+          <div className="px-6 pb-2">
+            <WarehouseAddedLines
+              added={order.warehouseFlags.added}
+              filedAt={order.warehouseFlags.filedAt}
+              preppedBy={order.warehouseFlags.preppedBy}
+            />
+          </div>
+        )}
+
         {/* Discounts panel — first-class. Renders null when there's no
             line content AND no existing discounts ("no discounts =
             layout unchanged" per the spec). isEditable mirrors the
@@ -4552,6 +4597,54 @@ export default function OrderDetailPage() {
         <p className="text-xs text-lt-fg3 mb-4">
           Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
         </p>
+
+        {/* Closed-day prompt (Wes 2026-09-13: "we are closed on sundays,
+            so all pickups and returns on that day should be asked: is
+            this a blind pickup/dropoff?"). The reservation desk and the
+            order builder ask it when the window is picked; this catches
+            the order whose dates MOVED onto a Sunday afterwards, which
+            is the one nobody would be asked about. Window read the way
+            deriveOrderWindow reads it — the lines, which are the rows
+            that are always dated. */}
+        {(() => {
+          const days = (pick: (li: LineItem) => string | null | undefined) =>
+            (order.lineItems ?? []).map((li) => (pick(li) || '').slice(0, 10)).filter(Boolean).sort();
+          const pickups = days((li) => li.pickupDate ?? li.startDate);
+          const returns = days((li) => li.returnDate ?? li.endDate);
+          const pickupDay = pickups[0] || null;
+          const returnDay = returns[returns.length - 1] || null;
+          const asks = [
+            ...(isClosedDay(pickupDay) && !blindPickup
+              ? [{ key: 'pickup', day: pickupDay, text: 'Is this a blind pickup?', on: () => { setBlindPickup(true); setBlindDirty(true); }, label: 'Yes — blind pickup' }]
+              : []),
+            ...(isClosedDay(returnDay) && !blindReturn
+              ? [{ key: 'return', day: returnDay, text: 'Is this a blind drop-off?', on: () => { setBlindReturn(true); setBlindDirty(true); }, label: 'Yes — blind return' }]
+              : []),
+          ];
+          if (asks.length === 0) return null;
+          return (
+            <div className="mb-4 rounded-lg border border-chip-warn-fg/40 bg-chip-warn-bg px-4 py-3 space-y-2.5">
+              <p className="text-sm font-semibold text-chip-warn-fg">We&apos;re closed Sunday</p>
+              {asks.map((a) => (
+                <div key={a.key} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-chip-warn-fg">
+                    {calendarDayLabel(a.day)} — {a.text}
+                  </span>
+                  <button
+                    onClick={a.on}
+                    className="px-2.5 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-500 text-white"
+                  >
+                    {a.label}
+                  </button>
+                </div>
+              ))}
+              <p className="text-xs text-chip-warn-fg/90">
+                If it isn&apos;t blind, someone has to open the yard for it — leave the toggle off and
+                tell whoever is covering.
+              </p>
+            </div>
+          );
+        })()}
 
         <div className="space-y-4">
           {/* Pickup */}

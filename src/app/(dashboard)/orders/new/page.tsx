@@ -21,6 +21,14 @@ import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } fr
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
+import {
+  ClosedDayHandoffPrompt,
+  NO_CLOSED_DAY_ANSWERS,
+  blindFlagsFor,
+  closedDayBlockers,
+  pruneClosedDayAnswers,
+  type ClosedDayHandoff,
+} from '@/components/orders/ClosedDayHandoffPrompt';
 import { AddItemModal, type CreatedInventoryItem } from '@/components/inventory/AddItemModal';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { IntegerInput } from '@/components/ui/IntegerInput';
@@ -1945,6 +1953,27 @@ function NewQuotePageInner() {
     />
   );
 
+  /** Is a Sunday pickup or return blind? The yard is closed, so the desk
+   *  answers it here and the answer lands on the order's blindPickup /
+   *  blindReturn (ClosedDayHandoffPrompt). The window read is the one
+   *  deriveOrderWindow would read — LINES first, header as the fallback
+   *  — so a line the rep dated by hand is what gets asked about. */
+  const [closedDayAnswers, setClosedDayAnswers] = useState<ClosedDayHandoff>(NO_CLOSED_DAY_ANSWERS);
+  const handoffWindow = useMemo(() => {
+    const days = (pick: (it: ResolvedItem) => string | null | undefined) =>
+      items.map((it) => (pick(it) || '').slice(0, 10)).filter(Boolean).sort();
+    const pickups = days((it) => it.pickupDate);
+    const returns = days((it) => it.returnDate);
+    return {
+      start: pickups[0] || editing.startDate || null,
+      end: returns[returns.length - 1] || editing.endDate || null,
+    };
+  }, [items, editing.startDate, editing.endDate]);
+  /** Derived, so an answer given for a Sunday is dropped the moment the
+   *  date moves to a weekday. */
+  const closedDay = pruneClosedDayAnswers(handoffWindow.start, handoffWindow.end, closedDayAnswers);
+  const closedDayStillNeeded = closedDayBlockers(handoffWindow.start, handoffWindow.end, closedDay);
+
   /** The "which unit" chips under a vehicle line — the Make Reservation
    *  modal's picker, on the order. Free units pick; a buffer unit picks
    *  with the turnaround warning (the human override next-available never
@@ -2363,6 +2392,13 @@ function NewQuotePageInner() {
         alert('Say how the gear leaves: will call, or loaded on one of the reserved vehicles. It is the question under the line items.');
         return;
       }
+      if (closedDayStillNeeded.length > 0) {
+        alert(
+          `We are closed Sunday — ${closedDayStillNeeded.join(' ')} Answer it under the rental window, ` +
+            'so the client is either told how to let themselves in or met by someone.',
+        );
+        return;
+      }
 
       // ATOMIC create — Order + ALL line items in ONE transaction via
       // /api/orders/from-parse (replaced the old create-order-then-loop-
@@ -2429,6 +2465,8 @@ function NewQuotePageInner() {
             // chain (Job name → typed production name → notes → generic).
             productionName: orderDescription,
           },
+          // Sunday pickup / return, answered under the rental window.
+          ...blindFlagsFor(handoffWindow.start, handoffWindow.end, closedDay),
           // Will call, or loaded on a reserved truck (Wes 2026-09-12). A
           // warehouse order written from a reservation already knows.
           gearHandoff: loadOnAssignmentId
@@ -3355,6 +3393,15 @@ function NewQuotePageInner() {
             />
           </div>
         </div>
+
+        {/* Closed-day handoff — renders only when the window (lines
+            first, header as the fallback) lands on a Sunday. */}
+        <ClosedDayHandoffPrompt
+          start={handoffWindow.start}
+          end={handoffWindow.end}
+          value={closedDay}
+          onChange={setClosedDayAnswers}
+        />
         {vehicleRows.length === 0 ? (
           <div className="text-xs text-lt-fg3 text-center py-4">
             No vehicles reserved. Pick a class above, or type one on a line below and the catalog match will move it here.

@@ -145,7 +145,14 @@ export async function POST(req: NextRequest) {
     if (gate instanceof NextResponse) return gate;
 
     const body = await req.json();
-    const { companyId, jobId, bookingId, description, startDate, endDate, taxRate } = body;
+    const {
+      companyId, jobId, bookingId, description, startDate, endDate, taxRate,
+      // Answered at the desk when the window lands on a day the yard is
+      // closed — see ClosedDayHandoffPrompt. The same two columns the
+      // order page's Blind handoff card writes; instructions are typed
+      // there, not here.
+      blindPickup, blindReturn,
+    } = body;
     let { agentId } = body;
 
     // Fall back to logged-in user for agentId if not supplied
@@ -224,6 +231,8 @@ export async function POST(req: NextRequest) {
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
           taxRate: taxRate ?? 0,
+          blindPickup: !!blindPickup,
+          blindReturn: !!blindReturn,
         },
         include: {
           company: { select: { id: true, name: true } },

@@ -23,6 +23,8 @@ import {
   PickListDocument,
   type Department,
   type PickListLine,
+  type PickListReceipt,
+  type ReceiptAddedLine,
 } from '@/lib/warehouse/PickListDocument'
 
 export interface RenderPickListResult {
@@ -38,11 +40,28 @@ export type RenderPickListFailure =
 
 export async function renderPickListPdf(
   orderId: string,
-  opts: { lineIds?: string[] } = {},
+  opts: { lineIds?: string[]; receipt?: boolean } = {},
 ): Promise<RenderPickListFailure | { ok: true; result: RenderPickListResult }> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
+      // Receipt mode reads the filed check-OUT sheet — see below. Loaded
+      // unconditionally because it is one indexed row on a unique key,
+      // and a second query would open a window where the sheet is filed
+      // between the two reads.
+      checkReports: {
+        where: { edge: 'OUT' },
+        select: {
+          submittedAt: true,
+          preppedBy: true,
+          lines: {
+            select: {
+              orderLineItemId: true, description: true, expectedQty: true,
+              actualQty: true, change: true, onSheet: true, note: true,
+            },
+          },
+        },
+      },
       company: { select: { name: true } },
       agent: { select: { name: true } },
       job: { select: { jobCode: true, name: true } },
@@ -81,8 +100,69 @@ export async function renderPickListPdf(
   // blank sheet is worse than a complete one.
   const wanted = new Set((opts.lineIds ?? []).map((v) => v.trim()).filter(Boolean))
   const selected = wanted.size > 0 ? pickable.filter((li) => wanted.has(li.id)) : pickable
-  const onSheet = selected.length > 0 ? selected : pickable
+
+  // ── The driver's receipt (Oliver, 2026-09-13) ──────────────────────
+  // "When they enter all of the picked quantities and make the out
+  // contract, they don't have the ability to print the pick list with
+  // the completed quantities to give to the driver. This is an
+  // important feature, as it's the driver's receipt."
+  //
+  // It reads the FILED CHECK-OUT REPORT, not the order and not the pick
+  // statuses, and the difference shows on every line that is not
+  // ordinary:
+  //   - the report holds expected AND actual, so a short line prints
+  //     both numbers. The order line only kept the actual (a check-out
+  //     rewrites it), so an order-derived receipt would claim six went
+  //     out on a line where four did;
+  //   - the report holds rows the warehouse WROTE IN, which are never
+  //     order lines at all (the yard cannot see rates) and would
+  //     otherwise be missing from the paper for gear that is on the
+  //     truck;
+  //   - a partial pull's off-sheet lines were not counted, so they are
+  //     not on this load and must not print as though they were.
+  const filedOut = order.checkReports[0] ?? null
+  if (opts.receipt && !filedOut) {
+    return {
+      ok: false,
+      error: 'No check-out report has been filed for this order yet — the receipt prints the counts on one.',
+      status: 400,
+    }
+  }
+
+  let receipt: PickListReceipt | null = null
+  /** What the sheet counted, keyed by order line. Null off receipt mode. */
+  let counted: Map<string, { expectedQty: number; actualQty: number; note: string | null }> | null = null
+  if (opts.receipt && filedOut) {
+    counted = new Map()
+    const addedLines: ReceiptAddedLine[] = []
+    for (const l of filedOut.lines) {
+      if (!l.onSheet) continue
+      if (!l.orderLineItemId || l.change === 'ADDED') {
+        addedLines.push({ description: l.description, quantity: l.actualQty, note: l.note })
+        continue
+      }
+      counted.set(l.orderLineItemId, {
+        expectedQty: l.expectedQty, actualQty: l.actualQty, note: l.note,
+      })
+    }
+    receipt = { preppedBy: filedOut.preppedBy, countedAt: filedOut.submittedAt, addedLines }
+  }
+
+  // On a receipt the SHEET's scope wins over ?lines= — what the driver
+  // is holding is what was counted, and a stale selection from whatever
+  // screen printed it must not quietly drop a line off the record.
+  const onSheet = counted
+    ? pickable.filter((li) => counted!.has(li.id))
+    : (selected.length > 0 ? selected : pickable)
   const omittedLineCount = pickable.length - onSheet.length
+
+  if (onSheet.length === 0) {
+    return {
+      ok: false,
+      error: 'The filed check-out report did not count any pickable line on this order.',
+      status: 400,
+    }
+  }
 
   // A check that is ALREADY its own line on this sheet must not also
   // print under the parent — the RW sheet the floor knows shows
@@ -106,17 +186,25 @@ export async function renderPickListPdf(
     const warehousePicked = li.pickStatus != null && li.pickStatus !== 'PENDING_PICK'
     const fleetOut = li.fulfillmentLane === 'FLEET' && order.fleetReadyAt != null
     const isOut = warehousePicked || fleetOut
+    // On the receipt the numbers come off the sheet: `ordered` is what
+    // the order called for when it was counted and `out` is what was
+    // put on the truck. Everywhere else they mean "what to pull" and
+    // "how much of it is already pulled".
+    const sheet = counted?.get(li.id) ?? null
     return {
       department: li.department as Department,
       code: li.inventoryItem?.code ?? null,
       description: li.description,
-      notes: li.notes,
+      // A receipt is a record, so it carries what the floor wrote next
+      // to the line — but never the unchecked pull boxes, which ask a
+      // question this document has already answered.
+      notes: sheet ? (sheet.note ?? li.notes) : li.notes,
       type: li.type === 'EXPENDABLE' ? 'SALE' : 'RENT',
-      ordered: li.quantity,
-      out: isOut ? li.quantity : 0,
+      ordered: sheet ? sheet.expectedQty : li.quantity,
+      out: sheet ? sheet.actualQty : (isOut ? li.quantity : 0),
       picked: warehousePicked,
       includedAccessory: !!li.autoKitPieceId,
-      unitChecks: printableChecks(li.inventoryItem?.unitChecks ?? []),
+      unitChecks: receipt ? [] : printableChecks(li.inventoryItem?.unitChecks ?? []),
     }
   })
 
@@ -136,14 +224,16 @@ export async function renderPickListPdf(
       lines,
       generatedAt: new Date(),
       omittedLineCount,
+      receipt,
     }) as React.ReactElement<DocumentProps>
     const pdf = await renderToBuffer(element)
     return {
       ok: true,
       result: {
         pdf,
-        stem:
-          omittedLineCount > 0
+        stem: receipt
+          ? `GearReceipt-${order.orderNumber}${omittedLineCount > 0 ? '-partial' : ''}`
+          : omittedLineCount > 0
             ? `PickList-${order.orderNumber}-partial`
             : `PickList-${order.orderNumber}`,
         orderNumber: order.orderNumber,

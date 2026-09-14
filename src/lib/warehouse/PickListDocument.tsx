@@ -66,6 +66,48 @@ export interface PickListLine {
   includedAccessory?: boolean
 }
 
+/**
+ * A row the warehouse wrote onto the sheet that was never on the order.
+ * It is not an order line and deliberately never becomes one (the yard
+ * cannot see rates, and a $0 line would under-bill the job) — but it IS
+ * on the truck, so the driver's copy has to list it.
+ */
+export interface ReceiptAddedLine {
+  description: string
+  quantity: number
+  note: string | null
+}
+
+/**
+ * Receipt mode — the DRIVER'S COPY, printed after the check-out sheet is
+ * filed.
+ *
+ * Oliver, 2026-09-13: "when they enter all of the picked quantities and
+ * make the out contract, they don't have the ability to print the pick
+ * list with the completed quantities to give to the driver. This is an
+ * important feature, as it's the driver's receipt."
+ *
+ * The pull sheet and the receipt are the same document at two different
+ * moments, which is why they are one component: the pull sheet asks a
+ * question (empty write-in boxes, Remaining to work down) and the
+ * receipt answers it (printed counts, nothing to fill in, a line for the
+ * driver to sign). Rendering them separately would let the two drift,
+ * and the whole point is that the driver is holding the sheet the floor
+ * just worked.
+ *
+ * It carries NO warehouse change flags. A swap or a shortfall shows as
+ * plain Ordered-vs-Out numbers, which is what the driver needs; the red
+ * flag that says "the warehouse did this" is staff-only and lives on the
+ * order (components/orders/WarehouseLineFlag).
+ */
+export interface PickListReceipt {
+  /** The associate named on the paper. */
+  preppedBy: string | null
+  /** When the sheet was filed. */
+  countedAt: Date | string
+  addedLines: ReceiptAddedLine[]
+}
+
 export interface PickListDocumentProps {
   orderNumber: string
   description: string | null
@@ -91,6 +133,14 @@ export interface PickListDocumentProps {
    * typed in.
    */
   omittedLineCount?: number
+  /**
+   * Present = print the driver's receipt rather than the pull sheet.
+   * In this mode `ordered` is what the order called for and `out` is
+   * what the floor counted onto the truck, so the two columns are the
+   * document: they are equal on an ordinary line, and they are not on a
+   * swap, a shortfall or a line that never went.
+   */
+  receipt?: PickListReceipt | null
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -322,6 +372,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   writeBoxText: { fontSize: 12, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
+  // ── Receipt columns ───────────────────────────────────────────────
+  // The driver's copy has nothing to write in, so the two 10.5% boxes
+  // and the Remaining column give their width back to Description and
+  // to the two counts that ARE the document. Same rule as the pull
+  // sheet: these must sum to 100, and receiptTotalValue must equal
+  // receiptColOut or the section totals stop lining up under it.
+  receiptColCode:    { width: '13%', fontSize: 9, paddingRight: 3 },
+  receiptColDesc:    { width: '52%', fontSize: 9, paddingRight: 4 },
+  receiptColType:    { width: '7%',  fontSize: 9 },
+  receiptColOrdered: { width: '14%', fontSize: 10, textAlign: 'right' as const, paddingRight: 10 },
+  receiptColOut:     { width: '14%', fontFamily: 'Helvetica-Bold', fontSize: 11, textAlign: 'right' as const, paddingRight: 6 },
+  receiptTotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 9, width: '14%', textAlign: 'right' as const, paddingRight: 6 },
+  receiptGrandTotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 11, width: '14%', textAlign: 'right' as const, paddingRight: 6 },
+  // A line that did not go out whole. Stated in words under the row
+  // rather than left to the reader to subtract two columns — the driver
+  // is reading this on a loading dock.
+  shortNote: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.ink, paddingLeft: '13%', paddingBottom: 2.5 },
+  addedHeader: {
+    paddingVertical: 3,
+    paddingHorizontal: 2,
+    marginTop: 4,
+    backgroundColor: C.band,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.rule,
+  },
+  receiptStamp: {
+    marginTop: 4,
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.ink,
+  },
+  // Kept deliberately short. A signature block tall enough to be pushed
+  // off the last page by `wrap={false}` orphans itself onto a sheet of
+  // its own, which is the one thing a document that gets signed on a
+  // loading dock must not do.
+  receiptSignBlock: { marginTop: 16 },
+  receiptSignRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 15 },
+  receiptSignLabel: { fontFamily: 'Helvetica-Bold', fontSize: 9, marginRight: 8 },
+  receiptSignLine: { flex: 1, borderBottomWidth: 0.75, borderBottomColor: C.ink },
+  receiptSignLineShort: { width: 120, borderBottomWidth: 0.75, borderBottomColor: C.ink },
+  receiptTerms: { fontSize: 7.5, color: C.muted, lineHeight: 1.35 },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -376,10 +467,19 @@ const styles = StyleSheet.create({
 export function PickListDocument(props: PickListDocumentProps) {
   const generatedAt = props.generatedAt ?? new Date()
   const sections = groupByDepartment(props.lines)
-  const grandTotal = props.lines.reduce((s, l) => s + l.ordered, 0)
+  // The pull sheet counts what to pull; the receipt counts what left.
+  const receipt = props.receipt ?? null
+  const grandTotal = props.lines.reduce((s, l) => s + (receipt ? l.out : l.ordered), 0)
+  const addedTotal = receipt ? receipt.addedLines.reduce((s, l) => s + l.quantity, 0) : 0
+  const docTitle = receipt
+    ? (props.omittedLineCount ? 'PARTIAL GEAR RECEIPT' : 'GEAR RECEIPT')
+    : (props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST')
 
   return (
-    <Document title={`Pick List ${props.orderNumber}`} author="SirReel Production Vehicles, Inc.">
+    <Document
+      title={`${receipt ? 'Gear Receipt' : 'Pick List'} ${props.orderNumber}`}
+      author="SirReel Production Vehicles, Inc."
+    >
       <Page size="LETTER" style={styles.page}>
         {/* Top band */}
         <View style={styles.topBand}>
@@ -407,14 +507,24 @@ export function PickListDocument(props: PickListDocumentProps) {
             </View>
           </View>
           <View style={styles.titleCol}>
-            <Text style={styles.docTitle}>
-              {props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST'}
-            </Text>
+            <Text style={styles.docTitle}>{docTitle}</Text>
             <Text style={styles.titleSub}>No: {props.orderNumber}</Text>
             {!!props.omittedLineCount && (
               <Text style={styles.partialNote}>
                 {props.lines.length} of {props.lines.length + props.omittedLineCount} lines ·{' '}
-                {props.omittedLineCount} not on this pull
+                {props.omittedLineCount} not on this {receipt ? 'load' : 'pull'}
+              </Text>
+            )}
+            {/* Who counted it and when. On the receipt this is the whole
+                claim the document makes, so it goes under the title
+                rather than in the info band where it would read as one
+                more field. */}
+            {receipt && (
+              <Text style={styles.receiptStamp}>
+                Counted out {fmtTimestamp(
+                  typeof receipt.countedAt === 'string' ? new Date(receipt.countedAt) : receipt.countedAt,
+                )}
+                {receipt.preppedBy ? ` \u00b7 ${receipt.preppedBy}` : ''}
               </Text>
             )}
           </View>
@@ -474,14 +584,26 @@ export function PickListDocument(props: PickListDocumentProps) {
 
         {/* Table head */}
         <View style={styles.tableHead} fixed>
-          <Text style={styles.colCode}>Item Code</Text>
-          <Text style={styles.colDesc}>Description</Text>
-          <Text style={styles.colType}>Type</Text>
-          <Text style={styles.colOrdered}>Ordered</Text>
-          <Text style={styles.colOut}>Out</Text>
-          <Text style={styles.colRemaining}>Remaining</Text>
-          <Text style={[styles.colPicked, { textAlign: 'center' }]}>Picked</Text>
-          <Text style={[styles.colVerified, { textAlign: 'center' }]}>Verified</Text>
+          {receipt ? (
+            <>
+              <Text style={styles.receiptColCode}>Item Code</Text>
+              <Text style={styles.receiptColDesc}>Description</Text>
+              <Text style={styles.receiptColType}>Type</Text>
+              <Text style={styles.receiptColOrdered}>Ordered</Text>
+              <Text style={styles.receiptColOut}>Went out</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.colCode}>Item Code</Text>
+              <Text style={styles.colDesc}>Description</Text>
+              <Text style={styles.colType}>Type</Text>
+              <Text style={styles.colOrdered}>Ordered</Text>
+              <Text style={styles.colOut}>Out</Text>
+              <Text style={styles.colRemaining}>Remaining</Text>
+              <Text style={[styles.colPicked, { textAlign: 'center' }]}>Picked</Text>
+              <Text style={[styles.colVerified, { textAlign: 'center' }]}>Verified</Text>
+            </>
+          )}
         </View>
         <View style={styles.rentalBanner}>
           <Text style={styles.rentalBannerText}>RENTAL</Text>
@@ -496,26 +618,39 @@ export function PickListDocument(props: PickListDocumentProps) {
             {section.lines.map((line, idx) => (
               <View key={idx} wrap={false}>
                 <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
-                  <Text style={styles.colCode}>{line.code ?? '—'}</Text>
-                  <Text style={styles.colDesc}>
+                  <Text style={receipt ? styles.receiptColCode : styles.colCode}>{line.code ?? '—'}</Text>
+                  <Text style={receipt ? styles.receiptColDesc : styles.colDesc}>
                     {line.includedAccessory ? '\u2514 ' : ''}{line.description}
                     {line.includedAccessory ? ' (incl.)' : ''}
                   </Text>
-                  <Text style={styles.colType}>{line.type}</Text>
-                  <Text style={styles.colOrdered}>{line.ordered}</Text>
-                  <Text style={styles.colOut}>{line.out}</Text>
-                  <Text style={styles.colRemaining}>{line.ordered - line.out}</Text>
-                  <View style={styles.colPicked}>
-                    <View style={styles.writeBox}>
-                      {line.picked ? (
-                        <Text style={styles.writeBoxText}>{line.out || line.ordered}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-                  <View style={styles.colVerified}>
-                    <View style={styles.writeBox} />
-                  </View>
+                  <Text style={receipt ? styles.receiptColType : styles.colType}>{line.type}</Text>
+                  <Text style={receipt ? styles.receiptColOrdered : styles.colOrdered}>{line.ordered}</Text>
+                  <Text style={receipt ? styles.receiptColOut : styles.colOut}>{line.out}</Text>
+                  {!receipt && (
+                    <>
+                      <Text style={styles.colRemaining}>{line.ordered - line.out}</Text>
+                      <View style={styles.colPicked}>
+                        <View style={styles.writeBox}>
+                          {line.picked ? (
+                            <Text style={styles.writeBoxText}>{line.out || line.ordered}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View style={styles.colVerified}>
+                        <View style={styles.writeBox} />
+                      </View>
+                    </>
+                  )}
                 </View>
+                {/* The driver should not have to subtract two columns on
+                    a loading dock to find out something is missing. */}
+                {receipt && line.out < line.ordered ? (
+                  <Text style={styles.shortNote}>
+                    {line.out === 0
+                      ? 'DID NOT GO OUT'
+                      : `SHORT \u2014 ${line.ordered - line.out} of ${line.ordered} did not go out`}
+                  </Text>
+                ) : null}
                 {line.notes ? (
                   <View style={styles.notesRow}>
                     <Text style={styles.notesText}>
@@ -528,24 +663,96 @@ export function PickListDocument(props: PickListDocumentProps) {
             ))}
             <View style={styles.totalRow} wrap={false}>
               <Text style={styles.totalLabel}>Total for {DEPT_LABELS[section.dept]}</Text>
-              <Text style={styles.totalValue}>{section.total}</Text>
-              <View style={styles.totalSpacer} />
+              {receipt ? (
+                <Text style={styles.receiptTotalValue}>
+                  {section.lines.reduce((sum, l) => sum + l.out, 0)}
+                </Text>
+              ) : (
+                <>
+                  <Text style={styles.totalValue}>{section.total}</Text>
+                  <View style={styles.totalSpacer} />
+                </>
+              )}
             </View>
           </View>
         ))}
 
+        {/* Gear the warehouse wrote in that was never on the order. It
+            is not billed and is not an order line, but it IS on the
+            truck — leaving it off the driver's copy would make the
+            receipt disagree with the load. */}
+        {receipt && receipt.addedLines.length > 0 && (
+          <View>
+            <View style={styles.addedHeader}>
+              <Text style={styles.deptHeaderText}>Added at the warehouse</Text>
+            </View>
+            {receipt.addedLines.map((line, idx) => (
+              <View key={idx} wrap={false}>
+                <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
+                  <Text style={styles.receiptColCode}>—</Text>
+                  <Text style={styles.receiptColDesc}>{line.description}</Text>
+                  <Text style={styles.receiptColType}>RENT</Text>
+                  <Text style={styles.receiptColOrdered}>—</Text>
+                  <Text style={styles.receiptColOut}>{line.quantity}</Text>
+                </View>
+                {line.note ? (
+                  <View style={styles.notesRow}>
+                    <Text style={styles.notesText}>
+                      <Text style={styles.notesLabel}>Notes: </Text>
+                      {line.note}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ))}
+            <View style={styles.totalRow} wrap={false}>
+              <Text style={styles.totalLabel}>Total added at the warehouse</Text>
+              <Text style={styles.receiptTotalValue}>{addedTotal}</Text>
+            </View>
+          </View>
+        )}
+
         {/* Grand total */}
         <View style={styles.grandTotalRow} wrap={false}>
-          <Text style={styles.grandTotalLabel}>Grand Total:</Text>
-          <Text style={styles.grandTotalValue}>{grandTotal}</Text>
-          <View style={styles.totalSpacer} />
+          <Text style={styles.grandTotalLabel}>
+            {receipt ? 'Total pieces out:' : 'Grand Total:'}
+          </Text>
+          {receipt ? (
+            <Text style={styles.receiptGrandTotalValue}>{grandTotal + addedTotal}</Text>
+          ) : (
+            <>
+              <Text style={styles.grandTotalValue}>{grandTotal}</Text>
+              <View style={styles.totalSpacer} />
+            </>
+          )}
         </View>
 
-        {/* Signature */}
-        <View style={styles.signatureRow} wrap={false}>
-          <Text style={styles.signatureLabel}>PICKED BY:</Text>
-          <View style={styles.signatureLine} />
-        </View>
+        {/* Signature. The pull sheet is signed by whoever pulled it; the
+            receipt is signed by whoever drove it away, which is the
+            reason the document exists. */}
+        {receipt ? (
+          <View style={styles.receiptSignBlock} wrap={false}>
+            <Text style={styles.receiptTerms}>
+              This is the record of what left the SirReel warehouse on this order. Please count it
+              before signing.
+            </Text>
+            <View style={styles.receiptSignRow}>
+              <Text style={styles.receiptSignLabel}>RECEIVED BY (print):</Text>
+              <View style={styles.receiptSignLine} />
+            </View>
+            <View style={styles.receiptSignRow}>
+              <Text style={styles.receiptSignLabel}>SIGNATURE:</Text>
+              <View style={styles.receiptSignLine} />
+              <Text style={[styles.receiptSignLabel, { marginLeft: 18 }]}>DATE:</Text>
+              <View style={styles.receiptSignLineShort} />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.signatureRow} wrap={false}>
+            <Text style={styles.signatureLabel}>PICKED BY:</Text>
+            <View style={styles.signatureLine} />
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer} fixed>

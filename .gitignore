@@ -32,6 +32,7 @@ scripts/*
 !scripts/seed-radio-parts-kit.ts
 !scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
+!scripts/backfill-kit-pieces.ts
 !scripts/import-annual-agreements.ts
 !scripts/create-annual-agreement-companies.ts
 !scripts/harvest-cois-from-email.ts
