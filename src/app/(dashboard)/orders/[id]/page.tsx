@@ -63,7 +63,7 @@ import {
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
-import { isClosedDay, calendarDayLabel } from '@/lib/site/yardHours';
+import { closureOn, calendarDayLabel } from '@/lib/site/yardHours';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -4598,36 +4598,62 @@ export default function OrderDetailPage() {
           Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
         </p>
 
-        {/* Closed-day prompt (Wes 2026-09-13: "we are closed on sundays,
-            so all pickups and returns on that day should be asked: is
-            this a blind pickup/dropoff?"). The reservation desk and the
-            order builder ask it when the window is picked; this catches
-            the order whose dates MOVED onto a Sunday afterwards, which
-            is the one nobody would be asked about. Window read the way
-            deriveOrderWindow reads it — the lines, which are the rows
-            that are always dated. */}
+        {/* Out-of-hours prompt (Wes 2026-09-13: "we are closed on
+            sundays, so all pickups and returns on that day should be
+            asked: is this a blind pickup/dropoff?"; 2026-09-14: "also
+            ask on Saturday after 3:30"). The reservation desk and the
+            order builder ask when the window is picked; this catches the
+            order whose dates MOVED onto a weekend afterwards, which is
+            the one nobody would otherwise be asked about.
+
+            A Sunday is a warning — there is no hour of it that anyone is
+            here. A Saturday is a reminder in the quieter voice, because
+            the yard IS staffed till 3:30 and no order carries a time, so
+            only the rep knows whether the question even applies.
+
+            Window read the way deriveOrderWindow reads it — the lines,
+            which are the rows that are always dated. */}
         {(() => {
           const days = (pick: (li: LineItem) => string | null | undefined) =>
             (order.lineItems ?? []).map((li) => (pick(li) || '').slice(0, 10)).filter(Boolean).sort();
           const pickups = days((li) => li.pickupDate ?? li.startDate);
           const returns = days((li) => li.returnDate ?? li.endDate);
-          const pickupDay = pickups[0] || null;
-          const returnDay = returns[returns.length - 1] || null;
+          const side = (
+            key: string,
+            day: string | null,
+            already: boolean,
+            noun: string,
+            on: () => void,
+          ) => {
+            const closure = day ? closureOn(day) : null;
+            if (!closure || already) return [];
+            return [{
+              key,
+              day,
+              dark: closure.kind === 'CLOSED_ALL_DAY',
+              text: closure.kind === 'CLOSED_ALL_DAY'
+                ? `we're closed — is this a blind ${noun}?`
+                : `we close at ${closure.closesAt} — if it's after that, it's blind.`,
+              label: `Yes — blind ${noun}`,
+              on,
+            }];
+          };
           const asks = [
-            ...(isClosedDay(pickupDay) && !blindPickup
-              ? [{ key: 'pickup', day: pickupDay, text: 'Is this a blind pickup?', on: () => { setBlindPickup(true); setBlindDirty(true); }, label: 'Yes — blind pickup' }]
-              : []),
-            ...(isClosedDay(returnDay) && !blindReturn
-              ? [{ key: 'return', day: returnDay, text: 'Is this a blind drop-off?', on: () => { setBlindReturn(true); setBlindDirty(true); }, label: 'Yes — blind return' }]
-              : []),
+            ...side('pickup', pickups[0] || null, blindPickup, 'pickup',
+              () => { setBlindPickup(true); setBlindDirty(true); }),
+            ...side('return', returns[returns.length - 1] || null, blindReturn, 'return',
+              () => { setBlindReturn(true); setBlindDirty(true); }),
           ];
           if (asks.length === 0) return null;
+          const dark = asks.some((a) => a.dark);
           return (
-            <div className="mb-4 rounded-lg border border-chip-warn-fg/40 bg-chip-warn-bg px-4 py-3 space-y-2.5">
-              <p className="text-sm font-semibold text-chip-warn-fg">We&apos;re closed Sunday</p>
+            <div className={`mb-4 rounded-lg border px-4 py-3 space-y-2.5 ${dark ? 'border-chip-warn-fg/40 bg-chip-warn-bg' : 'border-lt-hairline bg-lt-inner'}`}>
+              <p className={`text-sm font-semibold ${dark ? 'text-chip-warn-fg' : 'text-lt-fg'}`}>
+                {dark ? "We're closed Sunday" : 'Saturday closes at 3:30'}
+              </p>
               {asks.map((a) => (
                 <div key={a.key} className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-chip-warn-fg">
+                  <span className={`text-xs ${a.dark ? 'text-chip-warn-fg' : 'text-lt-fg2'}`}>
                     {calendarDayLabel(a.day)} — {a.text}
                   </span>
                   <button
@@ -4638,7 +4664,7 @@ export default function OrderDetailPage() {
                   </button>
                 </div>
               ))}
-              <p className="text-xs text-chip-warn-fg/90">
+              <p className={`text-xs ${dark ? 'text-chip-warn-fg/90' : 'text-lt-fg3'}`}>
                 If it isn&apos;t blind, someone has to open the yard for it — leave the toggle off and
                 tell whoever is covering.
               </p>
