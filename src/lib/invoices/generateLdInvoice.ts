@@ -15,11 +15,27 @@
  *   - Total = subtotal.
  *
  * Guards:
- *   - Order must have a Booking with at least one BookingAssignment —
- *     LD damage hangs off Inspection.bookingAssignment, no chain to
- *     reach DamageItems without that.
- *   - At least one SEND_TO_LD damage item must exist for the order
- *     with invoiceId IS NULL.
+ *   - At least one line, from either source (see below).
+ *   - At most ONE active (non-VOID) LD invoice per order.
+ *
+ * ── Two sources of lines, since 2026-09-14 ────────────────────────────
+ *
+ * Ana: *"a way to bill L&D on a separate invoice. That would be a game
+ * changer for me."* It already existed — for VEHICLE damage only, which is
+ * the wrong half for the billing desk. Most L&D here is gear that came back
+ * broken or did not come back at all, and that lives on the warehouse's
+ * check-in sheet, not in a fleet inspection.
+ *
+ * So callers may now pass explicit `lines` (what Ana ticked and priced in
+ * the composer — see ldCandidates.ts), and the SEND_TO_LD damage sweep is
+ * SKIPPED when they do: the composer already listed those damages among its
+ * candidates, so sweeping them in again would bill each one twice. Passing
+ * `damageItemIds` stamps the invoice back onto those rows so they stop
+ * appearing as unbilled.
+ *
+ * Calling it with no `lines` keeps the original behaviour exactly — the
+ * order-page damage flow (LdDispositionPanel) is untouched, including its
+ * requirement of a Booking, which only that path needs.
  *   - At most ONE active (non-VOID) LD invoice per order — like the
  *     RENTAL guard. Operators void before regenerating.
  *
@@ -54,12 +70,30 @@ export type GenerateLdInvoiceResult =
       existingInvoiceId?: string
     }
 
+export interface LdInvoiceLineInput {
+  description: string
+  category?: string | null
+  qty: number
+  unitPrice: number
+}
+
 export async function generateLdInvoice(args: {
   orderId: string
   dueDate?: Date | null
   notes?: string | null
+  /** Operator-composed lines. When present, the SEND_TO_LD sweep is skipped. */
+  lines?: LdInvoiceLineInput[] | null
+  /** DamageItems represented in `lines`, stamped with the new invoice id. */
+  damageItemIds?: string[] | null
 }): Promise<GenerateLdInvoiceResult> {
-  const { orderId, dueDate: dueDateOverride = null, notes = null } = args
+  const {
+    orderId,
+    dueDate: dueDateOverride = null,
+    notes = null,
+    lines: explicitLines = null,
+    damageItemIds = null,
+  } = args
+  const composed = !!explicitLines && explicitLines.length > 0
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -84,7 +118,10 @@ export async function generateLdInvoice(args: {
       existingInvoiceId: existingActiveLd.id,
     }
   }
-  if (!order.bookingId) {
+  // Only the damage-sweep path needs a Booking: that is the chain to reach
+  // DamageItems. Gear off a check-in sheet has no vehicle, and refusing it
+  // here is what kept the desk from billing most of its L&D.
+  if (!composed && !order.bookingId) {
     return {
       ok: false,
       status: 409,
@@ -92,27 +129,29 @@ export async function generateLdInvoice(args: {
     }
   }
 
-  // Pull SEND_TO_LD damages not already on an invoice.
-  const ldDamages = await prisma.damageItem.findMany({
-    where: {
-      disposition: 'SEND_TO_LD',
-      invoiceId: null,
-      inspection: {
-        bookingAssignment: {
-          bookingItem: { bookingId: order.bookingId },
-        },
+  // Pull SEND_TO_LD damages not already on an invoice. Hoisted into its own
+  // helper so the composed path can skip it without the empty branch
+  // collapsing the row type.
+  const sweepDamages = (bookingId: string) =>
+    prisma.damageItem.findMany({
+      where: {
+        disposition: 'SEND_TO_LD',
+        invoiceId: null,
+        inspection: { bookingAssignment: { bookingItem: { bookingId } } },
       },
-    },
-    select: {
-      id: true,
-      locationOnVehicle: true,
-      damageType: true,
-      severity: true,
-      estimatedRepairCost: true,
-      inspection: { select: { asset: { select: { unitName: true } } } },
-    },
-  })
-  if (ldDamages.length === 0) {
+      select: {
+        id: true,
+        locationOnVehicle: true,
+        damageType: true,
+        severity: true,
+        estimatedRepairCost: true,
+        inspection: { select: { asset: { select: { unitName: true } } } },
+      },
+    })
+
+  const ldDamages =
+    !composed && order.bookingId ? await sweepDamages(order.bookingId) : []
+  if (!composed && ldDamages.length === 0) {
     return {
       ok: false,
       status: 409,
@@ -120,14 +159,26 @@ export async function generateLdInvoice(args: {
     }
   }
 
-  const snapshot: InvoiceLineSnapshotEntry[] = ldDamages.map((d) => ({
-    description: `Damage — ${d.damageType.toLowerCase()} (${d.severity.toLowerCase()}) at ${d.locationOnVehicle}`,
-    category: d.inspection.asset?.unitName ?? null,
-    qty: 1,
-    unitPrice: d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost),
-    amount: d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost),
-    kind: 'DAMAGE' as const,
-  }))
+  const snapshot: InvoiceLineSnapshotEntry[] = composed
+    ? explicitLines!.map((l) => ({
+        description: l.description,
+        category: l.category ?? null,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        amount: Math.round(l.qty * l.unitPrice * 100) / 100,
+        kind: 'DAMAGE' as const,
+      }))
+    : ldDamages.map((d) => ({
+        description: `Damage — ${d.damageType.toLowerCase()} (${d.severity.toLowerCase()}) at ${d.locationOnVehicle}`,
+        category: d.inspection.asset?.unitName ?? null,
+        qty: 1,
+        unitPrice: d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost),
+        amount: d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost),
+        kind: 'DAMAGE' as const,
+      }))
+  if (snapshot.length === 0) {
+    return { ok: false, status: 400, error: 'an L&D invoice needs at least one line' }
+  }
   const subtotal = snapshot.reduce((s, l) => s + l.amount, 0)
   const total = subtotal // no tax on LD invoices — repair pass-through
 
@@ -209,10 +260,16 @@ export async function generateLdInvoice(args: {
       },
       select: { id: true },
     })
-    await tx.damageItem.updateMany({
-      where: { id: { in: ldDamages.map((d) => d.id) } },
-      data: { invoiceId: inv.id },
-    })
+    // Stamp the damages this invoice carries so they stop reading as
+    // unbilled — the swept ones on the original path, the ticked ones on
+    // the composed path.
+    const stampIds = composed ? (damageItemIds ?? []) : ldDamages.map((d) => d.id)
+    if (stampIds.length) {
+      await tx.damageItem.updateMany({
+        where: { id: { in: stampIds } },
+        data: { invoiceId: inv.id },
+      })
+    }
     return inv
   })
 

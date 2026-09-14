@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { LdInvoiceModal } from '@/components/collections/LdInvoiceModal'
 
 export interface BillingQueueRowView {
   orderId: string
@@ -136,6 +137,9 @@ export function BillingQueuePanel() {
   const [busy, setBusy] = useState<string | null>(null)
   /** Which row has its snooze/dismiss form open, and which one. */
   const [form, setForm] = useState<{ orderId: string; kind: 'snooze' | 'dismiss' } | null>(null)
+  /** The row whose L&D composer is open. Separate from `form` — it is a
+   *  modal over the whole queue, not an inline row form. */
+  const [ldFor, setLdFor] = useState<{ orderId: string; orderNumber: string } | null>(null)
   const [formReason, setFormReason] = useState('')
   const [formUntil, setFormUntil] = useState('')
   const [showTomorrow, setShowTomorrow] = useState(false)
@@ -378,6 +382,21 @@ export function BillingQueuePanel() {
                 {busy === r.orderId ? 'Sending…' : `Send ${inv.invoiceNumber}`}
               </button>
             )}
+            {/* L&D on its own invoice (Ana, 2026-09-14). Offered on every
+                row, not just short ones: damage turns up after the sheet is
+                typed, and she should not have to wait for a chip to bill it.
+                Emphasised when the sheet actually recorded a shortfall. */}
+            <button
+              onClick={() => setLdFor({ orderId: r.orderId, orderNumber: r.orderNumber })}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold ${
+                r.checkInDifferences > 0
+                  ? 'border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg hover:brightness-95'
+                  : 'border-lt-hairline bg-lt-card hover:bg-lt-inner text-lt-fg2'
+              }`}
+              title="Bill loss and damage on a separate invoice — it never holds up the rental bill"
+            >
+              Bill L&amp;D
+            </button>
             <Link
               href={`/jobs/${r.jobId}`}
               className="px-2.5 py-1 rounded-lg border border-lt-hairline bg-lt-card hover:bg-lt-inner text-[11px] font-semibold text-lt-fg2"
@@ -560,6 +579,17 @@ export function BillingQueuePanel() {
 
       {/* Never silent about the cut-off — a list that quietly stops at 120
           days looks identical to a list with nothing older in it. */}
+      {ldFor && (
+        <LdInvoiceModal
+          orderId={ldFor.orderId}
+          orderNumber={ldFor.orderNumber}
+          onClose={() => setLdFor(null)}
+          // The L&D invoice never changes the rental row, but the queue
+          // refresh keeps everything on this screen agreeing with the DB.
+          onCreated={() => void load()}
+        />
+      )}
+
       {stats.olderSuppressed > 0 && (
         <p className="text-[11px] text-lt-fg3 mt-3 border-t border-lt-hairline pt-2">
           {stats.olderSuppressed} unbilled order{stats.olderSuppressed === 1 ? '' : 's'} came back
