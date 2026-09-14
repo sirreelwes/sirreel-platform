@@ -7,20 +7,23 @@
  * holding: a marked-up sheet, a pen, and forty lines of which two are
  * wrong. So:
  *
- *   - On the way BACK, every line arrives pre-filled with what the
- *     order says: doing nothing and hitting Submit records "it all came
- *     back as written", which is the truth on most days.
- *   - On the way OUT it does NOT. Wes, 2026-09-14: "The pull list OUT
- *     numbers should start at zero because they haven't pulled anything
- *     yet. The quantity ordered should be next to the box so they know
- *     the quantity they need to pull. If three walkies are ordered, the
- *     quantity out should say zero until three walkies are scanned out."
+ *   - EVERY count starts at zero — both edges. Wes, 2026-09-14: "The
+ *     pull list OUT numbers should start at zero because they haven't
+ *     pulled anything yet. The quantity ordered should be next to the
+ *     box so they know the quantity they need to pull. If three walkies
+ *     are ordered, the quantity out should say zero until three walkies
+ *     are scanned out." Then, the same day: "For check out AND check in
+ *     reports, the quantities need to be started at zero."
  *     A pre-filled number is indistinguishable from a counted one — the
  *     same reason the photo reader is told to omit blank lines rather
- *     than echo the order. So an outbound line is UNCOUNTED until
- *     somebody scans it, types it, or taps its ordered quantity, and the
- *     sheet will not file while any line on it is still uncounted.
- *     "Everything as ordered" keeps the one-tap day one tap.
+ *     than echo the order. So a line is UNCOUNTED until somebody scans
+ *     it, types it, or taps its ordered quantity, and the sheet will not
+ *     file while any line on it is still uncounted. "Everything as
+ *     ordered" keeps the one-tap day one tap.
+ *   - A zero is still a real answer, and a dangerous one: on the way out
+ *     it rewrites the order and emails the client a smaller quote, and
+ *     on the way in it is gear that did not come home. Uncounted is NOT
+ *     that, and never reaches the server as a count.
  *   - A line only opens its exchange/note fields when its count differs
  *     or the supervisor asks for them. The sheet stays scannable.
  *   - The consequences are stated on screen BEFORE submitting, not
@@ -104,12 +107,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const isOut = draft.edge === 'OUT'
 
   /**
-   * A fresh OUTBOUND sheet starts empty — see the header. A sheet that is
-   * already on file, and every inbound sheet, keeps the pre-filled
-   * behaviour: those numbers were counted by a person.
+   * A fresh sheet starts empty, on BOTH edges — see the header. A sheet
+   * already on file keeps its numbers: those were counted by a person,
+   * and re-opening one is a correction, not a re-count from nothing.
    */
   const startsCounted = (l: DraftLine) =>
-    !isOut || !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
+    !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
   const [rows, setRows] = useState<Row[]>(() =>
     draft.lines.map((l) => {
       const counted = startsCounted(l)
@@ -228,7 +231,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         const open = noteChanged && sentence ? true : r.open
         if (before === after) return noteChanged ? { ...r, note, open } : r
         // Every scan of this line withdrawn → back to where it started:
-        // uncounted on a fresh outbound sheet, pre-filled otherwise.
+        // uncounted on a fresh sheet, pre-filled on a filed one.
         if (after === null) {
           const counted = startsCounted(r)
           return { ...r, actualQty: counted ? r.expectedQty : 0, counted, note, open }
@@ -858,21 +861,19 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[12px] text-lt-fg3">
-              {isOut
-                ? `${countedRows} of ${onSheetIds.length} lines counted${offSheet.length ? ` · ${offSheet.length} off this pull` : ''}`
-                : offSheet.length
-                  ? `${onSheetIds.length} of ${rows.length} lines on this pull`
-                  : `${rows.length} lines · pre-filled from the order`}
+              {`${countedRows} of ${onSheetIds.length} lines counted`}
+              {offSheet.length ? ` · ${offSheet.length} ${isOut ? 'off this pull' : 'still out'}` : ''}
             </span>
-            {/* Hugo's day: the whole sheet came off the shelf as written.
-                Still a deliberate tap, so nothing is counted by default. */}
-            {isOut && uncounted.length > 0 && (
+            {/* Hugo's day: the whole sheet came off the shelf as written,
+                or the whole truck came back. Still a deliberate tap, so
+                nothing is counted by default. */}
+            {uncounted.length > 0 && (
               <button
                 type="button"
                 onClick={countEverything}
                 className="text-[12px] font-semibold text-lt-fg2 hover:text-amber-600 border border-lt-hairline rounded-lg px-2.5 py-1"
               >
-                Everything as ordered
+                {isOut ? 'Everything as ordered' : 'Everything came back'}
               </button>
             )}
           </div>
@@ -885,9 +886,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         {rows.map((r) => {
           const differs =
             r.onSheet && r.counted && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
-          // Nobody has pulled this line yet. The box reads zero because
-          // that is what is on the truck, NOT because the client is
-          // losing the line (Wes, 2026-09-14).
+          // Nobody has counted this line yet. The box reads zero because
+          // that is what has been handled so far, NOT because the client
+          // is losing the line or the gear is missing (Wes, 2026-09-14).
           const awaiting = r.onSheet && !r.counted
           // A line held back for a later pull: dimmed, no count, and no
           // controls that would imply something happened to it.
@@ -925,10 +926,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   <div className="text-lt-fg text-[16px] font-medium truncate">{r.description}</div>
                   <div className="text-lt-fg2 text-[13px] truncate">
                     {r.qualifier && <span>{r.qualifier} · </span>}
-                    {isOut ? (
-                      awaiting ? <span className="text-lt-fg3">not pulled yet</span> : <span>counted</span>
+                    {awaiting ? (
+                      <span className="text-lt-fg3">{isOut ? 'not pulled yet' : 'not counted yet'}</span>
                     ) : (
-                      <span>ordered {r.expectedQty}</span>
+                      <span>counted</span>
                     )}
                     {r.lane && <span className="text-lt-fg3"> · {r.lane.toLowerCase()}</span>}
                   </div>
@@ -1183,12 +1184,14 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         />
       </label>
 
-      {/* Nothing files while a line on this pull has no count. A blank
-          line cannot be submitted as a zero: a zero rewrites the order
-          and emails the client a smaller quote, and "nobody has pulled
-          it yet" is not that. Naming the lines is the point — this is
-          the last screen before the truck leaves. */}
-      {isOut && uncounted.length > 0 && !confirming && (
+      {/* Nothing files while a line on this sheet has no count. A blank
+          line cannot be submitted as a zero: on the way out a zero
+          rewrites the order and emails the client a smaller quote, and
+          on the way in it is gear that did not come home. "Nobody has
+          counted it yet" is neither. Naming the lines is the point —
+          this is the last screen before the truck leaves, and the first
+          one after it gets back. */}
+      {uncounted.length > 0 && !confirming && (
         <div className="mb-3 rounded-lg border border-pill-quoted-fg/25 bg-pill-quoted-bg px-3 py-2.5">
           <p className="text-[14px] text-pill-quoted-fg">
             <b>
@@ -1196,9 +1199,19 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                 ? 'One line has no count yet.'
                 : `${uncounted.length} lines have no count yet.`}
             </b>{' '}
-            Scan or type what came off the shelf, tap <b>All n</b> on a line that went whole, or
-            mark it <b>Not this pull</b>. Use <b>Everything as ordered</b> above if the sheet went
-            out exactly as written.
+            {isOut ? (
+              <>
+                Scan or type what came off the shelf, tap <b>All n</b> on a line that went whole, or
+                mark it <b>Not this pull</b>. Use <b>Everything as ordered</b> above if the sheet
+                went out exactly as written.
+              </>
+            ) : (
+              <>
+                Scan or type what came off the truck, tap <b>All n</b> on a line that came back
+                whole, or mark it <b>Still out</b>. Use <b>Everything came back</b> above if the
+                whole sheet returned.
+              </>
+            )}
           </p>
           <p className="mt-1.5 text-[13px] text-pill-quoted-fg/80 truncate">
             {uncounted.slice(0, 6).map((r) => r.description).join(' · ')}
@@ -1405,12 +1418,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               if (diffs > 0 || shortfalls.length > 0) { setConfirming(true); return }
               void submit()
             }}
-            disabled={saving || (isOut && uncounted.length > 0)}
+            disabled={saving || uncounted.length > 0}
             className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
           >
             {saving
               ? 'Filing…'
-              : isOut && uncounted.length > 0
+              : uncounted.length > 0
                 ? `${uncounted.length} line${uncounted.length === 1 ? '' : 's'} still to count`
                 : shortfalls.length > 0
                   ? 'Review the short kit and file'
