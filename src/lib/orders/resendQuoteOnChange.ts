@@ -48,6 +48,7 @@
 import { get } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
+import { unpricedBlock } from '@/lib/orders/unpricedLines'
 import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { withTeamCc } from '@/lib/email/teamVisibility'
@@ -172,6 +173,13 @@ export async function resendQuoteOnChange(opts: {
   if (!order.quoteSentAt) {
     return { sent: false, reason: 'this quote has never been sent to the client' }
   }
+  // A line the warehouse added that nobody has priced would print on the
+  // corrected quote at $0 — which the client reads as "free", and which
+  // is very hard to walk back once they are holding it. Hold the send
+  // until an agent prices it; the agent's flag is already raised, and
+  // the caller is told exactly why the client was not emailed.
+  const unpriced = await unpricedBlock(orderId)
+  if (unpriced) return { sent: false, reason: unpriced }
 
   // The order's lines just moved, so the stored PDF is wrong by
   // construction — always re-cut, never fall back to the stale one. That

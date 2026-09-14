@@ -38,6 +38,9 @@ import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { advanceOneOrderToOnJob, ordersCarriedByBooking, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
 import { kitExpectationsFor } from '@/lib/orders/kitExpectations'
+import { createWarehouseAddedLines, type WarehouseAddedResult } from '@/lib/orders/warehouseAddedLines'
+import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
+import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 import type { KitExpectation } from '@/lib/orders/kitCompleteness'
 import { unitScanSummary, unitTrackedItemIds } from '@/lib/warehouse/unitScans'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
@@ -366,6 +369,16 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
 
 export interface SubmitLineInput {
   orderLineItemId: string | null
+  /**
+   * ADDED rows only — the catalog item the supervisor named for gear the
+   * floor wrote onto the sheet. It is what prices the new order line,
+   * off the client's rate card, and it is deliberately the ONLY thing
+   * that does: matching the typed description against the catalog would
+   * sooner or later put the wrong rate on an invoice, and an unpriced
+   * line that stops the invoice is a far cheaper mistake than a
+   * confidently wrong one. Null = the line goes on unpriced.
+   */
+  inventoryItemId?: string | null
   description: string
   expectedQty: number
   actualQty: number
@@ -398,6 +411,13 @@ export interface SubmitResult {
   partial: boolean
   /** Lines left off it — still to pull, or still to come back. */
   offSheet: number
+  /** Order lines created from the rows the warehouse wrote in
+   *  (2026-09-14). Empty on every sheet that added nothing, which is
+   *  most of them. */
+  added: WarehouseAddedResult[]
+  /** How many of those went on with no price, and so are holding the
+   *  invoice and the client's corrected quote. */
+  unpriced: number
 }
 
 // The classifier and its wording now live in checkLineChange.ts, with no
@@ -460,12 +480,41 @@ export async function submitCheckReport(opts: {
   // line moved. The client re-send is gated on it too, so a pre-booked
   // order would have emailed the client an "updated quote" identical to
   // the one they were already holding.
-  const orderLinesChanged = edge === 'OUT' && differing.some((l) => l.orderLineItemId)
+  // Rows the warehouse wrote in, which become order lines below. Derived
+  // out here because `orderLinesChanged` has to know about them before
+  // the transaction opens.
+  const willAdd =
+    edge === 'OUT'
+      ? classified.filter((l) => l.onSheet && l.change === 'ADDED' && !l.orderLineItemId)
+      : []
+
+  // As of 2026-09-14 an added row DOES rewrite the order — it becomes a
+  // line (see below) — so it belongs in `orderLinesChanged`, which was
+  // written when it could not. The guard the old comment was protecting
+  // is still there and is now the right one: `unpricedLines` stops the
+  // corrected quote whenever any of those lines has no price, so the
+  // client is never emailed a document with a $0 row on it.
+  const orderLinesChanged =
+    edge === 'OUT' && (differing.some((l) => l.orderLineItemId) || willAdd.length > 0)
   const applyToOrder = edge === 'OUT' && differing.length > 0
 
   const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
 
-  const reportId = await prisma.$transaction(async (tx) => {
+  // One stamp for the whole filing, so every line the sheet creates
+  // sorts and reads as one event.
+  const filedAt = new Date()
+
+  // The order facts a new line inherits. Loaded once, before the
+  // transaction, and only when there is something to add.
+  const orderForAdds =
+    willAdd.length > 0
+      ? await prisma.order.findUnique({
+          where: { id: orderId },
+          select: { id: true, companyId: true, startDate: true, endDate: true },
+        })
+      : null
+
+  const txResult = await prisma.$transaction(async (tx) => {
     // Replace-in-place: one current report per edge (see the @@unique).
     // A re-count corrects the sheet rather than stacking a second
     // document that disagrees with the first.
@@ -510,10 +559,49 @@ export async function submitCheckReport(opts: {
       select: { id: true },
     })
 
+    // ── Gear the warehouse wrote in becomes real order lines ───────
+    // Oliver, 2026-09-13. Until 2026-09-14 an ADDED row was recorded and
+    // flagged and never written onto the order, so the order, the
+    // invoice and the paper in the driver's hand all disagreed with the
+    // truck. It lands as a line now — priced off the client's rate card
+    // when the supervisor named the item, UNPRICED and blocking the
+    // invoice when they could not (lib/orders/unpricedLines.ts). The
+    // old refusal was about not billing $0 silently; this keeps that and
+    // drops only the silence.
+    //
+    // Inside the transaction on purpose: the sheet and the lines it
+    // creates land together or not at all. IN is excluded — gear that
+    // came back was never added to anything, and a check-in must never
+    // grow an order.
+    const addedRows = willAdd
+    const added = addedRows.length > 0 && orderForAdds
+      ? await createWarehouseAddedLines(tx, {
+          order: orderForAdds,
+          rows: addedRows.map((l) => ({
+            description: l.description,
+            quantity: l.actualQty,
+            note: l.note?.trim() || null,
+            inventoryItemId: l.inventoryItemId ?? null,
+          })),
+          preppedBy,
+          at: filedAt,
+        })
+      : []
+    // Join each written-in row to the line it became, so the report and
+    // the order stop being two accounts of the same event. It also makes
+    // the row drop out of `reportDraft`'s extras on a re-file (that list
+    // is "prior rows with no order line"), which is what stops a second
+    // filing from adding the gear twice.
+    const addedLineByIndex = new Map<number, string>()
+    addedRows.forEach((row, i) => {
+      const made = added[i]
+      if (made) addedLineByIndex.set(classified.indexOf(row), made.orderLineItemId)
+    })
+
     await tx.orderCheckReportLine.createMany({
-      data: classified.map((l) => ({
+      data: classified.map((l, i) => ({
         reportId: report.id,
-        orderLineItemId: l.orderLineItemId,
+        orderLineItemId: l.orderLineItemId ?? addedLineByIndex.get(i) ?? null,
         description: l.description,
         expectedQty: l.expectedQty,
         actualQty: l.actualQty,
@@ -551,19 +639,61 @@ export async function submitCheckReport(opts: {
           partial,
           offSheet,
           changes,
+          ...(added.length > 0
+            ? {
+                warehouseAdded: added.map((a) => ({
+                  orderLineItemId: a.orderLineItemId,
+                  description: a.description,
+                  quantity: a.quantity,
+                  rate: a.rate,
+                  unpriced: a.unpriced,
+                })),
+              }
+            : {}),
         },
       },
     })
 
-    return report.id
+    return { reportId: report.id, added }
   })
 
-  // Totals move when quantities do. Outside the transaction because
-  // recalcOrderTotals opens its own and refuses locked orders on its
-  // own terms.
-  if (orderLinesChanged) await recalcOrderTotals(orderId)
+  const { reportId, added } = txResult
 
-  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet }
+  // Totals move when quantities do — and a priced add moves them too.
+  // Outside the transaction because recalcOrderTotals opens its own and
+  // refuses locked orders on its own terms.
+  if (orderLinesChanged || added.length > 0) await recalcOrderTotals(orderId)
+
+  // A new line needs a lane and, in the warehouse lane, a PickListItem —
+  // the same append the rep's add does. Non-fatal and after the commit:
+  // the sheet is a record of gear that has already moved, and it must
+  // not fail to file because a pick list could not be touched.
+  for (const a of added) {
+    try {
+      await syncPickListOnLineAdd(prisma, {
+        orderId,
+        orderLineItemId: a.orderLineItemId,
+        department: a.department,
+      })
+    } catch (err) {
+      console.error('[checkReports] pick list sync for a warehouse add failed:', err)
+    }
+  }
+  // The order's window is a maintained mirror of its line dates; a new
+  // line inherits that window, so this is a no-op in the ordinary case
+  // and a repair in the one where the order had no dates at all.
+  if (added.length > 0) await syncOrderWindowSafe(orderId)
+
+  return {
+    reportId,
+    changedOrder: applyToOrder,
+    orderLinesChanged,
+    changes,
+    partial,
+    offSheet,
+    added,
+    unpriced: added.filter((a) => a.unpriced).length,
+  }
 }
 
 /**

@@ -46,7 +46,14 @@ export function WarehouseLineFlag({
   return (
     <span
       title={`Warehouse, ${filedOn(filedAt)}${who}: ${flag.detail}${flag.note ? ` — "${flag.note}"` : ''}`}
-      className="ml-1.5 inline-flex items-center gap-1 rounded bg-chip-bad-bg border border-chip-bad-fg/30 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-chip-bad-fg"
+      className={`ml-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
+        // An unpriced line is not a note about history — it is money
+        // sitting at zero and an invoice that will not cut. It gets the
+        // solid treatment so it reads as a to-do, not a footnote.
+        flag.unpriced
+          ? 'bg-chip-bad-fg text-white'
+          : 'bg-chip-bad-bg border border-chip-bad-fg/30 text-chip-bad-fg'
+      }`}
     >
       <Flag size={10} aria-hidden />
       {flag.label}
@@ -92,7 +99,39 @@ export function WarehouseAddedLines({
         ))}
       </ul>
       <p className="mt-1.5 ml-[21px] text-[12px] text-lt-fg2">
-        The client never sees this. Add it as a line to bill it.
+        The client never sees this. Sheets filed from 14 Sep put written-in gear straight onto the
+        order; these came in before that, so add them as lines to bill them.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The order cannot be invoiced while this is up.
+ *
+ * Warehouse-added lines land unpriced when the floor could not name the
+ * item off the catalog (lib/orders/warehouseAddedLines.ts). That is the
+ * deliberate trade that let the 2026-09-03 refusal be lifted: the gear
+ * reaches the order and the driver's paperwork, and the money stops
+ * until a person looks at it. So this banner has to say what is stuck
+ * and what unsticks it, not merely that something is wrong.
+ */
+export function UnpricedLinesBanner({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <div className="rounded-lg border border-chip-bad-fg/40 bg-chip-bad-bg px-3 py-2.5">
+      <p className="flex items-start gap-2 text-[13px] font-semibold text-chip-bad-fg">
+        <Flag size={13} aria-hidden className="mt-0.5 flex-none" />
+        <span>
+          {count === 1 ? 'One line has' : `${count} lines have`} no price. The warehouse added{' '}
+          {count === 1 ? 'it' : 'them'} at check-out and couldn&rsquo;t name{' '}
+          {count === 1 ? 'it' : 'them'} from the catalog.
+        </span>
+      </p>
+      <p className="mt-1 ml-[21px] text-[12px] text-lt-fg2">
+        This order can&rsquo;t be invoiced, and the client isn&rsquo;t sent a corrected quote, until{' '}
+        {count === 1 ? 'it has a rate' : 'they have rates'} — edit the flagged{' '}
+        {count === 1 ? 'line' : 'lines'} below and set the price.
       </p>
     </div>
   )

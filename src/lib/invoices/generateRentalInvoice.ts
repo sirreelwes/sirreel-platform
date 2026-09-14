@@ -59,6 +59,7 @@ import {
 } from './InvoiceDocument'
 import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 import { computeDays } from '@/lib/orders/days'
+import { unpricedBlock } from '@/lib/orders/unpricedLines'
 
 export type GenerateRentalInvoiceResult =
   | {
@@ -181,6 +182,18 @@ export async function generateRentalInvoice(args: {
       status: 409,
       error: 'order has no booked snapshot — book the order before invoicing',
     }
+  }
+
+  // ── Guard: nothing on the order may still be unpriced ───────────
+  // The warehouse can put gear on an order at check-out (2026-09-14),
+  // and when the floor could not name the item off the catalog it lands
+  // with no rate. An invoice cut over one of those bills the client zero
+  // for gear that physically went out, and Invoice.total is canonical
+  // the moment it exists — so this refuses rather than rounding the hole
+  // into the paperwork. See lib/orders/unpricedLines.ts.
+  const unpriced = await unpricedBlock(orderId)
+  if (unpriced) {
+    return { ok: false, status: 409, error: unpriced }
   }
 
   // ── Guard: one active RENTAL invoice at a time ──────────────────

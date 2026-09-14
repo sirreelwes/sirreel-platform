@@ -15,7 +15,7 @@ import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
-import { WarehouseLineFlag, WarehouseAddedLines, type OrderWarehouseFlags } from "@/components/orders/WarehouseLineFlag";
+import { WarehouseLineFlag, WarehouseAddedLines, UnpricedLinesBanner, type OrderWarehouseFlags } from "@/components/orders/WarehouseLineFlag";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -4147,6 +4147,15 @@ export default function OrderDetailPage() {
                 <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-lt-fg2 hover:text-lt-fg text-sm transition-colors">Cancel</button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Unpriced warehouse-added lines block the invoice. Above the
+            table rather than below it: it is the reason a biller cannot
+            do their job, and it should be the first thing they read. */}
+        {!!order?.warehouseFlags?.unpricedCount && (
+          <div className="px-6 pb-3">
+            <UnpricedLinesBanner count={order.warehouseFlags.unpricedCount} />
           </div>
         )}
 
