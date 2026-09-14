@@ -1,5 +1,17 @@
 /**
- * POST /api/orders/[id]/check-report/photo — read a photo of the paper.
+ * The photo of the paper sheet — stored on the way in, served on the way
+ * out.
+ *
+ * GET  ?edge=OUT|IN — the stored image, for the read-only view of a
+ *                     filed sheet. The blob is PRIVATE and 403s on a
+ *                     direct fetch, so it is streamed back behind the
+ *                     same yard gate the rest of this surface uses.
+ *                     Oliver, 2026-09-14: the fleet has to be able to
+ *                     look at past sheets, and the marked-up paper is
+ *                     the only thing that still shows what the floor
+ *                     actually wrote once the counts are typed in.
+ *
+ * POST — read a photo of the paper.
  *
  * Wes, 2026-09-03: "it would be really cool if they could just take a
  * photo of the pick list and have it be so that it is easy for HQ to
@@ -20,6 +32,7 @@ import { prisma } from '@/lib/prisma'
 import { requireYardAccess } from '@/lib/yard/requireYardAccess'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
 import { readPickSheetPhoto, type PrintedLine } from '@/lib/orders/readPickSheetPhoto'
+import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
 
 export const dynamic = 'force-dynamic'
 // A vision read of a full page. The license reader uses the same tier
@@ -28,6 +41,25 @@ export const maxDuration = 60
 
 const MAX_BYTES = 12 * 1024 * 1024
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireYardAccess()
+  if (!auth.ok) return auth.response
+  const { id } = await params
+  const edge = new URL(req.url).searchParams.get('edge') === 'IN' ? 'IN' : 'OUT'
+
+  const report = await prisma.orderCheckReport.findUnique({
+    where: { orderId_edge: { orderId: id, edge } },
+    select: { sheetPhotoUrl: true, order: { select: { orderNumber: true } } },
+  })
+  if (!report?.sheetPhotoUrl) {
+    return NextResponse.json({ error: 'no photo on this sheet' }, { status: 404 })
+  }
+  return streamPrivateBlobAsResponse({
+    fileUrl: report.sheetPhotoUrl,
+    filename: `${report.order.orderNumber}-${edge.toLowerCase()}-sheet.jpg`,
+  })
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireYardAccess()

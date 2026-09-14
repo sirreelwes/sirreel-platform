@@ -183,6 +183,109 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
   })
 }
 
+/**
+ * ── Past sheets ───────────────────────────────────────────────────────
+ *
+ * Oliver, 2026-09-14 (via Wes): "the fleet needs to be able to look at
+ * past check-in and check-out sheets."
+ *
+ * The list above is a WORK QUEUE — seven days wide, so a sheet that was
+ * never typed in stays visible and tomorrow can be prepped today. Filed
+ * sheets fall off the end of it, and they are the record of what left
+ * the yard and what came back: the thing you go looking for when a
+ * client says a case never arrived.
+ *
+ * So this is a second, unbounded read of the same table, newest first,
+ * with a text filter over order number / job / company. It never opens
+ * the typing screen by itself — the row links to a read-only view of
+ * what was filed.
+ */
+export interface FiledReportRow {
+  orderId: string
+  orderNumber: string
+  jobId: string
+  jobName: string
+  company: string
+  edge: OrderCheckEdge
+  submittedAt: Date
+  preppedBy: string | null
+  submittedByName: string | null
+  changedOrder: boolean
+  partial: boolean
+  /** Lines counted on the sheet, and how many of them differed. */
+  lineCount: number
+  differed: number
+  hasPhoto: boolean
+}
+
+export async function listFiledReports(opts: { q?: string; limit?: number } = {}): Promise<FiledReportRow[]> {
+  const q = (opts.q ?? '').trim()
+  const take = Math.min(Math.max(1, opts.limit ?? 100), 300)
+  const reports = await prisma.orderCheckReport.findMany({
+    where: q
+      ? {
+          OR: [
+            { order: { orderNumber: { contains: q, mode: 'insensitive' } } },
+            { order: { job: { name: { contains: q, mode: 'insensitive' } } } },
+            { order: { company: { name: { contains: q, mode: 'insensitive' } } } },
+            { preppedBy: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {},
+    select: {
+      edge: true,
+      submittedAt: true,
+      submittedById: true,
+      preppedBy: true,
+      changedOrder: true,
+      partial: true,
+      sheetPhotoUrl: true,
+      order: {
+        select: {
+          id: true, orderNumber: true, jobId: true,
+          job: { select: { name: true } },
+          company: { select: { name: true } },
+        },
+      },
+      lines: { select: { onSheet: true, change: true, orderLineItemId: true } },
+    },
+    orderBy: { submittedAt: 'desc' },
+    take,
+  })
+
+  // submittedById is a SOFT FK (see the model) — resolve the names in one
+  // query rather than pretending it is a relation.
+  const ids = [...new Set(reports.map((r) => r.submittedById).filter(Boolean))]
+  const users = ids.length
+    ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+    : []
+  const nameById = new Map(users.map((u) => [u.id, u.name]))
+
+  return reports.map((r) => {
+    // Order lines only — a row the floor ADDED is not one of the order's
+    // lines and is counted in `differed`, where it belongs.
+    const counted = r.lines.filter((l) => l.onSheet && l.orderLineItemId)
+    return {
+      orderId: r.order.id,
+      orderNumber: r.order.orderNumber,
+      jobId: r.order.jobId,
+      jobName: r.order.job?.name || 'Unnamed job',
+      company: r.order.company?.name || 'Unknown company',
+      edge: r.edge,
+      submittedAt: r.submittedAt,
+      preppedBy: r.preppedBy,
+      submittedByName: nameById.get(r.submittedById) ?? null,
+      changedOrder: r.changedOrder,
+      partial: r.partial,
+      lineCount: counted.length,
+      differed:
+        counted.filter((l) => l.change !== 'NONE').length +
+        r.lines.filter((l) => !l.orderLineItemId).length,
+      hasPhoto: !!r.sheetPhotoUrl,
+    }
+  })
+}
+
 export interface DraftLine {
   orderLineItemId: string
   description: string

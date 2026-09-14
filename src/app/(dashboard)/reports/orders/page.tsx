@@ -18,7 +18,7 @@
  */
 
 import Link from 'next/link'
-import { Lock, ClipboardList, Check, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Lock, ClipboardList, Check, AlertTriangle, ArrowRight, History } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { pacificYmd } from '@/lib/fleet/todayBoard'
 import { reportListFor, type ReportListRow } from '@/lib/orders/checkReports'
@@ -76,7 +76,19 @@ export default async function OrderReportsPage() {
     <div className="max-w-4xl mx-auto px-1 py-2">
       <header className="mb-5">
         <div className="text-amber-600 text-[13px] font-semibold uppercase tracking-wide mb-1">Orders</div>
-        <h1 className="text-lt-fg text-2xl font-bold">Check In/Out Reports</h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h1 className="text-lt-fg text-2xl font-bold">Check In/Out Reports</h1>
+          {/* This list is a work queue seven days wide. Everything filed
+              before that lives in the record (Oliver, 2026-09-14: "the
+              fleet needs to be able to look at past check-in and
+              check-out sheets"). */}
+          <Link
+            href="/reports/orders/history"
+            className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-lt-fg2 hover:text-lt-fg border border-lt-hairline rounded-lg px-3 py-1.5"
+          >
+            <History size={15} aria-hidden /> Past sheets
+          </Link>
+        </div>
         <p className="text-lt-fg2 text-[15px] mt-0.5 max-w-[70ch]">
           Type in the pull sheet after it comes off the floor. Everything is pre-filled with what
           the order says, so you only touch the lines that came out different — and on a check-out
