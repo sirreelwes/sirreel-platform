@@ -20,6 +20,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { CheckCircle2, Camera } from 'lucide-react'
 import { GuidedPhotoCapture, type StagedPhoto } from '@/components/fleet/GuidedPhotoCapture'
 import type { PhotoPosition } from '@/lib/fleet/photoPositions'
+import { FUEL_LEVELS } from '@/lib/fleet/fuelLevels'
 
 /** This driver's side of a handoff — see /api/drive/[token]. */
 export interface DriverHandoffView {
@@ -39,7 +40,6 @@ export interface SelfCheckoutView {
   licenseUnchecked: boolean
 }
 
-const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const
 
 const fmtWhen = (iso: string) =>
   new Date(iso).toLocaleString('en-US', {
@@ -197,7 +197,7 @@ export function DriverSelfCheckoutCard({
 
       <div className="mt-4">
         <label className="block text-[13px] font-semibold text-zinc-300 mb-1.5">Fuel <span className="font-normal text-zinc-500">(optional)</span></label>
-        <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           {FUEL_LEVELS.map((f) => (
             <button
               key={f}

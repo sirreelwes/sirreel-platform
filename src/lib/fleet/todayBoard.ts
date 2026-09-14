@@ -25,18 +25,10 @@
 import { prisma } from '@/lib/prisma'
 import { companyLabel } from '@/lib/scheduling/infoGaps'
 
-/** YYYY-MM-DD in America/Los_Angeles, offset by N days. */
-export function pacificYmd(offsetDays = 0): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(Date.now() + offsetDays * 86_400_000))
-}
-
-/** BookingAssignment.startDate/endDate are @db.Date (UTC-midnight) — match on that. */
-export const ymdToDbDate = (ymd: string) => new Date(`${ymd}T00:00:00.000Z`)
+/** Pacific-day and window helpers live in a prisma-free module so they
+ *  can be tested without a database; re-exported here because every
+ *  caller of this one has always got them from it. */
+export { pacificYmd, ymdToDbDate, checkWindowYmds } from '@/lib/fleet/checkWindow'
 
 export interface FleetMovement {
   assignmentId: string
@@ -62,17 +54,43 @@ export interface FleetMovement {
    * — the yard board treats it as extra information, never a blocker.
    */
   attachedOrder: { id: string; orderNumber: string } | null
+  /**
+   * The calendar day THIS edge falls on, as YYYY-MM-DD. Same value the
+   * caller matched on, carried back on the row so a multi-day read can
+   * group without asking one day at a time.
+   */
+  edgeDate: string
   /** The assignment's CHECKOUT (pre-rental) inspection, if submitted. */
   inspection: { id: string; inspectionDate: string; inspectorName: string | null } | null
   /** The assignment's RETURN inspection — the unit has been received. */
   returnInspection: { id: string; inspectionDate: string; inspectorName: string | null } | null
 }
 
+/** One day of movements. The single-day read every caller had before the
+ *  range read existed; still exactly a range of one. */
 export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Promise<FleetMovement[]> {
+  return fleetMovementsBetween(dbDate, dbDate, edge)
+}
+
+/**
+ * Movements whose edge falls anywhere in [from, to] INCLUSIVE.
+ *
+ * Same selection and same shape as the single-day read — deliberately,
+ * because the whole point of this module is that the cron, the yard
+ * board and the check lists cannot disagree about what is moving. A
+ * caller wanting a window used to loop this once per day; the rows carry
+ * `edgeDate` so it can ask once and group.
+ */
+export async function fleetMovementsBetween(
+  fromDbDate: Date,
+  toDbDate: Date,
+  edge: 'start' | 'end',
+): Promise<FleetMovement[]> {
+  const range = { gte: fromDbDate, lte: toDbDate }
   const rows = await prisma.bookingAssignment.findMany({
     where: {
       status: edge === 'start' ? 'ASSIGNED' : { in: ['ASSIGNED', 'CHECKED_OUT', 'RETURNED'] },
-      ...(edge === 'start' ? { startDate: dbDate } : { endDate: dbDate }),
+      ...(edge === 'start' ? { startDate: range } : { endDate: range }),
       bookingItem: {
         booking: {
           status: { in: ['CONFIRMED', 'ACTIVE'] },
@@ -81,6 +99,8 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
     },
     select: {
       id: true,
+      startDate: true,
+      endDate: true,
       order: { select: { id: true, orderNumber: true } },
       asset: { select: { unitName: true } },
       bookingItem: {
@@ -128,6 +148,9 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
     return {
       assignmentId: r.id,
       jobId: r.bookingItem.booking.jobId,
+      // @db.Date is UTC midnight — sliced in UTC, never Pacific, or every
+      // afternoon reads the row onto the day before (see calendarDayOf).
+      edgeDate: (edge === 'start' ? r.startDate : r.endDate).toISOString().slice(0, 10),
       unitName: r.asset.unitName,
       category: r.bookingItem.category.name,
       bookingNumber: r.bookingItem.booking.bookingNumber,

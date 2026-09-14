@@ -25,7 +25,7 @@ import Link from 'next/link'
 import { Lock, Car, ArrowRight, Check, ClipboardList, KeyRound, History } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { CheckEdgeTabs } from '@/components/reports/CheckEdgeTabs'
-import { fleetMovementsOn, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
+import { checkWindowYmds, fleetMovementsBetween, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,11 +34,33 @@ export const dynamic = 'force-dynamic'
  * window a supervisor needs to see coming; backward exists so a truck
  * that came in yesterday and never got checked in is still on screen
  * accusing someone, rather than silently dropping off the board.
+ *
+ * Backward is counted in days the yard WORKS, not calendar days — see
+ * checkWindowYmds. It was two calendar days, which meant Friday's
+ * returns were gone by Monday morning: Oliver, 2026-09-14, "Fox Sports
+ * Cube 33 returned on Friday. Julian wants to check it in, but it's not
+ * visible in the vehicle check in/out tab." Three open days matches the
+ * order check list this one is twinned with (REPORT_DAYS_BACK).
  */
-const DAYS_BACK = 2
+const DAYS_BACK = 3
 const DAYS_FORWARD = 6
 
-type Row = FleetMovement & { ymd: string }
+/**
+ * How far PAST the window the "never checked in" tail reaches.
+ *
+ * Widening the window fixed the Friday-to-Monday gap, but not the shape
+ * of it: a return that nobody files by the following Wednesday drops off
+ * again, and the return screen has no other route in — /fleet/return
+ * wants an assignment id, and the history page only lists walk-arounds
+ * that WERE filed. So there was no way to check in a truck that had
+ * already slipped, only a list that quietly stopped mentioning it.
+ *
+ * The tail is bounded on purpose. Every return has to stay reachable for
+ * long enough to be caught up on, but a queue that never forgets is an
+ * archive, and it stops being read. A week past the window is the
+ * catch-up horizon; older than that is a conversation, not a form.
+ */
+const UNFILED_TAIL_DAYS = 7
 
 function dayLabel(ymd: string, today: string): string {
   if (ymd === today) return 'Today'
@@ -48,16 +70,25 @@ function dayLabel(ymd: string, today: string): string {
   }).format(new Date(Date.UTC(y, m - 1, d)))
 }
 
-async function loadEdge(edge: 'start' | 'end'): Promise<Row[]> {
-  const days: string[] = []
-  for (let i = -DAYS_BACK; i <= DAYS_FORWARD; i++) days.push(pacificYmd(i))
-  const perDay = await Promise.all(
-    days.map(async (ymd) => {
-      const rows = await fleetMovementsOn(ymdToDbDate(ymd), edge)
-      return rows.map((r) => ({ ...r, ymd }))
-    }),
+const DAY_MS = 86_400_000
+
+/** The window is contiguous, so it is one range read per edge rather
+ *  than the day-at-a-time loop this page opened with. */
+function loadEdge(days: string[], edge: 'start' | 'end'): Promise<FleetMovement[]> {
+  return fleetMovementsBetween(ymdToDbDate(days[0]), ymdToDbDate(days[days.length - 1]), edge)
+}
+
+/** Returns that fell out of the back of the window still owing a
+ *  check-in. Filed ones are deliberately dropped — those are finished,
+ *  and they live on the history page. */
+async function loadUnfiledTail(windowStart: string): Promise<FleetMovement[]> {
+  const startMs = ymdToDbDate(windowStart).getTime()
+  const rows = await fleetMovementsBetween(
+    new Date(startMs - UNFILED_TAIL_DAYS * DAY_MS),
+    new Date(startMs - DAY_MS),
+    'end',
   )
-  return perDay.flat()
+  return rows.filter((r) => !r.returnInspection)
 }
 
 export default async function VehicleReportsPage() {
@@ -75,7 +106,14 @@ export default async function VehicleReportsPage() {
   }
 
   const today = pacificYmd(0)
-  const [out, back] = await Promise.all([loadEdge('start'), loadEdge('end')])
+  // Read once: three reads of the clock could straddle midnight and give
+  // the two lanes and the tail slightly different windows.
+  const days = checkWindowYmds(DAYS_BACK, DAYS_FORWARD)
+  const [out, back, unfiled] = await Promise.all([
+    loadEdge(days, 'start'),
+    loadEdge(days, 'end'),
+    loadUnfiledTail(days[0]),
+  ])
 
   return (
     <div className="max-w-4xl mx-auto px-1 py-2">
@@ -83,7 +121,7 @@ export default async function VehicleReportsPage() {
         <div className="text-amber-700 text-xs font-semibold uppercase tracking-wide mb-1">Vehicles</div>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <h1 className="text-lt-fg text-2xl font-bold">Check In/Out</h1>
-          {/* This list is a work queue eight days wide. Every walk-around
+          {/* This list is a work queue about a week and a half wide. Every walk-around
               ever filed lives in the record (Wes, 2026-09-14: "they need
               to be able to go back and see previous check in check out
               forms"). */}
@@ -117,13 +155,16 @@ export default async function VehicleReportsPage() {
           />
         }
         back={
-          <Lane
-            title="Check in — coming back"
-            empty="Nothing due back in this window."
-            rows={back}
-            today={today}
-            edge="back"
-          />
+          <>
+            <Lane
+              title="Check in — coming back"
+              empty="Nothing due back in this window."
+              rows={back}
+              today={today}
+              edge="back"
+            />
+            <UnfiledTail rows={unfiled} today={today} />
+          </>
         }
       />
     </div>
@@ -135,16 +176,16 @@ function Lane({
 }: {
   title: string
   empty: string
-  rows: Row[]
+  rows: FleetMovement[]
   today: string
   edge: 'out' | 'back'
 }) {
   // Chronological, and inside a day by unit so the same truck lands in
   // the same place on both lanes.
   const sorted = [...rows].sort(
-    (a, b) => a.ymd.localeCompare(b.ymd) || a.unitName.localeCompare(b.unitName),
+    (a, b) => a.edgeDate.localeCompare(b.edgeDate) || a.unitName.localeCompare(b.unitName),
   )
-  const days = [...new Set(sorted.map((r) => r.ymd))]
+  const days = [...new Set(sorted.map((r) => r.edgeDate))]
 
   return (
     <section className="mb-8">
@@ -160,7 +201,7 @@ function Lane({
               {dayLabel(ymd, today)}
             </div>
             <div className="space-y-1.5">
-              {sorted.filter((r) => r.ymd === ymd).map((r) => (
+              {sorted.filter((r) => r.edgeDate === ymd).map((r) => (
                 <VehicleRow key={`${r.assignmentId}-${edge}`} row={r} edge={edge} />
               ))}
             </div>
@@ -171,7 +212,67 @@ function Lane({
   )
 }
 
-function VehicleRow({ row, edge }: { row: Row; edge: 'out' | 'back' }) {
+/**
+ * Returns that fell out of the back of the window without a check-in.
+ *
+ * Collapsed, and deliberately not counted on the tab: the tab's number
+ * is the work in front of the crew today, and burying that under a
+ * backlog would make it useless. This is the escape hatch — the truck
+ * you are holding the keys to is in here when it is no longer on the
+ * board, instead of being unreachable.
+ *
+ * It renders nothing when it is empty, which is the state to aim for.
+ */
+function UnfiledTail({ rows, today }: { rows: FleetMovement[]; today: string }) {
+  if (rows.length === 0) return null
+  const sorted = [...rows].sort(
+    (a, b) => b.edgeDate.localeCompare(a.edgeDate) || a.unitName.localeCompare(b.unitName),
+  )
+
+  return (
+    <details className="mb-8 border border-lt-hairline rounded-lg bg-lt-card">
+      <summary className="cursor-pointer list-none px-4 py-3 text-[15px] font-semibold text-lt-fg2 hover:text-lt-fg flex items-center gap-2">
+        <History size={15} aria-hidden className="flex-none" />
+        Earlier returns never checked in
+        <span className="text-[12px] font-bold rounded-full px-1.5 py-0.5 bg-chip-warn-bg text-chip-warn-fg">
+          {sorted.length}
+        </span>
+      </summary>
+      <div className="px-4 pb-4">
+        <p className="text-lt-fg2 text-[13px] mb-3 max-w-[70ch]">
+          Came back before this window closed and no walk-around was filed. Still open to check
+          in — after that they drop off here too.
+        </p>
+        <div className="space-y-1.5">
+          {sorted.map((r) => (
+            <div key={`${r.assignmentId}-tail`} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-lt-hairline rounded-lg px-3 py-2.5 bg-lt-page">
+              <Car size={16} aria-hidden className="text-lt-fg3 flex-none" />
+              <div className="min-w-0 flex-1">
+                <div className="text-lt-fg text-[16px] font-semibold truncate">
+                  {r.unitName}
+                  <span className="text-lt-fg3 font-normal text-[13px] ml-2">{r.category}</span>
+                </div>
+                <div className="text-lt-fg2 text-[13px] truncate">
+                  Due back {dayLabel(r.edgeDate, today)}
+                  <span className="text-lt-fg3"> · {r.jobName} · {r.company}</span>
+                </div>
+              </div>
+              <Link
+                href={`/fleet/return/${r.assignmentId}`}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-md px-2.5 py-1.5 border border-lt-hairline text-lt-fg2 hover:bg-lt-inner flex-none"
+              >
+                Check in
+                <ArrowRight size={13} aria-hidden />
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function VehicleRow({ row, edge }: { row: FleetMovement; edge: 'out' | 'back' }) {
   // The state that matters is the report for THIS end of the arc. A
   // truck due back whose checkout was never filed is still "not checked
   // in" — the missing checkout is the other lane's problem, and saying

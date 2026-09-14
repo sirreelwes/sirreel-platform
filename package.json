@@ -128,7 +128,9 @@
     "test:auto-reply": "tsx tests/email/auto-reply.test.ts",
     "test:job-change-signals": "tsx tests/email/job-change-signals.test.ts",
     "rw:status": "tsx scripts/rw-sync-status.ts",
-    "planyo:alignment": "tsx scripts/planyo-unit-alignment.ts"
+    "planyo:alignment": "tsx scripts/planyo-unit-alignment.ts",
+    "test:fuel-levels": "tsx tests/fleet/fuel-levels.test.ts",
+    "test:check-window": "tsx tests/fleet/check-window.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

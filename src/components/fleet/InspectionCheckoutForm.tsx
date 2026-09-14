@@ -21,9 +21,9 @@ import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto } from './GuidedPhotoCapture';
 import { missingPositions } from '@/lib/fleet/photoPositions';
+import { FUEL_LEVELS } from '@/lib/fleet/fuelLevels';
 
 const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'] as const;
-const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const;
 const DAMAGE_TYPES = ['SCRATCH', 'DENT', 'CRACK', 'MISSING_PART', 'MECHANICAL', 'INTERIOR', 'OTHER'] as const;
 const SEVERITIES = ['MINOR', 'MODERATE', 'MAJOR'] as const;
 
@@ -171,7 +171,7 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
 
       <div>
         <label className={labelCls}>Fuel level</label>
-        <TapSelector options={FUEL_LEVELS} value={fuel} onChange={setFuel} columns={5} />
+        <TapSelector options={FUEL_LEVELS} value={fuel} onChange={setFuel} columns={3} />
       </div>
 
       <div>

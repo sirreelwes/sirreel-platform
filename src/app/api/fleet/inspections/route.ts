@@ -30,6 +30,7 @@ import type { DamageSeverity, DamageType, VehicleCondition, Prisma } from '@pris
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
 import { normalizePosition } from '@/lib/fleet/photoPositions'
+import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { cardGateForJob, cardGateMessage } from '@/lib/payments/cardGate'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,6 @@ export const dynamic = 'force-dynamic'
 const VALID_CONDITIONS = new Set(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'])
 const VALID_DAMAGE_TYPES = new Set(['SCRATCH', 'DENT', 'CRACK', 'MISSING_PART', 'MECHANICAL', 'INTERIOR', 'OTHER'])
 const VALID_SEVERITIES = new Set(['MINOR', 'MODERATE', 'MAJOR'])
-const VALID_FUEL = new Set(['full', '3/4', '1/2', '1/4', 'empty'])
 
 export async function POST(req: NextRequest) {
   const auth = await requireFleetInspectionAccess()
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'overallCondition required (EXCELLENT/GOOD/FAIR/POOR/DAMAGED)' }, { status: 400 })
   }
   if (body.fuelLevel != null && body.fuelLevel !== '' && !VALID_FUEL.has(body.fuelLevel)) {
-    return NextResponse.json({ error: 'fuelLevel must be one of full, 3/4, 1/2, 1/4, empty' }, { status: 400 })
+    return NextResponse.json({ error: FUEL_LEVEL_ERROR }, { status: 400 })
   }
   const damages = (body.damages ?? []).filter((d) => d.location?.trim())
   for (const d of damages) {

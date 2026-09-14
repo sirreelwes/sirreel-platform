@@ -34,7 +34,8 @@ import { REQUIRED_POSITIONS, DAMAGE_POSITION, normalizePosition, type PhotoPosit
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfReturnEmail } from '@/lib/email/templates/driverSelfReturn'
-import { stagedPrefixFor, VALID_FUEL } from '@/lib/drivers/selfCheckout'
+import { stagedPrefixFor } from '@/lib/drivers/selfCheckout'
+import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 
 const byId = new Map(REQUIRED_POSITIONS.map((p) => [p.id, p]))
 const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => byId.get(id)!).filter(Boolean)
@@ -179,7 +180,7 @@ export async function completeSelfReturn(input: CompleteSelfReturnInput): Promis
   }
 
   if (input.fuelLevel && !VALID_FUEL.has(input.fuelLevel)) {
-    throw new SelfReturnError('fuelLevel must be one of full, 3/4, 1/2, 1/4, empty')
+    throw new SelfReturnError(FUEL_LEVEL_ERROR)
   }
 
   // ── Photos: only keys under this assignment's staging prefix, and only

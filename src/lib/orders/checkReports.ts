@@ -33,7 +33,7 @@ import { prisma } from '@/lib/prisma'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
-import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
+import { checkWindowYmds, pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { advanceOneOrderToOnJob, ordersCarriedByBooking, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
@@ -109,10 +109,12 @@ export interface ReportListRow {
   } | null
 }
 
+/** Backward reach is counted in OPEN days (checkWindowYmds) — three
+ *  calendar days back stops short of Friday from any day but Monday, and
+ *  a sheet nobody filed before the weekend then has nowhere to be filed.
+ *  Same defect, same fix, as the vehicle list this one is twinned with. */
 function dayWindow(): string[] {
-  const days: string[] = []
-  for (let i = -REPORT_DAYS_BACK; i <= REPORT_DAYS_FORWARD; i++) days.push(pacificYmd(i))
-  return days
+  return checkWindowYmds(REPORT_DAYS_BACK, REPORT_DAYS_FORWARD)
 }
 
 /**

@@ -25,14 +25,11 @@ import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto, type ComparePhoto } from './GuidedPhotoCapture';
 import { missingPositions } from '@/lib/fleet/photoPositions';
+import { FUEL_LEVELS, cameBackLower } from '@/lib/fleet/fuelLevels';
 
 const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'] as const;
-const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const;
 const DAMAGE_TYPES = ['SCRATCH', 'DENT', 'CRACK', 'MISSING_PART', 'MECHANICAL', 'INTERIOR', 'OTHER'] as const;
 const SEVERITIES = ['MINOR', 'MODERATE', 'MAJOR'] as const;
-
-/** Fuel as a fraction, for the "came back lower" comparison. */
-const FUEL_FRACTION: Record<string, number> = { full: 1, '3/4': 0.75, '1/2': 0.5, '1/4': 0.25, empty: 0 };
 
 export interface CheckoutSnapshot {
   inspectionDate: string;
@@ -148,10 +145,9 @@ export function InspectionReturnForm({
     checkout?.mileage != null && mileage.trim() !== '' && Number.isFinite(Number(mileage))
       ? Math.floor(Number(mileage)) - checkout.mileage
       : null;
-  const fuelDown =
-    checkout?.fuelLevel && FUEL_FRACTION[fuel] < FUEL_FRACTION[checkout.fuelLevel]
-      ? `${checkout.fuelLevel} → ${fuel}`
-      : null;
+  const fuelDown = cameBackLower(checkout?.fuelLevel, fuel)
+    ? `${checkout?.fuelLevel} → ${fuel}`
+    : null;
 
   async function submit() {
     setSubmitting(true);
@@ -307,7 +303,7 @@ export function InspectionReturnForm({
 
       <div>
         <label className={labelCls}>Fuel level</label>
-        <TapSelector options={FUEL_LEVELS} value={fuel} onChange={setFuel} columns={5} />
+        <TapSelector options={FUEL_LEVELS} value={fuel} onChange={setFuel} columns={3} />
         {fuelDown && <p className="text-amber-400 text-xs mt-2">Came back lower — {fuelDown}.</p>}
       </div>
 

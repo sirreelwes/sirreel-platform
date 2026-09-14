@@ -32,6 +32,7 @@ import { list } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
 import { REQUIRED_POSITIONS, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfCheckoutEmail } from '@/lib/email/templates/driverSelfCheckout'
@@ -49,7 +50,6 @@ export const DRIVER_OPTIONAL_POSITIONS: readonly PhotoPosition[] = pick([
   'ODOMETER', 'FUEL_GAUGE', 'INTERIOR',
 ])
 
-export const VALID_FUEL = new Set(['full', '3/4', '1/2', '1/4', 'empty'])
 const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
 
 export const stagedPrefixFor = (bookingAssignmentId: string) =>
@@ -190,7 +190,7 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
   }
 
   if (input.fuelLevel && !VALID_FUEL.has(input.fuelLevel)) {
-    throw new SelfCheckoutError('fuelLevel must be one of full, 3/4, 1/2, 1/4, empty')
+    throw new SelfCheckoutError(FUEL_LEVEL_ERROR)
   }
 
   // ── Photos: only keys under this assignment's staging prefix, and only
