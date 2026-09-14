@@ -41,6 +41,10 @@
  *     upcoming order with no replacement cost, so the order cannot tell
  *     the client's broker what to insure it for. One item per ROW, not
  *     per order. Clears when the row (or its RentalWorks units) is priced.
+ *   - kit-incomplete (DERIVED) — an upcoming order whose radios (or any
+ *     kitted item) are missing the pieces the catalog says ride with
+ *     them, so they never print on the pull sheet. The early half of the
+ *     check the yard's check-out sheet now enforces at the bay.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -96,6 +100,7 @@ import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clien
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
+import { kitIncompleteProvider } from '@/lib/actionItems/providers/kitIncomplete'
 import { partnerCancelledOffPickListProvider } from '@/lib/actionItems/providers/partnerCancelledOffPickList'
 
 const PROVIDERS: ActionItemProvider[] = [
@@ -142,6 +147,7 @@ const PROVIDERS: ActionItemProvider[] = [
   // A catalog row on an upcoming order has no replacement cost, so the
   // order's COI figure for the client's broker is a floor, not a total.
   replacementCostMissingProvider,
+  kitIncompleteProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

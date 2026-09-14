@@ -28,6 +28,12 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import {
+  kitShortfalls,
+  describeShortfall,
+  describeParents,
+  type CountedQuantities,
+} from '@/lib/orders/kitCompleteness'
 import { UnitScanPanel, LineUnitStrip } from '@/components/reports/UnitScanPanel'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
@@ -241,6 +247,27 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    *  Additions never do — so a sheet whose only difference is an added
    *  row must not promise the client a corrected quote. */
   const orderLineDiffs = changeList.filter((c) => !c.added && !c.alreadyFiled).length
+
+  /**
+   * The kit double-check (Wes, 2026-09-13, after two walkie orders in one
+   * week went out with no antennas). The catalog knows an antenna and a
+   * battery ride with every radio and a charger with every twelve; this
+   * compares that against the numbers being typed, live.
+   *
+   * OUT only, deliberately. On the way out a short companion means the
+   * truck leaves incomplete and the crew is stuck on location. On the way
+   * back a line that came up short already classifies as SHORT and
+   * reaches the agent, and a staggered return is ordinary — flagging it
+   * again here would be noise on the one edge where it changes nothing.
+   */
+  const shortfalls = useMemo(() => {
+    if (!isOut || draft.kitExpectations.length === 0) return []
+    const counted: CountedQuantities = {}
+    for (const r of rows) counted[r.orderLineItemId] = r.onSheet ? r.actualQty : null
+    return kitShortfalls(draft.kitExpectations, counted)
+  }, [isOut, draft.kitExpectations, rows])
+  /** Lines the desk has to add — the yard cannot fix these from here. */
+  const missingFromOrder = shortfalls.filter((s) => s.missingFromOrder)
 
   /**
    * The partial pull (Wes, 2026-09-04: "we should have the ability to
@@ -1007,6 +1034,39 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         </p>
       )}
 
+      {/* ── The kit double-check ─────────────────────────────────────
+          Wes, 2026-09-13: "make sure that the walkies, their antennas,
+          their batteries, and the spare batteries are all included."
+          Said in red and above the change list because it is not a
+          difference to review — it is gear that is about to be missing
+          on location, and the sheet is the last place anyone looks. */}
+      {shortfalls.length > 0 && !confirming && (
+        <div className="mb-3 rounded-lg border border-chip-bad-fg/30 bg-chip-bad-bg px-3 py-2.5">
+          <p className="text-[14px] text-chip-bad-fg flex items-start gap-2">
+            <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
+            <span>
+              <b>The kit is short.</b> This sheet has{' '}
+              {shortfalls.length === 1 ? 'a piece' : `${shortfalls.length} pieces`} that should go
+              out with what is being counted:
+            </span>
+          </p>
+          <ul className="mt-2 ml-6 space-y-1">
+            {shortfalls.map((s) => (
+              <li key={s.key} className="text-[15px] font-medium text-lt-fg">
+                {describeShortfall(s)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 ml-6 text-[13px] text-chip-bad-fg leading-relaxed">
+            {missingFromOrder.length > 0
+              ? 'A piece that is not on the order never printed on the sheet, so the floor had nothing to pull — put it on the order, or write it in as an extra row below so at least what went out is recorded. '
+              : ''}
+            Count the shelf before filing. If it really is going out this way, file it anyway and
+            say why in the notes.
+          </p>
+        </div>
+      )}
+
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && !confirming && (
         <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
@@ -1039,6 +1099,25 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             <AlertTriangle size={16} aria-hidden className="flex-none" />
             Check this back against the sheet
           </h2>
+
+          {/* Above the change list on purpose: a short kit is the one
+              thing here that nobody downstream can put right once the
+              truck has gone. */}
+          {shortfalls.length > 0 && (
+            <>
+              <p className="mt-3 text-[13px] font-semibold text-chip-bad-fg">
+                Going out short — confirm this is really how it leaves:
+              </p>
+              <ul className="mt-1 space-y-1">
+                {shortfalls.map((s) => (
+                  <li key={s.key} className="text-[15px] text-lt-fg font-medium">
+                    {s.counted} of {s.expected} {s.pieceDescription} for {describeParents(s)}
+                    {s.missingFromOrder ? ' — not on the order' : ''}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {changeList.some((c) => !c.added) && (
             <>
@@ -1118,8 +1197,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         <div className="flex items-center gap-3 pb-8">
           <button
             onClick={() => {
-              // Nothing differs → nothing to read back. One tap, as before.
-              if (diffs > 0) { setConfirming(true); return }
+              // Nothing differs and the kit is complete → nothing to read
+              // back. One tap, as before, which is most days.
+              if (diffs > 0 || shortfalls.length > 0) { setConfirming(true); return }
               void submit()
             }}
             disabled={saving}
@@ -1127,9 +1207,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           >
             {saving
               ? 'Filing…'
-              : diffs > 0
-                ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
-                : draft.filed ? 'Replace the filed report' : 'File the report'}
+              : shortfalls.length > 0
+                ? 'Review the short kit and file'
+                : diffs > 0
+                  ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
+                  : draft.filed ? 'Replace the filed report' : 'File the report'}
           </button>
           <Link href="/reports/orders" className="text-[14px] text-lt-fg2 hover:text-lt-fg">
             Cancel

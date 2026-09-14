@@ -74,6 +74,11 @@ const EMPTY: KitSyncResult = { created: [], resized: [], removed: [], keptPicked
 export async function syncOrderKitPieces(
   tx: TxClient,
   orderId: string,
+  /** Backfill mode — see deriveKitPieceLines. A script's flag, never a
+   *  route's: it fills in FREE accessories on orders written before the
+   *  kit existed, and refuses CHARGED pieces so no past quote gains a
+   *  charge. */
+  opts?: { freeBackfill?: boolean },
 ): Promise<KitSyncResult> {
   const lines = await tx.orderLineItem.findMany({
     where: { orderId },
@@ -121,6 +126,7 @@ export async function syncOrderKitPieces(
     })),
     tx,
     orderForRates?.companyId ?? null,
+    opts,
   )
 
   // Nothing owed and nothing managed — the overwhelmingly common path.

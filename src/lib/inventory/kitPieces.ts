@@ -85,7 +85,21 @@ export async function deriveKitPieceLines(
    * FREE pieces are $0 by policy and unaffected.
    */
   companyId?: string | null,
+  /**
+   * Backfill mode — a deliberate, journaled, human-run script filling in
+   * accessories on orders that were written BEFORE the kit was
+   * configured. Never set by a route.
+   *
+   * It lifts the line-age guard below, and in exchange it refuses to
+   * touch a CHARGED piece, so the rule that makes the guard necessary
+   * ("rate changes should never change past invoices" — Wes 2026-09-07)
+   * cannot be crossed by it: a FREE accessory added to last week's
+   * booked order changes what the warehouse packs and nothing at all
+   * about what the client owes.
+   */
+  opts?: { freeBackfill?: boolean },
 ): Promise<KitPieceLine[]> {
+  const freeBackfill = opts?.freeBackfill === true
   // Parent quantities, summed across lines — two radio lines are one
   // radio count as far as the charging bank is concerned. Kept per line
   // (not pre-summed) because a kit rule only counts lines written AFTER
@@ -155,6 +169,8 @@ export async function deriveKitPieceLines(
   >()
   for (const kit of kits) {
     if (kit.suppressIfOrdered && orderedIds.has(kit.pieceItemId)) continue
+    // Backfill never adds money to a quote that already went out.
+    if (freeBackfill && kit.billing === 'CHARGED') continue
     // A rule never reaches back into money that was already quoted.
     // Wes 2026-09-07: "rate changes should never change past invoices."
     // Only lines written at or after the kit row existed count toward
@@ -163,7 +179,9 @@ export async function deriveKitPieceLines(
     // touches an unrelated line. Lines with no createdAt (the parse
     // preview, lines being created right now) are new by definition.
     const qty = (parentLines.get(kit.parentItemId) ?? [])
-      .filter((l) => !l.createdAt || l.createdAt.getTime() >= kit.createdAt.getTime())
+      .filter(
+        (l) => freeBackfill || !l.createdAt || l.createdAt.getTime() >= kit.createdAt.getTime(),
+      )
       .reduce((n, l) => n + l.quantity, 0)
     if (qty <= 0) continue
     const key = [

@@ -37,6 +37,8 @@ import { pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { advanceOneOrderToOnJob, ordersCarriedByBooking, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 import { advanceOneOrderToReturned, projectReturned } from '@/lib/orders/returnedFromCheckIn'
+import { kitExpectationsFor } from '@/lib/orders/kitExpectations'
+import type { KitExpectation } from '@/lib/orders/kitCompleteness'
 import { unitScanSummary, unitTrackedItemIds } from '@/lib/warehouse/unitScans'
 import type { UnitScanSummary } from '@/lib/warehouse/unitScanRules'
 
@@ -229,6 +231,12 @@ export interface ReportDraft {
   /** Per-unit scans on this order, by line. Null until the scan table
    *  exists — the form hides the scanner panel rather than fail. */
   unitScans: UnitScanSummary | null
+  /** What the catalog says rides along with what is on this order —
+   *  antennas and batteries with radios, bulbs with a mirror. The form
+   *  checks the counts being typed against these live, so a truck can no
+   *  longer leave with twelve radios and no antennas. Empty when nothing
+   *  on the order has a kit, which is most orders. */
+  kitExpectations: KitExpectation[]
 }
 
 /**
@@ -282,6 +290,12 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     unitTrackedItemIds(order.lineItems.map((l) => l.inventoryItemId).filter((x): x is string => !!x)),
     unitScanSummary(order.id),
   ])
+
+  // What the catalog owes this order's lines. One indexed query, and a
+  // no-op for the many orders with nothing kitted on them.
+  const kitExpectations = await kitExpectationsFor(
+    order.lineItems.map((l) => ({ id: l.id, inventoryItemId: l.inventoryItemId })),
+  )
 
   const prior = order.checkReports[0] ?? null
   const priorByLine = new Map(
@@ -346,6 +360,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
       .filter((l) => !l.orderLineItemId)
       .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note, filed: true })),
     unitScans,
+    kitExpectations,
   }
 }
 
