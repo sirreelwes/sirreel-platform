@@ -13,6 +13,15 @@
  * Buffer-state picks hit the soft-warn path on submit; the modal
  * surfaces the warning and the agent can choose to "Override & assign".
  *
+ * A date block that is already full still shows the candidate list. It
+ * used to be replaced outright by "This hold is fully assigned", so an
+ * agent who opened the picker to CHANGE which truck goes out saw nothing
+ * but the out-of-service section — every unit they couldn't have and
+ * none they could (Wes 2026-09-14). Picking a candidate on a full block
+ * is a SWAP: it names the unit being replaced, and the server drops that
+ * one in the same transaction that binds the new one, so the block is
+ * never left uncovered.
+ *
  * That confirmation, and any refusal from the server, render INLINE
  * under the row that was clicked. They used to sit at the bottom of the
  * modal, below a list that runs to twenty-odd trucks plus the
@@ -169,7 +178,13 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   const [error, setError] = useState<string | null>(null)
   /** Set when the error came from acting on one candidate row, so it can render there. */
   const [errorAssetId, setErrorAssetId] = useState<string | null>(null)
-  const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string } | null>(null)
+  const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string; replaceAssetId: string | null } | null>(null)
+  /**
+   * A swap in progress on a full block: the candidate the agent clicked,
+   * and which assigned unit it replaces (null until they say, which is
+   * only a question when the block holds more than one truck).
+   */
+  const [pendingSwap, setPendingSwap] = useState<{ asset: Candidate; outAssetId: string | null } | null>(null)
   /**
    * Which order the NEXT unit assigned here goes out on. Empty means
    * "let the server decide", which is correct whenever the job has a
@@ -336,7 +351,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     }
   }
 
-  async function assign(asset: Candidate, bufferOverride: boolean) {
+  async function assign(asset: Candidate, bufferOverride: boolean, replaceAssetId: string | null = null) {
     setSubmitting(asset.assetId)
     setError(null)
     setErrorAssetId(null)
@@ -355,17 +370,24 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
           // so the button can never check a window the list didn't.
           windowStart: data?.window?.start?.slice(0, 10),
           windowEnd: data?.window?.end?.slice(0, 10),
+          // Set on a swap: the server drops this unit's assignment in the
+          // same transaction that binds the new one.
+          replaceAssetId,
         }),
       })
       const json = await res.json()
       if (res.ok && json.ok) {
         setPendingBuffer(null)
+        setPendingSwap(null)
         await refresh()
         onChanged?.()
         return
       }
       if (res.status === 409 && json.error === 'buffer-encroachment' && json.needsOverride) {
-        setPendingBuffer({ asset, reason: json.reason })
+        // Carry the swap through the override — confirming "tight" must
+        // not quietly turn a swap into an extra unit.
+        setPendingBuffer({ asset, reason: json.reason, replaceAssetId })
+        setPendingSwap(null)
         return
       }
       setError(json.reason || json.error || `Request failed (${res.status})`)
@@ -376,6 +398,35 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     } finally {
       setSubmitting(null)
     }
+  }
+
+  /**
+   * Units a swap can take off THIS block: assigned (not physically out)
+   * and booked across the days on screen. A unit on the hold's other date
+   * block is not in this conversation — swapping it would uncover those
+   * days to cover these.
+   */
+  const swappable = (data?.currentAssignments ?? []).filter(
+    (a) =>
+      a.status === 'ASSIGNED' &&
+      (!data?.window ||
+        (a.startDate.slice(0, 10) <= data.window.end.slice(0, 10) &&
+          a.endDate.slice(0, 10) >= data.window.start.slice(0, 10))),
+  )
+  const isFull = !!data && data.bookingItem.remaining === 0
+  const unitNameOf = (assetId: string) =>
+    data?.currentAssignments.find((a) => a.asset.id === assetId)?.asset.unitName ?? 'the current unit'
+
+  /** Clicking a candidate on a FULL block: name what it replaces, then confirm. */
+  function startSwap(c: Candidate) {
+    setError(null)
+    setErrorAssetId(null)
+    if (swappable.length === 0) {
+      setError('Every unit on these dates is checked out — changing one is a return, not a pick change.')
+      setErrorAssetId(c.assetId)
+      return
+    }
+    setPendingSwap({ asset: c, outAssetId: swappable.length === 1 ? swappable[0].asset.id : null })
   }
 
   return (
@@ -629,90 +680,163 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 </section>
               )}
 
-              {data.bookingItem.remaining === 0 ? (
+              {isFull && (
                 <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  {(data.dateBlocks?.length ?? 0) > 1
-                    ? `Every unit for ${fmtDay(data.window.start)} → ${fmtDay(data.window.end)} is assigned. Pick another set of dates above to fill those.`
-                    : 'This hold is fully assigned.'}
+                  <span className="font-semibold">
+                    {(data.dateBlocks?.length ?? 0) > 1
+                      ? `Every unit for ${fmtDay(data.window.start)} → ${fmtDay(data.window.end)} is assigned.`
+                      : 'This hold is fully assigned.'}
+                  </span>{' '}
+                  {(data.dateBlocks?.length ?? 0) > 1 && 'Pick another set of dates above to fill those. '}
+                  {swappable.length > 0
+                    ? 'Sending a different unit? Pick it below — it swaps in and the one it replaces comes off the job.'
+                    : 'Its units are checked out — changing one is a return, not a pick change.'}
                 </div>
-              ) : (
-                <section>
-                  <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">
-                    Available units · best first
-                  </div>
-                  <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
-                    {data.candidates.length === 0 && (
-                      <li className="px-3 py-3 text-sm text-zinc-500">
-                        No units available {fmtDay(data.window.start)} → {fmtDay(data.window.end)}.
-                      </li>
-                    )}
-                    {data.candidates.map((c) => {
-                      const isBooked = c.state === 'booked'
-                      const isPendingThis = submitting === c.assetId
-                      const confirmHere = pendingBuffer?.asset.assetId === c.assetId ? pendingBuffer : null
-                      const errorHere = errorAssetId === c.assetId ? error : null
-                      return (
-                        <li key={c.assetId} className="px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
-                              <span className="font-mono text-[15px] sm:text-sm text-zinc-900">{c.unitName}</span>
-                              <span className="text-xs text-zinc-500">{c.tier}</span>
-                              <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
-                                {STATE_LABEL[c.state] ?? c.state}
-                              </span>
-                              {c.conflict && (
-                                <span className="text-xs text-zinc-500">
-                                  {c.state === 'booked' ? 'out' : 'back'} {fmtDay(c.conflict.start)} → {fmtDay(c.conflict.end)}
-                                  {c.conflict.jobName ? ` · ${c.conflict.jobName}` : ''}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => assign(c, false)}
-                              disabled={isBooked || !!submitting}
-                              className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
-                            >
-                              {isPendingThis ? 'Assigning…' : 'Assign'}
-                            </button>
-                          </div>
-
-                          {/* The decision lands under the truck it is about. A
-                              "tight" unit is assignable — it just needs the
-                              operator to say so. */}
-                          {confirmHere && (
-                            <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2">
-                              <div className="font-medium text-amber-900 text-[13px]">
-                                {c.unitName} is tight on these dates
-                              </div>
-                              <div className="text-amber-800 text-[13px] mt-0.5">{confirmHere.reason}</div>
-                              <div className="mt-2 flex gap-2">
-                                <button
-                                  onClick={() => assign(confirmHere.asset, true)}
-                                  disabled={!!submitting}
-                                  className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
-                                >
-                                  {isPendingThis ? 'Assigning…' : `Assign ${c.unitName} anyway`}
-                                </button>
-                                <button
-                                  onClick={() => setPendingBuffer(null)}
-                                  className="text-xs text-zinc-700 hover:text-zinc-900 px-2 py-1"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {errorHere && (
-                            <div className="mt-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
-                              {errorHere}
-                            </div>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </section>
               )}
+
+              {/* The candidate list renders whether or not the block is
+                  full. On a full block it is the SWAP list — hiding it was
+                  what left an agent looking at nothing but out-of-service
+                  trucks. */}
+              <section>
+                <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">
+                  {isFull ? 'Swap in a different unit · best first' : 'Available units · best first'}
+                </div>
+                <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
+                  {data.candidates.length === 0 && (
+                    <li className="px-3 py-3 text-sm text-zinc-500">
+                      {isFull ? 'No other unit in this class is free' : 'No units available'}{' '}
+                      {fmtDay(data.window.start)} → {fmtDay(data.window.end)}.
+                    </li>
+                  )}
+                  {data.candidates.map((c) => {
+                    const isBooked = c.state === 'booked'
+                    const isPendingThis = submitting === c.assetId
+                    const confirmHere = pendingBuffer?.asset.assetId === c.assetId ? pendingBuffer : null
+                    const swapHere = pendingSwap?.asset.assetId === c.assetId ? pendingSwap : null
+                    const errorHere = errorAssetId === c.assetId ? error : null
+                    return (
+                      <li key={c.assetId} className="px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
+                            <span className="font-mono text-[15px] sm:text-sm text-zinc-900">{c.unitName}</span>
+                            <span className="text-xs text-zinc-500">{c.tier}</span>
+                            <span className={`inline-block text-xs px-2 py-0.5 rounded border ${STATE_BADGE[c.state]}`}>
+                              {STATE_LABEL[c.state] ?? c.state}
+                            </span>
+                            {c.conflict && (
+                              <span className="text-xs text-zinc-500">
+                                {c.state === 'booked' ? 'out' : 'back'} {fmtDay(c.conflict.start)} → {fmtDay(c.conflict.end)}
+                                {c.conflict.jobName ? ` · ${c.conflict.jobName}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => (isFull ? startSwap(c) : assign(c, false))}
+                            disabled={isBooked || !!submitting}
+                            className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
+                          >
+                            {isPendingThis ? (isFull ? 'Swapping…' : 'Assigning…') : isFull ? 'Swap in' : 'Assign'}
+                          </button>
+                        </div>
+
+                        {/* Swapping drops a truck somebody already picked, so
+                            it is confirmed where it was clicked — and on a
+                            block holding more than one, it first asks WHICH. */}
+                        {swapHere && (
+                          <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2">
+                            {swapHere.outAssetId ? (
+                              <>
+                                <div className="font-medium text-amber-900 text-[13px]">
+                                  Send {c.unitName} instead of {unitNameOf(swapHere.outAssetId)}?
+                                </div>
+                                <div className="text-amber-800 text-[13px] mt-0.5">
+                                  {unitNameOf(swapHere.outAssetId)} comes off this job and is free again{' '}
+                                  {fmtDay(data.window.start)} → {fmtDay(data.window.end)}.
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                  <button
+                                    onClick={() => assign(c, false, swapHere.outAssetId)}
+                                    disabled={!!submitting}
+                                    className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
+                                  >
+                                    {isPendingThis ? 'Swapping…' : `Swap in ${c.unitName}`}
+                                  </button>
+                                  <button
+                                    onClick={() => setPendingSwap(null)}
+                                    className="text-xs text-zinc-700 hover:text-zinc-900 px-2 py-1"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="font-medium text-amber-900 text-[13px]">
+                                  Which unit does {c.unitName} replace?
+                                </div>
+                                <div className="mt-2 flex gap-2 flex-wrap">
+                                  {swappable.map((a) => (
+                                    <button
+                                      key={a.id}
+                                      onClick={() => setPendingSwap({ asset: c, outAssetId: a.asset.id })}
+                                      className="border border-amber-400 bg-white hover:bg-amber-100 text-amber-900 font-mono text-xs px-2.5 py-1.5 rounded"
+                                    >
+                                      {a.asset.unitName}
+                                    </button>
+                                  ))}
+                                  <button
+                                    onClick={() => setPendingSwap(null)}
+                                    className="text-xs text-zinc-700 hover:text-zinc-900 px-2 py-1"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* The decision lands under the truck it is about. A
+                            "tight" unit is assignable — it just needs the
+                            operator to say so. */}
+                        {confirmHere && (
+                          <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2">
+                            <div className="font-medium text-amber-900 text-[13px]">
+                              {c.unitName} is tight on these dates
+                            </div>
+                            <div className="text-amber-800 text-[13px] mt-0.5">{confirmHere.reason}</div>
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                onClick={() => assign(confirmHere.asset, true, confirmHere.replaceAssetId)}
+                                disabled={!!submitting}
+                                className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
+                              >
+                                {isPendingThis
+                                  ? 'Assigning…'
+                                  : confirmHere.replaceAssetId
+                                    ? `Swap in ${c.unitName} anyway`
+                                    : `Assign ${c.unitName} anyway`}
+                              </button>
+                              <button
+                                onClick={() => setPendingBuffer(null)}
+                                className="text-xs text-zinc-700 hover:text-zinc-900 px-2 py-1"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {errorHere && (
+                          <div className="mt-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
+                            {errorHere}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
 
               {/* Units the fleet has taken out for these dates. They used to
                   sit in the list above reading "available" with a live Assign
@@ -756,7 +880,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                   <div className="text-amber-800 mt-0.5">{pendingBuffer.reason}</div>
                   <div className="mt-2 flex gap-2">
                     <button
-                      onClick={() => assign(pendingBuffer.asset, true)}
+                      onClick={() => assign(pendingBuffer.asset, true, pendingBuffer.replaceAssetId)}
                       disabled={!!submitting}
                       className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded"
                     >

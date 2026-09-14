@@ -4,6 +4,10 @@
  * Chunk 5 of native-scheduling-v1-brief.md — assign one specific
  * Asset to a BookingItem. Two block modes:
  *
+ * A `replaceAssetId` in the body makes it a SWAP: that unit's assignment
+ * is dropped and the new one bound in the same transaction, which is how
+ * a fully-assigned date block changes trucks (Wes 2026-09-14).
+ *
  *   409 over-capacity            — the asset is already out across the
  *                                   date block being filled. No override.
  *   409 buffer-encroachment      — asset is in buffer state for this
@@ -33,6 +37,10 @@ interface AssignBody {
    *  Optional — resolved from the quoted lines when absent. */
   windowStart?: string
   windowEnd?: string
+  /** SWAP: the unit this one replaces on the same date block. Dropped and
+   *  re-bound in one transaction, which is the only way a block that is
+   *  already fully assigned can change trucks. */
+  replaceAssetId?: string
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -65,6 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderId: body.orderId,
     windowStart: body.windowStart,
     windowEnd: body.windowEnd,
+    replaceAssetId: body.replaceAssetId,
   })
   if (!result.ok) return NextResponse.json(result.body, { status: result.status })
 
@@ -75,6 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       bookingItem: result.bookingItem,
       bufferOverrideUsed: result.bufferOverrideUsed,
       window: result.window,
+      replacedAssetId: result.replacedAssetId,
     },
     { status: 201 },
   )

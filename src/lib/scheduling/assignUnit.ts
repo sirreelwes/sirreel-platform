@@ -46,6 +46,17 @@ export interface AssignUnitArgs {
    *  the quoted lines. See assignWindow.ts. */
   windowStart?: Date | string | null
   windowEnd?: Date | string | null
+  /**
+   * SWAP: the unit this one replaces on the SAME date block. A full block
+   * has no open slot, so changing which truck goes out used to mean
+   * Remove-then-Assign — two requests with the block sitting uncovered in
+   * between, and the picker hid the candidate list the moment the block
+   * was full, leaving the agent looking at nothing but out-of-service
+   * trucks (Wes 2026-09-14). Naming the outgoing unit here frees its slot
+   * for the capacity check and drops it in the SAME transaction that
+   * binds the replacement.
+   */
+  replaceAssetId?: string | null
 }
 
 export interface AssignedUnit {
@@ -64,6 +75,8 @@ export type AssignUnitResult =
       bufferOverrideUsed: boolean
       /** The days the unit was actually bound for, and why those days. */
       window: { start: string; end: string; source: ResolvedWindow['source'] }
+      /** The unit this one replaced, when the caller asked for a swap. */
+      replacedAssetId: string | null
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 
@@ -84,11 +97,37 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       // occupies nothing, and one for another date block is not in the way.
       assignments: {
         where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
-        select: { id: true, assetId: true, startDate: true, endDate: true },
+        select: { id: true, assetId: true, startDate: true, endDate: true, status: true, orderId: true },
       },
     },
   })
   if (!bookingItem) return refuse(404, { error: 'booking item not found' })
+
+  // ── The outgoing unit, on a swap ──────────────────────────────────
+  // Resolved first: it must not count against capacity, must not crowd
+  // the window resolver into a different block, and its order is what
+  // the replacement inherits.
+  let outgoing: { id: string; assetId: string; status: string; orderId: string | null; startDate: Date; endDate: Date } | null = null
+  if (args.replaceAssetId) {
+    const found = bookingItem.assignments.find((a) => a.assetId === args.replaceAssetId)
+    if (!found) {
+      return refuse(404, {
+        ok: false,
+        error: 'replace-not-assigned',
+        reason: 'the unit being swapped out is not on this hold',
+      })
+    }
+    if (found.status === 'CHECKED_OUT') {
+      return refuse(409, {
+        ok: false,
+        error: 'replace-checked-out',
+        reason: 'that unit is checked out — use the return flow, not a pick change',
+      })
+    }
+    outgoing = found
+  }
+  /** Everything still holding a slot once the outgoing unit steps aside. */
+  const standingAssignments = bookingItem.assignments.filter((a) => a.id !== outgoing?.id)
 
   // ── Which order, and therefore which window? ──────────────────────
   // The caller may name an order (a booking can carry lines from more than
@@ -104,7 +143,12 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   if (requestedOrderId && !candidateIds.has(requestedOrderId)) {
     return refuse(400, { ok: false, error: 'order-not-on-job', reason: 'that order does not belong to this booking’s job' })
   }
-  const attachOrderId = requestedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
+  // A swap inherits the outgoing unit's order — the yard's "which truck
+  // is on which order" marker should survive a change of truck without
+  // being re-picked.
+  const inheritedOrderId = outgoing?.orderId && candidateIds.has(outgoing.orderId) ? outgoing.orderId : null
+  const attachOrderId =
+    requestedOrderId ?? inheritedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
 
   // ── Which DAYS? ───────────────────────────────────────────────────
   // Not the booking envelope (it spans every order on the job) and not
@@ -141,14 +185,28 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     hold: { start: bookingItem.booking.startDate, end: bookingItem.booking.endDate },
     orderWindow,
     blocks,
-    assignments: bookingItem.assignments,
-    requested: { start: asDate(args.windowStart), end: asDate(args.windowEnd) },
+    assignments: standingAssignments,
+    // A swap with no window named lands on the outgoing unit's own days —
+    // the block it is coming off is the block being re-covered.
+    requested: {
+      start: asDate(args.windowStart) ?? outgoing?.startDate ?? null,
+      end: asDate(args.windowEnd) ?? outgoing?.endDate ?? null,
+    },
   })
   const windowStart = resolved.start
   const windowEnd = resolved.end
 
   // Only the assignments that TOUCH this window occupy it.
-  const occupying = bookingItem.assignments.filter((a) => overlaps(a, windowStart, windowEnd))
+  const occupying = standingAssignments.filter((a) => overlaps(a, windowStart, windowEnd))
+  // Swapping across blocks would uncover the block the outgoing unit is
+  // on to cover this one — two decisions wearing one button.
+  if (outgoing && !overlaps(outgoing, windowStart, windowEnd)) {
+    return refuse(409, {
+      ok: false,
+      error: 'replace-other-block',
+      reason: `that unit is booked ${formatCalendarRange(outgoing.startDate, outgoing.endDate)}, not ${formatCalendarRange(windowStart, windowEnd)} — swap it on its own dates`,
+    })
+  }
   if (occupying.some((a) => a.assetId === args.assetId)) {
     return refuse(409, { error: 'this asset is already assigned to this booking item for those dates' })
   }
@@ -293,6 +351,8 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    // Same transaction: the block is never left uncovered between the two.
+    if (outgoing) await tx.bookingAssignment.delete({ where: { id: outgoing.id } })
     const created = await tx.bookingAssignment.create({
       data: {
         bookingItemId: bookingItem.id,
@@ -337,5 +397,6 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       end: windowEnd.toISOString().slice(0, 10),
       source: resolved.source,
     },
+    replacedAssetId: outgoing?.assetId ?? null,
   }
 }
