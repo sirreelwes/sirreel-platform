@@ -29,6 +29,7 @@ scripts/*
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts
+!scripts/seed-kit-unit-checks.ts
 !scripts/seed-radio-parts-kit.ts
 !scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
