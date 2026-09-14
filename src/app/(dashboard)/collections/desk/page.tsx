@@ -25,8 +25,8 @@ export default async function CollectionsDeskPage() {
         <div>
           <h1 className="text-[20px] font-semibold text-lt-fg">Collections desk</h1>
           <p className="text-[12px] text-lt-fg2">
-            Money arriving and outreach going out, as it happens — not waiting
-            for the end-of-day report.
+            What the desk is landing — money in, invoices closed and clients
+            reached, as it happens.
           </p>
         </div>
         <Link
@@ -36,7 +36,7 @@ export default async function CollectionsDeskPage() {
           Back to collections
         </Link>
       </div>
-      <DeskActivityPanel />
+      <DeskActivityPanel viewerName={user.name} />
     </div>
   )
 }

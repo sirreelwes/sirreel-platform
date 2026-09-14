@@ -5,15 +5,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 /**
  * The live collections desk.
  *
- * Wes, 2026-09-14: he wanted to see the collections numbers arrive and the
- * outreach happen, without waiting for the 6pm report or asking the person
- * doing the work. The reasoning about WHAT is counted — and what is
- * deliberately not — lives in src/lib/collections/deskActivity.ts.
+ * Wes, 2026-09-14, on the first version: *"I want this to be positive and
+ * encouraging, not big brother ish."*
+ *
+ * So the page opens on what the desk LANDED this month — money cleared,
+ * invoices closed out, clients reached, the biggest single win — and only
+ * then shows the live detail underneath. Same rows as before; the difference
+ * is what the eye hits first, and that a page opening on "$12,812 collected,
+ * 18 invoices closed" is a place you'd show someone their own work.
+ *
+ * What is deliberately absent, and why, is documented in
+ * src/lib/collections/deskActivity.ts — chiefly per-person email counts,
+ * which went out with that note from Wes.
  *
  * Polling, not sockets: the desk produces a handful of rows an hour, and a 45
  * second refresh is indistinguishable from live at that rate. The poll stops
- * while the tab is hidden, so a page left open overnight isn't hammering the
- * DB from a background tab.
+ * while the tab is hidden.
  */
 
 interface MoneyBucket { amount: number; count: number }
@@ -33,13 +40,21 @@ interface DeskWindow {
   }
 }
 
+interface DeskWins {
+  collected: number
+  previousMonth: number
+  clearedFromAr: MoneyBucket
+  invoicesClosed: number
+  clientsReached: number
+  biggest: { label: string; amount: number; at: string } | null
+}
+
 interface OperatorStat {
   key: string
   name: string
   charged: MoneyBucket
   collected: MoneyBucket
   deskDecisions: number
-  emailsSent: number
 }
 
 type DeskEventKind =
@@ -58,6 +73,7 @@ interface DeskEvent {
 interface DeskData {
   generatedAt: string
   openAr: { total: number; count: number }
+  wins: DeskWins
   windows: DeskWindow[]
   operators: OperatorStat[]
   feed: DeskEvent[]
@@ -74,7 +90,6 @@ const usdShort = (n: number) =>
     ? `$${(n / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}K`
     : `$${n.toFixed(0)}`
 
-/** MONEY events are the outcome; the rest is the work that produced it. */
 const MONEY_KINDS: ReadonlySet<DeskEventKind> = new Set([
   'CHARGE', 'COLLECTED', 'PAYMENT', 'REVERSAL',
 ])
@@ -90,7 +105,7 @@ const KIND_META: Record<DeskEventKind, { label: string; cls: string }> = {
   EMAIL:         { label: 'Email',     cls: 'bg-cadence-booked-bg text-cadence-booked-fg' },
   INVOICE_SENT:  { label: 'Invoice',   cls: 'bg-cadence-booked-bg text-cadence-booked-fg' },
   CLIENT_ANSWER: { label: 'Client',    cls: 'bg-cadence-returned-bg text-cadence-returned-fg' },
-  PAID_MARK:     { label: 'Paid mark', cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
+  PAID_MARK:     { label: 'Closed',    cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
   TRIAGE:        { label: 'Aging',     cls: 'bg-chip-warn-bg text-chip-warn-fg' },
   NOTE:          { label: 'Note',      cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
   REMITTANCE:    { label: 'Remittance',cls: 'bg-chip-warn-bg text-chip-warn-fg' },
@@ -101,8 +116,8 @@ type FeedFilter = 'all' | 'money' | 'outreach' | 'decisions'
 const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'all', label: 'Everything' },
   { key: 'money', label: 'Money in' },
-  { key: 'outreach', label: 'Outreach' },
-  { key: 'decisions', label: 'Desk calls' },
+  { key: 'outreach', label: 'Client contact' },
+  { key: 'decisions', label: 'Desk work' },
 ]
 
 function when(iso: string, now: number): string {
@@ -116,12 +131,17 @@ function when(iso: string, now: number): string {
     ' ' + t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** A win tile. Big number, plain label, no target to fall short of. */
+function Win({ value, label, note }: { value: string; label: string; note?: string }) {
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-lt-fg3">{label}</div>
-      <div className="text-[20px] font-semibold text-lt-fg tabular-nums">{value}</div>
-      {sub ? <div className="text-[11px] text-lt-fg3">{sub}</div> : null}
+    <div className="rounded-lg bg-lt-inner px-4 py-3">
+      <div className="text-[22px] font-semibold text-lt-fg tabular-nums leading-tight">{value}</div>
+      <div className="text-[12px] text-lt-fg2">{label}</div>
+      {note ? <div className="text-[11px] text-lt-fg3 mt-0.5">{note}</div> : null}
     </div>
   )
 }
@@ -142,7 +162,9 @@ function WindowCard({ w }: { w: DeskWindow }) {
       <div className="mt-0.5 text-[12px] text-lt-fg3">
         {parts.length
           ? parts.map((p) => `${p.label} ${usdShort(p.b.amount)} (${p.b.count})`).join(' · ')
-          : 'nothing collected yet'}
+          : w.key === 'today'
+            ? 'nothing in yet today'
+            : 'nothing collected in this stretch'}
       </div>
 
       <div className="mt-3 border-t border-lt-hairline pt-3 grid grid-cols-2 gap-y-1.5 text-[12px]">
@@ -155,7 +177,7 @@ function WindowCard({ w }: { w: DeskWindow }) {
         </span>
         <span className="text-lt-fg2">Invoices sent</span>
         <span className="text-right tabular-nums text-lt-fg">{w.outreach.invoicesEmailed}</span>
-        <span className="text-lt-fg2">Desk calls logged</span>
+        <span className="text-lt-fg2">Follow-ups logged</span>
         <span className="text-right tabular-nums text-lt-fg">{w.outreach.deskDecisions}</span>
         <span className="text-lt-fg2">Clients answered</span>
         <span className="text-right tabular-nums text-lt-fg">{w.outreach.clientAnswers}</span>
@@ -170,7 +192,7 @@ function WindowCard({ w }: { w: DeskWindow }) {
   )
 }
 
-export function DeskActivityPanel() {
+export function DeskActivityPanel({ viewerName }: { viewerName?: string }) {
   const [data, setData] = useState<DeskData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<FeedFilter>('all')
@@ -227,50 +249,76 @@ export function DeskActivityPanel() {
     return <div className="rounded-lg border border-lt-hairline bg-lt-card p-6 text-[13px] text-lt-fg3">Loading the desk…</div>
   }
 
+  const { wins } = data
   const today = data.windows.find((w) => w.key === 'today')
-  const month = data.windows.find((w) => w.key === 'month')
   const staleInbox = data.inboxes.find((i) => i.stale)
+  const delta = wins.collected - wins.previousMonth
+  const ahead = wins.previousMonth > 0 && delta > 0
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-6">
-          <Stat
-            label="Open AR"
-            value={usd(data.openAr.total)}
-            sub={`${data.openAr.count} invoice${data.openAr.count === 1 ? '' : 's'} still owed`}
-          />
-          <Stat
-            label="In today"
-            value={usd(today?.money.total ?? 0)}
-            sub={`${today?.outreach.emailsSent ?? 0} emails out today`}
-          />
-          <Stat
-            label="Last 30 days"
-            value={usd(month?.money.total ?? 0)}
-            sub={`${month?.outreach.emailsSent ?? 0} emails out · ${month?.outreach.emailsIn ?? 0} in`}
-          />
+      {/* ── What the month has landed ─────────────────────────────── */}
+      <div className="rounded-lg border border-lt-hairline bg-lt-card p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-[13px] font-semibold text-lt-fg">Landed in the last 30 days</h2>
+          <div className="flex items-center gap-2 text-[11px] text-lt-fg3">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            live · updated {when(data.generatedAt, now)}
+            <button
+              onClick={() => void load()}
+              className="ml-1 rounded border border-lt-hairline px-2 py-0.5 text-lt-fg2 hover:bg-lt-inner"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-lt-fg3">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          live · updated {when(data.generatedAt, now)}
-          <button
-            onClick={() => void load()}
-            className="ml-1 rounded border border-lt-hairline px-2 py-0.5 text-lt-fg2 hover:bg-lt-inner"
-          >
-            Refresh
-          </button>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Win
+            value={usd(wins.collected)}
+            label="collected through HQ"
+            note={
+              wins.previousMonth > 0
+                ? ahead
+                  ? `${usdShort(delta)} ahead of the month before`
+                  : `${usdShort(Math.abs(delta))} behind the month before (${usdShort(wins.previousMonth)})`
+                : undefined
+            }
+          />
+          <Win
+            value={usd(wins.clearedFromAr.amount)}
+            label="cleared from AR"
+            note={`${wins.clearedFromAr.count} invoice${wins.clearedFromAr.count === 1 ? '' : 's'} marked paid in RentalWorks`}
+          />
+          <Win value={String(wins.invoicesClosed)} label="invoices closed out" />
+          <Win value={String(wins.clientsReached)} label="clients reached" note="by email from the desk" />
+        </div>
+
+        {wins.biggest ? (
+          <div className="mt-3 rounded-lg bg-chip-good-bg px-3 py-2 text-[12px] text-chip-good-fg">
+            Biggest of the month: <strong>{usd(wins.biggest.amount)}</strong> from{' '}
+            {wins.biggest.label} on {shortDate(wins.biggest.at)}.
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-lt-hairline pt-3 text-[12px] text-lt-fg2">
+          <span>
+            In today: <strong className="text-lt-fg tabular-nums">{usd(today?.money.total ?? 0)}</strong>
+          </span>
+          <span>
+            Still out there:{' '}
+            <strong className="text-lt-fg tabular-nums">{usd(data.openAr.total)}</strong> across{' '}
+            {data.openAr.count} invoice{data.openAr.count === 1 ? '' : 's'}
+          </span>
         </div>
       </div>
 
       {staleInbox ? (
         <div className="rounded-lg bg-chip-warn-bg px-3 py-2 text-[12px] text-chip-warn-fg">
-          {staleInbox.address}&rsquo;s Gmail watch has not renewed since{' '}
-          {staleInbox.watchedAt
-            ? new Date(staleInbox.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : 'ever'}
-          . Emails sent may be undercounted until it does — a quiet feed is not
-          proof of a quiet desk.
+          Heads up: {staleInbox.address}&rsquo;s Gmail watch has not renewed since{' '}
+          {staleInbox.watchedAt ? shortDate(staleInbox.watchedAt) : 'ever'}. Client emails
+          will be undercounted here until it does — the desk is doing more than this page
+          can see.
         </div>
       ) : null}
 
@@ -282,51 +330,52 @@ export function DeskActivityPanel() {
 
       <div className="rounded-lg border border-lt-hairline bg-lt-card">
         <div className="border-b border-lt-hairline px-4 py-2.5 text-[12px] font-semibold text-lt-fg">
-          Who did what · last 30 days
+          Credit where it&rsquo;s due · last 30 days
         </div>
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-lt-fg3">
-              <th className="px-4 py-2 text-left font-medium">Operator</th>
+              <th className="px-4 py-2 text-left font-medium">Who</th>
               <th className="px-4 py-2 text-right font-medium">Cards taken</th>
-              <th className="px-4 py-2 text-right font-medium">Other collected</th>
-              <th className="px-4 py-2 text-right font-medium">Desk calls</th>
-              <th className="px-4 py-2 text-right font-medium">Emails sent</th>
+              <th className="px-4 py-2 text-right font-medium">Other money in</th>
+              <th className="px-4 py-2 text-right font-medium">Follow-ups logged</th>
             </tr>
           </thead>
           <tbody>
             {data.operators.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-4 text-center text-[12px] text-lt-fg3">
+                <td colSpan={4} className="px-4 py-4 text-center text-[12px] text-lt-fg3">
                   Nothing recorded in the last 30 days.
                 </td>
               </tr>
             ) : (
-              data.operators.map((o) => (
-                <tr key={o.key} className="border-t border-lt-hairline">
-                  <td className="px-4 py-2 text-lt-fg">{o.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-lt-fg">
-                    {o.charged.count ? `${usd(o.charged.amount)}` : <span className="text-lt-fg3">—</span>}
-                    {o.charged.count ? <span className="text-lt-fg3"> ({o.charged.count})</span> : null}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-lt-fg">
-                    {o.collected.count ? `${usd(o.collected.amount)}` : <span className="text-lt-fg3">—</span>}
-                    {o.collected.count ? <span className="text-lt-fg3"> ({o.collected.count})</span> : null}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-lt-fg2">{o.deskDecisions || '—'}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-lt-fg2">{o.emailsSent || '—'}</td>
-                </tr>
-              ))
+              data.operators.map((o) => {
+                const isViewer = !!viewerName && o.name === viewerName
+                return (
+                  <tr key={o.key} className={`border-t border-lt-hairline ${isViewer ? 'bg-lt-inner2' : ''}`}>
+                    <td className="px-4 py-2 text-lt-fg">
+                      {o.name}
+                      {isViewer ? <span className="ml-1.5 text-[11px] text-lt-fg3">you</span> : null}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-lt-fg">
+                      {o.charged.count ? usd(o.charged.amount) : <span className="text-lt-fg3">—</span>}
+                      {o.charged.count ? <span className="text-lt-fg3"> ({o.charged.count})</span> : null}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-lt-fg">
+                      {o.collected.count ? usd(o.collected.amount) : <span className="text-lt-fg3">—</span>}
+                      {o.collected.count ? <span className="text-lt-fg3"> ({o.collected.count})</span> : null}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-lt-fg2">{o.deskDecisions || '—'}</td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
         <div className="border-t border-lt-hairline px-4 py-2 text-[11px] text-lt-fg3">
-          Dollars are the outcome; emails and desk calls are evidence of effort,
-          not a score. Phone calls never reach HQ, so a light column is not an
-          idle day. Mail sent from the shared billing@ and payments@ boxes goes
-          out as &ldquo;SirReel Billing&rdquo; with no person on the envelope —
-          it counts in the desk totals above, and is left out of this table
-          rather than attributed by guess.
+          Only outcomes are listed here — money in and follow-ups logged. Emails are counted
+          for the desk, never per person. Most of the work that clears an invoice is a phone
+          call HQ never sees, so a short row is not a short day.
         </div>
       </div>
 

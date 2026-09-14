@@ -30,12 +30,21 @@ import { pacificDayRange, pacificToday } from '@/lib/collections/eodReport'
  *
  * ── What this deliberately does NOT do ────────────────────────────────────
  *
- * It does not score anyone. Emails sent is an ACTIVITY count and a bad
- * performance metric — twelve one-line chases is not better work than three
- * calls that cleared $40k, and a view that ranked them would quietly teach
- * the desk to send more email. Dollars collected and open AR are the outcome
- * numbers; the activity columns sit beside them as evidence of effort, not as
- * a leaderboard.
+ * It does not score anyone. Wes, on reading the first version: *"I want this
+ * to be positive and encouraging, not big brother ish."* That is a design
+ * constraint, not a coat of paint, and it decided several things below:
+ *
+ *   - The page leads with what the desk LANDED — money cleared, invoices
+ *     closed out, clients reached — not with how busy anyone looked.
+ *   - Per-person EMAIL COUNTS are gone. Counting someone's messages is the
+ *     most surveillance-shaped number available and one of the least
+ *     informative: twelve one-line chases is not better work than three
+ *     calls that cleared $40k. The desk's client-email total stays, because
+ *     "is the chase happening" is a real question about the WORK.
+ *   - Everything attributed is an outcome someone produced — dollars in,
+ *     invoices closed, follow-ups logged — never a measure of time at a desk.
+ *   - The comparison is against the desk's own previous month, so a good
+ *     month reads as a good month instead of a quota.
  *
  * Phone calls are invisible here — HQ never sees them — so an empty hour is
  * not proof of an idle one. The page says so rather than letting the absence
@@ -133,13 +142,55 @@ export interface DeskWindow {
   outreach: DeskOutreach
 }
 
+/**
+ * The headline: what the last 30 days actually produced.
+ *
+ * Every figure here is an OUTCOME — money that arrived, invoices that closed,
+ * clients who got reached. None of it is a rate, a target or a ranking, and
+ * `previousMonth` compares the desk to itself rather than to a number someone
+ * made up.
+ */
+export interface DeskWins {
+  /** Money that moved THROUGH HQ: cards, bank money confirmed here, HQ invoices. */
+  collected: number
+  /** Same figure for the 30 days before this one — context, not a target. */
+  previousMonth: number
+  /**
+   * AR taken off the board in RentalWorks.
+   *
+   * The single most under-reported number on this desk. Most money still
+   * arrives as a wire or a check that Ana spots in the bank and marks paid in
+   * RW — no gateway, no HQ row with a dollar amount on it. Judged on HQ's own
+   * receipts alone the desk looked like it cleared $12.8k in the 30 days to
+   * 2026-09-14; it had actually closed another $38.9k of open invoices in the
+   * same window.
+   *
+   * The amount is what each invoice still showed owing at the mirror's last
+   * sync, so it UNDERSTATES whenever RentalWorks has already caught up and
+   * zeroed the balance (13 of 60 marks over 60 days). Invoices that were also
+   * charged here are left out — they are already in `collected`.
+   */
+  clearedFromAr: MoneyBucket
+  /** Invoices that stopped being owed: cards taken, bank money confirmed,
+   *  RentalWorks invoices marked paid. */
+  invoicesClosed: number
+  /** Distinct client addresses the desk reached. */
+  clientsReached: number
+  /** The single largest collection of the month. */
+  biggest: { label: string; amount: number; at: string } | null
+}
+
+/**
+ * Credit, not a scorecard. Dollars someone brought in and follow-ups they
+ * logged — no email counts, no time measures, no ordering that implies a
+ * winner beyond "most money first".
+ */
 export interface OperatorStat {
   key: string
   name: string
   charged: MoneyBucket
   collected: MoneyBucket
   deskDecisions: number
-  emailsSent: number
 }
 
 export type DeskEventKind =
@@ -174,6 +225,7 @@ export interface InboxHealth {
 export interface DeskActivity {
   generatedAt: string
   openAr: { total: number; count: number }
+  wins: DeskWins
   windows: DeskWindow[]
   operators: OperatorStat[]
   feed: DeskEvent[]
@@ -223,6 +275,10 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   const since = new Date(now.getTime() - WINDOW_DAYS * 86_400_000)
   const weekStart = new Date(now.getTime() - 7 * 86_400_000)
   const todayStart = pacificDayRange(pacificToday(now)).start
+  // The MONEY tables are read back two months so this month can be shown
+  // beside the last one. Mail is not — the email volume is an order of
+  // magnitude larger and nothing compares it across months.
+  const priorSince = new Date(now.getTime() - 2 * WINDOW_DAYS * 86_400_000)
 
   const mailboxFilter = DESK_ADDRESSES.map((a) => ({
     fromAddress: { contains: a, mode: 'insensitive' as const },
@@ -243,10 +299,10 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     users,
   ] = await Promise.all([
     prisma.rwCollectionCharge.findMany({
-      where: { chargedAt: { gte: since } },
+      where: { chargedAt: { gte: priorSince } },
       select: {
         chargedAt: true, amount: true, status: true, reversedAt: true, chargedById: true,
-        customerName: true, invoiceNumber: true, cardLast4: true,
+        customerName: true, invoiceNumber: true, cardLast4: true, rwInvoiceId: true,
       },
       orderBy: { chargedAt: 'desc' },
     }),
@@ -257,7 +313,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     prisma.jobFinalInvoice.findMany({
       where: {
         OR: [
-          { collectedAt: { gte: since } },
+          { collectedAt: { gte: priorSince } },
           { emailedAt: { gte: since } },
           { remittanceAt: { gte: since } },
           { clientAnsweredAt: { gte: since } },
@@ -273,7 +329,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
       },
     }),
     prisma.payment.findMany({
-      where: { receivedAt: { gte: since }, voidedAt: null, NOT: { status: 'FAILED' } },
+      where: { receivedAt: { gte: priorSince }, voidedAt: null, NOT: { status: 'FAILED' } },
       select: {
         receivedAt: true, amount: true, method: true, recordedById: true,
         invoice: { select: { invoiceNumber: true } },
@@ -431,6 +487,76 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     }
   })
 
+  // ── Wins (30 days, against the 30 before it) ─────────────────────────
+  const monthWindow = windows.find((w) => w.key === 'month')!
+  const inPrior = (d: Date | null | undefined) => !!d && d >= priorSince && d < since
+
+  let previousMonth = 0
+  for (const c of charges) {
+    if (c.status === 'APPROVED' && !c.reversedAt && inPrior(c.chargedAt)) previousMonth += money(c.amount)
+  }
+  for (const f of finals) {
+    if (f.collectedVia !== 'CARD' && inPrior(f.collectedAt)) previousMonth += money(f.amount)
+  }
+  for (const p of payments) if (inPrior(p.receivedAt)) previousMonth += money(p.amount)
+
+  // "Closed out" is the satisfying number: an invoice that stopped being
+  // owed. A card charge, bank money confirmed on a queued invoice, or an RW
+  // invoice marked paid each close exactly one.
+  const invoicesClosed =
+    monthWindow.money.card.count +
+    monthWindow.money.bank.count +
+    paidMarks.filter((m) => m.markedAt >= since).length
+
+  // What the month's paid-marks were carrying. One extra round trip, and the
+  // difference between a desk that looks like it cleared $12.8k and one that
+  // cleared $51k — see DeskWins.clearedFromAr.
+  const chargedIds = new Set(
+    charges.filter((c) => c.chargedAt >= since).map((c) => c.rwInvoiceId),
+  )
+  const markedIds = paidMarks
+    .filter((m) => m.markedAt >= since && !chargedIds.has(m.rwInvoiceId))
+    .map((m) => m.rwInvoiceId)
+  const markedInvoices = markedIds.length
+    ? await prisma.rwInvoice.findMany({
+        where: { rwInvoiceId: { in: markedIds } },
+        select: { remainingTotal: true },
+      })
+    : []
+  const clearedFromAr: MoneyBucket = {
+    amount: money(markedInvoices.reduce((n, i) => n + Number(i.remainingTotal), 0)),
+    count: markedIds.length,
+  }
+
+  let biggest: DeskWins['biggest'] = null
+  const considerWin = (label: string, amount: number, at: Date) => {
+    if (!biggest || amount > biggest.amount) biggest = { label, amount, at: at.toISOString() }
+  }
+  for (const c of charges) {
+    if (c.status === 'APPROVED' && !c.reversedAt && c.chargedAt >= since) {
+      considerWin(c.customerName ?? 'a client', money(c.amount), c.chargedAt)
+    }
+  }
+  for (const f of finals) {
+    if (f.collectedAt && f.collectedAt >= since && f.collectedVia !== 'CARD') {
+      considerWin(f.job?.name ?? f.invoiceNumber ?? 'a client', money(f.amount), f.collectedAt)
+    }
+  }
+  for (const p of payments) {
+    if (p.receivedAt >= since) {
+      considerWin(p.invoice?.invoiceNumber ?? 'an HQ invoice', money(p.amount), p.receivedAt)
+    }
+  }
+
+  const wins: DeskWins = {
+    collected: monthWindow.money.total,
+    previousMonth: money(previousMonth),
+    clearedFromAr,
+    invoicesClosed,
+    clientsReached: monthWindow.outreach.recipients,
+    biggest,
+  }
+
   // ── Operators (30 days) ──────────────────────────────────────────────
   const ops = new Map<string, OperatorStat>()
   const op = (key: string | null, name: string | null): OperatorStat => {
@@ -443,7 +569,6 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
         charged: emptyBucket(),
         collected: emptyBucket(),
         deskDecisions: 0,
-        emailsSent: 0,
       }
       ops.set(k, row)
     }
@@ -451,33 +576,25 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   }
 
   for (const c of charges) {
-    if (c.status !== 'APPROVED' || c.reversedAt) continue
+    if (c.status !== 'APPROVED' || c.reversedAt || c.chargedAt < since) continue
     add(op(c.chargedById, nameOf(c.chargedById)).charged, money(c.amount))
   }
   for (const f of finals) {
-    if (f.collectedAt && f.collectedVia !== 'CARD') {
+    if (f.collectedAt && f.collectedAt >= since && f.collectedVia !== 'CARD') {
       add(op(f.collectedById, nameOf(f.collectedById)).collected, money(f.amount))
     }
     if (f.remittanceAt) op(f.remittanceById, nameOf(f.remittanceById)).deskDecisions += 1
   }
-  for (const p of payments) add(op(p.recordedById, nameOf(p.recordedById)).collected, money(p.amount))
+  for (const p of payments) {
+    if (p.receivedAt < since) continue
+    add(op(p.recordedById, nameOf(p.recordedById)).collected, money(p.amount))
+  }
   for (const m of paidMarks) op(m.markedById, nameOf(m.markedById)).deskDecisions += 1
   for (const t of triages) op(t.decidedById, nameOf(t.decidedById)).deskDecisions += 1
   for (const r of reviews) {
     if (r.noteAt) op(idOfLoose(r.noteBy), nameOfLoose(r.noteBy)).deskDecisions += 1
     if (r.dismissedAt) op(idOfLoose(r.dismissedBy), nameOfLoose(r.dismissedBy)).deskDecisions += 1
   }
-  for (const m of clientMail) {
-    // Shared mailboxes carry no person on the envelope. Counting "SirReel
-    // Billing" as a colleague's output would be a guess dressed as a
-    // measurement — the desk total covers it instead.
-    const owner = mailboxOf(m.fromAddress)?.owner
-    if (!owner) continue
-    const user = users.find((u) => u.email.toLowerCase() === owner)
-    if (!user) continue
-    op(user.id, user.name).emailsSent += 1
-  }
-
   const operators = [...ops.values()].sort(
     (a, b) => b.charged.amount + b.collected.amount - (a.charged.amount + a.collected.amount),
   )
@@ -487,6 +604,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   const push = (e: DeskEvent) => feed.push(e)
 
   for (const c of charges) {
+    if (c.chargedAt < since) continue
     push({
       at: c.chargedAt.toISOString(),
       kind: 'CHARGE',
@@ -510,7 +628,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   }
   for (const f of finals) {
     const label = f.job?.name ?? f.invoiceNumber ?? 'invoice'
-    if (f.collectedAt && f.collectedVia !== 'CARD') {
+    if (f.collectedAt && f.collectedAt >= since && f.collectedVia !== 'CARD') {
       push({
         at: f.collectedAt.toISOString(),
         kind: 'COLLECTED',
@@ -552,6 +670,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     }
   }
   for (const p of payments) {
+    if (p.receivedAt < since) continue
     push({
       at: p.receivedAt.toISOString(),
       kind: 'PAYMENT',
@@ -621,6 +740,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   return {
     generatedAt: now.toISOString(),
     openAr,
+    wins,
     windows,
     operators,
     feed: feed.slice(0, 200),
