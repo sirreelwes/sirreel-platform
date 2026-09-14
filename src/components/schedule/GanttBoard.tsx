@@ -216,6 +216,16 @@ function IncompleteBadge({ gaps }: { gaps?: Array<{ key: string; label: string }
 // Per-drag row highlight state (computed once per target change in the parent;
 // the memoized row re-renders only when ITS state string flips).
 type DropState = 'none' | 'source' | 'valid' | 'valid-hover' | 'invalid'
+// The rule between vehicle types (Jose, 2026-09-14). Inline rather than
+// `border-t-gray-300` because the row already carries `border-gray-100`,
+// which sets all four border COLORS — whether the directional override
+// wins is a question about Tailwind's emit order, and a hairline that
+// silently comes out the wrong grey is exactly the bug nobody reports.
+// Both columns' rows set an explicit height with box-sizing:border-box,
+// so the 1px costs no vertical space and the label column stays aligned
+// with the grid.
+const CATEGORY_RULE = { borderTop: '1px solid #9ca3af' } as const
+
 const DROP_STATE_CLASS: Record<DropState, string> = {
   none: '',
   source: '',
@@ -327,7 +337,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
         data-unit-assetid={entry.unit.assetId}
         data-unit-name={entry.unit.unitName}
         className={`relative border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
-        style={{ height: mainRowHeight }}
+        style={{ height: mainRowHeight, ...(entry.startsCategory ? CATEGORY_RULE : null) }}
         onClick={(ev) => onRowClick(entry.unit, ev)}
       >
         {grid}
@@ -1415,7 +1425,7 @@ export function GanttBoard() {
   // holds with zero assignments. Without it those holds drop out of
   // By-Asset entirely (units[] is keyed by Asset, so no-asset → no row).
   type RowEntry =
-    | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[]; primaryLaneCount: number; backupLaneCount: number }
+    | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[]; primaryLaneCount: number; backupLaneCount: number; startsCategory?: boolean }
     | { type: 'divider'; label: string; accent?: 'warn' | 'idle' }
     | { type: 'taskBand'; tasks: any[]; bandHeight: number }
   const { rowEntries } = useMemo(() => {
@@ -1530,16 +1540,32 @@ export function GanttBoard() {
       cat === 'studio' ? 'Stages & Studios' : 'Vehicles'
     let currentSection: string | null = null
 
+    // Hairline between vehicle types INSIDE a section (Jose, 2026-09-14:
+    // "a horizontal line separating vehicle type — e.g. between cube
+    // trucks and cargo vans"). The section headings above only break
+    // Vehicles from Stages, so nine categories ran together as one wall
+    // of rows. This is a 1px top border on the first unit of each
+    // category, not another 24px labelled band — the board is long
+    // enough, and the rows carry box-sizing:border-box with an explicit
+    // height, so the border costs no vertical space and the left column
+    // stays aligned with the grid. A section divider already draws its
+    // own rule, so the first row after one doesn't get a second.
+    let prevCat: string | null = null
+
     for (const u of sorted) {
       const section = SECTION_OF(u.cat)
+      let afterDivider = false
       if (section !== currentSection) {
         // Skip the leading divider only when the list starts with
         // vehicles — a stage-filtered view should still say so.
         if (currentSection !== null || section !== 'Vehicles') {
           entries.push({ type: 'divider', label: section })
+          afterDivider = true
         }
         currentSection = section
       }
+      const startsCategory = prevCat !== null && u.cat !== prevCat && !afterDivider
+      prevCat = u.cat
       const split = splitBookings(u)
       // Overlapping bookings stack into sub-lanes (each bar gets a `lane`
       // index); the row and its label cell grow to laneRowHeight(count).
@@ -1552,6 +1578,7 @@ export function GanttBoard() {
         backupBookings: backup.bookings,
         primaryLaneCount: primary.laneCount,
         backupLaneCount: backup.laneCount,
+        startsCategory,
       })
     }
     return { rowEntries: entries }
@@ -1780,7 +1807,7 @@ export function GanttBoard() {
                   <div key={`u-${entry.unit.assetId}`}>
                     <div
                       className={`border-b border-gray-100 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}
-                      style={{ height: laneRowHeight(entry.primaryLaneCount) }}
+                      style={{ height: laneRowHeight(entry.primaryLaneCount), ...(entry.startsCategory ? CATEGORY_RULE : null) }}
                     >
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
