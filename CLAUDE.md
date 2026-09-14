@@ -295,7 +295,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   in BEFORE the relevance pass and dedupe by id. Client-facing form:
   `rankSearchResults` in `publicSupplySections.ts` takes the tier as its
   primary sort key. Every other search is byte-for-byte unchanged.
-- `npm run test:tent-first`.
+- **THREE boxes search this catalog, not two (Wes 2026-09-14, with a
+  screenshot).** After the first fix, sirreel.com's hero search still put
+  seven sidewalls above the first canopy: `searchPublicSite` in
+  `src/lib/site/publicSearch.ts` is its own ranking path — an in-process
+  index sorted by placement and then by SHORTER NAME, and every sidewall
+  label is shorter than every canopy label. It now takes the same tier.
+  When changing how this catalog ranks, change all three: the staff
+  typeahead (`/api/catalog/search`), the supply order form
+  (`publicSupplySections.rankSearchResults`) and the site-wide box
+  (`publicSearch.searchPublicSite`).
+- The site-wide box also had to move its `.slice(0, limit)` to AFTER the
+  reorder. Slicing to 8 first meant the canopies were already cut before
+  anything could rank them, so lifting the tents would only have reordered
+  the sidewalls that survived.
+- `npm run test:tent-first` — includes the eight rows from Wes's
+  screenshot, in the order the live box returned them.
 
 ## Sandbags with every tent (2026-09-13 — Wes)
 - Wes: "Whenever we rent tents, we want to offer sandbags. So if someone is

@@ -155,6 +155,40 @@ console.log('\nThe accessories survive the 10-row dropdown\n')
   ok(got.length === 2, 'accessories alone are still offered')
 }
 
+// ── The site-wide search box on sirreel.com ──────────────────────────
+console.log('\nThe public site-wide search, from the reported screenshot\n')
+
+{
+  // Wes 2026-09-14, with a screenshot of sirreel.com's hero search: typing
+  // "tent" returned seven sidewalls above the first canopy. That box is a
+  // THIRD ranking path (searchPublicSite) that the first fix missed — it
+  // sorts by placement and then by SHORTER NAME, and every sidewall label
+  // is shorter than every canopy label. These are the exact eight rows it
+  // returned, in the exact order it returned them.
+  const asReported = [
+    "Canopy Tent Sidewall - 10' Blue",
+    "Canopy Tent Sidewall - 15' Blue",
+    "Canopy Tent Sidewall - 8' Black",
+    "Canopy Tent Sidewall - 8' White",
+    "Canopy Tent Sidewall - 10' Black",
+    "Canopy Tent Sidewall - 10' White",
+    "Canopy Tent Sidewall - 15' black",
+    "Caravan Canopy Tent-10' x 10', Blue",
+  ]
+  const got = order(asReported, 'tent', 8)
+  ok(got[0] === "Caravan Canopy Tent-10' x 10', Blue", 'the canopy is now first, not eighth')
+  ok(got.slice(1).every((n) => tentRole(n) === 'ACCESSORY'), 'the sidewalls follow it')
+  ok(got.length === 8, 'still eight rows — the accessories are not dropped')
+  // The public index writes the footprint with no space before the hyphen,
+  // a spelling the staff catalog never uses.
+  ok(tentRole("Caravan Canopy Tent-10' x 10', Blue") === 'SHELTER',
+    '"Canopy Tent-10\' x 10\'" reads as a shelter despite the tight hyphen')
+  for (const q of ['tent', 'canopy', 'pop-up']) {
+    ok(order(asReported, q, 8)[0] === "Caravan Canopy Tent-10' x 10', Blue",
+      `"${q}" puts the canopy first`)
+  }
+}
+
 // ── Everything else is untouched ─────────────────────────────────────
 console.log('\nNo other search changes\n')
 
