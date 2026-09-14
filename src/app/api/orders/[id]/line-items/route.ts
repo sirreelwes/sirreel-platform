@@ -11,6 +11,7 @@ import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { syncOrderKitPieces } from "@/lib/orders/kitSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { ASSET_BEARING_DEPARTMENTS } from "@/lib/orders/lineItemDepartments";
 import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, resolveFeeLineRate, resolveRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
@@ -697,10 +698,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     // available unit but agent could reassign the vehicle later"). A hold
     // is a category line that shows on no unit row; this binds a truck to
     // it so the reservation is real on the board the moment the line
-    // exists. Vehicles only — a stage hold's rooms are picked on the
-    // stage side. Non-fatal: the line and the hold stand either way.
+    // exists. Stages bind the same way — what is picked on the stage
+    // side is the hold's ROOMS and parking, never which stage.
+    // Non-fatal: the line and the hold stand either way.
     let unitOutcome: UnitAssignmentOutcome | null = null;
-    if (wantsHoldSync && holdCategoryId && resolvedDepartment === 'VEHICLES') {
+    if (wantsHoldSync && holdCategoryId && ASSET_BEARING_DEPARTMENTS.has(resolvedDepartment)) {
       unitOutcome = await assignUnitsForLine({
         orderId,
         categoryId: holdCategoryId,

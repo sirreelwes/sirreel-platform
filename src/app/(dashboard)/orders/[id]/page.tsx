@@ -57,6 +57,7 @@ import {
 import { isStageLineItem } from "@/lib/orders/stageLines";
 import { configNotesFor, appendConfigNote } from "@/lib/catalog/configNotes";
 import {
+  ASSET_BEARING_DEPARTMENTS,
   groupLineItemsByDepartment,
   lineItemSectionLabel,
 } from "@/lib/orders/lineItemDepartments";
@@ -2189,7 +2190,7 @@ export default function OrderDetailPage() {
   /** The hold a VEHICLE line raised, if any — matched the way the hold was
    *  created: the line's category, directly or through its catalog row. */
   const holdForLine = (li: LineItem): HoldItem | null => {
-    if (li.department !== 'VEHICLES') return null;
+    if (!ASSET_BEARING_DEPARTMENTS.has(li.department)) return null;
     const catId = (li as unknown as { assetCategoryId?: string | null }).assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null;
     if (!catId) return null;
     const pools: HoldItem[] = [

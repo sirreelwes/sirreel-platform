@@ -36,6 +36,7 @@ import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { assignUnitToBookingItem } from '@/lib/scheduling/assignUnit'
 import { quotedBlocks, resolveAssignWindow } from '@/lib/scheduling/assignWindow'
+import { ASSET_BEARING_DEPARTMENTS } from '@/lib/orders/lineItemDepartments'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 
 export type UnitAssignmentMode = 'next' | 'named' | 'none'
@@ -287,7 +288,7 @@ export async function assignNextAvailableForOrder(
   for (const li of order.lineItems) {
     if (li.type === 'FEE' || li.type === 'DISCOUNT' || li.type === 'LABOR' || li.type === 'EXPENDABLE') continue
     const dept = li.inventoryItem?.department ?? li.department
-    if (dept !== 'VEHICLES') continue
+    if (!ASSET_BEARING_DEPARTMENTS.has(dept)) continue
     const categoryId = li.assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null
     if (!categoryId) continue
     const key = `${categoryId}|${li.pickupDate.toISOString().slice(0, 10)}|${li.returnDate.toISOString().slice(0, 10)}`

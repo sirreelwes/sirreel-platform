@@ -29,6 +29,27 @@ export const LINE_ITEM_DEPARTMENT_ORDER = [
 
 export type LineItemDepartmentKey = (typeof LINE_ITEM_DEPARTMENT_ORDER)[number]
 
+/**
+ * Departments whose lines raise a HOLD against a category and bind a
+ * UNIT out of it — the two halves of "this thing is a specific object
+ * somebody else cannot also have".
+ *
+ * Stages are asset-bearing exactly like vehicles: a studio sells as
+ * three bookable units (Standing Sets, LED/Volume Stage, Black Box) and
+ * the board has to say which one a production took. What is chosen on
+ * the stage side is the hold's rooms and parking (StageArea), never the
+ * stage itself.
+ *
+ * Several call sites tested `=== 'VEHICLES'` instead. That read as
+ * correct only because the published Lankershim Studios AssetCategory
+ * was filed under the VEHICLES department, so stage lines were taking
+ * the vehicle branch — which also handed them LCDW eligibility, vehicle
+ * weekly-rate capping and the COI auto-coverage checks. Re-filing the
+ * category under STAGES fixes those and would have silently broken the
+ * holds; hence one set, read everywhere.
+ */
+export const ASSET_BEARING_DEPARTMENTS: ReadonlySet<string> = new Set(['VEHICLES', 'STAGES'])
+
 /** Internal (staff-facing) labels — mirrors the row editor's <select>. */
 export const LINE_ITEM_DEPARTMENT_LABELS: Record<LineItemDepartmentKey, string> = {
   VEHICLES: 'Vehicles',
