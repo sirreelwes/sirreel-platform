@@ -168,7 +168,7 @@ export default function SchedulingHubPage() {
           <DiagTile
             href="/planyo-cancellations"
             title="Planyo cancellations"
-            description="Holds cancelled in Planyo that still hold a unit here. The sync flags them; releasing is deliberate and manual."
+            description="Residual Planyo-era holds still consuming a unit here. Mirroring was switched off 2026-09-14, so this list is final — clear it and the page is done."
           />
           <DiagTile
             href="/gantt"
@@ -181,6 +181,12 @@ export default function SchedulingHubPage() {
       <section className="mb-6">
         <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Write paths (operator-gated)</div>
         <div className="bg-white border border-zinc-200 rounded-lg p-4 text-sm text-zinc-700">
+          <p className="mb-2 rounded-lg bg-chip-neutral-bg border border-lt-hairline px-3 py-2 text-[12px] text-lt-fg2">
+            <strong className="text-lt-fg">Cutover complete (2026-09-14).</strong> Reservations
+            are made in HQ only and the daily Planyo mirror is off. These scripts are no
+            longer part of a routine — they stay as the recovery path if something turns
+            out to have been left behind in Planyo, and running one is a deliberate act.
+          </p>
           <p>
             Two scripts in <code className="text-xs bg-zinc-100 px-1 rounded">scripts/</code> handle the
             one-time Planyo migration. Both default to dry-run; pass <code className="text-xs bg-zinc-100 px-1 rounded">--write</code> to persist.

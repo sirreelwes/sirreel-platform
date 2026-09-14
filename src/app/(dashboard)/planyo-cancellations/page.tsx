@@ -48,6 +48,11 @@ export default function PlanyoCancellationsPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [done, setDone] = useState<Record<string, string>>({})
+  // Non-null once Planyo mirroring is retired (2026-09-14). No new
+  // candidates are produced after that, so the list below is final —
+  // and the "read is over a day old" warning must not keep firing at a
+  // sync that was switched off deliberately.
+  const [retired, setRetired] = useState<{ on: string } | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch('/api/scheduling/planyo-release-candidates')
@@ -55,6 +60,7 @@ export default function PlanyoCancellationsPage() {
     const j = await res.json()
     setRun(j.run ?? null)
     setRows(j.candidates ?? [])
+    setRetired(j.retired ?? null)
   }, [])
   useEffect(() => { void load() }, [load])
 
@@ -83,7 +89,8 @@ export default function PlanyoCancellationsPage() {
 
   const pending = (rows ?? []).filter((r) => !r.alreadyReleased)
   const cleared = (rows ?? []).filter((r) => r.alreadyReleased)
-  const stale = run && (Date.now() - new Date(run.startedAt).getTime()) > 36 * 60 * 60 * 1000
+  const stale =
+    !retired && run && Date.now() - new Date(run.startedAt).getTime() > 36 * 60 * 60 * 1000
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -98,8 +105,22 @@ export default function PlanyoCancellationsPage() {
           <p className={`mt-2 text-xs ${stale ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
             From the sync run of {new Date(run.startedAt).toLocaleString('en-US')} · {run.outcome}
             {run.dryRun ? ' · plan phase' : ''}
+            {retired && ' — the final run before mirroring was switched off.'}
             {stale && ' — that read is over a day old; the daily sync may not be completing.'}
           </p>
+        )}
+        {retired && (
+          <div className="mt-3 rounded-xl border border-lt-hairline bg-chip-neutral-bg px-4 py-3">
+            <div className="text-[13px] font-semibold text-lt-fg">
+              This list is final
+            </div>
+            <p className="mt-1 text-[12px] leading-relaxed text-lt-fg2">
+              Planyo mirroring was switched off on {retired.on} — reservations are made in
+              HQ only, so nothing new will appear here. Anything still listed is a hold
+              from the Planyo era that is worth clearing; once the list is empty this page
+              is done. Releasing still works exactly as before.
+            </p>
+          </div>
         )}
       </header>
 

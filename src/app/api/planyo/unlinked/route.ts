@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import {
+  planyoMirrorEnabled,
+  PLANYO_MIRROR_RETIRED_ON,
+} from '@/lib/sync/planyo/mirrorSwitch'
 
 const API_KEY = process.env.PLANYO_API_KEY || ''
 const SITE_ID = process.env.PLANYO_SITE_ID || '36171'
@@ -15,6 +19,20 @@ function mapStatus(status: string): string {
 }
 
 export async function GET() {
+  // Retired with the mirror (2026-09-14). This fed the RentalWorks
+  // dispatch linker a live list of Planyo carts; with reservations made
+  // in HQ only, that list is history rather than work. Returning an empty
+  // `ok` payload keeps the page's `.catch(() => ({}))` shape and lets it
+  // render its own retired notice instead of an error.
+  if (!planyoMirrorEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      unlinked: [],
+      retired: true,
+      retiredOn: PLANYO_MIRROR_RETIRED_ON,
+    })
+  }
+
   const from = new Date(); from.setDate(from.getDate() - 30)
   const to = new Date(); to.setDate(to.getDate() + 60)
   const fmt = (d: Date) => d.toISOString().slice(0, 10) + ' 00:00:00'

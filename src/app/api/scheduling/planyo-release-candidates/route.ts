@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { normalizePlanyoUnitName } from '@/lib/scheduling/planyoNameNormalizer'
+import {
+  planyoMirrorEnabled,
+  PLANYO_MIRROR_RETIRED_ON,
+} from '@/lib/sync/planyo/mirrorSwitch'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,12 +28,23 @@ export const dynamic = 'force-dynamic'
  * path, not a second implementation. Rows that can't be resolved are
  * returned with bookingItemId null and surfaced as needing manual
  * handling instead of being silently dropped.
+ *
+ * SINCE THE CUTOVER (2026-09-14) no new candidates are produced — the
+ * mirror that detected them is retired. The queue stays live so the
+ * residual backlog from the last run is still clearable, and `retired`
+ * is returned so the page can say the list is final rather than letting
+ * its "this read is over a day old, the sync may not be completing"
+ * warning fire forever against a sync that was switched off on purpose.
  */
 export async function GET() {
   const session = await getServerSession()
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   }
+
+  const retired = planyoMirrorEnabled()
+    ? null
+    : { on: PLANYO_MIRROR_RETIRED_ON }
 
   // Most recent run that actually produced candidates.
   const run = await prisma.planyoSyncRun.findFirst({
@@ -38,7 +53,7 @@ export async function GET() {
     select: { id: true, startedAt: true, finishedAt: true, dryRun: true, outcome: true },
   })
   if (!run) {
-    return NextResponse.json({ ok: true, run: null, candidates: [] })
+    return NextResponse.json({ ok: true, run: null, candidates: [], retired })
   }
 
   const events = await prisma.planyoSyncEvent.findMany({
@@ -47,7 +62,7 @@ export async function GET() {
   })
   const rids = events.map((e) => e.planyoReservationId).filter(Boolean) as string[]
   if (rids.length === 0) {
-    return NextResponse.json({ ok: true, run, candidates: [] })
+    return NextResponse.json({ ok: true, run, candidates: [], retired })
   }
 
   const reservations = await prisma.reservation.findMany({
@@ -130,5 +145,5 @@ export async function GET() {
     return (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0)
   })
 
-  return NextResponse.json({ ok: true, run, candidates })
+  return NextResponse.json({ ok: true, run, candidates, retired })
 }

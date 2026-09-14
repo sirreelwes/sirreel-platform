@@ -30,6 +30,11 @@ export default function DispatchPage() {
   const [linking, setLinking] = useState(false)
   const [linked, setLinked] = useState<Set<string>>(new Set())
   const [successMsg, setSuccessMsg] = useState('')
+  // Set by the API once Planyo mirroring is retired (2026-09-14). The
+  // linker's whole left column is a live Planyo read, so rather than show
+  // an empty list that looks like "all caught up", the page says the
+  // surface is over.
+  const [retired, setRetired] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -37,6 +42,7 @@ export default function DispatchPage() {
       fetch('/api/rentalworks?pageSize=200').then(r => r.json()).catch(() => ({})),
     ]).then(([planyoData, rwData]) => {
       if (planyoData.ok) setUnlinked(planyoData.unlinked || [])
+      if (planyoData.retired) setRetired(true)
       if (rwData?.orders?.Rows) {
         const cols = rwData.orders.ColumnIndex
         const rows = rwData.orders.Rows.map((r: any[]) => ({
@@ -106,11 +112,27 @@ export default function DispatchPage() {
               {successMsg}
             </div>
           )}
-          <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-700 font-semibold">
-            {displayUnlinked.length} unlinked reservations
-          </div>
+          {!retired && (
+            <div className="px-3 py-1.5 rounded-lg bg-chip-warn-bg border border-lt-hairline text-[11px] text-chip-warn-fg font-semibold">
+              {displayUnlinked.length} unlinked reservations
+            </div>
+          )}
         </div>
       </div>
+
+      {retired && (
+        <div className="mb-4 rounded-lg bg-chip-neutral-bg border border-lt-hairline px-4 py-3">
+          <div className="text-[13px] font-semibold text-lt-fg">
+            This linker is retired
+          </div>
+          <p className="text-[12px] text-lt-fg2 mt-1 leading-relaxed">
+            Planyo mirroring was switched off on 2026-09-14 — reservations are made in
+            HQ only, so there is no Planyo book left to link from. Link a RentalWorks
+            order to a job from the job page instead. Nothing linked in the past was
+            changed.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 h-[calc(100vh-180px)]">
 

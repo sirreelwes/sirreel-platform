@@ -50,6 +50,7 @@
     "test:paged-sync": "tsx tests/sync/paged-sync.test.ts",
     "test:rw-alert-gate": "tsx tests/sync/rw-sync-alert-gate.test.ts",
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
+    "test:planyo-mirror": "tsx tests/sync/planyo-mirror-switch.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:quote-hold": "tsx tests/orders/quote-hold.test.ts",
     "test:rental-days": "tsx tests/orders/rental-days.test.ts",

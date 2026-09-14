@@ -56,8 +56,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 
 ### Data Sources of Truth
 - **Scheduling — import executed 2026-08-18 (Wes authorized):** the one-time Planyo import ran clean — 47 bookings / 65 items / 61 assignments, every PLANYO booking linked to a Job, in-progress rentals included (window reaches back 60 days), and the 4 stale prior-backfill carts with drifted units superseded from current Planyo truth. HQ's native scheduler now holds the live book as of that run.
-  - Planyo (Site ID 36171) remains the team's working surface until Wes announces the switch. Anything booked/edited in Planyo after the import is DRIFT: re-run `scripts/scheduling-planyo-migration.ts --write` for new carts (journal-idempotent, appends by planyoCartId); for edits to already-imported carts use the supersede recipe — release the cart's items (assignments → SWAPPED, items → UNFULFILLED), delete its Reservation journal rows by captured id, re-run `--write`.
-  - Still no write-back to Planyo. Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
+  - **CUTOVER DONE 2026-09-14 (Wes): reservations are made in HQ ONLY and Planyo mirroring is OFF.** HQ is the book — full stop. Planyo (Site ID 36171) is history, not a working surface, and NOT a source to reconcile against: a cart that exists there and not here is not automatically a gap, because the team stopped maintaining it.
+  - The kill switch is `planyoMirrorEnabled()` in `src/lib/sync/planyo/mirrorSwitch.ts`, read by the `planyo-sync` cron and the two `/api/planyo/*` routes. It is **default OFF with no env var set**, so the state is the deployed default. Rolling back is `PLANYO_MIRROR=1` in Vercel Production — one env var, no deploy — and any run under that override posts a loud daily Slack line so a forgotten flag can't resume imports in the dark. The cron entry stays in vercel.json on purpose (a no-op tick beats needing a deploy to resurrect).
+  - `scripts/scheduling-planyo-migration.ts` is deliberately NOT gated — a human running the importer is a deliberate act and it is the recovery path. Do NOT run it to "catch up drift" as routine; that re-imports carts against a native book and mints duplicates. Historical rows keep `source=PLANYO_BACKFILL` + `planyoCartId`, and the `PlanyoSyncRun`/`PlanyoSyncEvent` audit tables are untouched.
+  - Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
 - **CardPointe** = card processing. **LIVE in production since 2026-08-18** —
   Fiserv signed off, `CARDPOINTE_ENV=PROD` and the four `CARDPOINTE_PROD_*`
@@ -826,8 +828,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 1. AI fleet optimization
 2. RentalWorks token refresh automation
 3. Update Timeline page to use real jobId instead of cart_id
-4. Reservations go-live announcement (plan artifact: eb4023dd) — 6 stage
-   residuals for Julian/Hugo, then Wes announces; Planyo → read-only
+4. Planyo decommission tail (cutover shipped 2026-09-14) — clear the
+   residual `/planyo-cancellations` queue, then delete the `planyo-sync`
+   cron entry + `src/lib/sync/planyo/` once it has been dark a month.
+   Plan artifact: eb4023dd
 
 (Removed as shipped: Julian's dispatch view = /dispatch "Deliveries &
 Pickups"; standalone /jobs list + detail; the new-quote auto-create-job

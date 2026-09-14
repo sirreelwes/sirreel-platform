@@ -2,6 +2,14 @@
  * Daily Planyo→HQ sync cron. Wired in vercel.json at `0 13 * * *` UTC
  * (= 6 AM PT). CRON_SECRET-protected like the other crons.
  *
+ * RETIRED 2026-09-14. The team books reservations in HQ only, so this
+ * whole run is gated behind `planyoMirrorEnabled()` and returns before it
+ * touches Planyo or the database. The schedule stays in vercel.json so
+ * bringing it back is one env var (`PLANYO_MIRROR=1`) rather than a
+ * deploy — see lib/sync/planyo/mirrorSwitch.ts for why it is shaped that
+ * way. Everything below this paragraph describes the run as it behaves
+ * when the override is set.
+ *
  * Two-phase: plan first (dry-run) to compute the signature, then apply
  * with that signature as `authorizedSignature`. If Planyo's state shifts
  * between the two phases, `runSync` aborts with `ABORTED_SIGNATURE_MISMATCH`
@@ -20,6 +28,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postMessage as slackPost } from '@/lib/slack'
+import {
+  planyoMirrorEnabled,
+  PLANYO_MIRROR_RETIRED_ON,
+} from '@/lib/sync/planyo/mirrorSwitch'
 import { runSync, type RunSyncResult } from '@/lib/sync/planyo/runSync'
 import { autoReleaseCandidates, autoReleaseEnabled, type AutoReleaseResult } from '@/lib/sync/planyo/autoRelease'
 import type { SyncEvent } from '@/lib/sync/planyo/reconcile'
@@ -45,6 +57,22 @@ function isAuthorized(req: NextRequest): boolean {
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  // CUTOVER GATE. Ahead of every phase, before a single Planyo request
+  // or DB write: with the mirror retired this run is a no-op. Returning
+  // 200 (not an error) keeps Vercel's cron history green — a retired job
+  // is not a failing one — and `skipped` names the reason for anyone
+  // reading the log wondering why the sync stopped.
+  if (!planyoMirrorEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: 'mirror-retired',
+      retiredOn: PLANYO_MIRROR_RETIRED_ON,
+      detail:
+        'Planyo mirroring is off: reservations are made in HQ only. ' +
+        'Set PLANYO_MIRROR=1 in Production to resume the daily sync.',
+    })
   }
 
   const tStart = Date.now()
@@ -142,7 +170,20 @@ export async function GET(req: NextRequest) {
   //   - per-cart errors in the new-cart pass
   //   - fatal throw from the new-cart pass as a whole
   //   - maintenance apply that didn't finish SUCCESS
+  //   - ALWAYS, while the mirror is retired-but-overridden. Reaching this
+  //     line at all means someone set PLANYO_MIRROR=1, and a retired
+  //     importer quietly writing to the live book is the exact failure
+  //     this cutover exists to prevent. A daily reminder is the point,
+  //     not noise: it stops an override flipped for one bad morning from
+  //     being forgotten for a month.
+  // Written as a call rather than a literal `true`: reaching this line
+  // means the gate at the top of GET let us through, so it is always true
+  // today — but the posture below stays correct if that gate ever moves,
+  // and it keeps the remaining terms live code rather than dead branches.
+  const retiredOverrideActive = planyoMirrorEnabled()
+
   const shouldAlert =
+    retiredOverrideActive ||
     candidates.length > 0 ||
     autoRelease.abortedOverCap ||
     autoRelease.failed.length > 0 ||
@@ -230,6 +271,9 @@ async function sendSyncAlert(
 
   const lines: string[] = []
   lines.push(`${headerEmoji} *Planyo daily sync* — ${new Date().toISOString().slice(0, 10)}`)
+  lines.push(
+    `:warning: *Planyo mirroring was retired ${PLANYO_MIRROR_RETIRED_ON}* — this run happened only because \`PLANYO_MIRROR=1\` is set in the environment. Reservations are supposed to be made in HQ only; anything imported below is competing with the native book. Unset the variable when the reason for the override has passed.`,
+  )
 
   // FATAL FAILURE in the new-cart pass — surface FIRST so a reader who
   // only catches the top of the message still sees it. Maintenance has
