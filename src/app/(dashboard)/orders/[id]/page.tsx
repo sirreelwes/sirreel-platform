@@ -62,6 +62,7 @@ import {
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
+import { isClosedDay, calendarDayLabel } from '@/lib/site/yardHours';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -4534,6 +4535,54 @@ export default function OrderDetailPage() {
         <p className="text-xs text-lt-fg3 mb-4">
           Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
         </p>
+
+        {/* Closed-day prompt (Wes 2026-09-13: "we are closed on sundays,
+            so all pickups and returns on that day should be asked: is
+            this a blind pickup/dropoff?"). The reservation desk and the
+            order builder ask it when the window is picked; this catches
+            the order whose dates MOVED onto a Sunday afterwards, which
+            is the one nobody would be asked about. Window read the way
+            deriveOrderWindow reads it — the lines, which are the rows
+            that are always dated. */}
+        {(() => {
+          const days = (pick: (li: LineItem) => string | null | undefined) =>
+            (order.lineItems ?? []).map((li) => (pick(li) || '').slice(0, 10)).filter(Boolean).sort();
+          const pickups = days((li) => li.pickupDate ?? li.startDate);
+          const returns = days((li) => li.returnDate ?? li.endDate);
+          const pickupDay = pickups[0] || null;
+          const returnDay = returns[returns.length - 1] || null;
+          const asks = [
+            ...(isClosedDay(pickupDay) && !blindPickup
+              ? [{ key: 'pickup', day: pickupDay, text: 'Is this a blind pickup?', on: () => { setBlindPickup(true); setBlindDirty(true); }, label: 'Yes — blind pickup' }]
+              : []),
+            ...(isClosedDay(returnDay) && !blindReturn
+              ? [{ key: 'return', day: returnDay, text: 'Is this a blind drop-off?', on: () => { setBlindReturn(true); setBlindDirty(true); }, label: 'Yes — blind return' }]
+              : []),
+          ];
+          if (asks.length === 0) return null;
+          return (
+            <div className="mb-4 rounded-lg border border-chip-warn-fg/40 bg-chip-warn-bg px-4 py-3 space-y-2.5">
+              <p className="text-sm font-semibold text-chip-warn-fg">We&apos;re closed Sunday</p>
+              {asks.map((a) => (
+                <div key={a.key} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-chip-warn-fg">
+                    {calendarDayLabel(a.day)} — {a.text}
+                  </span>
+                  <button
+                    onClick={a.on}
+                    className="px-2.5 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-500 text-white"
+                  >
+                    {a.label}
+                  </button>
+                </div>
+              ))}
+              <p className="text-xs text-chip-warn-fg/90">
+                If it isn&apos;t blind, someone has to open the yard for it — leave the toggle off and
+                tell whoever is covering.
+              </p>
+            </div>
+          );
+        })()}
 
         <div className="space-y-4">
           {/* Pickup */}

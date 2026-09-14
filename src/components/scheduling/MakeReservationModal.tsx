@@ -136,6 +136,14 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { InquirySourceDrawer } from '@/components/inquiries/InquirySourceDrawer'
 import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
+import {
+  ClosedDayHandoffPrompt,
+  NO_CLOSED_DAY_ANSWERS,
+  blindFlagsFor,
+  closedDayBlockers,
+  pruneClosedDayAnswers,
+  type ClosedDayHandoff,
+} from '@/components/orders/ClosedDayHandoffPrompt'
 
 interface Category {
   id: string
@@ -328,6 +336,10 @@ export function MakeReservationModal({
    *  unit is open regardless — the picks have to stay visible. */
   const [openPickers, setOpenPickers] = useState<Record<string, boolean>>({})
   const [notes, setNotes] = useState(prefill?.notes ?? '')
+  /** Sunday handoffs. The yard is closed, so a pickup or return on one
+   *  is blind unless someone opens up — asked here, answered onto the
+   *  order's blindPickup/blindReturn (see ClosedDayHandoffPrompt). */
+  const [closedDayAnswers, setClosedDayAnswers] = useState<ClosedDayHandoff>(NO_CLOSED_DAY_ANSWERS)
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
   const [contactFirst, setContactFirst] = useState(prefill?.contact?.firstName ?? '')
@@ -550,6 +562,11 @@ export function MakeReservationModal({
     jobContacts?.find((c) => c.email.trim().toLowerCase() === contactEmail.trim().toLowerCase()) ?? null
   const contactReady = jobHasContact || contactTyped
 
+  /** Derived, not stored: an answer given for a Sunday is dropped the
+   *  moment the rep moves that date to a weekday, so a stale "blind"
+   *  can never ride along to the order. */
+  const closedDay = pruneClosedDayAnswers(start, end, closedDayAnswers)
+
   /**
    * WHY the button is off, in the agent's words. A disabled primary CTA
    * that explains nothing is a dead end — Wes hit exactly that on
@@ -577,6 +594,7 @@ export function MakeReservationModal({
   ) {
     blockers.push('choose 2nd Hold or take the 1st')
   }
+  blockers.push(...closedDayBlockers(start, end, closedDay))
 
   const canSubmit = blockers.length === 0 && !contactsLoading && !preflightLoading && !submitting
 
@@ -733,6 +751,9 @@ export function MakeReservationModal({
             startDate: start,
             endDate: end,
             description: notes.trim() || null,
+            // Sunday handoff, answered above. False on every other
+            // window — the order page owns turning one on later.
+            ...blindFlagsFor(start, end, closedDay),
           }),
         })
         const created = await orderRes.json().catch(() => ({}))
@@ -1599,6 +1620,15 @@ export function MakeReservationModal({
                 One window for the whole order. A vehicle that needs different dates is its own
                 reservation.
               </p>
+
+              {/* Closed-day handoff. Renders only when an end of the
+                  window lands on a Sunday. */}
+              <ClosedDayHandoffPrompt
+                start={start}
+                end={end}
+                value={closedDay}
+                onChange={setClosedDayAnswers}
+              />
 
               {/* Company */}
               <div>

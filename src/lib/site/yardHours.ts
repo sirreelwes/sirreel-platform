@@ -41,3 +41,69 @@ export const YARD_HOURS = {
 /** The same three facts on one line, for a dense block like a quote PDF. */
 export const YARD_HOURS_ONE_LINE =
   'Mon–Fri 6:00 AM – 6:00 PM · Sat 7:00 AM – 3:30 PM · Closed Sunday'
+
+/* ── Which days the yard is dark, as a fact code can ask about ─────────
+ *
+ * YARD_HOURS.sunday has said "Closed Sunday" since these values were
+ * lifted off the flyer, but only in prose — nothing could branch on it.
+ * Wes 2026-09-13: "We are closed on sundays, so all pickups and returns
+ * on that day should be asked: Is this a blind pickup/dropoff?" A handoff
+ * booked for a closed day happens with nobody at the gate, so the desk
+ * has to decide which one it is at the moment the date is picked, not
+ * discover it when the client is standing there.
+ *
+ * One list, so a second dark day (a holiday) lands on every surface at
+ * once instead of being re-derived per form. */
+
+/** Closed days as `Date#getUTCDay` numbers. Sunday (0) today. */
+export const CLOSED_WEEKDAYS: readonly number[] = [0]
+
+const WEEKDAY_NAMES = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+] as const
+
+/** A calendar day as `YYYY-MM-DD`, or null when there isn't one.
+ *
+ *  Accepts what the two kinds of caller actually hold: the string an
+ *  `<input type="date">` carries, or a `@db.Date` value — which is
+ *  midnight UTC, so it is read in UTC. Reading it in Pacific renders the
+ *  day BEFORE (see `deriveOrderWindow`), which would make a Sunday pickup
+ *  answer as Saturday and skip the question entirely. */
+export function calendarDayOf(value: string | Date | null | undefined): string | null {
+  if (!value) return null
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) return null
+    return value.toISOString().slice(0, 10)
+  }
+  const ymd = value.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : null
+}
+
+/** The weekday of a calendar day (0 = Sunday), read in UTC. */
+export function weekdayOfCalendarDay(value: string | Date | null | undefined): number | null {
+  const ymd = calendarDayOf(value)
+  if (!ymd) return null
+  const d = new Date(`${ymd}T00:00:00.000Z`)
+  return Number.isFinite(d.getTime()) ? d.getUTCDay() : null
+}
+
+/** True when the yard is closed that day — nobody at the gate, so a
+ *  pickup or a return on it is blind unless someone opens up for it. */
+export function isClosedDay(value: string | Date | null | undefined): boolean {
+  const wd = weekdayOfCalendarDay(value)
+  return wd != null && CLOSED_WEEKDAYS.includes(wd)
+}
+
+/** "Sunday, September 20" — the day named back to whoever is being asked
+ *  about it. UTC, for the reason above. */
+export function calendarDayLabel(value: string | Date | null | undefined): string | null {
+  const ymd = calendarDayOf(value)
+  if (!ymd) return null
+  const d = new Date(`${ymd}T00:00:00.000Z`)
+  if (!Number.isFinite(d.getTime())) return null
+  return `${WEEKDAY_NAMES[d.getUTCDay()]}, ${d.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })}`
+}

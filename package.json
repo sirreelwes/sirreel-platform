@@ -31,6 +31,7 @@
     "test:thread-participants": "tsx tests/email/thread-participants.test.ts",
     "test:client-email-body": "tsx tests/email/client-email-body.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
+    "test:closed-day": "tsx tests/orders/closed-day-handoff.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
     "test:cadence": "tsx tests/jobs/cadence.test.ts",

@@ -178,6 +178,10 @@ interface FromParseBody {
   discount?: { amount: number; label?: string | null }
   /** Will call, or loaded on a reserved unit. Omitted = not asked. */
   gearHandoff?: GearHandoffInput | null
+  /** The closed-day handoff answers (the yard is dark on Sunday), as the
+   *  order columns they set. Omitted = the window never touched one. */
+  blindPickup?: boolean
+  blindReturn?: boolean
 }
 
 interface Warning {
@@ -215,6 +219,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { companyDecision, jobDecision, contactsDecision, items, parsed, discount, gearHandoff } = body
+  const { blindPickup, blindReturn } = body
   if (!companyDecision || !jobDecision) {
     return NextResponse.json({ error: 'companyDecision + jobDecision required' }, { status: 400 })
   }
@@ -342,6 +347,9 @@ export async function POST(req: NextRequest) {
           endDate: orderEnd,
           notes: parsed?.notes ?? null,
           taxRate: 0,
+          // Sunday pickup / return, answered in the builder.
+          blindPickup: !!blindPickup,
+          blindReturn: !!blindReturn,
         },
         select: { id: true, bookingId: true },
       })
