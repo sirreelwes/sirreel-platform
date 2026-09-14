@@ -7,8 +7,9 @@
  * Pure + offline.
  *
  * Wes 2026-09-13: four sandbags per 10x10, six per 10x15, eight per
- * 10x20. Those three numbers are the contract and are asserted literally
- * below — if a refactor changes one, this test is the thing that says so.
+ * 10x20, and — confirmed 2026-09-14 — four per 8x8. All four numbers are
+ * the contract and are asserted literally below; if a refactor changes
+ * one, this test is the thing that says so.
  *
  * Every tent name here is a REAL catalog row, because the risk is
  * entirely in the spelling: the catalog writes the same footprint six
@@ -41,8 +42,9 @@ console.log("Wes's counts, stated literally\n")
 ok(SANDBAGS_BY_SIZE['10x10'] === 4, 'four sandbags per 10 x 10 tent')
 ok(SANDBAGS_BY_SIZE['10x15'] === 6, 'six sandbags per 10 x 15 tent')
 ok(SANDBAGS_BY_SIZE['10x20'] === 8, 'eight sandbags per 10 x 20 tent')
-// Not stated by Wes — an 8x8 stands on the same four legs as a 10x10.
-ok(SANDBAGS_BY_SIZE['8x8'] === 4, 'four for an 8 x 8 (assumed: same four legs)')
+// Originally inferred from the four legs an 8x8 shares with a 10x10;
+// confirmed by Wes 2026-09-14.
+ok(SANDBAGS_BY_SIZE['8x8'] === 4, 'four sandbags per 8 x 8 tent')
 
 // ── Every spelling in the catalog ────────────────────────────────────
 console.log('\nEvery real tent row reads its own footprint\n')
