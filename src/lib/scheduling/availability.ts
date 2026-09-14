@@ -53,6 +53,17 @@ export const SERVICEABLE_EXCLUDED_STATUSES = ['MAINTENANCE', 'RETIRED', 'SOLD', 
 export const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
 /**
+ * A BookingItem still in play. SUBSTITUTED and UNFULFILLED are DEAD lines —
+ * UNFULFILLED is what `releaseBookingItem` writes when a hold is handed back
+ * (its assignments go SWAPPED with it), so such a line holds no unit and
+ * demands none. `getCategoryAvailability` already encodes this by counting
+ * only REQUESTED holds as pending demand; exported so the routes that walk a
+ * booking's items don't each re-invent the rule and accidentally re-validate a
+ * released line as live demand.
+ */
+export const LIVE_ITEM_STATUSES = ['REQUESTED', 'ASSIGNED'] as const
+
+/**
  * A unit is ALSO out of service while it carries an OPEN MaintenanceRecord
  * overlapping the window — and that is the state the fleet and sales UI
  * actually write.

@@ -6,6 +6,7 @@ import {
   getCategoryAvailability,
   computeUnitStates,
   ACTIVE_ASSIGNMENT_STATUSES,
+  LIVE_ITEM_STATUSES,
 } from "@/lib/scheduling/availability";
 
 type Params = { params: Promise<{ id: string }> };
@@ -29,8 +30,13 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  *     (so a reschedule never self-collides).
  *   - unassigned category holds: re-check category capacity, excluding this
  *     item's own pending demand.
- * Only primary (holdRank 1) items gate, mirroring holds/route.ts; backups are
- * allowed to overlap. Buffer encroachment returns 409 needsOverride (same as
+ * Only LIVE primary (holdRank 1) items gate. Backups are allowed to overlap,
+ * mirroring holds/route.ts, and DEAD lines (UNFULFILLED / SUBSTITUTED) are
+ * skipped entirely — a released line holds no unit and demands none, so
+ * re-validating it as category demand permanently froze the reservation's
+ * dates (Wes 2026-09-14: SR-JOB-0340 couldn't move Cam 1 off 9/15 because a
+ * released second Camera Cube line re-asked for capacity that was already
+ * spoken for). Buffer encroachment returns 409 needsOverride (same as
  * creation); over-capacity / hard overlap is a hard 409. On success the
  * booking window + its active assignments (which are date COPIES, not derived)
  * are shifted together. Dates only — assignment/status/backups untouched.
@@ -76,6 +82,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           categoryId: true,
           quantity: true,
           holdRank: true,
+          status: true,
           assignments: {
             where: { status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
             select: { id: true, asset: { select: { id: true, unitName: true, tier: true } } },
@@ -100,7 +107,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   const queryStart = new Date(start.getTime() - lookaround * 86_400_000);
   const queryEnd = new Date(end.getTime() + lookaround * 86_400_000);
 
+  const liveStatuses = new Set<string>(LIVE_ITEM_STATUSES);
   for (const it of booking.items) {
+    // Dead line (released / substituted) — holds nothing, demands nothing.
+    // Everything else that reads a booking's items already skips these; this
+    // loop didn't, so one released line blocked every reschedule of the whole
+    // reservation with a capacity error about gear nobody is still asking for.
+    if (!liveStatuses.has(it.status)) continue;
     const isPrimary = (it.holdRank ?? 1) < 2;
     if (!isPrimary) continue; // backups may overlap — mirror creation
 

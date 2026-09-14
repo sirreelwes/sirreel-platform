@@ -1568,11 +1568,19 @@ const driverTone = (d: any): string => {
         ← Back to jobs
       </Link>
 
-      {/* Header */}
-      <div className="relative overflow-hidden bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 pl-5 transition-colors duration-200 hover:border-zinc-400">
+      {/* Header — NOT overflow-hidden. It was, to tuck the stage rail into
+          the rounded corners, and that silently amputated the one popup that
+          opens from inside this card: "+ New reservation" drops its category
+          menu downward from a button that sits a Meta row above the card's
+          bottom edge, so everything past the 4th category was clipped away
+          and unreachable — the menu's own max-h/overflow-auto never scrolls
+          because the menu isn't what's too tall. Jose 2026-09-14: "it's not
+          giving me Super Cube option", which sorts last of the nine. The rail
+          rounds its own left corners instead. */}
+      <div className="relative bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 pl-5 transition-colors duration-200 hover:border-zinc-400">
         {/* Stage rail — the same strip the /jobs tile carries. */}
         <span
-          className={`absolute left-0 top-0 bottom-0 w-1.5 ${STAGE_RAIL[stage]}`}
+          className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${STAGE_RAIL[stage]}`}
           title={`${STAGE_LABEL[stage]} — ${STAGE_HINT[stage]}`}
           aria-hidden="true"
         />
