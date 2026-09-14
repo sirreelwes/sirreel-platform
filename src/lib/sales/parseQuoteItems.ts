@@ -727,20 +727,10 @@ export async function resolveParsedItems(
 /**
  * Which LineItemType a resolved item becomes.
  *
- * Lived in /api/orders/from-parse until 2026-09-08, when the paste-onto-
- * an-existing-order path needed it too and guessed instead — it sent
- * 'INVENTORY' / 'ASSET', which are not members of the enum (VEHICLE,
- * EQUIPMENT, EXPENDABLE, LABOR, FEE, DISCOUNT), so every single line
- * 400'd and nothing reached the order. Shared now so there is one answer.
+ * The rule itself moved to src/lib/orders/lineType.ts on 2026-09-14 so the
+ * two client-side doors (the reservation modal, the order page's row
+ * editor) could call it — this module pulls in prisma and the Anthropic
+ * SDK and can never be bundled. Re-exported here so existing importers
+ * keep working and there is still exactly one implementation.
  */
-export function resolveLineType(
-  itemType: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | null | undefined,
-  department: LineItemDepartment,
-  catalogLineType?: LineItemType | null,
-): LineItemType {
-  if (itemType === 'PACKAGE') return 'EQUIPMENT'
-  if (catalogLineType) return catalogLineType
-  if (itemType === 'ASSET_CATEGORY') return 'VEHICLE'
-  if (department === 'EXPENDABLES') return 'EXPENDABLE'
-  return 'EQUIPMENT'
-}
+export { resolveLineType } from '@/lib/orders/lineType'

@@ -169,6 +169,7 @@ import {
   pruneClosedDayAnswers,
   type ClosedDayHandoff,
 } from '@/components/orders/ClosedDayHandoffPrompt'
+import { resolveLineType } from '@/lib/orders/lineType'
 
 interface Category {
   id: string
@@ -936,7 +937,11 @@ export function MakeReservationModal({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: 'VEHICLE',
+            // NOT always VEHICLE: this picker serves VEHICLES *and* STAGES,
+            // and a stage day is EQUIPMENT in the STAGES department. One
+            // rule, shared with the order page's row editor — see
+            // src/lib/orders/lineType.ts.
+            type: resolveLineType('ASSET_CATEGORY', category.department),
             description: category.name,
             assetCategoryId: category.id,
             department: category.department,

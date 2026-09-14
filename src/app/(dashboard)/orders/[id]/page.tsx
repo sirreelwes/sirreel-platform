@@ -56,6 +56,7 @@ import {
   lineEditLockReason as lineEditLockReasonFn,
 } from "@/lib/orders/editability";
 import { isStageLineItem } from "@/lib/orders/stageLines";
+import { resolveLineType } from "@/lib/orders/lineType";
 import { configNotesFor, appendConfigNote } from "@/lib/catalog/configNotes";
 import {
   ASSET_BEARING_DEPARTMENTS,
@@ -2518,10 +2519,12 @@ export default function OrderDetailPage() {
     // (FLEET vs WAREHOUSE) stays honest after a re-pick. The PUT
     // route's pick-list sync (commit e29761c) keys off dept; this
     // keeps the row's `type` aligned with what the catalog says.
-    if (editCatalogType === 'ASSET_CATEGORY') {
-      body.type = 'VEHICLE';
-    } else if (editCatalogType === 'INVENTORY') {
-      body.type = editDept === 'EXPENDABLES' ? 'EXPENDABLE' : 'EQUIPMENT';
+    // Same rule the reservation modal writes with — a saved row must not
+    // come out a different type than the door it arrived through made it
+    // (src/lib/orders/lineType.ts). Unbound rows keep whatever type they
+    // have: `type` is simply not sent.
+    if (editCatalogType) {
+      body.type = resolveLineType(editCatalogType, (editDept || 'PRO_SUPPLIES') as LineItemDepartment);
     }
     const res = await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",

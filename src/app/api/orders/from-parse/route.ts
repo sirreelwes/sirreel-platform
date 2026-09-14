@@ -54,7 +54,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { resolveLineType } from '@/lib/sales/parseQuoteItems'
+import { resolveLineType } from '@/lib/orders/lineType'
 import type { ClientTier, JobRole, LineItemDepartment, LineItemType, Prisma, ProductionType, RateType } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'

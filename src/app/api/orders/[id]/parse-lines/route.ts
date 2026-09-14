@@ -27,7 +27,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AiJsonError } from '@/lib/ai/extractJson'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { parseQuoteText, resolveParsedItems, resolveLineType } from '@/lib/sales/parseQuoteItems'
+import { parseQuoteText, resolveParsedItems } from '@/lib/sales/parseQuoteItems'
+import { resolveLineType } from '@/lib/orders/lineType'
 
 // Same headroom as the quote parser — a long supply list is a long parse.
 export const maxDuration = 120
