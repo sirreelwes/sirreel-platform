@@ -648,6 +648,49 @@ export async function POST(req: NextRequest, { params }: Params) {
           console.error('[holds] override audit failed:', err instanceof Error ? err.message : err);
         }
       }
+
+      // A SECOND DATE BLOCK on a category that already has a hold. The
+      // quantity has to become the PEAK CONCURRENT need, and
+      // syncHoldOnLineAdd above ACCUMULATES — right for two lines that
+      // run together, wrong for two that run in sequence. A SuperCube
+      // out the 19th and another out the 24th would otherwise hold TWO
+      // trucks across the whole span, which is the USC over-hold
+      // lib/orders/peakConcurrentHold exists to prevent (and the reason
+      // the reservation desk used to refuse a second line of the same
+      // type at all).
+      //
+      // holdOnQuoteSend is the one implementation of that number: it
+      // recomputes from this order AND its booking siblings, SETs, and
+      // widens the booking envelope over the new block on its way out —
+      // which nothing else does, so without it the board would draw the
+      // reservation short. Idempotent + non-fatal, and skipped entirely
+      // for the one-window order, which is nearly all of them.
+      if (!holdsResult.created) {
+        const sameCategory = await prisma.orderLineItem.findMany({
+          where: {
+            orderId,
+            OR: [
+              { assetCategoryId: holdCategoryId },
+              { inventoryItem: { legacyAssetCategoryId: holdCategoryId } },
+            ],
+          },
+          select: { pickupDate: true, returnDate: true },
+        });
+        const blocks = new Set(
+          sameCategory
+            .filter((l) => l.pickupDate && l.returnDate)
+            .map(
+              (l) =>
+                `${l.pickupDate!.toISOString().slice(0, 10)}|${l.returnDate!.toISOString().slice(0, 10)}`,
+            ),
+        );
+        if (blocks.size > 1) {
+          const recomputed = await holdOnQuoteSend(orderId);
+          if (recomputed.error) {
+            console.error('[line-items] multi-block hold recompute failed:', recomputed.error);
+          }
+        }
+      }
     }
 
     // The UNIT, right after the class (Wes 2026-09-10: "assigning next

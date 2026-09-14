@@ -14,6 +14,7 @@ import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDel
 import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { holdOnQuoteSend } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
@@ -402,6 +403,29 @@ export async function PUT(req: NextRequest, { params }: Params) {
           });
         } catch (err) {
           console.error('[holds] override audit failed (PUT):', err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
+    // THE DATES MOVED on a held line. Everything above talks about
+    // QUANTITY, so a vehicle given its own days — the same class quoted
+    // for two blocks on one order — left the hold describing the OLD
+    // window: the peak was never recomputed and the booking envelope was
+    // never widened, so the board drew the reservation short and the
+    // second block read as part of the first. Same one implementation
+    // the line-add path uses (peak concurrent, SET, envelope widened);
+    // idempotent + non-fatal.
+    if (parentOrder?.bookingId && newIsHold) {
+      const dayOf = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+      const asked = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+      const movedPickup =
+        pickupDate !== undefined && asked(pickupDate) !== dayOf(fullExisting.pickupDate);
+      const movedReturn =
+        returnDate !== undefined && asked(returnDate) !== dayOf(fullExisting.returnDate);
+      if (movedPickup || movedReturn) {
+        const recomputed = await holdOnQuoteSend(orderId);
+        if (recomputed.error) {
+          console.error('[line-items] hold recompute after a date change failed:', recomputed.error);
         }
       }
     }

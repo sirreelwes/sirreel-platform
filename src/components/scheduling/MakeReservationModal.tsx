@@ -39,10 +39,34 @@
  * the booking yet). Lines are priced by the client's own rate card, and
  * there is no second write path to keep in sync.
  *
- * ONE LINE PER TYPE, for the same reason: posting two Cargo Van lines
- * in a row makes the second one's capacity check trip over the hold the
- * first one just took, and the desk gets a conflict against itself.
- * Two of a type is a quantity, not two lines.
+ * ONE LINE PER TYPE **PER WINDOW**. Two Cargo Van lines on the SAME
+ * days are a quantity, not two lines: posting them in a row makes the
+ * second one's capacity check trip over the hold the first just took,
+ * and the desk gets a conflict against itself.
+ *
+ * The same type on DIFFERENT days is a different ask, and a common one
+ * (Wes 2026-09-14: "we need the ability to set different pickup and
+ * drop off dates for multiple of the same type of vehicle on the same
+ * job" — a SuperCube out the 19th, another out the 24th, one order).
+ * Until now the form answered that with "a vehicle that needs different
+ * dates is its own reservation", which means a second order and a
+ * second draft on the same job for what the client thinks of as one
+ * booking. So every line carries an OPTIONAL window of its own: the
+ * dates below are the default each line inherits until it overrides
+ * them, and the duplicate guard fires on type + window, not type.
+ *
+ * What comes out is still ONE hold per type, at the PEAK CONCURRENT
+ * need — one SuperCube for two sequential blocks is one truck held,
+ * two for overlapping blocks is two (lib/orders/peakConcurrentHold).
+ * The line-items route recomputes the hold the moment a second block
+ * lands on a category that already has one; `syncHoldOnLineAdd` on its
+ * own ACCUMULATES, which is right for concurrent lines and over-holds
+ * sequential ones by a whole truck across the gap.
+ *
+ * A unit is bound for the BLOCK, not the order's span — the assign and
+ * available-units calls below pass this line's window, which is what
+ * `resolveAssignWindow` needs to fill the right block of a hold that
+ * now has two (lib/scheduling/assignWindow).
  *
  * That also means the holds arrive at whatever rank the paperwork rules
  * say (`reconcileHoldFirmness`) — this modal deliberately does NOT firm
@@ -140,6 +164,7 @@ import {
   ClosedDayHandoffPrompt,
   NO_CLOSED_DAY_ANSWERS,
   blindFlagsFor,
+  closedDayAsks,
   closedDayBlockers,
   pruneClosedDayAnswers,
   type ClosedDayHandoff,
@@ -190,6 +215,12 @@ interface Row {
   /** Units the agent named, by asset id. Empty = let "next available"
    *  decide. Never longer than `quantity`; trimmed when it shrinks. */
   unitIds: string[]
+  /** THIS line's window, when the show needs this truck on days the
+   *  rest of the order doesn't. null on both = inherits the
+   *  reservation's dates, which is what nearly every line does. Read
+   *  them through `rowStart` / `rowEnd`, never raw. */
+  start: string | null
+  end: string | null
   /** This line came off an inbound request. An unresolved one BLOCKS
    *  the submit: liveRows quietly skips a row with no type, which on a
    *  hand-built form is forgiving and on a client's request is losing
@@ -251,7 +282,27 @@ const newRow = (): Row => ({
   quantity: 1,
   queueChoice: 'none',
   unitIds: [],
+  start: null,
+  end: null,
 })
+
+/** A window the desk could actually hold against. */
+const windowValid = (s: string, e: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(s) && /^\d{4}-\d{2}-\d{2}$/.test(e) && e >= s
+
+/** "Sep 19" — @db.Date days are UTC midnight, so format them in UTC or
+ *  the label reads the day before (see lib/jobs/dateRange). */
+const dayLabel = (d: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(d)
+    ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', {
+        timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+      })
+    : d
+
+/** One window, as the form and the closed-day prompts key it. */
+const winKey = (s: string, e: string) => `${s}|${e}`
 
 /** A non-vehicle line from the same inbound request. */
 export interface PrefillSupply {
@@ -340,7 +391,7 @@ export function MakeReservationModal({
    *  so a pickup or return in either is blind unless someone opens up —
    *  asked here, answered onto the order's blindPickup/blindReturn (see
    *  ClosedDayHandoffPrompt). */
-  const [closedDayAnswers, setClosedDayAnswers] = useState<ClosedDayHandoff>(NO_CLOSED_DAY_ANSWERS)
+  const [closedDayAnswers, setClosedDayAnswers] = useState<Record<string, ClosedDayHandoff>>({})
   // The person this reservation is for. Only asked for when the job has
   // nobody — see the header. `null` = not looked up yet (or no job).
   const [contactFirst, setContactFirst] = useState(prefill?.contact?.firstName ?? '')
@@ -453,38 +504,59 @@ export function MakeReservationModal({
   }, [categories])
   const rowCat = (r: Row) => catById.get(r.categoryId) ?? null
 
-  const datesValid =
-    /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && end >= start
+  /** ONE line's window: its own if it set one, the reservation's
+   *  otherwise. Every read of a line's dates goes through these — a
+   *  bare `start` where a line's window belongs is how a second block
+   *  ends up checked, held and assigned against the wrong days. */
+  const rowStart = (r: Row) => r.start ?? start
+  const rowEnd = (r: Row) => r.end ?? end
+  /** Capacity is a question about a TYPE over a WINDOW, so the pair is
+   *  the preflight key. Keyed by category alone, a second block would
+   *  read the first block's answer — and a line's own window is exactly
+   *  the case where that answer is wrong. */
+  const preKey = (r: Row) => `${r.categoryId}|${rowStart(r)}|${rowEnd(r)}`
+
+  const datesValid = windowValid(start, end)
 
   // Preflight: is there anything left for these dates, and who is
   // holding it if not? This is what turns "Create reservation" into the
   // 2nd-Hold choice rather than a silent over-commit. Runs per distinct
   // category on the form; the dependency is the category LIST as a
   // string so adding a line refetches only what changed.
-  const catKey = useMemo(
-    () => [...new Set(rows.map((r) => r.categoryId).filter(Boolean))].sort().join(','),
-    [rows],
+  const preKeys = useMemo(
+    () =>
+      [
+        ...new Set(
+          rows
+            .filter((r) => r.categoryId && windowValid(r.start ?? start, r.end ?? end))
+            .map((r) => `${r.categoryId}|${r.start ?? start}|${r.end ?? end}`),
+        ),
+      ]
+        .sort()
+        .join(','),
+    [rows, start, end],
   )
   useEffect(() => {
-    const ids = catKey ? catKey.split(',') : []
-    if (ids.length === 0 || !datesValid) {
+    const keys = preKeys ? preKeys.split(',') : []
+    if (keys.length === 0) {
       setPre({})
       return
     }
     let cancelled = false
     setPre((p) =>
       Object.fromEntries(
-        ids.map((id) => [
-          id,
-          { avail: p[id]?.avail ?? null, stack: p[id]?.stack ?? [], units: p[id]?.units ?? [], loading: true },
+        keys.map((k) => [
+          k,
+          { avail: p[k]?.avail ?? null, stack: p[k]?.stack ?? [], units: p[k]?.units ?? [], loading: true },
         ]),
       ),
     )
     Promise.all(
-      ids.map(async (id) => {
+      keys.map(async (k) => {
+        const [id, s, e] = k.split('|')
         const [a, st] = await Promise.all([
-          fetch(`/api/scheduling/availability?categoryId=${id}&start=${start}&end=${end}`).then((r) => r.json()),
-          fetch(`/api/scheduling/stacked-holds?categoryId=${id}&start=${start}&end=${end}`).then((r) => r.json()),
+          fetch(`/api/scheduling/availability?categoryId=${id}&start=${s}&end=${e}`).then((r) => r.json()),
+          fetch(`/api/scheduling/stacked-holds?categoryId=${id}&start=${s}&end=${e}`).then((r) => r.json()),
         ])
         const entry: Preflight = {
           loading: false,
@@ -505,7 +577,7 @@ export function MakeReservationModal({
               u.unitName.localeCompare(v.unitName, undefined, { numeric: true }),
           ),
         }
-        return [id, entry] as const
+        return [k, entry] as const
       }),
     )
       .then((entries) => {
@@ -522,18 +594,18 @@ export function MakeReservationModal({
     return () => {
       cancelled = true
     }
-  }, [catKey, start, end, datesValid])
+  }, [preKeys])
 
   const preflightLoading = Object.values(pre).some((p) => p.loading)
 
   /** Nothing left for these dates — the moment the queue matters. */
   function rowAtCapacity(r: Row): boolean {
-    const p = pre[r.categoryId]
+    const p = pre[preKey(r)]
     return !!p?.avail && p.avail.availableToHold < r.quantity
   }
-  /** The queue as it stands for one line's category. */
+  /** The queue as it stands for one line's category, over ITS window. */
   function rowQueue(r: Row) {
-    const stack = pre[r.categoryId]?.stack ?? []
+    const stack = pre[preKey(r)]?.stack ?? []
     const incumbents = stack.filter((h) => h.holdRank === 1)
     const deepest = stack.reduce((m, h) => Math.max(m, h.holdRank), 0)
     /** Where a "2nd Hold" would actually land (2, or 3 behind a 2nd). */
@@ -543,9 +615,38 @@ export function MakeReservationModal({
 
   /** The lines that would actually be written. */
   const liveRows = rows.filter((r) => r.categoryId)
-  const dupTypes = liveRows
-    .map((r) => r.categoryId)
-    .filter((id, i, all) => all.indexOf(id) !== i)
+  /** A type twice on the SAME days is a quantity, not two lines (the
+   *  second line's capacity check would trip over the first line's own
+   *  hold). On different days it is two real asks — see the header. */
+  const dupKeys = liveRows.map((r) => preKey(r)).filter((k, i, all) => all.indexOf(k) !== i)
+
+  /** Every distinct window on the form, earliest first — the
+   *  reservation's own when no line overrides it. Each one is a real
+   *  pickup day and a real return day, so each is asked about
+   *  separately when it lands on a day the yard is shut. */
+  const windows = useMemo(() => {
+    const seen = new Map<string, { start: string; end: string }>()
+    for (const r of rows) {
+      if (!r.categoryId) continue
+      const w = { start: r.start ?? start, end: r.end ?? end }
+      seen.set(winKey(w.start, w.end), w)
+    }
+    if (seen.size === 0) seen.set(winKey(start, end), { start, end })
+    return [...seen.values()].sort(
+      (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
+    )
+  }, [rows, start, end])
+
+  /** The ORDER's span: the first truck out to the last one back. With
+   *  one window it is that window; with several it is their envelope,
+   *  which is what the Booking's own dates end up as too. */
+  const envelope = useMemo(
+    () => ({
+      start: windows.reduce((a, w) => (w.start < a ? w.start : a), windows[0].start),
+      end: windows.reduce((a, w) => (w.end > a ? w.end : a), windows[0].end),
+    }),
+    [windows],
+  )
 
   // First/last/email as THREE labelled fields. They used to be two
   // side-by-side boxes — "name" and "email" — which read as First and
@@ -565,8 +666,30 @@ export function MakeReservationModal({
 
   /** Derived, not stored: an answer the new dates can no longer carry is
    *  dropped the moment the rep moves them, so a stale "blind" can never
-   *  ride along to the order. */
-  const closedDay = pruneClosedDayAnswers(start, end, closedDayAnswers)
+   *  ride along to the order. Per WINDOW — a reservation can now carry
+   *  more than one, and a Sunday answered for the first block says
+   *  nothing about the second. */
+  const closedDay = (w: { start: string; end: string }) =>
+    pruneClosedDayAnswers(
+      w.start,
+      w.end,
+      closedDayAnswers[winKey(w.start, w.end)] ?? NO_CLOSED_DAY_ANSWERS,
+    )
+
+  /** The order carries ONE blindPickup / blindReturn pair, so they
+   *  describe its first handoff and its last: the answers given for the
+   *  window that opens the order and the one that closes it. Every
+   *  window is still ASKED — a middle block's closed day just has
+   *  nowhere order-level to land, and the order page owns it from
+   *  there. */
+  const orderBlindFlags = () => {
+    const opens = windows.find((w) => w.start === envelope.start) ?? windows[0]
+    const closes = windows.find((w) => w.end === envelope.end) ?? windows[0]
+    return {
+      blindPickup: blindFlagsFor(opens.start, opens.end, closedDay(opens)).blindPickup,
+      blindReturn: blindFlagsFor(closes.start, closes.end, closedDay(closes)).blindReturn,
+    }
+  }
 
   /**
    * WHY the button is off, in the agent's words. A disabled primary CTA
@@ -579,8 +702,11 @@ export function MakeReservationModal({
   if (rows.some((r) => r.fromRequest && !r.categoryId)) {
     blockers.push('name a fleet type for every vehicle on the request, or remove the line')
   }
-  if (dupTypes.length > 0) blockers.push('one line per type — use the quantity')
+  if (dupKeys.length > 0) blockers.push('one line per type per window — use the quantity')
   if (!datesValid) blockers.push('check the dates')
+  if (liveRows.some((r) => !windowValid(rowStart(r), rowEnd(r)))) {
+    blockers.push("check the dates on the vehicle that has its own")
+  }
   if (liveRows.some((r) => r.quantity < 1)) blockers.push('how many?')
   if (!company) blockers.push('pick a company')
   if (!job) blockers.push('pick a job')
@@ -595,7 +721,9 @@ export function MakeReservationModal({
   ) {
     blockers.push('choose 2nd Hold or take the 1st')
   }
-  blockers.push(...closedDayBlockers(start, end, closedDay))
+  blockers.push(
+    ...[...new Set(windows.flatMap((w) => closedDayBlockers(w.start, w.end, closedDay(w))))],
+  )
 
   const canSubmit = blockers.length === 0 && !contactsLoading && !preflightLoading && !submitting
 
@@ -749,12 +877,16 @@ export function MakeReservationModal({
           body: JSON.stringify({
             companyId: company.id,
             jobId: job.id,
-            startDate: start,
-            endDate: end,
+            // The ENVELOPE, not the form's own dates: with a line on its
+            // own window the order runs from the first truck out to the
+            // last one back. (Header dates are a mirror — every
+            // client-facing read derives the window from the lines.)
+            startDate: envelope.start,
+            endDate: envelope.end,
             description: notes.trim() || null,
             // Weekend handoff, answered above. False on every window the
             // yard is open for — the order page owns turning one on later.
-            ...blindFlagsFor(start, end, closedDay),
+            ...orderBlindFlags(),
           }),
         })
         const created = await orderRes.json().catch(() => ({}))
@@ -779,7 +911,14 @@ export function MakeReservationModal({
         }
         const category = rowCat(r)
         if (!category) continue
-        const label = `${category.name} × ${r.quantity}`
+        // This line's own days, which are the reservation's unless it
+        // said otherwise. Everything downstream — the hold, the block
+        // the unit binds to — keys off this pair.
+        const rStart = rowStart(r)
+        const rEnd = rowEnd(r)
+        const label = `${category.name} × ${r.quantity}${
+          r.start || r.end ? ` · ${dayLabel(rStart)} – ${dayLabel(rEnd)}` : ''
+        }`
         mark(stepKey, 'running')
 
         // The rate is the catalog list price; the route re-resolves it
@@ -796,8 +935,8 @@ export function MakeReservationModal({
             rateType: 'DAILY',
             rate: category.dailyRate ?? 0,
             quantity: r.quantity,
-            pickupDate: start,
-            returnDate: end,
+            pickupDate: rStart,
+            returnDate: rEnd,
             ...(confirmedNow[r.key] ? { confirmConflict: true } : {}),
             // The route binds next-available on its own since 2026-09-10.
             // This flow ranks the hold FIRST (a 2nd Hold must take no
@@ -905,7 +1044,7 @@ export function MakeReservationModal({
           // below deliberately withholds.
           const picked = r.unitIds.slice(0, r.quantity)
           for (const assetId of picked) {
-            const u = pre[category.id]?.units.find((x) => x.assetId === assetId)
+            const u = pre[preKey(r)]?.units.find((x) => x.assetId === assetId)
             const assignRes = await fetch(
               `/api/scheduling/booking-items/${bookingItemId}/assign`,
               {
@@ -914,6 +1053,13 @@ export function MakeReservationModal({
                 body: JSON.stringify({
                   assetId,
                   orderId: order.id,
+                  // THE BLOCK, not the order's span. One hold can now
+                  // carry two date blocks of the same type, and
+                  // resolveAssignWindow fills the one it is told about
+                  // — without this the second block's truck would be
+                  // bound to the first block's days.
+                  windowStart: rStart,
+                  windowEnd: rEnd,
                   ...(u?.state === 'buffer' ? { bufferOverride: true } : {}),
                 }),
               },
@@ -931,7 +1077,8 @@ export function MakeReservationModal({
           if (!note && assignNext) {
             for (let i = assigned.length; i < r.quantity; i++) {
               const availRes = await fetch(
-                `/api/scheduling/booking-items/${bookingItemId}/available-units`,
+                `/api/scheduling/booking-items/${bookingItemId}/available-units` +
+                  `?orderId=${order.id}&start=${rStart}&end=${rEnd}`,
               )
               const av = await availRes.json().catch(() => ({}))
               // `candidates` — NOT `units`. The route returns the pooled
@@ -946,7 +1093,7 @@ export function MakeReservationModal({
               if (!next) {
                 note =
                   assigned.length === 0
-                    ? `${category.name}: no unit was free for those dates — it holds the category and shows in the needs-a-unit lane.`
+                    ? `${category.name}: no unit was free for ${dayLabel(rStart)} – ${dayLabel(rEnd)} — it holds the category and shows in the needs-a-unit lane.`
                     : `${category.name}: only ${assigned.length} of ${r.quantity} could be assigned — no other unit is free.`
                 break
               }
@@ -955,7 +1102,12 @@ export function MakeReservationModal({
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ assetId: next.assetId, orderId: order.id }),
+                  body: JSON.stringify({
+                    assetId: next.assetId,
+                    orderId: order.id,
+                    windowStart: rStart,
+                    windowEnd: rEnd,
+                  }),
                 },
               )
               if (!assignRes.ok) {
@@ -1096,7 +1248,7 @@ export function MakeReservationModal({
    * with what it is doing on those dates.
    */
   const unitPicker = (r: Row) => {
-    const p = pre[r.categoryId]
+    const p = pre[preKey(r)]
     if (!p || p.loading) {
       return <p className="text-[11px] text-lt-fg3">Checking which units are free…</p>
     }
@@ -1202,11 +1354,14 @@ export function MakeReservationModal({
   const queueBlock = (r: Row) => {
     const category = rowCat(r)
     const { stack, incumbents, nextFreeRank, stackFull } = rowQueue(r)
-    const p = pre[r.categoryId]
+    const p = pre[preKey(r)]
     return (
       <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg px-3 py-2.5 space-y-2.5">
         <div className="text-[12px] font-semibold text-chip-warn-fg">
-          No {category?.name ?? 'unit'} free {start === end ? `on ${start}` : `${start} – ${end}`}
+          No {category?.name ?? 'unit'} free{' '}
+          {rowStart(r) === rowEnd(r)
+            ? `on ${dayLabel(rowStart(r))}`
+            : `${dayLabel(rowStart(r))} – ${dayLabel(rowEnd(r))}`}
           {p?.avail ? ` — ${p.avail.availableToHold} of ${p.avail.serviceableCount} available` : ''}
         </div>
         {incumbents.length > 0 && (
@@ -1427,15 +1582,16 @@ export function MakeReservationModal({
                   {liveRows.length > 0 && (
                     <span className="text-[11px] text-lt-fg3">
                       {liveRows.reduce((n, r) => n + r.quantity, 0)} unit
-                      {liveRows.reduce((n, r) => n + r.quantity, 0) === 1 ? '' : 's'} · one order
+                      {liveRows.reduce((n, r) => n + r.quantity, 0) === 1 ? '' : 's'}
+                      {windows.length > 1 ? ` · ${windows.length} date blocks` : ''} · one order
                     </span>
                   )}
                 </div>
 
                 {rows.map((r) => {
                   const category = rowCat(r)
-                  const p = pre[r.categoryId]
-                  const dup = !!r.categoryId && dupTypes.includes(r.categoryId)
+                  const p = pre[preKey(r)]
+                  const dup = !!r.categoryId && dupKeys.includes(preKey(r))
                   const atCap = rowAtCapacity(r)
                   const written = !!landed[r.key]
                   return (
@@ -1537,6 +1693,113 @@ export function MakeReservationModal({
                         )}
                       </div>
 
+                      {/* ITS OWN DATES, when the show needs this one on
+                          different days (Wes 2026-09-14). Closed by
+                          default and one line of text when closed — the
+                          overwhelming case is a line that just uses the
+                          reservation's window, and two more date boxes
+                          per vehicle would bury the form. */}
+                      {r.categoryId && !written && (
+                        r.start === null && r.end === null ? (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                            <span className="text-lt-fg3">
+                              {start === end
+                                ? dayLabel(start)
+                                : `${dayLabel(start)} – ${dayLabel(end)}`}{' '}
+                              · the reservation&apos;s dates
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                patchRow(r.key, {
+                                  start,
+                                  end,
+                                  queueChoice: 'none',
+                                  unitIds: [],
+                                })
+                              }
+                              className="font-semibold text-lt-fg2 hover:text-lt-fg underline underline-offset-2"
+                            >
+                              Different dates for this one
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-lt-hairline bg-lt-inner px-2.5 py-2 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] uppercase tracking-wide text-lt-fg3">
+                                This vehicle&apos;s own dates
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  patchRow(r.key, {
+                                    start: null,
+                                    end: null,
+                                    queueChoice: 'none',
+                                    unitIds: [],
+                                  })
+                                }
+                                className="text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg underline underline-offset-2"
+                              >
+                                Use the reservation&apos;s
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label
+                                  htmlFor={`reservation-start-${r.key}`}
+                                  className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5"
+                                >
+                                  Pickup
+                                </label>
+                                <input
+                                  id={`reservation-start-${r.key}`}
+                                  type="date"
+                                  value={rowStart(r)}
+                                  onChange={(e) =>
+                                    patchRow(r.key, {
+                                      start: e.target.value,
+                                      // Keep the pair sane the way the
+                                      // reservation's own boxes do.
+                                      ...(rowEnd(r) < e.target.value ? { end: e.target.value } : {}),
+                                      queueChoice: 'none',
+                                      unitIds: [],
+                                    })
+                                  }
+                                  className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                                />
+                              </div>
+                              <div>
+                                <label
+                                  htmlFor={`reservation-end-${r.key}`}
+                                  className="block text-[10px] uppercase tracking-wide text-lt-fg3 mb-0.5"
+                                >
+                                  Return
+                                </label>
+                                <input
+                                  id={`reservation-end-${r.key}`}
+                                  type="date"
+                                  min={rowStart(r)}
+                                  value={rowEnd(r)}
+                                  onChange={(e) =>
+                                    patchRow(r.key, {
+                                      end: e.target.value,
+                                      queueChoice: 'none',
+                                      unitIds: [],
+                                    })
+                                  }
+                                  className="w-full border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-lt-fg3">
+                              Same order, its own block. One {rowCat(r)?.name ?? 'unit'} covers
+                              back-to-back blocks; overlapping ones hold a second truck.
+                            </p>
+                          </div>
+                        )
+                      )}
+
                       {r.fromRequest && !r.categoryId && !written && (
                         <p className="text-[11px] text-chip-warn-fg">
                           On the request, with no fleet type behind it. Pick what holds it, or
@@ -1550,7 +1813,8 @@ export function MakeReservationModal({
                       )}
                       {dup && !written && (
                         <p className="text-[11px] text-chip-bad-fg">
-                          That type is already on this reservation — raise its quantity instead.
+                          That type is already on this reservation for those dates — raise its
+                          quantity instead, or give this one its own dates.
                         </p>
                       )}
                       {category && !dup && !written && p && !p.loading && p.avail && !atCap && (
@@ -1592,7 +1856,8 @@ export function MakeReservationModal({
                 </button>
               </div>
 
-              {/* Dates */}
+              {/* Dates — the DEFAULT every line inherits, not a
+                  constraint on all of them. */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-lt-fg2 mb-1">Start</label>
@@ -1618,18 +1883,44 @@ export function MakeReservationModal({
                 </div>
               </div>
               <p className="-mt-2 text-[11px] text-lt-fg3">
-                One window for the whole order. A vehicle that needs different dates is its own
-                reservation.
+                {windows.length > 1
+                  ? `The default — ${windows.length} blocks on this order, running ${dayLabel(
+                      envelope.start,
+                    )} – ${dayLabel(envelope.end)} in all.`
+                  : 'The default for every vehicle above. A line that needs its own days can take them.'}
               </p>
 
-              {/* Out-of-hours handoff. Renders only when an end of the
-                  window lands on a Sunday or a Saturday. */}
-              <ClosedDayHandoffPrompt
-                start={start}
-                end={end}
-                value={closedDay}
-                onChange={setClosedDayAnswers}
-              />
+              {/* Out-of-hours handoff, for EVERY block — the yard is shut
+                  on a Sunday whichever line lands on it. Renders nothing
+                  for a window that touches no closure, so the usual
+                  single-window reservation is unchanged. */}
+              {windows.map((w) => {
+                const asks = closedDayAsks(w.start, w.end)
+                if (!asks.pickup && !asks.dropoff) return null
+                return (
+                  <div key={winKey(w.start, w.end)} className="space-y-1">
+                    {windows.length > 1 && (
+                      <div className="text-[10px] uppercase tracking-wide text-lt-fg3">
+                        {dayLabel(w.start)} – {dayLabel(w.end)}
+                        {' · '}
+                        {liveRows
+                          .filter((r) => rowStart(r) === w.start && rowEnd(r) === w.end)
+                          .map((r) => rowCat(r)?.name)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </div>
+                    )}
+                    <ClosedDayHandoffPrompt
+                      start={w.start}
+                      end={w.end}
+                      value={closedDay(w)}
+                      onChange={(v) =>
+                        setClosedDayAnswers((a) => ({ ...a, [winKey(w.start, w.end)]: v }))
+                      }
+                    />
+                  </div>
+                )
+              })}
 
               {/* Company */}
               <div>
