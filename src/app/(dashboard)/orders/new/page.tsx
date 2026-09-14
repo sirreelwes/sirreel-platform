@@ -3433,27 +3433,53 @@ function NewQuotePageInner() {
         )}
 
         {/* Will call, or loaded on a reserved truck — asked only when
-            there is a truck to load and gear to load on it. */}
+            there is a truck to load and gear to load on it.
+
+            Buttons, not labels wrapping a visually-hidden radio (Wes
+            2026-09-14: "it sends to a blank screen and loses the
+            progress" — the page had jumped to the bottom, past the end
+            of the form; the answer was recorded and nothing was lost).
+            A clipped `sr-only` input is still a focus target, and the
+            browser scrolls a focused control into view from wherever it
+            computes that clipped box to be. The two prompts directly
+            above this one (closed-day, week decision) are plain button
+            chips for the same reason. */}
         {gearHandoffAsked && (
           <div className={`rounded-lg border p-3 space-y-2 ${gearHandoff ? 'border-lt-hairline bg-lt-inner/40' : 'border-chip-warn-fg/40 bg-chip-warn-bg'}`}>
             <div className={`text-xs font-semibold ${gearHandoff ? 'text-lt-fg' : 'text-chip-warn-fg'}`}>
               How does the gear leave?
-              {!gearHandoff && <span className="font-normal"> — needed before this order can be saved.</span>}
+              {/* Always a sentence here, so answering it doesn't reflow
+                  the block under the cursor — and so the answer says
+                  out loud that it landed. */}
+              <span className="font-normal">
+                {gearHandoff ? ' — recorded; change it any time before you save.' : ' — needed before this order can be saved.'}
+              </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <label className={`flex items-center gap-2 text-[12px] rounded-md border px-2.5 py-1.5 cursor-pointer ${gearHandoff?.kind === 'WILL_CALL' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}>
-                <input type="radio" name="gear-handoff" className="sr-only" checked={gearHandoff?.kind === 'WILL_CALL'} onChange={() => setGearHandoff({ kind: 'WILL_CALL' })} />
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="How does the gear leave?">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={gearHandoff?.kind === 'WILL_CALL'}
+                onClick={() => setGearHandoff({ kind: 'WILL_CALL' })}
+                className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${gearHandoff?.kind === 'WILL_CALL' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
+              >
                 Will call — the client picks it up at the warehouse
-              </label>
-              {holdableVehicleRows.map((it) => (
-                <label
-                  key={it.localId}
-                  className={`flex items-center gap-2 text-[12px] rounded-md border px-2.5 py-1.5 cursor-pointer ${gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
-                >
-                  <input type="radio" name="gear-handoff" className="sr-only" checked={gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId} onChange={() => setGearHandoff({ kind: 'LOAD_ON', localId: it.localId })} />
-                  Loaded on {it.description || 'the vehicle'}{it.quantity > 1 ? ` (×${it.quantity} — first unit bound)` : ''}
-                </label>
-              ))}
+              </button>
+              {holdableVehicleRows.map((it) => {
+                const picked = gearHandoff?.kind === 'LOAD_ON' && gearHandoff.localId === it.localId;
+                return (
+                  <button
+                    key={it.localId}
+                    type="button"
+                    role="radio"
+                    aria-checked={picked}
+                    onClick={() => setGearHandoff({ kind: 'LOAD_ON', localId: it.localId })}
+                    className={`text-left text-[12px] rounded-md border px-2.5 py-1.5 ${picked ? 'bg-amber-600 border-amber-600 text-white' : 'bg-lt-card border-lt-hairline text-lt-fg hover:border-amber-600'}`}
+                  >
+                    Loaded on {it.description || 'the vehicle'}{it.quantity > 1 ? ` (×${it.quantity} — first unit bound)` : ''}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
