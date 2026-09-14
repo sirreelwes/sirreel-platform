@@ -64,6 +64,18 @@ export interface PickListLine {
    *  nobody was billed for, which is precisely the gear that used to
    *  disappear without anyone noticing. */
   includedAccessory?: boolean
+  /** Parts attached to each unit that never get their own line — the
+   *  antenna and battery on a radio, the remote and case on a DF-50
+   *  (InventoryItem.unitChecks). Printed as a tick per part so the
+   *  picker counts them and the checker counts them back.
+   *
+   *  REMOVED BY ACCIDENT ONCE (4832853, 2026-09-12, a commit about
+   *  making the write-in boxes bigger) and restored 2026-09-14. It went
+   *  quiet rather than loud: renderPickListPdf kept computing the checks
+   *  and passing them to a field that no longer existed, so the sheet
+   *  simply stopped printing them and nothing failed. If you are
+   *  reshaping this row, keep this block. */
+  unitChecks?: string[]
 }
 
 /**
@@ -650,6 +662,15 @@ export function PickListDocument(props: PickListDocumentProps) {
                       ? 'DID NOT GO OUT'
                       : `SHORT \u2014 ${line.ordered - line.out} of ${line.ordered} did not go out`}
                   </Text>
+                ) : null}
+                {line.unitChecks && line.unitChecks.length > 0 ? (
+                  <View style={styles.notesRow}>
+                    <Text style={styles.notesText}>
+                      <Text style={styles.notesLabel}>Each unit: </Text>
+                      {line.unitChecks.map((c) => `( ) ${c}`).join('   ')}
+                      {`   \u00d7 ${line.ordered}`}
+                    </Text>
+                  </View>
                 ) : null}
                 {line.notes ? (
                   <View style={styles.notesRow}>
