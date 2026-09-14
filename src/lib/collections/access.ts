@@ -48,3 +48,22 @@ export async function requireCollectionsUser(): Promise<CollectionsUser | null> 
 
   return { id: user.id, name: user.name, email: user.email, role: String(user.role) }
 }
+
+/**
+ * Access gate for the DESK ACTIVITY view (/collections/desk) — the live
+ * money-in + outreach feed.
+ *
+ * Narrower than the workspace on purpose. Using collections means charging a
+ * card; reading this means reading a named colleague's day back to them, and
+ * the allowlist that lets Jose take a payment should not also hand him a feed
+ * of Ana's mail. ADMIN (Wes, Dani) and BILLING (Ana) — no address escape
+ * hatch, so widening it is a deliberate edit rather than a line in a list.
+ *
+ * Ana is included by role rather than excluded: a desk that can see its own
+ * numbers is a dashboard, and one that cannot is surveillance.
+ */
+export async function requireDeskViewer(): Promise<CollectionsUser | null> {
+  const user = await requireCollectionsUser()
+  if (!user) return null
+  return user.role === 'ADMIN' || user.role === 'BILLING' ? user : null
+}
