@@ -41,7 +41,7 @@ export interface LdDamageRow {
 }
 
 export interface LdReportedEmailInput {
-  source: 'CHECK_IN' | 'VEHICLE_RETURN' | 'INCIDENT'
+  source: 'CHECK_IN' | 'VEHICLE_RETURN' | 'INCIDENT' | 'DRIVER_RETURN'
   /** Set with source INCIDENT. */
   incidentNumber?: string | null
   orderNumbers: string[]
@@ -52,6 +52,15 @@ export interface LdReportedEmailInput {
   missing: LdMissingRow[]
   turnedUp: Array<{ description: string; wasMissing: number; nowMissing: number }>
   damage: LdDamageRow[]
+  /** Set with source DRIVER_RETURN: a driver on an unattended drop ticked
+   *  "I can see new damage". No DamageItem exists yet — just their word,
+   *  their note and their close-ups — so it renders as its own section. */
+  driverReport?: {
+    unitName: string | null
+    note: string | null
+    damagePhotoCount: number
+    photosLink: string
+  } | null
   orderLink: string
   billingLink: string
 }
@@ -85,6 +94,20 @@ function damageRouting(damage: LdDamageRow[]): string[] {
     out.push('Damage marked Bill now goes on the next rental invoice automatically.')
   }
   return out
+}
+
+// A driver's tick is not a finding: no location, no severity, no estimate.
+// The yard's walk-around is what records it (and sends its own email).
+const DRIVER_ROUTE =
+  "This is the driver's word, not the yard's finding — the walk-around records the damage itself, and it shows under Bill L&D once marked Send to L&D."
+
+function driverLines(dr: NonNullable<LdReportedEmailInput['driverReport']>): string[] {
+  return [
+    dr.note ? `Driver's note: ${dr.note}` : 'The driver left no note.',
+    dr.damagePhotoCount
+      ? `${dr.damagePhotoCount} damage close-up${dr.damagePhotoCount === 1 ? '' : 's'} taken`
+      : 'No damage close-ups — only the standard sides',
+  ]
 }
 
 const DISPOSITION_WORDS: Record<string, string> = {
@@ -132,7 +155,8 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
   const tail = `${orderRef}${account ? ` · ${account}` : ''}`
 
   const missingUnits = i.missing.reduce((n, m) => n + m.missing, 0)
-  const onlyGoodNews = !i.missing.length && !i.damage.length && i.turnedUp.length > 0
+  const dr = i.driverReport ?? null
+  const onlyGoodNews = !i.missing.length && !i.damage.length && !dr && i.turnedUp.length > 0
 
   const what: string[] = []
   if (missingUnits) what.push(`${missingUnits} item${missingUnits === 1 ? '' : 's'} not returned`)
@@ -140,6 +164,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     const units = Array.from(new Set(i.damage.map((d) => d.unitName).filter(Boolean)))
     what.push(`new damage${units.length ? ` on ${units.join(', ')}` : ''}`)
   }
+  if (dr) what.push(`driver reported new damage${dr.unitName ? ` on ${dr.unitName}` : ''}`)
   const subject = onlyGoodNews
     ? `L&D update: missing gear turned up — ${tail}`
     : `L&D: ${what.join(' + ')} — ${tail}`
@@ -157,7 +182,9 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
       : i.source === 'INCIDENT'
         ? `incident ${i.incidentNumber ?? ''}`.trim()
         : 'a vehicle return'
-  const intro = onlyGoodNews
+  const intro = dr
+    ? `${i.reportedBy || 'The driver'} dropped off ${dr.unitName || 'the vehicle'} unattended for ${orderRef} and reported new damage. Nobody from the yard has walked it yet.`
+    : onlyGoodNews
     ? `${i.reportedBy || 'The warehouse'} re-counted the check-in for ${orderRef}, and gear that was missing has turned up.`
     : noOrder && i.source === 'INCIDENT'
       ? `${i.reportedBy || 'Someone'} recorded damage on ${surface}.`
@@ -168,7 +195,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
   if (i.jobName) rows.push({ label: 'Job', value: i.jobName })
   if (i.companyName) rows.push({ label: 'Client', value: i.companyName })
   if (i.incidentNumber) rows.push({ label: 'Incident', value: i.incidentNumber })
-  rows.push({ label: 'Recorded by', value: i.reportedBy || '—' })
+  rows.push({ label: 'Recorded by', value: dr ? `${i.reportedBy || '—'} (driver)` : i.reportedBy || '—' })
   rows.push({ label: 'When', value: fmtWhen(i.at) })
 
   const valueNote = onlyGoodNews
@@ -182,6 +209,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
             ? 'A short count can still turn up on the truck — bill it from <strong>Bill L&amp;D</strong> on the billing queue once it is settled.'
             : '',
           ...damageRouting(i.damage).map(esc),
+          dr ? esc(DRIVER_ROUTE) : '',
         ].filter(Boolean).join(' '),
       )
 
@@ -190,6 +218,11 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     detailTable(rows),
     i.missing.length ? p('<strong>Not returned</strong>') + list(i.missing.map(missingLine)) : '',
     i.damage.length ? p('<strong>New damage</strong>') + list(i.damage.map(damageLine)) : '',
+    dr
+      ? p('<strong>Driver-reported damage</strong>') +
+        list(driverLines(dr)) +
+        p(`<a href="${esc(dr.photosLink)}" style="color:#0F7A93;">See the driver's photos</a>`)
+      : '',
     i.turnedUp.length ? p('<strong>Turned up since the last count</strong>') + list(i.turnedUp.map(turnedUpLine)) : '',
     valueNote,
     p(`<a href="${esc(i.billingLink)}" style="color:#0F7A93;">Open the billing queue</a>`),
@@ -210,6 +243,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     '',
     ...(i.missing.length ? ['NOT RETURNED', ...i.missing.map((m) => `- ${missingLine(m)}`), ''] : []),
     ...(i.damage.length ? ['NEW DAMAGE', ...i.damage.map((d) => `- ${damageLine(d)}`), ''] : []),
+    ...(dr ? ['DRIVER-REPORTED DAMAGE', ...driverLines(dr).map((l) => `- ${l}`), `Photos: ${dr.photosLink}`, ''] : []),
     ...(i.turnedUp.length ? ['TURNED UP SINCE THE LAST COUNT', ...i.turnedUp.map((t) => `- ${turnedUpLine(t)}`), ''] : []),
     onlyGoodNews
       ? ''
@@ -219,6 +253,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
           'Nothing has been billed yet.',
           i.missing.length ? 'Bill it from Bill L&D on the billing queue once it is settled.' : '',
           ...damageRouting(i.damage),
+          dr ? DRIVER_ROUTE : '',
         ].filter(Boolean).join(' '),
     '',
     `${linkNoun === 'order' ? 'Order' : 'Incident'}: ${i.orderLink}`,

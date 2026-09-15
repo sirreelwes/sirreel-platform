@@ -31,6 +31,7 @@
 import { list } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { positionById, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { notifyDriverReportedDamage } from '@/lib/invoices/notifyLdReported'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfReturnEmail } from '@/lib/email/templates/driverSelfReturn'
@@ -361,6 +362,18 @@ export async function completeSelfReturn(input: CompleteSelfReturnInput): Promis
     }
   } catch (e) {
     console.error('[selfReturn] HQ notification failed', e)
+  }
+
+  // The driver ticked "I can see new damage": the billing desk hears it
+  // too (Ana, 2026-09-15), as the driver's word — the yard's walk-around
+  // records the finding itself and sends its own L&D email. Never throws.
+  if (input.damageNoted) {
+    await notifyDriverReportedDamage({
+      bookingAssignmentId: asg.id,
+      driverName: `${da.driver.firstName} ${da.driver.lastName}`.trim() || da.driver.email || null,
+      note: input.notes?.trim() || null,
+      damagePhotoCount: present.filter(({ p }) => normalizePosition(p.position) === DAMAGE_POSITION).length,
+    })
   }
 
   return { ...result, photosAttached: present.length, photosMissing, returnedAt: now, milesDriven, emailSent }

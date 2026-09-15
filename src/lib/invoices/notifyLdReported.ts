@@ -6,11 +6,13 @@
  * for."* Recipients are the `ld-reported` channel (default billing@),
  * editable at /admin/notifications.
  *
- * Three doors, all called AFTER the record is written:
+ * Four doors, all called AFTER the record is written:
  *   - notifyMissingGear    — the check-in sheet counted gear short (or a
  *                            re-count found it)
  *   - notifyVehicleDamage  — new damage on a vehicle return
  *   - notifyIncidentDamage — an incident's "Bill renter" booked damage
+ *   - notifyDriverReportedDamage — a driver on an unattended drop-off
+ *                            ticked "I can see new damage"
  *
  * Same contract as notifyPortalPayment: awaited by the route (a serverless
  * function can freeze the instant it responds, so a floated promise never
@@ -99,6 +101,47 @@ export async function notifyMissingGear(input: {
   }
 }
 
+/** The booking context every vehicle-side email needs, off one assignment. */
+async function assignmentContext(bookingAssignmentId: string) {
+  const assignment = await prisma.bookingAssignment.findUnique({
+    where: { id: bookingAssignmentId },
+    select: {
+      asset: { select: { unitName: true } },
+      bookingItem: {
+        select: {
+          booking: {
+            select: {
+              jobName: true,
+              job: { select: { id: true, name: true, company: { select: { name: true } } } },
+              orders: {
+                where: { NOT: { status: 'CANCELLED' } },
+                select: { id: true, orderNumber: true },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  if (!assignment) return null
+  const booking = assignment.bookingItem.booking
+  const firstOrder = booking.orders[0]
+  return {
+    unitName: assignment.asset?.unitName ?? null,
+    firstOrder,
+    orderNumbers: booking.orders.map((o) => o.orderNumber),
+    jobName: resolveDisplayJobName({ bookingJobName: booking.jobName, jobName: booking.job?.name ?? null }),
+    companyName: booking.job?.company?.name ?? null,
+    // A reservation with no order yet still has a job to land on.
+    orderLink: firstOrder
+      ? `${base()}/orders/${firstOrder.id}`
+      : booking.job
+        ? `${base()}/jobs/${booking.job.id}`
+        : `${base()}/collections`,
+  }
+}
+
 export async function notifyVehicleDamage(input: {
   bookingAssignmentId: string
   reportedBy: string | null
@@ -108,49 +151,20 @@ export async function notifyVehicleDamage(input: {
     if (!input.findings.length) return false
     const to = await channelRecipients('ld-reported')
     if (!to.length) return false
-
-    const assignment = await prisma.bookingAssignment.findUnique({
-      where: { id: input.bookingAssignmentId },
-      select: {
-        asset: { select: { unitName: true } },
-        bookingItem: {
-          select: {
-            booking: {
-              select: {
-                jobName: true,
-                job: { select: { id: true, name: true, company: { select: { name: true } } } },
-                orders: {
-                  where: { NOT: { status: 'CANCELLED' } },
-                  select: { id: true, orderNumber: true },
-                  orderBy: { createdAt: 'asc' },
-                },
-              },
-            },
-          },
-        },
-      },
-    })
-    if (!assignment) return false
-    const booking = assignment.bookingItem.booking
-    const unitName = assignment.asset?.unitName ?? null
-    const firstOrder = booking.orders[0]
+    const ctx = await assignmentContext(input.bookingAssignmentId)
+    if (!ctx) return false
 
     const mail = buildLdReportedEmail({
       source: 'VEHICLE_RETURN',
-      orderNumbers: booking.orders.map((o) => o.orderNumber),
-      jobName: resolveDisplayJobName({ bookingJobName: booking.jobName, jobName: booking.job?.name ?? null }),
-      companyName: booking.job?.company?.name ?? null,
+      orderNumbers: ctx.orderNumbers,
+      jobName: ctx.jobName,
+      companyName: ctx.companyName,
       reportedBy: input.reportedBy,
       at: new Date(),
       missing: [],
       turnedUp: [],
-      damage: input.findings.map((f) => ({ ...f, unitName })),
-      // A reservation with no order yet still has a job to land on.
-      orderLink: firstOrder
-        ? `${base()}/orders/${firstOrder.id}`
-        : booking.job
-          ? `${base()}/jobs/${booking.job.id}`
-          : `${base()}/collections`,
+      damage: input.findings.map((f) => ({ ...f, unitName: ctx.unitName })),
+      orderLink: ctx.orderLink,
       billingLink: `${base()}/collections`,
     })
 
@@ -159,12 +173,59 @@ export async function notifyVehicleDamage(input: {
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
-      label: `ld-reported:${firstOrder?.orderNumber ?? unitName ?? input.bookingAssignmentId}`,
-      ...(firstOrder ? { orderId: firstOrder.id } : {}),
+      label: `ld-reported:${ctx.firstOrder?.orderNumber ?? ctx.unitName ?? input.bookingAssignmentId}`,
+      ...(ctx.firstOrder ? { orderId: ctx.firstOrder.id } : {}),
     })
     return r.ok
   } catch (e) {
     console.error('[notifyVehicleDamage] failed', e)
+    return false
+  }
+}
+
+export async function notifyDriverReportedDamage(input: {
+  bookingAssignmentId: string
+  driverName: string | null
+  note: string | null
+  damagePhotoCount: number
+}): Promise<boolean> {
+  try {
+    const to = await channelRecipients('ld-reported')
+    if (!to.length) return false
+    const ctx = await assignmentContext(input.bookingAssignmentId)
+    if (!ctx) return false
+
+    const mail = buildLdReportedEmail({
+      source: 'DRIVER_RETURN',
+      orderNumbers: ctx.orderNumbers,
+      jobName: ctx.jobName,
+      companyName: ctx.companyName,
+      reportedBy: input.driverName,
+      at: new Date(),
+      missing: [],
+      turnedUp: [],
+      damage: [],
+      driverReport: {
+        unitName: ctx.unitName,
+        note: input.note,
+        damagePhotoCount: input.damagePhotoCount,
+        photosLink: `${base()}/api/fleet/inspections/report/${input.bookingAssignmentId}`,
+      },
+      orderLink: ctx.orderLink,
+      billingLink: `${base()}/collections`,
+    })
+
+    const r = await sendAgreementEmail({
+      to,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      label: `ld-reported:driver:${ctx.firstOrder?.orderNumber ?? ctx.unitName ?? input.bookingAssignmentId}`,
+      ...(ctx.firstOrder ? { orderId: ctx.firstOrder.id } : {}),
+    })
+    return r.ok
+  } catch (e) {
+    console.error('[notifyDriverReportedDamage] failed', e)
     return false
   }
 }

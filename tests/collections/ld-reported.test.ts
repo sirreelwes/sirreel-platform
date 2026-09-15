@@ -160,6 +160,38 @@ const base = {
   truthy('return damage (no disposition) reads as pending triage', m.text.includes('once its disposition on the order is set to Send to L&D'))
 }
 
+{
+  const m = buildLdReportedEmail({
+    ...base,
+    reportedBy: 'Sam Rivera',
+    source: 'DRIVER_RETURN',
+    missing: [],
+    turnedUp: [],
+    damage: [],
+    driverReport: { unitName: 'Cube 4', note: 'scrape on the passenger side', damagePhotoCount: 2, photosLink: 'https://hq.sirreel.com/api/fleet/inspections/report/x' },
+  })
+  eq('driver subject', m.subject, 'L&D: driver reported new damage on Cube 4 — S260915-001 · Night Shoot · ZZTEST Productions')
+  truthy('driver intro says the yard has not walked it', m.text.includes('Nobody from the yard has walked it yet'))
+  truthy('recorded by marks the driver', m.text.includes('Recorded by: Sam Rivera (driver)'))
+  truthy("driver's note carried", m.text.includes("Driver's note: scrape on the passenger side"))
+  truthy('close-up count', m.text.includes('2 damage close-ups taken'))
+  truthy("framed as the driver's word", m.text.includes("the driver's word, not the yard's finding"))
+  truthy('no invented price line', !m.text.includes('no price on file') && !m.text.includes('$'))
+  truthy('photo link present', m.text.includes('Photos: https://hq.sirreel.com/api/fleet/inspections/report/x'))
+}
+{
+  const m = buildLdReportedEmail({
+    ...base,
+    reportedBy: 'Sam Rivera',
+    source: 'DRIVER_RETURN',
+    missing: [],
+    turnedUp: [],
+    damage: [],
+    driverReport: { unitName: null, note: null, damagePhotoCount: 0, photosLink: 'x' },
+  })
+  truthy('driver with no note or close-ups says so', m.text.includes('The driver left no note.') && m.text.includes('No damage close-ups'))
+}
+
 if (fail) {
   console.error(`\n${fail} failing`)
   process.exit(1)
