@@ -32,6 +32,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { DamageDisposition, DamageSeverity, DamageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { notifyIncidentDamage } from '@/lib/invoices/notifyLdReported'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const me = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, name: true },
   })
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -210,6 +211,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     return damageRows
   })
+
+  // Same heads-up the yard's damage sends (Ana, 2026-09-15): the billing
+  // desk hears about renter-billed damage without anyone forwarding it.
+  // Pre-existing and waived findings are not money. Awaited, never throws.
+  const billable = prepared.filter((f) => !f.isPreExisting && f.disposition !== 'WAIVED')
+  if (billable.length) {
+    await notifyIncidentDamage({
+      incidentId,
+      reportedBy: me.name || session.user.email,
+      findings: billable.map((f) => ({
+        location: f.locationOnVehicle,
+        damageType: f.damageType,
+        severity: f.severity,
+        estimate: f.estimatedRepairCost,
+        notes: f.notes,
+        disposition: f.disposition,
+      })),
+    })
+  }
 
   return NextResponse.json(
     {

@@ -6,10 +6,11 @@
  * for."* Recipients are the `ld-reported` channel (default billing@),
  * editable at /admin/notifications.
  *
- * Two doors, both called AFTER the record is written:
- *   - notifyMissingGear  — the check-in sheet counted gear short (or a
- *                          re-count found it)
- *   - notifyVehicleDamage — new damage on a vehicle return
+ * Three doors, all called AFTER the record is written:
+ *   - notifyMissingGear    — the check-in sheet counted gear short (or a
+ *                            re-count found it)
+ *   - notifyVehicleDamage  — new damage on a vehicle return
+ *   - notifyIncidentDamage — an incident's "Bill renter" booked damage
  *
  * Same contract as notifyPortalPayment: awaited by the route (a serverless
  * function can freeze the instant it responds, so a floated promise never
@@ -164,6 +165,71 @@ export async function notifyVehicleDamage(input: {
     return r.ok
   } catch (e) {
     console.error('[notifyVehicleDamage] failed', e)
+    return false
+  }
+}
+
+export async function notifyIncidentDamage(input: {
+  incidentId: string
+  reportedBy: string | null
+  findings: Array<Omit<LdDamageRow, 'unitName'>>
+}): Promise<boolean> {
+  try {
+    if (!input.findings.length) return false
+    const to = await channelRecipients('ld-reported')
+    if (!to.length) return false
+
+    const incident = await prisma.incident.findUnique({
+      where: { id: input.incidentId },
+      select: {
+        id: true,
+        incidentNumber: true,
+        // The incident names the vehicle; the order's booking may carry
+        // several, so never guess the unit from the booking chain.
+        asset: { select: { unitName: true } },
+        company: { select: { name: true } },
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            job: { select: { name: true, company: { select: { name: true } } } },
+            booking: { select: { jobName: true } },
+          },
+        },
+      },
+    })
+    if (!incident) return false
+    const order = incident.order
+    const unitName = incident.asset?.unitName ?? null
+
+    const mail = buildLdReportedEmail({
+      source: 'INCIDENT',
+      incidentNumber: incident.incidentNumber,
+      orderNumbers: order ? [order.orderNumber] : [],
+      jobName: order
+        ? resolveDisplayJobName({ bookingJobName: order.booking?.jobName ?? null, jobName: order.job?.name ?? null })
+        : null,
+      companyName: order?.job?.company?.name ?? incident.company?.name ?? null,
+      reportedBy: input.reportedBy,
+      at: new Date(),
+      missing: [],
+      turnedUp: [],
+      damage: input.findings.map((f) => ({ ...f, unitName })),
+      orderLink: order ? `${base()}/orders/${order.id}` : `${base()}/incidents/${incident.id}`,
+      billingLink: `${base()}/collections`,
+    })
+
+    const r = await sendAgreementEmail({
+      to,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      label: `ld-reported:${incident.incidentNumber}`,
+      ...(order ? { orderId: order.id } : {}),
+    })
+    return r.ok
+  } catch (e) {
+    console.error('[notifyIncidentDamage] failed', e)
     return false
   }
 }

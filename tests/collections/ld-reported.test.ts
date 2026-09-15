@@ -129,6 +129,37 @@ const base = {
   truthy('user text escaped in html', !m.html.includes('<img src=x>') && !m.html.includes('<b>x</b>'))
 }
 
+{
+  const m = buildLdReportedEmail({
+    ...base,
+    source: 'INCIDENT',
+    incidentNumber: 'INC-0042',
+    missing: [],
+    turnedUp: [],
+    damage: [
+      { unitName: 'Cube 4', location: 'liftgate', damageType: 'MECHANICAL', severity: 'MAJOR', estimate: 1800, notes: null, disposition: 'BILL_NOW' },
+      { unitName: 'Cube 4', location: 'mirror', damageType: 'CRACK', severity: 'MINOR', estimate: null, notes: null, disposition: 'SEND_TO_LD' },
+    ],
+  })
+  truthy('incident intro names the incident', m.text.includes('on incident INC-0042 for S260915-001'))
+  truthy('incident row in details', m.text.includes('Incident: INC-0042'))
+  truthy('BILL_NOW line says where it bills', m.text.includes('[bill now, on the rental invoice]'))
+  truthy('BILL_NOW routing sentence', m.text.includes('goes on the next rental invoice automatically'))
+  truthy('SEND_TO_LD routing sentence', m.text.includes('listed under Bill L&D now'))
+  truthy('no PENDING sentence when nothing is pending', !m.text.includes('once its disposition'))
+  truthy('no gear sentence without missing gear', !m.text.includes('short count'))
+}
+{
+  const m = buildLdReportedEmail({
+    ...base,
+    source: 'VEHICLE_RETURN',
+    missing: [],
+    turnedUp: [],
+    damage: [{ unitName: 'Cube 4', location: 'door', damageType: 'DENT', severity: 'MINOR', estimate: null, notes: null }],
+  })
+  truthy('return damage (no disposition) reads as pending triage', m.text.includes('once its disposition on the order is set to Send to L&D'))
+}
+
 if (fail) {
   console.error(`\n${fail} failing`)
   process.exit(1)

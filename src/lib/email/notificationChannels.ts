@@ -126,7 +126,7 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'ld-reported',
     label: 'L&D reported on an order',
     description:
-      'One email the moment the yard or warehouse records loss or damage on an order: gear counted short on the check-in sheet, or new damage found when a vehicle is walked around on return (or logged on the order page). Lists what is missing or damaged, who recorded it, the replacement cost or repair estimate where HQ holds one, and a link to the order. A re-count that finds a missing piece says so too, so it is not billed. Nothing is billed by this email — the Bill L&D button on the billing queue is still where that happens (Ana 2026-09-15: "When sales/warehouse reports L&D on an order, it\'d be great if I can get that sent to me in an email so I know what to look out for"). Defaults to billing@.',
+      'One email the moment the yard or warehouse records loss or damage on an order: gear counted short on the check-in sheet, new damage found when a vehicle is walked around on return (or logged on the order page), or damage booked to the renter from an incident\'s Bill renter. Lists what is missing or damaged, who recorded it, the replacement cost or repair estimate where HQ holds one, and a link to the order. A re-count that finds a missing piece says so too, so it is not billed. Nothing is billed by this email — the Bill L&D button on the billing queue is still where that happens (Ana 2026-09-15: "When sales/warehouse reports L&D on an order, it\'d be great if I can get that sent to me in an email so I know what to look out for"). Defaults to billing@.',
     defaults: () => ['billing@sirreel.com'],
   },
   {
