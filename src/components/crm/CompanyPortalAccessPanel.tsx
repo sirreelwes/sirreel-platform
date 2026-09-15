@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Check, Eye, FileSignature, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
+import { Check, Eye, FileSignature, Globe, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
 import { CompanyInviteReviewModal } from '@/components/crm/CompanyInviteReviewModal'
 
 const ROLES: { value: string; label: string }[] = [
@@ -86,6 +86,14 @@ export function CompanyPortalAccessPanel({
   const [logoVersion, setLogoVersion] = useState(0)
   const [logoBusy, setLogoBusy] = useState(false)
   const [logoError, setLogoError] = useState<string | null>(null)
+  /** A logo found on their website, shown for a yes/no before it is saved
+   *  (Wes 2026-09-14: "pull it from their website"). */
+  const [webLogo, setWebLogo] = useState<{
+    domain: string
+    preview: string | null
+    domains: Array<{ domain: string; count: number; matchesName: boolean }>
+    error: string | null
+  } | null>(null)
 
   /** The client's own ask for an annual, when one is open. Shown beside the
    *  button that answers it — an agent arriving from the action item should
@@ -201,6 +209,36 @@ export function CompanyPortalAccessPanel({
     }
   }
 
+  async function findWebLogo(domain?: string, save = false) {
+    setLogoBusy(true)
+    setLogoError(null)
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}/logo/from-website`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, save }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || j.reason || `HTTP ${res.status}`)
+      if (save && j.saved) {
+        setWebLogo(null)
+        setLogoPresent(true)
+        setLogoVersion((v) => v + 1)
+        return
+      }
+      setWebLogo({
+        domain: j.domain ?? domain ?? '',
+        preview: j.ok ? j.preview : null,
+        domains: j.domains ?? [],
+        error: j.ok ? null : j.error || 'Nothing usable on that site.',
+      })
+    } catch (e) {
+      setLogoError(e instanceof Error ? e.message : 'Search failed')
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
   async function removeLogo() {
     setLogoBusy(true)
     await fetch(`/api/crm/companies/${companyId}/logo`, { method: 'DELETE' })
@@ -302,6 +340,14 @@ export function CompanyPortalAccessPanel({
                 }}
               />
             </label>
+            <button
+              onClick={() => findWebLogo()}
+              disabled={logoBusy}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-lt-fg hover:text-black border border-lt-hairline rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+              title="Look for their logo on the website their email addresses point to"
+            >
+              <Globe className="w-3.5 h-3.5" /> From website
+            </button>
             {logoPresent && (
               <button
                 onClick={removeLogo}
@@ -315,6 +361,65 @@ export function CompanyPortalAccessPanel({
           </div>
         )}
       </div>
+
+      {webLogo && (
+        <div className="mt-2 border border-lt-hairline rounded-lg p-3 bg-lt-inner">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="w-40 h-16 bg-white border border-lt-hairline rounded flex items-center justify-center shrink-0 overflow-hidden px-2">
+              {webLogo.preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={webLogo.preview} alt="" className="max-h-12 max-w-full object-contain" />
+              ) : (
+                <ImageIcon className="w-5 h-5 text-lt-fg3" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1 text-xs">
+              <div className="text-lt-fg font-medium">
+                {webLogo.preview ? `Found on ${webLogo.domain}` : webLogo.domain ? `Nothing usable on ${webLogo.domain}` : 'No website to look at'}
+              </div>
+              <p className="text-lt-fg2 mt-0.5">
+                {webLogo.preview
+                  ? 'This is how it sits on a white band. Only save it if it is clearly their mark.'
+                  : webLogo.error}
+              </p>
+              {webLogo.domains.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <span className="text-lt-fg3">Try:</span>
+                  {webLogo.domains
+                    .filter((d) => d.domain !== webLogo.domain)
+                    .slice(0, 6)
+                    .map((d) => (
+                      <button
+                        key={d.domain}
+                        onClick={() => findWebLogo(d.domain)}
+                        disabled={logoBusy}
+                        className="px-1.5 py-0.5 rounded border border-lt-hairline bg-lt-card text-lt-fg hover:border-lt-fg3 disabled:opacity-50"
+                      >
+                        {d.domain}
+                        <span className="text-lt-fg3"> · {d.count}</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 sm:shrink-0">
+              {webLogo.preview && (
+                <button
+                  onClick={() => findWebLogo(webLogo.domain, true)}
+                  disabled={logoBusy}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                >
+                  {logoBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Use this
+                </button>
+              )}
+              <button onClick={() => setWebLogo(null)} className="text-lt-fg3 hover:text-lt-fg" title="Dismiss">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {notice && <p className="text-xs text-chip-good-fg mt-3">{notice}</p>}
       {error && <p className="text-xs text-chip-bad-fg mt-3">{error}</p>}

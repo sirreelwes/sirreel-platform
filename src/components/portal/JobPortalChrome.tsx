@@ -131,7 +131,7 @@ export function JobPortalShell({
               <img
                 src="/api/portal/job/company-logo"
                 alt={chrome.company.name}
-                className="block h-6 sm:h-[29px] w-auto max-w-[38vw] sm:max-w-[220px] object-contain object-left"
+                className="block h-8 sm:h-11 w-auto max-w-[38vw] sm:max-w-[240px] object-contain object-left"
               />
             ) : (
               <span className="font-display text-[24px] leading-none text-zinc-900 tracking-tight truncate">

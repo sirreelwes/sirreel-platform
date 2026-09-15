@@ -658,13 +658,28 @@ export default function JobPortalPage() {
           <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-zinc-500 mb-3">Your show</h2>
           <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              {/* The masthead carries the company and the band carries the
-                  show, so this is a quiet title, not a second headline
-                  (the account portal's "no big h1" rule, Wes 2026-09-04). */}
-              <h1 className="text-lg font-semibold text-zinc-900 truncate">{jobTitle}</h1>
-              <div className="text-xs text-zinc-500 mt-1 font-mono">
-                {data.job?.jobCode || data.order.orderNumber}
+            <div className="min-w-0 flex items-center gap-4">
+              {/* Their mark beside their show whenever we hold one (Wes
+                  2026-09-14: "feature the company logo whenever we have
+                  it"). Same session-gated proxy as the masthead. */}
+              {data.company.hasLogo && (
+                <div className="shrink-0 h-14 w-28 sm:w-36 rounded-lg border border-zinc-200 bg-white flex items-center justify-center px-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/api/portal/job/company-logo"
+                    alt={data.company.name}
+                    className="block max-h-10 max-w-full object-contain"
+                  />
+                </div>
+              )}
+              <div className="min-w-0">
+                {/* The masthead carries the company and the band carries the
+                    show, so this is a quiet title, not a second headline
+                    (the account portal's "no big h1" rule, Wes 2026-09-04). */}
+                <h1 className="text-lg font-semibold text-zinc-900 truncate">{jobTitle}</h1>
+                <div className="text-xs text-zinc-500 mt-1 font-mono">
+                  {data.job?.jobCode || data.order.orderNumber}
+                </div>
               </div>
             </div>
             {data.countdown && (
@@ -942,6 +957,13 @@ export default function JobPortalPage() {
           )}
           </div>
         </section>
+
+        {/* ── Your drivers ─────────────────────────────────────────────────
+            Wes 2026-09-14: "move the drivers tile up closer to the reserved
+            vehicles." Naming who collects each truck is about the trucks
+            just listed above, so it sits directly beneath them rather than
+            at the bottom of the page under the paperwork. */}
+        <PortalDriversSection />
 
         {/* ── Your quote ──────────────────────────────────────────────────
             Oliver, testing the client side 2026-09-12: "why is my quote not
@@ -1904,13 +1926,10 @@ export default function JobPortalPage() {
         )}
 
         {/* ── Deliveries ──────────────────────────────────────────────────── */}
-        {/* What's coming TO them, above "Your drivers" (what they collect FROM
-            us). Renders nothing when the job has no deliveries, so a
-            collect-it-yourself job is unchanged. */}
+        {/* What's coming TO them. "Your drivers" (who collects FROM us) moved
+            up beside the assets on 2026-09-14. Renders nothing when the job
+            has no deliveries, so a collect-it-yourself job is unchanged. */}
         <PortalDeliveriesSection />
-
-        {/* ── Your drivers ─────────────────────────────────────────────────── */}
-        <PortalDriversSection />
 
         {/* ── Contacts ────────────────────────────────────────────────────── */}
         <section>
