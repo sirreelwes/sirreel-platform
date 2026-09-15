@@ -133,15 +133,22 @@ async function main() {
   )
 
   // Clause 6 COUNTER → renders human counterLanguage, not the AI proposed text.
-  checkContains(
-    text,
-    'workers compensation/employers liability insurance with minimum limits of $1,000,000',
-    'clause 6 (COUNTER) renders counterLanguage'
-  )
+  //
+  // Asserted in PIECES, not as one contiguous run. Since 2026-09-15 the
+  // counter proposal shows its redline (MarkedUpBody), so a changed clause
+  // extracts as the struck baseline INTERLEAVED with the added wording —
+  // "worker's compensation/employer's workers compensation/employers
+  // liability insurance" — and any assertion written as one continuous
+  // sentence fails even though every word is on the page. Checking the
+  // fragments is what "the counter language is in the document" now means.
+  checkContains(text, 'workers compensation/em', 'clause 6 (COUNTER) renders counterLanguage')
+  checkContains(text, 'minimum limits of $1,000,000', 'clause 6 (COUNTER) renders the counter limit')
   checkNotContains(text, 'statutory limits only', 'clause 6 does not show AI proposed text')
 
-  // Clause 29 ACCEPT → renders the full-clause `proposed` text with the $200 fee.
-  checkContains(text, 'A $200 per day fee', 'clause 29 (ACCEPT) renders the reduced fee in full clause text')
+  // Clause 29 ACCEPT → renders the full-clause `proposed` text with the $200
+  // fee, and now shows what it replaced: "A $250 $200 per day fee".
+  checkContains(text, '$200 per day fee', 'clause 29 (ACCEPT) renders the reduced fee in full clause text')
+  checkContains(text, '$250', 'clause 29 (ACCEPT) shows the struck baseline fee beside the accepted one')
   checkContains(text, 'non-smoking vehicles', 'clause 29 (ACCEPT) renders the full clause body')
 
   // 6. Fleet + LCDW sections rendered.

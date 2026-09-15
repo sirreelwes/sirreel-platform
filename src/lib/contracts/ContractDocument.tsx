@@ -232,6 +232,17 @@ const styles = StyleSheet.create({
   docMeta: { flexDirection: 'column', alignItems: 'flex-end' },
   docTitle: { fontFamily: 'Helvetica-Bold', fontSize: 11 },
   docDate: { fontSize: 9, color: C.muted, marginTop: 2 },
+  // Centred title block under the masthead, mirroring the standard
+  // agreement's <h1> (18pt, uppercase, letter-spaced, centred).
+  docHeadingBlock: { alignItems: 'center', marginBottom: 14 },
+  docHeading: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  docHeadingSub: { fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center' },
   infoRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   infoBlock: {
     flex: 1,
@@ -356,10 +367,16 @@ function clauseBodyStyle(decision?: ChangeDecisionValue) {
  * A clause body with the client's redline left visible: their strikes struck,
  * the agreed additions in green, our unchanged wording plain.
  *
- * Only on the finalized agreement. The client should be able to see, on the
- * document they are signing, exactly which words moved — an agreement that
- * silently reads differently from the standard one is the version people
- * later argue about.
+ * On BOTH documents (Wes 2026-09-15: "the Redline doesn't show redlines").
+ * It was finalized-only, so the counter proposal — the one document whose
+ * whole purpose is to say where we landed against their redline — printed
+ * our rewritten wording as clean paragraphs, and the client had to diff it
+ * by eye against their own draft. An agreement that silently reads
+ * differently from the standard one is the version people later argue about,
+ * and that is truest while it is still being negotiated.
+ *
+ * The diff is always against OUR canonical clause, on both documents, so the
+ * question it answers is the same one either way: what moved from standard?
  */
 const MarkedUpBody: React.FC<{
   canonical: string
@@ -427,7 +444,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
   return (
     <Document
       title={`SirReel ${docTitle}`}
-      author="SirReel Studio Rentals"
+      author="SirReel Studio Services"
       subject={docTitle}
     >
       <Page size="LETTER" style={styles.page}>
@@ -437,12 +454,35 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                 signed copy. The legal-entity line stays: it names who the
                 client is contracting WITH, which the lockup does not. */}
             <Image src={WORDMARK_BLACK_DATA_URI} style={styles.wordmark} />
-            <Text style={styles.brandSub}>SirReel Production Vehicles, Inc.</Text>
+            {/* Branded SirReel Studio Services, and carrying the same contact
+                line as the standard agreement's masthead (Wes 2026-09-15:
+                "branded sirreel studio services and looking as much like our
+                standard agreement as possible"). The legal-entity line stays
+                either way: it names who the client is contracting WITH,
+                which neither the lockup nor the trading name does. */}
+            <Text style={styles.brandSub}>
+              SirReel Studio Services · SirReel Production Vehicles, Inc.
+            </Text>
+            <Text style={styles.brandSub}>
+              8500 Lankershim Blvd, Sun Valley, CA 91352 · (818) 515-2389 · info@sirreel.com
+            </Text>
           </View>
           <View style={styles.docMeta}>
             <Text style={styles.docTitle}>{docTitle}</Text>
             <Text style={styles.docDate}>Generated {fmtDate(generated)}</Text>
           </View>
+        </View>
+
+        {/* The standard agreement opens with a centred, uppercase document
+            title under the masthead; this one opened straight into the
+            company block, which is a large part of why the two documents did
+            not read as the same paper. The running header above still
+            carries the doc title on every page. */}
+        <View style={styles.docHeadingBlock}>
+          <Text style={styles.docHeading}>Equipment &amp; Vehicle Rental Agreement</Text>
+          <Text style={styles.docHeadingSub}>
+            {docTitle} · {fmtDate(generated)}
+          </Text>
         </View>
 
         <View style={styles.infoRow}>
@@ -492,12 +532,19 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             Please read carefully. You are liable for our equipment and vehicles from the time
             they leave our premises until the time they are returned to us and we sign for them.
           </Text>
-          {finalized && (
+          {finalized ? (
             <Text style={styles.sectionLede}>
               Your requested changes are shown in place:{' '}
               <Text style={styles.struck}>struck-through text</Text> has been removed and{' '}
               <Text style={styles.added}>text in green</Text> has been added. Both are part of this
               agreement as signed. Every other clause is unchanged.
+            </Text>
+          ) : (
+            <Text style={styles.sectionLede}>
+              Every clause below is our standard agreement, with our response to your redline shown
+              in place: <Text style={styles.struck}>struck-through text</Text> would be removed and{' '}
+              <Text style={styles.added}>text in green</Text> would be added. Clauses with no markup
+              are unchanged from our standard agreement.
             </Text>
           )}
           {CANONICAL_CLAUSES.map((cc) => {
@@ -509,11 +556,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                   <Text style={styles.clauseTitle}>{cc.title}</Text>
                   <DecisionTag decision={resolved.decision} />
                 </View>
-                {finalized ? (
-                  <MarkedUpBody canonical={cc.body} resolved={resolved} />
-                ) : (
-                  <Text style={clauseBodyStyle(resolved.decision)}>{resolved.body}</Text>
-                )}
+                <MarkedUpBody canonical={cc.body} resolved={resolved} />
               </View>
             )
           })}
