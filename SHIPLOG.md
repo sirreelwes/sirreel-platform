@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA: the driver's own cell is the credential, and the 888 line stops pretending
 
-`SHA_PLACEHOLDER` aha: name+number releases codes; named drivers count; no more 24/7 claim; emergencies get real numbers
+`0ee8b39` aha: name+number releases codes; named drivers count; no more 24/7 claim; emergencies get real numbers
 
 Wes, on the release bar: "if we have the driver's name and number and it matches up with who checked out the vehicle that should be sufficient. Sometimes they are calling us from their apartment after they've parked the vehicle and we don't wanna force them to go back out." Then: "Either first or last name and phone number is plenty." And separately: "I want to drop any reference to the 888 line being a 24/7 line. We do not have staff answering that 24/7. AHA should release the emergency contact numbers ... if it is an actual emergency."
 
