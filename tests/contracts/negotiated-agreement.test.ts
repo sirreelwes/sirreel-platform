@@ -35,20 +35,25 @@ const check = (cond: unknown, msg: string) => {
  * path from the `-layout` output it was parsed from). All 2,836 words of the
  * contract portion matched in order, with no substantive difference.
  *
- * Two artifacts, both resolved and neither a contract word:
- *  - "non-payment" in clause 21 wraps across a line. The whole five-page
- *    justified document contains exactly ONE line-break hyphen, so
- *    auto-hyphenation is off and the hyphen is the author's. Kept.
- *  - Clauses 22, 23 and 24 print "Title. Body" on one line, so their title
- *    token carries a trailing period. Titles are a separate element here, as
- *    they are for every other clause.
+ * RE-VERIFIED the same day after Wes asked for the clause-title periods to be
+ * restored ("restore the periods"): clauses 22, 23 and 24 print "Title. Body"
+ * on one line in their document and now carry that trailing period here, so
+ * the three title discrepancies the first pass reported are gone. The re-run
+ * against their PDF returns exactly ONE difference, and it is not a contract
+ * word:
+ *  - "non-payment" in clause 21 wraps across a line, so an extractor reads it
+ *    as "nonpayment". The whole five-page justified document contains exactly
+ *    ONE line-break hyphen — auto-hyphenation is off — so the hyphen is the
+ *    author's. Kept.
  *
  * The client's PDF is not in the repo, so that comparison cannot re-run in
  * CI. This digest stands in for it: any edit to the clause text changes it,
  * and re-verification against the client's file is then required before the
- * value below is updated. Do not update it to make a red test green.
+ * value below is updated. Do not update it to make a red test green — the
+ * update above was made only because the re-verification was actually run and
+ * came back cleaner than before.
  */
-const VERIFIED_CLAUSE_DIGEST = '67f0e1e3a90ca08904204b43a134a9d19763070ab3fa5aa0111742419831a282'
+const VERIFIED_CLAUSE_DIGEST = 'd9c6c5444393222d1fea3601fd3d1dbac1e0c896e86f72be9cdde097db3e3eff'
 const VERIFIED_WORD_COUNT = 2776
 
 /**

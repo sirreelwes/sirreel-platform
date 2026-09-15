@@ -16,6 +16,13 @@
  *    critical to needs_review by Wes on 2026-09-15, so this is not a bar.
  *  - Clauses 22 (Rights in Recordings) and 23 (Waiver of Injunctive Relief)
  *    are THEIRS, added. Our 22–29 therefore sit at their 24–31.
+ *  - Clauses 22, 23 and 24 carry a TRAILING PERIOD on the title; the other 27
+ *    do not. That is their document, not a typo of ours: their counsel set
+ *    those three as "Title. Body" on one line and the rest as a heading on
+ *    its own line. The render normalised it away at first; Wes, 2026-09-15:
+ *    "restore the periods." Their paper, their punctuation — matching it
+ *    exactly costs nothing and leaves one less thing to explain if anyone
+ *    ever lays the two documents side by side.
  *  - Reviewed against every CRITICAL rule in reviewPrompt.ts and clean: the
  *    consequential-damages cap survives (and extends to our own gross
  *    negligence), indemnity stays one-way and is not narrowed to third-party
@@ -160,19 +167,19 @@ export const GRADUATION_DAY_2026_CLAUSES: CanonicalClause[] = [
   },
   {
     ref: '22',
-    title: 'Rights in Recordings',
+    title: 'Rights in Recordings.',
     body:
       'All rights of every kind in and to all photographs, film and recordings made by Lessee utilizing the Equipment (but not taking recordings of the Equipment) shall be and remain vested in Lessee, its licensees, successors and assigns, including, without limitation, the right to use and reuse all such photographs, film and recordings (“Recordings”) in all manner and media now known or hereafter devised, in perpetuity, throughout the universe, and in connection with advertisements, promotions, publicity, clips, etc., related to the photographs, film and recordings made by Lessee.',
   },
   {
     ref: '23',
-    title: 'Waiver of Injunctive Relief',
+    title: 'Waiver of Injunctive Relief.',
     body:
       'In no event shall Lessor be entitled to enjoin, restrain or otherwise impair in any manner Lessee’s production, distribution, exhibition, exploitation, advertising, publicity or promotion of the Recordings.',
   },
   {
     ref: '24',
-    title: 'Return',
+    title: 'Return.',
     body:
       'Upon the expiration date of this Agreement with respect to any or all Equipment, you will return the property to us, together with all accessories, free from all damage, reasonable wear and tear excepted and in the same condition and appearance as when received by you, reasonable wear and tear excepted.',
   },
