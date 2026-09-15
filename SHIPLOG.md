@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA: access that expires on its own
 
-`SHA_PLACEHOLDER` aha: grants expire, and a wrapped or lost job closes its codes
+`202b071` aha: grants expire, and a wrapped or lost job closes its codes
 
 Wes: "how do we control whether Production people will have access to these security information like access codes when they are not on a current Production?" Mostly it was already automatic — codes are scoped to a live assignment ±1 day, job details to the job ±7 days, and the check runs against assignments rather than against the person, so nobody carries access between jobs. Two things did not follow that rule.
 
