@@ -54,6 +54,17 @@ interface Scoreboard {
   influencedRevenue: number
 }
 
+interface DraftRow {
+  id: string
+  name: string
+  subject: string
+  status: string
+  createdAt: string
+  updatedAt?: string
+  createdBy: { name: string | null; email: string } | null
+  statusCounts: Record<string, number>
+}
+
 interface PreviewResponse {
   audience: {
     total: number
@@ -88,6 +99,20 @@ export default function OutreachComposerPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [board, setBoard] = useState<Scoreboard | null>(null)
+  // The draft the composer is editing. Null = a new campaign; Save creates
+  // one and then keeps editing it, so a second Save never makes a copy.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<DraftRow[] | null>(null)
+  const [draftBusy, setDraftBusy] = useState<string | null>(null)
+
+  const loadDrafts = useCallback(() => {
+    fetch('/api/outreach/campaigns')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDrafts((d.campaigns as DraftRow[]).filter((c) => c.status === 'DRAFT')))
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => { loadDrafts() }, [loadDrafts])
 
   useEffect(() => {
     fetch('/api/outreach/scoreboard')
@@ -166,13 +191,80 @@ export default function OutreachComposerPage() {
   const toggleRole = (role: string) =>
     setRoleKeys((rs) => (rs.includes(role) ? rs.filter((r) => r !== role) : [...rs, role]))
 
+  const openDraft = async (id: string) => {
+    const dirty = subject.trim() !== '' || bodyTemplate.trim() !== ''
+    if (dirty && id !== editingId && !window.confirm('Replace what\'s in the composer with this draft?')) return
+    setDraftBusy(id)
+    setErr(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${id}`)
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(json.error || `HTTP ${res.status}`)
+        return
+      }
+      const c = json.campaign
+      const seg = (PEOPLE_SEGMENT_KEYS as readonly string[]).includes(c.segmentKey) ? (c.segmentKey as PeopleSegmentKey) : ''
+      setTemplate(null)
+      setEditingId(c.id)
+      setName(c.name)
+      setSubject(c.subject)
+      setBodyTemplate(c.bodyTemplate)
+      setSegment(seg)
+      setRoleKeys(c.roleKeys ?? [])
+      // Not stored on the campaign — ON is the side that never offers
+      // someone a portal they already sign into.
+      setExcludePortalAccess(true)
+      setNotice(`Opened "${c.name}". "Skip anyone who already has account access" is on — untick it if this draft shouldn't skip them.`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'could not open draft')
+    } finally {
+      setDraftBusy(null)
+    }
+  }
+
+  const discardDraft = async (d: DraftRow) => {
+    if (!window.confirm(`Discard the draft "${d.name}"? Nothing has been sent from it.`)) return
+    setDraftBusy(d.id)
+    setErr(null)
+    try {
+      const res = await fetch(`/api/outreach/campaigns/${d.id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(json.error || `HTTP ${res.status}`)
+        return
+      }
+      if (editingId === d.id) setEditingId(null)
+      setNotice(`Discarded "${d.name}".`)
+      loadDrafts()
+    } finally {
+      setDraftBusy(null)
+    }
+  }
+
+  const startNew = () => {
+    const dirty = subject.trim() !== '' || bodyTemplate.trim() !== ''
+    if (dirty && !window.confirm('Clear the composer and start a new campaign? A saved draft stays in the list.')) return
+    setEditingId(null)
+    setTemplate(null)
+    setName('')
+    setSubject('')
+    setBodyTemplate('')
+    setSegment('')
+    setRoleKeys([])
+    setExcludePortalAccess(false)
+    setNotice(null)
+    setErr(null)
+  }
+
   const createDraft = async () => {
     setCreating(true)
     setErr(null)
     setNotice(null)
     try {
-      const res = await fetch('/api/outreach/campaigns', {
-        method: 'POST',
+      const res = await fetch(editingId ? `/api/outreach/campaigns/${editingId}` : '/api/outreach/campaigns', {
+        method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
@@ -189,8 +281,10 @@ export default function OutreachComposerPage() {
         return
       }
       const counts = json.statusCounts ?? {}
+      if (json.id) setEditingId(json.id)
+      loadDrafts()
       setNotice(
-        `Draft saved — ${counts.PENDING ?? 0} ready to send` +
+        `${editingId ? 'Changes saved' : 'Draft saved'} — ${counts.PENDING ?? 0} ready to send` +
           (counts.SKIPPED ? `, ${counts.SKIPPED} skipped` : '') +
           '. Nothing has been sent.',
       )
@@ -222,6 +316,48 @@ export default function OutreachComposerPage() {
             <p className="text-xs text-chip-warn-fg mt-1">
               You can still build and save the campaign — it will send when this is opened.
             </p>
+          </div>
+        )}
+
+        {/* Saved drafts. Saving used to be a one-way door — the draft
+            existed, the page had no way back to it. */}
+        {drafts && drafts.length > 0 && (
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <h2 className="text-sm font-semibold text-lt-fg">Drafts</h2>
+              <span className="text-xs text-lt-fg3">Open one to keep editing. Nothing in a draft has been sent.</span>
+            </div>
+            <ul className="mt-3 divide-y divide-lt-hairline">
+              {drafts.map((d) => {
+                const open = d.id === editingId
+                const ready = d.statusCounts.PENDING ?? 0
+                const skipped = d.statusCounts.SKIPPED ?? 0
+                return (
+                  <li key={d.id} className="py-2.5 flex items-center gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-lt-fg truncate">
+                        {d.name}
+                        {open && <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">editing</span>}
+                      </div>
+                      <div className="text-xs text-lt-fg2 truncate">{d.subject}</div>
+                      <div className="text-[11px] text-lt-fg3 mt-0.5">
+                        {ready.toLocaleString()} ready{skipped ? ` · ${skipped.toLocaleString()} skipped` : ''} ·{' '}
+                        {d.createdBy?.name || d.createdBy?.email || 'unknown'} ·{' '}
+                        {new Date(d.updatedAt ?? d.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => openDraft(d.id)} disabled={draftBusy === d.id || open}
+                      className="px-3 py-1.5 rounded-lg border border-lt-hairline text-sm text-lt-fg hover:border-lt-fg3 disabled:text-lt-fg3">
+                      {open ? 'Open' : draftBusy === d.id ? 'Opening…' : 'Open'}
+                    </button>
+                    <button type="button" onClick={() => discardDraft(d)} disabled={draftBusy === d.id}
+                      className="px-3 py-1.5 rounded-lg text-sm text-chip-bad-fg hover:underline disabled:text-lt-fg3">
+                      Discard
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         )}
 
@@ -412,8 +548,14 @@ export default function OutreachComposerPage() {
           <div className="flex items-center gap-3">
             <button onClick={createDraft} disabled={!canDraft || creating}
               className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-medium">
-              {creating ? 'Saving…' : 'Save draft'}
+              {creating ? 'Saving…' : editingId ? 'Save changes' : 'Save draft'}
             </button>
+            {editingId && (
+              <button type="button" onClick={startNew}
+                className="px-3 py-2 rounded-lg border border-lt-hairline text-sm text-lt-fg2 hover:border-lt-fg3">
+                New campaign
+              </button>
+            )}
             <span className="text-xs text-lt-fg3">{loading ? 'Refreshing preview…' : 'Saving a draft sends nothing.'}</span>
           </div>
         </div>

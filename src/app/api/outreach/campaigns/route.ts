@@ -16,10 +16,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { resolveRecipients } from '@/lib/outreach/campaign'
-import { renderForRecipient } from '@/lib/outreach/mergeFields'
+import { writeRecipientSnapshot } from '@/lib/outreach/draftSnapshot'
 
 export const dynamic = 'force-dynamic'
 
+// Mirrored in [id]/route.ts — a route file may not export it.
 const MAX_AUDIENCE = 2000
 
 export async function GET() {
@@ -29,7 +30,7 @@ export async function GET() {
   const campaigns = await prisma.outreachCampaign.findMany({
     select: {
       id: true, name: true, subject: true, status: true,
-      createdAt: true, releasedAt: true, completedAt: true,
+      createdAt: true, updatedAt: true, releasedAt: true, completedAt: true,
       createdBy: { select: { name: true, email: true } },
       _count: { select: { recipients: true } },
     },
@@ -134,34 +135,12 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   })
 
-  await prisma.outreachCampaignRecipient.createMany({
-    data: recipients.map((r) => {
-      const rendered = renderForRecipient(subject, template, r.ctx)
-      return {
-        campaignId: campaign.id,
-        personId: r.personId,
-        email: r.email,
-        status: rendered.ok ? ('PENDING' as const) : ('SKIPPED' as const),
-        reason: rendered.ok
-          ? null
-          : `No value for ${rendered.missing.join(', ')} on this contact`,
-        renderedSubject: rendered.ok ? rendered.subject : null,
-        renderedBody: rendered.ok ? rendered.body : null,
-      }
-    }),
-    skipDuplicates: true,
-  })
-
-  const statusCounts = await prisma.outreachCampaignRecipient.groupBy({
-    by: ['status'],
-    where: { campaignId: campaign.id },
-    _count: { _all: true },
-  })
+  const statusCounts = await writeRecipientSnapshot(prisma, campaign.id, subject, template, recipients)
 
   return NextResponse.json(
     {
       id: campaign.id,
-      statusCounts: Object.fromEntries(statusCounts.map((s) => [s.status, s._count._all])),
+      statusCounts,
     },
     { status: 201 },
   )
