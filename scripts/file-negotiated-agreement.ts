@@ -2,7 +2,11 @@
  * File a negotiated rental agreement as a company master.
  *
  *   npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026
- *   npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write
+ *   vercel env run -e production -- \
+ *     npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write
+ *
+ * The write needs BLOB_READ_WRITE_TOKEN, which is deliberately not in
+ * .env.local — hence `vercel env run` (same pattern as fetch-company-logos.ts).
  *
  * The coverage window comes from the agreement itself; --effective/--expires
  * override it for a one-off.
@@ -103,6 +107,21 @@ async function main() {
   if (WRITE && !expiryDate) {
     console.error('No expiry date: an auto-covering master with no end date never lapses.')
     console.error('Set expiryDate on the agreement in negotiatedAgreement.ts, or pass --expires.')
+    process.exit(1)
+  }
+
+  // Checked BEFORE anything is rendered or written. The PDF goes to the
+  // private blob store first and the CompanyAgreement row second, so a
+  // missing token fails mid-company — after the first upload, possibly
+  // between the two companies — and leaves the run half-done. BLOB_READ_
+  // WRITE_TOKEN is deliberately NOT in .env.local (see
+  // scripts/fetch-company-logos.ts), so this is the normal way to get it
+  // wrong, not an edge case.
+  if (WRITE && !process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error('BLOB_READ_WRITE_TOKEN is not set — the agreement PDF has nowhere to go.')
+    console.error('It is not in .env.local by design. Run the write under Vercel env:')
+    console.error('')
+    console.error(`  vercel env run -e production -- npx tsx scripts/file-negotiated-agreement.ts --key ${key} --write`)
     process.exit(1)
   }
 
