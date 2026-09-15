@@ -31,6 +31,7 @@ import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
+import { textPartnerAboutBooking } from '@/lib/sub-rentals/partnerSms'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { bindSubRentalToOrderLine } from '@/lib/sub-rentals/bindToOrderLine'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
@@ -191,6 +192,9 @@ export async function sendHoldRequest(args: {
         where: { id: s.id },
         data: { vendorHoldRequestedAt: new Date() },
       })
+      // A nudge to anyone at the partner who asked for texts. The email above
+      // is the record; this never gates it (partnerSms.ts).
+      void textPartnerAboutBooking(s.id, 'hold')
     } else {
       outcome.warning = `${s.vendor.name} could not be asked to hold ${vehicleName}: ${res.reason}`
     }

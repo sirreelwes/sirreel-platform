@@ -24,6 +24,7 @@
  * it — a client cancelling ends the sub-rental whatever the partner said.
  */
 
+import { textPartnerAboutBooking } from '@/lib/sub-rentals/partnerSms'
 import { prisma } from '@/lib/prisma'
 import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
@@ -136,6 +137,7 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
       if (res.ok) {
         o.notified = true
         await prisma.subRental.update({ where: { id: s.id }, data: { vendorBookedNotifiedAt: new Date() } })
+        void textPartnerAboutBooking(s.id, 'go')
       } else o.warning = `${s.vendor.name} could not be told ${vehicleName} is a go: ${res.reason}`
     }
     await prisma.auditLog.create({
@@ -223,6 +225,7 @@ async function cancelSubRentalsWhere(
       if (res.ok) {
         o.notified = true
         await prisma.subRental.update({ where: { id: s.id }, data: { vendorCancelNotifiedAt: new Date() } })
+        void textPartnerAboutBooking(s.id, 'released')
       } else o.warning = `${s.vendor.name} could not be told ${vehicleName} is released: ${res.reason}`
     }
     await prisma.auditLog.create({

@@ -111,6 +111,7 @@
     "test:partner-mail": "tsx tests/sub-rentals/partner-mail.test.ts",
     "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
     "test:partner-terms": "tsx tests/sub-rentals/partner-terms.test.ts",
+    "test:partner-sms": "tsx tests/sub-rentals/partner-sms.test.ts",
     "test:will-call": "tsx tests/sub-rentals/will-call.test.ts",
     "test:portal-pickup": "tsx tests/portal/deliveries-pickup.test.ts",
     "test:owner-numbers": "tsx tests/exec/owner-numbers.test.ts",

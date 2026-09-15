@@ -703,6 +703,19 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   on the Portals row; resolve via `sirreelContactFor()`. Column added by
   targeted ALTER.
 
+## Partners can ask to hear about bookings by TEXT (2026-09-15 — Wes)
+- `VendorContact.smsBookings` + `smsConsentAt` (additive SQL,
+  `scripts/add-partner-sms-columns.ts`). OFF by default and only the PARTNER
+  may tick it, on their own page beside the number — the HQ contact routes
+  strip `smsBookings` from the body on purpose. Ticking records consent on the
+  SmsThread (`recordConsent(phone, 'partner-page')`), which clears an old STOP.
+- `textPartnerAboutBooking(subRentalId, kind)` in `partnerSms.ts` fires after
+  the hold-request, it's-a-go and released EMAILS — the email is still the
+  record, the text is a nudge, and a send failure never rolls anything back.
+  Everything goes through `sendTracked` (STOP, 9pm-6am quiet hours, the
+  thread log). No production, company, address or rate in the words.
+- `npm run test:partner-sms`.
+
 ## Pickup at the partner's lot — WILL_CALL (2026-09-15 — Wes)
 - Car-rental partners (California Rent A Car): the PRODUCTION picks the unit up
   at the partner's lot and returns it there. Delivery stays possible, arranged

@@ -9,6 +9,13 @@
  *   isPrimary      the address on file. Mirrored into
  *                  Vendor.contactName/email/phone, so every existing partner
  *                  mail path keeps sending exactly where it sent before.
+ *   smsBookings    per-person, OFF by default, and only THEY may tick it (on
+ *                  their own page): a text when a booking moves — quoted,
+ *                  please hold, it's a go, released. The email still goes;
+ *                  the text is the nudge. Consent is stamped (smsConsentAt)
+ *                  and every send runs through sendTracked, so STOP, quiet
+ *                  hours and the log are the same as any other SirReel text.
+ *
  *   emailBookings  per-person, OFF by default. Ticked, they are CC'd on
  *                  booking mail (estimate, hold request, it's-a-go, cancel,
  *                  logistics) — never on the introduction or the account link,
@@ -50,6 +57,8 @@ export interface VendorContactView {
   notes: string | null
   isPrimary: boolean
   emailBookings: boolean
+  smsBookings: boolean
+  smsConsentAt: string | null
   addedByPartner: boolean
 }
 
@@ -61,6 +70,7 @@ export interface VendorContactInput {
   notes?: unknown
   isPrimary?: unknown
   emailBookings?: unknown
+  smsBookings?: unknown
 }
 
 export interface CleanContact {
@@ -71,6 +81,7 @@ export interface CleanContact {
   notes: string | null
   isPrimary: boolean
   emailBookings: boolean
+  smsBookings: boolean
 }
 
 const trim = (v: unknown, max: number): string | null => {
@@ -93,6 +104,9 @@ export function cleanContactInput(raw: VendorContactInput): { ok: true; value: C
   if (email && !looksLikeEmail(email)) return { ok: false, error: `“${email}” doesn’t look like an email address.` }
   const isPrimary = raw.isPrimary === true
   const emailBookings = raw.emailBookings === true
+  const smsBookings = raw.smsBookings === true
+  const phoneRaw = trim(raw.phone, 30)
+  if (smsBookings && !phoneRaw) return { ok: false, error: 'Add a mobile number before asking us to text them about bookings.' }
   if (!email && isPrimary) return { ok: false, error: 'The main contact needs an email address — that is where partner mail goes.' }
   if (!email && emailBookings) return { ok: false, error: 'Add an email address before asking us to copy them on bookings.' }
   return {
@@ -100,18 +114,19 @@ export function cleanContactInput(raw: VendorContactInput): { ok: true; value: C
     value: {
       name,
       email,
-      phone: trim(raw.phone, 30),
+      phone: phoneRaw,
       role: isVendorContactRole(raw.role) ? raw.role : 'OTHER',
       notes: trim(raw.notes, 1000),
       isPrimary,
       emailBookings,
+      smsBookings,
     },
   }
 }
 
 const toView = (r: {
   id: string; name: string; email: string | null; phone: string | null; role: string
-  notes: string | null; isPrimary: boolean; emailBookings: boolean; addedByPartner: boolean
+  notes: string | null; isPrimary: boolean; emailBookings: boolean; smsBookings: boolean; smsConsentAt: Date | null; addedByPartner: boolean
 }): VendorContactView => ({
   id: r.id,
   name: r.name,
@@ -122,12 +137,14 @@ const toView = (r: {
   notes: r.notes,
   isPrimary: r.isPrimary,
   emailBookings: r.emailBookings,
+  smsBookings: r.smsBookings,
+  smsConsentAt: r.smsConsentAt ? r.smsConsentAt.toISOString() : null,
   addedByPartner: r.addedByPartner,
 })
 
 const SELECT = {
   id: true, name: true, email: true, phone: true, role: true,
-  notes: true, isPrimary: true, emailBookings: true, addedByPartner: true,
+  notes: true, isPrimary: true, emailBookings: true, smsBookings: true, smsConsentAt: true, addedByPartner: true,
 } as const
 
 /**
@@ -156,6 +173,7 @@ export async function listVendorContacts(db: Db, vendorId: string): Promise<Vend
       role: 'OWNER',
       isPrimary: !!email,
       emailBookings: false,
+      smsBookings: false,
     },
     select: SELECT,
   })
@@ -219,7 +237,12 @@ export async function updateVendorContactRow(
   const parsed = cleanContactInput(input)
   if (!parsed.ok) return parsed
   const v = parsed.value
-  const updated = await db.vendorContact.update({ where: { id: contactId }, data: v, select: SELECT })
+  // Their consent is stamped the moment they tick it, and cleared when they
+  // untick — the carrier record has to say when they agreed, not just that
+  // the box is on today.
+  const was = await db.vendorContact.findUnique({ where: { id: contactId }, select: { smsBookings: true, smsConsentAt: true } })
+  const smsConsentAt = v.smsBookings ? (was?.smsBookings ? was.smsConsentAt ?? new Date() : new Date()) : null
+  const updated = await db.vendorContact.update({ where: { id: contactId }, data: { ...v, smsConsentAt }, select: SELECT })
   if (v.isPrimary) { await clearOtherPrimaries(db, vendorId, contactId); await mirrorPrimaryToVendor(db, vendorId) }
   return { ok: true, contact: toView(updated) }
 }

@@ -5314,6 +5314,13 @@ model VendorContact {
   isPrimary     Boolean @default(false) @map("is_primary")
   /// CC this person on booking mail. Off unless someone turns it on.
   emailBookings Boolean @default(false) @map("email_bookings")
+  /// TEXT this person when a booking moves (Wes 2026-09-15, for Clifford at
+  /// California Rent A Car). Off unless THEY turn it on on their own page —
+  /// it is their consent, not our switch, so smsConsentAt stamps when they
+  /// did and the number goes through the same SmsThread opt-out every other
+  /// text respects. Email still goes either way; the text is a nudge.
+  smsBookings   Boolean   @default(false) @map("sms_bookings")
+  smsConsentAt  DateTime? @map("sms_consent_at")
   /// The partner added this one from their own page, not HQ.
   addedByPartner Boolean @default(false) @map("added_by_partner")
 

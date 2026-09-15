@@ -20,6 +20,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (gate instanceof NextResponse) return gate
   const { id, contactId } = await params
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  // Texting is the PARTNER's consent to give, on their own page next to the
+  // number — staff cannot tick it for them (Wes 2026-09-15).
+  if (body && typeof body === 'object') delete (body as Record<string, unknown>).smsBookings
   const r = await updateVendorContactRow(prisma, id, contactId, body)
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 400 })
   return NextResponse.json({ ok: true, contact: r.contact })

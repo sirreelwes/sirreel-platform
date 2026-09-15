@@ -19,6 +19,7 @@ interface Contact {
   notes: string | null
   isPrimary: boolean
   emailBookings: boolean
+  smsBookings: boolean
 }
 
 const ROLES = [
@@ -35,7 +36,7 @@ const BTN: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#fff',
 const LINK: React.CSSProperties = { fontSize: 13, color: '#6b6560', background: 'none', border: 0, cursor: 'pointer', padding: 0 }
 const CHIP: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#eef4f2', color: '#2f7d5d' }
 
-const blank = { name: '', email: '', phone: '', role: 'OTHER', notes: '', isPrimary: false, emailBookings: false }
+const blank = { name: '', email: '', phone: '', role: 'OTHER', notes: '', isPrimary: false, emailBookings: false, smsBookings: false }
 
 /** Pointing SirReel's mail somewhere new needs a code sent to the address
  *  already on file — the one thing a forwarded link cannot reach. */
@@ -101,7 +102,7 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
   }
 
   function startEdit(c: Contact) {
-    setDraft({ name: c.name, email: c.email ?? '', phone: c.phone ?? '', role: c.role, notes: c.notes ?? '', isPrimary: c.isPrimary, emailBookings: c.emailBookings })
+    setDraft({ name: c.name, email: c.email ?? '', phone: c.phone ?? '', role: c.role, notes: c.notes ?? '', isPrimary: c.isPrimary, emailBookings: c.emailBookings, smsBookings: c.smsBookings })
     setEditing(c.id); setAdding(false); setMsg(null)
   }
 
@@ -121,6 +122,18 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
       <label style={{ fontSize: 13, color: '#3d392f', display: 'flex', gap: 8, alignItems: 'center' }}>
         <input type="checkbox" checked={draft.emailBookings} onChange={(e) => setDraft({ ...draft, emailBookings: e.target.checked })} />
         Copy them on bookings — estimates, holds, go-aheads, cancellations
+      </label>
+      {/* Their choice, next to the number it texts. The email goes either
+          way; this is the nudge that lands while someone is at the desk. */}
+      <label style={{ fontSize: 13, color: '#3d392f', display: 'flex', gap: 8, alignItems: 'flex-start', lineHeight: 1.5 }}>
+        <input type="checkbox" style={{ marginTop: 3 }} checked={draft.smsBookings} onChange={(e) => setDraft({ ...draft, smsBookings: e.target.checked })} />
+        <span>
+          Text them too, at the number above, when a booking moves — quoted, please hold, it&rsquo;s a go, cancelled.
+          You&rsquo;re agreeing SirReel Studio Services may text that number about these bookings; the email still comes either way.
+          Message frequency varies. Msg &amp; data rates may apply. Reply STOP to stop, HELP for help.{' '}
+          <a href="https://sirreel.com/sms-terms" target="_blank" rel="noreferrer" style={{ color: '#0F7A93' }}>Terms</a>{' · '}
+          <a href="https://sirreel.com/privacy" target="_blank" rel="noreferrer" style={{ color: '#0F7A93' }}>Privacy</a>.
+        </span>
       </label>
       {(needsCode || MOVES_MAIL(draft)) && (
         <div style={{ border: '1px solid #e7c46a', background: '#fdf7e6', borderRadius: 8, padding: 10 }}>
@@ -180,6 +193,7 @@ export function VendorContactsCard({ token, preview }: { token: string; preview:
                 <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                   {c.isPrimary && <span style={CHIP}>main contact</span>}
                   {c.emailBookings && <span style={{ ...CHIP, background: '#f4f0e6', color: '#8a6d1f' }}>copied on bookings</span>}
+                  {c.smsBookings && <span style={{ ...CHIP, background: '#e6f4ec', color: '#2f7d5d' }}>texted on bookings</span>}
                 </div>
               </div>
               {!preview && (

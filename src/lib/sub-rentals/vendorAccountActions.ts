@@ -26,6 +26,7 @@ import { channelRecipients } from '@/lib/email/notificationChannels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { shouldNotifyHq } from '@/lib/sub-rentals/partnerPhotos'
 import { MAX_PROPOSED_RATE } from '@/lib/sub-rentals/rateProposalInput'
+import { recordConsent } from '@/lib/sms/threads'
 import {
   addVendorContact,
   listVendorContacts,
@@ -164,6 +165,7 @@ export async function partnerAddContact(vendorId: string, vendorName: string, in
     return { ok: false as const, needsCode: true as const, error: 'Enter the code we email to the address on file — that is what moves where SirReel writes to you.' }
   }
   const r = await addVendorContact(prisma, vendorId, input, { byPartner: true })
+  if (r.ok && r.contact.smsBookings && r.contact.phone) await recordConsent(r.contact.phone, 'partner-page').catch(() => false)
   if (r.ok) {
     if (r.contact.isPrimary || r.contact.emailBookings) {
       await tellPartner(
@@ -191,6 +193,7 @@ export async function partnerUpdateContact(vendorId: string, vendorName: string,
     return { ok: false as const, needsCode: true as const, error: 'Enter the code we email to the address on file — that is what moves where SirReel writes to you.' }
   }
   const r = await updateVendorContactRow(prisma, vendorId, contactId, input)
+  if (r.ok && r.contact.smsBookings && r.contact.phone) await recordConsent(r.contact.phone, 'partner-page').catch(() => false)
   if (r.ok) {
     if ((r.contact.isPrimary && !current?.isPrimary) || (r.contact.emailBookings && !current?.emailBookings)) {
       await tellPartner(

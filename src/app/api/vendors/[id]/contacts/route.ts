@@ -30,6 +30,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (gate instanceof NextResponse) return gate
   const { id } = await params
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  // Texting is the PARTNER's consent to give, on their own page next to the
+  // number — staff cannot tick it for them (Wes 2026-09-15).
+  if (body && typeof body === 'object') delete (body as Record<string, unknown>).smsBookings
   const r = await addVendorContact(prisma, id, body, { byPartner: false })
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 400 })
   return NextResponse.json({ ok: true, contact: r.contact }, { status: 201 })
