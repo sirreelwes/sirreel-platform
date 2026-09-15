@@ -3,12 +3,16 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
 import { NA_REFERRAL_TITLE, NA_FLEET_TITLE } from "@/lib/scheduling/naTitles";
+import { parseNaEndDate } from "@/lib/scheduling/naDuration";
+import { pacificYmd } from "@/lib/fleet/checkWindow";
 
 type Params = { params: Promise<{ assetId: string }> };
 
 const OPEN_STATUSES = ["SCHEDULED", "IN_PROGRESS"] as const;
-// UTC-midnight "today" for the @db.Date columns.
-const todayDate = () => new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+// @db.Date columns hold UTC midnight of the day. "Today" is the PACIFIC day:
+// the UTC day rolls over at 5pm here, and a "1 day" N/A keyed on it would
+// start tomorrow and end before it began.
+const dateOf = (ymd: string) => new Date(`${ymd}T00:00:00.000Z`);
 
 /**
  * POST /api/scheduling/assets/[assetId]/maintenance — set/clear a unit's N/A
@@ -30,6 +34,18 @@ const todayDate = () => new Date(`${new Date().toISOString().slice(0, 10)}T00:00
  *   action: 'clear'   → FLEET (canAssignAssets) closes the unit's OPEN records
  *                       (status COMPLETED + endDate today) — NON-destructive,
  *                       maintenance history is preserved.
+ *   action: 'set-return' → change the last day out on the unit's in-effect
+ *                       records (the one-day fix that turned into three).
+ *                       Fleet may move any; sales only its own referrals, so
+ *                       a sales edit can never shorten a fleet N/A into a
+ *                       bookable truck.
+ *
+ * `endDate` (YYYY-MM-DD, optional) on refer / mark-na / set-return is the
+ * LAST day the unit is out, inclusive — "1 day" from the prompt is today.
+ * Omitted/null = open-ended, until fleet clears it (the only shape before
+ * 2026-09-15). Availability and the timeline already overlap-test endDate,
+ * so a dated record releases the unit the day after with nobody clicking
+ * Clear.
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { assetId } = await params;
@@ -53,20 +69,35 @@ export async function POST(req: NextRequest, { params }: Params) {
     body && typeof body.note === "string" && body.note.trim()
       ? body.note.trim().slice(0, 280)
       : null;
-  if (action !== "refer" && action !== "mark-na" && action !== "clear") {
-    return NextResponse.json({ error: "action must be refer | mark-na | clear" }, { status: 400 });
+  if (action !== "refer" && action !== "mark-na" && action !== "clear" && action !== "set-return") {
+    return NextResponse.json({ error: "action must be refer | mark-na | clear | set-return" }, { status: 400 });
   }
 
-  // Per-action permission: referral is a sales action; mark-NA / clear are fleet.
-  const needed = action === "refer" ? "canCreateBooking" : "canAssignAssets";
-  if (!can(actor.role, needed)) {
+  const today = pacificYmd();
+  const end = parseNaEndDate(body?.endDate, today);
+  if (!end.ok) {
+    return NextResponse.json({ error: end.error }, { status: 400 });
+  }
+
+  // Per-action permission: referral is a sales action; mark-NA / clear are
+  // fleet. Changing the return date is either — scoped below for sales.
+  const isFleet = can(actor.role, "canAssignAssets");
+  const allowed =
+    action === "refer"
+      ? can(actor.role, "canCreateBooking")
+      : action === "set-return"
+        ? isFleet || can(actor.role, "canCreateBooking")
+        : isFleet;
+  if (!allowed) {
     return NextResponse.json(
       {
         error: "forbidden",
         reason:
           action === "refer"
             ? "referring a unit to maintenance is a sales action"
-            : "marking a unit out of service is a fleet action",
+            : action === "set-return"
+              ? "changing a unit's return date needs sales or fleet access"
+              : "marking a unit out of service is a fleet action",
       },
       { status: 403 },
     );
@@ -78,11 +109,48 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   if (action === "clear") {
+    // Close everything open. Only records still running past today get
+    // their end pulled in to today — a dated record that already lapsed
+    // keeps its real last day rather than being stretched to now.
+    const [pulledIn, lapsed] = await prisma.$transaction([
+      prisma.maintenanceRecord.updateMany({
+        where: {
+          assetId,
+          status: { in: [...OPEN_STATUSES] },
+          OR: [{ endDate: null }, { endDate: { gt: dateOf(today) } }],
+        },
+        data: { status: "COMPLETED", endDate: dateOf(today) },
+      }),
+      prisma.maintenanceRecord.updateMany({
+        where: { assetId, status: { in: [...OPEN_STATUSES] } },
+        data: { status: "COMPLETED" },
+      }),
+    ]);
+    return NextResponse.json({ ok: true, action, closed: pulledIn.count + lapsed.count });
+  }
+
+  if (action === "set-return") {
     const res = await prisma.maintenanceRecord.updateMany({
-      where: { assetId, status: { in: [...OPEN_STATUSES] } },
-      data: { status: "COMPLETED", endDate: todayDate() },
+      where: {
+        assetId,
+        status: { in: [...OPEN_STATUSES] },
+        OR: [{ endDate: null }, { endDate: { gte: dateOf(today) } }],
+        ...(isFleet ? {} : { title: NA_REFERRAL_TITLE }),
+      },
+      data: { endDate: end.endYmd ? dateOf(end.endYmd) : null },
     });
-    return NextResponse.json({ ok: true, action, closed: res.count });
+    if (res.count === 0) {
+      return NextResponse.json(
+        {
+          error: "nothing to change",
+          reason: isFleet
+            ? "this unit has no N/A in effect"
+            : "only fleet can change the return date on a fleet N/A",
+        },
+        { status: isFleet ? 404 : 403 },
+      );
+    }
+    return NextResponse.json({ ok: true, action, updated: res.count, endDate: end.endYmd });
   }
 
   // refer / mark-na → open an open-ended N/A record.
@@ -101,12 +169,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       ]
         .filter(Boolean)
         .join(" — "),
-      startDate: todayDate(),
-      endDate: null,
+      startDate: dateOf(today),
+      endDate: end.endYmd ? dateOf(end.endYmd) : null,
       status: isReferral ? "SCHEDULED" : "IN_PROGRESS",
       createdBy: actor.id,
     },
     select: { id: true, status: true, description: true },
   });
-  return NextResponse.json({ ok: true, action, recordId: record.id, description: record.description });
+  return NextResponse.json({
+    ok: true,
+    action,
+    recordId: record.id,
+    description: record.description,
+    endDate: end.endYmd,
+  });
 }

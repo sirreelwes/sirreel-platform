@@ -100,8 +100,9 @@ export interface OutOfServiceUnit {
 /**
  * Which of `assetIds` are out of service for [windowStart, windowEnd], with
  * the reason. Overlap is inclusive on both ends, and an OPEN-ENDED record
- * (endDate null — every record the N/A route writes) covers everything from
- * its start onward.
+ * (endDate null — "until cleared" from the N/A route) covers everything from
+ * its start onward; a dated one ("out 2 days") releases the unit the day
+ * after its endDate with nobody touching the record.
  */
 export async function outOfServiceByAsset(
   assetIds: string[],

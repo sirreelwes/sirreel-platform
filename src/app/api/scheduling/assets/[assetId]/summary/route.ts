@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import type { AssetTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
+import { naInEffect } from "@/lib/scheduling/naDuration";
+import { pacificYmd } from "@/lib/fleet/checkWindow";
 
 type Params = { params: Promise<{ assetId: string }> };
 
@@ -96,8 +98,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   // Open/in-progress first (newest first within each group), then a concise
   // tail of recent completed/cancelled records.
-  const open = asset.maintenanceRecords.filter((m) => OPEN_MAINT.has(m.status));
-  const closed = asset.maintenanceRecords.filter((m) => !OPEN_MAINT.has(m.status)).slice(0, 8);
+  // "Open" also means still in effect: a dated N/A past its last day keeps
+  // its status but the unit is back, so it reads with the history.
+  const today = pacificYmd();
+  const isOpen = (m: { status: string; endDate: Date | null }) =>
+    OPEN_MAINT.has(m.status) && naInEffect(m.endDate, today);
+  const open = asset.maintenanceRecords.filter(isOpen);
+  const closed = asset.maintenanceRecords.filter((m) => !isOpen(m)).slice(0, 8);
 
   const { maintenanceRecords: _all, category, ...fields } = asset;
   return NextResponse.json({

@@ -13,6 +13,8 @@ import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
 import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
+import { NA_DURATION_PRESETS, naEndForDays, naReturnLine, naDayLabel, addDaysYmd } from '@/lib/scheduling/naDuration';
+import { pacificYmd } from '@/lib/fleet/checkWindow';
 import { canCreateOrders, getPermissions } from '@/lib/permissions';
 import { readViewAsCookie } from '@/lib/auth/viewAs';
 import {
@@ -363,7 +365,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           if (!bar) return null
           const referral = w.kind === 'referral'
           const summary: string | null = w.summary || null
-          const window = w.end ? `(${w.start} – ${w.end})` : `(from ${w.start})`
+          const window = w.end ? `(${w.start} – ${w.end})\n${naReturnLine(w.end)}` : `(from ${w.start} — until fleet clears it)`
           return (
             <div
               key={`na-${k}`}
@@ -501,7 +503,7 @@ export function GanttBoard() {
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null
   // Unit N/A (out-of-service) per-row action menu. Positioned fixed (the label
   // column scrolls, so an absolute dropdown would clip).
-  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; unitName: string; isNa: boolean; tier: string; x: number; y: number }>(null)
+  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; unitName: string; isNa: boolean; referralPending: boolean; naEnd: string | null; tier: string; x: number; y: number }>(null)
   // Asset summary panel — opened by clicking a unit's NAME (asset view).
   const [summaryAssetId, setSummaryAssetId] = useState<string | null>(null)
   // Standalone "+ New Task" (delivery/pickup DispatchTask, orderId null).
@@ -516,8 +518,23 @@ export function GanttBoard() {
   // What's WRONG with the unit — captured at the moment it's greyed so
   // fleet doesn't have to phone whoever flagged it (Wes, 2026-08-24).
   // Holds the pending refer/mark-na action while the note is typed.
-  const [naPrompt, setNaPrompt] = useState<null | { assetId: string; action: 'refer' | 'mark-na'; unitName: string }>(null)
+  // 'set-return' reuses the prompt with only the duration picker — the
+  // one-day fix that became three.
+  const [naPrompt, setNaPrompt] = useState<null | { assetId: string; action: 'refer' | 'mark-na' | 'set-return'; unitName: string }>(null)
   const [naNote, setNaNote] = useState('')
+  // How long it's out (sales/fleet 2026-09-15: "sometimes they know it's
+  // only going to be a day or two"). A preset day count, a picked last
+  // day, or 'open' — until fleet clears it, the only shape before this.
+  const [naLength, setNaLength] = useState<number | 'date' | 'open'>('open')
+  const [naPickedEnd, setNaPickedEnd] = useState('')
+  const openNaPrompt = (p: NonNullable<typeof naPrompt>, currentEnd: string | null = null) => {
+    setNaNote('')
+    setNaErr(null)
+    setNaLength(currentEnd ? 'date' : 'open')
+    setNaPickedEnd(currentEnd ?? '')
+    setNaPrompt(p)
+    setUnitMenu(null)
+  }
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
   // unit row to rebind for the SAME dates via the existing assign/unassign
   // endpoints. Dates never change (that's the modal reschedule).
@@ -1115,14 +1132,14 @@ export function GanttBoard() {
   // Sales "Refer to Maintenance" (canCreateBooking) / fleet "Mark Not Available"
   // + "Clear" (canAssignAssets) — open/close OPEN MaintenanceRecords, flowing
   // through the shipped N/A grey display. Server enforces the per-action perm.
-  async function handleUnitNa(assetId: string, action: 'refer' | 'mark-na' | 'clear', note?: string) {
+  async function handleUnitNa(assetId: string, action: 'refer' | 'mark-na' | 'clear' | 'set-return', note?: string, endDate?: string | null) {
     setNaBusy(true)
     setNaErr(null)
     try {
       const res = await fetch(`/api/scheduling/assets/${assetId}/maintenance`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action, note: note?.trim() || undefined }),
+        body: JSON.stringify({ action, note: note?.trim() || undefined, endDate: endDate ?? null }),
       })
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `failed (${res.status})`)
@@ -1932,12 +1949,22 @@ export function GanttBoard() {
                         <div className={`text-[9px] truncate ${onJobToday ? 'text-emerald-700' : 'text-gray-400'}`}>{entry.unit.resourceName}</div>
                       </div>
                       {(() => {
-                        const na = (entry.unit.naWindows || []) as any[]
+                        // In effect from today on — a dated N/A whose last
+                        // day has passed still draws its grey bar over those
+                        // days, but the unit is back: no chip, no Clear.
+                        const naToday = pacificYmd()
+                        const na = ((entry.unit.naWindows || []) as any[]).filter((w) => !w.end || w.end >= naToday)
                         const isNa = na.length > 0
+                        // Latest last-day-out across the in-effect windows;
+                        // null when any is open-ended.
+                        const naEnd: string | null = !isNa || na.some((w) => !w.end)
+                          ? null
+                          : na.map((w) => w.end as string).sort().slice(-1)[0]
                         const referralPending = na.some((w) => w.kind === 'referral')
                         // A kebab appears only when the viewer has an available action:
                         // sales can refer a non-N/A unit; fleet can mark/clear.
-                        const canAny = (canSetStatus && !isNa) || canFleetOps
+                        // Sales may also move the return date on a referral.
+                        const canAny = (canSetStatus && (!isNa || referralPending)) || canFleetOps
                         return (
                           <div className="ml-auto flex items-center gap-1">
                             {isNa && (
@@ -1946,10 +1973,11 @@ export function GanttBoard() {
                                 // The grey bar carries the symptom too, but it
                                 // scrolls out of view with the timeline — this
                                 // chip doesn't.
-                                title={
+                                title={[
                                   na.map((w) => w.summary).filter(Boolean).join(' · ') ||
-                                  (referralPending ? 'Referred to maintenance — pending fleet review' : 'Out of service')
-                                }
+                                    (referralPending ? 'Referred to maintenance — pending fleet review' : 'Out of service'),
+                                  naReturnLine(naEnd),
+                                ].join('\n')}
                               >
                                 {referralPending ? 'N/A?' : 'N/A'}
                               </span>
@@ -1963,7 +1991,7 @@ export function GanttBoard() {
                                   setUnitMenu(
                                     unitMenu?.assetId === entry.unit.assetId
                                       ? null
-                                      : { assetId: entry.unit.assetId, unitName: entry.unit.unitName, isNa, tier: entry.unit.tier, x: r.right, y: r.bottom },
+                                      : { assetId: entry.unit.assetId, unitName: entry.unit.unitName, isNa, referralPending, naEnd, tier: entry.unit.tier, x: r.right, y: r.bottom },
                                   )
                                 }}
                                 className="text-gray-400 hover:text-gray-700 text-[13px] leading-none px-1"
@@ -2926,41 +2954,87 @@ export function GanttBoard() {
       )}
 
       {/* Unit N/A action menu — fixed so the scrolling label column can't clip it. */}
-      {naPrompt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!naBusy) { setNaPrompt(null); setNaNote('') } }}>
+      {naPrompt && (() => {
+        const setReturn = naPrompt.action === 'set-return'
+        const naToday = pacificYmd()
+        // The last day out, inclusive — "1 day" is today. null = until cleared.
+        const endYmd: string | null =
+          naLength === 'open' ? null
+          : naLength === 'date' ? (naPickedEnd && naPickedEnd >= naToday ? naPickedEnd : null)
+          : naEndForDays(naToday, naLength)
+        const dateMissing = naLength === 'date' && !endYmd
+        const closePrompt = () => { if (!naBusy) { setNaPrompt(null); setNaNote('') } }
+        const chip = (active: boolean) =>
+          `text-[12px] px-2.5 py-1 rounded-full border ${active ? 'bg-amber-600 border-amber-600 text-white' : 'border-gray-300 text-gray-700 hover:border-gray-400'}`
+        return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={closePrompt}>
           <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-900">
-              {naPrompt.action === 'refer' ? 'Refer to maintenance' : 'Mark not available'} · {naPrompt.unitName}
+              {naPrompt.action === 'refer' ? 'Refer to maintenance' : setReturn ? 'Change return date' : 'Mark not available'} · {naPrompt.unitName}
             </h3>
-            <p className="text-[12px] text-gray-500 mt-1">
-              What&rsquo;s wrong with it? Fleet sees this on the unit — one line is plenty.
-            </p>
-            <textarea
-              value={naNote}
-              onChange={(e) => setNaNote(e.target.value.slice(0, 280))}
-              rows={3}
-              autoFocus
-              placeholder="e.g. Driver-side mirror cracked; check engine light came on I-5"
-              className="mt-2 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 resize-y"
-            />
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[10px] text-gray-400">{naNote.length}/280</span>
-              {naErr && <span className="text-[10px] text-rose-600">{naErr}</span>}
+            {!setReturn && (
+              <>
+                <p className="text-[12px] text-gray-500 mt-1">
+                  What&rsquo;s wrong with it? Fleet sees this on the unit — one line is plenty.
+                </p>
+                <textarea
+                  value={naNote}
+                  onChange={(e) => setNaNote(e.target.value.slice(0, 280))}
+                  rows={3}
+                  autoFocus
+                  placeholder="e.g. Driver-side mirror cracked; check engine light came on I-5"
+                  className="mt-2 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 resize-y"
+                />
+                <div className="mt-1 text-[10px] text-gray-400">{naNote.length}/280</div>
+              </>
+            )}
+            <div className={setReturn ? 'mt-2' : 'mt-3'}>
+              <div className="text-[12px] font-medium text-gray-700">How long is it out?</div>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {NA_DURATION_PRESETS.map((p) => (
+                  <button key={p.days} type="button" onClick={() => setNaLength(p.days)} className={chip(naLength === p.days)}>
+                    {p.label}
+                  </button>
+                ))}
+                <button type="button" onClick={() => { setNaLength('date'); if (!naPickedEnd) setNaPickedEnd(naToday) }} className={chip(naLength === 'date')}>
+                  Pick date
+                </button>
+                <button type="button" onClick={() => setNaLength('open')} className={chip(naLength === 'open')}>
+                  Until cleared
+                </button>
+              </div>
+              {naLength === 'date' && (
+                <label className="flex items-center gap-2 mt-2 text-[12px] text-gray-600">
+                  Last day out
+                  <input
+                    type="date"
+                    value={naPickedEnd}
+                    min={naToday}
+                    onChange={(e) => setNaPickedEnd(e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded-lg text-[13px] text-gray-900"
+                  />
+                </label>
+              )}
+              <p className="text-[11px] text-gray-500 mt-1.5">
+                {dateMissing ? 'Pick the last day it’s out.' : naReturnLine(endYmd)}
+              </p>
             </div>
+            {naErr && <div className="text-[11px] text-rose-600 mt-2">{naErr}</div>}
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => { setNaPrompt(null); setNaNote('') }} disabled={naBusy}
+              <button onClick={closePrompt} disabled={naBusy}
                 className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-1.5">Cancel</button>
               <button
-                onClick={() => handleUnitNa(naPrompt.assetId, naPrompt.action, naNote)}
-                disabled={naBusy || !naNote.trim()}
-                title={!naNote.trim() ? 'Add a short description first' : undefined}
+                onClick={() => handleUnitNa(naPrompt.assetId, naPrompt.action, setReturn ? undefined : naNote, endYmd)}
+                disabled={naBusy || (!setReturn && !naNote.trim()) || dateMissing}
+                title={!setReturn && !naNote.trim() ? 'Add a short description first' : undefined}
                 className="text-[12px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40">
-                {naBusy ? 'Saving…' : naPrompt.action === 'refer' ? 'Refer' : 'Mark N/A'}
+                {naBusy ? 'Saving…' : naPrompt.action === 'refer' ? 'Refer' : setReturn ? 'Save' : 'Mark N/A'}
               </button>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {unitMenu && (
         <>
@@ -2971,7 +3045,7 @@ export function GanttBoard() {
           >
             {canSetStatus && !unitMenu.isNa && (
               <button
-                onClick={() => { setNaNote(''); setNaErr(null); setNaPrompt({ assetId: unitMenu.assetId, action: 'refer', unitName: unitMenu.unitName }); setUnitMenu(null) }}
+                onClick={() => openNaPrompt({ assetId: unitMenu.assetId, action: 'refer', unitName: unitMenu.unitName })}
                 disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
                 Refer to Maintenance…
@@ -2979,10 +3053,21 @@ export function GanttBoard() {
             )}
             {canFleetOps && !unitMenu.isNa && (
               <button
-                onClick={() => { setNaNote(''); setNaErr(null); setNaPrompt({ assetId: unitMenu.assetId, action: 'mark-na', unitName: unitMenu.unitName }); setUnitMenu(null) }}
+                onClick={() => openNaPrompt({ assetId: unitMenu.assetId, action: 'mark-na', unitName: unitMenu.unitName })}
                 disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
                 Mark Not Available…
+              </button>
+            )}
+            {unitMenu.isNa && (canFleetOps || (canSetStatus && unitMenu.referralPending)) && (
+              <button
+                onClick={() => openNaPrompt({ assetId: unitMenu.assetId, action: 'set-return', unitName: unitMenu.unitName }, unitMenu.naEnd)}
+                disabled={naBusy}
+                className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
+                Change return date…
+                <span className="block text-[10px] text-gray-500">
+                  {unitMenu.naEnd ? `Back ${naDayLabel(addDaysYmd(unitMenu.naEnd, 1))}` : 'Until cleared'}
+                </span>
               </button>
             )}
             {canFleetOps && unitMenu.isNa && (

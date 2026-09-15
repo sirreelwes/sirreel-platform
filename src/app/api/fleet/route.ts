@@ -5,6 +5,7 @@ import { getPermissions } from '@/lib/permissions'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
+import { pacificYmd } from '@/lib/fleet/checkWindow'
 
 // Full lifecycle vocabulary. Terminal statuses take a unit OUT of fleet:
 // the PATCH below forces isActive=false for them (and true for the rest) so
@@ -72,7 +73,12 @@ export async function GET(req: NextRequest) {
           take: 1,
         },
         maintenanceRecords: {
-          where: { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
+          // In effect today — a dated N/A whose last day has passed still
+          // carries an open status but no longer holds the unit out.
+          where: {
+            status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+            OR: [{ endDate: null }, { endDate: { gte: new Date(`${pacificYmd()}T00:00:00.000Z`) } }],
+          },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: { description: true, status: true },
