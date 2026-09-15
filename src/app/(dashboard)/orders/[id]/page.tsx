@@ -44,6 +44,7 @@ import { TentSandbagOffer, type SandbagCatalogItem } from '@/components/orders/T
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
+import { WalkieSupplyNotice } from "@/components/orders/WalkieSupplyNotice";
 import EnterRedlineModal from "@/components/orders/EnterRedlineModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
@@ -899,6 +900,8 @@ export default function OrderDetailPage() {
   // the target line's context (id, qty cap, rate, dates) so the modal
   // can clamp + pre-fill. Null when closed.
   const [subRentalLine, setSubRentalLine] = useState<SubRentalLineContext | null>(null);
+  // Bumped when a sub-rental is recorded, so the walkie notice re-reads.
+  const [subRentalsVersion, setSubRentalsVersion] = useState(0);
   // "Switch class…" on a vehicle line (Wes 2026-09-11) — liftgate to no
   // liftgate, or up to a cube at the quoted rate.
   const [switchLine, setSwitchLine] = useState<SwitchClassLine | null>(null);
@@ -3649,6 +3652,17 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* Walkie supply — HQ's call on whether this order's radios need
+          subbing (Wes 2026-09-15). Renders nothing without walkies. */}
+      <WalkieSupplyNotice
+        orderId={orderId}
+        refreshKey={`${subRentalsVersion}|${order.lineItems
+          .map((li) => `${li.id}:${li.quantity}:${li.pickupDate}:${li.returnDate}`)
+          .join(",")}|${order.status}`}
+        canSubRent={canManageSubRentals}
+        onSubRent={setSubRentalLine}
+      />
+
       {/* A/V Tech reminder banner — fires whenever any line item on the
           order references an InventoryItem flagged REQUIRES_AV_TECH
           (currently: LED Wall Usage). Internal-only reminder, never
@@ -6008,7 +6022,8 @@ export default function OrderDetailPage() {
         <SubRentalModal
           line={subRentalLine}
           onClose={() => setSubRentalLine(null)}
-          onChanged={() => { /* phase 1: no order-total impact; refresh is internal */ }}
+          // No order-total impact; the walkie notice is what reads it.
+          onChanged={() => setSubRentalsVersion((v) => v + 1)}
         />
       )}
 

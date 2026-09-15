@@ -11,6 +11,7 @@ import {
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
 import { negotiated } from '@/lib/pricing/companyRate'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
 
 export const dynamic = 'force-dynamic'
 
@@ -148,7 +149,10 @@ export async function GET(req: NextRequest) {
   // walkie" → analog, and still resolves "garment rack" and "trash can
   // liner" the way the seed intended.
   const aliasRows = await prisma.inventoryItem.findMany({
-    where: { isActive: true, NOT: { aliases: { isEmpty: true } } },
+    where: {
+      isActive: true,
+      NOT: [{ aliases: { isEmpty: true } }, { code: { in: [...STOCK_ONLY_CODES] } }],
+    },
     select: { id: true, aliases: true },
   })
   const aliasMatchIds = aliasRows
@@ -214,6 +218,10 @@ export async function GET(req: NextRequest) {
       ? prisma.inventoryItem.findMany({
           where: {
             isActive: true,
+            // Stock-only rows (the analog walkies) fill orders written
+            // against another row and are never offered here — a rep
+            // picks "Motorola CP200", not a radio type (Wes 2026-09-15).
+            NOT: { code: { in: [...STOCK_ONLY_CODES] } },
             ...(trackingFilter ? { trackingMode: trackingFilter } : {}),
             OR: [
               // Rows whose aliases satisfied every token (resolved above).

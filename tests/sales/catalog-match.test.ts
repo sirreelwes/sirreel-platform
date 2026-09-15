@@ -98,18 +98,15 @@ const CASES: Array<[description: string, expected: string | RegExp | null]> = [
 
   // Unchanged behavior — the curated-alias path and its deterministic
   // tiebreak among identically-scoring variants.
-  // Walkies default to digital (Wes, 8/17); the analog answers only when
-  // the request says so. Same rate either way — this is a pull-sheet
-  // question, not a billing one.
-  // Matched by rule, not by row: the two digital rows were merged the same
-  // afternoon and the surviving id changed under us. The rule doesn't care
-  // which row wins, and a pinned name can't survive that churn.
-  ['walkies', /Digital/],
-  ['walkie talkies', /Digital/],
-  ['handhelds', /Digital/],
-  ['cp200d', /Digital/],
-  ['analog walkies', /Analog/],
-  ['cp200 analog', /Analog/],
+  // Walkies are ONE product (Wes, 9/15) — superseding the 8/17 "digital
+  // unless it says analog" ruling. Every walkie word, qualified or not,
+  // lands on "Motorola CP200"; the analog stock row is never offered.
+  ['walkies', /^Motorola CP200$/],
+  ['walkie talkies', /^Motorola CP200$/],
+  ['handhelds', /^Motorola CP200$/],
+  ['cp200d', /^Motorola CP200$/],
+  ['analog walkies', /^Motorola CP200$/],
+  ['cp200 analog', /^Motorola CP200$/],
   ['surveillance kits', 'Surveillance Kit'],
   ['hand mics', 'Hand Mics'],
   ['sandbags', '25 LB. SANDBAG'],

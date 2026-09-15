@@ -204,7 +204,7 @@ QUALIFIERS (negative qualifiers are exclusions, NOT new line items)
 A qualifier is a PREFERENCE. A word that picks out WHICH catalog item they
 mean is part of the item — leave it in \`description\`, not \`qualifier\`:
 sizes and capacities ("6' tables", "100 qt cooler", "3000w generator") and
-variant words ("analog walkies", "tall director's chairs"). Split those off
+variant words ("tall director's chairs"). Split those off
 into \`qualifier\` and the server matches on what's left, which is every
 size of table at once. "Walkies for the DP" — that's a qualifier.
 
@@ -226,16 +226,16 @@ Industry context: in film/TV rentals, radio accessories are SEPARATE inventory
 items that pair 1:1 with the base radio. SirReel currently stocks two
 accessory SKUs:
 
-  - "walkie" / "walkies"                                = Motorola CP200d UHF Radio (Digital) — see below
+  - "walkie" / "walkies"                                = Motorola CP200 — see below
   - "surveillance kit" / "surveillances" / "earpiece"   = Surveillance Kit (discreet earpiece + lapel mic)
   - "hand mic" / "handset" / "shoulder mic" / "speaker mic"
                                                         = Hand Mics (remote speaker/microphone accessory)
 
-SirReel stocks both digital and analog CP200s at the same rate. Unqualified
-"walkies" means the DIGITAL radio — that is the house default and what goes
-out unless the client asks otherwise. Match the analog row ONLY when the
-request actually says analog; when it does, keep the word "analog" in the
-line's \`description\` (it identifies the radio, it isn't a preference).
+SirReel rents ONE walkie: the Motorola CP200. Whether a given radio is
+analog or digital is the warehouse's call, never a separate line — "analog
+walkies" and "digital radios" are both just walkies. Keep "analog" /
+"digital" OUT of \`description\`; if the client asked for a type, put it in
+\`qualifier\` so the rep sees the preference.
 
 The canonical SirReel names are "Surveillance Kit" and "Hand Mics" — but
 the AI should use the spelling the client wrote in the description field

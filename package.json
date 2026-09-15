@@ -53,6 +53,7 @@
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
     "test:planyo-mirror": "tsx tests/sync/planyo-mirror-switch.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
+    "test:walkies": "tsx tests/catalog/walkies.test.ts",
     "test:quote-hold": "tsx tests/orders/quote-hold.test.ts",
     "test:rental-days": "tsx tests/orders/rental-days.test.ts",
     "test:week-decision": "tsx tests/orders/week-decision.test.ts",

@@ -66,6 +66,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'annual-requested': { label: 'Annual agreement asked for', hint: 'A client asked in their portal to sign once for the year — offer it on the company page' },
   'rw-token': { label: 'RentalWorks', hint: 'The RentalWorks credential needs renewing' },
   'partner-cancelled-off-pick-list': { label: 'Not on the pick list', hint: 'A partner’s booking was cancelled and we’re filling the line — the warehouse was never told' },
+  'walkies-short': { label: 'Sub walkies', hint: 'Booked orders need more Motorola CP200s than we own on those days — record a sub-rental on the walkie line' },
   'replacement-cost-missing': { label: 'Replacement cost to add', hint: 'Gear on an upcoming order has no replacement cost on file — the client’s broker needs the figure for the COI' },
 };
 

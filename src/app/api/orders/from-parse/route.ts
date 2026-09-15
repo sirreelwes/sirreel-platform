@@ -70,6 +70,7 @@ import { resolveLineRate, resolveFeeLineRate, logRateOverride } from '@/lib/pric
 import { holdOnQuoteSend, reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { assignNextAvailableForOrder, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { orderableWalkieLine } from '@/lib/catalog/walkiePool'
 
 
 export const dynamic = 'force-dynamic'
@@ -237,7 +238,11 @@ export async function POST(req: NextRequest) {
   // Empty items[] is valid (blank-mode wizard creates an empty DRAFT
   // and the rep adds lines on /orders/[id]). Just normalize the array
   // shape so the loop below is a no-op when nothing was parsed.
-  const itemsSafe = Array.isArray(items) ? items : []
+  // Walkies land on the one "Motorola CP200" row and read that way,
+  // whatever the client called them (lib/catalog/walkies.ts).
+  const itemsSafe = await Promise.all(
+    (Array.isArray(items) ? items : []).map((it) => orderableWalkieLine(it)),
+  )
 
   // Order date range (inherited by lines that don't specify their own).
   // Inverted-range guard mirrors POST /api/orders.

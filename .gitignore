@@ -64,6 +64,7 @@ scripts/*
 !scripts/scheduling-cleanup-empty-categories.ts
 !scripts/seed-catalog-aliases.ts
 !scripts/seed-walkie-kit-pieces.ts
+!scripts/walkies-one-product.ts
 !scripts/supply-catalog-seed.ts
 !scripts/supply-catalog-seed.json
 !scripts/verify-rw-token.ts

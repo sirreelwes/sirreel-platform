@@ -50,6 +50,9 @@ export interface SubRentalLineContext {
   description: string
   /** OrderLineItem.quantity — the cap on quantity entry. */
   quantity: number
+  /** Pre-fill for the quantity box when HQ already knows how many to sub
+   *  (the walkie shortfall). Defaults to the whole line. */
+  suggestedQuantity?: number
   /** Client-side rate per day; shown as the derived client price column
    *  for transparency. NOT editable. */
   rate: number
@@ -97,7 +100,7 @@ export function SubRentalModal({
   const [vendorId, setVendorId] = useState<string>('')
   const [newVendorName, setNewVendorName] = useState<string>('')
   const [creatingVendor, setCreatingVendor] = useState(false)
-  const [qty, setQty] = useState<string>(String(line.quantity))
+  const [qty, setQty] = useState<string>(String(line.suggestedQuantity ?? line.quantity))
   const [receiveMethod, setReceiveMethod] = useState<ReceiveMethod>('PICKUP')
   const [vendorDailyRate, setVendorDailyRate] = useState<string>('')
   const [vendorWeeklyRate, setVendorWeeklyRate] = useState<string>('')

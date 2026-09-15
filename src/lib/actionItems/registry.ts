@@ -45,6 +45,9 @@
  *     kitted item) are missing the pieces the catalog says ride with
  *     them, so they never print on the pull sheet. The early half of the
  *     check the yard's check-out sheet now enforces at the bay.
+ *   - walkies-short (DERIVED) — committed walkie orders need more Motorola
+ *     CP200s on some day than the pool (analog + digital stock + subbed in)
+ *     holds. Says how many to sub; clears when the sub-rental is recorded.
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -101,6 +104,7 @@ import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possib
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
 import { kitIncompleteProvider } from '@/lib/actionItems/providers/kitIncomplete'
+import { walkiesShortProvider } from '@/lib/actionItems/providers/walkiesShort'
 import { partnerCancelledOffPickListProvider } from '@/lib/actionItems/providers/partnerCancelledOffPickList'
 
 const PROVIDERS: ActionItemProvider[] = [
@@ -148,6 +152,9 @@ const PROVIDERS: ActionItemProvider[] = [
   // order's COI figure for the client's broker is a floor, not a total.
   replacementCostMissingProvider,
   kitIncompleteProvider,
+  // Committed walkie orders overrun the CP200 pool on some day — HQ says
+  // how many to sub (Wes 2026-09-15: the "(Sub)" catalog row is gone).
+  walkiesShortProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

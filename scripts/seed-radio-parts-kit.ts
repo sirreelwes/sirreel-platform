@@ -4,7 +4,6 @@
  *
  *   npx tsx scripts/seed-radio-parts-kit.ts             # dry run
  *   npx tsx scripts/seed-radio-parts-kit.ts --write
- *   npx tsx scripts/seed-radio-parts-kit.ts --write --include-sub
  *
  * Wes, 2026-09-11: "add antenna and battery to pick lists as part of the
  * kit". The RW sheet for order 304656 is the reference — 15 radios print
@@ -76,7 +75,8 @@ function numArg(flag: string): number | null {
 
 /** Same parents as the walkie-kit seed. Codes, not names — names drift. */
 const RADIO_CODES = ['103733', '104387']
-if (args.includes('--include-sub')) RADIO_CODES.push('CP200S')
+// No --include-sub: the "(Sub)" radio row was archived 2026-09-15 —
+// subbing is HQ's call from the pool now (src/lib/catalog/walkiePool.ts).
 
 /** The HQ-invented spare row this script folds into the battery pool. */
 const LEGACY_SPARE_CODE = 'CP200-BATTERY'
