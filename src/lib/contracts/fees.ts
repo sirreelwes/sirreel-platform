@@ -7,6 +7,14 @@
  * rental agreement changes, and must stay in lockstep with
  * public/contracts/sirreel-rental-agreement.pdf (same rule as
  * contractClauses.ts).
+ *
+ * Confirmed current by Wes on 2026-09-15, when all three were about to print
+ * into a negotiated master filed for two companies. That is the standing
+ * reason to check before changing one: these values do not only render on a
+ * page a client can re-read later — they are typeset into filed PDFs that
+ * stop tracking this file the moment they are written. Changing a number here
+ * does NOT amend an agreement already on file; that needs a re-issued
+ * document (see lib/contracts/negotiatedAgreement.ts).
  */
 
 /** Limited Collision Damage Waiver, per day per vehicle. */

@@ -2,8 +2,10 @@
  * File a negotiated rental agreement as a company master.
  *
  *   npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026
- *   npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write \
- *     --effective 2026-01-01 --expires 2026-12-31
+ *   npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write
+ *
+ * The coverage window comes from the agreement itself; --effective/--expires
+ * override it for a one-off.
  *
  * Renders the client's negotiated agreement on SirReel paper (see
  * negotiatedAgreement.ts) and files ONE CompanyAgreement per company, with
@@ -93,17 +95,25 @@ async function main() {
     process.exit(2)
   }
 
-  const effectiveDate = parseDate(arg('effective'), 'effective')
-  const expiryDate = parseDate(arg('expires'), 'expires')
+  // The agreed window lives on the agreement; flags override for a one-off.
+  const effectiveOverride = arg('effective')
+  const expiryOverride = arg('expires')
+  const effectiveDate = parseDate(effectiveOverride ?? agreement.effectiveDate, 'effective')
+  const expiryDate = parseDate(expiryOverride ?? agreement.expiryDate, 'expires')
   if (WRITE && !expiryDate) {
-    console.error('--expires is required with --write: an auto-covering master with no end date never lapses.')
+    console.error('No expiry date: an auto-covering master with no end date never lapses.')
+    console.error('Set expiryDate on the agreement in negotiatedAgreement.ts, or pass --expires.')
     process.exit(1)
   }
 
+  const src = (o: string | undefined) => (o ? 'flag' : 'agreement')
   console.log(`\n${agreement.title} (${agreement.key})`)
   console.log(`  ${agreement.clauses.length} negotiated clauses + ${agreement.appendedClauses.length} appended, plus Fleet + LCDW`)
   console.log(`  appended: ${agreement.appendedClauses.map((c) => `${c.ref}. ${c.title}`).join(', ')}`)
-  console.log(`  effective ${effectiveDate ? effectiveDate.toISOString().slice(0, 10) : '(none)'} → ${expiryDate ? expiryDate.toISOString().slice(0, 10) : '(none)'}`)
+  console.log(
+    `  effective ${effectiveDate!.toISOString().slice(0, 10)} (${src(effectiveOverride)})` +
+      ` → ${expiryDate!.toISOString().slice(0, 10)} (${src(expiryOverride)})`,
+  )
   console.log(WRITE ? '  MODE: WRITE\n' : '  MODE: dry run (pass --write to file)\n')
 
   const journal: Array<Record<string, unknown>> = []

@@ -65,6 +65,17 @@ export interface NegotiatedAgreement {
   appendedClauses: CanonicalClause[]
   /** Company names this document is the master for. Filing script targets these. */
   companies: string[]
+  /**
+   * The agreed coverage window, as YYYY-MM-DD.
+   *
+   * Recorded here rather than typed at the command line each run. The filing
+   * script refuses to file an auto-covering master with no end date — one that
+   * never lapses never hands the signing ask back — and a date that must be
+   * retyped for every company is a date that eventually gets mistyped into a
+   * contract. Flags still override for a one-off.
+   */
+  effectiveDate: string
+  expiryDate: string
 }
 
 /** The canonical clause our appendix borrows, looked up rather than retyped. */
@@ -115,6 +126,10 @@ export const GRADUATION_DAY_2026: NegotiatedAgreement = {
     },
   ],
   companies: ['Graduation Day Productions', 'Party Giraffes'],
+  // Wes, 2026-09-15: "effective 5/15 through 12/31" — 5/15 being the date on
+  // their counsel's PDF, the day the redline was settled.
+  effectiveDate: '2026-05-15',
+  expiryDate: '2026-12-31',
 }
 
 export const NEGOTIATED_AGREEMENTS: NegotiatedAgreement[] = [GRADUATION_DAY_2026]
