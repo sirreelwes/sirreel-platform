@@ -31,6 +31,7 @@ scripts/*
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts
 !scripts/seed-kit-unit-checks.ts
+!scripts/seed-rosco-fluid-kits.ts
 !scripts/seed-radio-parts-kit.ts
 !scripts/add-hq-user.ts
 !scripts/backfill-coi-named-insured.ts
@@ -65,6 +66,9 @@ scripts/*
 !scripts/scheduling-cleanup-empty-categories.ts
 !scripts/seed-catalog-aliases.ts
 !scripts/seed-walkie-kit-pieces.ts
+!scripts/walkies-one-product.ts
+!scripts/walkie-kit-client-hidden.ts
+!scripts/walkie-client-note.ts
 !scripts/supply-catalog-seed.ts
 !scripts/supply-catalog-seed.json
 !scripts/verify-rw-token.ts

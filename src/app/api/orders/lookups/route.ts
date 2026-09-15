@@ -26,10 +26,30 @@ export async function GET(req: NextRequest) {
     // Post catalog merge these are unit-tracked InventoryItems. The
     // response key stays `assetCategories` — it is what the order page's
     // vehicle picker reads — but the ids are catalog ids and bind to
-    // inventoryItemId. isPublished became publicVisible in the merge.
+    // inventoryItemId.
+    //
+    // NOT gated on publicVisible. The merge (4c2185bf) carried the frozen
+    // AssetCategory.isPublished across as publicVisible on the assumption
+    // they meant the same thing. They don't: publicVisible is the
+    // sirreel.com gate the publish desk owns, and it is false on all 17
+    // unit-tracked rows — so this returned an EMPTY list and the order
+    // page's "Select vehicle…" dropdown has had nothing in it since
+    // 2026-08-02. Reps fell through to the catalog combobox, which is why
+    // nobody reported it.
+    //
+    // isPublished was no better a rule anyway: it was true on a retired
+    // 12-passenger van and on Lankershim Studios (a stage), and false on
+    // three trucks we rent. Nothing maintains it — the table is frozen.
+    // The honest staff rule is what a rep can actually put on an order:
+    // every active unit-tracked row the catalog itself calls a VEHICLE.
+    // That is the 10 live classes, stages excluded (they are booked
+    // through Make Reservation) and the retired rows out with isActive.
     prisma.inventoryItem.findMany({
-      where: { trackingMode: "UNIT_TRACKED", publicVisible: true, isActive: true },
-      select: { id: true, code: true, description: true, slug: true, dailyRate: true, weeklyRate: true },
+      where: { trackingMode: "UNIT_TRACKED", isActive: true, type: "VEHICLE" },
+      select: {
+        id: true, code: true, description: true, slug: true,
+        dailyRate: true, weeklyRate: true, department: true, type: true,
+      },
       orderBy: { description: "asc" },
     }),
     prisma.inventoryCategory.findMany({
@@ -48,6 +68,11 @@ export async function GET(req: NextRequest) {
       slug: c.slug,
       dailyRate: c.dailyRate,
       weeklyRate: c.weeklyRate,
+      // Travel with the row so the picker derives the line's type the way
+      // every other door does (src/lib/orders/lineType.ts) instead of
+      // assuming everything in this list is a truck.
+      department: c.department,
+      lineType: c.type,
     })),
     inventoryCategories,
   });

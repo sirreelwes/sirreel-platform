@@ -1,0 +1,55 @@
+{
+  "ranAt": "2026-09-15T17:57:24.157Z",
+  "entries": [
+    {
+      "kind": "item.department",
+      "id": "1b9c5c24-c753-420a-9632-075e637f9029",
+      "code": "RVHAZER",
+      "from": {
+        "department": "PRO_SUPPLIES",
+        "type": "EQUIPMENT"
+      },
+      "to": {
+        "department": "EXPENDABLES",
+        "type": "EXPENDABLE"
+      }
+    },
+    {
+      "kind": "item.department",
+      "id": "8ab53680-292b-4bf5-b366-43b7a0eb3a16",
+      "code": "FOG1",
+      "from": {
+        "department": "PRO_SUPPLIES",
+        "type": "EXPENDABLE"
+      },
+      "to": {
+        "department": "EXPENDABLES",
+        "type": "EXPENDABLE"
+      }
+    },
+    {
+      "kind": "kit.create",
+      "id": "48d7f2d7-ad96-4501-a6dd-c8e76c6660db",
+      "parent": "103859",
+      "piece": "RVHAZER"
+    },
+    {
+      "kind": "kit.create",
+      "id": "816cb11d-dd99-4e48-b16c-a8ba8bb3d8d1",
+      "parent": "EFX-ROSCOE-V-HAZER-WATER-BASED",
+      "piece": "RVHAZER"
+    },
+    {
+      "kind": "kit.create",
+      "id": "cb65e0a7-cef3-43f2-9956-96e2ce4a035f",
+      "parent": "EFX-ROSCOE-FOGGER-1900",
+      "piece": "FOG1"
+    },
+    {
+      "kind": "kit.create",
+      "id": "e0615480-3c0a-4905-b22f-e393de434740",
+      "parent": "104455",
+      "piece": "FOG1"
+    }
+  ]
+}

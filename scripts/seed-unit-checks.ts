@@ -3,7 +3,6 @@
  *
  *   npx tsx scripts/seed-unit-checks.ts            # dry run
  *   npx tsx scripts/seed-unit-checks.ts --write
- *   npx tsx scripts/seed-unit-checks.ts --write --include-sub   # CP200S too
  *   npx tsx scripts/seed-unit-checks.ts --write --checks "Antenna,Battery,Belt clip"
  *
  * Wes, 2026-09-11: "We need to add antenna and battery to pick lists as
@@ -38,7 +37,8 @@ function strArg(flag: string): string | null {
 
 // Same codes the walkie-kit seed hangs off. Codes, not names — names drift.
 const RADIO_CODES = ['103733', '104387']
-if (args.includes('--include-sub')) RADIO_CODES.push('CP200S')
+// No --include-sub: the "(Sub)" radio row was archived 2026-09-15 —
+// subbing is HQ's call from the pool now (src/lib/catalog/walkiePool.ts).
 
 const CHECKS = normalizeUnitChecks((strArg('--checks') ?? 'Antenna,Battery').split(','))
 

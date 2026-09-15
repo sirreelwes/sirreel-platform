@@ -7,6 +7,7 @@ import {
   tokenVariants,
 } from '@/lib/sales/queryTokens'
 import type { LineItemDepartment, LineItemType } from '@prisma/client'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
 
 // Token helpers moved to queryTokens.ts (prisma-free, so the public order
 // form can rank client-side against the SAME singular/plural rules).
@@ -70,6 +71,9 @@ export async function loadCatalogForSnippet(): Promise<CatalogProduct[]> {
   const invItems = await prisma.inventoryItem.findMany({
     where: {
       isActive: true,
+      // Never match a quote line to a stock-only row — "analog walkies"
+      // is a Motorola CP200 like any other (Wes 2026-09-15).
+      NOT: { code: { in: [...STOCK_ONLY_CODES] } },
       OR: [
         { trackingMode: 'UNIT_TRACKED' },
         { NOT: { aliases: { isEmpty: true } } },

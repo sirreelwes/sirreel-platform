@@ -46,5 +46,5 @@ export default async function OrderCheckReportPage({ params, searchParams }: Pro
     )
   }
 
-  return <CheckReportForm draft={draft} />
+  return <CheckReportForm draft={draft} viewerName={user.name} />
 }

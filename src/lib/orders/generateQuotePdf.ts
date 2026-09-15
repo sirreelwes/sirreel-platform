@@ -26,6 +26,7 @@ import { catalogClientCode } from '@/lib/catalog/display'
 import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 import { parseDriverEstimate, viewDriverEstimate, driverEstimateSentence } from '@/lib/orders/driverEstimate'
+import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 
 export type GenerateQuotePdfResult =
   | { ok: true; url: string; key: string; generatedAt: Date }
@@ -48,6 +49,7 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
           // must answer "is there one" and nothing else, so no vendor name,
           // cost or PO can reach a client-facing render through it.
           subRentals: { select: { id: true } },
+          ...CLIENT_KIT_VISIBILITY,
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -67,7 +69,9 @@ export async function generateQuotePdf(orderId: string): Promise<GenerateQuotePd
   // quote shows the client what they're paying, not where SirReel
   // sourced it from. Internal sub-rental surfaces read OrderLineItem
   // .subRentals directly and never come through this DTO.
-  const lineItems: QuoteLineItem[] = order.lineItems.map((li) => ({
+  // Hidden included accessories ($0, kit piece not client-visible) are
+  // left off — lib/orders/clientLines.ts.
+  const lineItems: QuoteLineItem[] = order.lineItems.filter((li) => !hiddenFromClient(li)).map((li) => ({
     department: li.department as Department,
     description: li.description,
     qualifier: li.qualifier,

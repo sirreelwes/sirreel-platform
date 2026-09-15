@@ -30,7 +30,10 @@ import type { LineItemDepartment } from '@prisma/client'
 // ─────────────────────────────────────────────────────────────────────────
 const INVENTORY_ALIASES: { codeContains: string; aliases: string[] }[] = [
   {
-    codeContains: 'CP200',
+    // Was 'CP200', which since 8/29 also hit CP200-BATTERY and
+    // CP200-CHARGER-6BANK and taught the matcher that "walkies" means a
+    // battery (found 2026-09-15). The radio's own I-code only.
+    codeContains: '104387',
     aliases: [
       'walkies', 'walkie', 'walkie talkie', 'walkie talkies',
       'handheld', 'handhelds', 'two-way radio', 'two way radio',

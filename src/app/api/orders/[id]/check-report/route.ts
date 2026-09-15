@@ -72,6 +72,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!Array.isArray(body?.lines)) {
     return NextResponse.json({ error: 'lines[] required' }, { status: 400 })
   }
+  // Every pull and every check-in carries the name of whoever did it
+  // (Wes, 2026-09-15: "we should require a name for any pull or checkin
+  // of items"). Not defaulted to the session: the terminal on the floor
+  // is signed in as whoever last used it, and a sheet credited to the
+  // wrong person is worse than one that asks.
+  const passName = typeof body.preppedBy === 'string' ? body.preppedBy.trim() : ''
+  if (!passName) {
+    return NextResponse.json(
+      { error: 'name required', reason: `Put the name of whoever ${edge === 'OUT' ? 'pulled' : 'checked in'} these items before filing.` },
+      { status: 400 },
+    )
+  }
 
   // Trust the client for the COUNT and the note, never for the expected
   // quantity or the identity of the line — those come off the order, so
@@ -126,7 +138,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     orderId: id,
     edge,
     submittedById: auth.userId,
-    preppedBy: typeof body.preppedBy === 'string' && body.preppedBy.trim() ? body.preppedBy.trim() : null,
+    // The name this pass is credited to — required above.
+    preppedBy: passName,
     notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null,
     lines,
     sheetPhotoKey: typeof body.sheetPhotoKey === 'string' ? body.sheetPhotoKey : null,

@@ -63,6 +63,7 @@ import {
   vehicleLineCount,
 } from '@/lib/sales/inquiryVehicleRequest'
 import type { EmailVehicleRequest } from '@/lib/sales/emailVehicleMatch'
+import { askHowPaymentInfoWasHandled, isPaymentInfoInquiry } from '@/lib/inquiries/paymentInfoDismiss'
 import {
   MakeReservationModal,
   type ReservationPrefill,
@@ -564,13 +565,20 @@ export function NewInboundColumn({
     }
   }
 
-  const dismissPersistent = async (inquiryId: string) => {
+  const dismissPersistent = async (inquiryId: string, title: string) => {
+    // Payment-info requests say how they were handled (see paymentInfoDismiss).
+    let handledNote: string | undefined
+    if (isPaymentInfoInquiry(title)) {
+      const note = askHowPaymentInfoWasHandled()
+      if (note === null) return
+      handledNote = note
+    }
     setBusyId(inquiryId)
     try {
       const res = await fetch(`/api/inquiries/${encodeURIComponent(inquiryId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'DISMISSED' }),
+        body: JSON.stringify({ status: 'DISMISSED', handledNote }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -717,7 +725,7 @@ export function NewInboundColumn({
                     onReserve={() => openReservation(item.row)}
                     onAddOn={() => setAddOnInquiry(item.row)}
                     onQuickRespond={() => openQuickRespond(item.row)}
-                    onDismiss={() => dismissPersistent(item.row.id)}
+                    onDismiss={() => dismissPersistent(item.row.id, item.row.title)}
                   />
                 ) : (
                   <SuggestionCard
@@ -792,7 +800,7 @@ export function NewInboundColumn({
                         onReserve={() => openReservation(item.row)}
                         onAddOn={() => setAddOnInquiry(item.row)}
                         onQuickRespond={() => openQuickRespond(item.row)}
-                        onDismiss={() => dismissPersistent(item.row.id)}
+                        onDismiss={() => dismissPersistent(item.row.id, item.row.title)}
                       />
                     ) : (
                       <SuggestionCard

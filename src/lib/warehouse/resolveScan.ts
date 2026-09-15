@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { isStockOnlyCode, WALKIE_ORDER_CODE } from '@/lib/catalog/walkies'
 
 /**
  * Turn whatever a scanner (or a picker's keyboard) put in the box into a
@@ -82,7 +83,8 @@ export async function resolveScan(raw: string): Promise<ScanResolution> {
     select: { id: true, code: true },
   })
   if (item) {
-    return { kind: 'catalog', inventoryItemId: item.id, code: item.code, scanned }
+    const orderable = await orderableRow(item)
+    return { kind: 'catalog', inventoryItemId: orderable.id, code: orderable.code ?? item.code, scanned }
   }
 
   // 2. Unit barcode from the mirrored RW register.
@@ -111,10 +113,11 @@ export async function resolveScan(raw: string): Promise<ScanResolution> {
         },
       }
     }
+    const orderable = await orderableRow({ id: unit.inventoryItemId, code: unit.inventoryItem?.code ?? null })
     return {
       kind: 'unit',
-      inventoryItemId: unit.inventoryItemId,
-      code: unit.inventoryItem?.code ?? null,
+      inventoryItemId: orderable.id,
+      code: orderable.code,
       scanned,
       unit: {
         id: unit.id,
@@ -127,6 +130,28 @@ export async function resolveScan(raw: string): Promise<ScanResolution> {
   }
 
   return { kind: 'unknown', scanned }
+}
+
+/**
+ * A stock-only row answers as the row its orders are written against.
+ *
+ * Walkies (lib/catalog/walkies.ts): every walkie line binds to the
+ * "Motorola CP200" row, but the shelf holds analog radios under their own
+ * RentalWorks I-code. Without this, a picker grabbing an analog radio for
+ * a walkie line would be told "this line expects 104387" — the floor
+ * decides which CP200 goes out, not the order. The unit itself (id,
+ * barcode) is untouched, so the scan still records exactly which radio
+ * left.
+ */
+async function orderableRow<T extends { id: string; code: string | null }>(
+  row: T,
+): Promise<{ id: string; code: string | null }> {
+  if (!isStockOnlyCode(row.code)) return row
+  const target = await prisma.inventoryItem.findFirst({
+    where: { code: WALKIE_ORDER_CODE, isActive: true },
+    select: { id: true, code: true },
+  })
+  return target ?? row
 }
 
 /**

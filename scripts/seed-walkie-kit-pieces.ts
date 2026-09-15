@@ -58,14 +58,11 @@ function numArg(flag: string): number | null {
 
 // The radios the kit hangs off. Codes, not names — names drift.
 //
-// CP200S (the "Sub" radio) is deliberately NOT here. It has zero on hand
-// and no replacement cost, which reads as a sub-rental placeholder rather
-// than stock we own — and a sub'd radio most likely arrives with the
-// partner's own batteries, so auto-adding OURS to that order would send
-// gear nobody asked for. Pending Wes's call; `--include-sub` adds it, and
-// the script is idempotent so that is a one-line re-run.
+// CP200S (the "Sub" radio) is deliberately NOT here, and never will be:
+// Wes archived it 2026-09-15 ("remove sub from the inventory") — whether
+// walkies get subbed is HQ's call from the pool now
+// (src/lib/catalog/walkiePool.ts), recorded as a SubRental on the line.
 const RADIO_CODES = ['103733', '104387']
-if (args.includes('--include-sub')) RADIO_CODES.push('CP200S')
 
 const PIECES = [
   {
@@ -183,12 +180,16 @@ async function main() {
           rounding: piece.kit.rounding,
           minQty: piece.kit.minQty,
           billing: 'FREE',
+          // Client sees only the Motorola CP200 (Wes 2026-09-15); the
+          // accessory still pulls, packs and checks in.
+          clientVisible: false,
         },
         update: {
           qtyPer: piece.kit.qtyPer,
           perUnits: piece.kit.perUnits,
           rounding: piece.kit.rounding,
           minQty: piece.kit.minQty,
+          clientVisible: false,
         },
         select: { id: true },
       })

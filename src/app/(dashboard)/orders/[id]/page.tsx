@@ -44,10 +44,11 @@ import { TentSandbagOffer, type SandbagCatalogItem } from '@/components/orders/T
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
+import { WalkieSupplyNotice } from "@/components/orders/WalkieSupplyNotice";
 import EnterRedlineModal from "@/components/orders/EnterRedlineModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
-import type { AgreementStatus, LineItemDepartment, OrderStatus } from "@prisma/client";
+import type { AgreementStatus, LineItemDepartment, LineItemType, OrderStatus } from "@prisma/client";
 import {
   isOrderEditable as isOrderEditableFn,
   isMoneyEditable as isMoneyEditableFn,
@@ -55,6 +56,7 @@ import {
   lineEditLockReason as lineEditLockReasonFn,
 } from "@/lib/orders/editability";
 import { isStageLineItem } from "@/lib/orders/stageLines";
+import { resolveLineType } from "@/lib/orders/lineType";
 import { configNotesFor, appendConfigNote } from "@/lib/catalog/configNotes";
 import {
   ASSET_BEARING_DEPARTMENTS,
@@ -461,7 +463,18 @@ function computeRecipients(order: Order): RecipientChoice {
 
 // Unit-tracked catalog rows (vehicles + stages). Named for the picker
 // it feeds; the id is an InventoryItem id since the Aug 2026 merge.
-type AssetCat = { id: string; name: string; slug: string | null; dailyRate: string; weeklyRate: string | null };
+type AssetCat = {
+  id: string;
+  name: string;
+  slug: string | null;
+  dailyRate: string;
+  weeklyRate: string | null;
+  // The catalog row's own department + LineItemType, so picking one
+  // derives the line's type through the shared rule rather than the
+  // dropdown's label. /api/orders/lookups sends both.
+  department?: LineItemDepartment | null;
+  lineType?: LineItemType | null;
+};
 type InvItem = {
   id: string;
   code: string;
@@ -899,6 +912,8 @@ export default function OrderDetailPage() {
   // the target line's context (id, qty cap, rate, dates) so the modal
   // can clamp + pre-fill. Null when closed.
   const [subRentalLine, setSubRentalLine] = useState<SubRentalLineContext | null>(null);
+  // Bumped when a sub-rental is recorded, so the walkie notice re-reads.
+  const [subRentalsVersion, setSubRentalsVersion] = useState(0);
   // "Switch class…" on a vehicle line (Wes 2026-09-11) — liftgate to no
   // liftgate, or up to a cube at the quoted rate.
   const [switchLine, setSwitchLine] = useState<SwitchClassLine | null>(null);
@@ -2109,6 +2124,10 @@ export default function OrderDetailPage() {
     // frozen table on every new vehicle line.
     setLiInvItemId(cat.id);
     setLiAssetCatId("");
+    // The row says what it is. The list is vehicles today, but the type a
+    // line is STORED as must never depend on which control was used to
+    // pick it — that is the bug this rule exists for (lineType.ts).
+    setLiType(resolveLineType('INVENTORY', (cat.department || 'VEHICLES') as LineItemDepartment, cat.lineType ?? 'VEHICLE'));
     maybeAutoFillDesc(cat.name);
     setLiRate(String(Number(cat.dailyRate)));
     setLiRateType("DAILY");
@@ -2515,10 +2534,12 @@ export default function OrderDetailPage() {
     // (FLEET vs WAREHOUSE) stays honest after a re-pick. The PUT
     // route's pick-list sync (commit e29761c) keys off dept; this
     // keeps the row's `type` aligned with what the catalog says.
-    if (editCatalogType === 'ASSET_CATEGORY') {
-      body.type = 'VEHICLE';
-    } else if (editCatalogType === 'INVENTORY') {
-      body.type = editDept === 'EXPENDABLES' ? 'EXPENDABLE' : 'EQUIPMENT';
+    // Same rule the reservation modal writes with — a saved row must not
+    // come out a different type than the door it arrived through made it
+    // (src/lib/orders/lineType.ts). Unbound rows keep whatever type they
+    // have: `type` is simply not sent.
+    if (editCatalogType) {
+      body.type = resolveLineType(editCatalogType, (editDept || 'PRO_SUPPLIES') as LineItemDepartment);
     }
     const res = await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
@@ -3649,6 +3670,17 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* Walkie supply — HQ's call on whether this order's radios need
+          subbing (Wes 2026-09-15). Renders nothing without walkies. */}
+      <WalkieSupplyNotice
+        orderId={orderId}
+        refreshKey={`${subRentalsVersion}|${order.lineItems
+          .map((li) => `${li.id}:${li.quantity}:${li.pickupDate}:${li.returnDate}`)
+          .join(",")}|${order.status}`}
+        canSubRent={canManageSubRentals}
+        onSubRent={setSubRentalLine}
+      />
+
       {/* A/V Tech reminder banner — fires whenever any line item on the
           order references an InventoryItem flagged REQUIRES_AV_TECH
           (currently: LED Wall Usage). Internal-only reminder, never
@@ -4043,11 +4075,26 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 ) : liType === "VEHICLE" ? (
+                  <>
                   <select value={assetCats.some((c) => c.id === liInvItemId) ? liInvItemId : ""} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                     <option value="">Select vehicle...</option>
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
                   </select>
+                  {/* An empty picker has to SAY it is empty. This list was
+                      silently empty from 2026-08-02 to 2026-09-14 — the
+                      lookups query carried a publicVisible gate that is
+                      false on every unit-tracked row — and all a rep saw
+                      was a dropdown with one placeholder in it. Nobody
+                      filed it; they used the search box instead. */}
+                  {assetCats.length === 0 && (
+                    <p className="mt-1 text-xs text-chip-warn-fg">
+                      No vehicle classes came back — the fleet catalog list is empty.
+                      Search for the vehicle under Equipment instead, and tell whoever
+                      runs HQ: /api/orders/lookups is returning nothing.
+                    </p>
+                  )}
+                  </>
                 ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
                   <>
                   <LineItemDescriptionCombobox
@@ -6008,7 +6055,8 @@ export default function OrderDetailPage() {
         <SubRentalModal
           line={subRentalLine}
           onClose={() => setSubRentalLine(null)}
-          onChanged={() => { /* phase 1: no order-total impact; refresh is internal */ }}
+          // No order-total impact; the walkie notice is what reads it.
+          onChanged={() => setSubRentalsVersion((v) => v + 1)}
         />
       )}
 

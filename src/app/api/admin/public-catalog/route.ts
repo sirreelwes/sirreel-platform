@@ -20,6 +20,7 @@ import {
   publicBlockReason,
   publishingIsEnough,
 } from '@/lib/catalog/publicVisibility'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,9 @@ export async function GET() {
   // Everything active, whether or not it has a category — the two
   // uncategorised buckets are part of what this screen has to explain.
   const rows = await prisma.inventoryItem.findMany({
-    where: { isActive: true },
+    // Stock-only rows can't be published (the gate refuses them), so
+    // listing them would offer a switch that does nothing.
+    where: { isActive: true, NOT: { code: { in: [...STOCK_ONLY_CODES] } } },
     select: SELECT,
     orderBy: [{ description: 'asc' }],
   })

@@ -203,7 +203,12 @@ export default function PullSheetsGuidePage() {
             <Step n={3} title="Put your name at the top">
               <p>
                 Whoever prepped and loaded it. It carries into HQ as{' '}
-                <strong>Prepped &amp; loaded by</strong> and is the only record of who built the cart.
+                <strong>Pulled &amp; loaded by</strong> and is the only record of who built the cart.
+                HQ won&rsquo;t file a check-out or a check-in without a name.
+              </p>
+              <p>
+                Split the cart with somebody? Each of you writes your name next to the lines you pulled.
+                HQ keeps a name on every line, so both of you get credit for your part.
               </p>
             </Step>
           </ol>
@@ -252,7 +257,7 @@ export default function PullSheetsGuidePage() {
               <p>
                 Anything written at the bottom that isn&rsquo;t on the order lands under{' '}
                 <strong>Not on the order</strong>, and a name written at the top fills{' '}
-                <strong>Prepped &amp; loaded by</strong>.
+                <strong>Pulled &amp; loaded by</strong>.
               </p>
               <Note tone="plain" label="The photo decides nothing">
                 Reading the photo writes nothing anywhere — it only fills the form in front of you. The
@@ -272,7 +277,26 @@ export default function PullSheetsGuidePage() {
                 line — in the same words the agent and the client will see — before it does anything.
               </p>
             </Step>
-            <Step n={5} title="What filing actually does">
+            <Step n={5} title="Had to stop partway? Save what’s done">
+              <p>
+                Did the walkies and got pulled onto another truck? Count what you did and hit{' '}
+                <strong>Save what&rsquo;s done</strong> next to File. Your lines are filed under the name
+                in the box at the top. Every line you didn&rsquo;t
+                count stays open — nothing is recorded against it and nothing on the order moves for it.
+              </p>
+              <p>
+                Whoever finishes opens the <strong>same sheet</strong>. What&rsquo;s done shows{' '}
+                <strong>counted by</strong> and a time. What&rsquo;s left comes back with empty counts,
+                and <strong>Print what&rsquo;s left</strong> prints only those lines. Put your own name in
+                the box, count the rest and file. A line you leave alone keeps the first person&rsquo;s
+                name. A line you change becomes yours.
+              </p>
+              <Note tone="plain" label="The job stays open until it's all counted">
+                A sheet that isn&rsquo;t finished moves nothing. The gear isn&rsquo;t marked loaded (or
+                returned), and the job stays on the Today board until the last line is counted.
+              </Note>
+            </Step>
+            <Step n={6} title="What filing actually does">
               <ul className="ml-4 list-disc space-y-1">
                 <li>the counts you filed are written onto the order and the totals are recalculated;</li>
                 <li>the sales agent is flagged to review what changed;</li>

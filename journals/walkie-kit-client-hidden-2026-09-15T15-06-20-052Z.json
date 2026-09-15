@@ -1,0 +1,67 @@
+{
+  "ranAt": "2026-09-15T15-06-20-052Z",
+  "kitPieces": [
+    {
+      "id": "ecce5cbf-a5f0-4ca6-aa41-84f58106727c",
+      "before": {
+        "clientVisible": true
+      },
+      "after": {
+        "clientVisible": false
+      }
+    },
+    {
+      "id": "0a2bf60a-8664-4ad6-8f9a-6df84db9d1a8",
+      "before": {
+        "clientVisible": true
+      },
+      "after": {
+        "clientVisible": false
+      }
+    },
+    {
+      "id": "7b52e9f0-8ee6-4323-bbb2-c1b0c76f6ae7",
+      "before": {
+        "clientVisible": true
+      },
+      "after": {
+        "clientVisible": false
+      }
+    },
+    {
+      "id": "44037e57-a106-4abb-bdb6-19a88d57e4a0",
+      "before": {
+        "clientVisible": true
+      },
+      "after": {
+        "clientVisible": false
+      }
+    }
+  ],
+  "touchedLineIds": [
+    "894911d9-702a-430f-b6c4-a05f6d24ec54",
+    "26e7d062-cd5e-42f2-b7aa-33dd65157646",
+    "555f0912-984c-4b45-a22f-abad6b8e4470",
+    "7ed7f672-7b68-4e66-a624-99bc95ec6431",
+    "883be531-e7bd-497e-b24d-e620068bfdf6",
+    "a256d98b-d050-45cf-a8aa-f00f438f2399",
+    "229f4575-21f5-409f-8775-792d3e7ee384",
+    "f423e806-22d5-4e9d-9941-ead407523534",
+    "8d397364-e4ab-49c6-9655-e40c3fab2e7a",
+    "703a0ce2-854a-40c8-b727-b968b2687c34",
+    "c3cd115a-35f0-4d54-a6c7-f197c2b7015d",
+    "e7195e0c-89f0-46f8-b91a-3fdd98cd0987",
+    "d1b11cb1-3954-4982-93ba-cfe3b15ec1a9",
+    "6b5544eb-b65a-4c33-bdec-28edb272f263",
+    "1836f7d9-4b30-4062-bbf2-91f9707cc7e0",
+    "8ad03e8b-45ec-4a1b-bfb4-82772ac28f52",
+    "491b2567-82d7-44b1-9461-fa5b0256b976",
+    "258d043b-c47f-48c1-91f3-550f887bb5a6",
+    "2f53f70a-6c43-40ca-8a5b-095b24759365",
+    "a3b2c014-14da-401f-9c54-0b79a07cf975",
+    "2d8fbacd-028d-4a65-ad95-a6c483467af0",
+    "eb3777de-9917-49bf-8c45-be3eea6e48ac",
+    "56885c29-62b2-4a20-baee-b233525f3108",
+    "ddb91a9b-6b1e-4e65-9931-9e851bd64b04"
+  ]
+}

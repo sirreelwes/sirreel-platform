@@ -15,6 +15,7 @@ import { ASSET_BEARING_DEPARTMENTS } from "@/lib/orders/lineItemDepartments";
 import { holdOnQuoteSend, reconcileHoldFirmness } from "@/lib/orders/holdOnQuoteSend";
 import { resolveLineRate, resolveFeeLineRate, resolveRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { orderableWalkieLine } from '@/lib/catalog/walkiePool'
 import { assignUnitsForLine, parseUnitAssignment, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
@@ -35,7 +36,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id: orderId } = await params;
 
   try {
-    const body = await req.json();
+    // Walkies bind to the one "Motorola CP200" row and read that way,
+    // whichever radio row the caller named (lib/catalog/walkies.ts).
+    const body = await orderableWalkieLine(await req.json());
     const {
       type, description, inventoryItemId, assetCategoryId,
       // A PARTNER's unit picked from the catalog box. Not a catalog FK — it

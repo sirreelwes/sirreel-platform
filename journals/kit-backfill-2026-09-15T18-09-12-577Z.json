@@ -1,0 +1,50 @@
+{
+  "ranAt": "2026-09-15T18:09:12.577Z",
+  "write": true,
+  "days": 21,
+  "onlyOrder": null,
+  "createdLineIds": [
+    {
+      "orderId": "93d6c189-aa7b-4506-8377-00d611c23587",
+      "orderNumber": "S260904-002",
+      "lineItemId": "f557988a-ccda-4171-bbb0-10d77c07f6da",
+      "description": "Motorola CP200 Antenna",
+      "quantity": 16
+    },
+    {
+      "orderId": "589dea17-1ff5-4606-ba20-c8fadf3f6a70",
+      "orderNumber": "S260831-008",
+      "lineItemId": "1d53db24-764e-44e8-8071-7c054bfe6971",
+      "description": "Motorola CP200 Antenna",
+      "quantity": 100
+    },
+    {
+      "orderId": "20b08313-a1a9-446d-9d8d-b949a0332d39",
+      "orderNumber": "S260914-001",
+      "lineItemId": "a8f0e960-1d41-4980-b952-8cda98f366e0",
+      "description": "Motorola CP200 Antenna",
+      "quantity": 20
+    },
+    {
+      "orderId": "a6f20f86-9414-458b-a17b-ef71227aaccb",
+      "orderNumber": "S260909-021",
+      "lineItemId": "0bc36e5b-4b39-46d8-9a73-965a713a946c",
+      "description": "Motorola CP200 Antenna",
+      "quantity": 35
+    }
+  ],
+  "resized": [
+    {
+      "orderId": "93d6c189-aa7b-4506-8377-00d611c23587",
+      "lineItemId": "c3cd115a-35f0-4d54-a6c7-f197c2b7015d",
+      "from": 8,
+      "to": 24
+    },
+    {
+      "orderId": "20b08313-a1a9-446d-9d8d-b949a0332d39",
+      "lineItemId": "f423e806-22d5-4e9d-9941-ead407523534",
+      "from": 10,
+      "to": 30
+    }
+  ]
+}

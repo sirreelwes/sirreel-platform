@@ -632,6 +632,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
           { id: 'account-portals', label: 'Portals', icon: 'Building2', href: '/crm/portals' },
+          // Type an address, send SirReel's payment details (Wes 2026-09-15).
+          { id: 'send-payment-info', label: 'Send Payment Info', icon: 'Banknote', href: '/tools/send-payment-info' },
           // Every how-to lives under one entry (Wes 2026-09-05); the
           // registry in src/lib/guides decides what each role sees.
           { id: 'hq-help', label: 'HQ Help', icon: 'BookOpen', href: '/guides' },

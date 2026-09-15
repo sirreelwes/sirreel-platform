@@ -67,33 +67,64 @@ const SEEDS: AliasSeed[] = [
     aliases: ['trash can liner', 'can liner', 'trash liner', 'trash bag', 'garbage bag'],
     why: 'Ordered alongside cans as "cans + liners"; the liner half needs its own row. "Trash bags" means these, not the disposal service (Wes, 8/17).',
   },
-  // ── Walkies default to digital (Wes, 8/17) ──────────────────────
-  // Both radios rent for the same $10/day, so this isn't a billing
-  // question — it's which SKU lands on the pull sheet. The generic
-  // vocabulary can only belong to one row, so the analog keeps only the
-  // qualified forms and answers when the request actually says analog.
+  // ── Walkies are ONE product: the Motorola CP200 (Wes, 9/15) ─────
+  // Superseded the 8/17 "digital unless it says analog" ruling. Clients
+  // and the order form see one walkie; analog vs digital is the
+  // warehouse's call. The digital row is the orderable one (renamed
+  // "Motorola CP200" by scripts/walkies-one-product.ts) and takes every
+  // walkie word, qualified or not. The analog row is stock-only
+  // (src/lib/catalog/walkies.ts) and answers to nothing.
   {
     // Repointed 2026-08-17: the CP200d row and this one were the same
     // radio (Wes), so they were merged and the 21-unit CP200d archived.
     // The 91-unit RW-backed row is the survivor — the default walkie now
     // lands on it. See scripts/merge-cp200-digital-dup.ts.
     id: 'd61119ab-5af1-4de5-a601-28a22944a956',
-    name: 'Motorola CP200  UHF Radio (Digital)',
-    aliases: ['walkie', 'walkie talkie', 'handheld', 'two-way radio', 'two way radio', 'radio', 'cp200', 'cp200d'],
+    name: 'Motorola CP200',
+    aliases: [
+      'walkie', 'walkie talkie', 'handheld', 'two-way radio', 'two way radio', 'radio', 'cp200', 'cp200d',
+      'analog walkie', 'analog radio', 'cp200 analog', 'digital walkie', 'digital radio',
+    ],
     // Plurals are dead weight — aliasHit() already allows a trailing s, and
     // an alias that fires twice on one description just inflates the score.
     remove: ['walkies', 'walkie talkies', 'handhelds', 'radios'],
-    why: 'Default walkie. Digital unless the request says analog. Carries "cp200d" because the row that spelled it that way is now archived.',
+    why: 'The walkie. Every walkie word lands here, analog or digital — which radio goes out is the warehouse\'s call. Carries "cp200d" because the row that spelled it that way is archived.',
   },
   {
     id: '61954d15-9592-453d-9d29-8f06a40cf5c8',
     name: 'Motorola CP200  UHF Radio (Analog)',
-    aliases: ['analog', 'analog walkie', 'analog radio', 'cp200 analog', 'analogue'],
+    aliases: [],
+    remove: [
+      'analog', 'analog walkie', 'analog radio', 'cp200 analog', 'analogue', 'motorola cp200 analog',
+      'walkies', 'walkie', 'walkie talkie', 'walkie talkies', 'handheld',
+      'handhelds', 'two-way radio', 'two way radio', 'radios', 'radio', 'cp200',
+    ],
+    why: 'Stock-only since 9/15 — fills Motorola CP200 orders, never offered, so it answers to nothing.',
+  },
+  // The walkie accessories answer to their own words, never the radio's.
+  // prisma/seeds/2026-05-08-catalog-aliases.ts matched code ILIKE '%CP200%'
+  // and stamped the whole walkie vocabulary onto both, so "walkies" on a
+  // quote matched the BATTERY (2026-09-15). Their own aliases are owned by
+  // scripts/seed-walkie-kit-pieces.ts and left alone here.
+  {
+    id: 'fba4a972-fdce-438f-b0b4-a0b769dbc86d',
+    name: 'Motorola CP200 Battery',
+    aliases: [],
     remove: [
       'walkies', 'walkie', 'walkie talkie', 'walkie talkies', 'handheld',
       'handhelds', 'two-way radio', 'two way radio', 'radios', 'radio', 'cp200',
     ],
-    why: 'Answers to "analog" only — the bare walkie words now belong to the digital row.',
+    why: 'A battery is not a walkie — the radio words belong to the Motorola CP200.',
+  },
+  {
+    id: 'c708d350-63f6-40b7-82d3-4e2307234581',
+    name: 'Motorola CP200 6-Bank Charger',
+    aliases: [],
+    remove: [
+      'walkies', 'walkie', 'walkie talkie', 'walkie talkies', 'handheld',
+      'handhelds', 'two-way radio', 'two way radio', 'radios', 'radio', 'cp200',
+    ],
+    why: 'A charger is not a walkie — the radio words belong to the Motorola CP200.',
   },
   {
     id: 'f2fa4a8f-43f1-4c2b-aca7-6e2445eb69f0',

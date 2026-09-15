@@ -59,6 +59,7 @@ import {
 } from './InvoiceDocument'
 import { buildInvoiceBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 import { computeDays } from '@/lib/orders/days'
+import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 
 export type GenerateRentalInvoiceResult =
   | {
@@ -160,6 +161,7 @@ export async function generateRentalInvoice(args: {
         include: {
           inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           feeItem: { select: { code: true, name: true } },
+          ...CLIENT_KIT_VISIBILITY,
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -220,7 +222,8 @@ export async function generateRentalInvoice(args: {
   //     (vehicles bill 5 days of 7, supplies 3) but a discounted DAY
   //     rate on STAGES, and labelling that one "/wk" would misstate the
   //     charge by a factor of five.
-  const rentalLines: InvoiceLineSnapshotEntry[] = order.lineItems.map((li) => ({
+  // Hidden included accessories ($0) never print — lib/orders/clientLines.ts.
+  const rentalLines: InvoiceLineSnapshotEntry[] = order.lineItems.filter((li) => !hiddenFromClient(li)).map((li) => ({
     description: li.description,
     // Fee-catalog lines label as "FEE · <code>" so charges read
     // distinctly from gear on the (flat, sortOrder-driven) invoice.

@@ -20,18 +20,23 @@
  */
 
 import type { Prisma } from '@prisma/client'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
 
 /** Rules 1, 2 and 4 as a Prisma filter. Rule 3 needs a row, see below. */
 export const PUBLIC_CATALOG_VISIBLE_WHERE = {
   publicVisible: true,
   isActive: true,
   categoryId: { not: null },
+  // Stock-only rows never face a client, published or not: the analog
+  // walkies are sold as the one "Motorola CP200" row (lib/catalog/walkies).
+  NOT: { code: { in: [...STOCK_ONLY_CODES] } },
 } satisfies Prisma.InventoryItemWhereInput
 
 /** Rules 1 and 2 only — every row the publish desk can act on. */
 export const PUBLISHABLE_CANDIDATE_WHERE = {
   isActive: true,
   categoryId: { not: null },
+  NOT: { code: { in: [...STOCK_ONLY_CODES] } },
 } satisfies Prisma.InventoryItemWhereInput
 
 /** The minimum a row needs for the gate to be decidable. */

@@ -21,6 +21,7 @@
 
 import { useEffect, useState } from 'react';
 import { FRAUD_WARNING } from '@/lib/email/templates/paymentInfo';
+import { SendPaymentInfoCard } from '@/components/payments/SendPaymentInfoCard';
 
 type SlotKey = 'ach-form' | 'bank-info';
 interface SlotState {
@@ -188,6 +189,9 @@ export default function AdminPaymentInfoPage() {
           </p>
         )}
       </header>
+
+      {/* Send to any address — the details don't need a job or an inquiry. */}
+      <SendPaymentInfoCard />
 
       {/* Structured banking fields — the ONLY entry path */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-4">
