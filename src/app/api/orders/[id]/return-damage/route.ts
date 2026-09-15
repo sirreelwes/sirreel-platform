@@ -27,6 +27,7 @@ import { getServerSession } from 'next-auth'
 import type { DamageType, DamageSeverity, DamageDisposition, VehicleCondition } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { captureReturnDamage } from '@/lib/inspections/captureReturnDamage'
+import { notifyVehicleDamage } from '@/lib/invoices/notifyLdReported'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, name: true },
   })
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -141,6 +142,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status })
+  }
+
+  // Tell the billing desk (Ana, 2026-09-15). Pre-existing and waived
+  // findings are a record of condition, not something to bill.
+  const billable = findings.filter((f) => !f.isPreExisting && f.disposition !== 'WAIVED')
+  if (billable.length) {
+    await notifyVehicleDamage({
+      bookingAssignmentId,
+      reportedBy: user.name || session.user.email,
+      findings: billable.map((f) => ({
+        location: f.locationOnVehicle,
+        damageType: f.damageType,
+        severity: f.severity,
+        estimate: f.estimatedRepairCost ?? null,
+        notes: f.notes ?? null,
+      })),
+    })
   }
   return NextResponse.json(result, { status: 201 })
 }

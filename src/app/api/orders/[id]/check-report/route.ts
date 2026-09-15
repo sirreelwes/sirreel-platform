@@ -31,6 +31,8 @@ import {
   type GearSettleResult, type SubmitLineInput,
 } from '@/lib/orders/checkReports'
 import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
+import { diffMissingGear, type InboundLineFacts } from '@/lib/invoices/ldMissingGear'
+import { notifyMissingGear } from '@/lib/invoices/notifyLdReported'
 
 export const dynamic = 'force-dynamic'
 // A submit that changes a quote re-renders the PDF and dispatches an
@@ -134,6 +136,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
+  // The inbound sheet as it stood BEFORE this pass. The report is replaced
+  // in place on every pass and correction, so the L&D email below has to
+  // diff against it — otherwise saving the rest of a check-in re-announces
+  // the same missing light every time.
+  const priorInbound: InboundLineFacts[] =
+    edge === 'IN'
+      ? await prisma.orderCheckReportLine.findMany({
+          where: { report: { orderId: id, edge: 'IN' } },
+          select: {
+            orderLineItemId: true, description: true, expectedQty: true,
+            actualQty: true, change: true, onSheet: true, note: true,
+          },
+        })
+      : []
+
   const result = await submitCheckReport({
     orderId: id,
     edge,
@@ -185,7 +202,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ ok: true, ...result, resend, gear })
+  // Ana, 2026-09-15: L&D the floor records should reach the billing desk
+  // without anyone writing it up. Filing the sheet IS the button. Awaited
+  // (a floated promise dies with the function) and never throws.
+  let ldNotified = false
+  if (edge === 'IN') {
+    const filed = await prisma.orderCheckReportLine.findMany({
+      where: { reportId: result.reportId },
+      select: {
+        orderLineItemId: true, description: true, expectedQty: true,
+        actualQty: true, change: true, onSheet: true, note: true,
+      },
+    }).catch(() => null)
+    if (filed) {
+      ldNotified = await notifyMissingGear({
+        orderId: id,
+        delta: diffMissingGear(priorInbound, filed),
+        reportedBy: passName,
+      })
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...result, resend, gear, ldNotified })
 }
 
 /** The agent marking "I've seen what the yard changed." */

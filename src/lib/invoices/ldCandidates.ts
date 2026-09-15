@@ -33,6 +33,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
 
 export type LdCandidateSource = 'CHECK_IN_SHORT' | 'VEHICLE_DAMAGE'
 
@@ -101,15 +102,20 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
           change: true,
           note: true,
           orderLineItemId: true,
+          onSheet: true,
         },
       },
     },
   })
 
+  // SHORT *and* REMOVED: nothing back at all (0 of 3) classifies as REMOVED,
+  // and filtering on SHORT alone hid the worst shortfalls. See ldMissingGear.
   const shortLines = reports.flatMap((r) =>
-    r.lines
-      .filter((l) => l.change === 'SHORT' && l.expectedQty > l.actualQty)
-      .map((l) => ({ ...l, reportId: r.id })),
+    missingOnCheckIn(r.lines).map((m) => ({
+      ...m,
+      id: r.lines.find((l) => l.orderLineItemId === m.orderLineItemId)!.id,
+      reportId: r.id,
+    })),
   )
 
   // Price the short gear at what it costs to replace. One query for every
@@ -129,7 +135,7 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
   const byLineId = new Map(orderLines.map((l) => [l.id, l]))
 
   const candidates: LdCandidate[] = shortLines.map((l) => {
-    const missing = l.expectedQty - l.actualQty
+    const missing = l.missing
     const inv = l.orderLineItemId ? byLineId.get(l.orderLineItemId)?.inventoryItem : null
     const cost = inv?.replacementCost == null ? null : Number(inv.replacementCost)
     return {
@@ -141,7 +147,7 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
       unitPrice: cost ?? 0,
       priced: cost != null && cost > 0,
       priceBasis: cost != null && cost > 0 ? 'replacement cost' : null,
-      note: l.note?.trim() || `${l.actualQty} of ${l.expectedQty} came back`,
+      note: l.note || `${l.actualQty} of ${l.expectedQty} came back`,
     }
   })
 

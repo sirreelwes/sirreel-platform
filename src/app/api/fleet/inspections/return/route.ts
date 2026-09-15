@@ -37,6 +37,7 @@ import { normalizePosition } from '@/lib/fleet/photoPositions'
 import { normalizeInspectorName, INSPECTOR_NAME_REQUIRED } from '@/lib/fleet/walkaroundCrew'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
+import { notifyVehicleDamage } from '@/lib/invoices/notifyLdReported'
 
 export const dynamic = 'force-dynamic'
 
@@ -259,6 +260,24 @@ export async function POST(req: NextRequest) {
   }
 
   const settled = await settleJobReturnSafe(assignment.bookingItem.booking.jobId, auth.userId)
+
+  // New damage on return goes to the billing desk on its own (Ana,
+  // 2026-09-15). Only what THIS walk-around found — damage logged earlier
+  // on the order page was announced when it was logged. Awaited, never
+  // throws; the truck is received either way.
+  if (damages.length) {
+    await notifyVehicleDamage({
+      bookingAssignmentId: assignment.id,
+      reportedBy: inspectorName,
+      findings: damages.map((d) => ({
+        location: d.location!.trim(),
+        damageType: d.damageType!,
+        severity: d.severity!,
+        estimate: null,
+        notes: d.notes?.trim() || null,
+      })),
+    })
+  }
 
   return NextResponse.json(
     {
