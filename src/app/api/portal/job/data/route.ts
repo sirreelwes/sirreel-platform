@@ -1,5 +1,5 @@
 import { categoryNameForLine, catalogClientCode } from '@/lib/catalog/display'
-import { latestCounterProposalForJob } from '@/lib/contracts/jobCounterProposal'
+import { openCounterProposalForJob } from '@/lib/contracts/jobCounterProposal'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
@@ -494,7 +494,7 @@ export async function GET(req: NextRequest) {
   // itself is out to sign — from then the row above carries the document
   // they sign, and a second "response to your redline" beside it would read
   // as two versions in play.
-  const counterReview = order.jobId ? await latestCounterProposalForJob(order.jobId) : null
+  const counterReview = order.jobId ? await openCounterProposalForJob(order.jobId) : null
   const negotiatedOut =
     rentalAgreement?.status === 'NEGOTIATED_READY' ||
     rentalAgreement?.status === 'SIGNED_NEGOTIATED' ||

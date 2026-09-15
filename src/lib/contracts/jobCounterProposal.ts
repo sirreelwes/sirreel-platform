@@ -53,6 +53,30 @@ export async function latestCounterProposalForJob(jobId: string) {
   })
 }
 
+/**
+ * The job's counter-proposal while it is still OPEN — posted, and the
+ * negotiated agreement not yet out. Closed once the agreement it was accepted
+ * onto (on ANY order of the job) is NEGOTIATED_READY or signed. While open,
+ * the portal shows "Our response to your redline" and the standard agreement
+ * is not signable (Wes 2026-09-15).
+ */
+export async function openCounterProposalForJob(jobId: string) {
+  const review = await latestCounterProposalForJob(jobId)
+  if (!review) return null
+  const linked = await prisma.signedAgreement.findFirst({
+    where: { contractReviewId: review.id },
+    select: { status: true, signedAt: true },
+  })
+  const closed =
+    !!linked &&
+    (linked.status === 'NEGOTIATED_READY' ||
+      linked.status === 'SIGNED_NEGOTIATED' ||
+      linked.status === 'SIGNED_BASELINE' ||
+      linked.status === 'SIGNED_OFFLINE' ||
+      !!linked.signedAt)
+  return closed ? null : review
+}
+
 /** Filename the client sees, on the portal and as the email attachment. */
 export function counterProposalFilename(jobCode: string | null | undefined): string {
   const code = (jobCode || '').replace(/[^A-Za-z0-9-]+/g, '')

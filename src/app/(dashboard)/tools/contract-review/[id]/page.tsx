@@ -7,6 +7,7 @@ import { ReviewResultPanel, type DecisionState, type ClauseDecisionValue } from 
 import { CounterPdfPreview } from '@/components/reviews/CounterPdfPreview';
 import { CounterProposalEmail } from '@/components/reviews/CounterProposalEmail';
 import { JobCounterProposalPanel } from '@/components/jobs/JobCounterProposalPanel';
+import { AcceptFinalForJob } from '@/components/reviews/AcceptFinalForJob';
 import { AlertTriangle, Circle, FileText } from 'lucide-react'
 
 const RISK_BADGE: Record<string, string> = {
@@ -685,6 +686,12 @@ export default function ContractReviewDetailPage() {
             <div className="text-[11px] text-red-600 text-right">{rerunError}</div>
           )}
         </div>
+      )}
+
+      {/* A job-linked review with no agreement yet (a /tools upload): pick the
+          order and accept — otherwise nothing ever unlocks signing. */}
+      {!record.signedAgreement && record.job && record.counterPdfKey && (
+        <AcceptFinalForJob reviewId={record.id} onDone={() => void refreshRecord()} />
       )}
 
       {/* Path A negotiated-agreement handoff */}

@@ -1235,12 +1235,6 @@ export default function JobPortalPage() {
                     >
                       Read it
                     </a>
-                    <a
-                      href={`${data.paperwork.counterProposal.url}?download=1`}
-                      className="text-xs font-semibold text-zinc-500 underline"
-                    >
-                      Download PDF
-                    </a>
                     {/* Wes 2026-09-15: our reasoning right next to the PDF,
                         so "not exactly your redline" arrives with the why. */}
                     <button
@@ -1269,12 +1263,16 @@ export default function JobPortalPage() {
                     ? 'On file'
                     : data.agreementCoverage
                       ? 'Covered'
-                      : agreementStatusLabel(data.paperwork.agreement)
+                      : data.paperwork.counterProposal
+                        ? 'Awaiting redline'
+                        : agreementStatusLabel(data.paperwork.agreement)
                 }
                 statusKind={
                   data.annualAgreement || data.agreementCoverage
                     ? 'success'
-                    : agreementStatusKind(data.paperwork.agreement)
+                    : data.paperwork.counterProposal
+                      ? 'pending'
+                      : agreementStatusKind(data.paperwork.agreement)
                 }
               >
                 {data.annualAgreement ? (
@@ -1344,6 +1342,19 @@ export default function JobPortalPage() {
                       </a>
                     </div>
                   ) : null
+                ) : data.paperwork.counterProposal ? (
+                  // Mid-negotiation (Wes 2026-09-15: "sign button should go
+                  // away"). The agreement released at quote approval is the
+                  // standard one — the document they redlined. Offering it
+                  // here, under our response to their redline, invited
+                  // signing it mid-negotiation and contradicted the row above
+                  // ("the final agreement appears below to sign"). The sign
+                  // route refuses it too. Returns once the negotiated
+                  // version is out (the counter row then disappears).
+                  <span className="text-xs text-zinc-500">
+                    We&rsquo;re working through your redline — see our response above. The agreement to sign
+                    appears here once we&rsquo;ve agreed the changes.
+                  </span>
                 ) : agreementIsReleased(data.paperwork.agreement) &&
                   data.paperwork.agreement?.documentToSignUrl ? (
                   // The native in-portal signing flow. This page has had a

@@ -36,6 +36,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { openCounterProposalForJob } from '@/lib/contracts/jobCounterProposal'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
 
@@ -106,6 +107,26 @@ export async function POST(req: NextRequest) {
       },
       { status: 409 },
     )
+  }
+
+  // Mid-negotiation: our counter-proposal is posted and the negotiated
+  // agreement isn't out yet, so what's on file is the STANDARD agreement the
+  // client redlined. The portal hides the button (Wes 2026-09-15); this
+  // refuses an old "Sign agreement" link or a direct POST as well. Same rule
+  // the portal data route uses to show the counter row.
+  if (agreement.status !== 'NEGOTIATED_READY') {
+    const order = await prisma.order.findUnique({ where: { id: resolved.orderId }, select: { jobId: true } })
+    const openCounter = order?.jobId ? await openCounterProposalForJob(order.jobId) : null
+    if (openCounter) {
+      return NextResponse.json(
+        {
+          error:
+            "We've responded to your redline — see it under Paperwork on your job page. The agreement to sign appears once the changes are agreed.",
+          currentStatus: agreement.status,
+        },
+        { status: 409 },
+      )
+    }
   }
 
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null

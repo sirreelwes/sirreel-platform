@@ -68,6 +68,9 @@ export default function RentalAgreementSignPage() {
   const slug = String(params?.slug || '');
 
   const [agreement, setAgreement] = useState<AgreementShape | null>(null);
+  /** Our counter-proposal is posted and the negotiated agreement isn't out
+   *  yet — the standard agreement is not signable meanwhile. */
+  const [counterOpen, setCounterOpen] = useState(false);
   const [chrome, setChrome] = useState<JobPortalChromeData | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [signerName, setSignerName] = useState('');
@@ -105,6 +108,7 @@ export default function RentalAgreementSignPage() {
         return;
       }
       setAgreement(a);
+      setCounterOpen(!!d?.paperwork?.counterProposal);
       // documentToSignUrl is a PRIVATE blob (403s raw) — load it through the
       // job-session-gated proxy, which the same-origin iframe cookies into.
       if (a.documentToSignUrl) setPdfUrl('/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT');
@@ -251,13 +255,15 @@ export default function RentalAgreementSignPage() {
   }
 
   const isSigned = agreement?.status === 'SIGNED_BASELINE' || agreement?.status === 'SIGNED_NEGOTIATED';
-  const isRedlinePending = agreement?.status === 'REDLINE_UPLOADED' || agreement?.status === 'UNDER_REVIEW';
+  const isRedlinePending =
+    agreement?.status === 'REDLINE_UPLOADED' || agreement?.status === 'UNDER_REVIEW' || counterOpen;
   // The sign form opens only on released-and-not-yet-signed states.
   // Mid-review states show a status message instead.
   const canSign =
-    agreement?.status === 'PORTAL_RELEASED' ||
-    agreement?.status === 'DOWNLOAD_SENT' ||
-    agreement?.status === 'NEGOTIATED_READY';
+    !counterOpen &&
+    (agreement?.status === 'PORTAL_RELEASED' ||
+      agreement?.status === 'DOWNLOAD_SENT' ||
+      agreement?.status === 'NEGOTIATED_READY');
 
   return (
     <JobPortalShell chrome={chrome} width="narrow">
@@ -274,7 +280,9 @@ export default function RentalAgreementSignPage() {
             {isSigned
               ? 'This agreement has been signed.'
               : isRedlinePending
-                ? 'We have your redline. Our team is reviewing it.'
+                ? counterOpen
+                  ? 'Our response to your redline is on your job page.'
+                  : 'We have your redline. Our team is reviewing it.'
                 : 'Review the agreement below. You can sign it as-is, or download a .docx and upload a redlined version for our team to review.'}
           </p>
         </div>
@@ -394,11 +402,20 @@ export default function RentalAgreementSignPage() {
         {/* Mid-review banner */}
         {isRedlinePending && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
-            <div className="font-semibold mb-1">Redline under review</div>
+            <div className="font-semibold mb-1">{counterOpen ? 'Our response is on your job page' : 'Redline under review'}</div>
             <p>
-              We received your redlined agreement and our team is reviewing it. We&rsquo;ll be
-              in touch with a counter or to confirm acceptance. The sign form will reopen
-              once we&rsquo;ve responded.
+              {counterOpen ? (
+                <>
+                  We&rsquo;ve responded to your redline — it&rsquo;s under Paperwork on your job page, with a note on how
+                  we landed on each change. The agreement to sign appears once we&rsquo;ve agreed the changes.
+                </>
+              ) : (
+                <>
+                  We received your redlined agreement and our team is reviewing it. We&rsquo;ll be
+                  in touch with a counter or to confirm acceptance. The sign form will reopen
+                  once we&rsquo;ve responded.
+                </>
+              )}
             </p>
           </div>
         )}
