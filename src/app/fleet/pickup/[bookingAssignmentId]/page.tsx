@@ -67,7 +67,7 @@ export default async function FleetPickupPage({ params }: Params) {
       bookingItem: {
         select: {
           booking: {
-            select: { bookingNumber: true, jobName: true, company: { select: { name: true } } },
+            select: { bookingNumber: true, jobName: true, jobId: true, company: { select: { name: true } } },
           },
         },
       },
@@ -158,6 +158,30 @@ export default async function FleetPickupPage({ params }: Params) {
       })
     : null
 
+  // The drivers the client or office already NAMED — for this unit first,
+  // then anywhere else on the job. The picker used to open on the first
+  // eight names of the whole driver file, A–Z: on Cube 28 (2026-09-15)
+  // Julian saw Dominic, Dylan, Emily… while the job's actual driver,
+  // Wendell Peters, wasn't on screen at all.
+  const jobId = booking.jobId
+  const named = await prisma.driverAssignment.findMany({
+    where: {
+      status: { not: 'CANCELLED' },
+      OR: [
+        { bookingAssignmentId: assignment.id },
+        ...(jobId ? [{ bookingAssignment: { bookingItem: { booking: { jobId } } } }] : []),
+      ],
+    },
+    orderBy: { invitedAt: 'asc' },
+    select: { driverId: true, bookingAssignmentId: true },
+  })
+  const namedDrivers: { id: string; forThisUnit: boolean }[] = []
+  for (const n of [...named].sort((a, b) => Number(b.bookingAssignmentId === assignment.id) - Number(a.bookingAssignmentId === assignment.id))) {
+    if (!namedDrivers.some((d) => d.id === n.driverId)) {
+      namedDrivers.push({ id: n.driverId, forThisUnit: n.bookingAssignmentId === assignment.id })
+    }
+  }
+
   return (
     <Shell>
       {header}
@@ -169,6 +193,7 @@ export default async function FleetPickupPage({ params }: Params) {
       )}
       <PickupDriverForm
         checkoutId={checkout.id}
+        namedDrivers={namedDrivers}
         assignedDriver={
           checkout.driver
             ? {

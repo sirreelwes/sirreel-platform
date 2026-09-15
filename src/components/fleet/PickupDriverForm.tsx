@@ -32,6 +32,9 @@ interface DriverRow {
 
 interface Props {
   checkoutId: string
+  /** Drivers already named on this job — this unit's first. They are the
+   *  list; the rest of the driver file is reached by searching. */
+  namedDrivers?: { id: string; forThisUnit: boolean }[]
   assignedDriver: { id: string; name: string; licenseVerifiedAtHandover: boolean } | null
 }
 
@@ -46,7 +49,7 @@ function toGateInput(d: DriverRow) {
   }
 }
 
-export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
+export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = [] }: Props) {
   const [drivers, setDrivers] = useState<DriverRow[] | null>(null)
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -80,12 +83,22 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
     [selected],
   )
 
+  const needle = q.trim().toLowerCase()
+  // No search → ONLY the drivers named on this job. The whole driver file
+  // A–Z is noise at the gate (none of those people are taking this truck);
+  // it is one search away for the driver nobody told us about.
   const filtered = useMemo(() => {
     if (!drivers) return []
-    const needle = q.trim().toLowerCase()
-    if (!needle) return drivers.slice(0, 8)
+    if (!needle) {
+      const byId = new Map(drivers.map((d) => [d.id, d]))
+      return namedDrivers.map((n) => byId.get(n.id)).filter((d): d is DriverRow => !!d)
+    }
     return drivers.filter((d) => d.name.toLowerCase().includes(needle)).slice(0, 8)
-  }, [drivers, q])
+  }, [drivers, needle, namedDrivers])
+  const forThisUnit = useMemo(
+    () => new Set(namedDrivers.filter((n) => n.forThisUnit).map((n) => n.id)),
+    [namedDrivers],
+  )
 
   async function addDriver() {
     if (!first.trim() || !last.trim()) return
@@ -204,10 +217,17 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
       {/* Driver picker */}
       <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-4">
         <label className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Who is taking it?</label>
+        {!needle && drivers !== null && (
+          <p className="mt-1 text-xs text-zinc-400">
+            {filtered.length > 0
+              ? `Named for this job. Someone else showed up? Search below.`
+              : 'No driver has been named for this job. Search the driver file, or add them.'}
+          </p>
+        )}
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setSelectedId(null); setLink(null) }}
-          placeholder="Search drivers…"
+          placeholder={filtered.length > 0 && !needle ? 'Different driver? Search…' : 'Search drivers…'}
           className="mt-1.5 w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2.5 text-[15px] text-white placeholder:text-zinc-500"
         />
         {drivers === null ? (
@@ -229,7 +249,10 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
                   <span className="min-w-0">
                     <span className="block truncate text-[15px] text-white">{d.name}</span>
                     <span className="block truncate text-xs text-zinc-400">
-                      {d.companyName || 'Guest driver'}{d.phone ? ` · ${d.phone}` : ''}
+                      {!needle && namedDrivers.length > 0
+                        ? (forThisUnit.has(d.id) ? 'Named for this truck' : 'Named on this job')
+                        : (d.companyName || 'Guest driver')}
+                      {d.phone ? ` · ${d.phone}` : ''}
                     </span>
                   </span>
                   <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -242,7 +265,7 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
                 </button>
               )
             })}
-            {filtered.length === 0 && (
+            {filtered.length === 0 && needle && (
               <p className="px-1 py-2 text-xs text-zinc-500">No match.</p>
             )}
           </div>
