@@ -28,7 +28,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { stampVendorCost } from '@/lib/sub-rentals/partnerShare'
 import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildVendorHoldRequest } from '@/lib/sub-rentals/vendorNotice'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
@@ -171,7 +171,7 @@ export async function sendHoldRequest(args: {
     })
     // rentals@ is CC'd for the same reason the estimate CCs it: a hold commits
     // a partner's unit and the desk must see that it went out.
-    const res = await sendAgreementEmail({
+    const res = await sendPartnerMail({
       to: [to],
       // Anyone the partner asked us to copy on bookings (vendorContacts.ts).
       cc: await withTeamCc(await vendorBookingCc(prisma, s.vendor.id, [to]), to),

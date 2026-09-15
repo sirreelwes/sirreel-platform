@@ -6,9 +6,14 @@
  *
  * Wes is CC'd through the sub-rental-conduit-cc channel like every other
  * partner-facing send; replies go to the staff member who pressed the button.
+ *
+ * Both sends leave through `sendPartnerMail`, which strips hello@ and hq@ from
+ * the CC and pins Reply-To to one address — and when Wes is the sender, the
+ * From is his own mailbox rather than notifications@ (Wes 2026-09-14). See
+ * partnerMail.ts for why the ingest anchor is given up here.
  */
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendPartnerMail, partnerFrom } from '@/lib/sub-rentals/partnerMail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { renderEmailShell, renderEmailText, p, calloutBox } from '@/lib/email/templates/shell'
 import { ensureVendorPortalToken, vendorAccountUrl } from './vendorAccount'
@@ -264,13 +269,17 @@ export async function sendPartnerWelcome(args: {
 
   const { html, text } = renderPartnerWelcome({ vendorName: v.name, subject, body, ...(await partnerWelcomeExtras(v.id)) })
 
-  // CC'd like every other partner-facing send, and replies go to him.
+  // CC'd like every other partner-facing send, and replies go to him — to
+  // HIM, singular: sendPartnerMail drops hello@/hq@ from the CC and stops the
+  // capture inbox riding along on Reply-To, so the partner is offered one
+  // person to answer and no shared desk.
   const cc = (await channelRecipients('sub-rental-conduit-cc')).filter(
     (e) => e && e.toLowerCase() !== to && e.toLowerCase() !== args.sender.email.toLowerCase(),
   )
-  const res = await sendAgreementEmail({
+  const res = await sendPartnerMail({
     to: [to],
     cc: cc.length ? cc : undefined,
+    from: partnerFrom(args.sender),
     replyTo: args.sender.email,
     subject,
     html,
@@ -350,9 +359,10 @@ export async function sendVendorInvite(args: { vendorId: string; to: string; sen
   // 2026-09-06: "send the portal invite to David at King Kong and CC wes@").
   const skip = new Set([to])
   const cc = (await channelRecipients('sub-rental-conduit-cc')).filter((e) => e && !skip.has(e.toLowerCase()))
-  const res = await sendAgreementEmail({
+  const res = await sendPartnerMail({
     to: [to],
     cc: cc.length ? cc : undefined,
+    from: partnerFrom(args.sender),
     replyTo: args.sender.email,
     subject: mail.subject,
     html: mail.html,

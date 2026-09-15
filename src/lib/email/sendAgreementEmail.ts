@@ -39,9 +39,18 @@ const REPLY_CAPTURE_INBOX = 'hello@sirreel.com'
  * a STORED message, and a first reply to a Resend send references only
  * Resend's unstored Message-ID — the hello@ copy is the anchor that
  * makes the rest of the chain linkable.
+ *
+ * Exported for tests/sub-rentals/partner-mail.test.ts — both directions of
+ * this rule are invisible until they land in somebody's inbox.
  */
-function effectiveReplyTo(replyTo: string | undefined): string | string[] | undefined {
+export function effectiveReplyTo(replyTo: string | undefined, exact?: boolean): string | string[] | undefined {
   if (!replyTo) return undefined
+  // PARTNER MAIL OPTS OUT (Wes 2026-09-14). The capture inbox is an ingest
+  // trick that costs the recipient a second "reply to" choice, and on a
+  // partner thread that choice is a SirReel shared inbox the partner was
+  // never meant to see. Where the caller says the Reply-To is exact, it is
+  // exact — HQ loses the thread rather than the partner losing the person.
+  if (exact) return replyTo
   const primary = replyTo.trim().toLowerCase()
   const onDomain = /^[^\s@]+@sirreel\.com$/.test(primary)
   const fullyIngested = isWatchedInbox(primary) && inboxMode(primary) !== 'LINKED'
@@ -73,6 +82,14 @@ export interface EmailPayload {
    * unset falls back to SEND_FROM.
    */
   from?: string
+  /**
+   * Send the Reply-To EXACTLY as given — suppress the hello@ capture inbox
+   * that effectiveReplyTo() otherwise appends for on-domain addresses HQ
+   * does not fully ingest. Partner-facing mail sets this: a partner must see
+   * one human to answer, never a SirReel shared inbox alongside them
+   * (Wes 2026-09-14). Use `sendPartnerMail()` rather than setting it by hand.
+   */
+  replyToExact?: boolean
   /** Logging tag — surfaces in console error lines so it's obvious which touchpoint failed. */
   label?: string
   /**
@@ -114,7 +131,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       from: payload.from || SEND_FROM,
       to: payload.to,
       cc: payload.cc,
-      replyTo: effectiveReplyTo(payload.replyTo),
+      replyTo: effectiveReplyTo(payload.replyTo, payload.replyToExact),
       subject: payload.subject,
       html: payload.html,
       text: payload.text,

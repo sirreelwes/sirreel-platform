@@ -99,6 +99,7 @@
     "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
     "test:driver-payroll": "tsx tests/sub-rentals/driver-payroll.test.ts",
     "test:sub-rental-hold": "tsx tests/sub-rentals/hold-state.test.ts",
+    "test:partner-mail": "tsx tests/sub-rentals/partner-mail.test.ts",
     "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
     "test:partner-pick-list": "tsx tests/orders/partner-lines-pick-list.test.ts",
     "test:partner-cancelled-lines": "tsx tests/orders/partner-cancelled-lines.test.ts",

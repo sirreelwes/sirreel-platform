@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { composeEstimateEmail } from '@/lib/sub-rentals/estimateEmail'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { createPotentialSubRental, vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { buildVendorEstimateNotice } from '@/lib/sub-rentals/vendorNotice'
@@ -169,7 +170,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         const partnerCc = await prisma.subRental
           .findUnique({ where: { id: potential.subRentalId }, select: { vendorId: true } })
           .then((r) => (r ? vendorBookingCc(prisma, r.vendorId, [potential.vendorEmail]) : []))
-        const vres = await sendAgreementEmail({
+        // The PARTNER's copy, so sendPartnerMail: the client estimate above is
+        // client-facing and keeps the ordinary path. Partner mail is never
+        // shown hello@ or hq@ (Wes 2026-09-14).
+        const vres = await sendPartnerMail({
           to: [potential.vendorEmail],
           cc: partnerCc.length ? partnerCc : undefined,
           replyTo: agentReplyTo(user.email) ?? undefined,

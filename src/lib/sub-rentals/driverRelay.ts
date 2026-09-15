@@ -231,7 +231,7 @@ export async function relayInboundMessage(args: {
   subject: string
   bodyHtml: string
 }): Promise<{ relayed: boolean; direction?: string; reason?: string }> {
-  const { sendAgreementEmail } = await import('@/lib/email/sendAgreementEmail')
+  const { sendPartnerMail } = await import('@/lib/sub-rentals/partnerMail')
   const target = await resolveRelayTarget(args.tag)
   if (!target) return { relayed: false, reason: 'unknown-or-unassigned-tag' }
 
@@ -248,10 +248,13 @@ export async function relayInboundMessage(args: {
         : `<p style="font-size:14px;color:#4b5563;margin:0 0 12px;">From ${target.driverName}, your driver:</p>${args.bodyHtml}`,
   })
 
-  const res = await sendAgreementEmail({
+  const res = await sendPartnerMail({
     to: [to],
     // Replies come back to the relay, never to the other party directly —
     // that is what keeps the conduit intact and the thread visible in HQ.
+    // sendPartnerMail is what makes "never" true: jobs+{tag}@ is not in
+    // WATCHED_INBOXES, so the capture rule used to append hello@ here and
+    // offer the recipient a second, un-relayed address to answer.
     replyTo: relayAddress(args.tag),
     subject: wrapped.subject,
     html: wrapped.html,

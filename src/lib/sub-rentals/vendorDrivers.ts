@@ -15,7 +15,7 @@
  */
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { renderEmailShell, renderEmailText, p, detailTable, calloutBox } from '@/lib/email/templates/shell'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
@@ -225,7 +225,7 @@ export async function addVendorDriver(args: {
     profileUrl: profilePageUrl(token),
     resend: !!existing,
   })
-  const res = await sendAgreementEmail({
+  const res = await sendPartnerMail({
     to: [email],
     cc: await cc([email]),
     subject: mail.subject,
@@ -436,7 +436,7 @@ async function afterProfileChange(vendorDriverId: string): Promise<void> {
     trainedVehicles: d.trainedVehicles.map((v) => v.name),
     vendorUrl: latest?.vendorToken ? vendorPageUrl(latest.vendorToken) : null,
   })
-  await sendAgreementEmail({
+  await sendPartnerMail({
     to: [to],
     cc: await cc([to]),
     subject: mail.subject,

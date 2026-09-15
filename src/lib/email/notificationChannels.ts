@@ -97,7 +97,7 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     key: 'sub-rental-conduit-cc',
     label: 'Sub-rental conduit CC',
     description:
-      'Copied on every email the sub-rental conduit sends between a production, a partner (King Kong etc.) and the partner\'s driver: location and call time going out, a driver being named, the driver confirming, the partner confirming or declining a hold, a driver\'s question. Wes 2026-09-05: "cc Wes on all of these emails for the time being" — so this defaults to Wes alone. Save an empty list here to stop the copies once the flow has proven itself.',
+      'Copied on every email the sub-rental conduit sends between a production, a partner (King Kong etc.) and the partner\'s driver: location and call time going out, a driver being named, the driver confirming, the partner confirming or declining a hold, a driver\'s question. Wes 2026-09-05: "cc Wes on all of these emails for the time being" — so this defaults to Wes alone. Save an empty list here to stop the copies once the flow has proven itself. NOTE: hello@ and hq@ are stripped from this list before a partner send leaves — a partner is never shown a SirReel shared inbox (Wes 2026-09-14). Adding either here has no effect; name the people instead.',
     defaults: () => ['wes@sirreel.com'],
   },
   {

@@ -36,7 +36,7 @@
 import { randomBytes } from 'crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { vendorBookingCc } from '@/lib/sub-rentals/vendorContacts'
 import { renderEmailShell, renderEmailText, p, detailTable, calloutBox } from '@/lib/email/templates/shell'
@@ -736,7 +736,13 @@ async function send(args: {
   orderId: string | null
 }): Promise<boolean> {
   const cc = [...(args.cc ?? []), ...(await conduitCc([args.to, ...(args.cc ?? [])]))]
-  const res = await sendAgreementEmail({
+  // sendPartnerMail, not sendAgreementEmail: nobody on a conduit thread — the
+  // partner, their driver, the production — is shown hello@ or hq@, and the
+  // Reply-To they are given is the only one (Wes 2026-09-14). That matters
+  // most on the relay sends: their Reply-To is jobs+{tag}@, which the capture
+  // rule treated as un-ingested and quietly paired with hello@, handing the
+  // recipient a way around the relay.
+  const res = await sendPartnerMail({
     to: [args.to],
     cc: cc.length ? cc : undefined,
     replyTo: args.replyTo,
