@@ -83,6 +83,7 @@ yes('equipment insurance is GL + inland marine, not auto-only', /inland-marine|i
 yes('equipment terms name delivery, fuel and technician charges', /delivery, fuel and technician/.test(eqp.terms(20)[1].value))
 eq('shared numbers agree: 24-hour cancellation on both', [/24 hours/.test(veh.clauses[1].body), /24 hours/.test(eqp.clauses[1].body)], [true, true])
 eq('shared numbers agree: 30-day payment on both', [/30 days/.test(veh.clauses[7].body), /30 days/.test(eqp.clauses[7].body)], [true, true])
+eq('pay when paid, whichever is later, on both', [/later of 30 days after it receives a correct invoice and 10 business days after it receives the production’s payment/.test(veh.clauses[7].body), /later of 30 days after it receives a correct invoice and 10 business days after it receives the production’s payment/.test(eqp.clauses[7].body)], [true, true])
 
 // ── Welcome email ───────────────────────────────────────────────────────────
 const base = { vendorName: 'PowerTrip Rentals', contactName: 'Evan Crawford', accountUrl: 'https://hq.sirreel.com/vendor/account/x', unitCount: 13, agreementWaiting: true, senderName: 'Wes', sharePercent: 20 }

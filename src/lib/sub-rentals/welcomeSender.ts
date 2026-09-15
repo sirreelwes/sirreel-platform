@@ -138,7 +138,7 @@ export function buildIntroDraft(a: {
   const settle =
     share == null
       ? `At the end of the job, we bill the client, collect the money and pass it along to you minus our percentage, which we'd agree on before anything is booked.`
-      : `At the end of the job, we bill the client, collect the money and pass it along to you within 30 days, minus our ${share}%.`
+      : `At the end of the job, we bill the client, collect the money and pass it along to you, minus our ${share}%, 30 days after your invoice or once the client has paid, whichever is later.`
 
   return {
     subject: `SirReel wants to be your outside sales partner!`,

@@ -77,7 +77,7 @@ export async function draftFromPrompt(a: {
     share == null
       ? `The revenue split: NOT AGREED YET. Do not state any percentage. Say the exact split will be confirmed before anything is booked.`
       : `The revenue split: the production pays the partner's listed rate; the partner receives ${theirs}% of it and SirReel keeps ${share}%. SirReel's share comes out of the partner's side, NOT added on top, so going through SirReel costs the production nothing.`,
-    `Payment: the partner invoices SirReel after a booking comes back; SirReel pays within 30 days.`,
+    `Payment: the partner invoices SirReel after a booking comes back; SirReel pays 30 days after the invoice or once the production has paid SirReel, WHICHEVER IS LATER. Never say simply "within 30 days".`,
     words.drivers
       ? `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery, mileage, generator hours, driver time.`
       : `Ancillaries billed on top at the partner's own rates, paid to them in full: delivery and collection, fuel, cable and distribution, technician time.`,

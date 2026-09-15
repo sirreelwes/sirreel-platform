@@ -67,6 +67,15 @@
  * ships — and it makes the partner an express beneficiary of the client's
  * indemnity, which is what lets §5 and §11 be capped here at all.
  *
+ * v2026-09-15 — PAY WHEN PAID (Wes: "net 30 or when paid by production …
+ * update the agreement for whichever is later"). §8 and the Terms box: SirReel
+ * pays on the later of 30 days from a correct invoice and 10 business days
+ * from the production's payment for that booking; part payments pass through
+ * pro rata; SirReel must chase in good faith and cannot waive what the
+ * production owes for the partner's unit without consent. The partner now
+ * carries the production's credit risk on the rental rate — counsel to read.
+ * The equipment variant moved in step.
+ *
  * Commercial read of SirReel's own documents, not legal advice. Wes to have
  * counsel read the §5 and §11 caps specifically before either goes out.
  */
@@ -78,7 +87,7 @@ export interface VendorAgreementClause {
 }
 
 export const VENDOR_AGREEMENT_TITLE = 'Partner Vehicle Agreement'
-export const VENDOR_AGREEMENT_VERSION = '2026-09-11'
+export const VENDOR_AGREEMENT_VERSION = '2026-09-15'
 
 export const VENDOR_AGREEMENT_SIRREEL = {
   legalName: 'SirReel Production Vehicles, Inc.',
@@ -96,7 +105,7 @@ export function vendorAgreementTerms(sharePercent: number | null, maxSharePercen
   const keep = Math.round((100 - sharePercent) * 100) / 100
   return [
     { label: 'SirReel’s share of the vehicle rental rate', value: `${sharePercent}%` },
-    { label: 'Partner receives', value: `${keep}% of the listed rate, paid within 30 days of the Vehicle’s return` },
+    { label: 'Partner receives', value: `${keep}% of the listed rate, paid 30 days after your invoice or 10 business days after the production pays SirReel, whichever is later` },
     {
       label: 'Client discounts (Section 8)',
       value: maxSharePercent != null && maxSharePercent > sharePercent
@@ -148,7 +157,7 @@ export const VENDOR_AGREEMENT_CLAUSES: VendorAgreementClause[] = [
   {
     ref: '8',
     title: 'Rates and Payment',
-    body: 'Your listed rate for a Vehicle is the rate SirReel quotes the production. SirReel keeps the share of the vehicle rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Vehicle on your partner page at the time the booking is confirmed, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. When SirReel gives a production a discount off that rate to secure a booking, the discount is shared equally between you and SirReel until SirReel’s share reaches the maximum stated in the Terms box, and SirReel bears any further discount; where no maximum is stated, SirReel bears the whole discount. Either way your payment for the Vehicle is never less than its listed rate reduced by that maximum, or by SirReel’s share where no maximum is stated, and the booking notice shows the rate that applies. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number, and SirReel pays within 30 days of receiving a correct invoice. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
+    body: 'Your listed rate for a Vehicle is the rate SirReel quotes the production. SirReel keeps the share of the vehicle rental rate stated in the Terms box on the first page of this Agreement and pays you the remainder, calculated on the rate listed for the Vehicle on your partner page at the time the booking is confirmed, plus any ancillary fees listed there (delivery, mileage, generator hours, cleaning and the like) and any driver time under Section 7. When SirReel gives a production a discount off that rate to secure a booking, the discount is shared equally between you and SirReel until SirReel’s share reaches the maximum stated in the Terms box, and SirReel bears any further discount; where no maximum is stated, SirReel bears the whole discount. Either way your payment for the Vehicle is never less than its listed rate reduced by that maximum, or by SirReel’s share where no maximum is stated, and the booking notice shows the rate that applies. Nothing else is chargeable unless SirReel approves it in writing before it is incurred. You invoice SirReel after the Vehicle is returned, referencing SirReel’s booking number. SirReel pays each invoice on the later of 30 days after it receives a correct invoice and 10 business days after it receives the production’s payment for that booking. Where a production pays part of a booking, SirReel pays you the same proportion of your invoice on that timetable and the balance as the rest arrives. SirReel invoices the production promptly, pursues payment in good faith, and on request tells you where collection of your booking stands; SirReel will not waive or reduce what a production owes for your Vehicle without your written consent. Until the production pays, the amount is not yet due to you. You will not invoice, quote or collect from a production for any Vehicle placed through SirReel.',
   },
   {
     ref: '9',
