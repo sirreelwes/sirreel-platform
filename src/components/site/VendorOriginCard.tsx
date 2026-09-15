@@ -12,24 +12,26 @@
  * per-booking origin; the POST behind it now refuses.)
  */
 export default function VendorOriginCard({
-  lotAddress, originAddress, unitName,
-}: { token?: string; lotAddress: string | null; originAddress: string | null; unitName: string; readOnly?: boolean }) {
+  lotAddress, originAddress, unitName, willCall = false,
+}: { token?: string; lotAddress: string | null; originAddress: string | null; unitName: string; readOnly?: boolean; willCall?: boolean }) {
   const effective = originAddress || lotAddress
   const eyebrow = 'text-[12px] font-semibold tracking-[0.16em] uppercase text-[#8b857a]'
   return (
     <div className="mt-6 rounded-[14px] border border-[#e4dfd4] bg-white p-5">
-      <div className={`${eyebrow} mb-1`} style={{ fontFamily: 'Archivo, sans-serif' }}>Start location</div>
+      <div className={`${eyebrow} mb-1`} style={{ fontFamily: 'Archivo, sans-serif' }}>{willCall ? 'Pickup location' : 'Start location'}</div>
       {effective ? (
         <>
           <p className="text-[15px] font-semibold text-[#0c0c0d] whitespace-pre-line">{effective}</p>
           <p className="mt-1 text-[13px] text-[#5a554c]">
-            We expect the {unitName} to leave from here{originAddress ? ' for this booking' : ''}. Hours and mileage start from this point.
-            If that&rsquo;s not right, reply to your booking email.
+            {willCall
+              ? <>The production collects the {unitName} here{originAddress ? ' for this booking' : ''} and returns it here.</>
+              : <>We expect the {unitName} to leave from here{originAddress ? ' for this booking' : ''}. Hours and mileage start from this point.</>}
+            {' '}If that&rsquo;s not right, reply to your booking email.
           </p>
         </>
       ) : (
         <p className="text-[14px] text-[#5a554c]">
-          We expect the {unitName} to leave from your lot. SirReel sets the address on your account; if you don&rsquo;t see it here, reply to your booking email.
+          {willCall ? `The production collects the ${unitName} at your lot.` : `We expect the ${unitName} to leave from your lot.`} SirReel sets the address on your account; if you don&rsquo;t see it here, reply to your booking email.
         </p>
       )}
     </div>

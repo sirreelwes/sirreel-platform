@@ -21,6 +21,7 @@
  * custody of these units and needs the panel; he is not to see the rates.
  */
 
+import { RECEIVE_METHOD_LABEL, usesPartnerDriver, type ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 import { useCallback, useEffect, useState } from 'react'
 import { TextButton } from '@/components/sms/TextButton'
 import Link from 'next/link'
@@ -247,6 +248,37 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
     [load],
   )
 
+  /**
+   * How the unit reaches the production. A car-rental partner defaults to
+   * pickup at their lot, but a booking can go out delivered — the partner
+   * arranges it with the client through the portal (Wes 2026-09-15). It
+   * decides what the partner's page asks for: a driver, a delivery contact,
+   * or nothing.
+   */
+  const setReceive = useCallback(
+    async (s: JobSubRental, next: ReceiveMethodKey) => {
+      setBusyId(s.id)
+      setErr(null)
+      setMsg(null)
+      try {
+        const r = await fetch(`/api/sub-rentals/${s.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ receiveMethod: next }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Could not update it (${r.status})`)
+        setMsg(`${s.vehicleName}: ${RECEIVE_METHOD_LABEL[next].hq.toLowerCase()}. The partner's page now asks for ${next === 'PICKUP' ? 'a driver' : next === 'DELIVERY' ? 'a delivery contact' : 'no driver'}.`)
+        await load()
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Could not update it')
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [load],
+  )
+
   const copy = useCallback(async (s: JobSubRental, which: 'vendor' | 'driver' = 'vendor') => {
     const url = which === 'vendor' ? s.vendorUrl : s.driverUrl
     if (!url) return
@@ -343,7 +375,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                   <div className="mt-1 text-[12px] text-zinc-600">
                     {s.vendor.name} · {day(s.startDate)} – {day(s.endDate)}
                     {s.poNumber && ` · PO ${s.poNumber}`}
-                    {s.receiveMethod && ` · ${s.receiveMethod === 'PICKUP' ? 'we collect' : 'they deliver'}`}
+                    {s.receiveMethod && ` · ${RECEIVE_METHOD_LABEL[s.receiveMethod as ReceiveMethodKey]?.short ?? s.receiveMethod.toLowerCase()}`}
                   </div>
                 </div>
 
@@ -427,7 +459,12 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               ) : null}
 
               {/* Where and when — what the client set on their portal, and whether it reached the other side. */}
-              {COMMITTED.includes(s.status) && (
+              {COMMITTED.includes(s.status) && s.receiveMethod === 'WILL_CALL' && (
+                <div className="mt-1 text-[12px] text-zinc-600">
+                  Production picks it up at {s.vendor.name}&rsquo;s lot{s.leavingFrom ? <> — <span className="text-zinc-800">{s.leavingFrom}</span></> : ''} and returns it there. The partner isn&rsquo;t sent the set location or call time.
+                </div>
+              )}
+              {COMMITTED.includes(s.status) && s.receiveMethod !== 'WILL_CALL' && (
                 <div className="mt-1 text-[12px] text-zinc-600">
                   {s.leavingFrom && <span className="block">Leaves from <span className="text-zinc-800">{s.leavingFrom}</span></span>}
                   {s.reportToAddress || s.callTime || s.reportToTime ? (
@@ -500,6 +537,8 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                         )}</>
                     )}
                   </>
+                ) : COMMITTED.includes(s.status) && s.receiveMethod === 'WILL_CALL' ? (
+                  <span className="text-zinc-600">No partner driver — the production collects it.</span>
                 ) : COMMITTED.includes(s.status) ? (
                   <span className="text-zinc-600">No driver named yet — the partner names theirs on their page.</span>
                 ) : null}
@@ -508,7 +547,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               {/* Who pays that driver. Stated on every live row, not only when
                   it's on: "we're billing for the driver" is the default and is
                   worth reading before a union quote goes out. */}
-              {!DEAD.includes(s.status) && s.receiveMethod !== 'DELIVERY' && (
+              {!DEAD.includes(s.status) && usesPartnerDriver(s.receiveMethod) && (
                 <div className="mt-1 text-[12px]">
                   {s.driverOnProductionPayroll ? (
                     <span className="text-indigo-700">
@@ -569,7 +608,19 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                     </Link>
                   </>
                 )}
-                {!DEAD.includes(s.status) && s.receiveMethod !== 'DELIVERY' && (
+                {!DEAD.includes(s.status) && (
+                  <select
+                    value={s.receiveMethod ?? ''}
+                    disabled={busy}
+                    onChange={(e) => { if (e.target.value) void setReceive(s, e.target.value as ReceiveMethodKey) }}
+                    title="How it reaches the production — decides what the partner's page asks for"
+                    className="text-[12px] px-2 py-1 rounded-lg bg-zinc-100 border border-zinc-300 text-zinc-700 disabled:opacity-50"
+                  >
+                    {!s.receiveMethod && <option value="">How it gets there…</option>}
+                    {(['WILL_CALL', 'DELIVERY', 'PICKUP'] as const).map((m) => <option key={m} value={m}>{RECEIVE_METHOD_LABEL[m].hq}</option>)}
+                  </select>
+                )}
+                {!DEAD.includes(s.status) && usesPartnerDriver(s.receiveMethod) && (
                   <button
                     onClick={() => setPayroll(s, !s.driverOnProductionPayroll)}
                     disabled={busy}

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     /** Public-catalog section override (null = the vendor's default). */
     catalogSection?: string | null
     /** PICKUP (driven to set) or DELIVERY (the partner brings it). */
-    defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | null
+    defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
   } | null
   if (!body?.name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
   if (body.catalogSection != null && !isPartnerSectionKey(body.catalogSection)) {
     return NextResponse.json({ error: 'unknown catalogSection' }, { status: 400 })
   }
-  if (body.defaultReceiveMethod != null && body.defaultReceiveMethod !== 'PICKUP' && body.defaultReceiveMethod !== 'DELIVERY') {
-    return NextResponse.json({ error: 'defaultReceiveMethod must be PICKUP or DELIVERY' }, { status: 400 })
+  if (body.defaultReceiveMethod != null && body.defaultReceiveMethod !== 'PICKUP' && body.defaultReceiveMethod !== 'DELIVERY' && body.defaultReceiveMethod !== 'WILL_CALL') {
+    return NextResponse.json({ error: 'defaultReceiveMethod must be PICKUP, DELIVERY or WILL_CALL' }, { status: 400 })
   }
 
   const vehicle = await prisma.$transaction(async (tx) => {

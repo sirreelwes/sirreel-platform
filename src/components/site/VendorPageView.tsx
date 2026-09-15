@@ -1,3 +1,4 @@
+import { usesPartnerDriver } from '@/lib/sub-rentals/partnerKind'
 import type { VendorView } from '@/lib/sub-rentals/potentialSubRental'
 import VehicleGallery from '@/components/site/VehicleGallery'
 import VendorDriverCard from '@/components/site/VendorDriverCard'
@@ -43,6 +44,16 @@ const STATUS_COPY: Record<string, { label: string; blurb: string; tone: string }
   },
 }
 
+/** A will-call unit — the production collects it at the partner's lot
+ *  (Wes 2026-09-15). Same statuses, none of the driver / call-time asks. */
+const WILL_CALL_COPY: Record<string, string> = {
+  REQUESTED: 'The production has accepted — please hold this unit for the dates below and confirm with the button further down. We will follow up with the PO. The production picks it up at your lot and returns it there.',
+  REQUESTED_CONFIRMED: 'You have confirmed the hold — thank you. SirReel is finalising the booking with the production and will follow up with the PO. The production picks it up at your lot and returns it there.',
+  CONFIRMED: 'This booking is confirmed. The production picks it up at your lot and returns it there; we will let you know who is collecting before the start date.',
+  PICKED_UP: 'The production has collected the unit.',
+  ON_RENT: 'The unit is out with the production.',
+}
+
 /** REQUESTED, but the partner has already pressed Confirm hold. HQ may still be
  *  finishing its side (the COI gate holds the status back until the production's
  *  certificate clears) — that is ours to chase, so the page stops asking them. */
@@ -74,13 +85,18 @@ const DD = 'text-[15px] font-semibold text-[#0c0c0d] text-right'
 export function VendorPageView({ v, token, preview = false }: { v: VendorView; token: string; preview?: boolean }) {
   // REQUESTED with the partner's confirm already stamped: HQ is still finishing
   // its side (the COI gate can hold the status back), so don't ask them again.
-  const status =
+  const willCall = v.receiveMethod === 'WILL_CALL'
+  const baseStatus =
     v.status === 'REQUESTED' && v.vendorConfirmedAt
       ? REQUESTED_CONFIRMED_COPY
       : STATUS_COPY[v.status] ?? { label: v.status, blurb: '', tone: '#5a554c' }
+  const willCallBlurb = willCall ? WILL_CALL_COPY[v.status === 'REQUESTED' && v.vendorConfirmedAt ? 'REQUESTED_CONFIRMED' : v.status] : undefined
+  const status = willCallBlurb ? { ...baseStatus, blurb: willCallBlurb } : baseStatus
   const photos = v.photos.map((p) => ({ id: p.id, src: `/api/public/vendor/${token}/photo/${p.id}` }))
   const l = v.logistics
-  const showLogistics = ['REQUESTED', 'CONFIRMED', 'PICKED_UP', 'ON_RENT'].includes(v.status)
+  // A will-call unit never goes to set on the partner's side, so the
+  // production's location and call time are not theirs to see.
+  const showLogistics = !willCall && ['REQUESTED', 'CONFIRMED', 'PICKED_UP', 'ON_RENT'].includes(v.status)
 
   return (
     <div className="max-w-[1100px] mx-auto px-5 py-8 sm:py-12">
@@ -123,7 +139,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
             readOnly={preview}
           />
 
-          <VendorOriginCard token={token} lotAddress={v.lotAddress} originAddress={v.originAddress} unitName={v.vehicleName} readOnly={preview} />
+          <VendorOriginCard token={token} lotAddress={v.lotAddress} originAddress={v.originAddress} unitName={v.vehicleName} readOnly={preview} willCall={willCall} />
 
           {/* Where and when — set by the production on their portal. */}
           {showLogistics && (
@@ -165,7 +181,7 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
               their own payroll, so the driver day is not ours to be billed for
               (Wes 2026-09-09). Only shown when it's true — the ordinary case
               needs no announcement. */}
-          {v.driverOnProductionPayroll && v.receiveMethod !== 'DELIVERY' && (
+          {v.driverOnProductionPayroll && usesPartnerDriver(v.receiveMethod) && (
             <div className="mt-6 rounded-[14px] border border-[#cbdde3] bg-[#f2f8fa] px-4 py-3.5">
               <div className="text-[14px] font-semibold text-[#0c0c0d]">
                 Driver is on the production&rsquo;s payroll for this booking
@@ -181,7 +197,17 @@ export function VendorPageView({ v, token, preview = false }: { v: VendorView; t
 
           {/* A delivered unit (restroom trailer) has no driver on set — the
               partner gives us a name and a mobile instead (Wes 2026-09-07). */}
-          {v.receiveMethod === 'DELIVERY' ? (
+          {willCall ? (
+          <div className="mt-6">
+            <div className={EYEBROW} style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup &amp; return</div>
+            <div className="rounded-[14px] border border-[#e4dfd4] bg-white px-4 py-3.5">
+              <p className="text-[15px] font-semibold text-[#0c0c0d]">The production picks up the {v.vehicleName} at your lot and returns it there.</p>
+              <p className="mt-1 text-[13px] text-[#5a554c] leading-relaxed">
+                Check it out at your counter the way you do for any rental. No driver is needed from you. SirReel will let you know who is collecting before {fmtDate(v.startDate)}. Questions — reply to your booking email.
+              </p>
+            </div>
+          </div>
+          ) : v.receiveMethod === 'DELIVERY' ? (
           <VendorDeliveryContactCard
             token={token}
             status={v.status}

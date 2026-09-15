@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => null) as {
     vendorId?: string
-    receiveMethod?: 'PICKUP' | 'DELIVERY' | null
+    receiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
     itemDescription?: string
     quantity?: number
     startDate?: string | null

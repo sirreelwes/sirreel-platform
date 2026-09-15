@@ -288,7 +288,7 @@ export default async function CompanyPortalsPage() {
     orderBy: { name: 'asc' },
     select: {
       id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true,
-      partnerKind: true, catalogSection: true,
+      partnerKind: true, catalogSection: true, defaultReceiveMethod: true,
       logoUrl: true, logoSvg: true,
       portalToken: true, portalTokenMintedAt: true, portalViewedAt: true, portalViewCount: true,
       portalInvitedAt: true, portalInvitedTo: true,
@@ -536,6 +536,7 @@ export default async function CompanyPortalsPage() {
                       coi={{ receivedAt: va.coiReceivedAt?.toISOString() ?? null, expiresAt: va.coiExpiresAt?.toISOString() ?? null }}
                       kind={va.partnerKind}
                       section={va.catalogSection}
+                      receive={va.defaultReceiveMethod}
                       stage={stageOf(va.id)}
                       newPhotos={newPhotoGroups.filter((g) => g.vendorId === va.id).map((g) => ({ unitId: g.unitId, unitName: g.unitName, count: g.count, latestAt: g.latestAt.toISOString() }))}
                     />

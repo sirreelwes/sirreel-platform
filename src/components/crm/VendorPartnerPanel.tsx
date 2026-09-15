@@ -3,7 +3,7 @@
  *  agreement to sign, and the rate proposals waiting on a decision. */
 import { useState } from 'react'
 import { Camera, Check, FileSignature, FileText, Loader2, Percent, Send, ShieldCheck, Tag, Trash2, Upload, X } from 'lucide-react'
-import { PARTNER_KINDS, partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import { PARTNER_KINDS, partnerVocab, RECEIVE_METHOD_LABEL, type PartnerKindKey, type ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 import { PARTNER_SECTIONS, partnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 import { PartnerWelcomeCard } from '@/components/crm/PartnerWelcomeCard'
 import { VendorContactsPanel } from '@/components/crm/VendorContactsPanel'
@@ -19,7 +19,7 @@ export interface RateProposalRow {
   note: string | null
 }
 
-export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, maxSharePercent = null, sirreelContactUserId = null, staff = [], naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', newPhotos = [], stage: stageInitial = 'partner' }: {
+export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, contact, invited, sharePercent, maxSharePercent = null, sirreelContactUserId = null, staff = [], naming = null, welcomeSent = null, canSendWelcome = false, vendorName = 'this partner', coi, kind: kindInitial = 'VEHICLES', section: sectionInitial = 'LOCATION_VEHICLES', receive: receiveInitial = null, newPhotos = [], stage: stageInitial = 'partner' }: {
   vendorId: string
   hasLogo: boolean
   /** Units with partner-added photos nobody at HQ has looked at. Live already. */
@@ -28,6 +28,8 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   kind?: PartnerKindKey
   /** Where their listed units sit on /vehicles by default. */
   section?: PartnerCatalogSectionKey
+  /** How their units normally reach the production; null = by kind. */
+  receive?: ReceiveMethodKey | null
   /** Last time HQ emailed the account link, and to whom. */
   invited: { at: string; to: string } | null
   /** For the introduction's subject line and confirm dialog. */
@@ -80,6 +82,7 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
   const [invTo, setInvTo] = useState(invited?.to ?? contact.email ?? '')
   const [kind, setKind] = useState<PartnerKindKey>(kindInitial)
   const [section, setSection] = useState<PartnerCatalogSectionKey>(sectionInitial)
+  const [receive, setReceive] = useState<ReceiveMethodKey | null>(receiveInitial)
   const words = partnerVocab(kind)
   const money = (n: number | null) => (n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
 
@@ -134,6 +137,17 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
     const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partnerKind: next }) })
     if (r.ok) { setKind(next); setMsg(next === 'EQUIPMENT' ? 'Equipment partner. Their page, welcome email and the standard agreement now say so — re-file the agreement if one is already filed.' : 'Vehicle partner. Their page, welcome email and the standard agreement now say so — re-file the agreement if one is already filed.') }
     else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
+    setBusy(null)
+  }
+  async function saveReceive(next: ReceiveMethodKey | null) {
+    setBusy('receive'); setMsg(null)
+    const r = await fetch(`/api/vendors/${vendorId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ defaultReceiveMethod: next }) })
+    if (r.ok) {
+      setReceive(next)
+      setMsg(next === 'WILL_CALL'
+        ? 'New bookings of their units start as pickup at their lot — no driver asked for, no call time or set location sent. Switch a booking to delivery on the job page when they arrange one with the client.'
+        : next ? `New bookings of their units start as “${RECEIVE_METHOD_LABEL[next].hq.toLowerCase()}”. Existing bookings keep what they have.` : 'Back to the default for their kind. Existing bookings keep what they have.')
+    } else setMsg((await r.json().catch(() => ({})))?.error || 'Failed')
     setBusy(null)
   }
   async function saveSection(next: PartnerCatalogSectionKey) {
@@ -254,6 +268,14 @@ export function VendorPartnerPanel({ vendorId, hasLogo, agreement, proposals, co
               {PARTNER_SECTIONS.map((sec) => <option key={sec.key} value={sec.key}>{sec.title}</option>)}
             </select>
             <div className="text-[11px] text-lt-fg3 mt-1">Where their listed units appear under “Also from SirReel”. A unit can pick its own section on its roster page.</div>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[11px] text-lt-fg2 mb-1">How productions get their units</label>
+            <select value={receive ?? ''} onChange={(e) => saveReceive((e.target.value || null) as ReceiveMethodKey | null)} disabled={busy === 'receive'} className="w-full text-xs border border-lt-hairline rounded-md px-2 py-1.5 bg-lt-card text-lt-fg">
+              <option value="">By kind ({words.drivers ? 'driver takes it' : 'they deliver'})</option>
+              {(['WILL_CALL', 'DELIVERY', 'PICKUP'] as const).map((m) => <option key={m} value={m}>{RECEIVE_METHOD_LABEL[m].hq}</option>)}
+            </select>
+            <div className="text-[11px] text-lt-fg3 mt-1">The starting point for each new booking; a unit can set its own, and any booking can be switched on the job page. Pickup at their lot asks the partner for no driver.</div>
           </div>
         </div>
       </div>

@@ -28,6 +28,7 @@ scripts/*
 !scripts/add-partner-prospect-columns.ts
 !scripts/add-partner-photo-columns.ts
 !scripts/add-cars-suvs-section.ts
+!scripts/add-will-call-receive-method.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts

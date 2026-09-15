@@ -123,6 +123,7 @@ export async function notifySubRentalsBooked(orderId: string): Promise<Lifecycle
         agentName: ctx.agentName ?? 'Team SirReel', holdConfirmed: !!s.vendorConfirmedAt, driverNamed: !!s.driverName,
         rate: cost,
         delivery: s.receiveMethod === 'DELIVERY',
+        willCall: s.receiveMethod === 'WILL_CALL',
         contactFirstName: (s.vendor.contactName ?? '').split(/\s+/)[0] || null,
         deliverTo: ctx.deliverTo,
         jobName: ctx.jobName,

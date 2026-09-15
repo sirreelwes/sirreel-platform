@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
-import { isPartnerKind } from '@/lib/sub-rentals/partnerKind'
+import { isPartnerKind, isReceiveMethod } from '@/lib/sub-rentals/partnerKind'
 import { isPartnerSectionKey } from '@/lib/site/partnerSections'
 import { SIRREEL_CONTACT_ROLES } from '@/lib/sub-rentals/sirreelContact'
 
@@ -85,6 +85,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (deliveryTerms !== undefined) data.deliveryTerms = deliveryTerms
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive
   // What kind of partner, and where their listed units sit on sirreel.com.
+  if ('defaultReceiveMethod' in body) {
+    const m = (body as Record<string, unknown>).defaultReceiveMethod
+    if (m === null || m === '') data.defaultReceiveMethod = null
+    else if (isReceiveMethod(m)) data.defaultReceiveMethod = m
+    else return NextResponse.json({ error: 'defaultReceiveMethod must be PICKUP, DELIVERY, WILL_CALL or empty' }, { status: 400 })
+  }
   if ('partnerKind' in body) {
     const k = (body as Record<string, unknown>).partnerKind
     if (!isPartnerKind(k)) return NextResponse.json({ error: 'partnerKind must be VEHICLES or EQUIPMENT' }, { status: 400 })

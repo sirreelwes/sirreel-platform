@@ -16,6 +16,7 @@
  * out; the API double-checks on its own.
  */
 
+import { RECEIVE_METHOD_LABEL } from '@/lib/sub-rentals/partnerKind'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -25,7 +26,7 @@ type SubRentalStatus =
 interface Row {
   id: string
   status: SubRentalStatus
-  receiveMethod: 'PICKUP' | 'DELIVERY' | null
+  receiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
   itemDescription: string
   quantity: number
   startDate: string | null
@@ -154,7 +155,7 @@ export default function SubRentalsPage() {
                     <td className="px-3 py-2 text-gray-700">{row.itemDescription}</td>
                     <td className="px-3 py-2 text-center text-gray-700">{row.quantity}</td>
                     <td className="px-3 py-2 text-gray-700 text-xs">
-                      {row.receiveMethod ? row.receiveMethod.toLowerCase() : '—'}
+                      {row.receiveMethod ? RECEIVE_METHOD_LABEL[row.receiveMethod].short : '—'}
                     </td>
                     <td className="px-3 py-2 text-gray-700 text-xs">{fmtDate(row.startDate)}</td>
                     <td className="px-3 py-2 text-gray-700 text-xs">{fmtDate(row.endDate)}</td>

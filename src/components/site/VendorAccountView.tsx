@@ -19,7 +19,7 @@ import { VendorContactsCard } from '@/components/site/VendorContactsCard'
 import { UnitMarketingToggle } from '@/components/site/UnitMarketingToggle'
 import { UnitRateForm } from '@/components/site/UnitRateForm'
 import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
-import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
+import { partnerVocab, RECEIVE_METHOD_LABEL } from '@/lib/sub-rentals/partnerKind'
 import { partnerSection } from '@/lib/site/partnerSections'
 import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { partnerTerms } from '@/lib/sub-rentals/partnerTerms'
@@ -256,7 +256,7 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{u.name}{u.vehicleType ? <span style={{ fontWeight: 400, color: '#6b6560' }}> · {u.vehicleType}</span> : null}</div>
                 <div style={{ fontSize: 12, color: '#6b6560', marginTop: 2 }}>
-                  {u.listed ? `Offered to productions · under ${partnerSection(u.section).title} on sirreel.com` : 'Not offered'}{u.receiveMethod === 'DELIVERY' ? ' · you deliver' : u.receiveMethod === 'PICKUP' ? ' · driven to set' : ''}{!u.active ? ' · inactive' : ''}
+                  {u.listed ? `Offered to productions · under ${partnerSection(u.section).title} on sirreel.com` : 'Not offered'}{u.receiveMethod ? ` · ${RECEIVE_METHOD_LABEL[u.receiveMethod].partner}` : ''}{!u.active ? ' · inactive' : ''}
                 </div>
                 <UnitRateForm token={token} unitId={u.id} preview={preview} current={{ daily: u.daily, weekly: u.weekly, monthly: u.monthly }} proposed={u.proposed} />
                 <UnitMarketingToggle token={token} unitId={u.id} preview={preview} initial={u.listed} noun={words.one} />

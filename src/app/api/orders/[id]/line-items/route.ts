@@ -1,3 +1,4 @@
+import { defaultReceiveMethodFor } from "@/lib/sub-rentals/partnerKind";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, type LineItemDepartment, type RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -788,7 +789,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (subcontractedVehicleId) {
       const unit = await prisma.subcontractedVehicle.findFirst({
         where: { id: subcontractedVehicleId, isActive: true, offeredToSirReel: true },
-        select: { id: true, name: true, vendorId: true, listDailyRate: true, listWeeklyRate: true },
+        select: { id: true, name: true, vendorId: true, listDailyRate: true, listWeeklyRate: true, defaultReceiveMethod: true, vendor: { select: { partnerKind: true, defaultReceiveMethod: true } } },
       });
       if (unit) {
         subRental = await prisma.subRental.create({
@@ -803,6 +804,10 @@ export async function POST(req: NextRequest, { params }: Params) {
             startDate: lineItem.startDate,
             endDate: lineItem.endDate,
             status: "ESTIMATED",
+            // Driven, delivered or picked up at their lot — decides what the
+            // partner's booking page asks for. This path left it null until
+            // 2026-09-15, so every unit quoted from an order read as driven.
+            receiveMethod: defaultReceiveMethodFor(unit, unit.vendor),
             // What the CLIENT is billed, mirrored from the line so the
             // partner-side numbers can be stamped later without re-deriving
             // it (partnerShare.stampVendorCost fills the vendor side).

@@ -93,6 +93,7 @@ export async function sendHoldRequest(args: {
       endDate: true,
       vendorToken: true,
       orderId: true,
+      receiveMethod: true,
       subcontractedVehicle: { select: { name: true } },
       vendor: { select: { id: true, name: true, email: true, poEmail: true } },
     },
@@ -168,6 +169,7 @@ export async function sendHoldRequest(args: {
       vendorUrl: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(token)}`,
       agentName: args.agentName ?? 'Team SirReel',
       rate: cost,
+      receiveMethod: s.receiveMethod,
     })
     // rentals@ is CC'd for the same reason the estimate CCs it: a hold commits
     // a partner's unit and the desk must see that it went out.

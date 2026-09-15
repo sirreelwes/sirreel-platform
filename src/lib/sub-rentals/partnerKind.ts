@@ -69,11 +69,37 @@ export function isPartnerKind(v: unknown): v is PartnerKindKey {
   return v === 'VEHICLES' || v === 'EQUIPMENT'
 }
 
-/** The receive method a NEW booking should start with for a unit. */
+export type ReceiveMethodKey = 'PICKUP' | 'DELIVERY' | 'WILL_CALL'
+
+export function isReceiveMethod(v: unknown): v is ReceiveMethodKey {
+  return v === 'PICKUP' || v === 'DELIVERY' || v === 'WILL_CALL'
+}
+
+/**
+ * Whether a partner booking involves the PARTNER'S DRIVER. Only PICKUP does
+ * (a roster driver takes the unit to set). A delivered unit has a delivery
+ * contact; a will-call unit is collected by the production at the partner's
+ * lot (Wes 2026-09-15). Null is legacy — rows made before receiveMethod was
+ * set on every creation path — and keeps the driver flow it always had.
+ */
+export function usesPartnerDriver(m: string | null | undefined): boolean {
+  return m !== 'DELIVERY' && m !== 'WILL_CALL'
+}
+
+/** Labels, HQ-side and partner-side. */
+export const RECEIVE_METHOD_LABEL: Record<ReceiveMethodKey, { hq: string; partner: string; short: string }> = {
+  PICKUP: { hq: 'Driver takes it (their roster)', partner: 'driven to set', short: 'their driver' },
+  DELIVERY: { hq: 'They deliver & collect it', partner: 'you deliver', short: 'they deliver' },
+  WILL_CALL: { hq: 'Production picks up at their lot', partner: 'picked up at your lot', short: 'pickup at their lot' },
+}
+
+/** The receive method a NEW booking should start with for a unit: the unit's
+ *  own, else the partner's default, else by kind. */
 export function defaultReceiveMethodFor(
   unit: { defaultReceiveMethod: string | null } | null | undefined,
-  vendor: { partnerKind: string | null } | null | undefined,
-): 'PICKUP' | 'DELIVERY' {
-  if (unit?.defaultReceiveMethod === 'DELIVERY' || unit?.defaultReceiveMethod === 'PICKUP') return unit.defaultReceiveMethod
+  vendor: { partnerKind: string | null; defaultReceiveMethod?: string | null } | null | undefined,
+): ReceiveMethodKey {
+  if (isReceiveMethod(unit?.defaultReceiveMethod)) return unit!.defaultReceiveMethod as ReceiveMethodKey
+  if (isReceiveMethod(vendor?.defaultReceiveMethod)) return vendor!.defaultReceiveMethod as ReceiveMethodKey
   return partnerVocab(vendor?.partnerKind).drivers ? 'PICKUP' : 'DELIVERY'
 }

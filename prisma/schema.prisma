@@ -4780,6 +4780,13 @@ model Vendor {
   partnerKind    PartnerKind           @default(VEHICLES) @map("partner_kind")
   /// Default public-catalog section for this partner's listed units.
   catalogSection PartnerCatalogSection @default(LOCATION_VEHICLES) @map("catalog_section")
+  /// How this partner's units normally reach the production, when the unit
+  /// doesn't say. Null = by partnerKind (vehicles driven, equipment
+  /// delivered). WILL_CALL for a car-rental partner (California Rent A Car,
+  /// Wes 2026-09-15): the production picks up at their lot; a booking can
+  /// still be switched to DELIVERY, which the partner arranges with the
+  /// client through the portal. Read via defaultReceiveMethodFor().
+  defaultReceiveMethod ReceiveMethod? @map("default_receive_method")
 
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
@@ -4938,9 +4945,16 @@ enum SubRentalStatus {
 /// PICKUP  = SirReel goes to the vendor to collect.
 /// DELIVERY = vendor drops at SirReel's location.
 /// Drives Phase 2 "receive from vendor" logistics (not built yet).
+/// On a PARTNER unit (sub-rental conduit) the words shifted: PICKUP = the
+/// partner's roster driver takes it to set; DELIVERY = the partner delivers
+/// and collects, with a delivery contact.
+/// WILL_CALL (2026-09-15, California Rent A Car) = the PRODUCTION picks it up
+/// at the partner's lot and returns it there, like any rental. No partner
+/// driver, no call time, no set location for the partner.
 enum ReceiveMethod {
   PICKUP
   DELIVERY
+  WILL_CALL
 }
 
 model SubRental {

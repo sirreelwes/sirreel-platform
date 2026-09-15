@@ -177,6 +177,17 @@ export function buildVendorEstimateNotice(a: VendorNoticeArgs): {
 export interface VendorHoldRequestArgs extends VendorNoticeArgs {
   /** Quantity of this unit, when more than one was quoted. */
   quantity?: number
+  /** How the unit reaches the production. Only PICKUP (or legacy null) has a
+   *  partner driver to name; WILL_CALL is collected at their lot, DELIVERY
+   *  has a delivery contact (Wes 2026-09-15). */
+  receiveMethod?: string | null
+}
+
+/** The "what happens next" sentence on the hold request, by receive method. */
+export function holdNextStep(receiveMethod: string | null | undefined): string {
+  if (receiveMethod === 'WILL_CALL') return `Reply to confirm the hold, and we'll follow up with the PO. The production picks it up at your lot and returns it there — we'll let you know who is collecting before the start date.`
+  if (receiveMethod === 'DELIVERY') return `Reply to confirm the hold, and we'll follow up with the PO. The drop-off address and timing are on your booking page; add a delivery contact there when you're ready.`
+  return `Reply to confirm the hold, and we'll follow up with the PO. Driver, call time and location are exchanged on your booking page — you can name your driver there now.`
 }
 
 export function buildVendorHoldRequest(a: VendorHoldRequestArgs): {
@@ -205,7 +216,7 @@ export function buildVendorHoldRequest(a: VendorHoldRequestArgs): {
             Good news &mdash; the production accepted our estimate. <strong>Please hold your ${escapeHtml(a.vehicleName)}</strong> for the dates below.
           </p>
           <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">
-            Reply to confirm the hold, and we'll follow up with the PO. Driver, call time and location are exchanged on your booking page &mdash; you can name your driver there now.
+            ${escapeHtml(holdNextStep(a.receiveMethod))}
           </p>
         </td></tr>
         <tr><td style="padding:14px 32px 0;">
@@ -251,8 +262,7 @@ export function buildVendorHoldRequest(a: VendorHoldRequestArgs): {
     ...(a.reference ? [`SirReel reference: ${a.reference}`] : []),
     ...rateText(a),
     '',
-    `Reply to confirm the hold, and we'll follow up with the PO. Driver, call time and`,
-    `location are exchanged on your booking page — you can name your driver there now.`,
+    holdNextStep(a.receiveMethod),
     '',
     `Open the booking page: ${a.vendorUrl}`,
     '',
@@ -286,6 +296,9 @@ export interface VendorBookedNoticeArgs extends VendorNoticeArgs {
    *  for a delivery contact (name + mobile) instead of a driver, no driver
    *  page. Wes 2026-09-07. */
   delivery?: boolean
+  /** The production collects the unit at the partner's lot — no driver to
+   *  name, no call time or set location coming (Wes 2026-09-15). */
+  willCall?: boolean
   /** First name of the vendor's contact, for the greeting on the casual note. */
   contactFirstName?: string | null
   /** Where it goes: the exact report-to when the production has set it,
@@ -299,6 +312,14 @@ export interface VendorBookedNoticeArgs extends VendorNoticeArgs {
   jobName?: string | null
 }
 
+/** The logistics sentence on the go note: a driven unit waits on call time and
+ *  location; a will-call unit is collected at the partner's lot. */
+export function bookedLogisticsLine(a: { willCall?: boolean }): string {
+  return a.willCall
+    ? `The production picks it up at your lot and returns it there. We'll let you know who is collecting before the start date.`
+    : `Call time and the location land on that page as the production sets them, and your driver gets them on their phone.`
+}
+
 export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
   subject: string
   html: string
@@ -310,7 +331,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
   const qtyLine = a.quantity && a.quantity > 1 ? `<p style="font-size:13px;color:${MUTED};margin:2px 0 0;">${a.quantity} units</p>` : ''
   const nextSteps: string[] = []
   if (!a.holdConfirmed) nextSteps.push('confirm the hold')
-  if (!a.driverNamed) nextSteps.push('name your driver')
+  if (!a.driverNamed && !a.willCall) nextSteps.push('name your driver')
   const nextHtml = nextSteps.length
     ? `Two things on your booking page when you have a minute: ${nextSteps.join(' and ')}.`.replace('Two things', nextSteps.length === 1 ? 'One thing' : 'Two things')
     : 'Nothing more is needed from you right now.'
@@ -332,7 +353,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
             <strong>The production has booked &mdash; this job is a go.</strong> Your ${escapeHtml(a.vehicleName)} is confirmed for the dates below.
           </p>
           <p style="font-size:16px;color:${TEXT};margin:0 0 12px;line-height:1.6;">
-            ${nextHtml} Call time and the location land on that page as the production sets them, and your driver gets them on their phone.
+            ${nextHtml} ${escapeHtml(bookedLogisticsLine(a))}
           </p>
         </td></tr>
         <tr><td style="padding:14px 32px 0;">
@@ -379,7 +400,7 @@ export function buildVendorBookedNotice(a: VendorBookedNoticeArgs): {
     ...rateText(a),
     '',
     nextHtml.replace(/<[^>]+>/g, ''),
-    `Call time and the location land on that page as the production sets them, and your driver gets them on their phone.`,
+    bookedLogisticsLine(a),
     '',
     `Open the booking page: ${a.vendorUrl}`,
     '',

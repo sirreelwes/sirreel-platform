@@ -45,7 +45,7 @@ interface Vehicle {
   /** Public-catalog section override; null = the vendor's default. */
   catalogSection: string | null
   /** How it reaches set; null = decided per booking. */
-  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | null
+  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
   updatedAt: string
   vendor: {
     id: string
@@ -209,7 +209,7 @@ export default function SubcontractedVehiclePage() {
             {vehicle.vehicleType ?? (vehicle.vendor.partnerKind === 'EQUIPMENT' ? 'Partner equipment' : 'Subcontracted vehicle')} · owned by{' '}
             <span className="font-medium text-gray-700">{vehicle.vendor.name}</span>
             {' '}· subcontracted — not SirReel fleet
-            {' '}· {vehicle.defaultReceiveMethod === 'DELIVERY' ? 'they deliver' : vehicle.defaultReceiveMethod === 'PICKUP' ? 'driver takes it' : 'pickup/delivery decided per booking'}
+            {' '}· {vehicle.defaultReceiveMethod === 'WILL_CALL' ? 'production picks up at their lot' : vehicle.defaultReceiveMethod === 'DELIVERY' ? 'they deliver' : vehicle.defaultReceiveMethod === 'PICKUP' ? 'driver takes it' : 'pickup/delivery decided per booking'}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -423,8 +423,9 @@ export default function SubcontractedVehiclePage() {
                   <option value="">Decide per booking</option>
                   <option value="PICKUP">Driver takes it (their roster)</option>
                   <option value="DELIVERY">They deliver &amp; collect it</option>
+                  <option value="WILL_CALL">Production picks up at their lot</option>
                 </select>
-                <div className="text-[11px] text-gray-400 mt-1">Decides whether their booking page asks for a driver or a delivery contact.</div>
+                <div className="text-[11px] text-gray-400 mt-1">Decides whether their booking page asks for a driver, a delivery contact, or nothing (picked up at their lot). &ldquo;Decide per booking&rdquo; uses the partner&rsquo;s default.</div>
               </div>
             </div>
             <div>

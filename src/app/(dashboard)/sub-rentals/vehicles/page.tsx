@@ -29,7 +29,7 @@ interface VehicleRow {
   listMonthlyRate: string | null
   discountPercent: string | null
   catalogSection: string | null
-  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | null
+  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
   vendor: { id: string; name: string; partnerSharePercent: string | null; partnerKind: 'VEHICLES' | 'EQUIPMENT'; catalogSection: string | null }
 }
 
@@ -49,7 +49,7 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
   // '' = the vendor's default section; a key = this unit's own.
   const [section, setSection] = useState('')
   // '' = decide per booking; PowerTrip's gear defaults to DELIVERY below.
-  const [receive, setReceive] = useState<'' | 'PICKUP' | 'DELIVERY'>('')
+  const [receive, setReceive] = useState<'' | 'PICKUP' | 'DELIVERY' | 'WILL_CALL'>('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -175,10 +175,11 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reaches set by</label>
-              <select value={receive} onChange={(e) => setReceive(e.target.value as '' | 'PICKUP' | 'DELIVERY')} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+              <select value={receive} onChange={(e) => setReceive(e.target.value as '' | 'PICKUP' | 'DELIVERY' | 'WILL_CALL')} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                 <option value="">Decide per booking</option>
                 <option value="PICKUP">Driver takes it (their roster)</option>
                 <option value="DELIVERY">They deliver &amp; collect it</option>
+                <option value="WILL_CALL">Production picks up at their lot</option>
               </select>
             </div>
           </div>

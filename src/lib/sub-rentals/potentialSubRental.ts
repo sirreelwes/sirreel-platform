@@ -79,7 +79,7 @@ export async function createPotentialSubRental(
       listDailyRate: true,
       listWeeklyRate: true,
       defaultReceiveMethod: true,
-      vendor: { select: { id: true, name: true, email: true, poEmail: true, partnerKind: true } },
+      vendor: { select: { id: true, name: true, email: true, poEmail: true, partnerKind: true, defaultReceiveMethod: true } },
     },
   })
   if (!vehicle) return { error: 'vehicle not found' }

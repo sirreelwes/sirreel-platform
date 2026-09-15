@@ -99,6 +99,26 @@ export interface VendorAccountJob {
  *  driver, and has no driver acknowledgement to chase. */
 export type UnitAlert = 'confirm' | 'driver' | 'delivery-contact' | 'driver-ack' | 'call-time'
 
+/**
+ * What a partner still owes us on one booking. Pure, so the rule is testable.
+ * A will-call unit (the production collects it at their lot, Wes 2026-09-15)
+ * owes nothing but the hold confirmation: no driver, no driver ack, and no
+ * call time — that is the production's business, not theirs.
+ */
+export function unitAlertsFor(r: { status: string; receiveMethod: string | null; vendorConfirmedAt: Date | null; vendorDeclinedAt: Date | null; driverName: string | null; driverAckedAt: Date | null; callTime: string | null }): UnitAlert[] {
+  const alerts: UnitAlert[] = []
+  const delivered = r.receiveMethod === 'DELIVERY'
+  const willCall = r.receiveMethod === 'WILL_CALL'
+  if (r.status === 'REQUESTED' && !r.vendorConfirmedAt && !r.vendorDeclinedAt) alerts.push('confirm')
+  if (willCall) return alerts
+  // driverName doubles as the delivery contact on a delivered unit (the
+  // conduit's delivery-contact card writes the same column).
+  if ((r.status === 'REQUESTED' || r.status === 'CONFIRMED') && !r.driverName) alerts.push(delivered ? 'delivery-contact' : 'driver')
+  if (!delivered && (r.status === 'CONFIRMED' || r.status === 'PICKED_UP') && r.driverName && !r.driverAckedAt) alerts.push('driver-ack')
+  if (r.status === 'CONFIRMED' && !r.callTime) alerts.push('call-time')
+  return alerts
+}
+
 export interface VendorAccountFleetUnit {
   id: string
   name: string
@@ -106,7 +126,7 @@ export interface VendorAccountFleetUnit {
   /** Where it sits on sirreel.com when listed. */
   section: PartnerCatalogSectionKey
   /** How it normally reaches set; null = decided per booking. */
-  receiveMethod: 'PICKUP' | 'DELIVERY' | null
+  receiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
   listed: boolean
   active: boolean
   daily: number | null
@@ -177,7 +197,7 @@ export async function loadVendorAccount(
   if (!token || token.length < 32) return null
   const vendor = await prisma.vendor.findUnique({
     where: { portalToken: token },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true, defaultReceiveMethod: true },
   })
   if (!vendor || !vendor.isActive) return null
   if (opts.stamp) {
@@ -192,7 +212,7 @@ export async function loadVendorAccount(
 export async function loadVendorAccountById(vendorId: string): Promise<VendorAccountView | null> {
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
-    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true },
+    select: { id: true, name: true, contactName: true, email: true, phone: true, lotAddress: true, logoUrl: true, logoSvg: true, isActive: true, partnerSharePercent: true, partnerMaxSharePercent: true, sirreelContactUserId: true, partnerKind: true, catalogSection: true, defaultReceiveMethod: true },
   })
   if (!vendor) return null
   return buildVendorAccount(vendor, null)
@@ -212,6 +232,7 @@ async function buildVendorAccount(vendor: {
   sirreelContactUserId: string | null
   partnerKind: PartnerKindKey
   catalogSection: string | null
+  defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
 }, portalToken: string | null): Promise<VendorAccountView> {
   const [rows, rosterCount, fleetRows, agreementRow, hqWorkspace] = await Promise.all([
     prisma.subRental.findMany({
@@ -286,14 +307,7 @@ async function buildVendorAccount(vendor: {
     const e = iso(r.endDate)
     if (s && (!entry.startDate || s < entry.startDate)) entry.startDate = s
     if (e && (!entry.endDate || e > entry.endDate)) entry.endDate = e
-    const alerts: UnitAlert[] = []
-    const delivered = r.receiveMethod === 'DELIVERY'
-    if (r.status === 'REQUESTED' && !r.vendorConfirmedAt && !r.vendorDeclinedAt) alerts.push('confirm')
-    // driverName doubles as the delivery contact on a delivered unit (the
-    // conduit's delivery-contact card writes the same column).
-    if ((r.status === 'REQUESTED' || r.status === 'CONFIRMED') && !r.driverName) alerts.push(delivered ? 'delivery-contact' : 'driver')
-    if (!delivered && (r.status === 'CONFIRMED' || r.status === 'PICKED_UP') && r.driverName && !r.driverAckedAt) alerts.push('driver-ack')
-    if (r.status === 'CONFIRMED' && !r.callTime) alerts.push('call-time')
+    const alerts = unitAlertsFor(r)
     entry.units.push({
       subRentalId: r.id,
       unitName: unitNameOf(r),
@@ -332,7 +346,7 @@ async function buildVendorAccount(vendor: {
       name: u.name,
       vehicleType: u.vehicleType,
       section: resolvePartnerSection(u, vendor).key,
-      receiveMethod: u.defaultReceiveMethod ?? null,
+      receiveMethod: u.defaultReceiveMethod ?? vendor.defaultReceiveMethod ?? null,
       listed: u.publiclyListed,
       active: u.isActive,
       daily: num(u.listDailyRate),

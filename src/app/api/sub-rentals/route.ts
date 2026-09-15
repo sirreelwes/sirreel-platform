@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     orderLineItemId?: string | null
     inventoryItemId?: string | null
     vendorId?: string
-    receiveMethod?: 'PICKUP' | 'DELIVERY' | null
+    receiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
     itemDescription?: string
     quantity?: number
     startDate?: string | null

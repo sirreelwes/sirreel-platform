@@ -703,6 +703,24 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   on the Portals row; resolve via `sirreelContactFor()`. Column added by
   targeted ALTER.
 
+## Pickup at the partner's lot — WILL_CALL (2026-09-15 — Wes)
+- Car-rental partners (California Rent A Car): the PRODUCTION picks the unit up
+  at the partner's lot and returns it there. Delivery stays possible, arranged
+  by the partner with the client through the portal. King Kong keeps drivers.
+- `ReceiveMethod.WILL_CALL` + `Vendor.defaultReceiveMethod` (additive SQL,
+  `scripts/add-will-call-receive-method.ts`). Default chain in
+  `defaultReceiveMethodFor()`: unit → partner → kind. Every creation path sets
+  it now — the order line-items route used to leave it null, which read as
+  "driven" even for PowerTrip's generators.
+- WILL_CALL asks the partner for NO driver: booking page shows "Pickup &
+  return" (no location/call time), hold + go notes drop the driver ask,
+  account alerts are confirm-only, `notifyLogisticsChanged` skips it. Use
+  `usesPartnerDriver()` rather than `!== 'DELIVERY'`. Switch per booking on
+  the job page; default per partner on /crm/portals#partners.
+- Still open: the CLIENT portal shows partner units as arriving/delivered and
+  never tells the production where to pick up.
+- `npm run test:will-call`.
+
 ## Cars & SUVs — a catalog section only (2026-09-15 — Wes)
 - `PartnerCatalogSection.CARS_SUVS` ("Cars & SUVs", `#cars-suvs`, right after
   Specialty Vehicles) for California Rent A Car (Culver City; VEHICLES partner

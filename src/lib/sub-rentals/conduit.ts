@@ -76,6 +76,7 @@ export function receivesLogistics(status: string): boolean {
 const CONDUIT_SELECT = {
   id: true,
   status: true,
+  receiveMethod: true,
   itemDescription: true,
   quantity: true,
   startDate: true,
@@ -796,6 +797,10 @@ export async function notifyLogisticsChanged(args: {
     await prisma.subRental.update({ where: { id }, data: { logisticsUpdatedAt: at } })
     const row = await loadConduit(id)
     if (!row) continue
+    // Picked up at the partner's lot: the production's set address and call
+    // time are nobody's business on the partner side, and there is no partner
+    // driver to tell (Wes 2026-09-15). The stamp above still records the change.
+    if (row.receiveMethod === 'WILL_CALL') continue
     const logistics = logisticsFor(row)
     if (!logistics.hasAny) continue
     const unitName = unitNameOf(row)
