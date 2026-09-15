@@ -101,6 +101,31 @@ const SEEDS: AliasSeed[] = [
     ],
     why: 'Stock-only since 9/15 — fills Motorola CP200 orders, never offered, so it answers to nothing.',
   },
+  // The walkie accessories answer to their own words, never the radio's.
+  // prisma/seeds/2026-05-08-catalog-aliases.ts matched code ILIKE '%CP200%'
+  // and stamped the whole walkie vocabulary onto both, so "walkies" on a
+  // quote matched the BATTERY (2026-09-15). Their own aliases are owned by
+  // scripts/seed-walkie-kit-pieces.ts and left alone here.
+  {
+    id: 'fba4a972-fdce-438f-b0b4-a0b769dbc86d',
+    name: 'Motorola CP200 Battery',
+    aliases: [],
+    remove: [
+      'walkies', 'walkie', 'walkie talkie', 'walkie talkies', 'handheld',
+      'handhelds', 'two-way radio', 'two way radio', 'radios', 'radio', 'cp200',
+    ],
+    why: 'A battery is not a walkie — the radio words belong to the Motorola CP200.',
+  },
+  {
+    id: 'c708d350-63f6-40b7-82d3-4e2307234581',
+    name: 'Motorola CP200 6-Bank Charger',
+    aliases: [],
+    remove: [
+      'walkies', 'walkie', 'walkie talkie', 'walkie talkies', 'handheld',
+      'handhelds', 'two-way radio', 'two way radio', 'radios', 'radio', 'cp200',
+    ],
+    why: 'A charger is not a walkie — the radio words belong to the Motorola CP200.',
+  },
   {
     id: 'f2fa4a8f-43f1-4c2b-aca7-6e2445eb69f0',
     name: 'Trash Bag Disposal',
