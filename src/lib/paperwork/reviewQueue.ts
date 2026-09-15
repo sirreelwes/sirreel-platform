@@ -19,7 +19,12 @@
  *                that was approved months ago can re-enter the queue when
  *                the job's company is corrected.
  *  - CONTRACT_REVIEW — a client redline sitting at PENDING on the review
- *                desk (/tools/contract-review/[id]).
+ *                desk (/tools/contract-review/[id]) that we have not yet
+ *                answered. Posting the counter-PDF IS the answer (it goes to
+ *                the client's portal and emails them), so from then the ball
+ *                is theirs — same reasoning as a COUNTERED certificate
+ *                (Wes 2026-09-15: "when we have submitted a counter, that
+ *                should also be reflected in the paperwork review page").
  *  - REDLINE   — the legacy portal path (PaperworkRequest.contract_redline_*),
  *                status 'pending_review'. Zero rows today; kept because the
  *                portal route still writes it.
@@ -95,6 +100,32 @@ export function coiNeedsReview(humanDecision: string, flagged: boolean): boolean
   return humanDecision === 'PENDING' || flagged
 }
 
+/** A client redline still waiting on US: no ruling, and no counter posted. */
+export function contractReviewNeedsReview(humanDecision: string, counterGeneratedAt: Date | string | null): boolean {
+  return humanDecision === 'PENDING' && !counterGeneratedAt
+}
+
+export type RedlineStage = 'NEEDS_REVIEW' | 'COUNTER_SENT' | 'OUT_TO_SIGN' | 'SIGNED' | 'APPROVED' | 'REJECTED'
+
+/**
+ * Where a client redline stands, for the feed's chip. The agreement it was
+ * accepted onto (if any) outranks the review's own fields: once the
+ * negotiated agreement is out or signed, that is the news.
+ */
+export function redlineStage(r: {
+  humanDecision: string
+  counterGeneratedAt: Date | string | null
+  agreementStatus: string | null
+}): RedlineStage {
+  const a = r.agreementStatus
+  if (a === 'SIGNED_NEGOTIATED' || a === 'SIGNED_BASELINE' || a === 'SIGNED_OFFLINE') return 'SIGNED'
+  if (a === 'NEGOTIATED_READY') return 'OUT_TO_SIGN'
+  if (r.counterGeneratedAt) return 'COUNTER_SENT'
+  if (r.humanDecision === 'APPROVED') return 'APPROVED'
+  if (r.humanDecision === 'REJECTED') return 'REJECTED'
+  return 'NEEDS_REVIEW'
+}
+
 export interface ReviewQueueCounts {
   total: number
   coi: number
@@ -123,7 +154,7 @@ export async function countPaperworkReviewQueue(): Promise<ReviewQueueCounts> {
       },
     }),
     prisma.contractReview.findMany({
-      where: { deletedAt: null, humanDecision: 'PENDING' },
+      where: { deletedAt: null, humanDecision: 'PENDING', counterGeneratedAt: null },
       take: 2000,
       select: { id: true },
     }),

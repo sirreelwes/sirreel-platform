@@ -3,7 +3,7 @@
  *
  * Returns the four buckets the Exec/Coverage approvals queue surfaces:
  *
- *   1. contractReviews  — ContractReview rows with humanDecision=PENDING
+ *   1. contractReviews  — ContractReview rows with humanDecision=PENDING and no counter posted
  *   2. coiChecks        — CoiCheck rows with humanDecision=PENDING (carry aiRiskLevel)
  *   3. changeDecisions  — ReviewChangeDecision rows with decision=PENDING
  *   4. renewals         — Companies whose annualAgreementExpiresAt or
@@ -44,7 +44,9 @@ export async function GET() {
 
   const [contractReviews, coiChecks, changeDecisions, renewalCompanies] = await Promise.all([
     prisma.contractReview.findMany({
-      where: { humanDecision: 'PENDING', deletedAt: null },
+      // Answered redlines (counter posted to the client) are the client's
+      // move, not ours — same rule as the Paperwork queue (reviewQueue.ts).
+      where: { humanDecision: 'PENDING', deletedAt: null, counterGeneratedAt: null },
       orderBy: [{ createdAt: 'asc' }],
       select: {
         id: true,

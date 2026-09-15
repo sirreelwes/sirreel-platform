@@ -64,6 +64,7 @@ interface Submission {
   reviewState: 'PENDING' | 'APPROVED' | 'COUNTERED' | 'REJECTED' | null
   flag: { label: string; detail: string } | null
   needsReview: boolean
+  redlineStage?: { stage: 'NEEDS_REVIEW' | 'COUNTER_SENT' | 'OUT_TO_SIGN' | 'SIGNED' | 'APPROVED' | 'REJECTED'; at: string | null } | null
   dismissal: { at: string; by: string | null; reason: string | null; note: string | null } | null
 }
 
@@ -486,6 +487,31 @@ function SubmissionRow({
               )}
             </div>
           ) : null)}
+        {/* Where a client redline stands once we've answered it (Wes
+            2026-09-15) — a posted counter leaves the queue, and the row
+            says why instead of just going quiet. */}
+        {r.redlineStage && r.redlineStage.stage !== 'NEEDS_REVIEW' && (
+          <span
+            title={r.redlineStage.at ? `Counter posted ${fmtWhen(r.redlineStage.at)}` : undefined}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+              r.redlineStage.stage === 'SIGNED' || r.redlineStage.stage === 'OUT_TO_SIGN' || r.redlineStage.stage === 'APPROVED'
+                ? 'bg-emerald-100 text-emerald-700'
+                : r.redlineStage.stage === 'COUNTER_SENT'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-rose-100 text-rose-700'
+            }`}
+          >
+            {r.redlineStage.stage === 'COUNTER_SENT'
+              ? 'Counter sent'
+              : r.redlineStage.stage === 'OUT_TO_SIGN'
+                ? 'Out to sign'
+                : r.redlineStage.stage === 'SIGNED'
+                  ? 'Signed'
+                  : r.redlineStage.stage === 'APPROVED'
+                    ? 'Approved'
+                    : 'Rejected'}
+          </span>
+        )}
         {r.reviewState && r.reviewState !== 'PENDING' && (
           <span
             className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
@@ -543,7 +569,7 @@ function SubmissionRow({
             href={r.href}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
           >
-            Review
+            {r.kind === 'CONTRACT_REVIEW' && !r.needsReview ? 'Open' : 'Review'}
           </Link>
         ) : null}
       </div>

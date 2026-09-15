@@ -5,9 +5,12 @@ import { prisma } from '@/lib/prisma'
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL } from '@/lib/coi/insuredMatch'
 import {
   coiNeedsReview,
+  contractReviewNeedsReview,
   dismissalKey,
   loadDismissals,
+  redlineStage,
   type DismissalInfo,
+  type RedlineStage,
 } from '@/lib/paperwork/reviewQueue'
 
 export const dynamic = 'force-dynamic'
@@ -73,6 +76,8 @@ export interface PaperworkSubmission {
   /** True while this row is still asking for a human — see
    *  src/lib/paperwork/reviewQueue.ts. What the nav badge counts. */
   needsReview: boolean
+  /** Client redlines only: where the negotiation stands (reviewQueue.redlineStage). */
+  redlineStage?: { stage: RedlineStage; at: string | null } | null
   /** Set once someone skipped it: who, when, why. A skip suppresses the
    *  alert and nothing else — the document's own state is untouched. */
   dismissal: DismissalInfo | null
@@ -230,6 +235,8 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         humanDecision: true,
         aiRiskLevel: true,
+        counterGeneratedAt: true,
+        signedAgreement: { select: { status: true } },
         job: { select: jobSelect },
         company: { select: { name: true } },
         uploadedBy: { select: { name: true } },
@@ -395,9 +402,19 @@ export async function GET(req: NextRequest) {
       href: `/tools/contract-review/${cr.id}`,
       documentHref: null,
       downloadHref: null,
-      reviewState: cr.humanDecision === 'PENDING' ? 'PENDING' : null,
+      // PENDING only while it is still ours to answer — the feed's Skip/Undo
+      // recount keys on it.
+      reviewState: contractReviewNeedsReview(cr.humanDecision, cr.counterGeneratedAt) ? 'PENDING' : null,
       flag: null,
-      needsReview: !crDismissal && cr.humanDecision === 'PENDING',
+      needsReview: !crDismissal && contractReviewNeedsReview(cr.humanDecision, cr.counterGeneratedAt),
+      redlineStage: {
+        stage: redlineStage({
+          humanDecision: cr.humanDecision,
+          counterGeneratedAt: cr.counterGeneratedAt,
+          agreementStatus: cr.signedAgreement?.status ?? null,
+        }),
+        at: cr.counterGeneratedAt?.toISOString() ?? null,
+      },
       dismissal: crDismissal,
     })
   }
