@@ -16,7 +16,12 @@ export const COPY_RECIPIENTS = {
   // default that will be wrong (Wes: "Oliver is in rentals@ group so no
   // need for extra cc"). Overrides at /admin/notifications still win.
   sales: ['rentals@sirreel.com'],
-  billing: ['ana@sirreel.com'],
+  // The shared billing mailbox, not Ana's personal one (Wes 2026-09-15:
+  // "switch from ana@ to billing@"). billing@ is where the desk actually
+  // works — ~750 client-facing sends a month against ONE from ana@ — so a
+  // payment or signed-contract copy sent to ana@ lands outside the thread
+  // it belongs to. Feeds portal-payments and signed-contract-billing.
+  billing: ['billing@sirreel.com'],
 } as const
 
 /**
