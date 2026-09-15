@@ -70,7 +70,7 @@ export const STATUS_COLORS: Record<string, BarColor> = {
 /** Alias kept for older imports — the `order` stage IS the order-attached red. */
 export const ORDER_ATTACHED_COLOR: BarColor = STATUS_COLORS.order
 
-/** A BOOKED bar whose linked order is flagged blind pickup. Wins over order-attached red — it's the day-of-operations alert. */
+/** A bar whose job carries an order flagged blind pickup OR blind return. Wins over every live stage — it's the day-of-operations alert. */
 export const BLIND_PICKUP_COLOR: BarColor = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' }
 
 /** Unit N/A (open maintenance window). The ONLY grey-filled bar on the board. */
@@ -78,14 +78,32 @@ export const UNIT_NA_COLOR: BarColor = { bg: 'bg-gray-400', border: 'border-gray
 
 /**
  * Bar color resolver. `stage` is the JOB's stage token (or the booking's
- * own status token for a job-less hold). Blind pickup (violet) wins over
- * booked / order — it is the day-of-operations alert. The old `hasOrder`
+ * own status token for a job-less hold). Blind pickup or return (violet)
+ * wins over every LIVE stage — it is the day-of-operations alert. It used
+ * to require booked / order and read pickup only, so a blind handoff on a
+ * reservation still on hold (the usual state when Make Reservation asks
+ * the closed-day question) — or any blind RETURN — never went violet.
+ * Cancelled / lost stay struck: a dead job has no handoff to warn about. The old `hasOrder`
  * option is gone: order-attached red is now a stage the server derives
  * (a WAREHOUSE-lane order on a booked job), not a per-bar flag.
  */
-export function barColor(stage: string, opts?: { blindPickup?: boolean }): BarColor {
-  if ((stage === 'booked' || stage === 'order') && opts?.blindPickup) return BLIND_PICKUP_COLOR
+export function barColor(stage: string, opts?: { blindPickup?: boolean; blindReturn?: boolean }): BarColor {
+  if (isBlindBar(stage, opts)) return BLIND_PICKUP_COLOR
   return STATUS_COLORS[stage] || STATUS_COLORS.booked
+}
+
+/** True when a bar in this stage should wear the blind-handoff violet. */
+export function isBlindBar(stage: string, opts?: { blindPickup?: boolean; blindReturn?: boolean }): boolean {
+  if (stage === 'cancelled' || stage === 'lost') return false
+  return !!(opts?.blindPickup || opts?.blindReturn)
+}
+
+/** "Blind pickup" / "Blind return" / "Blind both ways" — the chip label. */
+export function blindLabel(opts: { blindPickup?: boolean; blindReturn?: boolean }): string | null {
+  if (opts.blindPickup && opts.blindReturn) return 'Blind both ways'
+  if (opts.blindPickup) return 'Blind pickup'
+  if (opts.blindReturn) return 'Blind return'
+  return null
 }
 
 /**
@@ -196,7 +214,7 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
   { label: 'Hold', swatch: `${STATUS_COLORS.hold.bg} border ${STATUS_COLORS.hold.border}` },
   { label: 'Booked', swatch: `${STATUS_COLORS.booked.bg} border ${STATUS_COLORS.booked.border}` },
   { label: 'Booked · Warehouse order', swatch: `${STATUS_COLORS.order.bg} border ${STATUS_COLORS.order.border}` },
-  { label: 'Booked · Blind Pickup', swatch: `${BLIND_PICKUP_COLOR.bg} border ${BLIND_PICKUP_COLOR.border}` },
+  { label: 'Blind pickup / return', swatch: `${BLIND_PICKUP_COLOR.bg} border ${BLIND_PICKUP_COLOR.border}` },
   { label: 'Cancelled', swatch: `${STATUS_COLORS.cancelled.bg} border ${STATUS_COLORS.cancelled.border}`, struck: true },
   { label: 'Lost', swatch: `${STATUS_COLORS.lost.bg} border ${STATUS_COLORS.lost.border}`, struck: true },
   { label: 'Maintenance / Unit N/A', swatch: `${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border}` },

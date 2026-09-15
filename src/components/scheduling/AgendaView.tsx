@@ -26,7 +26,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { STATUS_CHIPS, CAT_COLORS } from '@/lib/scheduling/statusTokens'
+import { STATUS_CHIPS, CAT_COLORS, isBlindBar, blindLabel } from '@/lib/scheduling/statusTokens'
 
 interface AgendaBooking {
   unitName: string
@@ -45,6 +45,7 @@ interface AgendaBooking {
   stage?: string
   hasOrder?: boolean
   blindPickup?: boolean
+  blindReturn?: boolean
 }
 
 const DAY_MS = 86_400_000
@@ -113,6 +114,7 @@ export function AgendaView() {
               status: String(b.status ?? 'booked'),
               hasOrder: !!b.hasOrder,
               blindPickup: !!b.blindPickup,
+              blindReturn: !!b.blindReturn,
             })
           }
         }
@@ -243,16 +245,17 @@ const DIRECTION_META = {
 
 function AgendaRow({ r, direction }: { r: AgendaBooking; direction: keyof typeof DIRECTION_META }) {
   const meta = DIRECTION_META[direction]
-  // Same precedence the gantt bars use — blind pickup shouts over
-  // order-attached, which shouts over plain booked.
+  // Same precedence the gantt bars use — a blind pickup or return shouts
+  // over every live stage (isBlindBar).
   // `stage` is the JOB'S color token (src/lib/jobs/stage.ts) — the same
   // one the gantt bar and the /jobs tile rail wear.
   const stage = r.stage ?? r.status
-  const chip = r.blindPickup
+  const blind = isBlindBar(stage, r) ? blindLabel(r) : null
+  const chip = blind
     ? 'bg-violet-100 text-violet-800 border border-violet-200'
     : STATUS_CHIPS[stage] ?? STATUS_CHIPS.booked
-  const statusLabel = r.blindPickup
-    ? 'blind pickup'
+  const statusLabel = blind
+    ? blind.toLowerCase()
     : stage === 'order'
       ? 'warehouse order'
       : stage

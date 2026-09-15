@@ -34,7 +34,8 @@ export interface BarHoverInfo {
   contact?: { name: string; role: string | null; phone: string | null } | null
   orders?: string[]
   readiness?: JobReadiness
-  blindPickup?: boolean
+  /** 'Blind pickup' / 'Blind return' / 'Blind both ways', or null. */
+  blind?: string | null
 }
 
 interface HoverState { info: BarHoverInfo; rect: { left: number; top: number; bottom: number; width: number } }
@@ -116,11 +117,11 @@ export function BarHoverCard() {
         {info.start === info.end ? fDate(info.start) : `${fDate(info.start)} – ${fDate(info.end)}`}
         <span className="text-gray-500"> · {days} day{days === 1 ? '' : 's'}</span>
       </div>
-      {(stageLabel || info.flag || info.blindPickup) && (
+      {(stageLabel || info.flag || info.blind) && (
         <div className="flex flex-wrap gap-1 mt-2">
           {info.flag && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">{info.flag}</span>}
           {stageLabel && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">{stageLabel}</span>}
-          {info.blindPickup && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 text-violet-800 border border-violet-200">Blind pickup</span>}
+          {info.blind && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 text-violet-800 border border-violet-200">{info.blind}</span>}
         </div>
       )}
       <dl className="mt-2 space-y-0.5 text-[12px]">

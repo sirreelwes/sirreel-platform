@@ -19,6 +19,8 @@ import { canCreateOrders, getPermissions } from '@/lib/permissions';
 import { readViewAsCookie } from '@/lib/auth/viewAs';
 import {
   barColor,
+  blindLabel,
+  isBlindBar,
   CAT_LABELS,
   TIER_COLORS,
   TIER_LABELS,
@@ -33,6 +35,7 @@ import type { JobReadiness } from '@/lib/jobs/readiness';
 import StatusLegend, { TierKey } from '@/components/scheduling/StatusLegend';
 import { StageAreasPicker } from '@/components/scheduling/StageAreasPicker';
 import OutBackStrip from '@/components/scheduling/OutBackStrip';
+import { BlindHandoffToggles } from '@/components/schedule/BlindHandoffToggles';
 import { BarHoverCard, hideBarHover, showBarHover, type BarHoverInfo } from '@/components/schedule/BarHoverCard';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -129,7 +132,7 @@ function barHoverInfo(b: any, rdy: JobReadiness | undefined, extra?: Partial<Bar
     contact: b.primaryContact ?? null,
     orders: [...hq, ...rw],
     readiness: rdy,
-    blindPickup: !!b.blindPickup && (b.stage === 'booked' || b.stage === 'order'),
+    blind: isBlindBar(b.stage ?? b.status, b) ? blindLabel(b) : null,
     ...extra,
   }
 }
@@ -430,7 +433,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           // own lifecycle token; a job-less call-in hold has no stage and
           // falls back to it.
           const stage: string = b.stage ?? b.status
-          const sc = barColor(stage, { blindPickup: b.blindPickup })
+          const sc = barColor(stage, b)
           // Paperwork wash across the bar, in the stage's hue. Absent for a
           // job with no unfinished bar (the server only ships those) and for
           // job-less call-in holds — draw nothing rather than an empty
@@ -1483,7 +1486,7 @@ export function GanttBoard() {
     if (inFlightReassigns.current.has(b.bookingItemId)) return
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-    const sc = barColor(b.stage ?? b.status, { blindPickup: b.blindPickup })
+    const sc = barColor(b.stage ?? b.status, b)
     dragState.current = {
       bookingItemId: b.bookingItemId,
       fromAssetId: unit.assetId,
@@ -2269,7 +2272,7 @@ export function GanttBoard() {
                       const bar = getBar(job.startDate, job.endDate)
                       if (!bar) return null
                       const stage: string = job.stage ?? job.status
-                      const sc = barColor(stage, { blindPickup: job.blindPickup })
+                      const sc = barColor(stage, job)
                       const rdy = job.jobId ? readiness[job.jobId] : undefined
                       const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
                       return (
@@ -2320,7 +2323,7 @@ export function GanttBoard() {
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelected(null)}>
           <div className="bg-white rounded-2xl w-[720px] max-w-[95vw] max-h-[88vh] overflow-y-auto p-5 shadow-2xl border border-gray-200 relative" onClick={e => e.stopPropagation()}>
             {/* Status ribbon — same palette as the bar the user clicked. */}
-            <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${barColor(selected.stage ?? selected.status, { blindPickup: selected.blindPickup }).bg}`} />
+            <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${barColor(selected.stage ?? selected.status, selected).bg}`} />
             <div className="flex justify-between items-start mb-4 pt-1">
               <div>
                 {selected.isUnit ? (
@@ -2383,6 +2386,28 @@ export function GanttBoard() {
               </div>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
             </div>
+
+            {/* Blind pickup / return — sales flips it right here; the bar
+                goes violet on the refresh. Writes the job's live orders. */}
+            {selected.bookingId && (
+              <BlindHandoffToggles
+                orders={Array.isArray(selected.orders) ? selected.orders : []}
+                canEdit={canSetStatus}
+                onChanged={(next) => {
+                  setSelected((prev: any) =>
+                    prev
+                      ? {
+                          ...prev,
+                          orders: next,
+                          blindPickup: next.some((o) => o.status !== 'CANCELLED' && o.blindPickup),
+                          blindReturn: next.some((o) => o.status !== 'CANCELLED' && o.blindReturn),
+                        }
+                      : prev,
+                  )
+                  refreshTimeline()
+                }}
+              />
+            )}
 
             {/* Call-in completion — company / job name / expected order.
                 Shown for both the unit-bar and job-view shapes; the two

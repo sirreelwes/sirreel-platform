@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
             // blindPickup comes from the JOB's orders, not just the booking's.
             // Orders link to a Job; nothing sets Order.bookingId in practice.
             select: {
-              id: true, orderNumber: true, status: true, blindPickup: true,
+              id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true,
               // Asset-bearing lines only — feeds the "order covers more than
               // the reservation" check (Wes 2026-08-22). Supplies lines are
               // deliberately excluded: a truck order that also carries
@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
       // Linked Order(s) — id/number/status feed the clickable order
       // links in the reservation detail + the order-badge bar indicator;
       // blindPickup keeps its existing "any order flagged" semantics.
-      orders: { select: { id: true, orderNumber: true, status: true, blindPickup: true } },
+      orders: { select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true } },
       adminNotes: true,
       items: {
         select: {
@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
   const bookingExtras = new Map<
     string,
     {
-      orders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean }>
+      orders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>
       units: Array<{ unitName: string; category: string; bookingNumber: string }>
     }
   >()
@@ -321,11 +321,11 @@ export async function GET(req: NextRequest) {
   for (const b of bookings) {
     // Union of the job's orders (the real linkage) and any directly
     // booking-linked orders, deduped by id.
-    const orderById = new Map<string, { id: string; orderNumber: string; status: string; blindPickup: boolean }>()
+    const orderById = new Map<string, { id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>()
     for (const o of b.job?.orders ?? [])
-      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup })
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
     for (const o of b.orders)
-      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup })
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
     const ownUnits = b.items.flatMap((it) =>
       it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '', bookingNumber: b.bookingNumber })),
     )
@@ -416,6 +416,7 @@ export async function GET(req: NextRequest) {
       // Order.bookingId, so the violet blind-pickup bar could never appear
       // for an order created natively in HQ.
       blindPickup: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindPickup),
+      blindReturn: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindReturn),
       // Clickable order links for the job detail modal; hasOrder drives
       // the order badge on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
@@ -570,6 +571,7 @@ export async function GET(req: NextRequest) {
       bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
       // See the job-view branch: the union, not the booking's direct orders.
       blindPickup: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindPickup),
+      blindReturn: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindReturn),
       start: ymd(a.startDate),
       end: ymd(a.endDate),
       adminNotes: '',
