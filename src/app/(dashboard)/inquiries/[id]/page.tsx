@@ -19,6 +19,7 @@ import Link from 'next/link'
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
 import { JobResolverModal } from '@/components/shared/JobResolverModal'
 import { PaymentDetailsSendPanel } from '@/components/inquiries/PaymentDetailsSendPanel'
+import { askHowPaymentInfoWasHandled, isPaymentInfoInquiry } from '@/lib/inquiries/paymentInfoDismiss'
 
 type InquiryStatus = 'NEW' | 'CONVERTED' | 'DISMISSED'
 type InquirySource = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
@@ -220,16 +221,28 @@ export default function InquiryDetailPage() {
 
   async function dismiss() {
     if (!inquiry) return
-    if (!confirm('Dismiss this inquiry? You can find it later via the All filter.')) return
+    // Payment-info requests say how they were handled — the note IS the
+    // confirmation. Everything else keeps the plain confirm.
+    let handledNote: string | undefined
+    if (isPaymentInfoInquiry(inquiry.title)) {
+      const note = askHowPaymentInfoWasHandled()
+      if (note === null) return
+      handledNote = note
+    } else if (!confirm('Dismiss this inquiry? You can find it later via the All filter.')) {
+      return
+    }
     setActionPending('dismiss')
     setActionError(null)
     try {
       const res = await fetch(`/api/inquiries/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'DISMISSED' }),
+        body: JSON.stringify({ status: 'DISMISSED', handledNote }),
       })
-      if (!res.ok) throw new Error('Dismiss failed')
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error || 'Dismiss failed')
+      }
       router.push('/inquiries')
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
@@ -288,6 +301,9 @@ export default function InquiryDetailPage() {
   const isPaymentInfo = inquiry.title.trim().toLowerCase() === 'payment info request'
   const paymentSentAt = (meta as Record<string, unknown> | null)?.paymentDetailsSentAt as string | undefined
   const paymentSentTo = (meta as Record<string, unknown> | null)?.paymentDetailsSentTo as string | undefined
+  const handledNote = (meta as Record<string, unknown> | null)?.handledNote as string | undefined
+  const handledBy = ((meta as Record<string, unknown> | null)?.dismissedBy ??
+    (meta as Record<string, unknown> | null)?.handledBy) as string | undefined
   const refCode = inquiry.id.slice(0, 8).toUpperCase()
   const cart = isSupplyOrder ? meta?.cart ?? [] : []
   const isClosed = inquiry.status !== 'NEW'
@@ -386,6 +402,22 @@ export default function InquiryDetailPage() {
         {isPaymentInfo && paymentSentAt && (
           <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
             Payment details sent{paymentSentTo ? ` to ${paymentSentTo}` : ''} on {fmtDateTime(paymentSentAt)}.
+          </div>
+        )}
+
+        {/* How a closed payment-info request was dealt with — Dismiss and
+            Mark handled both leave a note, so "closed" never reads as
+            "nobody answered". */}
+        {isPaymentInfo && isClosed && !paymentSentAt && (
+          <div className="mt-3 text-xs text-zinc-700 bg-zinc-50 border border-zinc-200 rounded px-2.5 py-1.5">
+            {handledNote ? (
+              <>
+                {inquiry.status === 'DISMISSED' ? 'Dismissed' : 'Marked handled'}
+                {handledBy ? ` by ${handledBy}` : ''}: <span className="font-medium">{handledNote}</span>
+              </>
+            ) : (
+              <>Closed with no note — HQ has no record of whether payment details were sent.</>
+            )}
           </div>
         )}
 

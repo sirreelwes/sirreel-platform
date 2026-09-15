@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import type { InquiryStatus } from '@prisma/client'
+import { HANDLED_NOTE_MAX, isPaymentInfoInquiry } from '@/lib/inquiries/paymentInfoDismiss'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -143,6 +144,38 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Job may already own another inquiry's convertedJobId - unique FK).
     if (body.convertedOrderId !== undefined) data.convertedOrderId = body.convertedOrderId || null
 
+    // A payment-info request can't be dismissed silently: a DISMISSED one
+    // with no trace reads as "never answered" and gets the details sent
+    // twice (Maddy, 2026-09-15). Require a note, keep it on the inquiry,
+    // audit it. See src/lib/inquiries/paymentInfoDismiss.ts.
+    let dismissAudit: { oldStatus: string; note: string } | null = null
+    if (body.status === 'DISMISSED') {
+      const current = await prisma.inquiry.findUnique({
+        where: { id },
+        select: { title: true, status: true, sourceMetadata: true },
+      })
+      if (current && current.status !== 'DISMISSED' && isPaymentInfoInquiry(current.title)) {
+        const note = typeof body.handledNote === 'string' ? body.handledNote.trim().slice(0, HANDLED_NOTE_MAX) : ''
+        if (!note) {
+          return NextResponse.json(
+            { error: 'Say how this payment-info request was handled before dismissing it.', needsHandledNote: true },
+            { status: 400 },
+          )
+        }
+        const prior =
+          current.sourceMetadata && typeof current.sourceMetadata === 'object' && !Array.isArray(current.sourceMetadata)
+            ? (current.sourceMetadata as Record<string, unknown>)
+            : {}
+        data.sourceMetadata = {
+          ...prior,
+          dismissedAt: new Date().toISOString(),
+          dismissedBy: session.user.email,
+          handledNote: note,
+        }
+        dismissAudit = { oldStatus: current.status, note }
+      }
+    }
+
     const inquiry = await prisma.inquiry.update({
       where: { id },
       data,
@@ -159,6 +192,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         convertedOrder: { select: { id: true, orderNumber: true, status: true } },
       },
     })
+
+    if (dismissAudit) {
+      await prisma.auditLog
+        .create({
+          data: {
+            userId: null,
+            action: 'inquiry.payment_info_dismissed',
+            entityType: 'Inquiry',
+            entityId: id,
+            oldValues: { status: dismissAudit.oldStatus },
+            newValues: { status: 'DISMISSED', dismissedBy: session.user.email, note: dismissAudit.note },
+          },
+        })
+        .catch((e) => console.error('[inquiry dismiss] audit write failed:', e))
+    }
 
     // Email-in-Job (step 6): conversion is where the agent explicitly
     // resolved the Job — file the inquiry's source email thread in it
