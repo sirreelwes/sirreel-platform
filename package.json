@@ -139,7 +139,8 @@
     "rw:status": "tsx scripts/rw-sync-status.ts",
     "planyo:alignment": "tsx scripts/planyo-unit-alignment.ts",
     "test:fuel-levels": "tsx tests/fleet/fuel-levels.test.ts",
-    "test:check-window": "tsx tests/fleet/check-window.test.ts"
+    "test:check-window": "tsx tests/fleet/check-window.test.ts",
+    "test:desk-charge-payments": "tsx tests/collections/desk-charge-payments.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
