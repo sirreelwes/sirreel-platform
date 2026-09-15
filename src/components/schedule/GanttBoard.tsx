@@ -691,11 +691,11 @@ export function GanttBoard() {
     endDate: string
     asBackup: boolean
   }>(null)
-  // Operator-controlled window anchor. Default mirrors the prior
-  // behaviour (today-3) so the page renders the same on first load,
-  // but ‹ Today › buttons step it forward/back by the current window
-  // width and reset on demand.
-  const defaultAnchor = useMemo(() => addDays(today, -3), [])
+  // Operator-controlled window anchor. Opens on YESTERDAY (Wes
+  // 2026-09-15) — on the 1W default that's yesterday, today and five days
+  // ahead. ‹ Today › buttons step it forward/back by the current window
+  // width; Today resets here.
+  const defaultAnchor = useMemo(() => addDays(today, -1), [])
   const [anchorDate, setAnchorDate] = useState<string>(defaultAnchor)
 
   // Deep-link: /gantt?date=YYYY-MM-DD centers the window near that date
