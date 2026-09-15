@@ -2,6 +2,8 @@
 
 Keep it to the problem it solves: nobody has to call us at 2am to get into a truck.
 
+**Say it AH-ha**, stress on the first syllable. Not ah-HA like the exclamation, which is how people read it if nobody tells them. It stands for SirReel After Hours Assistant.
+
 ## The 10-second version — say this one
 > "We have an assistant called AHA. If your driver's at the lot at 4am and can't get in, they text AHA from their own cell, give their name, and get the gate code and the lockbox code right there."
 
