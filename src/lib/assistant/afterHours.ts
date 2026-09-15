@@ -38,6 +38,17 @@ const TEAM_INBOX = 'rentals@sirreel.com'
 const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const GRACE_DAYS = 1
 
+/**
+ * Job states that close code access regardless of the assignment dates.
+ * Wes 2026-09-15: these are the human off-ramps from CLAUDE.md, and until
+ * now the release check ignored them entirely — it looked only at the
+ * BOOKING, so marking a job WRAPPED or LOST cut the caller's booking
+ * details (senderIdentity does filter on job status) while leaving the gate
+ * and lockbox codes open until the dates ran out. HOLD is deliberately NOT
+ * here: a job on hold is still live, and a driver mid-rental needs in.
+ */
+export const CODE_BLOCKING_JOB_STATUSES = ['WRAPPED', 'LOST'] as const
+
 function normTokens(s: string): string[] {
   return s
     .toLowerCase()
@@ -271,6 +282,15 @@ export async function verifyAndRelease(input: {
         booking: {
           status: { notIn: ['CANCELLED', 'ARCHIVED'] },
           archivedAt: null,
+          // The job's own off-ramps close codes (see the constant above).
+          // Booking.jobId is NULLABLE — call-in intake creates a booking
+          // before the job is named — so a bare `job: { is: ... }` would
+          // have silently stopped releasing codes for every job-less
+          // booking. The null branch keeps those working exactly as before.
+          OR: [
+            { jobId: null },
+            { job: { is: { archivedAt: null, status: { notIn: [...CODE_BLOCKING_JOB_STATUSES] } } } },
+          ],
           ...(jobId ? { jobId } : {}),
         },
       },

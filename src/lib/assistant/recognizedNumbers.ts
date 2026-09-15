@@ -25,6 +25,12 @@
  *              their own name, the unit, or the VIN last 4.
  * Everything else is the public tier: job-code verification, escalation,
  * gear setup help. There is no block list; STOP only silences outbound.
+ *
+ * Every tier LAPSES on its own — that is the answer to "how does someone
+ * lose access once they are off the production" (Wes 2026-09-15). Contacts
+ * a week past their job, drivers a day past the assignment, hand-made rows
+ * on their own `expiresAt`. Only staff persist, because their access
+ * follows their HQ account rather than a job.
  */
 import { prisma } from '@/lib/prisma'
 import { phoneTail } from '@/lib/assistant/phoneFactor'
@@ -88,10 +94,17 @@ export async function listRecognizedNumbers(now = new Date()): Promise<Recognize
   const rows: RecognizedNumber[] = []
 
   // ── Hand-made grants and blocks (the table may not exist before db push) ──
-  type GrantRow = { id: string; phone: string; phoneTail: string; name: string; level: string; note: string | null; jobId: string | null }
+  type GrantRow = { id: string; phone: string; phoneTail: string; name: string; level: string; note: string | null; jobId: string | null; expiresAt: Date | null }
   let grantRows: GrantRow[] = []
   try {
-    grantRows = await prisma.ahaGrant.findMany({ where: { revokedAt: null }, orderBy: { createdAt: 'desc' }, select: { id: true, phone: true, phoneTail: true, name: true, level: true, note: true, jobId: true } })
+    // Expired rows are as good as gone — the live check filters them out in
+    // SQL, so listing them here would make the roster claim access that does
+    // not exist. "The list IS the access" only holds if both agree.
+    grantRows = await prisma.ahaGrant.findMany({
+      where: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, phone: true, phoneTail: true, name: true, level: true, note: true, jobId: true, expiresAt: true },
+    })
   } catch (err) {
     console.error('[recognizedNumbers] grants unavailable:', err)
   }
@@ -105,9 +118,14 @@ export async function listRecognizedNumbers(now = new Date()): Promise<Recognize
     const job = g.jobId ? grantJobs.get(g.jobId) : null
     rows.push({
       tier: level === 'blocked' ? 'blocked' : 'grant', level, tail: g.phoneTail, phone: g.phone, name: g.name,
-      reason: level === 'blocked' ? 'Blocked by hand on this page' : `Added by hand on this page as ${level}${job ? ` on job ${job.jobCode}` : ''}`,
+      reason: level === 'blocked'
+        ? 'Blocked by hand on this page'
+        : `Added by hand on this page as ${level}${job ? ` on job ${job.jobCode}` : ''}${g.expiresAt ? '' : ' — never expires'}`,
       grants: grantsForLevel(level), manageHref: '/admin/assistant', manageLabel: 'Remove',
-      until: null, grantId: g.id, note: g.note, jobCode: job?.jobCode ?? null, jobName: job?.name ?? null,
+      // A blocked row has nothing to lapse; everything else now carries its
+      // own end date, so a hand-made row reads like every derived tier.
+      until: level === 'blocked' ? null : (g.expiresAt?.toISOString() ?? null),
+      grantId: g.id, note: g.note, jobCode: job?.jobCode ?? null, jobName: job?.name ?? null,
     })
   }
   const overridden = new Set(grantRows.map((g) => g.phoneTail))

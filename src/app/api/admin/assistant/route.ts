@@ -19,6 +19,7 @@ import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
 import { resolveTwilioConfig } from '@/lib/sms/sendSms'
 import { listRecognizedNumbers } from '@/lib/assistant/recognizedNumbers'
+import { resolveGrantExpiry } from '@/lib/assistant/grantExpiry'
 import { phoneTail } from '@/lib/assistant/phoneFactor'
 import { levelForRole } from '@/lib/assistant/access'
 import { firstNameOf } from '@/lib/assistant/greeting'
@@ -146,7 +147,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string
+        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string; expiresAt?: string
         name?: string; level?: string; note?: string; jobCode?: string; grantId?: string
       }
     | null
@@ -168,18 +169,41 @@ export async function POST(req: NextRequest) {
     if (!tail) return NextResponse.json({ error: 'a full US mobile number is required' }, { status: 400 })
     if (!level) return NextResponse.json({ error: 'level must be BLOCKED, CONTACT, STAFF or ADMIN' }, { status: 400 })
     let jobId: string | null = null
+    // A CONTACT grant's default expiry follows its job, so the job's last
+    // live date is read here alongside the id.
+    let jobEnd: Date | null = null
     if (level === 'CONTACT') {
       const jobCode = typeof body.jobCode === 'string' ? body.jobCode.trim() : ''
       if (!jobCode) return NextResponse.json({ error: 'a CONTACT grant needs the job code it is a contact on' }, { status: 400 })
-      const job = await prisma.job.findFirst({ where: { jobCode: { equals: jobCode, mode: 'insensitive' } }, select: { id: true } })
+      const job = await prisma.job.findFirst({
+        where: { jobCode: { equals: jobCode, mode: 'insensitive' } },
+        select: {
+          id: true,
+          orders: { where: { status: { notIn: ['CANCELLED', 'CLOSED'] } }, select: { endDate: true } },
+          bookings: { where: { archivedAt: null, status: { notIn: ['CANCELLED', 'ARCHIVED'] } }, select: { endDate: true } },
+        },
+      })
       if (!job) return NextResponse.json({ error: `no job ${jobCode}` }, { status: 404 })
       jobId = job.id
+      for (const d of [...job.orders.map((o) => o.endDate), ...job.bookings.map((b) => b.endDate)]) {
+        if (d && (!jobEnd || d > jobEnd)) jobEnd = d
+      }
     }
+    // "never" is a deliberate choice an admin has to make; anything else is
+    // a date, and leaving it blank takes the default for the level.
+    const requested =
+      body.expiresAt === 'never'
+        ? ('never' as const)
+        : typeof body.expiresAt === 'string' && body.expiresAt.trim()
+          ? new Date(body.expiresAt)
+          : null
+    const { expiresAt, error: expiryError } = resolveGrantExpiry({ requested, level, jobEnd })
+    if (expiryError) return NextResponse.json({ error: expiryError }, { status: 400 })
     try {
       const replaced = await prisma.ahaGrant.updateMany({ where: { phoneTail: tail, revokedAt: null }, data: { revokedAt: new Date(), revokedById: gate.user.id } })
-      const row = await prisma.ahaGrant.create({ data: { phone, phoneTail: tail, name, level, jobId, note, createdById: gate.user.id }, select: { id: true } })
+      const row = await prisma.ahaGrant.create({ data: { phone, phoneTail: tail, name, level, jobId, note, expiresAt, createdById: gate.user.id }, select: { id: true } })
       await prisma.auditLog.create({
-        data: { userId: gate.user.id, action: 'admin.aha_grant_added', entityType: 'AhaGrant', entityId: row.id, oldValues: { replaced: replaced.count }, newValues: { name, level, phoneTail: tail.slice(-4), jobId, at: new Date().toISOString() } },
+        data: { userId: gate.user.id, action: 'admin.aha_grant_added', entityType: 'AhaGrant', entityId: row.id, oldValues: { replaced: replaced.count }, newValues: { name, level, phoneTail: tail.slice(-4), jobId, expiresAt: expiresAt ? expiresAt.toISOString() : 'never', at: new Date().toISOString() } },
       })
       return NextResponse.json({ ok: true, id: row.id })
     } catch (err) {

@@ -249,6 +249,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and shows what the caller gave; its API had never selected `oldValues`,
   so the unit, VIN and typed name were stored from day one and invisible.
   `npm run test:phone-factor`.
+- **Access LAPSES on its own — that is how someone loses it when they are
+  off the production** (Wes 2026-09-15: "how do we control whether
+  Production people will have access to security information like access
+  codes when they are not on a current Production"). Codes: the live
+  assignment ±1 day (`GRACE_DAYS`). Job details: the job ±7 days
+  (`CURRENT_GRACE_DAYS`). Nobody carries access between jobs — the check
+  runs against live assignments, never against the person. Two holes closed
+  that day:
+  - **A job's own off-ramp now closes codes.** `verifyAndRelease` filtered
+    on the BOOKING only, so marking a job WRAPPED or LOST cut the caller's
+    booking details while leaving gate + lockbox codes open until the dates
+    ran out. `CODE_BLOCKING_JOB_STATUSES` (WRAPPED, LOST — **not** HOLD, a
+    held job is still live) is now in the query. `Booking.jobId` is
+    NULLABLE (call-in intake), so the filter is an OR with `jobId: null` —
+    a bare `job: { is: … }` would have stopped releasing codes for every
+    job-less booking.
+  - **Hand-made grants expire.** `AhaGrant.expiresAt` (**additive
+    `prisma db push`: one nullable column**) — a CONTACT grant defaults to
+    its job's last live date + 7 days so it lapses with the real tier,
+    anything else to 90 days, and NULL is a deliberate never that the admin
+    page labels. `src/lib/assistant/grantExpiry.ts` is the rule;
+    `activeGrant` and `listRecognizedNumbers` both filter on it, so an
+    expired row neither works nor appears. `npm run test:aha-grant-expiry`.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as

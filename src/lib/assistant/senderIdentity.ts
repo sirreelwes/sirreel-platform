@@ -58,11 +58,22 @@ export function identityForUser(user: { id: string; name: string; role: string; 
   }
 }
 
-/** The active hand-made grant for a number, if the table exists yet. */
+/**
+ * The active hand-made grant for a number, if the table exists yet.
+ *
+ * "Active" means not revoked AND not expired. Wes 2026-09-15: every derived
+ * tier lapses on its own, so a hand-made row that outlived the production
+ * was the one standing way to keep access between jobs. A NULL expiresAt is
+ * still a deliberate forever (a long-term partner dispatcher, say).
+ */
 async function activeGrant(tail: string) {
   try {
     const g = await prisma.ahaGrant.findFirst({
-      where: { phoneTail: tail, revokedAt: null },
+      where: {
+        phoneTail: tail,
+        revokedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, level: true, note: true, jobId: true },
     })

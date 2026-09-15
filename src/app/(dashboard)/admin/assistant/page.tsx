@@ -194,6 +194,9 @@ function AddNumberForm({ onDone, preset }: { onDone: () => void; preset?: { name
   const [phone, setPhone] = useState(preset?.phone ?? '')
   const [level, setLevel] = useState(preset?.level ?? 'STAFF')
   const [jobCode, setJobCode] = useState('')
+  // '' = take the default for the level (a contact follows their job, anyone
+  // else gets 90 days). 'never' is the deliberate opt-out.
+  const [expiresAt, setExpiresAt] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -208,11 +211,11 @@ function AddNumberForm({ onDone, preset }: { onDone: () => void; preset?: { name
       const res = await fetch('/api/admin/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'add-grant', name, phone, level, jobCode: jobCode || undefined, note: note || undefined }),
+        body: JSON.stringify({ action: 'add-grant', name, phone, level, jobCode: jobCode || undefined, note: note || undefined, expiresAt: expiresAt || undefined }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(j.error || 'Could not save.'); return }
-      setName(''); setPhone(''); setJobCode(''); setNote('')
+      setName(''); setPhone(''); setJobCode(''); setNote(''); setExpiresAt('')
       onDone()
     } finally { setBusy(false) }
   }
@@ -231,6 +234,26 @@ function AddNumberForm({ onDone, preset }: { onDone: () => void; preset?: { name
           <option value="BLOCKED">Blocked — nothing</option>
         </select>
         {level === 'CONTACT' && <input value={jobCode} onChange={(e) => setJobCode(e.target.value)} placeholder="Job code (SR-JOB-0231)" className={`${input} w-44 font-mono`} />}
+        {level !== 'BLOCKED' && (
+          <label className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+            Until
+            <input
+              id="grant-expires"
+              type="date"
+              value={expiresAt === 'never' ? '' : expiresAt}
+              disabled={expiresAt === 'never'}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className={`${input} w-36 disabled:opacity-40`}
+            />
+            <button
+              type="button"
+              onClick={() => setExpiresAt(expiresAt === 'never' ? '' : 'never')}
+              className={`rounded px-2 py-1 text-[11px] ${expiresAt === 'never' ? 'bg-red-900 text-red-200' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+            >
+              never
+            </button>
+          </label>
+        )}
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why (optional)" className={`${input} w-56`} />
         <button
           onClick={() => void submit()}
@@ -243,6 +266,7 @@ function AddNumberForm({ onDone, preset }: { onDone: () => void; preset?: { name
       {err && <div className="mt-2 text-xs text-red-300">{err}</div>}
       <div className="mt-2 text-[11px] text-zinc-600">
         HQ users get their level from their role automatically — add them here only to give a different level or to block. Every change is audited.
+        {' '}Left blank, a production contact lapses with their job and anyone else in 90 days; <span className="text-zinc-400">never</span> is the only way to grant access that outlives a production.
       </div>
     </div>
   )

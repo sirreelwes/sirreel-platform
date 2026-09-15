@@ -22,6 +22,20 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-15 (later still)
+
+### AHA: access that expires on its own
+
+`SHA_PLACEHOLDER` aha: grants expire, and a wrapped or lost job closes its codes
+
+Wes: "how do we control whether Production people will have access to these security information like access codes when they are not on a current Production?" Mostly it was already automatic — codes are scoped to a live assignment ±1 day, job details to the job ±7 days, and the check runs against assignments rather than against the person, so nobody carries access between jobs. Two things did not follow that rule.
+
+- **A job's off-ramps did nothing to codes.** `verifyAndRelease` filtered on the BOOKING (not CANCELLED/ARCHIVED) and the assignment dates, never on the job. Marking a job WRAPPED or LOST therefore cut the caller's booking details — `senderIdentity` does filter on job status — while leaving the gate and lockbox codes open until the dates ran out. `CODE_BLOCKING_JOB_STATUSES` is now in the query. HOLD is deliberately excluded: a held job is still live and a driver mid-rental needs in.
+- **`Booking.jobId` is nullable**, which nearly turned that fix into an outage. Call-in intake creates a booking before the job is named, so a bare `job: { is: … }` filter would have silently stopped releasing codes for every job-less booking. The filter is an OR with a `jobId: null` branch.
+- **Hand-made grants now expire.** `AhaGrant.expiresAt` — additive `prisma db push`, one nullable column. A CONTACT grant defaults to its job's last live order/booking date + the same 7-day tail the derived contact tier gets, so a hand-made contact and a real one lapse together; anything else defaults to 90 days; NULL is a deliberate never, chosen with a button rather than by leaving a field blank. A date more than 400 days out is refused instead of quietly granting years. `src/lib/assistant/grantExpiry.ts` holds the rule and `npm run test:aha-grant-expiry` pins it.
+- **The roster and the live check agree.** `activeGrant` and `listRecognizedNumbers` both filter expired rows out, so an expired grant neither works nor shows on "Who AHA recognises" — that page only means something if it cannot claim access that does not exist. Hand-made rows now carry a lapse date like every derived tier, and a never-expires row says so in its reason line.
+- The add-person form gained an "Until" date with a **never** toggle, and the helper text says what blank means for each level. Build green, eight assistant suites pass.
+
 ## 2026-09-15 (later)
 
 ### AHA: every release says who it was for

@@ -1190,19 +1190,19 @@ enum BookingItemStatus {
 }
 
 model BookingItem {
-  id         String            @id @default(uuid())
-  bookingId  String            @map("booking_id")
-  categoryId String            @map("category_id")
-  quantity   Int
-  dailyRate  Decimal           @map("daily_rate") @db.Decimal(10, 2)
-  lineTotal  Decimal?          @map("line_total") @db.Decimal(10, 2)
-  status     BookingItemStatus @default(REQUESTED)
+  id               String            @id @default(uuid())
+  bookingId        String            @map("booking_id")
+  categoryId       String            @map("category_id")
+  quantity         Int
+  dailyRate        Decimal           @map("daily_rate") @db.Decimal(10, 2)
+  lineTotal        Decimal?          @map("line_total") @db.Decimal(10, 2)
+  status           BookingItemStatus @default(REQUESTED)
   /// Hold rank — 1 = primary, ≥2 = backup ("2nd hold" / "3rd hold").
   /// Backups can overlap a category at capacity; they do NOT consume
   /// availableToHold. Manual promotion only — when a primary
   /// releases, an agent surfaces the next-rank backup explicitly.
   /// Replaces the Planyo "X - 2ND HOLD" placeholder workaround.
-  holdRank   Int               @default(1) @map("hold_rank")
+  holdRank         Int               @default(1) @map("hold_rank")
   /// A HUMAN placed this hold in the queue — "2nd Hold", or "1st Hold and
   /// demote the other" — so `reconcileHoldFirmness` must NOT move it.
   /// Queue position beats paperwork (Wes 2026-09-09): without this lock the
@@ -1212,10 +1212,10 @@ model BookingItem {
   /// pattern as Order.verbalApprovalAt: an automatic rule yields to a
   /// recorded human decision. Clearing these three columns hands the hold
   /// back to the automatic rule.
-  rankLockedAt     DateTime? @map("rank_locked_at")
-  rankLockedById   String?   @map("rank_locked_by_id")
-  rankLockedReason String?   @map("rank_locked_reason") @db.Text
-  notes      String?           @db.Text
+  rankLockedAt     DateTime?         @map("rank_locked_at")
+  rankLockedById   String?           @map("rank_locked_by_id")
+  rankLockedReason String?           @map("rank_locked_reason") @db.Text
+  notes            String?           @db.Text
 
   // Relations
   booking       Booking                @relation(fields: [bookingId], references: [id], onDelete: Cascade)
@@ -3005,51 +3005,51 @@ model RateChangeLog {
 }
 
 model InventoryItem {
-  id                String             @id @default(uuid())
+  id                 String             @id @default(uuid())
   // Nullable since the May 2026 RW import — auto-created rows from RW
   // start with no SirReel category until the admin reassigns. Existing
   // hand-curated rows always have one.
-  categoryId        String?            @map("category_id")
-  code              String             @unique
+  categoryId         String?            @map("category_id")
+  code               String             @unique
   // RentalWorks item number (I-Code), backfilled one-time from RW in the
   // 2026-06-23 reconcile. Distinct from `code` (HQ's descriptive unique
   // key) and `rwId` (RW InventoryId / master). Surfaces to the catalog
   // since the catalog reads InventoryItem. Nullable: only MATCHED rows
   // get one; never overwritten once set.
-  rwICode           String?            @map("rw_icode")
-  description       String?
-  dailyRate         Decimal            @default(0) @map("daily_rate") @db.Decimal(10, 2)
-  weeklyRate        Decimal            @default(0) @map("weekly_rate") @db.Decimal(10, 2)
+  rwICode            String?            @map("rw_icode")
+  description        String?
+  dailyRate          Decimal            @default(0) @map("daily_rate") @db.Decimal(10, 2)
+  weeklyRate         Decimal            @default(0) @map("weekly_rate") @db.Decimal(10, 2)
   // Intentional no-charge inclusion (e.g. recycle bins that come with a
   // basecamp order). Disambiguates a $0 dailyRate: includedFree=true →
   // public form shows "Included" (not orderable); a $0 with includedFree=false
   // is a missing price and is HIDDEN from the public form (fail-safe — never
   // render "FREE"/orderable to a client). Internal/rep views ignore this flag.
-  includedFree      Boolean            @default(false) @map("included_free")
-  qtyOwned          Int                @default(0) @map("qty_owned")
-  replacementCost   Decimal?           @map("replacement_cost") @db.Decimal(10, 2)
-  imageUrl          String?            @map("image_url")
+  includedFree       Boolean            @default(false) @map("included_free")
+  qtyOwned           Int                @default(0) @map("qty_owned")
+  replacementCost    Decimal?           @map("replacement_cost") @db.Decimal(10, 2)
+  imageUrl           String?            @map("image_url")
   // Preferred replacement vendor — relational so reorder routing is
   // consistent across items (same handful of vendors: Amazon, Home
   // Depot, etc., not free text). `vendorItemUrl` is an item-specific
   // product/reorder link that overrides Vendor.url for THIS item;
   // when null we fall back to the vendor's default url.
-  preferredVendorId String?            @map("preferred_vendor_id")
-  preferredVendor   Vendor?            @relation(fields: [preferredVendorId], references: [id])
-  vendorItemUrl     String?            @map("vendor_item_url")
+  preferredVendorId  String?            @map("preferred_vendor_id")
+  preferredVendor    Vendor?            @relation(fields: [preferredVendorId], references: [id])
+  vendorItemUrl      String?            @map("vendor_item_url")
   // Phase 2 sales pipeline. `aliases` are colloquial synonyms ("walkies" →
   // CP200 Radio) handed to the AI extractor as catalog context and used
   // server-side for fallback alias-tokenized matching. `department` is the
   // catalog-side authority — when an OrderLineItem matches this product,
   // the line item's department is overridden from this field.
-  aliases           String[]           @default([])
-  department        LineItemDepartment
+  aliases            String[]           @default([])
+  department         LineItemDepartment
   // Default LineItemType for this catalog item — inherited by
   // OrderLineItem when the line is created from a catalog match
   // (overridable per-line). EQUIPMENT for unit=day rentals,
   // EXPENDABLE for unit=ea consumables. The new-quote createQuote
   // path may still re-derive at create time for legacy callers.
-  type              LineItemType       @default(EQUIPMENT)
+  type               LineItemType       @default(EQUIPMENT)
   /// SPECIALTY VEHICLE — a billing class, not a label (Wes 2026-09-10:
   /// "motorhomes and wardrobe makeup trailers are all going to be in the
   /// Specialty Vehicles category"). The signed rental agreement has named
@@ -3059,50 +3059,50 @@ model InventoryItem {
   /// weekly cap. Read it through `src/lib/pricing/specialtyVehicles.ts`,
   /// never this column alone — a partner's coach and a free-typed trailer
   /// are specialty too and have no catalog row to carry a flag.
-  isSpecialtyVehicle Boolean           @default(false) @map("is_specialty_vehicle")
+  isSpecialtyVehicle Boolean            @default(false) @map("is_specialty_vehicle")
   // RentalWorks enrichment (May 2026 spike). The first four columns are
   // populated from RW Items grouped by InventoryId. needsReview flags
   // auto-created rows where Wes hasn't yet picked an InventoryCategory /
   // confirmed the dept guess. rwLastSyncedAt + rwId track the last RW
   // pull so re-syncs can pick up where they left off.
-  manufacturer      String?
-  model             String?
-  specs             String?            @db.Text
-  dimensions        String?
+  manufacturer       String?
+  model              String?
+  specs              String?            @db.Text
+  dimensions         String?
   // Color-variant grouping (2026-07, tents first): items sharing a
   // variantGroupKey render as ONE public-catalog card with color swatches;
   // color labels each swatch. Only COLOR is a variant — sizes stay separate
   // groups/cards. Null = standalone item (renders exactly as before).
-  color             String?
-  variantGroupKey   String?            @map("variant_group_key")
-  needsReview       Boolean            @default(false) @map("needs_review")
-  rwLastSyncedAt    DateTime?          @map("rw_last_synced_at")
-  rwId              String?            @map("rw_id")
+  color              String?
+  variantGroupKey    String?            @map("variant_group_key")
+  needsReview        Boolean            @default(false) @map("needs_review")
+  rwLastSyncedAt     DateTime?          @map("rw_last_synced_at")
+  rwId               String?            @map("rw_id")
   // Whether the item appears in the client-facing supply ordering
   // catalog. Defaults false so RW-imported rows stay out of the public
   // surface until an operator (or the seed script) opts them in. The
   // seed flips this for items reconciled against the Production
   // Supplies PDF; everything else stays hidden.
-  publicVisible     Boolean            @default(false) @map("public_visible")
+  publicVisible      Boolean            @default(false) @map("public_visible")
   // Soft-delete: `isActive=false` is the archive state (already the
   // universal exclude filter on list / catalog / search / pickers).
   // `archivedAt` records WHEN it was archived for the Archived view +
   // restore audit; restore flips isActive=true and clears archivedAt.
-  isActive          Boolean            @default(true) @map("is_active")
-  archivedAt        DateTime?          @map("archived_at")
+  isActive           Boolean            @default(true) @map("is_active")
+  archivedAt         DateTime?          @map("archived_at")
   // Client-facing note seeded onto OrderLineItem.notes whenever this
   // InventoryItem is added as a line. Lets the catalog carry policy text
   // (e.g. "LED wall use requires a qualified A/V Tech on the client's
   // payroll.") so the same wording prints on every quote/invoice
   // without per-line config. Editable per-line after the fact.
-  clientNote        String?            @map("client_note")
+  clientNote         String?            @map("client_note")
   // Admin-only flags that the order detail UI consults to surface
   // operational reminders (e.g. ["REQUIRES_AV_TECH"] for the LED Wall
   // Usage item triggers a sticky amber banner). Never printed on
   // client-facing PDFs.
-  internalFlags     String[]           @default([]) @map("internal_flags")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
+  internalFlags      String[]           @default([]) @map("internal_flags")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   category     InventoryCategory?  @relation(fields: [categoryId], references: [id])
   lineItems    OrderLineItem[]
@@ -4630,15 +4630,15 @@ model Vendor {
   /// opens the per-unit conduit page (SubRental.vendorToken), which is
   /// where location / call time / driver are exchanged. 32 random bytes,
   /// base64url; long-lived, rotated from HQ.
-  portalToken         String?   @unique @map("portal_token")
-  portalTokenMintedAt DateTime? @map("portal_token_minted_at")
-  portalViewedAt      DateTime? @map("portal_viewed_at")
-  portalViewCount     Int       @default(0) @map("portal_view_count")
+  portalToken          String?   @unique @map("portal_token")
+  portalTokenMintedAt  DateTime? @map("portal_token_minted_at")
+  portalViewedAt       DateTime? @map("portal_viewed_at")
+  portalViewCount      Int       @default(0) @map("portal_view_count")
   /// When (and to whom) HQ last emailed the account link. Minting alone is
   /// not an invite — the Portals tab reads this to say "invited Sep 6 · not
   /// yet opened" instead of the misleading "link minted".
-  portalInvitedAt     DateTime? @map("portal_invited_at")
-  portalInvitedTo     String?   @map("portal_invited_to")
+  portalInvitedAt      DateTime? @map("portal_invited_at")
+  portalInvitedTo      String?   @map("portal_invited_to")
   /// THE INTRODUCTION — "SirReel wants to partner with PowerTrip!" — sent
   /// before the account link ever goes out. Wes 2026-09-10: "I don't want to
   /// send a portal link without the initial welcome email." A cold link to a
@@ -4649,16 +4649,16 @@ model Vendor {
   /// Composed and sent only by Wes (src/lib/sub-rentals/welcomeSender.ts) —
   /// it is a personal approach from the owner, not a system notification, and
   /// the draft is his to edit before it goes.
-  welcomeSentAt       DateTime? @map("welcome_sent_at")
-  welcomeSentTo       String?   @map("welcome_sent_to")
-  welcomeSubject      String?   @map("welcome_subject")
+  welcomeSentAt        DateTime? @map("welcome_sent_at")
+  welcomeSentTo        String?   @map("welcome_sent_to")
+  welcomeSubject       String?   @map("welcome_subject")
   /// THE DEAL (Wes 2026-09-06, King Kong: "20% of vehicle rental rate goes
   /// to SirReel"). SirReel's share of the vehicle rental rate, in percent.
   /// The partner's listed rate is what the production pays; the partner
   /// receives list × (1 − share/100). SubcontractedVehicle.discountPercent
   /// is a per-unit OVERRIDE of this; null there means "the vendor's deal".
   /// Read through partnerShare.ts, never raw.
-  partnerSharePercent Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
+  partnerSharePercent  Decimal?  @map("partner_share_percent") @db.Decimal(5, 2)
   /// UNUSED — nothing reads or writes these three.
   ///
   /// Added 2026-09-10 for a partner-side "propose a different split" form, and
@@ -4671,7 +4671,7 @@ model Vendor {
   /// before the code stopped reading them — dropping first would have 500'd
   /// the partner page (same ordering rule as adding an enum value). Empty and
   /// harmless; safe to drop in a later pass if anyone is tidying.
-  proposedSharePercent Decimal? @map("proposed_share_percent") @db.Decimal(5, 2)
+  proposedSharePercent Decimal?  @map("proposed_share_percent") @db.Decimal(5, 2)
   shareProposedAt      DateTime? @map("share_proposed_at")
   shareProposalNote    String?   @map("share_proposal_note") @db.Text
   /// The partner's certificate of insurance (agreement clause 4: their
@@ -4680,8 +4680,8 @@ model Vendor {
   /// this week's rental" — so the welcome email no longer asks; the
   /// partner-coi-missing action item follows up a week after signature and
   /// clears when HQ stamps receipt here. Expiry re-raises it.
-  coiReceivedAt       DateTime? @map("coi_received_at")
-  coiExpiresAt        DateTime? @map("coi_expires_at")
+  coiReceivedAt        DateTime? @map("coi_received_at")
+  coiExpiresAt         DateTime? @map("coi_expires_at")
 
   /// MAY WE NAME THEM TO CLIENTS? Agreement clause 10 says SirReel does not
   /// use a partner's name, logo or trademarks in any client-facing material
@@ -5175,13 +5175,13 @@ model SubcontractedVehicle {
 
   /// Per-unit override of Vendor.catalogSection (null = the vendor's). A
   /// power partner's scissor lift belongs under Lifts, not Generators.
-  catalogSection PartnerCatalogSection? @map("catalog_section")
+  catalogSection       PartnerCatalogSection? @map("catalog_section")
   /// How this unit normally reaches set: PICKUP = a driver takes it (King
   /// Kong star wagon), DELIVERY = the partner delivers and collects it
   /// (a towable generator, a restroom trailer). Seeds SubRental.receiveMethod
   /// when a booking is created off this unit, which is what decides whether
   /// the partner is asked for a DRIVER or a DELIVERY CONTACT. Null = ask.
-  defaultReceiveMethod ReceiveMethod? @map("default_receive_method")
+  defaultReceiveMethod ReceiveMethod?         @map("default_receive_method")
 
   vendor            Vendor                      @relation(fields: [vendorId], references: [id])
   fees              SubcontractedFee[]
@@ -5861,12 +5861,10 @@ model TeamMember {
 
 /**
  * A market SirReel sells into — a commercial territory, not a geography.
- *
  * "Napa Valley" rather than "NORCAL" (Wes, 2026-09-10). Markets are the
  * unit of expansion, and the plan is to open them on partner equipment, so
  * this is a table: adding one is a row, not a migration plus a careful
  * two-stage deploy.
- *
  * What it deliberately does NOT do: nothing filters availability by market.
  * `src/lib/scheduling/` is location-blind, and separation between markets
  * still comes from market-scoped CATEGORIES (`DLUX (NorCal)` is its own
@@ -5875,18 +5873,18 @@ model TeamMember {
  * before any of it can be built.
  */
 model Market {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   /// Display name, as the business says it: "Los Angeles", "Napa Valley".
-  name      String   @unique
+  name      String  @unique
   /// URL/key form: "los-angeles", "napa-valley".
-  slug      String   @unique
+  slug      String  @unique
   /// Retire a market without deleting it — jobs keep pointing at history.
-  isActive  Boolean  @default(true) @map("is_active")
+  isActive  Boolean @default(true) @map("is_active")
   /// Hand-ordered for pickers; home market first.
-  sortOrder Int      @default(0) @map("sort_order")
-  notes     String?  @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+  notes     String? @db.Text
 
-  jobs      Job[]
+  jobs Job[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -9798,6 +9796,12 @@ model AhaGrant {
   /// CONTACT grants need a job to be a contact ON; ignored for other levels.
   jobId       String?   @map("job_id")
   note        String?   @db.VarChar(300)
+  /// When this grant stops working on its own. Wes 2026-09-15: every
+  /// derived tier lapses (codes a day past the assignment, job info a week
+  /// past the job) but a hand-made row used to last until a human revoked
+  /// it — the one way someone kept access between productions. NULL is a
+  /// deliberate never-expires, which the admin page marks as such.
+  expiresAt   DateTime? @map("expires_at")
   createdById String    @map("created_by_id")
   createdAt   DateTime  @default(now()) @map("created_at")
   revokedById String?   @map("revoked_by_id")
