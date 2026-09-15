@@ -26,9 +26,16 @@ export async function GET(req: NextRequest) {
     // Post catalog merge these are unit-tracked InventoryItems. The
     // response key stays `assetCategories` — it is what the order page's
     // vehicle picker reads — but the ids are catalog ids and bind to
-    // inventoryItemId. isPublished became publicVisible in the merge.
+    // inventoryItemId.
+    //
+    // NOT gated on publicVisible. That flag is the public website's
+    // publish switch; this is a STAFF picker. On 2026-09-15 no vehicle
+    // row was published, so Type: Vehicle offered nothing but "Select
+    // vehicle..." (Oliver). A rep books a class whether or not it is on
+    // the website. type VEHICLE keeps stages and kit rows (also
+    // unit-tracked) out of a list labelled Vehicle.
     prisma.inventoryItem.findMany({
-      where: { trackingMode: "UNIT_TRACKED", publicVisible: true, isActive: true },
+      where: { trackingMode: "UNIT_TRACKED", type: "VEHICLE", isActive: true },
       select: { id: true, code: true, description: true, slug: true, dailyRate: true, weeklyRate: true },
       orderBy: { description: "asc" },
     }),
