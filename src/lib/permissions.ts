@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { canUseCollections } from '@/lib/collections/allowlist';
 import { isExportApprover } from '@/lib/exports/approver';
+import { isOwnerNumbersViewer } from '@/lib/exec/ownerAllowlist';
 import { isAllowedPayrollEmail } from '@/lib/payroll/allowlist';
 import { isAllowedYardEmail } from '@/lib/yard/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
@@ -801,6 +802,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
         { id: 'coverage', label: 'Coverage', icon: 'Radar', href: '/exec/coverage' },
         { id: 'reporting', label: 'Reporting', icon: 'BarChart3', href: '/reporting' },
+        // Wes only (2026-09-15). Email-gated, NOT role-gated — ADMIN is Wes
+        // AND Dani. The page enforces it too; this only hides the row. See
+        // src/lib/exec/ownerAllowlist.ts.
+        ...(isOwnerNumbersViewer(navEmail)
+          ? [{ id: 'owner-numbers', label: 'Sales & Collections', icon: 'TrendingUp', href: '/exec/numbers' }]
+          : []),
         // Approver-only (Wes). Everyone else reaches their own request
         // history from the Clients page; a queue tab they can't act on
         // would just be noise. Email-gated, NOT role-gated — ADMIN is
