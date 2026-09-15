@@ -31,6 +31,7 @@ import type {
 } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { attributeLines, rollupPreppedBy, summarizePasses, type PassSummary } from '@/lib/orders/checkPasses'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 import { checkWindowYmds, pacificYmd, ymdToDbDate } from '@/lib/fleet/todayBoard'
@@ -302,6 +303,11 @@ export interface DraftLine {
   /** False when a previous partial pull left this line off the sheet.
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
+  /** Who counted this line on a previous pass, and when (ISO). Null on a
+   *  fresh line, an off-sheet line, and a pre-2026-09-15 row with no
+   *  name on its report. See checkPasses.ts. */
+  countedBy: string | null
+  countedAt: string | null
   inventoryItemId: string | null
   /** The catalog row's own name. Carried so the sheet can say when a
    *  line and the row it is booked against are different things —
@@ -332,12 +338,21 @@ export interface ReportDraft {
     changedOrder: boolean
     partial: boolean
     sheetPhotoUrl: string | null
+    /** Everyone who has counted something on this sheet, first first. */
+    passes: PassSummary[]
   } | null
+  /** The name box's starting value. EMPTY once a sheet is on file: the
+   *  person opening it again is usually somebody else picking up the
+   *  rest, and a pre-filled name would credit their lines to the first
+   *  person. Blank files as the signed-in user. */
   preppedBy: string
   notes: string
   lines: DraftLine[]
   /** Rows a previous report ADDED that are not order lines. */
-  extras: Array<{ description: string; actualQty: number; note: string | null; filed?: boolean }>
+  extras: Array<{
+    description: string; actualQty: number; note: string | null; filed?: boolean
+    countedBy?: string | null; countedAt?: string | null
+  }>
   /** Per-unit scans on this order, by line. Null until the scan table
    *  exists — the form hides the scanner panel rather than fail. */
   unitScans: UnitScanSummary | null
@@ -386,8 +401,9 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
             select: {
               orderLineItemId: true, description: true, expectedQty: true,
               actualQty: true, change: true, substituteFor: true, note: true,
-              onSheet: true,
+              onSheet: true, countedBy: true, countedAt: true,
             },
+            orderBy: { createdAt: 'asc' },
           },
         },
       },
@@ -415,6 +431,18 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
 
   const ymd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
+  // A row filed before lines carried a name reads as its report's — but
+  // only while that report named ONE person. A rollup ("Carlos, Pedro")
+  // cannot be a single line's counter, and never is: every row filed
+  // since the rollup existed carries its own name.
+  const legacyName = prior?.preppedBy && !prior.preppedBy.includes(',') ? prior.preppedBy : null
+  const byline = (l: { onSheet: boolean; countedBy: string | null; countedAt: Date | null }) =>
+    !l.onSheet
+      ? { countedBy: null, countedAt: null }
+      : l.countedBy
+        ? { countedBy: l.countedBy, countedAt: l.countedAt?.toISOString() ?? null }
+        : { countedBy: legacyName, countedAt: legacyName ? prior!.submittedAt.toISOString() : null }
+
   return {
     orderId: order.id,
     orderNumber: order.orderNumber,
@@ -435,9 +463,10 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           changedOrder: prior.changedOrder,
           partial: prior.partial,
           sheetPhotoUrl: prior.sheetPhotoUrl,
+          passes: summarizePasses(prior.lines.map((l) => ({ ...l, ...byline(l) }))),
         }
       : null,
-    preppedBy: prior?.preppedBy ?? '',
+    preppedBy: '',
     notes: prior?.notes ?? '',
     lines: order.lineItems.map((li) => {
       const p = priorByLine.get(li.id)
@@ -455,6 +484,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         // back still off the sheet, so the second pull starts where the
         // first one stopped instead of re-counting what already went.
         onSheet: p ? p.onSheet : true,
+        ...(p ? byline(p) : { countedBy: null, countedAt: null }),
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,
         inventoryItemId: li.inventoryItemId,
@@ -470,7 +500,9 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     // still "differ", file again. That is the loop Jose hit.
     extras: (prior?.lines ?? [])
       .filter((l) => !l.orderLineItemId)
-      .map((l) => ({ description: l.description, actualQty: l.actualQty, note: l.note, filed: true })),
+      .map((l) => ({
+        description: l.description, actualQty: l.actualQty, note: l.note, filed: true, ...byline(l),
+      })),
     unitScans,
     kitExpectations,
   }
@@ -510,6 +542,10 @@ export interface SubmitResult {
   partial: boolean
   /** Lines left off it — still to pull, or still to come back. */
   offSheet: number
+  /** The name this pass was filed under, and how many lines it counted
+   *  (as opposed to carried forward from an earlier pass). */
+  passBy: string
+  countedThisPass: number
 }
 
 // The classifier and its wording now live in checkLineChange.ts, with no
@@ -534,6 +570,9 @@ export async function submitCheckReport(opts: {
   orderId: string
   edge: OrderCheckEdge
   submittedById: string
+  /** The name of whoever did THIS pass — stamped on the lines it counted.
+   *  The report's own `preppedBy` becomes the roll-up of every name on
+   *  the sheet, so it no longer takes this value verbatim. */
   preppedBy: string | null
   notes: string | null
   lines: SubmitLineInput[]
@@ -543,7 +582,9 @@ export async function submitCheckReport(opts: {
   sheetPhotoKey?: string | null
   sheetPhotoUrl?: string | null
 }): Promise<SubmitResult> {
-  const { orderId, edge, submittedById, preppedBy, notes, lines } = opts
+  const { orderId, edge, submittedById, notes, lines } = opts
+  const passName = opts.preppedBy?.trim() || 'Unnamed'
+  const passAt = new Date()
 
   // A line that was not on this sheet is not a count at all — it is
   // silence about that line. Classify only what the paper actually
@@ -577,14 +618,40 @@ export async function submitCheckReport(opts: {
 
   const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
 
+  let countedThisPass = 0
   const reportId = await prisma.$transaction(async (tx) => {
     // Replace-in-place: one current report per edge (see the @@unique).
     // A re-count corrects the sheet rather than stacking a second
     // document that disagrees with the first.
     const existing = await tx.orderCheckReport.findUnique({
       where: { orderId_edge: { orderId, edge } },
-      select: { id: true },
+      select: {
+        id: true, preppedBy: true, submittedById: true, submittedAt: true,
+        lines: {
+          select: {
+            orderLineItemId: true, description: true, actualQty: true, substituteFor: true,
+            note: true, onSheet: true, countedBy: true, countedById: true, countedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     })
+
+    // Who counted what. Read BEFORE the lines are replaced: a line this
+    // pass re-submits unchanged keeps the name of whoever counted it.
+    const attribution = attributeLines(
+      existing?.lines ?? [],
+      classified,
+      { name: passName, userId: submittedById, at: passAt },
+      existing && existing.preppedBy && !existing.preppedBy.includes(',')
+        ? { name: existing.preppedBy, userId: existing.submittedById, at: existing.submittedAt }
+        : null,
+    )
+    const preppedBy = rollupPreppedBy(
+      summarizePasses(classified.map((l, i) => ({ onSheet: l.onSheet, ...attribution[i] }))),
+    )
+    countedThisPass = attribution.filter((a) => a.thisPass).length
+
     if (existing) {
       await tx.orderCheckReportLine.deleteMany({ where: { reportId: existing.id } })
     }
@@ -610,7 +677,7 @@ export async function submitCheckReport(opts: {
         ...(opts.sheetPhotoKey
           ? { sheetPhotoKey: opts.sheetPhotoKey, sheetPhotoUrl: opts.sheetPhotoUrl ?? null }
           : {}),
-        submittedAt: new Date(),
+        submittedAt: passAt,
         changedOrder: applyToOrder,
         // A second pull re-files the same report with the remaining
         // lines ticked on — which is exactly how a partial becomes
@@ -623,8 +690,11 @@ export async function submitCheckReport(opts: {
     })
 
     await tx.orderCheckReportLine.createMany({
-      data: classified.map((l) => ({
+      data: classified.map((l, i) => ({
         reportId: report.id,
+        countedBy: attribution[i].countedBy,
+        countedById: attribution[i].countedById,
+        countedAt: attribution[i].countedAt,
         orderLineItemId: l.orderLineItemId,
         description: l.description,
         expectedQty: l.expectedQty,
@@ -658,6 +728,12 @@ export async function submitCheckReport(opts: {
         newValues: {
           reportId: report.id,
           preppedBy,
+          // The pass itself — the report row is replaced in place, so the
+          // audit trail is where each person's filing survives, photo
+          // included (a later pass's photo replaces it on the report).
+          passBy: passName,
+          countedThisPass,
+          sheetPhotoKey: opts.sheetPhotoKey ?? null,
           lineCount: classified.length,
           changedOrder: applyToOrder,
           partial,
@@ -675,7 +751,10 @@ export async function submitCheckReport(opts: {
   // own terms.
   if (orderLinesChanged) await recalcOrderTotals(orderId)
 
-  return { reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet }
+  return {
+    reportId, changedOrder: applyToOrder, orderLinesChanged, changes, partial, offSheet,
+    passBy: passName, countedThisPass,
+  }
 }
 
 /**

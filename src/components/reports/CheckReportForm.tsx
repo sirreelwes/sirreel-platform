@@ -33,6 +33,11 @@
  *   - The consequences are stated on screen BEFORE submitting, not
  *     discovered afterwards: a check-out that differs says, in words,
  *     that it will change the order and tell the agent.
+ *   - A sheet is often done in PASSES by different people (Wes,
+ *     2026-09-15: somebody does the walkies, gets pulled away, and
+ *     somebody else finishes). "Save what's done" files the counted
+ *     lines and leaves every uncounted one open; re-opening shows those
+ *     as not-pulled-yet, and every counted line says who counted it.
  *
  * Hugo, 2026-09-03: "there are last minute exchanges and modifications
  * that will need to be done to the order based on the check out report.
@@ -45,6 +50,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
 import type { ReportDraft, DraftLine, OutBlockedReason } from '@/lib/orders/checkReports'
+import { sameCount } from '@/lib/orders/checkPasses'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import {
   kitShortfalls,
@@ -112,6 +118,17 @@ type Extra = {
  */
 const isFleetLine = (l: { lane: string | null }) => l.lane === 'FLEET'
 
+/** "10:14 AM" today, "Mon 4:02 PM" otherwise — a byline, not a record. */
+const fmtWhen = (iso: string | null) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const tz = 'America/Los_Angeles'
+  const day = (x: Date) => new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeZone: tz }).format(x)
+  const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(d)
+  if (day(d) === day(new Date())) return time
+  return `${new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d)} ${time}`
+}
+
 const fmtDay = (ymd: string | null) => {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-').map(Number)
@@ -120,9 +137,10 @@ const fmtDay = (ymd: string | null) => {
   }).format(new Date(Date.UTC(y, m - 1, d)))
 }
 
-export function CheckReportForm({ draft }: { draft: ReportDraft }) {
+export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; viewerName: string | null }) {
   const router = useRouter()
   const isOut = draft.edge === 'OUT'
+  const draftById = useMemo(() => new Map(draft.lines.map((l) => [l.orderLineItemId, l])), [draft.lines])
 
   /**
    * A fresh sheet starts empty, on BOTH edges — see the header. A sheet
@@ -130,12 +148,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * and re-opening one is a correction, not a re-count from nothing.
    */
   const startsCounted = (l: DraftLine) =>
-    isFleetLine(l) || !!draft.filed || l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note
+    isFleetLine(l) ||
+    (draft.filed ? l.onSheet : l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note)
   const [rows, setRows] = useState<Row[]>(() =>
     draft.lines.map((l) => {
       const counted = startsCounted(l)
       return {
         ...l,
+        // The rest of a sheet somebody saved partway: back ON the sheet
+        // and UNCOUNTED, exactly like a fresh line. The person picking it
+        // up sees what is left as work to do, not as struck-through rows
+        // they have to un-strike one at a time first.
+        onSheet: true,
         // A line a previous report marked up opens already expanded, so a
         // correction shows what was said rather than hiding it.
         open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
@@ -154,6 +178,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     })),
   )
   const [preppedBy, setPreppedBy] = useState(draft.preppedBy)
+  /** Lines a previous pass left for later — what "Print what's left" and
+   *  the header count as the remainder. */
+  const leftByEarlierPass = useMemo(
+    () => new Set(draft.filed?.partial ? draft.lines.filter((l) => !l.onSheet).map((l) => l.orderLineItemId) : []),
+    [draft.filed, draft.lines],
+  )
   // ── Photo of the paper ────────────────────────────────────────────
   // Wes, 2026-09-03: photograph the marked-up sheet and let HQ read it.
   // What comes back is a SUGGESTION — it fills the form and nothing
@@ -169,8 +199,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   const [fromPhoto, setFromPhoto] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState(draft.notes)
   const [saving, setSaving] = useState(false)
-  /** Second click. See the confirm panel at the foot of the form. */
-  const [confirming, setConfirming] = useState(false)
+  /** Second click. See the confirm panel at the foot of the form. Which
+   *  button opened it decides what the confirm button does: file the
+   *  whole sheet, or save what is done and leave the rest open. */
+  const [confirming, setConfirming] = useState<null | 'file' | 'save'>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{
     /** Something here is the agent's to act on. */
@@ -192,6 +224,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     /** The sheet covered only part of the order. */
     partial: boolean
     offSheet: number
+    /** The name this pass went under and how many lines it counted. */
+    passBy: string | null
+    countedThisPass: number
   } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
@@ -251,7 +286,9 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         // Every scan of this line withdrawn → back to where it started:
         // uncounted on a fresh sheet, pre-filled on a filed one.
         if (after === null) {
-          const counted = startsCounted(r)
+          // Judged on the line as it was FILED — every row is on the sheet
+          // once the form opens, including the ones an earlier pass left.
+          const counted = startsCounted(draftById.get(r.orderLineItemId) ?? r)
           return { ...r, actualQty: counted ? r.expectedQty : 0, counted, note, open }
         }
         return { ...r, actualQty: after, counted: true, onSheet: true, note, open }
@@ -276,8 +313,16 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       if (!r.onSheet || !r.counted) continue
       const change = classifyCheckLine(r)
       if (change === 'NONE') continue
+      // A difference an earlier pass already filed and flagged — on a
+      // check-in, a short case stays "different" for ever, because IN
+      // never rewrites the order. The person finishing the sheet did not
+      // count it and is not the one to read it back.
+      const d = draftById.get(r.orderLineItemId)
       out.push({
-        key: r.orderLineItemId, text: describeCheckChange(r, change), added: false, alreadyFiled: false,
+        key: r.orderLineItemId, text: describeCheckChange(r, change), added: false,
+        alreadyFiled: !!draft.filed && !!d && sameCount(
+          { ...d, countedById: null, countedAt: null }, r,
+        ),
       })
     }
     for (const e of extras) {
@@ -296,13 +341,13 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
       })
     }
     return out
-  }, [rows, extras])
+  }, [rows, extras, draft.filed, draftById])
   /** Outstanding work — what filing would actually change. An addition
    *  the last submission already recorded is NOT outstanding: it cannot
    *  be reconciled against the order by design, so counting it here is
    *  what made the report re-demand a read-back forever. */
   const diffs = changeList.filter((c) => !c.alreadyFiled).length
-  const pendingAdditions = changeList.filter((c) => c.alreadyFiled)
+  const pendingAdditions = changeList.filter((c) => c.alreadyFiled && c.added)
   /** Of the outstanding work, what would actually rewrite the order.
    *  Additions never do — so a sheet whose only difference is an added
    *  row must not promise the client a corrected quote. */
@@ -382,16 +427,17 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
    * Getting this backwards would hand the floor a sheet for gear that
    * is already on the truck.
    */
-  const pickedUpWhereWeLeftOff = !!draft.filed?.partial && offSheet.length > 0
-  const printIds = pickedUpWhereWeLeftOff
-    ? offSheet.map((r) => r.orderLineItemId)
-    : onSheetIds
+  const leftIds = rows
+    .filter((r) => !isFleetLine(r) && (!r.onSheet || (leftByEarlierPass.has(r.orderLineItemId) && !r.counted)))
+    .map((r) => r.orderLineItemId)
+  const pickedUpWhereWeLeftOff = leftByEarlierPass.size > 0 && leftIds.length > 0
+  const printIds = pickedUpWhereWeLeftOff ? leftIds : onSheetIds
   const sheetLabel = pickedUpWhereWeLeftOff
-    ? `Print what's left (${offSheet.length})`
+    ? `Print what's left (${leftIds.length})`
     : offSheet.length
       ? `Print these ${onSheetIds.length} line${onSheetIds.length === 1 ? '' : 's'}`
       : 'Print a fresh sheet'
-  const sheetHref = offSheet.length
+  const sheetHref = offSheet.length || pickedUpWhereWeLeftOff
     ? `/api/orders/${draft.orderId}/pick-list-pdf?lines=${printIds.join(',')}`
     : `/api/orders/${draft.orderId}/pick-list-pdf`
 
@@ -399,7 +445,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
   // File, spots a wrong digit in the read-back, fixes it behind the panel
   // and clicks the confirm button would be confirming a list they never
   // actually read.
-  useEffect(() => { setConfirming(false) }, [rows, extras])
+  useEffect(() => { setConfirming(null) }, [rows, extras])
 
   /**
    * Both doors into the reader — the camera/file picker and a dropped
@@ -509,7 +555,15 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
     }
   }
 
-  async function submit() {
+  /**
+   * `saveProgress`: the person has done part of the sheet and has to go.
+   * Every line still uncounted goes up as OFF this sheet — the same
+   * "not this pull" the row button says, done for all of them at once —
+   * so nothing they did not touch reads as a zero (a zero rewrites the
+   * order and emails the client). The report files PARTIAL, settles no
+   * gear, and the next person opens it where this one stopped.
+   */
+  async function submit(saveProgress = false) {
     setSaving(true)
     setError(null)
     try {
@@ -532,7 +586,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               // A vehicle is never "left on the shelf for a later pull" —
               // off-sheet is what makes a report PARTIAL, and a partial
               // report settles no gear at all.
-              onSheet: isFleetLine(r) ? true : r.onSheet,
+              onSheet: isFleetLine(r) ? true : r.onSheet && (r.counted || !saveProgress),
             })),
             ...extras
               .filter((e) => e.description.trim())
@@ -558,6 +612,8 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         gear: data.gear ?? null,
         partial: !!data.partial,
         offSheet: data.offSheet ?? 0,
+        passBy: data.passBy ?? null,
+        countedThisPass: data.countedThisPass ?? 0,
       })
       router.refresh()
     } catch (e) {
@@ -573,8 +629,15 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         <div className="border border-lt-hairline rounded-xl p-6 bg-lt-card text-center">
           <Check size={28} aria-hidden className="mx-auto mb-3 text-chip-good-fg" />
           <h1 className="text-lt-fg text-xl font-semibold mb-1">
-            {isOut ? 'Check-out report filed' : 'Check-in report filed'}
+            {done.partial
+              ? `Saved — ${done.offSheet} line${done.offSheet === 1 ? '' : 's'} still to ${isOut ? 'pull' : 'count'}`
+              : isOut ? 'Check-out report filed' : 'Check-in report filed'}
           </h1>
+          {done.passBy && done.countedThisPass > 0 && (
+            <p className="text-lt-fg2 text-[14px] mb-2">
+              {done.countedThisPass} line{done.countedThisPass === 1 ? '' : 's'} credited to <b className="text-lt-fg">{done.passBy}</b>.
+            </p>
+          )}
           {done.changedOrder ? (
             <>
               <p className="text-lt-fg2 text-[15px] max-w-[52ch] mx-auto">
@@ -612,10 +675,10 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               say so, because the next question a supervisor has is
               whether anyone still has to mark the job returned. */}
           {done.partial && (
-            <p className="mt-3 text-[14px] text-pill-quoted-fg">
-              {done.offSheet} line{done.offSheet === 1 ? '' : 's'} weren&rsquo;t on this sheet — the
-              order is unchanged there, and the job stays open on the board until they
-              {isOut ? ' go out' : ' come back'}.
+            <p className="mt-3 text-[14px] text-pill-quoted-fg max-w-[56ch] mx-auto">
+              The lines nobody counted are untouched on the order, and the job stays open on the
+              board. Whoever picks it up opens this same sheet — what&rsquo;s done shows who did it,
+              and what&rsquo;s left is waiting to be counted.
             </p>
           )}
           {done.gear?.jobReturned && (
@@ -731,20 +794,31 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           </p>
         )}
         {draft.filed && (
-          <p className="text-[13px] text-lt-fg2 mt-2 border border-lt-hairline bg-lt-card rounded-lg px-3 py-2">
-            Already filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}
-            {draft.filed.preppedBy ? ` · prepped by ${draft.filed.preppedBy}` : ''}.{' '}
+          <div className="text-[13px] text-lt-fg2 mt-2 border border-lt-hairline bg-lt-card rounded-lg px-3 py-2">
             {draft.filed.partial ? (
-              <>
-                That was a <b>partial</b> {isOut ? 'pull' : 'count'} — the lines below marked
-                &ldquo;{isOut ? 'stays on the shelf' : 'still out'}&rdquo; are what is left. Print
-                those, then put them back and count them here; filing again keeps the counts already
-                on record.
-              </>
+              <p>
+                <b className="text-lt-fg">Started, not finished.</b> {leftByEarlierPass.size} line
+                {leftByEarlierPass.size === 1 ? ' is' : 's are'} still to {isOut ? 'pull' : 'count'} —
+                they&rsquo;re below with empty counts. Lines already done keep the name of whoever
+                counted them; anything you count or change is credited to you.
+              </p>
             ) : (
-              'Submitting again replaces it.'
+              <p>
+                Filed {new Date(draft.filed.submittedAt).toLocaleString('en-US')}. Submitting again
+                replaces it — lines you leave as they are keep who counted them.
+              </p>
             )}
-          </p>
+            {draft.filed.passes.length > 0 && (
+              <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                {draft.filed.passes.map((p) => (
+                  <li key={p.name}>
+                    <b className="text-lt-fg">{p.name}</b> · {p.lines} line{p.lines === 1 ? '' : 's'}
+                    {p.at ? ` · ${fmtWhen(p.at)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </header>
 
@@ -851,16 +925,18 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
         )}
       </div>
 
-      {/* Who prepped it — the name on the paper. */}
+      {/* Who is doing THIS pass — the name the lines counted now are
+          credited to. Empty on a re-open on purpose: the person picking
+          up the rest is usually not the person who started. */}
       <div className="mb-4">
         <label className="block">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
-            Prepped &amp; loaded by
+            {draft.filed ? 'Who is counting now' : isOut ? 'Prepped & loaded by' : 'Counted by'}
           </span>
           <input
             value={preppedBy}
             onChange={(e) => setPreppedBy(e.target.value)}
-            placeholder="The associate who pulled it"
+            placeholder={viewerName ? `Your name — blank files it as ${viewerName}` : 'The associate doing this part'}
             className="mt-1 w-full bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 text-[15px] text-lt-fg placeholder:text-lt-fg3"
           />
         </label>
@@ -921,6 +997,14 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           // that is what has been handled so far, NOT because the client
           // is losing the line or the gear is missing (Wes, 2026-09-14).
           const awaiting = r.onSheet && !r.counted
+          // Counted on an earlier pass and not touched on this one — so it
+          // still belongs to whoever counted it. Edit it and it is yours,
+          // which is exactly what the server will record.
+          const d = draftById.get(r.orderLineItemId)
+          const carriedBy =
+            !awaiting && d?.countedBy && sameCount({ ...d, countedById: null, countedAt: null }, r)
+              ? { name: d.countedBy, at: d.countedAt }
+              : null
           // The truck. Shown so the floor knows what else is leaving with
           // this order, with no count box and no controls — typing a
           // number here would be the warehouse signing for a walk-around
@@ -984,6 +1068,11 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     {r.qualifier && <span>{r.qualifier} · </span>}
                     {awaiting ? (
                       <span className="text-lt-fg3">{isOut ? 'not pulled yet' : 'not counted yet'}</span>
+                    ) : carriedBy ? (
+                      <span>
+                        counted by <b className="font-semibold text-lt-fg">{carriedBy.name}</b>
+                        {carriedBy.at ? ` · ${fmtWhen(carriedBy.at)}` : ''}
+                      </span>
                     ) : (
                       <span>counted</span>
                     )}
@@ -1264,13 +1353,14 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
               <>
                 Scan or type what came off the shelf, tap <b>All n</b> on a line that went whole, or
                 mark it <b>Not this pull</b>. Use <b>Everything as ordered</b> above if the sheet
-                went out exactly as written.
+                went out exactly as written — or <b>Save what&rsquo;s done</b> below if you have to
+                stop and somebody else will finish.
               </>
             ) : (
               <>
                 Scan or type what came off the truck, tap <b>All n</b> on a line that came back
                 whole, or mark it <b>Still out</b>. Use <b>Everything came back</b> above if the
-                whole sheet returned.
+                whole sheet returned — or <b>Save what&rsquo;s done</b> below if you have to stop.
               </>
             )}
           </p>
@@ -1396,7 +1486,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             </>
           )}
 
-          {changeList.some((c) => !c.added) && (
+          {changeList.some((c) => !c.added && !c.alreadyFiled) && (
             <>
               <p className="mt-3 text-[13px] font-semibold text-chip-warn-fg">
                 {isOut
@@ -1404,7 +1494,7 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                   : 'Recorded against the order — the order itself is not changed:'}
               </p>
               <ul className="mt-1 space-y-1">
-                {changeList.filter((c) => !c.added).map((c) => (
+                {changeList.filter((c) => !c.added && !c.alreadyFiled).map((c) => (
                   <li key={c.key} className="text-[15px] text-lt-fg font-medium">{c.text}</li>
                 ))}
               </ul>
@@ -1449,20 +1539,31 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
             )}
           </p>
 
+          {confirming === 'save' && uncounted.length > 0 && (
+            <p className="mt-2 text-[13px] text-chip-warn-fg">
+              The {uncounted.length} uncounted line{uncounted.length === 1 ? '' : 's'} stay open for
+              the next person — nothing is recorded against {uncounted.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
-              onClick={() => void submit()}
+              onClick={() => void submit(confirming === 'save')}
               disabled={saving}
               className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
             >
               {saving
                 ? 'Filing…'
-                : isOut
-                  ? 'Yes — file it and update the order'
-                  : 'Yes — file it'}
+                : confirming === 'save'
+                  ? isOut && orderLineDiffs > 0
+                    ? 'Yes — save it and update the order'
+                    : 'Yes — save what’s done'
+                  : isOut
+                    ? 'Yes — file it and update the order'
+                    : 'Yes — file it'}
             </button>
             <button
-              onClick={() => setConfirming(false)}
+              onClick={() => setConfirming(null)}
               disabled={saving}
               className="text-[14px] font-semibold text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
             >
@@ -1471,12 +1572,12 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 pb-8">
+        <div className="flex flex-wrap items-center gap-3 pb-8">
           <button
             onClick={() => {
               // Nothing differs and the kit is complete → nothing to read
               // back. One tap, as before, which is most days.
-              if (diffs > 0 || shortfalls.length > 0) { setConfirming(true); return }
+              if (diffs > 0 || shortfalls.length > 0) { setConfirming('file'); return }
               void submit()
             }}
             disabled={saving || uncounted.length > 0}
@@ -1492,6 +1593,23 @@ export function CheckReportForm({ draft }: { draft: ReportDraft }) {
                     ? `Review ${diffs} change${diffs === 1 ? '' : 's'} and file`
                     : draft.filed ? 'Replace the filed report' : 'File the report'}
           </button>
+          {/* Somebody did the walkies and got pulled onto another truck.
+              Files what they counted, under their name, and leaves every
+              line nobody has counted open for whoever finishes. Only
+              offered when there is both something done and something
+              left — otherwise it is just File. */}
+          {uncounted.length > 0 && countedRows > 0 && (
+            <button
+              onClick={() => {
+                if (diffs > 0 || shortfalls.length > 0) { setConfirming('save'); return }
+                void submit(true)
+              }}
+              disabled={saving}
+              className="px-4 py-2.5 border border-amber-600 text-amber-700 hover:bg-chip-warn-bg text-[15px] font-semibold rounded-lg disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : `Save what’s done (${countedRows} of ${onSheetIds.length})`}
+            </button>
+          )}
           <Link href="/reports/orders" className="text-[14px] text-lt-fg2 hover:text-lt-fg">
             Cancel
           </Link>

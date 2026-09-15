@@ -3828,6 +3828,24 @@ model OrderCheckReportLine {
   substituteFor String?              @map("substitute_for")
   note          String?              @db.Text
 
+  /// WHO counted this line and when — a sheet is often done in passes.
+  /// Wes, 2026-09-15: "sometimes warehouse workers have to start on one
+  /// part of the order (for instance, walkies) and move on somewhere
+  /// else ... another warehouse employee might take over and do the
+  /// other stuff." The report is replaced in place on every pass, so
+  /// the report-level `preppedBy` / `submittedById` only ever named the
+  /// LAST person. These travel with the line: a re-file that leaves a
+  /// line's count untouched carries them forward, a line counted (or
+  /// re-counted) on this pass takes this pass's name.
+  ///
+  /// `countedBy` is the name on the floor (free text, like preppedBy);
+  /// `countedById` is the HQ session that filed that pass (SOFT FK).
+  /// All null on an off-sheet line, and on rows filed before 2026-09-15
+  /// — read those as the report's own preppedBy / submittedAt.
+  countedBy     String?   @map("counted_by")
+  countedById   String?   @map("counted_by_id")
+  countedAt     DateTime? @map("counted_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([reportId])

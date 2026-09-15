@@ -31,6 +31,17 @@ function fmtWhen(iso: string): string {
   }).format(new Date(iso))
 }
 
+/** A line's byline: time only when it was the filing day, else day + time. */
+function fmtBy(iso: string | null, filedIso: string): string {
+  if (!iso) return ''
+  const tz = 'America/Los_Angeles'
+  const day = (x: string) => new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeZone: tz }).format(new Date(x))
+  const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(iso))
+  return day(iso) === day(filedIso)
+    ? time
+    : `${new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz }).format(new Date(iso))} ${time}`
+}
+
 function fmtDay(ymd: string | null): string {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-').map(Number)
@@ -105,10 +116,25 @@ export default async function FiledSheetPage({
           {fmtDay(draft.startDate)} → {fmtDay(draft.endDate)}
         </p>
         <p className="text-lt-fg2 text-[14px] mt-2">
-          Filed {fmtWhen(draft.filed.submittedAt)}
-          {draft.filed.preppedBy ? ` · prepped & loaded by ${draft.filed.preppedBy}` : ''}
-          {draft.filed.partial ? ' · partial sheet' : ''}
+          {draft.filed.passes.length > 1 ? 'Last filed' : 'Filed'} {fmtWhen(draft.filed.submittedAt)}
+          {draft.filed.passes.length === 0 && draft.filed.preppedBy
+            ? ` · prepped & loaded by ${draft.filed.preppedBy}`
+            : ''}
+          {draft.filed.partial ? ' · partial sheet, still open' : ''}
         </p>
+        {/* Everyone who counted part of it — a sheet is often done in
+            passes (Wes, 2026-09-15), and the line bylines below say which
+            lines were whose. */}
+        {draft.filed.passes.length > 0 && (
+          <ul className="mt-1 text-[14px] text-lt-fg2 flex flex-wrap gap-x-4 gap-y-0.5">
+            {draft.filed.passes.map((p) => (
+              <li key={p.name}>
+                <b className="text-lt-fg">{p.name}</b> · {p.lines} line{p.lines === 1 ? '' : 's'}
+                {p.at ? ` · from ${fmtBy(p.at, draft.filed!.submittedAt)}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
         {draft.filed.changedOrder && (
           <p className="mt-2 text-[14px] text-chip-warn-fg bg-chip-warn-bg border border-chip-warn-fg/25 rounded-lg px-3 py-2">
             This sheet changed the order — {draft.agentName || 'the agent'} was flagged.
@@ -158,6 +184,12 @@ export default async function FiledSheetPage({
                   {l.qualifier && <span>{l.qualifier} · </span>}
                   ordered {l.expectedQty}
                   {l.lane && <span className="text-lt-fg3"> · {l.lane.toLowerCase()}</span>}
+                  {l.countedBy && (
+                    <span>
+                      {' '}· counted by <b className="font-semibold text-lt-fg">{l.countedBy}</b>
+                      {l.countedAt ? ` · ${fmtBy(l.countedAt, draft.filed!.submittedAt)}` : ''}
+                    </span>
+                  )}
                 </div>
                 {l.substituteFor && (
                   <div className="text-[13px] text-lt-fg2 mt-0.5">In place of {l.substituteFor}</div>
@@ -193,6 +225,7 @@ export default async function FiledSheetPage({
               <div className="min-w-0 flex-1">
                 <div className="text-lt-fg text-[16px] font-medium truncate">{e.description}</div>
                 {e.note && <div className="text-[13px] text-lt-fg2">{e.note}</div>}
+                {e.countedBy && <div className="text-[13px] text-lt-fg3">by {e.countedBy}</div>}
               </div>
               <span className="flex-none text-[15px] text-lt-fg tabular-nums">{e.actualQty}</span>
             </div>
@@ -203,7 +236,7 @@ export default async function FiledSheetPage({
       {held.length > 0 && (
         <div className="border border-lt-hairline bg-lt-inner rounded-xl px-3 py-2.5 mb-4">
           <div className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold mb-1">
-            Left off this sheet · {held.length}
+            Nobody has counted these yet · {held.length}
           </div>
           <p className="text-[14px] text-lt-fg2">
             {held.map((l) => `${l.description} (${l.expectedQty})`).join(' · ')}

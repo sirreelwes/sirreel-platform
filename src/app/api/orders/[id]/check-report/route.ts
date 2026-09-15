@@ -126,7 +126,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     orderId: id,
     edge,
     submittedById: auth.userId,
-    preppedBy: typeof body.preppedBy === 'string' && body.preppedBy.trim() ? body.preppedBy.trim() : null,
+    // The name this pass is credited to. Left blank, it is whoever is
+    // signed in — a pass is never filed under nobody, and never under
+    // the name of the person who did the previous one.
+    preppedBy: (typeof body.preppedBy === 'string' && body.preppedBy.trim()) || auth.name || null,
     notes: typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null,
     lines,
     sheetPhotoKey: typeof body.sheetPhotoKey === 'string' ? body.sheetPhotoKey : null,
