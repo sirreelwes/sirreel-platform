@@ -31,15 +31,17 @@
 import { list } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
-import { REQUIRED_POSITIONS, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { positionById, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfCheckoutEmail } from '@/lib/email/templates/driverSelfCheckout'
 import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
 
-const byId = new Map(REQUIRED_POSITIONS.map((p) => [p.id, p]))
-const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => byId.get(id)!).filter(Boolean)
+// From the FULL registry: the flat sides, odometer and fuel gauge are no
+// longer in the staff walk-around (Julian's list, 2026-09-15) but drivers
+// still shoot them.
+const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => positionById(id)!).filter(Boolean)
 
 /** The four sides. Every one must be on file before the driver can check out. */
 export const DRIVER_REQUIRED_POSITIONS: readonly PhotoPosition[] = pick([

@@ -30,6 +30,7 @@ import type { DamageSeverity, DamageType, VehicleCondition, Prisma } from '@pris
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
 import { normalizePosition } from '@/lib/fleet/photoPositions'
+import { normalizeInspectorName, INSPECTOR_NAME_REQUIRED } from '@/lib/fleet/walkaroundCrew'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { cardGateForJob, cardGateMessage } from '@/lib/payments/cardGate'
 
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
     mileage?: number | string | null
     fuelLevel?: string | null
     notes?: string | null
+    /** Who walked it — picked on the screen, never the login. */
+    inspectorName?: string | null
     damages?: { location?: string; damageType?: string; severity?: string; notes?: string | null }[]
     // Blob keys returned by /api/fleet/inspections/photos/stage — the
     // photos already uploaded as they were taken; finalize only links
@@ -57,6 +60,13 @@ export async function POST(req: NextRequest) {
   } | null
   if (!body?.bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId required' }, { status: 400 })
+  }
+  // Required, and not defaulted from the session: fleet@ is shared by
+  // Andy and Frankie, so the login cannot say who walked the truck
+  // (lib/fleet/walkaroundCrew).
+  const inspectorName = normalizeInspectorName(body.inspectorName)
+  if (!inspectorName) {
+    return NextResponse.json({ error: INSPECTOR_NAME_REQUIRED, code: 'INSPECTOR_NAME_REQUIRED' }, { status: 400 })
   }
   if (!body.overallCondition || !VALID_CONDITIONS.has(body.overallCondition)) {
     return NextResponse.json({ error: 'overallCondition required (EXCELLENT/GOOD/FAIR/POOR/DAMAGED)' }, { status: 400 })
@@ -119,6 +129,7 @@ export async function POST(req: NextRequest) {
         bookingAssignmentId: assignment.id,
         type: 'CHECKOUT',
         inspectedBy: auth.userId,
+        inspectorName,
         inspectionDate: new Date(),
         overallCondition: body.overallCondition as VehicleCondition,
         mileageAtInspection: mileage,
@@ -246,6 +257,7 @@ export async function GET(req: NextRequest) {
       mileageAtInspection: true,
       fuelLevel: true,
       notes: true,
+      inspectorName: true,
       inspectedByUser: { select: { name: true, email: true } },
       inspectedByDriver: { select: { firstName: true, lastName: true } },
       bookingAssignment: {

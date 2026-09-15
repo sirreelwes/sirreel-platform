@@ -20,7 +20,8 @@
 import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto } from './GuidedPhotoCapture';
-import { missingPositions } from '@/lib/fleet/photoPositions';
+import { missingPositions, positionLabel, REQUIRED_POSITIONS, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions';
+import { WalkaroundCrewPicker } from './WalkaroundCrewPicker';
 import { FUEL_LEVELS } from '@/lib/fleet/fuelLevels';
 
 const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'] as const;
@@ -81,6 +82,8 @@ function TapSelector({
 }
 
 export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignmentId: string }) {
+  // Empty until someone taps their name — never the login (fleet@ is shared).
+  const [inspectorName, setInspectorName] = useState('');
   const [condition, setCondition] = useState<string>('GOOD');
   const [mileage, setMileage] = useState('');
   const [fuel, setFuel] = useState<string>('full');
@@ -103,7 +106,13 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
   // A PROMPT, never a lock — see the note in GuidedPhotoCapture. A tech
   // in front of a truck at 6am has to be able to record what they can
   // see; an unshot angle is recorded as unshot rather than blocking.
-  const missing = missingPositions(photos.map((p) => p.position));
+  const missingAll = missingPositions(photos.map((p) => p.position), REQUIRED_POSITIONS);
+  // The licence is called out on its own line: it is the one shot that is
+  // about the driver, and the one a walk-around done the day before can't
+  // have. It can still be added at handover.
+  const licenseMissing = missingAll.some((m) => m.id === DRIVERS_LICENSE_POSITION);
+  const missing = missingAll.filter((m) => m.id !== DRIVERS_LICENSE_POSITION);
+  const nameMissing = !inspectorName.trim();
 
   async function submit() {
     setSubmitting(true);
@@ -114,6 +123,7 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingAssignmentId,
+          inspectorName: inspectorName.trim(),
           overallCondition: condition,
           mileage: mileage.trim() === '' ? null : Number(mileage),
           fuelLevel: fuel,
@@ -150,14 +160,30 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
           {done.photosAttached} photo{done.photosAttached === 1 ? '' : 's'} attached
           {done.photosMissing > 0 ? ` — ${done.photosMissing} could not be found and were skipped` : ''}
         </p>
+        {/* The next step when the driver is standing there — and where the
+            license gets shot if it wasn't part of this walk-around. */}
+        <a
+          href={`/fleet/pickup/${bookingAssignmentId}`}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+        >
+          Hand over to driver
+          <ArrowRight size={14} aria-hidden />
+        </a>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      <WalkaroundCrewPicker value={inspectorName} onChange={setInspectorName} label="Who's checking it out?" />
+
       {/* Same slots the return screen will expect — see the note above. */}
-      <GuidedPhotoCapture bookingAssignmentId={bookingAssignmentId} onChange={onPhotosChange} />
+      <GuidedPhotoCapture
+        bookingAssignmentId={bookingAssignmentId}
+        onChange={onPhotosChange}
+        requiredPositions={REQUIRED_POSITIONS}
+        title="Check-out photos"
+      />
 
       <div>
         <label className={labelCls}>Overall condition</label>
@@ -250,9 +276,15 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
         />
       </div>
 
+      {licenseMissing && (
+        <p className="text-amber-300 text-sm bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2">
+          No driver&rsquo;s license photo. If the driver isn&rsquo;t here yet, take it on the handover
+          screen when they pick up — even if a license is already on file.
+        </p>
+      )}
       {missing.length > 0 && (
         <p className="text-amber-400/90 text-xs bg-amber-950/30 border border-amber-900/60 rounded-lg px-3 py-2">
-          Walk-around incomplete — no {missing.map((m) => m.label.toLowerCase()).join(', ')} shot.
+          Walk-around incomplete — no {missing.map((m) => positionLabel(m.id).toLowerCase()).join(', ')} shot.
           {' '}You can still submit; the gap is recorded as a gap.
         </p>
       )}
@@ -261,10 +293,12 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
       <button
         type="button"
         onClick={submit}
-        disabled={submitting || uploadingCount > 0}
+        disabled={submitting || uploadingCount > 0 || nameMissing}
         className="w-full bg-amber-600 active:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-xl py-4 text-lg"
       >
-        {submitting
+        {nameMissing
+          ? 'Pick your name at the top first'
+          : submitting
           ? 'Submitting…'
           : uploadingCount > 0
             ? `Waiting for ${uploadingCount} photo${uploadingCount === 1 ? '' : 's'}…`

@@ -19,6 +19,8 @@ import { Lock, ClipboardList, Flag } from 'lucide-react'
 import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess'
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
+import { HandoverLicensePhoto } from '@/components/fleet/HandoverLicensePhoto'
+import { DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,7 +75,7 @@ export default async function FleetPickupPage({ params }: Params) {
         orderBy: { checkoutTime: 'desc' },
         take: 1,
         select: {
-          id: true, checkoutTime: true, returnTime: true, licenseVerified: true,
+          id: true, checkoutTime: true, returnTime: true, licenseVerified: true, checkoutInspectionId: true,
           driver: { select: { id: true, firstName: true, lastName: true } },
         },
       },
@@ -145,9 +147,26 @@ export default async function FleetPickupPage({ params }: Params) {
     )
   }
 
+  // The licence shot belongs to the check-out walk-around (slot 23), but
+  // a walk-around done before the driver arrived can't have it — so it is
+  // offered here too, into the same slot. Newest wins on the record.
+  const licensePhoto = checkout.checkoutInspectionId
+    ? await prisma.inspectionPhoto.findFirst({
+        where: { inspectionId: checkout.checkoutInspectionId, position: DRIVERS_LICENSE_POSITION },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    : null
+
   return (
     <Shell>
       {header}
+      {checkout.checkoutInspectionId && (
+        <HandoverLicensePhoto
+          inspectionId={checkout.checkoutInspectionId}
+          existingPhotoId={licensePhoto?.id ?? null}
+        />
+      )}
       <PickupDriverForm
         checkoutId={checkout.id}
         assignedDriver={

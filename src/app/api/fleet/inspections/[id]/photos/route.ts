@@ -5,6 +5,11 @@
  * /api/fleet/photos/[photoId] streaming proxy — the raw blob URL is
  * never exposed to the client.
  * Role-gated: ADMIN / MANAGER / DISPATCHER / FLEET_TECH.
+ *
+ * Optional `position` (2026-09-15): the handover screen uses this to add
+ * the DRIVERS_LICENSE shot to a check-out that was walked before the
+ * driver arrived, or when a production swaps drivers — so the licence
+ * lands in its slot on the filed record instead of under "Other".
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,6 +17,7 @@ import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
+import { normalizePosition } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +52,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'only JPEG/PNG/WebP/HEIC images are accepted' }, { status: 415 })
   }
 
+  // Validated, never written through — see lib/fleet/photoPositions.
+  const position = normalizePosition(form.get('position'))
+
   const safeName = (file.name || 'photo').replace(/[^\w.\-]/g, '_').slice(0, 80)
   const blobKey = `fleet-inspections/${inspectionId}/${randomUUID()}-${safeName}`
   const blob = await put(blobKey, file, {
@@ -59,9 +68,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       fileUrl: blob.url,
       filename: safeName,
       contentType,
+      position,
       uploadedBy: auth.userId,
     },
-    select: { id: true, filename: true },
+    select: { id: true, filename: true, position: true },
   })
 
   return NextResponse.json({ ok: true, photo }, { status: 201 })

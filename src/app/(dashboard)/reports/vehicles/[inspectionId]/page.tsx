@@ -6,8 +6,8 @@
  * truck on the road, so looking one up months later must not sit one
  * mis-tap from any of that. Nothing on this page posts anywhere.
  *
- * The slots are rendered in full — all 22, including the ones nobody
- * shot. A missing angle is the fact you need when a body shop points at
+ * The slots are rendered in full — Julian's whole walk-around for this
+ * end (23 out, 22 back), including the ones nobody shot. A missing angle is the fact you need when a body shop points at
  * a panel: "not photographed" is evidence, a silent gap is not
  * (src/lib/fleet/photoPositions.ts).
  *
