@@ -55,6 +55,13 @@ export interface FleetMovement {
    */
   attachedOrder: { id: string; orderNumber: string } | null
   /**
+   * The job's LIVE orders with their blind-handoff flags (Julian,
+   * 2026-09-15: three vans going out blind and the check list had no way
+   * to say so, or to mark it). A unit is blind when ANY live order on the
+   * job says so — the same rule the reservations board paints violet.
+   */
+  liveOrders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>
+  /**
    * The calendar day THIS edge falls on, as YYYY-MM-DD. Same value the
    * caller matched on, carried back on the row so a multi-day read can
    * group without asking one day at a time.
@@ -101,7 +108,7 @@ export async function fleetMovementsBetween(
       id: true,
       startDate: true,
       endDate: true,
-      order: { select: { id: true, orderNumber: true } },
+      order: { select: { id: true, orderNumber: true, status: true } },
       asset: { select: { unitName: true } },
       bookingItem: {
         select: {
@@ -114,6 +121,15 @@ export async function fleetMovementsBetween(
               deliveryTime: true,
               pickupTime: true,
               company: { select: { name: true } },
+              job: {
+                select: {
+                  orders: {
+                    where: { status: { not: 'CANCELLED' } },
+                    select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true },
+                    orderBy: { createdAt: 'asc' },
+                  },
+                },
+              },
             },
           },
         },
@@ -160,9 +176,27 @@ export async function fleetMovementsBetween(
       company: companyLabel(r.bookingItem.booking.company?.name),
       deliveryTime: r.bookingItem.booking.deliveryTime,
       pickupTime: r.bookingItem.booking.pickupTime,
-      attachedOrder: r.order ? { id: r.order.id, orderNumber: r.order.orderNumber } : null,
+      attachedOrder: attachedOrderOf(r.order, r.bookingItem.booking.job?.orders ?? []),
+      liveOrders: r.bookingItem.booking.job?.orders ?? [],
       inspection: shape(insp),
       returnInspection: shape(ret),
     }
   })
+}
+
+/**
+ * The order a unit goes out on. A unit attached to an order that was
+ * since CANCELLED (a rebook writes a new order; the assignment keeps
+ * pointing at the dead one) reads as the job's single live order instead
+ * — Wrong Number's three vans showed "Order attached · S260915-004", a
+ * cancelled order, while S260915-005 was the real one. With several live
+ * orders there is no honest pick, so it shows none rather than guess.
+ */
+function attachedOrderOf(
+  order: { id: string; orderNumber: string; status: string } | null,
+  liveOrders: Array<{ id: string; orderNumber: string }>,
+): { id: string; orderNumber: string } | null {
+  if (!order) return null
+  if (order.status !== 'CANCELLED') return { id: order.id, orderNumber: order.orderNumber }
+  return liveOrders.length === 1 ? { id: liveOrders[0].id, orderNumber: liveOrders[0].orderNumber } : null
 }

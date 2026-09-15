@@ -277,6 +277,11 @@ const METER_FILL_BY_STAGE: Record<string, string | null> = {
   cancelled: null,
   lost: null,
 }
+/** violet-300 — a blind bar's wash follows its violet, not the stage's
+ *  green/blue (Wes 2026-09-15: "the gradual build should be light purple
+ *  in the case of blind pickups/returns to match the theme"). Same rule
+ *  as the bar color: the blind violet outranks the stage. */
+const METER_FILL_BLIND = '196, 181, 253'
 /** The wash's opacity RAMPS with completion, and that is what makes both
  *  halves of Wes's sketch true at once. Part-way, the fill is translucent
  *  and the bar's own status colour reads through it — a half-papered hold
@@ -317,13 +322,17 @@ const METER_PLATE = 'bg-white/85 text-zinc-900 px-1 rounded-sm'
 export function readinessMeterStyle(
   done: number,
   total: number,
-  opts?: { light?: boolean; stage?: string },
+  opts?: { light?: boolean; stage?: string; blindPickup?: boolean; blindReturn?: boolean },
 ): CSSProperties {
   const steps = Math.max(1, total)
   const pct = Math.max(0, Math.min(1, done / steps)) * 100
   if (pct <= 0) return {}
   const stage = opts?.stage ?? 'booked'
-  const rgb = stage in METER_FILL_BY_STAGE ? METER_FILL_BY_STAGE[stage] : METER_FILL
+  const rgb = isBlindBar(stage, opts)
+    ? METER_FILL_BLIND
+    : stage in METER_FILL_BY_STAGE
+      ? METER_FILL_BY_STAGE[stage]
+      : METER_FILL
   if (rgb === null) return {}
   // Outline stages have no strong hue to preserve — the fill carries the
   // whole signal against white grid, so it starts with more body.

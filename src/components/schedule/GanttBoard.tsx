@@ -440,7 +440,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           // meter, which would read as a deficiency where there is no job
           // to chase.
           const rdy = b.jobId ? readiness[b.jobId] : undefined
-          const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
+          const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: b.blindPickup, blindReturn: b.blindReturn }) : undefined
           return (
             <div
               key={`p-${j}`}
@@ -489,7 +489,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
             const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
             const rdy = b.jobId ? readiness[b.jobId] : undefined
-            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, stage: b.stage ?? b.status }) : undefined
+            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, stage: b.stage ?? b.status, blindPickup: b.blindPickup, blindReturn: b.blindReturn }) : undefined
             return (
               <div
                 key={`b-${j}`}
@@ -2274,7 +2274,7 @@ export function GanttBoard() {
                       const stage: string = job.stage ?? job.status
                       const sc = barColor(stage, job)
                       const rdy = job.jobId ? readiness[job.jobId] : undefined
-                      const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
+                      const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: job.blindPickup, blindReturn: job.blindReturn }) : undefined
                       return (
                         <div
                           onPointerEnter={(ev) => showBarHover(ev, barHoverInfo(job, rdy, {

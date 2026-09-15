@@ -25,6 +25,7 @@ import Link from 'next/link'
 import { Lock, Car, ArrowRight, Check, ClipboardList, KeyRound, History } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { CheckEdgeTabs } from '@/components/reports/CheckEdgeTabs'
+import { VehicleBlindToggle } from '@/components/fleet/VehicleBlindToggle'
 import { checkWindowYmds, fleetMovementsBetween, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
 
 export const dynamic = 'force-dynamic'
@@ -305,6 +306,10 @@ function VehicleRow({ row, edge }: { row: FleetMovement; edge: 'out' | 'back' })
             Order attached · {row.attachedOrder.orderNumber}
           </Link>
         )}
+        {/* Blind pickup on the going-out lane, blind return on the coming-
+            back lane — the handoff THIS end of the arc is about. Violet
+            when set, same as the bar on the reservations board. */}
+        <VehicleBlindToggle orders={row.liveOrders} kind={edge === 'out' ? 'blindPickup' : 'blindReturn'} />
       </div>
 
       {done ? (

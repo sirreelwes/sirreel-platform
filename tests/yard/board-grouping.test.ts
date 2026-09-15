@@ -34,6 +34,8 @@ const truck = (over: Partial<FleetMovement> = {}): FleetMovement => ({
   deliveryTime: '7:00a',
   pickupTime: '6:00p',
   attachedOrder: null,
+  liveOrders: [],
+  edgeDate: '2026-09-15',
   inspection: null,
   returnInspection: null,
   ...over,

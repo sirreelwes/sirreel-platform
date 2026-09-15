@@ -27,15 +27,24 @@ export type BlindOrder = {
   blindReturn: boolean
 }
 
-type Kind = 'blindPickup' | 'blindReturn'
+export type BlindKind = 'blindPickup' | 'blindReturn'
+type Kind = BlindKind
 
 export function BlindHandoffToggles({
   orders,
   canEdit,
   onChanged,
+  kinds = ['blindPickup', 'blindReturn'],
+  size = 'sm',
+  className = 'mb-3',
 }: {
   orders: BlindOrder[]
   canEdit: boolean
+  /** Which toggles to show — the yard check list shows only the edge it is on. */
+  kinds?: Kind[]
+  /** 'md' for yard terminals, read standing up. */
+  size?: 'sm' | 'md'
+  className?: string
   /** Called with the orders as they now stand, after the write lands. */
   onChanged: (next: BlindOrder[]) => void
 }) {
@@ -87,25 +96,26 @@ export function BlindHandoffToggles({
               ? `${label} — the driver handles it without staff. Click to turn off.`
               : `Mark as ${label.toLowerCase()} — the driver handles it without staff`
         }
-        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed ${
+        className={`inline-flex items-center gap-1 rounded-md border font-semibold ${size === 'md' ? 'px-2.5 py-1.5 text-[13px]' : 'px-2 py-1 text-[12px]'} transition-colors disabled:cursor-not-allowed ${
           active
             ? 'border-violet-600 bg-violet-500 text-white hover:bg-violet-600'
-            : 'border-gray-300 bg-white text-gray-700 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-800'
+            : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-800'
         } ${live.length === 0 ? 'opacity-50' : ''} ${pending === kind ? 'opacity-60' : ''}`}
       >
-        <EyeOff size={12} aria-hidden />
+        <EyeOff size={size === 'md' ? 14 : 12} aria-hidden />
         {label}
       </button>
     )
   }
 
+  const note = size === 'md' ? 'text-[13px]' : 'text-[11px]'
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-1.5">
-      {chip('blindPickup', 'Blind pickup')}
-      {chip('blindReturn', 'Blind return')}
-      {live.length === 0 && <span className="text-[11px] text-gray-500">Needs an order first</span>}
-      {live.length > 1 && <span className="text-[11px] text-gray-500">Applies to all {live.length} orders on this job</span>}
-      {err && <span className="text-[11px] text-rose-700">{err}</span>}
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {kinds.includes('blindPickup') && chip('blindPickup', 'Blind pickup')}
+      {kinds.includes('blindReturn') && chip('blindReturn', 'Blind return')}
+      {live.length === 0 && <span className={`${note} text-lt-fg3`}>Needs an order first</span>}
+      {live.length > 1 && <span className={`${note} text-lt-fg3`}>Applies to all {live.length} orders on this job</span>}
+      {err && <span className={`${note} text-rose-700`}>{err}</span>}
     </div>
   )
 }
