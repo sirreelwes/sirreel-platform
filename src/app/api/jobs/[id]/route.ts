@@ -141,6 +141,10 @@ export async function GET(
             notes: true,
             // Booked snapshot — Phase 1 commit 2. Surface for rollup.
             bookedTotal: true,
+            // Blind handoff — the paperwork wash on this page wears the
+            // same violet the reservation bar does when either is set.
+            blindPickup: true,
+            blindReturn: true,
             fleetReadyAt: true,
             // Phase 1b — set on Orders created via the inquiry add-on
             // triage path. Drives the "Add-on" chip on the job detail

@@ -272,6 +272,8 @@ interface JobOrder {
   subtotal: number;
   total: number;
   bookedTotal: number | null;
+  blindPickup: boolean;
+  blindReturn: boolean;
   fleetReadyAt: string | null;
   notes: string | null;
   lineItems: OrderLineItem[];
@@ -2066,7 +2068,14 @@ const driverTone = (d: any): string => {
                     wash the reservations bar carries. */}
                 <span
                   className="inline-block w-20 h-2 rounded-sm bg-zinc-200 border border-zinc-300"
-                  style={readinessMeterStyle(readiness.done, readiness.total, { stage, light: true })}
+                  style={readinessMeterStyle(readiness.done, readiness.total, {
+                    stage,
+                    light: true,
+                    // Blind handoff outranks the stage here too, so the
+                    // strip and the job's bar on the board are one color.
+                    blindPickup: liveOrders.some((o) => o.blindPickup),
+                    blindReturn: liveOrders.some((o) => o.blindReturn),
+                  })}
                   aria-hidden="true"
                 />
                 <span>
