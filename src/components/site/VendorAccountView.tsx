@@ -22,6 +22,7 @@ import { UnitPhotosForm } from '@/components/site/UnitPhotosForm'
 import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
 import { partnerSection } from '@/lib/site/partnerSections'
 import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
+import { partnerTerms } from '@/lib/sub-rentals/partnerTerms'
 
 const STATUS: Record<string, { label: string; tone: string; bg: string }> = {
   ESTIMATED: { label: 'Quoted', tone: '#8a6d1f', bg: '#fbf3df' },
@@ -196,20 +197,23 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           </section>
         )}
 
-        {/* The deal — plain words, the same numbers the agreement carries */}
-        <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ ...H2, margin: '0 0 6px' }}>Your deal with SirReel</div>
-            {v.sharePercent == null ? (
-              <div style={{ fontSize: 14, color: '#6b6560' }}>SirReel hasn&apos;t set the split yet. It will show here, and on every booking, once it is.</div>
-            ) : (
-              <div style={{ fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>
-                Your listed rate is what the production pays. <strong style={{ color: '#111' }}>SirReel keeps {v.sharePercent}%</strong> of the {words.rateNoun} and <strong style={{ color: '#111' }}>you receive {Math.round((100 - v.sharePercent) * 100) / 100}%</strong>, invoiced to SirReel after each booking returns. Each unit below shows what that comes to.{' '}
-                {v.maxSharePercent != null && v.maxSharePercent > v.sharePercent
-                  ? <>If a production needs a discount to book, it is <strong style={{ color: '#111' }}>shared equally with SirReel</strong> until SirReel&apos;s share reaches {v.maxSharePercent}% (you receive {Math.round((100 - v.maxSharePercent) * 100) / 100}% of list); past that, SirReel covers the rest.</>
-                  : <>If a production needs a discount to book, it comes out of SirReel&apos;s share, not yours.</>}
-              </div>
-            )}
+        {/* The terms — plain words, each restating a clause of the agreement
+            (partnerTerms.ts; Wes 2026-09-15: "we haven't created the terms
+            clearly for them"). */}
+        <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0, flex: 1, flexBasis: 420 }}>
+            <div style={{ ...H2, margin: '0 0 10px' }}>Your terms with SirReel</div>
+            <dl style={{ margin: 0, display: 'grid', gap: 10 }}>
+              {partnerTerms({ kind: v.kind, sharePercent: v.sharePercent, maxSharePercent: v.maxSharePercent }).map((t) => (
+                <div key={t.key}>
+                  <dt style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{t.title}</dt>
+                  <dd style={{ margin: '2px 0 0', fontSize: 14, color: '#3d392f', lineHeight: 1.55 }}>{t.body}</dd>
+                </div>
+              ))}
+            </dl>
+            <div style={{ fontSize: 13, color: '#6b6560', marginTop: 10 }}>
+              {v.agreement ? 'The partner agreement above has the full wording.' : 'The full wording comes in your partner agreement, which will appear above to read and sign.'}
+            </div>
             {/* Wes 2026-09-10, second pass: the split is a conversation he
                 wants to have himself, not a number typed into a form. A form
                 would record an ask and leave the partner waiting; an email
