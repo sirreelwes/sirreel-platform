@@ -126,6 +126,7 @@ function barHoverInfo(b: any, rdy: JobReadiness | undefined, extra?: Partial<Bar
     end: b.end ?? b.endDate,
     stage: b.stage ?? b.status,
     agent: b.agent || null,
+    contact: b.primaryContact ?? null,
     orders: [...hq, ...rw],
     readiness: rdy,
     blindPickup: !!b.blindPickup && (b.stage === 'booked' || b.stage === 'order'),
@@ -2190,6 +2191,7 @@ export function GanttBoard() {
                                   end: t.end,
                                   flag: canBindUnit ? 'Needs a unit · click to pick one' : 'Needs a unit',
                                   unit: `${t.categoryName}${t.needed > 1 ? ` ×${t.needed}` : ''}`,
+                                  contact: t.primaryContact ?? null,
                                   readiness: rdy,
                                 })}
                                 onPointerLeave={hideBarHover}

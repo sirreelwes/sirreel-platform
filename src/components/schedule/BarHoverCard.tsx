@@ -30,6 +30,8 @@ export interface BarHoverInfo {
   /** "Cube 13 · SuperCube Truck", or "3 units" in the job view. */
   unit?: string | null
   agent?: string | null
+  /** The job's primary contact — absent for roles that can't see client people. */
+  contact?: { name: string; role: string | null; phone: string | null } | null
   orders?: string[]
   readiness?: JobReadiness
   blindPickup?: boolean
@@ -77,6 +79,11 @@ function spanDays(start: string, end: string): number {
 
 const CARD_W = 300
 
+const CONTACT_ROLE: Record<string, string> = {
+  PRODUCER: 'Producer', PM: 'PM', PC: 'PC', TRANSPO: 'Transpo',
+  ACCOUNTING: 'Accounting', ART_DEPT: 'Art Dept', OTHER: 'Other',
+}
+
 export function BarHoverCard() {
   const state = useSyncExternalStore(subscribe, () => current, () => null)
   if (!state) return null
@@ -117,6 +124,12 @@ export function BarHoverCard() {
         </div>
       )}
       <dl className="mt-2 space-y-0.5 text-[12px]">
+        {info.contact && (
+          <Row
+            label="Contact"
+            value={`${info.contact.name}${info.contact.role ? ` (${CONTACT_ROLE[info.contact.role] ?? info.contact.role})` : ''}${info.contact.phone ? ` · ${info.contact.phone}` : ''}`}
+          />
+        )}
         {info.unit && <Row label="Unit" value={info.unit} />}
         {info.orders && info.orders.length > 0 && <Row label={info.orders.length === 1 ? 'Order' : 'Orders'} value={info.orders.join(', ')} mono />}
         {info.agent && <Row label="Agent" value={info.agent} />}
@@ -133,7 +146,7 @@ export function BarHoverCard() {
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex gap-2">
-      <dt className="w-12 flex-shrink-0 text-gray-500">{label}</dt>
+      <dt className="w-14 flex-shrink-0 text-gray-500">{label}</dt>
       <dd className={`text-gray-800 min-w-0 break-words ${mono ? 'font-mono text-[11px] leading-[18px]' : ''}`}>{value}</dd>
     </div>
   )

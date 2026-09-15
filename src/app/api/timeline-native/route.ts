@@ -23,6 +23,7 @@ import { prisma } from '@/lib/prisma'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { getPermissions } from '@/lib/permissions'
 import { effectiveViewRole } from '@/lib/auth/viewAs'
+import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 
 export const dynamic = 'force-dynamic'
 
@@ -804,11 +805,54 @@ export async function GET(req: NextRequest) {
       planyoUnits: hintsByBooking.get(i.booking.id) ?? [],
     }))
 
+  // ── Primary contact per job, for the bar hover card (Wes 2026-09-15).
+  //    One batch read across every job on the board; the ladder is
+  //    pickPrimaryContact's (PM → PC → marked primary → first). A job-less
+  //    call-in hold falls back to the booking's own person. Gated on
+  //    seeClientNames like `contact` above — yard roles get none. ──
+  type BarContact = { name: string; role: string | null; phone: string | null }
+  const contactByJob = new Map<string, BarContact>()
+  const contactByBooking = new Map<string, BarContact>()
+  if (showClientContacts) {
+    const jobIds = new Set<string>()
+    for (const j of jobs) if (j.jobId) jobIds.add(j.jobId)
+    for (const u of units) for (const bk of u.bookings) if (typeof bk.jobId === 'string') jobIds.add(bk.jobId)
+    for (const h of unboundHolds) if (h.jobId) jobIds.add(h.jobId)
+    const rows = jobIds.size
+      ? await prisma.jobContact.findMany({
+          where: { jobId: { in: [...jobIds] } },
+          orderBy: { createdAt: 'asc' },
+          select: { jobId: true, role: true, isPrimary: true, person: { select: { firstName: true, lastName: true, phone: true } } },
+        })
+      : []
+    const byJob = new Map<string, typeof rows>()
+    for (const r of rows) byJob.set(r.jobId, [...(byJob.get(r.jobId) ?? []), r])
+    for (const [jobId, list] of byJob) {
+      const c = pickPrimaryContact(list)
+      const name = c ? nameOfPerson(c.person) : ''
+      if (c && name) contactByJob.set(jobId, { name, role: c.role, phone: c.person.phone ?? null })
+    }
+    for (const b of bookings) {
+      const name = nameOfPerson(b.person)
+      if (name) contactByBooking.set(b.id, { name, role: null, phone: null })
+    }
+  }
+  const contactFor = (jobId: unknown, bookingId: unknown): BarContact | null =>
+    (typeof jobId === 'string' && contactByJob.get(jobId)) ||
+    (typeof bookingId === 'string' && contactByBooking.get(bookingId)) ||
+    null
+
   return NextResponse.json({
     ok: true,
-    jobs,
-    units,
-    unassignedHolds: [...unassignedHolds, ...unboundHolds],
+    jobs: jobs.map((j) => ({ ...j, primaryContact: contactFor(j.jobId, j.bookingId) })),
+    units: units.map((u) => ({
+      ...u,
+      bookings: u.bookings.map((bk) => ({ ...bk, primaryContact: contactFor(bk.jobId, bk.bookingId) })),
+    })),
+    unassignedHolds: [
+      ...unassignedHolds,
+      ...unboundHolds.map((h) => ({ ...h, primaryContact: contactFor(h.jobId, h.bookingId) })),
+    ],
     unboundHoldCount: unboundHolds.length,
     total: assignments.length,
     window: { from: ymd(from), to: ymd(to) },
