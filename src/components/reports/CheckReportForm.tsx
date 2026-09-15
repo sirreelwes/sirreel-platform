@@ -178,6 +178,9 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
     })),
   )
   const [preppedBy, setPreppedBy] = useState(draft.preppedBy)
+  /** Nothing files without a name — Wes, 2026-09-15: "we should require
+   *  a name for any pull or checkin of items". */
+  const nameMissing = !preppedBy.trim()
   /** Lines a previous pass left for later — what "Print what's left" and
    *  the header count as the remainder. */
   const leftByEarlierPass = useMemo(
@@ -564,6 +567,10 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
    * gear, and the next person opens it where this one stopped.
    */
   async function submit(saveProgress = false) {
+    if (nameMissing) {
+      setError(`Put your name in first — every ${isOut ? 'pull' : 'check-in'} is filed under who did it.`)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -572,7 +579,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           edge: draft.edge,
-          preppedBy,
+          preppedBy: preppedBy.trim(),
           notes,
           sheetPhotoKey: photo?.key ?? null,
           sheetPhotoUrl: photo?.url ?? null,
@@ -931,15 +938,31 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
       <div className="mb-4">
         <label className="block">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
-            {draft.filed ? 'Who is counting now' : isOut ? 'Prepped & loaded by' : 'Counted by'}
+            {draft.filed ? 'Who is counting now' : isOut ? 'Pulled & loaded by' : 'Checked in by'}
+            <span className="text-chip-bad-fg"> *</span>
           </span>
           <input
             value={preppedBy}
             onChange={(e) => setPreppedBy(e.target.value)}
-            placeholder={viewerName ? `Your name — blank files it as ${viewerName}` : 'The associate doing this part'}
-            className="mt-1 w-full bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 text-[15px] text-lt-fg placeholder:text-lt-fg3"
+            required
+            aria-required="true"
+            placeholder="Your name — required"
+            className={`mt-1 w-full bg-lt-inner border rounded-lg px-3 py-2 text-[15px] text-lt-fg placeholder:text-lt-fg3 ${
+              nameMissing ? 'border-dashed border-lt-fg3' : 'border-lt-hairline'
+            }`}
           />
         </label>
+        {/* One tap for the common case, never a silent default: the
+            floor terminal is signed in as whoever used it last. */}
+        {nameMissing && viewerName && (
+          <button
+            type="button"
+            onClick={() => setPreppedBy(viewerName)}
+            className="mt-1.5 text-[13px] font-semibold text-lt-fg2 hover:text-amber-600"
+          >
+            That&rsquo;s me — {viewerName}
+          </button>
+        )}
       </div>
 
       {unitScans && (
@@ -1549,7 +1572,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               onClick={() => void submit(confirming === 'save')}
-              disabled={saving}
+              disabled={saving || nameMissing}
               className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
             >
               {saving
@@ -1580,12 +1603,14 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               if (diffs > 0 || shortfalls.length > 0) { setConfirming('file'); return }
               void submit()
             }}
-            disabled={saving || uncounted.length > 0}
+            disabled={saving || uncounted.length > 0 || nameMissing}
             className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
           >
             {saving
               ? 'Filing…'
-              : uncounted.length > 0
+              : nameMissing
+                ? `Add your name to ${uncounted.length > 0 && countedRows > 0 ? 'save or file' : 'file'}`
+                : uncounted.length > 0
                 ? `${uncounted.length} line${uncounted.length === 1 ? '' : 's'} still to count`
                 : shortfalls.length > 0
                   ? 'Review the short kit and file'
@@ -1604,7 +1629,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                 if (diffs > 0 || shortfalls.length > 0) { setConfirming('save'); return }
                 void submit(true)
               }}
-              disabled={saving}
+              disabled={saving || nameMissing}
               className="px-4 py-2.5 border border-amber-600 text-amber-700 hover:bg-chip-warn-bg text-[15px] font-semibold rounded-lg disabled:opacity-50"
             >
               {saving ? 'Saving…' : `Save what’s done (${countedRows} of ${onSheetIds.length})`}

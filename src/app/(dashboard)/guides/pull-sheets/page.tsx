@@ -203,7 +203,8 @@ export default function PullSheetsGuidePage() {
             <Step n={3} title="Put your name at the top">
               <p>
                 Whoever prepped and loaded it. It carries into HQ as{' '}
-                <strong>Prepped &amp; loaded by</strong> and is the only record of who built the cart.
+                <strong>Pulled &amp; loaded by</strong> and is the only record of who built the cart.
+                HQ won&rsquo;t file a check-out or a check-in without a name.
               </p>
               <p>
                 Split the cart with somebody? Each of you writes your name next to the lines you pulled.
@@ -256,7 +257,7 @@ export default function PullSheetsGuidePage() {
               <p>
                 Anything written at the bottom that isn&rsquo;t on the order lands under{' '}
                 <strong>Not on the order</strong>, and a name written at the top fills{' '}
-                <strong>Prepped &amp; loaded by</strong>.
+                <strong>Pulled &amp; loaded by</strong>.
               </p>
               <Note tone="plain" label="The photo decides nothing">
                 Reading the photo writes nothing anywhere — it only fills the form in front of you. The
@@ -280,7 +281,7 @@ export default function PullSheetsGuidePage() {
               <p>
                 Did the walkies and got pulled onto another truck? Count what you did and hit{' '}
                 <strong>Save what&rsquo;s done</strong> next to File. Your lines are filed under the name
-                in the box at the top (leave it blank and it uses your login). Every line you didn&rsquo;t
+                in the box at the top. Every line you didn&rsquo;t
                 count stays open — nothing is recorded against it and nothing on the order moves for it.
               </p>
               <p>

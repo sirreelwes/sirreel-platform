@@ -571,6 +571,7 @@ export async function submitCheckReport(opts: {
   edge: OrderCheckEdge
   submittedById: string
   /** The name of whoever did THIS pass — stamped on the lines it counted.
+   *  Required by the route; the 'Unnamed' fallback below is defensive.
    *  The report's own `preppedBy` becomes the roll-up of every name on
    *  the sheet, so it no longer takes this value verbatim. */
   preppedBy: string | null
