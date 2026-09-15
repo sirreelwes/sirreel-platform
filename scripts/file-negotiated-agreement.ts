@@ -46,6 +46,26 @@ function arg(name: string): string | undefined {
 }
 const WRITE = process.argv.includes('--write')
 
+/**
+ * `--alias "Party Giraffes=Party Giraffes, LLC"` (repeatable) maps the name in
+ * the registry to the company's EXACT name in the DB.
+ *
+ * The registry names a company the way we talk about it; the DB row may carry
+ * the legal entity. Matching stays exact — an alias is a human stating which
+ * row, not the script loosening its rule and picking a near-match. Filing a
+ * contract against the wrong company is the failure worth being rigid about.
+ */
+function aliases(): Map<string, string> {
+  const m = new Map<string, string>()
+  process.argv.forEach((a, i) => {
+    if (a !== '--alias') return
+    const raw = process.argv[i + 1] || ''
+    const eq = raw.indexOf('=')
+    if (eq > 0) m.set(raw.slice(0, eq).trim(), raw.slice(eq + 1).trim())
+  })
+  return m
+}
+
 function parseDate(v: string | undefined, label: string): Date | null {
   if (!v) return null
   const d = new Date(`${v}T00:00:00Z`)
@@ -57,6 +77,7 @@ async function main() {
   const key = arg('key')
   if (!key) {
     console.log('Usage: --key <agreement-key> [--write] [--effective YYYY-MM-DD] [--expires YYYY-MM-DD]')
+    console.log('       [--alias "Registry Name=Exact DB Name"] (repeatable)')
     console.log('Known keys:', NEGOTIATED_AGREEMENTS.map((a) => a.key).join(', '))
     process.exit(1)
   }
@@ -87,13 +108,29 @@ async function main() {
 
   const journal: Array<Record<string, unknown>> = []
 
-  for (const companyName of agreement.companies) {
+  const alias = aliases()
+
+  for (const registryName of agreement.companies) {
+    const companyName = alias.get(registryName) ?? registryName
     const matches = await prisma.company.findMany({
       where: { name: companyName },
       select: { id: true, name: true },
     })
     if (matches.length !== 1) {
-      console.log(`  ✗ ${companyName}: ${matches.length} companies match that exact name — skipped`)
+      console.log(
+        `  ✗ ${registryName}: ${matches.length} companies match the exact name "${companyName}" — skipped`,
+      )
+      // Name the candidates so the next run is a one-liner rather than a
+      // guessing game. Read-only, and it still refuses to choose.
+      const near = await prisma.company.findMany({
+        where: { name: { contains: companyName.split(/\s+/)[0], mode: 'insensitive' } },
+        select: { id: true, name: true },
+        take: 10,
+      })
+      if (near.length) {
+        console.log('      did you mean:')
+        for (const n of near) console.log(`        --alias "${registryName}=${n.name}"   (${n.id})`)
+      }
       continue
     }
     const company = matches[0]
