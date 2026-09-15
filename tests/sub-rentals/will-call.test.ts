@@ -48,6 +48,11 @@ ok('will-call go note: collected at their lot, told who is coming', /picks it up
 const driven = buildVendorBookedNotice({ ...base, holdConfirmed: true, driverNamed: false } as Parameters<typeof buildVendorBookedNotice>[0])
 ok('driven go note still asks for the driver', /name your driver/.test(driven.text))
 
+console.log('\nmoney')
+const priced = buildVendorHoldRequest({ ...base, receiveMethod: 'WILL_CALL', rate: { listDaily: 189, vendorDaily: 170.1, vendorTotal: 510.3, sharePercent: 10 } } as Parameters<typeof buildVendorHoldRequest>[0])
+ok('cents are never half-printed ($170.10, not $170.1)', /\$170\.10 \/ day/.test(priced.text) && /\$510\.30 for the booking/.test(priced.text), priced.text.split('\n').find((l) => l.startsWith('Your rate')))
+ok('whole dollars stay clean', /\$189 list/.test(priced.text))
+
 console.log('\naccount alerts')
 const row = { receiveMethod: 'WILL_CALL', vendorConfirmedAt: null, vendorDeclinedAt: null, driverName: null, driverAckedAt: null, callTime: null }
 ok('will-call REQUESTED: only "confirm"', JSON.stringify(unitAlertsFor({ ...row, status: 'REQUESTED' })) === JSON.stringify(['confirm']))

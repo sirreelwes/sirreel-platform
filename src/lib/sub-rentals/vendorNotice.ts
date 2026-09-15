@@ -52,7 +52,11 @@ export interface VendorNoticeArgs {
   rate?: { listDaily: number | null; vendorDaily: number | null; vendorTotal: number | null; sharePercent: number; concessionPercent?: number } | null
 }
 
-const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+// Money a partner reads before invoicing us. A stray one-decimal figure
+// ("$170.1 / day", seen in the California Rent A Car walkthrough 2026-09-15)
+// reads as a typo on the one number they check, so cents are all-or-nothing:
+// whole dollars stay clean, anything else shows both digits.
+const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`
 
 /** "Your rate: $1,276 / day (80% of $1,595 list) · $1,276 for the booking" —
  *  and, when the client got a discount the partner shared in, it says so, so
