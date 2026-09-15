@@ -703,6 +703,17 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   on the Portals row; resolve via `sirreelContactFor()`. Column added by
   targeted ALTER.
 
+## Cars & SUVs — a catalog section only (2026-09-15 — Wes)
+- `PartnerCatalogSection.CARS_SUVS` ("Cars & SUVs", `#cars-suvs`, right after
+  Specialty Vehicles) for California Rent A Car (Culver City; VEHICLES partner
+  PROSPECT since 2026-09-15, introduction not yet sent). Specialty Vehicles was
+  the only vehicle section and is also a billing class (no LCDW, mileage from
+  mile 1) — wrong for a sedan. This one is a HEADING ONLY: no department, no
+  pricing rule; a VEHICLES partner's unit still quotes under Vehicles.
+- Enum value went in by `scripts/add-cars-suvs-section.ts` (additive ALTER
+  TYPE, run before the deploy). Move the vendor's `catalogSection` only after
+  the deploy is Ready.
+
 ## Photo Shoot Rentals — a department AND a catalog section (2026-09-11 — Wes)
 - Wes: "for VSM planet, photo shoot rentals is going to be a new class of
   rentals." It is both a `LineItemDepartment` (own section + subtotal on

@@ -30,12 +30,20 @@
  * billing class: it is a LineItemDepartment too, so a partner unit in it
  * quotes under its own section and subtotal — see partnerUnitDepartment().
  *
+ * CARS & SUVS (2026-09-15, Wes: "maybe just cars and suvs") is for California
+ * Rent A Car, the first partner whose units are ordinary passenger cars.
+ * Specialty Vehicles was the only vehicle section and is also a billing class
+ * (no LCDW, mileage from the first mile), which is wrong for a sedan. This
+ * one is a HEADING ONLY — nothing in pricing reads the section, and a
+ * VEHICLES partner's unit still quotes under Vehicles.
+ *
  * Plain module on purpose (no Prisma import): the roster page's <select>
  * and the partner panel are client components and read the same list.
  */
 
 export type PartnerCatalogSectionKey =
   | 'LOCATION_VEHICLES'
+  | 'CARS_SUVS'
   | 'POWER_GENERATORS'
   | 'CABLES_DISTRO'
   | 'HVAC'
@@ -73,6 +81,15 @@ export const PARTNER_SECTIONS: readonly PartnerSectionMeta[] = [
     anchor: 'specialty-vehicles',
     noun: 'vehicle',
     order: 10,
+  },
+  {
+    key: 'CARS_SUVS',
+    title: 'Cars & SUVs',
+    short: 'Cars & SUVs',
+    blurb: 'Sedans, SUVs and black luxury SUVs for talent, directors, executives and production runs, ready for pickup or delivered to your hotel, office or set.',
+    anchor: 'cars-suvs',
+    noun: 'vehicle',
+    order: 15,
   },
   {
     key: 'POWER_GENERATORS',

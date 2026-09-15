@@ -44,6 +44,9 @@ eq('default section is motorhomes & trailers', partnerSection(null).key, 'LOCATI
 eq('unknown key falls back, never throws', partnerSection('WIDGETS').key, 'LOCATION_VEHICLES')
 yes('POWER_GENERATORS is a section', isPartnerSectionKey('POWER_GENERATORS'))
 yes('PHOTO_SHOOT is a section', isPartnerSectionKey('PHOTO_SHOOT'))
+yes('CARS_SUVS is a section', isPartnerSectionKey('CARS_SUVS'))
+eq('Cars & SUVs is titled for the page', partnerSection('CARS_SUVS').title, 'Cars & SUVs')
+eq('a partner car quotes under Vehicles, not a department of its own', partnerUnitDepartment({ catalogSection: 'CARS_SUVS' }, { catalogSection: 'CARS_SUVS', partnerKind: 'VEHICLES' }), 'VEHICLES')
 eq('a photo-shoot unit quotes under Photo Shoot Rentals', partnerUnitDepartment({ catalogSection: 'PHOTO_SHOOT' }, { catalogSection: 'LIGHTING', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
 eq('a photo-shoot partner’s units quote under Photo Shoot Rentals by default', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'PHOTO_SHOOT', partnerKind: 'EQUIPMENT' }), 'PHOTO_SHOOT')
 eq('other partner equipment quotes under G&E', partnerUnitDepartment({ catalogSection: null }, { catalogSection: 'POWER_GENERATORS', partnerKind: 'EQUIPMENT' }), 'GE')
@@ -63,6 +66,7 @@ eq('sections come out in page order', groups.map((g) => g.meta.key), ['LOCATION_
 eq('generators share one section', groups.find((g) => g.meta.key === 'POWER_GENERATORS')!.items.map((i) => i.id), ['gen100', 'gen60'])
 eq('a sectionless partner unit resolves to the default before it reaches the grid', resolvePartnerSection({ catalogSection: null }, { catalogSection: null }).key, 'LOCATION_VEHICLES')
 eq('an owned specialty vehicle shares the section with partner coaches', groupPartnerUnits([unit('restroom2', 'LOCATION_VEHICLES', false), unit('starwagon', 'LOCATION_VEHICLES')]).map((g) => [g.meta.key, g.items.map((i) => i.id)]), [['LOCATION_VEHICLES', ['restroom2', 'starwagon']]])
+eq('Cars & SUVs sits right after Specialty Vehicles', groupPartnerUnits([unit('gen', 'POWER_GENERATORS'), unit('suv', 'CARS_SUVS'), unit('coach', 'LOCATION_VEHICLES')]).map((g) => g.meta.key), ['LOCATION_VEHICLES', 'CARS_SUVS', 'POWER_GENERATORS'])
 eq('no sectioned units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
 
 // ── Agreement variant ───────────────────────────────────────────────────────

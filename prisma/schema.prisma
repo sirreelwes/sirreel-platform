@@ -4733,6 +4733,7 @@ enum PartnerKind {
 /// lifts). Titles and blurbs live in src/lib/site/partnerSections.ts.
 enum PartnerCatalogSection {
   LOCATION_VEHICLES
+  CARS_SUVS
   POWER_GENERATORS
   CABLES_DISTRO
   HVAC
