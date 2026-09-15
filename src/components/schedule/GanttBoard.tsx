@@ -623,7 +623,8 @@ export function GanttBoard() {
   const [view, setView] = useState<'asset' | 'job'>('asset')
   // Visible span in DAYS. 3D exists for one-day rentals (Wes 2026-09-15:
   // "zoom in tighter with fewer days so we can see more of the job").
-  const [spanDays, setSpanDays] = useState(14)
+  // Opens on 1W (Wes 2026-09-15) — wide enough columns to read the job.
+  const [spanDays, setSpanDays] = useState(7)
   const [catFilter, setCatFilter] = useState('all')
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
