@@ -1,0 +1,77 @@
+{
+  "items": [
+    {
+      "id": "695cbe67-3bf5-4029-8b05-27885ecb7b5e",
+      "code": "102933"
+    }
+  ],
+  "kitPieces": [
+    {
+      "id": "5127d9a3-b704-4c94-9c38-beb21a7889b5",
+      "parentCode": "103733",
+      "pieceCode": "102933"
+    },
+    {
+      "id": "7502c8cf-b9fd-4c07-8949-5d81968644ca",
+      "parentCode": "104387",
+      "pieceCode": "102933"
+    }
+  ],
+  "updatedItems": [
+    {
+      "id": "fba4a972-fdce-438f-b0b4-a0b769dbc86d",
+      "code": "CP200-BATTERY",
+      "qtyOwned": {
+        "from": 400,
+        "to": 620
+      }
+    }
+  ],
+  "updatedKitPieces": [
+    {
+      "id": "7b52e9f0-8ee6-4323-bbb2-c1b0c76f6ae7",
+      "parentCode": "103733",
+      "pieceCode": "CP200-BATTERY",
+      "before": {
+        "id": "7b52e9f0-8ee6-4323-bbb2-c1b0c76f6ae7",
+        "parentItemId": "61954d15-9592-453d-9d29-8f06a40cf5c8",
+        "pieceItemId": "fba4a972-fdce-438f-b0b4-a0b769dbc86d",
+        "qtyPer": "0.5",
+        "perUnits": 1,
+        "rounding": "CEIL",
+        "minQty": 0,
+        "billing": "FREE",
+        "clientVisible": false,
+        "suppressIfOrdered": true,
+        "note": null,
+        "sortOrder": 0,
+        "isActive": true,
+        "createdAt": "2026-08-29T23:45:36.041Z",
+        "updatedAt": "2026-09-15T15:06:20.094Z"
+      }
+    },
+    {
+      "id": "44037e57-a106-4abb-bdb6-19a88d57e4a0",
+      "parentCode": "104387",
+      "pieceCode": "CP200-BATTERY",
+      "before": {
+        "id": "44037e57-a106-4abb-bdb6-19a88d57e4a0",
+        "parentItemId": "d61119ab-5af1-4de5-a601-28a22944a956",
+        "pieceItemId": "fba4a972-fdce-438f-b0b4-a0b769dbc86d",
+        "qtyPer": "0.5",
+        "perUnits": 1,
+        "rounding": "CEIL",
+        "minQty": 0,
+        "billing": "FREE",
+        "clientVisible": false,
+        "suppressIfOrdered": true,
+        "note": null,
+        "sortOrder": 0,
+        "isActive": true,
+        "createdAt": "2026-08-29T23:45:36.136Z",
+        "updatedAt": "2026-09-15T15:06:20.094Z"
+      }
+    }
+  ],
+  "deactivated": []
+}

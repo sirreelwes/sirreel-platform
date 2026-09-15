@@ -11,7 +11,14 @@
  *     filters on autoKitPieceId before calling in);
  *   - a piece that is no longer owed but has already been physically
  *     picked is KEPT, because deleting it erases the warehouse's only
- *     record of gear that left the building.
+ *     record of gear that left the building;
+ *   - a picked piece is never RESIZED either, for the same reason. Its
+ *     quantity is what the floor pulled and loaded. On 2026-09-15 a kit
+ *     ratio change (walkie batteries 0.5 → 1.5 per radio) rewrote a
+ *     LOADED battery line 8 → 24 on an order whose check-out sheet was
+ *     already filed, so the order no longer said what the truck carried.
+ *     The completeness check at the check-out desk is what catches a
+ *     picked piece that is now short.
  */
 
 export interface ManagedLine {
@@ -69,7 +76,10 @@ export function planKitReconcile(
     // Claimed — whatever is left in the map at the end is genuinely new.
     wanted.delete(line.autoKitPieceId)
 
-    if (line.quantity !== want.quantity) {
+    const picked = !!line.pickStatus && line.pickStatus !== 'PENDING_PICK'
+    if (line.quantity !== want.quantity && picked) {
+      actions.push({ kind: 'keep-picked', lineId: line.id, quantity: line.quantity })
+    } else if (line.quantity !== want.quantity) {
       actions.push({
         kind: 'resize',
         lineId: line.id,

@@ -87,6 +87,12 @@ async function main() {
           startDate: { gte: today, lte: until },
           quoteStatus: { not: 'LOST' },
           job: { status: { not: 'LOST' }, archivedAt: null },
+          // A filed check-OUT sheet means the truck is loaded: the order
+          // must keep saying what went on it. 2026-09-15 this run added
+          // antennas to, and resized the batteries on, an order that had
+          // been checked out the night before. --order still reaches one
+          // deliberately.
+          checkReports: { none: { edge: 'OUT' } },
         },
     select: {
       id: true,

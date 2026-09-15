@@ -47,6 +47,21 @@
  * The Surveillance Kit is NOT seeded: on that sheet it is what the
  * client ordered, not what the radio comes with.
  *
+ * 2026-09-15 — THE POOL IS THE ROW THAT ALREADY EXISTS. When this finally
+ * ran (Wes: "378 walkies and 425 antennas, 620 batteries for starting
+ * inventory"), 102930 had never been created, and CP200-BATTERY was the
+ * live battery row: 400 owned, on 19 order lines, carrying every walkie
+ * battery alias. Creating 102930 beside it would have put the one pool
+ * on the counts page twice (400 and 620). So the battery part IS
+ * CP200-BATTERY — its ratio goes 0.5 → 1.5 and its count to 620 — and
+ * the fold step below has nothing left to fold. The radio count needed
+ * no change: 103733 + 104387 already owned 287 + 91 = 378. The antenna
+ * is created as 102933, named like its siblings.
+ *
+ * Every number stays editable afterwards: Qty owned is a field in the
+ * item drawer on /inventory. A re-run with a count overwrites it, so only
+ * pass --antenna-qty / --battery-qty when you mean to reset the count.
+ *
  * Codes are RW's own I-codes, so an item that already exists is reused
  * rather than duplicated. Idempotent: items matched by `code`, kits by
  * (parent, piece); a re-run updates. A --write run journals every id it
@@ -79,12 +94,14 @@ const RADIO_CODES = ['103733', '104387']
 // subbing is HQ's call from the pool now (src/lib/catalog/walkiePool.ts).
 
 /** The HQ-invented spare row this script folds into the battery pool. */
-const LEGACY_SPARE_CODE = 'CP200-BATTERY'
+// Now the pool itself (see header), so there is no separate legacy row;
+// kept as a constant only so the fold step below skips cleanly.
+const LEGACY_SPARE_CODE = 'CP200-BATTERY-LEGACY-NONE'
 
 const PARTS = [
   {
     code: '102933',
-    description: 'CP200 - Antenna',
+    description: 'Motorola CP200 Antenna',
     aliases: ['antenna', 'walkie antenna', 'radio antenna'],
     qty: numArg('--antenna-qty'),
     // qtyPer / perUnits / rounding: one antenna per radio body.
@@ -92,11 +109,14 @@ const PARTS = [
     note: 'One per radio — on the body. Count one per radio both ways.',
   },
   {
-    code: '102930',
-    description: 'CP200 - Battery',
+    code: 'CP200-BATTERY',
+    description: 'Motorola CP200 Battery',
     // Every battery is the same cell, so the spare wording lives here as
     // an alias rather than on a second row.
-    aliases: ['walkie battery', 'radio battery', 'spare battery', 'spare batteries', 'battery'],
+    // NOT a bare "battery": seventeen unrelated battery rows exist (Dewalt,
+    // Milwaukee, Pelican…) and that alias would pull every one of their
+    // mentions onto the walkie battery.
+    aliases: ['walkie battery', 'radio battery', 'spare battery', 'spare batteries'],
     qty: numArg('--battery-qty'),
     // 1 in each body + 1 spare per 2 radios, rounded up: 15 → 23.
     kit: { qtyPer: 1.5, perUnits: 1, rounding: 'CEIL' as const, minQty: 0 },
@@ -108,6 +128,9 @@ const created = {
   items: [] as Array<{ id: string; code: string }>,
   kitPieces: [] as Array<{ id: string; parentCode: string; pieceCode: string }>,
 }
+/** Rows this run changed rather than created — with the prior values. */
+const updatedItems: Array<{ id: string; code: string; qtyOwned: { from: number; to: number } }> = []
+const updatedKitPieces: Array<{ id: string; parentCode: string; pieceCode: string; before: unknown }> = []
 /** Legacy spare-battery kit links this run switched off — reversible by id. */
 const deactivated: Array<{ id: string; parentCode: string; pieceCode: string }> = []
 
@@ -163,9 +186,12 @@ async function main() {
         await prisma.inventoryItem.update({ where: { id: item.id }, data: { aliases: nextAliases } })
         console.log(`    ✓ aliases += ${part.aliases.join(', ')}`)
       }
-      if (WRITE && part.qty != null && part.qty !== item.qtyOwned) {
-        await prisma.inventoryItem.update({ where: { id: item.id }, data: { qtyOwned: part.qty } })
-        console.log(`    ✓ qtyOwned ${item.qtyOwned} → ${part.qty}`)
+      if (part.qty != null && part.qty !== item.qtyOwned) {
+        console.log(`    ${WRITE ? '✓' : '~'} qtyOwned ${item.qtyOwned} → ${part.qty}`)
+        if (WRITE) {
+          await prisma.inventoryItem.update({ where: { id: item.id }, data: { qtyOwned: part.qty } })
+          updatedItems.push({ id: item.id, code: item.code, qtyOwned: { from: item.qtyOwned, to: part.qty } })
+        }
       }
     }
 
@@ -188,7 +214,9 @@ async function main() {
         isActive: true,
       }
       if (existing) {
+        const before = await prisma.inventoryKitPiece.findUnique({ where: { id: existing.id } })
         await prisma.inventoryKitPiece.update({ where: { id: existing.id }, data })
+        updatedKitPieces.push({ id: existing.id, parentCode: radio.code, pieceCode: part.code, before })
         console.log('      ✓ updated')
       } else {
         const row = await prisma.inventoryKitPiece.create({
@@ -203,6 +231,8 @@ async function main() {
   }
 
   // ── Fold the legacy 0.5 "spare battery" row into the one pool ───────
+  // No-op since 2026-09-15 — the pool IS the old spare row. Kept so a
+  // catalog that still has a separate legacy row is handled if restored.
   // Left alone, 15 radios would put TWO battery lines on the sheet (15
   // and 8) for one physical object, and the checker would have to decide
   // which pile each returned cell came from. There is no such fact.
@@ -248,10 +278,10 @@ async function main() {
     }
   }
 
-  if (WRITE && (created.items.length || created.kitPieces.length || deactivated.length)) {
+  if (WRITE && (created.items.length || created.kitPieces.length || deactivated.length || updatedItems.length || updatedKitPieces.length)) {
     mkdirSync('journals', { recursive: true })
     const file = path.join('journals', `radio-parts-kit-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
-    writeFileSync(file, JSON.stringify({ ...created, deactivated }, null, 2))
+    writeFileSync(file, JSON.stringify({ ...created, updatedItems, updatedKitPieces, deactivated }, null, 2))
     console.log(`journal: ${file}`)
   }
   if (!WRITE) console.log('Dry run — add --write to apply.')

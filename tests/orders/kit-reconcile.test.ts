@@ -70,6 +70,23 @@ console.log('\nQuantity edit — the parent count moved')
   check(only(actions, 'remove').length === 0, 'nothing is removed on a resize')
 }
 
+console.log('\nAlready picked — a piece whose count moved is KEPT at what was pulled')
+{
+  // 2026-09-15: a ratio change rewrote a LOADED battery line 8 → 24 on an
+  // order whose check-out sheet was already filed.
+  for (const status of ['PICKED', 'STAGED', 'LOADED', 'RETURNED', 'SHORT']) {
+    for (const to of [24, 3]) {
+      const actions = planKitReconcile([managed({ quantity: 8, pickStatus: status })], [want({ quantity: to })])
+      check(
+        only(actions, 'resize').length === 0 &&
+          only(actions, 'keep-picked').length === 1 &&
+          only(actions, 'keep-picked')[0].quantity === 8,
+        `${status} 8 → ${to} is not resized — the line stays what the floor loaded`,
+      )
+    }
+  }
+}
+
 console.log('\nNo change — the common save')
 check(
   planKitReconcile([managed()], [want()]).length === 0,
