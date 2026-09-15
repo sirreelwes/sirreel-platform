@@ -30,15 +30,17 @@
 
 import { list } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { REQUIRED_POSITIONS, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { positionById, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { buildDriverSelfReturnEmail } from '@/lib/email/templates/driverSelfReturn'
 import { stagedPrefixFor } from '@/lib/drivers/selfCheckout'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 
-const byId = new Map(REQUIRED_POSITIONS.map((p) => [p.id, p]))
-const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => byId.get(id)!).filter(Boolean)
+// From the FULL registry: the flat sides, odometer and fuel gauge are no
+// longer in the staff walk-around (Julian's list, 2026-09-15) but drivers
+// still shoot them.
+const pick = (ids: string[]): PhotoPosition[] => ids.map((id) => positionById(id)!).filter(Boolean)
 
 /** The four sides again — the return set has to line up with the check-out set. */
 export const RETURN_REQUIRED_POSITIONS: readonly PhotoPosition[] = pick([

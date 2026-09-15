@@ -30,7 +30,6 @@ import { Camera, Images, RotateCw, Check, X } from 'lucide-react';
 import {
   REQUIRED_POSITIONS,
   DAMAGE_POSITION,
-  PHOTO_GROUPS,
   type PhotoPosition,
 } from '@/lib/fleet/photoPositions';
 
@@ -87,7 +86,9 @@ export function GuidedPhotoCapture({
    * same response, same staging prefix — only the credential differs.
    */
   uploadEndpoint?: string;
-  /** Slots that count toward "N of M". Default: the full seven. */
+  /** Slots that count toward "N of M", in the order they are walked.
+   *  Default: the check-out walk-around (Julian's 23). The return screen
+   *  passes RETURN_POSITIONS; the driver pages pass their four sides. */
   requiredPositions?: readonly PhotoPosition[];
   /** Slots offered but not counted — rendered after the required ones. */
   optionalPositions?: readonly PhotoPosition[];
@@ -193,6 +194,24 @@ export function GuidedPhotoCapture({
   const byPosition = new Map(photos.filter((p) => p.position).map((p) => [p.position as string, p]));
   const damagePhotos = photos.filter((p) => p.position === DAMAGE_POSITION);
   const doneRequired = requiredPositions.filter((s) => byPosition.has(s.id)).length;
+  /* The staff walk-around is numbered and sectioned — the crew knows the
+     DamageID sequence by number. A driver's four sides are neither: a
+     four-slot list split into four one-slot sections reads as noise. */
+  const numbered = requiredPositions.length > 8;
+  const numberOf = new Map(requiredPositions.map((s, i) => [s.id, i + 1]));
+  /* Sections are CONTIGUOUS runs of the list, so grouping can never
+     reorder the walk (photoPositions.ts keeps each group together). */
+  const sections: { group: string; req: PhotoPosition[]; opt: PhotoPosition[] }[] = [];
+  if (numbered) {
+    for (const slot of requiredPositions) {
+      const last = sections[sections.length - 1];
+      if (last && last.group === slot.group) last.req.push(slot);
+      else sections.push({ group: slot.group, req: [slot], opt: [] });
+    }
+    if (optionalPositions.length) sections.push({ group: 'Optional', req: [], opt: [...optionalPositions] });
+  } else {
+    sections.push({ group: '', req: [...requiredPositions], opt: [...optionalPositions] });
+  }
   /* The return screen is the one that passes a comparison set at all. */
   const isReturn = Array.isArray(compareTo);
 
@@ -232,10 +251,14 @@ export function GuidedPhotoCapture({
   function Slot({ slot, optional }: { slot: PhotoPosition; optional?: boolean }) {
     const taken = byPosition.get(slot.id);
     const before = compareByPosition.get(slot.id);
+    const n = numbered && !optional ? numberOf.get(slot.id) : undefined;
     return (
       <div className="rounded-xl border border-zinc-700 bg-zinc-800/40 p-3">
         <div className="flex items-baseline justify-between gap-2 mb-2">
-          <span className="text-white text-sm font-semibold">{slot.label}</span>
+          <span className="text-white text-base font-semibold">
+            {n != null && <span className="text-zinc-400 tabular-nums mr-2">{n}.</span>}
+            {slot.label}
+          </span>
           {taken ? (
             <span className="text-emerald-400 text-[11px] font-medium inline-flex items-center gap-1">
               <Check size={11} aria-hidden />
@@ -245,7 +268,7 @@ export function GuidedPhotoCapture({
             <span className="text-zinc-500 text-[11px]">{optional ? 'Optional' : 'Needed'}</span>
           )}
         </div>
-        <p className="text-zinc-500 text-xs mb-2">{slot.hint}</p>
+        <p className="text-zinc-400 text-[13px] mb-2">{slot.hint}</p>
 
         {/* A truck that checked out before this angle existed has no shot
             to sit next to. Say that, rather than showing a single frame
@@ -324,28 +347,28 @@ export function GuidedPhotoCapture({
         </span>
       </div>
 
-      {/* Grouped, because 22 slots in one column is a wall — and the
-          groups are the order the tech already walks: round the outside,
-          down at the wheels, then get in. Each header carries its own
-          count so progress is legible without scrolling to the top. */}
+      {/* Sectioned, because 23 slots in one column is a wall — and the
+          sections are the order the crew already walks. Each header
+          carries its own count so progress is legible without scrolling
+          back to the top. */}
       <div className="space-y-5">
-        {PHOTO_GROUPS.map((group) => {
-          const req = requiredPositions.filter((s) => s.group === group);
-          const opt = optionalPositions.filter((s) => s.group === group);
+        {sections.map(({ group, req, opt }) => {
           if (req.length === 0 && opt.length === 0) return null;
           const got = req.filter((s) => byPosition.has(s.id)).length;
           return (
-            <section key={group}>
-              <div className="flex items-baseline justify-between mb-2">
-                <h3 className="text-zinc-300 text-[11px] font-bold uppercase tracking-[0.16em]">
-                  {group}
-                </h3>
-                {req.length > 0 && (
-                  <span className={`text-[11px] font-medium ${got === req.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {got} of {req.length}
-                  </span>
-                )}
-              </div>
+            <section key={group || 'all'}>
+              {group && (
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="text-zinc-300 text-[12px] font-bold uppercase tracking-[0.16em]">
+                    {group}
+                  </h3>
+                  {req.length > 0 && (
+                    <span className={`text-[12px] font-medium ${got === req.length ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                      {got} of {req.length}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="space-y-3">
                 {req.map((slot) => <Slot key={slot.id} slot={slot} />)}
                 {opt.map((slot) => <Slot key={slot.id} slot={slot} optional />)}

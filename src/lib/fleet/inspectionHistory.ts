@@ -10,7 +10,7 @@
  * screens that knew about its walk-around were the two capture pages,
  * which say "Inspection already completed" and show nothing that was
  * captured. A photographed truck nobody can look up afterwards settles
- * no argument, which is the entire reason the 22 slots exist
+ * no argument, which is the entire reason the walk-around slots exist
  * (src/lib/fleet/photoPositions.ts).
  *
  * So this is the same second read the order sheets got the same day
@@ -28,7 +28,8 @@
 
 import type { InspectionType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { REQUIRED_POSITIONS, DAMAGE_POSITION, positionLabel } from '@/lib/fleet/photoPositions'
+import { positionsFor, LEGACY_POSITIONS, DAMAGE_POSITION, positionLabel, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { inspectorDisplayName } from '@/lib/fleet/walkaroundCrew'
 
 /** Which end of the rental a filed form belongs to. */
 export type InspectionEdge = 'OUT' | 'IN'
@@ -64,19 +65,8 @@ export interface FiledInspectionRow {
   newDamageCount: number
 }
 
-const inspectorOf = (i: {
-  inspectedByUser: { name: string | null } | null
-  inspectedByDriver: { firstName: string; lastName: string } | null
-}): { name: string | null; byDriver: boolean } => {
-  if (i.inspectedByUser?.name) return { name: i.inspectedByUser.name, byDriver: false }
-  if (i.inspectedByDriver) {
-    return {
-      name: `${i.inspectedByDriver.firstName} ${i.inspectedByDriver.lastName}`.trim() || null,
-      byDriver: true,
-    }
-  }
-  return { name: null, byDriver: false }
-}
+/** The picked name first — the login is fleet@ for two different people. */
+const inspectorOf = inspectorDisplayName
 
 export async function listFiledInspections(
   opts: { q?: string; limit?: number } = {},
@@ -97,6 +87,7 @@ export async function listFiledInspections(
           { bookingAssignment: { bookingItem: { booking: { jobName: like } } } },
           { bookingAssignment: { bookingItem: { booking: { bookingNumber: like } } } },
           { bookingAssignment: { bookingItem: { booking: { company: { name: like } } } } },
+          { inspectorName: like },
           { inspectedByUser: { name: like } },
           { inspectedByDriver: { firstName: like } },
           { inspectedByDriver: { lastName: like } },
@@ -113,6 +104,7 @@ export async function listFiledInspections(
       overallCondition: true,
       mileageAtInspection: true,
       fuelLevel: true,
+      inspectorName: true,
       asset: { select: { unitName: true, category: { select: { name: true } } } },
       inspectedByUser: { select: { name: true } },
       inspectedByDriver: { select: { firstName: true, lastName: true } },
@@ -233,6 +225,7 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
       mileageAtInspection: true,
       fuelLevel: true,
       notes: true,
+      inspectorName: true,
       bookingAssignmentId: true,
       asset: {
         select: {
@@ -304,13 +297,28 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
     position: p.position,
     takenAt: p.createdAt,
   })
+  // The NEWEST photo in the slot. The capture screen replaces a re-shot
+  // slot, but the handover screen can add a second licence to a filed
+  // check-out when the production swaps drivers — the latest is who
+  // actually drove off.
   const bySlot = (photos: { id: string; position: string | null; createdAt: Date }[], position: string) => {
-    const hit = photos.find((p) => p.position === position)
+    const hits = photos.filter((p) => p.position === position)
+    const hit = hits[hits.length - 1]
     return hit ? shape(hit) : null
   }
 
-  const slots: FiledSlot[] = REQUIRED_POSITIONS.map((slot) => ({
+  // This end's walk-around in Julian's order (no licence on a check-in),
+  // then any retired angle that actually holds a photo on either end —
+  // those were real shots and render under "Earlier angles".
+  const onFile = new Set([...i.photos, ...(other?.photos ?? [])].map((p) => p.position))
+  const walk: readonly PhotoPosition[] = [
+    ...positionsFor(edge),
+    ...LEGACY_POSITIONS.filter((slot) => onFile.has(slot.id)),
+  ]
+  const slots: FiledSlot[] = walk.map((slot) => ({
     position: slot.id,
+    // Julian's wording; the record page sections by group, which is what
+    // says which side a "Rear tire" is on.
     label: slot.label,
     group: slot.group,
     mine: bySlot(i.photos, slot.id),

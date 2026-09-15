@@ -34,6 +34,7 @@ import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/clien
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
 import { normalizePosition } from '@/lib/fleet/photoPositions'
+import { normalizeInspectorName, INSPECTOR_NAME_REQUIRED } from '@/lib/fleet/walkaroundCrew'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
 
@@ -54,12 +55,21 @@ export async function POST(req: NextRequest) {
     mileage?: number | string | null
     fuelLevel?: string | null
     notes?: string | null
+    /** Who walked it — picked on the screen, never the login. */
+    inspectorName?: string | null
     damages?: { location?: string; damageType?: string; severity?: string; notes?: string | null }[]
     stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null; position?: string | null }[]
   } | null
 
   if (!body?.bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId required' }, { status: 400 })
+  }
+  // Required, and not defaulted from the session: fleet@ is shared by
+  // Andy and Frankie, so the login cannot say who walked the truck
+  // (lib/fleet/walkaroundCrew).
+  const inspectorName = normalizeInspectorName(body.inspectorName)
+  if (!inspectorName) {
+    return NextResponse.json({ error: INSPECTOR_NAME_REQUIRED, code: 'INSPECTOR_NAME_REQUIRED' }, { status: 400 })
   }
   if (!body.overallCondition || !VALID_CONDITIONS.has(body.overallCondition)) {
     return NextResponse.json(
@@ -139,6 +149,7 @@ export async function POST(req: NextRequest) {
           where: { id: existing.id },
           data: {
             inspectedBy: auth.userId,
+            inspectorName,
             inspectionDate: new Date(),
             overallCondition: body.overallCondition as VehicleCondition,
             // A DRIVER may have filed this inspection on a blind return
@@ -158,6 +169,7 @@ export async function POST(req: NextRequest) {
             bookingAssignmentId: assignment.id,
             type: 'RETURN',
             inspectedBy: auth.userId,
+            inspectorName,
             inspectionDate: new Date(),
             overallCondition: body.overallCondition as VehicleCondition,
             mileageAtInspection: mileage,

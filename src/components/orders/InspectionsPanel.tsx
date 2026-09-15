@@ -29,6 +29,8 @@ interface PanelInspection {
   mileageAtInspection: number | null;
   fuelLevel: string | null;
   notes: string | null;
+  /** The person picked on the capture screen — wins over the login. */
+  inspectorName?: string | null;
   inspectedByUser: { name: string | null; email: string } | null;
   /** Set instead of inspectedByUser when the driver did the walk-around (blind pickup). */
   inspectedByDriver?: { firstName: string; lastName: string } | null;
@@ -82,7 +84,9 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
                 {insp.fuelLevel && <span className="text-zinc-500 font-normal"> · fuel {insp.fuelLevel}</span>}
               </div>
               <div className="text-zinc-500 text-xs">
-                {new Date(insp.inspectionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} — {insp.inspectedByUser
+                {new Date(insp.inspectionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} — {insp.inspectorName
+                  ? insp.inspectorName
+                  : insp.inspectedByUser
                   ? (insp.inspectedByUser.name || insp.inspectedByUser.email)
                   : insp.inspectedByDriver
                     ? `${insp.inspectedByDriver.firstName} ${insp.inspectedByDriver.lastName}`.trim() + ' (driver, self check-out)'

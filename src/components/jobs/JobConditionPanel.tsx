@@ -23,7 +23,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Camera, ArrowRight, AlertTriangle } from 'lucide-react'
-import { REQUIRED_POSITIONS, positionLabel, DAMAGE_POSITION } from '@/lib/fleet/photoPositions'
+import { positionsFor, positionLabel, DAMAGE_POSITION } from '@/lib/fleet/photoPositions'
 
 type Photo = { id: string; filename: string | null; position: string | null }
 
@@ -34,6 +34,8 @@ type Inspection = {
   mileageAtInspection: number | null
   fuelLevel: string | null
   notes: string | null
+  /** Picked on the capture screen — wins over the login (fleet@ is shared). */
+  inspectorName?: string | null
   inspectedByUser: { name: string | null; email: string } | null
   inspectedByDriver: { firstName: string; lastName: string } | null
   bookingAssignment: { id: string; asset: { unitName: string } | null } | null
@@ -42,9 +44,10 @@ type Inspection = {
 }
 
 const shotBy = (i: Inspection): string =>
-  i.inspectedByDriver
+  i.inspectorName ||
+  (i.inspectedByDriver
     ? `${i.inspectedByDriver.firstName} ${i.inspectedByDriver.lastName}`.trim() + ' · driver'
-    : i.inspectedByUser?.name || i.inspectedByUser?.email || 'unknown'
+    : i.inspectedByUser?.name || i.inspectedByUser?.email || 'unknown')
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -58,17 +61,21 @@ function Side({ label, insp }: { label: 'Out' | 'Back'; insp: Inspection | undef
       </div>
     )
   }
-  const slots = insp.photos.filter((p) => p.position && p.position !== DAMAGE_POSITION)
+  // Counted against the walk-around for THIS end — the check-in has no
+  // licence slot — and only against slots still in it, so an older
+  // photo under a retired angle doesn't inflate "N of M".
+  const positions = positionsFor(label === 'Back' ? 'IN' : 'OUT')
   const damage = insp.photos.filter((p) => p.position === DAMAGE_POSITION)
-  const have = new Set(slots.map((p) => p.position as string))
-  const missing = REQUIRED_POSITIONS.filter((s) => !have.has(s.id))
+  const have = new Set(insp.photos.map((p) => p.position).filter(Boolean) as string[])
+  const shotCount = positions.filter((s) => have.has(s.id)).length
+  const missing = positions.filter((s) => !have.has(s.id))
 
   return (
     <div className="flex-1 min-w-0 border border-lt-hairline bg-lt-card rounded-lg p-3">
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-lt-fg2">{label}</span>
         <span className={`text-[12px] font-semibold ${missing.length === 0 ? 'text-chip-good-fg' : 'text-chip-warn-fg'}`}>
-          {slots.length} of {REQUIRED_POSITIONS.length}
+          {shotCount} of {positions.length}
         </span>
       </div>
       <div className="text-lt-fg2 text-[13px] mb-2">
@@ -104,7 +111,7 @@ function Side({ label, insp }: { label: 'Out' | 'Back'; insp: Inspection | undef
           side" is the sentence that loses the argument later. */}
       {missing.length > 0 && (
         <p className="text-lt-fg3 text-[12px] mt-1">
-          Missing: {missing.slice(0, 4).map((m) => m.label).join(', ')}
+          Missing: {missing.slice(0, 4).map((m) => positionLabel(m.id)).join(', ')}
           {missing.length > 4 ? ` +${missing.length - 4} more` : ''}
         </p>
       )}

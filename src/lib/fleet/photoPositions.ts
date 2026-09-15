@@ -17,83 +17,137 @@
  *
  * Stored as a plain string on InspectionPhoto.position — see the schema
  * note for why this is not an enum.
+ *
+ * History: 7 slots (2026-09-02) → a 22-slot draft of DamageID's list
+ * (2026-09-08, Hugo: seven couldn't defend a claim) → Julian's actual
+ * DamageID list, 23 shots in his order (2026-09-15).
  */
 
 export interface PhotoPosition {
   /** Stored value. Never rename one of these — old photos keep it. */
   id: string
-  /** What the tech reads on the button. */
+  /** What the tech reads on the button — Julian's words, verbatim. */
   label: string
   /** The one-line instruction under it. Concrete beats exhaustive. */
   hint: string
-  /** Section heading in the capture UI. At 22 slots an undifferentiated
-   *  column is a wall; grouped, it reads as "walk the sides, then the
-   *  wheels, then get in", which is the order the tech moves anyway. */
+  /** Section heading in the capture UI. Sections are CONTIGUOUS runs of
+   *  the list, so grouping never reorders the walk. */
   group: PhotoGroup
+  /** Which side of the truck, when the label alone doesn't say. Julian's
+   *  list has "Front tire" and "Rear tire" twice each — in the walk the
+   *  section says which, but an email or a thumbnail title has no
+   *  section, so positionLabel() appends this. */
+  side?: 'driver side' | 'passenger side'
 }
 
-export type PhotoGroup = 'Sides & corners' | 'Wheels' | 'Detail' | 'Interior' | 'Gauges'
+export type PhotoGroup =
+  | 'Cab'
+  | 'Driver side'
+  | 'Front'
+  | 'Passenger side'
+  | 'Rear & inside'
+  | 'Remote & paperwork'
+  | 'Driver'
+  | 'Earlier angles'
 
-/** Section order for the capture screen. */
+/** Section order for the capture screen and the filed record. */
 export const PHOTO_GROUPS: readonly PhotoGroup[] = [
-  'Sides & corners', 'Wheels', 'Detail', 'Interior', 'Gauges',
+  'Cab', 'Driver side', 'Front', 'Passenger side', 'Rear & inside', 'Remote & paperwork', 'Driver',
+  'Earlier angles',
 ] as const
+
+/** The one slot that is about the PERSON, not the truck. */
+export const DRIVERS_LICENSE_POSITION = 'DRIVERS_LICENSE'
 
 /**
- * The required slots, in walk-around order — you circle the vehicle,
- * then get in. Odometer and fuel are shots rather than only typed
- * numbers because a photo of the gauge is what settles an argument
- * about the number.
+ * The staff walk-around — Julian's DamageID shot list, in his order, in
+ * his words (2026-09-15, Wes: "the text to follow damage IDs on each
+ * photo… keep it in this exact order"). HQ is replacing DamageID, so the
+ * crew should not have to learn a second sequence: this is the order
+ * they already walk. Cab first; then the driver side starting at the
+ * REAR corner and working forward, round the front, back down the
+ * passenger side, the rear and the inside, and last the loose items and
+ * the driver. Don't "tidy" it into front-to-back — the numbers on the
+ * capture screen are the numbers the crew knows.
  *
- * Went from 7 to 22 on 2026-09-08. Hugo's complaint was simply that
- * seven was not enough to defend a damage claim — DamageID asks for
- * about 22 at each end, and the four flat sides miss exactly what gets
- * hit: corners, bumpers, wheels and the lift gate. The count is the
- * point, so the additions are the angles a body shop argues about.
+ * Where one of Julian's shots is an angle the earlier 22-slot draft
+ * already had, it REUSES that id (DASH, the corners, the wheels,
+ * WINDSHIELD, FRONT, REAR, CARGO_INTERIOR) so the handful of photos
+ * already filed still line up with a check-in shot of the same angle.
+ * Only the label and hint changed. Ids are never renamed.
  *
- * The first seven ids are UNCHANGED and in their original order. Old
- * photos carry these strings, the driver self-serve subsets pick from
- * them by id, and a rename would orphan both.
- *
- * A truck that checked out under the old seven will show fifteen slots
- * at check-in with nothing above them to compare against. That is
- * expected and the capture screen says so per slot rather than leaving
- * a gap the tech has to interpret.
+ * Driver's license is last and check-OUT only. The licence may already
+ * be on file from the driver's email check-in, but Julian wants it shot
+ * at the truck anyway: productions swap drivers, and the photo is the
+ * record of who actually drove off. It is not part of the check-in, and
+ * it never goes in the renter-facing condition report.
  */
-export const REQUIRED_POSITIONS: readonly PhotoPosition[] = [
-  // The original four flat sides, ids and order untouched.
-  { id: 'FRONT',          label: 'Front',          hint: 'Straight on, whole front end in frame', group: 'Sides & corners' },
-  { id: 'DRIVER_SIDE',    label: 'Driver side',    hint: 'Full length of the driver side', group: 'Sides & corners' },
-  { id: 'REAR',           label: 'Rear',           hint: 'Straight on, including the liftgate or roll-up', group: 'Sides & corners' },
-  { id: 'PASSENGER_SIDE', label: 'Passenger side', hint: 'Full length of the passenger side', group: 'Sides & corners' },
-  // The corners. A flat side photo flattens the very panel edges that
-  // get clipped backing out of a location; a 3/4 shows both faces.
-  { id: 'FRONT_DRIVER_CORNER',     label: 'Front driver corner',     hint: 'Three-quarter angle — front and driver side in one frame', group: 'Sides & corners' },
-  { id: 'REAR_DRIVER_CORNER',      label: 'Rear driver corner',      hint: 'Three-quarter angle — driver side and rear', group: 'Sides & corners' },
-  { id: 'REAR_PASSENGER_CORNER',   label: 'Rear passenger corner',   hint: 'Three-quarter angle — rear and passenger side', group: 'Sides & corners' },
-  { id: 'FRONT_PASSENGER_CORNER',  label: 'Front passenger corner',  hint: 'Three-quarter angle — passenger side and front', group: 'Sides & corners' },
+const WALKAROUND: readonly PhotoPosition[] = [
+  { id: 'DASH',        label: 'Dashboard',   hint: 'Whole dash with the key on — odometer, fuel gauge and any warning lights readable', group: 'Cab' },
+  { id: 'VISORS',      label: 'Visors',      hint: 'Both sun visors, flipped down', group: 'Cab' },
+  { id: 'CUP_HOLDERS', label: 'Cup holders', hint: 'Cup holders and center console', group: 'Cab' },
+  { id: 'LOCKBOX',     label: 'Lockbox',     hint: 'The lockbox, clearly in frame', group: 'Cab' },
 
-  // Curbing a wheel is the single most common return damage and the
-  // side shots never show the rim face.
-  { id: 'WHEEL_DRIVER_FRONT',     label: 'Driver front wheel',     hint: 'Rim face and sidewall', group: 'Wheels' },
-  { id: 'WHEEL_DRIVER_REAR',      label: 'Driver rear wheel',      hint: 'Rim face and sidewall', group: 'Wheels' },
-  { id: 'WHEEL_PASSENGER_REAR',   label: 'Passenger rear wheel',   hint: 'Rim face and sidewall', group: 'Wheels' },
-  { id: 'WHEEL_PASSENGER_FRONT',  label: 'Passenger front wheel',  hint: 'Rim face and sidewall', group: 'Wheels' },
+  { id: 'REAR_DRIVER_CORNER',  label: 'Driver side rear',   hint: 'Three-quarter angle — driver side and rear in one frame', group: 'Driver side' },
+  { id: 'WHEEL_DRIVER_REAR',   label: 'Rear tire',          hint: 'Driver side — rim face and sidewall', group: 'Driver side', side: 'driver side' },
+  { id: 'FUEL_CAP',            label: 'Fuel cap',           hint: 'Fuel door open, cap in place', group: 'Driver side' },
+  { id: 'DRIVER_MIRROR',       label: 'Driver side mirror', hint: 'Mirror glass and housing', group: 'Driver side' },
+  { id: 'FRONT_DRIVER_CORNER', label: 'Driver side front',  hint: 'Three-quarter angle — driver side and front in one frame', group: 'Driver side' },
+  { id: 'WHEEL_DRIVER_FRONT',  label: 'Front tire',         hint: 'Driver side — rim face and sidewall', group: 'Driver side', side: 'driver side' },
 
-  { id: 'ROOF',          label: 'Roof / top',           hint: 'From the mirror or a step — scrapes from low clearances live here', group: 'Detail' },
-  { id: 'WINDSHIELD',    label: 'Windshield',           hint: 'Whole glass, angled so chips show', group: 'Detail' },
-  { id: 'FRONT_BUMPER',  label: 'Front bumper',         hint: 'Low and close, full width', group: 'Detail' },
-  { id: 'REAR_BUMPER',   label: 'Rear bumper / door',   hint: 'Low and close — the roll-up track and rear door edge', group: 'Detail' },
-  { id: 'LIFT_GATE',     label: 'Lift gate / ramp',     hint: 'Deployed if it has one. Skip if this truck has neither', group: 'Detail' },
+  { id: 'WINDSHIELD', label: 'Windshield', hint: 'Whole glass, angled so chips show', group: 'Front' },
+  { id: 'FRONT',      label: 'Front',      hint: 'Straight on, whole front end in frame', group: 'Front' },
 
-  // INTERIOR keeps its id — it is on every photo taken before today.
-  { id: 'INTERIOR',        label: 'Cab interior',       hint: 'Seats and floor', group: 'Interior' },
-  { id: 'DASH',            label: 'Dash & controls',    hint: 'Whole dash, including any warning lights showing', group: 'Interior' },
-  { id: 'CARGO_INTERIOR',  label: 'Cargo area',         hint: 'Full length of the box or cargo space, walls and floor', group: 'Interior' },
+  { id: 'PASSENGER_MIRROR',       label: 'Pass side mirror', hint: 'Mirror glass and housing', group: 'Passenger side' },
+  { id: 'WHEEL_PASSENGER_FRONT',  label: 'Front tire',       hint: 'Passenger side — rim face and sidewall', group: 'Passenger side', side: 'passenger side' },
+  { id: 'FRONT_PASSENGER_CORNER', label: 'Pass side front',  hint: 'Three-quarter angle — passenger side and front in one frame', group: 'Passenger side' },
+  { id: 'WHEEL_PASSENGER_REAR',   label: 'Rear tire',        hint: 'Passenger side — rim face and sidewall', group: 'Passenger side', side: 'passenger side' },
+  { id: 'REAR_PASSENGER_CORNER',  label: 'Pass side rear',   hint: 'Three-quarter angle — passenger side and rear in one frame', group: 'Passenger side' },
 
-  { id: 'ODOMETER',   label: 'Odometer',   hint: 'Close enough to read the number', group: 'Gauges' },
-  { id: 'FUEL_GAUGE', label: 'Fuel gauge', hint: 'Needle clearly visible', group: 'Gauges' },
+  { id: 'REAR',           label: 'Rear',            hint: 'Straight on, including the liftgate or roll-up', group: 'Rear & inside' },
+  { id: 'INSIDE_ROOF',    label: 'Inside roof',     hint: 'The ceiling inside — punctures and scrapes show here', group: 'Rear & inside' },
+  { id: 'CARGO_INTERIOR', label: 'Inside complete', hint: 'The whole inside in one frame — walls and floor', group: 'Rear & inside' },
+
+  { id: 'REMOTE',                 label: 'Remote',           hint: 'Every remote going out with the vehicle', group: 'Remote & paperwork' },
+  { id: 'PAPERWORK',              label: 'Paperwork',        hint: 'Registration and insurance card, readable', group: 'Remote & paperwork' },
+  { id: DRIVERS_LICENSE_POSITION, label: 'Driver’s license', hint: 'Whoever is driving it off — front of the card, readable. Shoot it even if one is on file: drivers get swapped', group: 'Driver' },
 ] as const
+
+/** Check-out: all 23, in order. */
+export const REQUIRED_POSITIONS: readonly PhotoPosition[] = WALKAROUND
+
+/** Check-in: the same walk without the licence. The licence records who
+ *  took the truck; there is nothing on the way back to compare it to. */
+export const RETURN_POSITIONS: readonly PhotoPosition[] =
+  WALKAROUND.filter((p) => p.id !== DRIVERS_LICENSE_POSITION)
+
+export type WalkaroundEdge = 'OUT' | 'IN'
+
+export function positionsFor(edge: WalkaroundEdge): readonly PhotoPosition[] {
+  return edge === 'IN' ? RETURN_POSITIONS : REQUIRED_POSITIONS
+}
+
+/**
+ * Angles from before Julian's list that it does not ask for. Kept so the
+ * photos already filed under them still have a name, and because the
+ * driver self-serve pages still use four of them (the flat sides,
+ * odometer, fuel gauge, interior) — Wes wants drivers kept light.
+ * Rendered under "Earlier angles" only when a photo actually sits in one.
+ */
+export const LEGACY_POSITIONS: readonly PhotoPosition[] = [
+  { id: 'DRIVER_SIDE',    label: 'Driver side',    hint: 'Full length of the driver side', group: 'Earlier angles' },
+  { id: 'PASSENGER_SIDE', label: 'Passenger side', hint: 'Full length of the passenger side', group: 'Earlier angles' },
+  { id: 'ROOF',           label: 'Roof / top',     hint: 'From the mirror or a step — scrapes from low clearances live here', group: 'Earlier angles' },
+  { id: 'FRONT_BUMPER',   label: 'Front bumper',   hint: 'Low and close, full width', group: 'Earlier angles' },
+  { id: 'REAR_BUMPER',    label: 'Rear bumper / door', hint: 'Low and close — the roll-up track and rear door edge', group: 'Earlier angles' },
+  { id: 'LIFT_GATE',      label: 'Lift gate / ramp', hint: 'Deployed if it has one', group: 'Earlier angles' },
+  { id: 'INTERIOR',       label: 'Cab interior',   hint: 'Seats and floor', group: 'Earlier angles' },
+  { id: 'ODOMETER',       label: 'Odometer',       hint: 'Close enough to read the number', group: 'Earlier angles' },
+  { id: 'FUEL_GAUGE',     label: 'Fuel gauge',     hint: 'Needle clearly visible', group: 'Earlier angles' },
+] as const
+
+/** Every slot id that has ever been valid. */
+export const ALL_POSITIONS: readonly PhotoPosition[] = [...WALKAROUND, ...LEGACY_POSITIONS]
 
 /** Close-ups of specific damage. Unlimited, and never required. */
 export const DAMAGE_POSITION = 'DAMAGE'
@@ -101,12 +155,20 @@ export const DAMAGE_POSITION = 'DAMAGE'
 /** Anything shot before the guided capture existed, or an extra. */
 export const OTHER_LABEL = 'Other'
 
-const BY_ID = new Map(REQUIRED_POSITIONS.map((p) => [p.id, p]))
+const BY_ID = new Map(ALL_POSITIONS.map((p) => [p.id, p]))
 
+export function positionById(id: string): PhotoPosition | undefined {
+  return BY_ID.get(id)
+}
+
+/** A slot's name OUT of the walk — "Rear tire · driver side". Inside the
+ *  capture screen the section already says which side; use `label`. */
 export function positionLabel(position: string | null | undefined): string {
   if (!position) return OTHER_LABEL
   if (position === DAMAGE_POSITION) return 'Damage close-up'
-  return BY_ID.get(position)?.label ?? position
+  const slot = BY_ID.get(position)
+  if (!slot) return position
+  return slot.side ? `${slot.label} · ${slot.side}` : slot.label
 }
 
 /** Guards the stored value — anything unrecognised is dropped to null
@@ -117,11 +179,13 @@ export function normalizePosition(position: unknown): string | null {
   return BY_ID.has(position) ? position : null
 }
 
-/** Which required slots have no photo yet. Drives the "3 of 7" counter
- *  and the soft warning on submit — soft because a tech standing in
- *  front of a truck at 6am must never be locked out of recording what
- *  they can see. */
-export function missingPositions(taken: Iterable<string | null | undefined>): PhotoPosition[] {
+/** Which slots have no photo yet. Drives the "3 of 23" counter and the
+ *  soft warning on submit — soft because a tech standing in front of a
+ *  truck at 6am must never be locked out of recording what they can see. */
+export function missingPositions(
+  taken: Iterable<string | null | undefined>,
+  positions: readonly PhotoPosition[] = REQUIRED_POSITIONS,
+): PhotoPosition[] {
   const have = new Set([...taken].filter(Boolean) as string[])
-  return REQUIRED_POSITIONS.filter((p) => !have.has(p.id))
+  return positions.filter((p) => !have.has(p.id))
 }

@@ -24,7 +24,8 @@
 import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto, type ComparePhoto } from './GuidedPhotoCapture';
-import { missingPositions } from '@/lib/fleet/photoPositions';
+import { missingPositions, positionLabel, RETURN_POSITIONS } from '@/lib/fleet/photoPositions';
+import { WalkaroundCrewPicker } from './WalkaroundCrewPicker';
 import { FUEL_LEVELS, cameBackLower } from '@/lib/fleet/fuelLevels';
 
 const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'] as const;
@@ -109,6 +110,8 @@ export function InspectionReturnForm({
   bookingAssignmentId: string;
   checkout: CheckoutSnapshot | null;
 }) {
+  // Empty until someone taps their name — never the login (fleet@ is shared).
+  const [inspectorName, setInspectorName] = useState('');
   const [condition, setCondition] = useState<string>(checkout?.overallCondition ?? 'GOOD');
   const [mileage, setMileage] = useState('');
   const [fuel, setFuel] = useState<string>(checkout?.fuelLevel ?? 'full');
@@ -136,7 +139,8 @@ export function InspectionReturnForm({
   // A PROMPT, never a lock — see the note in GuidedPhotoCapture. A tech
   // in front of a truck at 6am has to be able to record what they can
   // see; an unshot angle is recorded as unshot rather than blocking.
-  const missing = missingPositions(photos.map((p) => p.position));
+  const missing = missingPositions(photos.map((p) => p.position), RETURN_POSITIONS);
+  const nameMissing = !inspectorName.trim();
 
   // Live comparisons against the checkout. Both are stated as facts on
   // the screen rather than left as arithmetic for whoever reads the two
@@ -158,6 +162,7 @@ export function InspectionReturnForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingAssignmentId,
+          inspectorName: inspectorName.trim(),
           overallCondition: condition,
           mileage: mileage.trim() === '' ? null : Number(mileage),
           fuelLevel: fuel,
@@ -283,12 +288,17 @@ export function InspectionReturnForm({
         </section>
       )}
 
+      <WalkaroundCrewPicker value={inspectorName} onChange={setInspectorName} label="Who's checking it in?" />
+
       {/* The guided walk-around — same slots the check-out shot, with
-          each check-out photo above the button that replaces it. */}
+          each check-out photo above the button that replaces it. No
+          licence slot on the way back (photoPositions.RETURN_POSITIONS). */}
       <GuidedPhotoCapture
         bookingAssignmentId={bookingAssignmentId}
         compareTo={checkout?.photos}
         onChange={onPhotosChange}
+        requiredPositions={RETURN_POSITIONS}
+        title="Check-in photos"
       />
 
       <div>
@@ -400,7 +410,7 @@ export function InspectionReturnForm({
 
       {missing.length > 0 && (
         <p className="text-amber-400/90 text-xs bg-amber-950/30 border border-amber-900/60 rounded-lg px-3 py-2">
-          Walk-around incomplete — no {missing.map((m) => m.label.toLowerCase()).join(', ')} shot.
+          Walk-around incomplete — no {missing.map((m) => positionLabel(m.id).toLowerCase()).join(', ')} shot.
           {' '}You can still submit; the gap is recorded as a gap.
         </p>
       )}
@@ -409,10 +419,12 @@ export function InspectionReturnForm({
       <button
         type="button"
         onClick={submit}
-        disabled={submitting || uploadingCount > 0}
+        disabled={submitting || uploadingCount > 0 || nameMissing}
         className="w-full bg-amber-600 active:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-xl py-4 text-lg"
       >
-        {submitting
+        {nameMissing
+          ? 'Pick your name at the top first'
+          : submitting
           ? 'Checking in…'
           : uploadingCount > 0
             ? `Waiting for ${uploadingCount} photo${uploadingCount === 1 ? '' : 's'}…`

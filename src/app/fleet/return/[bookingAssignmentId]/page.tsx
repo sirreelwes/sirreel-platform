@@ -89,6 +89,7 @@ export default async function FleetReturnPage({ params }: Params) {
           fuelLevel: true,
           mileageAtInspection: true,
           notes: true,
+          inspectorName: true,
           inspectedByUser: { select: { name: true } },
           inspectedByDriver: { select: { firstName: true, lastName: true } },
           // The check-out walk-around, laid beside the new shots
@@ -169,7 +170,7 @@ export default async function FleetReturnPage({ params }: Params) {
           <p className="text-white font-semibold">Already checked in</p>
           <p className="text-zinc-400 text-sm mt-1">
             {returnRow.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by{' '}
-            {returnRow.inspectedByUser?.name ??
+            {returnRow.inspectorName ?? returnRow.inspectedByUser?.name ??
               (returnRow.inspectedByDriver
                 ? `${returnRow.inspectedByDriver.firstName} ${returnRow.inspectedByDriver.lastName}`.trim() + ' (driver)'
                 : 'fleet')}
@@ -221,6 +222,7 @@ export default async function FleetReturnPage({ params }: Params) {
         inspectionDate: checkoutRow.inspectionDate.toISOString(),
         // A blind pickup's check-out was done by the DRIVER, not a tech.
         inspectorName:
+          checkoutRow.inspectorName ??
           checkoutRow.inspectedByUser?.name ??
           (checkoutRow.inspectedByDriver
             ? `${checkoutRow.inspectedByDriver.firstName} ${checkoutRow.inspectedByDriver.lastName}`.trim() + ' (driver)'

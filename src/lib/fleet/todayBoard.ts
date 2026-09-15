@@ -127,18 +127,20 @@ export async function fleetMovementsBetween(
           id: true,
           type: true,
           inspectionDate: true,
+          inspectorName: true,
           inspectedByUser: { select: { name: true } },
         },
       },
     },
     orderBy: { createdAt: 'asc' },
   })
-  const shape = (i: { id: string; inspectionDate: Date; inspectedByUser: { name: string | null } | null } | undefined) =>
+  const shape = (i: { id: string; inspectionDate: Date; inspectorName: string | null; inspectedByUser: { name: string | null } | null } | undefined) =>
     i
       ? {
           id: i.id,
           inspectionDate: i.inspectionDate.toISOString(),
-          inspectorName: i.inspectedByUser?.name ?? null,
+          // The picked name, not the login — fleet@ is shared.
+          inspectorName: i.inspectorName ?? i.inspectedByUser?.name ?? null,
         }
       : null
 

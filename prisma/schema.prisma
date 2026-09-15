@@ -1499,6 +1499,13 @@ model Inspection {
   /// Exactly one of the two is set on every row written since then.
   inspectedBy         String?          @map("inspected_by")
   inspectedByDriverId String?          @map("inspected_by_driver_id")
+  /// The PERSON who walked the truck, picked on the capture screen
+  /// (2026-09-15). `inspectedBy` is the LOGIN, and fleet@sirreel.com is
+  /// shared by Andy and Frankie, so the login cannot say who it was.
+  /// Required on every staff walk-around filed since; NULL on older rows
+  /// and on a driver's self-serve row. See src/lib/fleet/walkaroundCrew.ts.
+  /// Added by additive ALTER on the live DB (never `db push`).
+  inspectorName       String?          @map("inspector_name")
   inspectionDate      DateTime         @map("inspection_date")
   overallCondition    VehicleCondition @map("overall_condition")
   mileageAtInspection Int?             @map("mileage_at_inspection")

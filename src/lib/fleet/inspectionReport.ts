@@ -16,7 +16,8 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { positionLabel, REQUIRED_POSITIONS, DAMAGE_POSITION } from '@/lib/fleet/photoPositions'
+import { positionLabel, RETURN_POSITIONS, LEGACY_POSITIONS, DAMAGE_POSITION, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
+import { inspectorDisplayName } from '@/lib/fleet/walkaroundCrew'
 
 export interface ReportPhoto {
   id: string
@@ -116,6 +117,7 @@ export async function buildInspectionReport(
           fuelLevel: true,
           mileageAtInspection: true,
           notes: true,
+          inspectorName: true,
           inspectedByUser: { select: { name: true } },
           inspectedByDriver: { select: { firstName: true, lastName: true } },
           photos: {
@@ -147,16 +149,19 @@ export async function buildInspectionReport(
       // Staff name, or the driver's on a blind pickup where the driver
       // did the walk-around themselves — the report should say who was
       // holding the phone.
-      inspector:
-        i.inspectedByUser?.name ??
-        (i.inspectedByDriver
-          ? `${i.inspectedByDriver.firstName} ${i.inspectedByDriver.lastName}`.trim() + ' (driver)'
-          : null),
+      inspector: (() => {
+        const who = inspectorDisplayName(i)
+        return who.name ? `${who.name}${who.byDriver ? ' (driver)' : ''}` : null
+      })(),
       condition: i.overallCondition,
       fuelLevel: i.fuelLevel,
       mileage: i.mileageAtInspection,
       notes: i.notes,
-      photos: i.photos.map(shapePhoto),
+      // The driver's licence photo NEVER goes in this report. It is a
+      // renter-facing document (sending is gated, not absent), and it can
+      // reach the production company, not just the driver. It stays on the
+      // internal filed record only.
+      photos: i.photos.filter((p) => p.position !== DRIVERS_LICENSE_POSITION).map(shapePhoto),
       damage: i.damageItems.map((d) => ({
         id: d.id,
         location: d.locationOnVehicle,
@@ -174,9 +179,16 @@ export async function buildInspectionReport(
   const bySlot = (s: ReportSide | null, position: string) =>
     s?.photos.find((p) => p.position === position) ?? null
 
-  const pairs: ReportPair[] = REQUIRED_POSITIONS.map((slot) => ({
+  // The shared walk (both ends shoot it — no licence), then any retired
+  // angle that actually holds a photo.
+  const onFile = new Set([...(out?.photos ?? []), ...(back?.photos ?? [])].map((p) => p.position))
+  const pairs: ReportPair[] = [
+    ...RETURN_POSITIONS,
+    ...LEGACY_POSITIONS.filter((slot) => onFile.has(slot.id)),
+  ].map((slot) => ({
     position: slot.id,
-    label: slot.label,
+    // No section headers in the PDF, so "Rear tire · driver side".
+    label: positionLabel(slot.id),
     out: bySlot(out, slot.id),
     back: bySlot(back, slot.id),
   }))
