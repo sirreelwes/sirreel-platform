@@ -234,6 +234,21 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the prompt reads them out. That is the one place AHA gives out a
   personal number — change who is reachable on /admin/assistant, not in
   code.
+- **Every release records WHO** (Wes 2026-09-15, after a Lunch Rush
+  release logged four digits: "do we always get the name of the person
+  asking for access?"). We did not, and on the sender-number path we KNEW
+  and discarded it — the phone check answered yes/no, never who.
+  `peopleOn(assignment)` in `afterHours.ts` is now the one roster both the
+  phone and the name check run against (booking requester / job contact /
+  checkout driver / named driver), so a match yields a `PersonHit`.
+  `AuditLog.newValues.identifiedAs` carries it on EVERY row, release and
+  denial, alongside `via` ("text from +1747…" / "web chat (IP …)") —
+  `ipAddress` holds a PHONE NUMBER on the text path, which read as an IP
+  and hid the one identifying fact we had. The team email leads with Who
+  and names it in the subject. `/admin/assistant` gained a **Who** column
+  and shows what the caller gave; its API had never selected `oldValues`,
+  so the unit, VIN and typed name were stored from day one and invisible.
+  `npm run test:phone-factor`.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as

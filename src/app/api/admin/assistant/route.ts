@@ -76,7 +76,11 @@ export async function GET() {
     },
     orderBy: { createdAt: 'desc' },
     take: 30,
-    select: { id: true, action: true, createdAt: true, ipAddress: true, newValues: true },
+    // oldValues carries what the caller actually GAVE (unit, VIN, name,
+    // whether a job code was tried). It was stored from the start and never
+    // selected, so the log could not say what someone asked for — only what
+    // came out. Wes 2026-09-15.
+    select: { id: true, action: true, createdAt: true, ipAddress: true, newValues: true, oldValues: true },
   })
 
   // Usage summary reads a wider window than the 30-row log below it. The log

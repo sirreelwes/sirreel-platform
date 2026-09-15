@@ -22,6 +22,21 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-15 (later)
+
+### AHA: every release says who it was for
+
+`SHA_PLACEHOLDER` aha: record the identified person on every release, and surface it
+
+Wes, on a release to the Lunch Rush job: "where do we record that interaction and do we always get the name of the person asking for access?" We did not. The name was stored only when the caller typed one, so the two fastest paths (job code + VIN, and number + unit) recorded nobody. Worse, on the sender-number path the identity was known and thrown away — `phoneMatched` filtered on a flat array of numbers and returned a boolean, so the person whose record matched was never captured.
+
+- **`peopleOn(assignment)`** is now the single roster both the phone check and the name check run against, each entry carrying the person's name, their phones, and their role: booking requester / job contact / checkout driver / named driver. A match yields a `PersonHit` instead of `true`.
+- **`identified` is set by whichever factor named a person** — the number wins over a typed name, since possession of a handset on file is the stronger claim — and the `audit()` helper writes it to `newValues.identifiedAs` on EVERY row it writes, denials included.
+- **`via` replaces a misleading label.** `AuditLog.ipAddress` holds a PHONE NUMBER on the text path (the SMS route passes `thread.phone` as the audit key), and the admin page rendered that column as "IP". Rows now also carry `via`: "text from +1747…" or "web chat (IP …)".
+- **The team email leads with Who**, names them in the subject line, and says what the caller actually handed over. It previously reported only the outcome and "Verified by:".
+- **The admin log reads the other half of the row.** `/api/admin/assistant` had never selected `oldValues`, so the unit asked for, the VIN, the typed name and whether a job code was tried were stored from day one and shown nowhere. The Recent access log gains a **Who** column (italic "Not identified" when we genuinely do not know, rather than a blank) and a "gave …" clause on the event line.
+- No change to who gets a code — the release bar is untouched. `npm run test:phone-factor` gained the roster, role-labelling and number-to-person cases. Build green, seven assistant suites pass.
+
 ## 2026-09-15
 
 ### AHA: the driver's own cell is the credential, and the 888 line stops pretending

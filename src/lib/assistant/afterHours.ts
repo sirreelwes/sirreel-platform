@@ -60,6 +60,39 @@ function normAlnum(s: string): string {
   return s.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
+/**
+ * Who a release was actually granted to.
+ *
+ * Wes 2026-09-15, after a Lunch Rush release landed in the log as four
+ * digits: "do we always get the name of the person asking for access?" We
+ * did not — and worse, on the sender-number path we KNEW and threw it
+ * away, because the phone check answered yes/no instead of who. These two
+ * helpers make the match name a person, so every release records one.
+ */
+export type PersonHit = { name: string; role: string }
+
+export function personName(p: { firstName: string | null; lastName: string | null }): string {
+  return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()
+}
+
+/** Everyone on file for one assignment, each with their numbers and their role. */
+export function peopleOn(asg: {
+  bookingItem: { booking: {
+    person: { firstName: string | null; lastName: string | null; phone: string | null; mobile: string | null } | null
+    job: { jobContacts: Array<{ person: { firstName: string | null; lastName: string | null; phone: string | null; mobile: string | null } }> } | null
+  } }
+  checkoutRecords: Array<{ driver: { firstName: string; lastName: string; phone: string | null } | null }>
+  driverAssignments: Array<{ driver: { firstName: string; lastName: string; phone: string | null } }>
+}): Array<{ name: string; role: string; phones: Array<string | null | undefined> }> {
+  const b = asg.bookingItem.booking
+  const out: Array<{ name: string; role: string; phones: Array<string | null | undefined> }> = []
+  if (b.person) out.push({ name: personName(b.person), role: 'booking requester', phones: [b.person.phone, b.person.mobile] })
+  for (const jc of b.job?.jobContacts ?? []) out.push({ name: personName(jc.person), role: 'job contact', phones: [jc.person.phone, jc.person.mobile] })
+  for (const cr of asg.checkoutRecords) if (cr.driver) out.push({ name: personName(cr.driver), role: 'checkout driver', phones: [cr.driver.phone] })
+  for (const da of asg.driverAssignments) out.push({ name: personName(da.driver), role: 'named driver', phones: [da.driver.phone] })
+  return out
+}
+
 type ResolvedAsset = {
   id: string
   unitName: string
@@ -128,6 +161,12 @@ export async function verifyAndRelease(input: {
   const driverName = input.driverName?.trim() || ''
   const senderTail = phoneTail(input.senderPhone)
   const ip = input.ip
+  // "text from +1747…" or "web chat (IP …)". The audit row's `ipAddress`
+  // column holds a PHONE NUMBER on the text path, which read as an IP on
+  // the admin page and hid the one identifying fact we had.
+  const via = input.senderPhone ? `text from ${input.senderPhone}` : `web chat (IP ${ip})`
+  // Set the moment a factor names a person; read by every audit write below.
+  let identified: PersonHit | null = null
 
   const audit = async (action: string, extra: Record<string, unknown>) => {
     try {
@@ -145,7 +184,12 @@ export async function verifyAndRelease(input: {
             driverName: driverName || null,
             senderPhoneTail: senderTail ? senderTail.slice(-4) : null,
           },
-          newValues: { ...extra, at: new Date().toISOString() },
+          newValues: {
+            ...extra,
+            via,
+            identifiedAs: identified ? `${identified.name} (${identified.role})` : null,
+            at: new Date().toISOString(),
+          },
         },
       })
     } catch (err) {
@@ -275,16 +319,17 @@ export async function verifyAndRelease(input: {
   // When the number is the ONLY anchor, the assignment set is narrowed to the
   // driver's own current job(s) so the VIN / unit check and the lockbox pin
   // below can only land on a truck that job holds.
-  const phoneMatched = senderTail
-    ? assignments.filter((asg) => {
-        const b = asg.bookingItem.booking
-        const numbers: Array<string | null | undefined> = [b.person?.phone, b.person?.mobile]
-        for (const jc of b.job?.jobContacts ?? []) numbers.push(jc.person.phone, jc.person.mobile)
-        for (const cr of asg.checkoutRecords) numbers.push(cr.driver?.phone)
-        for (const da of asg.driverAssignments) numbers.push(da.driver.phone)
-        return phoneOnFile(senderTail, numbers)
-      })
-    : []
+  const phoneMatched: typeof assignments = []
+  if (senderTail) {
+    for (const asg of assignments) {
+      const hit = peopleOn(asg).find((p) => phoneOnFile(senderTail, p.phones))
+      if (!hit) continue
+      phoneMatched.push(asg)
+      // First match wins the identity — the same number across two of the
+      // driver's assignments is the same person.
+      identified ??= { name: hit.name, role: hit.role }
+    }
+  }
   const phoneOk = phoneMatched.length > 0
   if (!jobId && !vehicleResolvedLegacy) {
     if (!phoneOk) {
@@ -320,27 +365,20 @@ export async function verifyAndRelease(input: {
     : []
   const vinLast4Ok = vinMatches.length > 0
 
-  let nameOk = false
+  let nameHit: PersonHit | null = null
   if (driverName) {
     for (const asg of assignments) {
-      const b = asg.bookingItem.booking
-      const cands: string[] = []
-      if (b.person) cands.push(`${b.person.firstName ?? ''} ${b.person.lastName ?? ''}`)
-      for (const jc of b.job?.jobContacts ?? []) {
-        cands.push(`${jc.person.firstName ?? ''} ${jc.person.lastName ?? ''}`)
-      }
-      for (const cr of asg.checkoutRecords) {
-        if (cr.driver) cands.push(`${cr.driver.firstName} ${cr.driver.lastName}`)
-      }
-      for (const da of asg.driverAssignments) {
-        cands.push(`${da.driver.firstName} ${da.driver.lastName}`)
-      }
-      if (cands.some((c) => nameMatches(driverName, c))) {
-        nameOk = true
+      const hit = peopleOn(asg).find((p) => p.name && nameMatches(driverName, p.name))
+      if (hit) {
+        nameHit = { name: hit.name, role: hit.role }
         break
       }
     }
   }
+  const nameOk = Boolean(nameHit)
+  // The number is the stronger identifier (possession of a handset on file),
+  // so it wins; a typed name identifies whoever it matched on the web path.
+  identified ??= nameHit
 
   // Release bar. Job code is the strong factor; it needs one corroborator.
   // The legacy unit+name path stays open for a substitute returner who
@@ -421,12 +459,22 @@ export async function verifyAndRelease(input: {
     jobName,
     verifiedBy,
   })
-  await notifyTeam(`After-hours access released — ${jobName}`, [
-    `Access released via the site assistant for ${jobName}.`,
+  // Who first — it is the question the team asks of this email, and until
+  // 2026-09-15 it was the one thing the email did not say.
+  await notifyTeam(`After-hours access released — ${identified?.name ?? 'unidentified caller'} · ${jobName}`, [
+    `AHA released access for ${jobName}.`,
+    `Who: ${identified ? `${identified.name} — ${identified.role} on this job` : 'NOT IDENTIFIED — they gave no name and the number they used is not on file for this job'}.`,
+    `Reached us by: ${via}.`,
+    `They asked for: ${[
+      vehicleNumber ? `unit "${vehicleNumber}"` : null,
+      vinLast4 ? `VIN last 4 ${vinLast4}` : null,
+      driverName ? `name "${driverName}"` : null,
+      jobCodeRaw ? 'a job code' : null,
+    ].filter(Boolean).join(', ') || 'nothing beyond their number'}.`,
     `Gate code: ${gateCode ? 'released' : 'NOT on file'} · Lockbox (${target?.unitName ?? 'n/a'}): ${
       lockboxCode ? 'released' : lockboxHint
     }.`,
-    `Verified by: ${verifiedBy}. IP: ${ip}.`,
+    `Verified by: ${verifiedBy}.`,
     `The codes themselves are not repeated in this email.`,
   ])
 

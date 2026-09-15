@@ -9,6 +9,7 @@
  * cases are the ways numbers are actually typed into HQ.
  */
 import { phoneOnFile, phoneTail } from '../../src/lib/assistant/phoneFactor'
+import { peopleOn, personName } from '../../src/lib/assistant/afterHours'
 
 let failed = 0
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -80,6 +81,40 @@ check('full name matches', nameMatches('Mike Rodriguez', 'Mike Rodriguez'))
 check('case and punctuation are ignored', nameMatches('o\'brien', "O'Brien"))
 check('a different name does not match', !nameMatches('Dave', 'Mike Rodriguez'))
 check('an empty name never matches', !nameMatches('', 'Mike Rodriguez'))
+
+// ── Who a release is recorded against ───────────────────────────────────
+// Wes 2026-09-15: a Lunch Rush release logged four digits and no name. The
+// sender-number path KNEW who it matched and discarded it. peopleOn is the
+// roster the match now runs against, so the hit names a person.
+console.log('who is on an assignment')
+const asg = {
+  bookingItem: { booking: {
+    person: { firstName: 'Ray', lastName: 'Kim', phone: null, mobile: '(213) 555-0199' },
+    job: { jobContacts: [{ person: { firstName: 'Ana', lastName: 'Lopez', phone: '323-555-0100', mobile: null } }] },
+  } },
+  checkoutRecords: [{ driver: { firstName: 'Dee', lastName: 'Driver', phone: '818 555 0142' } }, { driver: null }],
+  driverAssignments: [{ driver: { firstName: 'Sam', lastName: 'Ng', phone: '(661) 555-0177' } }],
+}
+const people = peopleOn(asg)
+const roleOf = (n: string) => people.find((p) => p.name === n)?.role
+check('every person on the assignment is listed once', people.length === 4, people.map((p) => p.name))
+check('the booking requester is labelled', roleOf('Ray Kim') === 'booking requester')
+check('a job contact is labelled', roleOf('Ana Lopez') === 'job contact')
+check('the checkout driver is labelled', roleOf('Dee Driver') === 'checkout driver')
+check('a named driver is labelled', roleOf('Sam Ng') === 'named driver')
+check('a checkout row with no driver is skipped', !people.some((p) => p.name === ''))
+
+console.log('the sender number names a person')
+const hit = people.find((p) => phoneOnFile('+18185550142', p.phones))
+check('a match resolves to the person, not a boolean', hit?.name === 'Dee Driver' && hit?.role === 'checkout driver', hit)
+check('the named driver matches on their own cell', people.find((p) => phoneOnFile('661-555-0177', p.phones))?.name === 'Sam Ng')
+check('the requester matches on mobile when phone is null', people.find((p) => phoneOnFile('2135550199', p.phones))?.name === 'Ray Kim')
+check('an unknown number names nobody', !people.some((p) => phoneOnFile('+15005550000', p.phones)))
+
+console.log('names are built safely')
+check('first + last', personName({ firstName: 'Mike', lastName: 'Rodriguez' }) === 'Mike Rodriguez')
+check('a missing last name does not leave a trailing space', personName({ firstName: 'Cher', lastName: null }) === 'Cher')
+check('no name at all is empty, never " "', personName({ firstName: null, lastName: null }) === '')
 
 if (failed) { console.log(`\n${failed} failing`); process.exit(1) }
 console.log('\nall passing')

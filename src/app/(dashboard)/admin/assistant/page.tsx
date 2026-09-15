@@ -21,6 +21,8 @@ type AuditRow = {
   createdAt: string
   ipAddress: string | null
   newValues: Record<string, unknown> | null
+  /** What the caller GAVE: vehicleNumber, vinLast4, driverName, jobCodeProvided. */
+  oldValues: Record<string, unknown> | null
 }
 type EmergencyContact = {
   id: string
@@ -111,6 +113,36 @@ function fmt(d: string | null): string {
   } catch {
     return '—'
   }
+}
+
+/**
+ * Who the release was granted to. Written by verifyAndRelease from the
+ * factor that named a person — the sender's number, or a typed name that
+ * matched someone on the job. Null means we genuinely do not know, which
+ * is worth showing as such rather than leaving the column blank.
+ */
+function auditWho(a: AuditRow): string {
+  const id = (a.newValues || {}).identifiedAs
+  if (typeof id === 'string' && id.trim()) return id
+  const typed = (a.oldValues || {}).driverName
+  if (typeof typed === 'string' && typed.trim()) return `${typed} (as typed, unmatched)`
+  return 'Not identified'
+}
+
+/** What they handed over to get in. */
+function auditGave(a: AuditRow): string {
+  const o = a.oldValues || {}
+  const str = (k: string) => (typeof o[k] === 'string' && (o[k] as string).trim() ? (o[k] as string) : null)
+  return (
+    [
+      o.jobCodeProvided ? 'job code' : null,
+      str('vehicleNumber') ? `unit ${str('vehicleNumber')}` : null,
+      str('vinLast4') ? `VIN ${str('vinLast4')}` : null,
+      str('driverName') ? `name "${str('driverName')}"` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'their number only'
+  )
 }
 
 function auditLabel(a: AuditRow): string {
@@ -919,22 +951,34 @@ export default function AssistantAdminPage() {
               <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 bg-zinc-900">
                   <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
-                    <th className="w-[11rem] px-2 py-1.5 font-medium">When</th>
+                    <th className="w-[10rem] px-2 py-1.5 font-medium">When</th>
                     <th className="px-2 py-1.5 font-medium">Event</th>
-                    <th className="w-[9rem] px-2 py-1.5 font-medium">IP</th>
+                    <th className="w-[13rem] px-2 py-1.5 font-medium">Who</th>
+                    <th className="w-[10rem] px-2 py-1.5 font-medium">From</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.audit.map((a) => (
                     <tr key={a.id} className="border-t border-zinc-800 align-middle">
                       <td className="truncate px-2 py-1.5 text-xs text-zinc-400">{fmt(a.createdAt)}</td>
-                      <td className="truncate px-2 py-1.5 text-zinc-200" title={auditLabel(a)}>{auditLabel(a)}</td>
-                      <td className="truncate px-2 py-1.5 font-mono text-xs text-zinc-500">{a.ipAddress || '—'}</td>
+                      <td className="truncate px-2 py-1.5 text-zinc-200" title={`${auditLabel(a)} — gave: ${auditGave(a)}`}>
+                        {auditLabel(a)}
+                        <span className="ml-1.5 text-xs text-zinc-500">gave {auditGave(a)}</span>
+                      </td>
+                      <td
+                        className={`truncate px-2 py-1.5 text-xs ${auditWho(a) === 'Not identified' ? 'text-zinc-500 italic' : 'text-zinc-200'}`}
+                        title={auditWho(a)}
+                      >
+                        {auditWho(a)}
+                      </td>
+                      <td className="truncate px-2 py-1.5 font-mono text-xs text-zinc-500" title={a.ipAddress || ''}>
+                        {a.ipAddress || '—'}
+                      </td>
                     </tr>
                   ))}
                   {data.audit.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="py-4 text-center text-zinc-500">
+                      <td colSpan={4} className="py-4 text-center text-zinc-500">
                         No access requests yet.
                       </td>
                     </tr>
