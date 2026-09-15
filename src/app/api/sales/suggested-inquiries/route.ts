@@ -143,6 +143,39 @@ export async function GET() {
     }
   }
 
+  // ── A decision covers the thread up to that message, not one row ──
+  //
+  // Capture and Dismiss record ONE email id — the one on the card. But the
+  // card is one-per-thread, and a thread can hold several inbound copies of
+  // the same event: Cognito sends each submission as three separate emails
+  // (three Message-IDs, so the rfc822 collapse can't join them) that Gmail
+  // threads together. Dismissing the newest uncovered the next copy, which
+  // took over the card — Wes dismissed "Order Request - Hugo Servin - 1,100"
+  // three times on 2026-09-15 and it "continually returns".
+  //
+  // So a thread counts as decided for every inbound at or BEFORE the newest
+  // decided message on it (ties included — the three copies share a
+  // timestamp). A message that arrives AFTER the decision still surfaces:
+  // a client writing again on a dismissed thread is new information.
+  // Same idea across inboxes: a decision on any copy of an RFC-822 message
+  // covers every copy.
+  const decidedThreadAt = new Map<string, number>();
+  const decidedMessageIds = new Set<string>();
+  for (const e of emails) {
+    if (!consideredMap.has(e.id)) continue;
+    if (e.rfc822MessageId) decidedMessageIds.add(e.rfc822MessageId);
+    if (e.threadId) {
+      const at = e.sentAt.getTime();
+      if (at > (decidedThreadAt.get(e.threadId) ?? -Infinity)) decidedThreadAt.set(e.threadId, at);
+    }
+  }
+  const isConsidered = (e: { id: string; threadId: string | null; rfc822MessageId: string | null; sentAt: Date }) => {
+    if (consideredMap.has(e.id)) return true;
+    if (e.rfc822MessageId && decidedMessageIds.has(e.rfc822MessageId)) return true;
+    const decidedAt = e.threadId ? decidedThreadAt.get(e.threadId) : undefined;
+    return decidedAt !== undefined && e.sentAt.getTime() <= decidedAt;
+  };
+
   // Drop emails whose thread has been responded to — ANY staff outbound on
   // the thread counts (lastOutboundAt set), not just outbound-last. The old
   // lastDirection==='OUTBOUND' test flipped a thread back to full "new
@@ -299,7 +332,7 @@ export async function GET() {
   };
 
   const candidates = emails.filter(
-    (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedupByMessageId(e) && dedupByThread(e),
+    (e) => !respondedTo(e) && !isConsidered(e) && dedupByMessageId(e) && dedupByThread(e),
   );
 
   // Responded stream — same considered/dedup discipline, opposite
@@ -308,7 +341,7 @@ export async function GET() {
   const seenRespondedThreads = new Set<string>();
   const seenRespondedMessageIds = new Set<string>();
   const respondedCandidates = emails.filter((e) => {
-    if (!respondedTo(e) || consideredMap.has(e.id)) return false;
+    if (!respondedTo(e) || isConsidered(e)) return false;
     // Same message-level collapse as the pending stream, or one answered
     // lead renders once per inbox that received it.
     if (e.rfc822MessageId) {
