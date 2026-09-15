@@ -112,6 +112,7 @@
     "test:partner-kind": "tsx tests/sub-rentals/partner-kind.test.ts",
     "test:partner-terms": "tsx tests/sub-rentals/partner-terms.test.ts",
     "test:will-call": "tsx tests/sub-rentals/will-call.test.ts",
+    "test:portal-pickup": "tsx tests/portal/deliveries-pickup.test.ts",
     "test:owner-numbers": "tsx tests/exec/owner-numbers.test.ts",
     "test:partner-pick-list": "tsx tests/orders/partner-lines-pick-list.test.ts",
     "test:partner-cancelled-lines": "tsx tests/orders/partner-cancelled-lines.test.ts",

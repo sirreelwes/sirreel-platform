@@ -62,9 +62,11 @@ export async function POST(req: NextRequest) {
   // The scoping check — both linkage shapes, re-derived from the session.
   const sub = await prisma.subRental.findFirst({
     where: { id: subRentalId, OR: [{ jobId: ctx.jobId }, { order: { jobId: ctx.jobId } }] },
-    select: { id: true, status: true, callTime: true, driverNotes: true },
+    select: { id: true, status: true, callTime: true, driverNotes: true, receiveMethod: true },
   })
   if (!sub) return NextResponse.json({ error: 'That unit is not on your job.' }, { status: 403 })
+  // Collected at the partner's lot — there is no driver coming to be given a call time.
+  if (sub.receiveMethod === 'WILL_CALL') return NextResponse.json({ error: 'This one is picked up at the rental location, so there is no call time to set.' }, { status: 409 })
   if (sub.status === 'CANCELLED') return NextResponse.json({ error: 'That unit is no longer coming.' }, { status: 409 })
 
   const unchanged =

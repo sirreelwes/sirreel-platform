@@ -717,8 +717,13 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   account alerts are confirm-only, `notifyLogisticsChanged` skips it. Use
   `usesPartnerDriver()` rather than `!== 'DELIVERY'`. Switch per booking on
   the job page; default per partner on /crm/portals#partners.
-- Still open: the CLIENT portal shows partner units as arriving/delivered and
-  never tells the production where to pick up.
+- Client portal (same day): `loadDeliveries` returns WILL_CALL rows as
+  `handoff: 'PICKUP'` with `pickupAt.address` (booking originAddress, else the
+  partner's lotAddress — the one vendor fact read beyond name/permission, and
+  only for these rows); the section shows a "You pick up" card with a Maps
+  link and hides the drop-off/collection forms when nothing is delivered. The
+  per-unit call-time route refuses WILL_CALL. `npm run test:portal-pickup`.
+- Still open: HQ can't tell the partner WHO is collecting.
 - `npm run test:will-call`.
 
 ## Cars & SUVs — a catalog section only (2026-09-15 — Wes)

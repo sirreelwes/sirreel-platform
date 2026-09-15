@@ -34,6 +34,17 @@
  *
  * The reverse direction is untouched: the vendor still never learns who the
  * client is, and driverEmail / driverPhone / relayTag still never leave HQ.
+ *
+ * ── Picked up at the partner's lot (WILL_CALL, 2026-09-15) ──────────────────
+ * A car-rental partner's unit is not delivered: the production collects it at
+ * the partner's lot and returns it there (Wes, California Rent A Car). Before
+ * this the list said every partner unit was "coming to you" and asked where to
+ * drop it, and nothing told the production where to go. Those rows now come
+ * back as `handoff: 'PICKUP'` with the ADDRESS they must drive to — the
+ * booking's origin override, else the partner's lot. The address is the one
+ * extra vendor fact this serializer reads, and only for these rows: a
+ * production cannot collect a car without it. The partner's NAME still
+ * follows permission (partnerAttribution) like everywhere else.
  */
 import { prisma } from '@/lib/prisma'
 import { PARTNER_ATTRIBUTION_SELECT, partnerAttribution } from '@/lib/sub-rentals/partnerAttribution'
@@ -65,6 +76,11 @@ export interface DeliveryUnit {
   driverAck: { at: string; note: string | null; stale: boolean } | null
   /** Hours the driver has logged on their page — total and days. */
   hours: { total: number; days: number }
+  /** DELIVERED = brought to the production (the original shape). PICKUP = the
+   *  production collects it at the partner's lot and returns it there. */
+  handoff: 'DELIVERED' | 'PICKUP'
+  /** Where to collect it — PICKUP rows only. */
+  pickupAt: { address: string | null } | null
 }
 
 export interface ReportTo {
@@ -167,7 +183,11 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         // selected. Keep it that way — see the header. The vendor is selected
         // for its NAME AND PERMISSION ONLY (partnerAttribution.ts); nothing
         // else off that row may be added here.
-        vendor: { select: PARTNER_ATTRIBUTION_SELECT },
+        // lotAddress is read for WILL_CALL rows only (see the header) and
+        // never emitted for any other row.
+        vendor: { select: { ...PARTNER_ATTRIBUTION_SELECT, lotAddress: true } },
+        receiveMethod: true,
+        originAddress: true,
         subcontractedVehicle: { select: { vehicleType: true } },
       },
     }),
@@ -193,6 +213,28 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
 
   for (const s of subRentals) {
     if (GONE.has(s.status)) continue
+    if (s.receiveMethod === 'WILL_CALL') {
+      units.push({
+        id: `sub:${s.id}`,
+        unitName: s.itemDescription,
+        unitType: s.subcontractedVehicle?.vehicleType ?? null,
+        suppliedBy: partnerAttribution(s.vendor),
+        startDate: ymd(s.startDate),
+        endDate: ymd(s.endDate),
+        sameDay: !!s.startDate && !!s.endDate && ymd(s.startDate) === ymd(s.endDate),
+        // No partner driver, no call time: the production's own driver
+        // collects it, so none of the delivery fields apply.
+        driver: null,
+        editable: false,
+        callTime: null,
+        driverNotes: null,
+        driverAck: null,
+        hours: { total: 0, days: 0 },
+        handoff: 'PICKUP',
+        pickupAt: { address: s.originAddress?.trim() || s.vendor.lotAddress?.trim() || null },
+      })
+      continue
+    }
     units.push({
       id: `sub:${s.id}`,
       unitName: s.itemDescription,
@@ -215,6 +257,8 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
           }
         : null,
       hours: { total: sumHours(s.driverHours), days: s.driverHours.length },
+      handoff: 'DELIVERED',
+      pickupAt: null,
     })
   }
 
@@ -252,6 +296,8 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         driverNotes: null,
         driverAck: null,
         hours: { total: 0, days: 0 },
+        handoff: 'DELIVERED',
+        pickupAt: null,
       })
     }
   }

@@ -24,6 +24,13 @@
  * A partner's coach and one of our own trailers render through the same JSX,
  * and the driver line is a name and a state, never digits. See the sibling
  * notes in src/lib/portal/deliveries.ts for why both rules exist.
+ *
+ * ── Pickups (2026-09-15) ────────────────────────────────────────────────────
+ * A car from a rental partner isn't delivered — the production collects it at
+ * the partner's lot and brings it back there. Those rows (handoff PICKUP) get
+ * their own card with the address to drive to, and when nothing on the job is
+ * delivered the drop-off / collection forms don't show at all: asking "where
+ * should we drop it?" about a car nobody is dropping was the bug.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -43,6 +50,8 @@ interface DeliveryUnit {
   driverNotes: string | null
   driverAck: { at: string; note: string | null; stale: boolean } | null
   hours: { total: number; days: number }
+  handoff?: 'DELIVERED' | 'PICKUP'
+  pickupAt?: { address: string | null } | null
 }
 interface Payload {
   units: DeliveryUnit[]
@@ -229,17 +238,85 @@ export function PortalDeliveriesSection() {
 
   const savedAt = fmtSaved(data.reportTo.updatedAt)
   const hasAddress = !!data.reportTo.address
+  const delivered = data.units.filter((u) => u.handoff !== 'PICKUP')
+  const pickups = data.units.filter((u) => u.handoff === 'PICKUP')
 
   return (
     <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
       <div>
-        <h2 className="text-base font-bold text-gray-900">Deliveries</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          {data.units.length === 1 ? 'One unit is' : `${data.units.length} units are`} coming to you.
-          Tell us where and when to drop them, and where and when to collect them — we pass it
-          straight to the drivers.
-        </p>
+        <h2 className="text-base font-bold text-gray-900">
+          {delivered.length && pickups.length ? 'Deliveries & pickups' : pickups.length ? 'Pickups' : 'Deliveries'}
+        </h2>
+        {delivered.length > 0 && (
+          <p className="text-xs text-gray-500 mt-1">
+            {delivered.length === 1 ? 'One unit is' : `${delivered.length} units are`} coming to you.
+            Tell us where and when to drop them, and where and when to collect them — we pass it
+            straight to the drivers.
+          </p>
+        )}
+        {pickups.length > 0 && (
+          <p className="text-xs text-gray-500 mt-1">
+            {pickups.length === 1 ? 'One vehicle is' : `${pickups.length} vehicles are`} picked up by your team at the rental
+            location below and returned there — no delivery on {pickups.length === 1 ? 'this one' : 'these'}.
+          </p>
+        )}
       </div>
+
+      {/* ── Pickups — collected at the partner's lot ───────────────────────── */}
+      {pickups.map((u) => {
+        const day = fmtDay(u.startDate)
+        const backDay = u.sameDay ? day : fmtDay(u.endDate)
+        const addr = u.pickupAt?.address ?? null
+        return (
+          <article key={u.id} className="border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-gray-900">{u.unitName}</span>
+              <span className="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                You pick up
+              </span>
+            </div>
+            {u.unitType && <div className="text-xs text-gray-500 mt-0.5">{u.unitType}</div>}
+            {u.suppliedBy && <div className="text-xs text-gray-500 mt-0.5">From {u.suppliedBy}</div>}
+
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="text-xs text-gray-600">
+                <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold block">Pick up</span>
+                <span className="font-semibold text-gray-900">{day ?? 'TBC'}</span>
+              </div>
+              <div className="text-xs text-gray-600">
+                <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold block">Return</span>
+                <span className="font-semibold text-gray-900">{backDay ?? 'TBC'}</span>
+                <span className="text-gray-500"> · same place</span>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg bg-[#FBFAF8] border border-gray-200 px-3 py-2.5">
+              <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold block">Where</span>
+              {addr ? (
+                <>
+                  <div className="text-sm font-semibold text-gray-900 whitespace-pre-line">{addr}</div>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block mt-1 text-xs font-semibold text-[#0F7A93] underline underline-offset-2"
+                  >
+                    Open in Maps
+                  </a>
+                </>
+              ) : (
+                <div className="text-xs text-gray-600">Your SirReel rep will confirm the pickup address before the date.</div>
+              )}
+              <p className="mt-2 text-[11px] text-gray-500 leading-relaxed">
+                Whoever collects it checks out at the counter with their driver&apos;s license — tell them it&apos;s a
+                SirReel booking. The rental itself is billed through SirReel.
+              </p>
+            </div>
+          </article>
+        )
+      })}
+
+      {delivered.length > 0 && (<>
 
       {/* ── Delivery ──────────────────────────────────────────────────────── */}
       <div className="bg-[#FBFAF8] border border-gray-200 rounded-xl p-4 space-y-3">
@@ -368,7 +445,7 @@ export function PortalDeliveriesSection() {
 
       {/* ── Units ─────────────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        {data.units.map((u) => {
+        {delivered.map((u) => {
           const day = fmtDay(u.startDate)
           const backDay = u.sameDay ? day : fmtDay(u.endDate)
           const isOpen = openProfile === u.id
@@ -520,6 +597,7 @@ export function PortalDeliveriesSection() {
           )
         })}
       </div>
+      </>)}
     </section>
   )
 }
