@@ -17,6 +17,7 @@
 
 import Link from 'next/link'
 import RecentSubmissions from '@/components/paperwork/RecentSubmissions'
+import FiledAgreements from '@/components/paperwork/FiledAgreements'
 
 const TOOLS = [
   {
@@ -81,6 +82,23 @@ export default function PaperworkToolsIndex() {
             <p className="text-[13px] text-gray-600 mt-1.5 leading-relaxed">{t.description}</p>
           </Link>
         ))}
+      </div>
+
+      {/* The negotiations that are OVER. The feed at the top is what still
+          waits on us; this is what we have agreed and filed. */}
+      <div className="mt-10">
+        <h2 className="text-sm font-semibold text-gray-900 mb-1">Approved redlined agreements</h2>
+        <p className="text-[12px] text-gray-500 mb-3">
+          Negotiated agreements on file, by production company. A master marked Auto-covers papers
+          every job that company books — the portal serves that document and asks only for the
+          damage-waiver election. Companies flagged Needs attention are approved in one register but
+          not the other. The standing-terms registry on its own is at{' '}
+          <Link href="/admin/negotiated-agreements" className="underline hover:text-gray-700">
+            /admin/negotiated-agreements
+          </Link>
+          .
+        </p>
+        <FiledAgreements />
       </div>
     </div>
   )
