@@ -114,6 +114,8 @@ export default function ContractReviewDetailPage() {
   const [tab, setTab] = useState<Tab>('original');
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  /** What happened to the automatic "our response is in your portal" email. */
+  const [notice, setNotice] = useState<{ sent: boolean; to?: string; reason?: string } | null>(null);
   const [pdfCacheKey, setPdfCacheKey] = useState<string>('');
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
@@ -315,6 +317,8 @@ export default function ContractReviewDetailPage() {
         setGenerateError(err.error || 'Failed to generate counter-PDF');
         return;
       }
+      const genData = await res.json().catch(() => ({}));
+      setNotice(genData?.notice ?? null);
       await refreshRecord();
       setTab('counter');
     } finally {
@@ -470,6 +474,17 @@ export default function ContractReviewDetailPage() {
                     client's portal and the job page — and is sent from
                     there. The same card, so the desk and the job page
                     offer one send, not two. Remounts on regenerate. */}
+                {notice && (
+                  <div
+                    className={`rounded-lg px-3 py-2 text-[12px] ${
+                      notice.sent ? 'bg-chip-good-bg text-chip-good-fg' : 'bg-chip-warn-bg text-chip-warn-fg'
+                    }`}
+                  >
+                    {notice.sent
+                      ? `Emailed ${notice.to} that our response is in their job portal.`
+                      : `Client not emailed: ${notice.reason}`}
+                  </div>
+                )}
                 {record.job ? (
                   <JobCounterProposalPanel
                     key={record.counterGeneratedAt || 'none'}
@@ -515,12 +530,17 @@ export default function ContractReviewDetailPage() {
                       ? 'Save your decisions to enable counter-PDF generation.'
                       : 'Your decisions are saved. Click below to generate the counter-PDF.'}
                 </div>
+                {record.job && (
+                  <div className="text-[11px] text-gray-500 max-w-md mx-auto">
+                    Generating posts it to the client&rsquo;s job portal and emails them that our response is there.
+                  </div>
+                )}
                 <button
                   onClick={handleGenerateClick}
                   disabled={!canGenerate || generating}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
                 >
-                  {generating ? 'Generating…' : 'Generate counter-PDF'}
+                  {generating ? 'Generating…' : record.job ? 'Generate & send to client' : 'Generate counter-PDF'}
                 </button>
                 {generateError && (
                   <div className="text-[11px] text-red-600 max-w-md mx-auto">{generateError}</div>
@@ -808,6 +828,10 @@ export default function ContractReviewDetailPage() {
             <p className="text-[12px] text-gray-600">
               This will replace the previous counter-PDF (generated {fmtDateTime(record.counterGeneratedAt)})
               with a fresh one based on your current decisions. The previous version will not be kept.
+              {record.job && (
+                <> The client&rsquo;s portal shows the new one straight away. They are not emailed again — use
+                Send again on the card if they should hear about it.</>
+              )}
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button

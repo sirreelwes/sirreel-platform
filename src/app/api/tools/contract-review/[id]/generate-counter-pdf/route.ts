@@ -5,12 +5,14 @@ import { put, del } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
 import { buildReviewPdfProps } from '@/lib/contracts/buildReviewPdfProps'
+import { notifyClientOfCounter, type CounterNoticeResult } from '@/lib/contracts/counterNotice'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 15
+// Render + upload + (first time) the client notice.
+export const maxDuration = 60
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession()
@@ -82,9 +84,26 @@ export async function POST(
     }
   }
 
+  // Posting the counter IS submitting it: the client hears it is in their
+  // portal (Wes 2026-09-15). Once per review — a regenerate does not mail
+  // them again. `?notify=0` is for callers that send their own email right
+  // after (the entered-redline "Approve & send for signature" chain, whose
+  // accept step emails "ready to sign" seconds later). Best-effort: a failed
+  // notice never fails the PDF, and the desk is told why.
+  let notice: CounterNoticeResult | null = null
+  if (req.nextUrl.searchParams.get('notify') !== '0') {
+    try {
+      notice = await notifyClientOfCounter({ reviewId, senderUserId: sessionUser.id })
+    } catch (err) {
+      console.error('[generate-counter-pdf] client notice failed:', reviewId, err)
+      notice = { sent: false, reason: 'The client email failed — use Send to client on the job page.' }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     counterPdfId: reviewId,
     counterGeneratedAt: now.toISOString(),
+    notice,
   })
 }

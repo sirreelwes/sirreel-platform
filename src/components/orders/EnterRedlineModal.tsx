@@ -296,7 +296,9 @@ export default function EnterRedlineModal({
       if (!reviewId) return;
 
       setSendStage("Building the agreement…");
-      const gen = await fetch(`/api/tools/contract-review/${reviewId}/generate-counter-pdf`, {
+      // notify=0: the accept step below emails "ready to sign"; the
+      // counter-posted notice seconds earlier would be a second email.
+      const gen = await fetch(`/api/tools/contract-review/${reviewId}/generate-counter-pdf?notify=0`, {
         method: "POST",
       });
       if (!gen.ok) {
