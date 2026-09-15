@@ -791,6 +791,7 @@ export function GanttBoard() {
         if (!d.ok) return
         if (seq !== refetchSeq.current) return // superseded by a newer refetch
         if (inFlightReassigns.current.size > 0) return // mutations pending — settle path will refetch
+        if (inFlightReschedules.current.size > 0) return // a bar is mid-move; its own settle refetches
         setJobs(d.jobs || [])
         setUnits(d.units || [])
         setUnassignedHolds(d.unassignedHolds || [])
@@ -1225,6 +1226,123 @@ export function GanttBoard() {
       setDragBusy(false)
     }
   }, [refreshTimeline])
+
+  // ── Job view: drag a bar sideways to move the whole reservation ──────
+  // Job rows are BOOKINGS, not trucks, so the vertical drop that drives the
+  // asset view has no meaning here — there is no "other job" to land on.
+  // The horizontal axis is the calendar, and dragging along it is the same
+  // reschedule the drawer's date fields perform: POST .../bookings/[id]/dates,
+  // which re-validates every held unit against the new window and shifts the
+  // booking and its assignments together. Length is preserved; resizing an
+  // end is a different gesture and isn't offered here.
+  const jobDragState = useRef<null | { bookingId: string; start: string; end: string; label: string; startX: number; moved: boolean; el: HTMLElement }>(null)
+  const [jobDrag, setJobDrag] = useState<null | { days: number; start: string; end: string }>(null)
+  const [jobDragBusy, setJobDragBusy] = useState(false)
+  const [jobDragErr, setJobDragErr] = useState<string | null>(null)
+  const [jobDragBuffer, setJobDragBuffer] = useState<null | { bookingId: string; start: string; end: string; from: { start: string; end: string }; label: string; reason: string }>(null)
+  /** Bookings whose reschedule is still in flight — their bar is stale. */
+  const inFlightReschedules = useRef<Set<string>>(new Set())
+
+  const doReschedule = useCallback(async (
+    bookingId: string,
+    start: string,
+    end: string,
+    from: { start: string; end: string },
+    label: string,
+    bufferOverride = false,
+  ) => {
+    // Optimistic: the bar sits on the new dates while the write runs.
+    setJobs((prev) => prev.map((j) => (j.bookingId === bookingId ? { ...j, startDate: start, endDate: end } : j)))
+    const rollback = () => setJobs((prev) => prev.map((j) => (j.bookingId === bookingId ? { ...j, startDate: from.start, endDate: from.end } : j)))
+    inFlightReschedules.current.add(bookingId)
+    setJobDragBusy(true)
+    setJobDragErr(null)
+    try {
+      const r = await fetch(`/api/scheduling/bookings/${bookingId}/dates`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ startDate: start, endDate: end, bufferDays: 1, bufferOverride }),
+      })
+      const j = await r.json().catch(() => ({} as any))
+      if (r.ok && j.ok) {
+        setJobDragBuffer(null)
+        refreshTimeline()
+        return
+      }
+      // Refused — the server never moved, so undoing the optimistic shift is
+      // the whole repair.
+      rollback()
+      if (r.status === 409 && j.error === 'buffer-encroachment' && j.needsOverride) {
+        setJobDragBuffer({ bookingId, start, end, from, label, reason: j.reason || 'This move encroaches a turnaround buffer.' })
+        return
+      }
+      setJobDragErr(j.reason || j.error || `Reschedule failed (${r.status}) — move undone.`)
+    } catch (e) {
+      rollback()
+      setJobDragErr(`${e instanceof Error ? e.message : String(e)} — move undone.`)
+      refreshTimeline()
+    } finally {
+      inFlightReschedules.current.delete(bookingId)
+      setJobDragBusy(false)
+    }
+  }, [refreshTimeline])
+
+  const onJobBarPointerDown = useCallback((ev: React.PointerEvent<HTMLDivElement>, job: any) => {
+    if (!canSetStatus || !job?.bookingId) return
+    // This booking's last move hasn't landed — its bar may not match the
+    // server yet, so a drag now would compute from a stale position.
+    if (inFlightReschedules.current.has(job.bookingId)) return
+    ev.stopPropagation()
+    const el = ev.currentTarget as HTMLElement
+    el.setPointerCapture(ev.pointerId)
+    jobDragState.current = {
+      bookingId: job.bookingId,
+      start: job.startDate,
+      end: job.endDate,
+      label: `${job.company ?? ''}${job.jobName ? ` · ${job.jobName}` : ''}`.trim() || 'this reservation',
+      startX: ev.clientX,
+      moved: false,
+      el,
+    }
+  }, [canSetStatus])
+
+  const onJobBarPointerMove = useCallback((ev: React.PointerEvent<HTMLDivElement>) => {
+    const d = jobDragState.current
+    if (!d) return
+    const dx = ev.clientX - d.startX
+    if (!d.moved && Math.abs(dx) < 5) return
+    d.moved = true
+    // Per-frame: slide the bar itself, snapped to whole days. Direct style
+    // mutation — React only hears about it when the day count changes.
+    const days = Math.round(dx / dayWidth)
+    d.el.style.transform = `translateX(${days * dayWidth}px)`
+    setJobDrag((prev) => (prev && prev.days === days ? prev : { days, start: addDays(d.start, days), end: addDays(d.end, days) }))
+  }, [dayWidth])
+
+  /** Capture lost (browser took the gesture, window blurred) — put the bar
+   *  back on its own dates and write nothing. */
+  const onJobBarPointerCancel = useCallback(() => {
+    const d = jobDragState.current
+    jobDragState.current = null
+    setJobDrag(null)
+    if (d) d.el.style.transform = ''
+  }, [])
+
+  const onJobBarPointerUp = useCallback((ev: React.PointerEvent<HTMLDivElement>) => {
+    const d = jobDragState.current
+    jobDragState.current = null
+    ;(ev.currentTarget as HTMLElement).releasePointerCapture?.(ev.pointerId)
+    setJobDrag(null)
+    if (!d) return
+    // The optimistic state (or the rollback) owns the position from here.
+    d.el.style.transform = ''
+    if (!d.moved) return // no drag → let onClick open the detail drawer
+    suppressBarClick.current = true // this was a drag; swallow the trailing click
+    setTimeout(() => { suppressBarClick.current = false }, 0)
+    const days = Math.round((ev.clientX - d.startX) / dayWidth)
+    if (days === 0) return // dropped back where it started
+    void doReschedule(d.bookingId, addDays(d.start, days), addDays(d.end, days), { start: d.start, end: d.end }, d.label)
+  }, [dayWidth, doReschedule])
 
   // Wrapper over the pure module-level computeBar (kept for the non-row call
   // sites: task band chips, job view, needs-assign lane).
@@ -2055,9 +2173,20 @@ export function GanttBoard() {
                       return (
                         <div
                           title={rdy ? readinessMeterTitle(rdy) : undefined}
-                          className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}
-                          style={{ left: bar.left, width: bar.width, ...meter }}
-                          onClick={() => setSelected(job)}
+                          className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 ${canSetStatus && job.bookingId ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:opacity-90 overflow-hidden`}
+                          // touchAction none ONLY on the bar: a sideways drag here
+                          // is the gesture, while the board still pans from
+                          // anywhere else (these boards get used on tablets).
+                          style={{ left: bar.left, width: bar.width, ...meter, ...(canSetStatus && job.bookingId ? { touchAction: 'none' as const } : null) }}
+                          onPointerDown={canSetStatus && job.bookingId ? (ev) => onJobBarPointerDown(ev, job) : undefined}
+                          onPointerMove={canSetStatus && job.bookingId ? onJobBarPointerMove : undefined}
+                          onPointerUp={canSetStatus && job.bookingId ? onJobBarPointerUp : undefined}
+                          onPointerCancel={canSetStatus && job.bookingId ? onJobBarPointerCancel : undefined}
+                          onClick={() => {
+                            // The drag just ended on this bar — don't also open it.
+                            if (suppressBarClick.current) { suppressBarClick.current = false; return }
+                            setSelected(job)
+                          }}
                         >
                           <IncompleteBadge gaps={job.infoGaps} />
                           {job.hasOrder && <OrderBadge order={job.orders?.[0]} rwOrderNumber={job.rwOrderNumbers?.[0]} jobId={job.jobId} />}
@@ -2738,6 +2867,51 @@ export function GanttBoard() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Job-view drag preview — the dates the bar would land on. The bar
+          itself is already sliding; this says what that means in days. */}
+      {jobDrag && jobDrag.days !== 0 && (
+        <div className="fixed z-[60] bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+          {fMonth(jobDrag.start)} → {fMonth(jobDrag.end)}
+          <span className="text-zinc-400 ml-2">
+            {jobDrag.days > 0 ? `+${jobDrag.days}` : jobDrag.days} day{Math.abs(jobDrag.days) === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+
+      {/* Buffer-adjacent reschedule — the same override the drawer offers. */}
+      {jobDragBuffer && (
+        <>
+          <div className="fixed inset-0 z-[65] bg-black/20" onClick={() => setJobDragBuffer(null)} />
+          <div className="fixed z-[66] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-amber-300 rounded-lg shadow-xl p-4 w-80 text-sm">
+            <div className="font-semibold text-amber-800 mb-1">Turnaround buffer</div>
+            <div className="text-xs text-gray-700 mb-3">
+              {jobDragBuffer.reason} Move {jobDragBuffer.label} to {fMonth(jobDragBuffer.start)} → {fMonth(jobDragBuffer.end)} anyway?
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setJobDragBuffer(null)} disabled={jobDragBusy} className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5 disabled:opacity-40">Cancel</button>
+              <button
+                onClick={() => doReschedule(jobDragBuffer.bookingId, jobDragBuffer.start, jobDragBuffer.end, jobDragBuffer.from, jobDragBuffer.label, true)}
+                disabled={jobDragBusy}
+                className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40"
+              >
+                {jobDragBusy ? 'Moving…' : 'Override & move'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Reschedule refused — a held unit is out, or the class is at capacity
+          on the new dates. The bar is already back where it was. */}
+      {jobDragErr && (
+        <div
+          className="fixed z-[60] bottom-4 left-1/2 -translate-x-1/2 bg-rose-600 text-white text-xs px-3 py-2 rounded-lg shadow-lg max-w-md cursor-pointer"
+          onClick={() => setJobDragErr(null)}
+        >
+          {jobDragErr}
+        </div>
       )}
 
       {/* Reassign error / conflict — readable reason; the bar never left its row. */}
