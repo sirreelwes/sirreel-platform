@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA: every release says who it was for
 
-`SHA_PLACEHOLDER` aha: record the identified person on every release, and surface it
+`6d40412` aha: record the identified person on every release, and surface it
 
 Wes, on a release to the Lunch Rush job: "where do we record that interaction and do we always get the name of the person asking for access?" We did not. The name was stored only when the caller typed one, so the two fastest paths (job code + VIN, and number + unit) recorded nobody. Worse, on the sender-number path the identity was known and thrown away — `phoneMatched` filtered on a flat array of numbers and returned a boolean, so the person whose record matched was never captured.
 
