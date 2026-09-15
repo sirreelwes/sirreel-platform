@@ -11,10 +11,10 @@
 - It knows which unit and which SirReel job that number is on, so nobody has to explain the booking from scratch
 
 ## What AHA can do for them
-- Directions to the SirReel lot (8500 Lankershim Blvd, Sun Valley), hours, and the 24/7 line (888) 477-7335
+- Directions to the SirReel lot (8500 Lankershim Blvd, Sun Valley) and the office line (888) 477-7335, which is business hours
 - Stuck at a SirReel vehicle after hours and unable to verify → AHA texts the on-call team their name and callback number so a person steps in
-- A genuine emergency — a safety issue, or a blocked on-the-clock production → the on-call team is texted their name, number and what is wrong
-- Lot gate access, when a SirReel job needs it: the production's job code plus the VIN last 4 or the driver's name, or the production contact can text on the driver's behalf
+- A genuine emergency — a safety issue, or a blocked on-the-clock production → the on-call team is texted their name, number and what is wrong, and AHA gives them the on-call numbers to call directly
+- Lot gate access, when a SirReel job needs it: if their number is on the SirReel booking, their first or last name verifies them; otherwise the production's job code plus the VIN last 4 or the driver's name
 - Gear setup walkthroughs for units on the job, with a link to the printable guide
 
 ## How your people opt in to texts

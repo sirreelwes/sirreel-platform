@@ -48,7 +48,7 @@ export const AFTER_HOURS_SUPPORT = {
   phone: PUBLIC_CONTACT.phone,
   phoneHref: PUBLIC_CONTACT.phoneHref,
   staffedHours: '7:30 AM – 5:30 PM, Monday through Friday',
-  /** The 24/7 assistant — it can verify a caller and release codes itself. */
+  /** AHA, reachable any hour — it verifies a caller and releases codes itself. */
   helpUrl: `${PUBLIC_SITE_URL}/help`,
 } as const
 

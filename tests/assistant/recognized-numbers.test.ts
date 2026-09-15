@@ -11,6 +11,8 @@
  *   - a job contact and a booking requester on a current job are contacts,
  *     with the job to change them on and a lapse date 7 days past the job
  *   - a checkout driver on a live assignment is a driver on that unit
+ *   - a driver merely NAMED for a unit (invited, not picked up) is too —
+ *     they are the 4am arrival, and their cell is the factor
  *   - a number in two tiers is listed once per tier (that is the truth)
  *   - a query failure yields an empty roster, never a thrown page
  */
@@ -40,6 +42,13 @@ const assignments = [
       { driver: { firstName: 'Dee', lastName: 'Driver', phone: '818 555 0142' } },
       { driver: { firstName: 'Dee', lastName: 'Driver', phone: '+18185550142' } },
       { driver: null },
+    ],
+    // Dee again (already checked out, so the stronger reason wins) plus Sam,
+    // invited days ago and not yet at the lot.
+    driverAssignments: [
+      { status: 'INVITED', driver: { firstName: 'Sam', lastName: 'Ng', phone: '(661) 555-0177' } },
+      { status: 'VIEWED', driver: { firstName: 'Dee', lastName: 'Driver', phone: '818-555-0142' } },
+      { status: 'INVITED', driver: { firstName: 'No', lastName: 'Phone', phone: null } },
     ],
   },
 ]
@@ -87,9 +96,16 @@ async function main() {
 
   console.log('drivers')
   const d = by('driver')
-  check('one driver row per distinct number per unit', d.length === 1, d)
-  check('driver row names the unit and the job', d[0]?.unit === 'Cube 27' && d[0]?.jobCode === 'SR-JOB-0231' && /Cube 27/.test(d[0]?.reason ?? ''))
-  check('driver lapse = assignment end + 1 day grace', d[0]?.until?.startsWith('2026-09-12') === true, d[0]?.until)
+  const dee = d.find((r) => r.name === 'Dee Driver')
+  const sam = d.find((r) => r.name === 'Sam Ng')
+  check('one row per distinct number per unit (Dee once, Sam once)', d.length === 2, d)
+  check('driver row names the unit and the job', dee?.unit === 'Cube 27' && dee?.jobCode === 'SR-JOB-0231' && /Cube 27/.test(dee?.reason ?? ''))
+  check('driver lapse = assignment end + 1 day grace', d.every((r) => r.until?.startsWith('2026-09-12')), d.map((r) => r.until))
+  check('a driver in both lists keeps the checkout reason', /Checkout driver/.test(dee?.reason ?? ''), dee?.reason)
+  check('a named driver who has not picked up is still recognised', Boolean(sam) && /not picked up yet/.test(sam?.reason ?? ''), sam?.reason)
+  check('the named driver links to the drivers surface', sam?.manageLabel === 'Job SR-JOB-0231 drivers', sam?.manageLabel)
+  check('a driver with no phone on file is not listed', !d.some((r) => r.name === 'No Phone'))
+  check('the grant line mentions the name as a factor', d.every((r) => /own name/.test(r.grants)), d[0]?.grants)
 
   console.log('failure')
   FAIL = true

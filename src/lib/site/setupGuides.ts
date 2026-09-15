@@ -165,7 +165,7 @@ export const STARLINK_MINI_GUIDE: SetupGuide = {
     },
     {
       q: 'Still stuck',
-      a: 'Unplug it, wait 30 seconds, plug it back in and give it 5 minutes. If that does not do it, call the 24/7 line.',
+      a: 'Unplug it, wait 30 seconds, plug it back in and give it 5 minutes. If that does not do it, text AHA any hour or call us during business hours.',
     },
     {
       q: 'Can it stay out in the rain?',
@@ -183,10 +183,10 @@ export const STARLINK_MINI_GUIDE: SetupGuide = {
   assistantBrief: `STARLINK MINI RENTALS — SirReel rents Starlink Mini satellite internet units.
 - Arrives activated on the SirReel account; nothing for the client to sign up for. The dish has Wi-Fi built in.
 - Setup: place it OUTSIDE on a flat surface with a clear view of the sky, kickstand out, facing north; plug into standard 110V; wait 5-10 min on first boot; join the unit's Wi-Fi.
-- Each unit has its own network named "SirReel" + a unit number. NEVER state a network password — you do not have it. The name and password are printed on the case label and the setup card in the kit; if the client cannot find them, tell them to call the 24/7 line.
+- Each unit has its own network named "SirReel" + a unit number. NEVER state a network password — you do not have it. The name and password are printed on the case label and the setup card in the kit; if the client cannot find them, hand off to a person.
 - Most common failure is obstruction: under a tent, tree, awning, stage roof, truck, or inside a window will not work. Glass blocks it.
 - Some kits include an optional Mini Router — a mesh extender that rebroadcasts the SAME network name and password. It needs 110V power and must sit within ~25 ft of the dish. It is NOT weather-rated and must stay dry; the dish itself is fine in rain.
-- Fix-it order: check power and both cable ends -> move to open sky -> unplug 30 s and re-plug, then wait 5 min -> call the 24/7 line.
+- Fix-it order: check power and both cable ends -> move to open sky -> unplug 30 s and re-plug, then wait 5 min -> hand off to a person.
 - Tell clients NOT to factory-reset the dish or change the Wi-Fi settings; it is tied to the SirReel service account.`,
 }
 

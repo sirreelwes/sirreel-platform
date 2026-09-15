@@ -168,7 +168,7 @@ export function buildSelfServeNextStepsEmail(i: SelfServeNextStepsInput) {
       (i.repEmail
         ? `Questions, or need the dates held sooner? Reply to this email — it goes straight to ${esc(rep)}${i.repPhone ? `, or call ${esc(i.repPhone)}` : ''}. `
         : `Questions, or need the dates held sooner? Reply to this email, or call us at <a href="${PUBLIC_CONTACT.phoneHref}" style="color:${ACCENT};text-decoration:none;font-weight:600;">${PUBLIC_CONTACT.phone}</a>. `) +
-      `We answer 24/7.`,
+      `Business hours.`,
     accent: ACCENT,
   })
 
@@ -187,8 +187,8 @@ export function buildSelfServeNextStepsEmail(i: SelfServeNextStepsInput) {
     `Your job portal: ${i.portalUrl}`,
     '',
     i.repEmail
-      ? `Questions, or need the dates held sooner? Reply to this email — it goes straight to ${rep}${i.repPhone ? `, or call ${i.repPhone}` : ''}. We answer 24/7.`
-      : `Questions, or need the dates held sooner? Reply to this email, or call ${PUBLIC_CONTACT.phone}. We answer 24/7.`,
+      ? `Questions, or need the dates held sooner? Reply to this email — it goes straight to ${rep}${i.repPhone ? `, or call ${i.repPhone}` : ''}.`
+      : `Questions, or need the dates held sooner? Reply to this email, or call ${PUBLIC_CONTACT.phone} during business hours.`,
   ])
 
   return { subject, html, text }

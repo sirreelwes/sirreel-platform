@@ -17,9 +17,12 @@
  *              CURRENT job (currentJobWhere: ±7 days). Their own job's
  *              details, a message to their agent, and — with the unit or
  *              VIN last 4 — that job's truck codes (phone factor).
- *   driver   — verifyAndRelease(): the checkout driver on an assignment
- *              that is ASSIGNED / CHECKED_OUT within a day of today. Truck
- *              codes for that unit with the unit or VIN last 4.
+ *   driver   — verifyAndRelease(): the driver on an assignment that is
+ *              ASSIGNED / CHECKED_OUT within a day of today — both the one
+ *              who checked the truck out AND the one merely named for it,
+ *              since a driver is invited days before pickup and needs a
+ *              code most on the morning they arrive. Truck codes with
+ *              their own name, the unit, or the VIN last 4.
  * Everything else is the public tier: job-code verification, escalation,
  * gear setup help. There is no block list; STOP only silences outbound.
  */
@@ -58,7 +61,7 @@ export interface RecognizedNumber {
 }
 
 const CONTACT_GRANTS = 'Own job details, message to agent, and the job\'s truck codes with the unit or VIN last 4'
-const DRIVER_GRANTS = 'That truck\'s gate + lockbox codes with the unit or VIN last 4'
+const DRIVER_GRANTS = 'That truck\'s gate + lockbox codes with their own name, the unit, or the VIN last 4'
 const STAFF_GRANTS = 'Fleet and job lookups (who is on a unit, has a job come back, drivers + numbers)'
 const ADMIN_GRANTS = 'Everything staff can, plus the platform memory and recent admin activity'
 const BLOCKED_GRANTS = 'Nothing — told to call the office'
@@ -189,13 +192,20 @@ export async function listRecognizedNumbers(now = new Date()): Promise<Recognize
       startDate: { lte: plusDays(today, GRACE_DAYS) },
       endDate: { gte: plusDays(today, -GRACE_DAYS) },
       bookingItem: { booking: { status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null } },
-      checkoutRecords: { some: { driver: { phone: { not: null } } } },
+      OR: [
+        { checkoutRecords: { some: { driver: { phone: { not: null } } } } },
+        { driverAssignments: { some: { status: { not: 'CANCELLED' }, driver: { phone: { not: null } } } } },
+      ],
     },
     select: {
       endDate: true,
       asset: { select: { unitName: true } },
       bookingItem: { select: { booking: { select: { job: { select: { id: true, jobCode: true, name: true } } } } } },
       checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true, phone: true } } } },
+      driverAssignments: {
+        where: { status: { not: 'CANCELLED' } },
+        select: { status: true, driver: { select: { firstName: true, lastName: true, phone: true } } },
+      },
     },
     orderBy: { endDate: 'asc' },
     take: 300,
@@ -203,15 +213,21 @@ export async function listRecognizedNumbers(now = new Date()): Promise<Recognize
   for (const a of assignments) {
     const job = a.bookingItem.booking.job
     const seen = new Set<string>()
-    for (const cr of a.checkoutRecords) {
-      const tail = phoneTail(cr.driver?.phone)
-      if (!cr.driver || !tail || seen.has(tail)) continue
+    // Checked-out drivers first, then the named-but-not-yet-picked-up ones.
+    // A driver in both is listed once, under the stronger reason.
+    const drivers: Array<{ d: { firstName: string; lastName: string; phone: string | null } | null; reason: string; label: string }> = [
+      ...a.checkoutRecords.map((cr) => ({ d: cr.driver, reason: `Checkout driver on ${a.asset.unitName}`, label: 'check-out' })),
+      ...a.driverAssignments.map((da) => ({ d: da.driver, reason: `Named driver on ${a.asset.unitName} (${String(da.status).toLowerCase()}, not picked up yet)`, label: 'drivers' })),
+    ]
+    for (const { d, reason, label } of drivers) {
+      const tail = phoneTail(d?.phone)
+      if (!d || !tail || seen.has(tail)) continue
       seen.add(tail)
       rows.push({
-        tier: 'driver', level: overridden.has(tail) ? 'public' : 'public', tail, phone: display(cr.driver.phone),
-        name: `${cr.driver.firstName} ${cr.driver.lastName}`.trim(),
-        reason: `Checkout driver on ${a.asset.unitName}`, grants: DRIVER_GRANTS,
-        manageHref: job ? `/jobs/${job.id}` : '/drivers', manageLabel: job ? `Job ${job.jobCode} check-out` : 'Driver record',
+        tier: 'driver', level: 'public', tail, phone: display(d.phone),
+        name: `${d.firstName} ${d.lastName}`.trim(),
+        reason, grants: DRIVER_GRANTS,
+        manageHref: job ? `/jobs/${job.id}` : '/drivers', manageLabel: job ? `Job ${job.jobCode} ${label}` : 'Driver record',
         until: plusDays(a.endDate, GRACE_DAYS).toISOString(),
         jobCode: job?.jobCode ?? null, jobName: job?.name ?? null, unit: a.asset.unitName,
       })

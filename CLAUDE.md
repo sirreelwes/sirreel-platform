@@ -204,11 +204,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   The keyword replies stay exactly as filed — no name in them.
 - **Sender number is a release factor by text** (Wes, 2026-09-10): the
   number a text came from, when on file for a driver OR a production
-  contact on a CURRENT job, plus the unit number or VIN last 4, releases
-  that job's truck without the job code (`verifyAndRelease.senderPhone`,
-  `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
-  to the live assignment — a number on another job unlocks nothing. Web
-  chat never passes a number; the job-code paths are unchanged.
+  contact on a CURRENT job, releases that job's truck without the job code
+  (`verifyAndRelease.senderPhone`, `src/lib/assistant/phoneFactor.ts`,
+  `npm run test:phone-factor`). Scoped to the live assignment — a number on
+  another job unlocks nothing. Web chat never passes a number; the
+  job-code paths are unchanged.
+  - **The corroborator is ANY ONE of: their own name, the unit number, the
+    VIN last 4** (Wes 2026-09-15). The name counts alone because "sometimes
+    they are calling us from their apartment after they've parked the
+    vehicle and we don't wanna force them to go back out" — requiring the
+    unit assumed the driver is at the truck, which is when they need us
+    least. `nameMatches` accepts a single token, so a first OR last name
+    passes ("either first or last name and phone number is plenty"). With
+    no vehicle named the gate code still releases and `lockboxHint` asks
+    which unit when the driver's jobs hold more than one.
+  - **NAMED drivers count, not just checked-out ones.** Candidates now
+    include `BookingAssignment.driverAssignments` (status ≠ CANCELLED), not
+    only `checkoutRecords`. A CheckoutRecord exists only after the keys
+    change hands, so before this the 4am arrival — the moment a driver most
+    needs a code — was the one moment their own cell was not on file.
+- **The (888) line is NOT 24/7 and AHA must never say it is** (Wes
+  2026-09-15). Nobody answers it overnight, so every "24/7 line" / "we
+  answer 24/7" claim was swept out of the prompt, the public site, the
+  portal, the transactional emails and the setup guides — AHA is the
+  after-hours front door and the office number is offered for business
+  hours only. **On a GENUINE emergency AHA hands over the on-call people
+  by name and direct number**: `alertOnCallTeam` returns `contacts` (the
+  `isEmergencyContact` + `emergencyPhone` users from /admin/assistant) and
+  the prompt reads them out. That is the one place AHA gives out a
+  personal number — change who is reachable on /admin/assistant, not in
+  code.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as

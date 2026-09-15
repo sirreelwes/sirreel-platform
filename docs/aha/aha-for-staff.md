@@ -22,8 +22,9 @@
 - Built for continuity: a plain-words walkthrough of anything in HQ for whoever has to step in, one thing at a time
 
 ## What AHA does for callers, so you don't have to
-- Releases the lot gate code and a truck's lockbox code after hours on a job code + one corroborator, or a unit + driver name, or (by text) a number on file for the job + the unit or VIN last 4
-- Answers hours, address, directions, where to pay, how to quote
+- Releases the lot gate code and a truck's lockbox code after hours on a job code + one corroborator, or a unit + driver name, or (by text) a number on file for the job + any one of: their name, the unit, the VIN last 4
+- Answers address, directions, where to pay, how to quote
+- Hands a genuine emergency the on-call names and direct numbers, because the office line is business hours only
 - Walks clients through gear setup from the same registry as the public /help guides
 - Gives production contacts on a current job their booking details and files any request for their agent
 

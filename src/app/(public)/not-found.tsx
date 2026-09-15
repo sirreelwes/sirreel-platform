@@ -29,7 +29,7 @@ const DESTINATIONS = [
   { href: '/vehicles', label: 'Vehicles', hint: 'Cube trucks, cargo vans, trailers' },
   { href: '/stages', label: 'Stages & Studios', hint: 'Stages and standing sets' },
   { href: '/order/supplies', label: 'Order supplies', hint: 'Build an order online' },
-  { href: '/help', label: 'Help', hint: 'Setup guides and the 24/7 assistant' },
+  { href: '/help', label: 'Help', hint: 'Setup guides and AHA, our after-hours assistant' },
 ]
 
 export default function PublicNotFound() {
@@ -75,8 +75,8 @@ export default function PublicNotFound() {
               Looking for something specific?
             </div>
             <p className="text-[13.5px] text-[#cfc9bd] mt-1 max-w-[52ch]">
-              If you were sent this link by a SirReel agent, call us and we&rsquo;ll point you at the
-              right place — we answer 24/7.
+              If you were sent this link by a SirReel agent, call us during business hours and
+              we&rsquo;ll point you at the right place.
             </p>
           </div>
           <a

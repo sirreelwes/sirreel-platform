@@ -259,6 +259,15 @@ export async function verifyAndRelease(input: {
         },
       },
       checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true, phone: true } } } },
+      // The drivers NAMED for this vehicle, which happens days before
+      // pickup. Without these the 4am arrival — the moment a driver most
+      // needs a code — was the one moment their own cell was not on file,
+      // because a CheckoutRecord only exists once the keys have changed
+      // hands. Cancelled invitations are excluded.
+      driverAssignments: {
+        where: { status: { not: 'CANCELLED' } },
+        select: { driver: { select: { firstName: true, lastName: true, phone: true } } },
+      },
     },
   })
 
@@ -272,6 +281,7 @@ export async function verifyAndRelease(input: {
         const numbers: Array<string | null | undefined> = [b.person?.phone, b.person?.mobile]
         for (const jc of b.job?.jobContacts ?? []) numbers.push(jc.person.phone, jc.person.mobile)
         for (const cr of asg.checkoutRecords) numbers.push(cr.driver?.phone)
+        for (const da of asg.driverAssignments) numbers.push(da.driver.phone)
         return phoneOnFile(senderTail, numbers)
       })
     : []
@@ -322,6 +332,9 @@ export async function verifyAndRelease(input: {
       for (const cr of asg.checkoutRecords) {
         if (cr.driver) cands.push(`${cr.driver.firstName} ${cr.driver.lastName}`)
       }
+      for (const da of asg.driverAssignments) {
+        cands.push(`${da.driver.firstName} ${da.driver.lastName}`)
+      }
       if (cands.some((c) => nameMatches(driverName, c))) {
         nameOk = true
         break
@@ -332,11 +345,24 @@ export async function verifyAndRelease(input: {
   // Release bar. Job code is the strong factor; it needs one corroborator.
   // The legacy unit+name path stays open for a substitute returner who
   // wasn't handed the job code. By text, the sender's number on file for
-  // the current job plus the vehicle (VIN last 4 or unit) is the third path.
+  // the current job is the third path, corroborated by ANY ONE of: the
+  // unit number, the VIN last 4, or their own name.
+  //
+  // Wes 2026-09-15 on why the name counts on its own: "sometimes they are
+  // calling us from their apartment after they've parked the vehicle and
+  // we don't wanna force them to go back out to get that information."
+  // Requiring the unit number assumed the driver is standing at the truck,
+  // which is exactly when they need nothing from us. `nameMatches` already
+  // accepts a single token, so a first name or a last name is enough —
+  // "either first or last name and phone number is plenty" (Wes).
+  //
+  // With no vehicle named the lockbox simply may not pin: the gate code
+  // still releases, and lockboxHint asks which unit when the driver's
+  // current jobs hold more than one.
   const authed =
     (jobCodeOk && (vinLast4Ok || nameOk)) ||
     (!jobCodeOk && vehicleResolvedLegacy && nameOk) ||
-    (phoneOk && (vinLast4Ok || vehicleResolvedLegacy))
+    (phoneOk && (vinLast4Ok || vehicleResolvedLegacy || nameOk))
 
   if (!authed) {
     // vinLast4Ok above is scoped to the assignments we resolved; this asks the
@@ -452,7 +478,16 @@ export async function fileAfterHoursCallback(input: {
 }
 
 export type AlertResult =
-  | { result: 'ALERTED'; texted: number; oncall: number }
+  /**
+   * `contacts` is the on-call roster WITH numbers, for the assistant to
+   * read out. Wes 2026-09-15: "AHA should release the emergency contact
+   * numbers ... if it is an actual emergency and not recommend that they
+   * go to the 888 line." The office line is not staffed around the clock,
+   * so pointing a genuine emergency at it sent people to a phone nobody
+   * answers. These are the numbers already marked on-call in
+   * /admin/assistant — changing who is reachable is done there, not here.
+   */
+  | { result: 'ALERTED'; texted: number; oncall: number; contacts: Array<{ name: string; phone: string }> }
   | { result: 'NO_ONCALL' }
 
 /**
@@ -525,7 +560,7 @@ export async function alertOnCallTeam(input: {
     console.error('[after-hours] emergency audit failed:', err)
   }
 
-  return { result: 'ALERTED', texted, oncall: oncall.length }
+  return { result: 'ALERTED', texted, oncall: oncall.length, contacts: oncall }
 }
 
 export type StrandedResult =

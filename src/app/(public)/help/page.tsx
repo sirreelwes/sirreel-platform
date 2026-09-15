@@ -16,7 +16,7 @@ import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 export const metadata: Metadata = {
   title: 'SirReel · Help',
   description:
-    'Get help from SirReel — chat with AHA, our 24/7 after-hours assistant, for access codes, directions and gear setup, or watch how-to videos.',
+    'Get help from SirReel — chat with AHA, our automated after-hours assistant, for access codes, directions and gear setup, or watch how-to videos.',
   alternates: { canonical: '/help' },
 }
 
@@ -39,7 +39,7 @@ export default function HelpPage() {
               </h1>
               <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
                 Locked out after hours, lost a vehicle access code, or need directions? AHA, our
-                automated after-hours assistant, is here 24/7 — right here, no waiting. For anything urgent, call{' '}
+                automated after-hours assistant, is here any hour — right here, no waiting. During business hours you can also call{' '}
                 <a href={PUBLIC_CONTACT.phoneHref} className="text-[#4DB1C6] hover:text-[#6FC3D4] font-semibold whitespace-nowrap">
                   {PUBLIC_CONTACT.phone}
                 </a>
@@ -147,7 +147,7 @@ export default function HelpPage() {
           <div>
             <div className="text-[18px] font-black" style={{ fontFamily: 'Archivo, sans-serif' }}>Still need a person?</div>
             <p className="text-[13.5px] text-[#cfc9bd] mt-1 max-w-[52ch]">
-              Our 24/7 line is the fastest way to reach someone after hours.
+              Ask AHA above — it reaches our on-call team for a real emergency, any hour. Our office line is business hours.
             </p>
           </div>
           <a

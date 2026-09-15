@@ -19,7 +19,7 @@ import { PublicSiteJsonLd } from '@/components/site/PublicSiteJsonLd'
 export const metadata: Metadata = {
   title: 'SirReel Studio Services — Production Trucks, Stages & Standing Sets in LA',
   description:
-    'Production vehicle and stage rentals for film and TV in Los Angeles. Cube trucks, cargo and passenger vans, camera cubes, sound stages and standing sets — with 24/7 production support.',
+    'Production vehicle and stage rentals for film and TV in Los Angeles. Cube trucks, cargo and passenger vans, camera cubes, sound stages and standing sets — with after-hours support from AHA, our automated assistant.',
   alternates: { canonical: '/' },
 }
 

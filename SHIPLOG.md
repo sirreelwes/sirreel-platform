@@ -22,6 +22,22 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-15
+
+### AHA: the driver's own cell is the credential, and the 888 line stops pretending
+
+`SHA_PLACEHOLDER` aha: name+number releases codes; named drivers count; no more 24/7 claim; emergencies get real numbers
+
+Wes, on the release bar: "if we have the driver's name and number and it matches up with who checked out the vehicle that should be sufficient. Sometimes they are calling us from their apartment after they've parked the vehicle and we don't wanna force them to go back out." Then: "Either first or last name and phone number is plenty." And separately: "I want to drop any reference to the 888 line being a 24/7 line. We do not have staff answering that 24/7. AHA should release the emergency contact numbers ... if it is an actual emergency."
+
+- **The corroborator is now ANY ONE of name / unit / VIN last 4**, once the sender's number is on file for a current job (`phoneOk && (vinLast4Ok || vehicleResolvedLegacy || nameOk)` in `verifyAndRelease`). The old bar required the vehicle, which assumed the driver was standing at it — exactly when they need us least. `nameMatches` already accepted a single token, so a first OR last name passes; that is now pinned by test rather than incidental. With no vehicle named the gate code still releases and `lockboxHint` asks which unit only when the driver's jobs hold more than one.
+- **Named drivers count, not just checked-out ones.** Candidates now include `BookingAssignment.driverAssignments` (status ≠ CANCELLED) for both the phone and the name match. A `CheckoutRecord` only exists once the keys change hands, so before this a driver invited days earlier was unknown to AHA at 4am on pickup morning — the one moment the feature exists for. The job code would not have saved them either: it is deliberately withheld from `/drive` as the PRODUCTION's factor.
+- **"24/7" is gone wherever it described the phone line** — the prompt, the public help pages, the 404, the portal job page, two transactional email templates and the Starlink guide. AHA is still described as available any hour, because it is. The prompt now carries an explicit rule never to call (888) 477-7335 a 24/7 line or send someone there as the way to reach a person after hours.
+- **A genuine emergency now gets real people.** `alertOnCallTeam` returns `contacts` (name + `emergencyPhone` for each `isEmergencyContact` user) and the prompt reads them out, so a caller can ring a person instead of a number nobody answers. Still the only place AHA hands out a personal number, still gated on the caller declaring a real emergency, still texted + emailed + audited. Who is reachable is changed on /admin/assistant, not in code — confirm the right people are toggled on.
+- **The roster follows.** `listRecognizedNumbers` lists named-but-not-picked-up drivers alongside checkout drivers (a driver in both keeps the stronger reason), so "Who AHA recognises" still IS the access.
+- Docs: the three one-pagers and the client script rewritten around the phone-first flow. `npm run test:phone-factor` gained the release-bar truth table and the first/last-name cases; `npm run test:recognized-numbers` gained the named-driver rows. Build green.
+- **Not changed, flagged instead:** the stranded-driver path still releases no numbers — it texts on-call and now tells the caller so rather than pointing at the office line. Say the word if a driver stuck at the lot should also get the on-call numbers.
+
 ## 2026-09-11
 
 ### AHA: owners-only notes, and the one-pagers

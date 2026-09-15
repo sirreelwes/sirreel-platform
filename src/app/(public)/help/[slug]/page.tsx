@@ -251,7 +251,7 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
               Still stuck on location?
             </div>
             <p className="text-[13.5px] text-[#cfc9bd] mt-1 max-w-[52ch]">
-              Our 24/7 line is the fastest way to reach someone — or ask the assistant on the{' '}
+              AHA answers any hour on the{' '}
               <Link href="/help" className="text-[#4DB1C6] hover:text-[#6FC3D4] font-semibold">
                 help page
               </Link>

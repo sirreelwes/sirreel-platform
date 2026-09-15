@@ -7,11 +7,14 @@
 ## Where to reach it
 - Chat bubble on every sirreel.com page, and the full panel at sirreel.com/help
 - Text (747) 335-1665 any hour — or just reply to any text SirReel sent you
-- Anything urgent → call the 24/7 line, (888) 477-7335
+- Office line (888) 477-7335 is business hours — it is not staffed overnight, so AHA is the after-hours front door
 
 ## After-hours gate + lockbox codes
-- Give the 5-digit job code from your portal job page, plus the VIN last 4 or the driver's full name, and say which unit ("Cube 27") — codes released on the spot, no agent needed
-- Texting from a number on file for the job (driver, producer, PM, coordinator, transpo)? Skip the job code — just the unit number or VIN last 4
+- **Texting from a number on file for the job?** Give your first or last name and you're verified — that's it. Works for the driver, producer, PM, coordinator or transpo
+- The number counts from the moment a driver is named on the job, not just after they've picked up
+- No need to be standing at the truck. Parked and gone home? Your name and your number are enough
+- Say the unit ("Cube 27") or the VIN last 4 when you know it — that's what pins which lockbox. If your job has more than one truck, AHA asks which
+- **Number not on file?** The 5-digit job code from your portal job page, plus the VIN last 4 or the driver's name
 - A producer or coordinator can text on behalf of their driver — the number on file for the job is the factor, not who is holding the truck
 - Standing at one of our trucks and can't be verified? AHA texts the on-call team your name and number so a person can help — no code is released
 - Gate code and lockbox code arrive as their own plain messages, once each
@@ -29,13 +32,14 @@
 
 ## Emergencies
 - A safety issue, or a blocked on-the-clock production → AHA texts the on-call team your name, callback number and what's wrong
-- The 24/7 line is always the faster route for anything immediate
+- **AHA then gives you the on-call names and direct numbers** so you can call a person right away
+- That's the only time it hands out a number, and only on a real emergency
 
 ## What it will never do
 - Quote pricing or availability — the agent confirms those
 - State a Wi-Fi password, payment details or any credential
 - Say whether a job or vehicle exists, or who is on a booking, until you are verified
-- Hand out an individual employee's phone number
+- Hand out an individual employee's phone number, except the on-call team on a genuine emergency
 - Every code release or denial is logged and the SirReel team is notified
 
 ## Texting basics

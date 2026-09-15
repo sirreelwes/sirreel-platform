@@ -184,7 +184,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Refuse to send a page that would render "Gate code: —". A driver at
   // 5am reads a missing code as "there is no code", drives to Sun Valley,
-  // and calls the 24/7 line from outside a locked gate.
+  // and calls the office from outside a locked gate.
   const instructions = await afterHoursPayload()
   if (!instructions.complete) {
     const missing = [

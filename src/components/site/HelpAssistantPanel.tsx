@@ -22,7 +22,7 @@ export function HelpAssistantPanel() {
             <div className="text-[14px] font-extrabold text-white" style={{ fontFamily: 'Archivo, sans-serif' }}>
               {ASSISTANT_NAME}
             </div>
-            <div className="text-[11px] text-[#8b857a]">{ASSISTANT_EXPANSION} · here 24/7 for access codes &amp; help</div>
+            <div className="text-[11px] text-[#8b857a]">{ASSISTANT_EXPANSION} · here any hour for access codes &amp; help</div>
           </div>
         </div>
         <a href="tel:+18884777335" className="hidden sm:inline text-[12px] font-bold text-[#4DB1C6] hover:text-[#6FC3D4]">

@@ -778,7 +778,7 @@ export default function JobPortalPage() {
                   Call us at (888) 477-7335
                 </a>
               )}
-              {' '}— we answer 24/7.
+              {' '}during business hours. After hours, text AHA at (747) 335-1665.
             </p>
           </section>
         )}
