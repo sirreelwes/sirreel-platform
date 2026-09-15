@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>AHA — Warehouse &amp; Fleet</title>
+<style>
+  @page { size: letter; margin: 0.5in 0.6in; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #15140F; font-size: 12pt; line-height: 1.34;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .head { border-bottom: 3px solid #0F7A93; padding-bottom: 9pt; margin-bottom: 13pt; }
+  .kicker { font-size: 8.5pt; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #0F7A93; }
+  h1 { font-size: 27pt; line-height: .98; font-weight: 800; margin: 4pt 0 5pt; letter-spacing: -.015em; }
+  h1 .say { color: #0C657A; font-weight: 700; font-size: 15pt; letter-spacing: 0; }
+  .lede { font-size: 11.5pt; color: #33302A; margin: 0; max-width: 62ch; }
+  .num { display: inline-block; background: #0F7A93; color: #fff; font-size: 11pt; font-weight: 800;
+         width: 19pt; height: 19pt; line-height: 19pt; text-align: center; border-radius: 3pt; margin-right: 7pt; }
+  h2 { font-size: 13pt; font-weight: 800; margin: 0 0 5pt; display: flex; align-items: center; letter-spacing: -.005em; }
+  section { margin-bottom: 12pt; break-inside: avoid; }
+  ul { margin: 0 0 0 26pt; padding: 0; list-style: none; }
+  li { position: relative; padding-left: 12pt; margin-bottom: 3.5pt; font-size: 11.5pt; }
+  li::before { content: ""; position: absolute; left: 0; top: 5.6pt; width: 4.5pt; height: 4.5pt;
+               background: #0F7A93; transform: rotate(45deg); border-radius: .6pt; }
+  b { font-weight: 800; }
+  .keep { background: #F0F6F7; border-left: 4pt solid #0F7A93; padding: 9pt 11pt 9pt 9pt; }
+  .keep h2 { margin-left: 0; }
+  .keep ul { margin-left: 13pt; }
+  .foot { border-top: 1pt solid #C9C3B6; padding-top: 7pt; margin-top: 2pt;
+          display: flex; justify-content: space-between; font-size: 10pt; color: #55514A; font-weight: 600; }
+  .foot .big { color: #0C657A; font-weight: 800; }
+</style></head><body>
+
+<div class="head">
+  <div class="kicker">SirReel · Warehouse &amp; Fleet</div>
+  <h1>Meet AHA <span class="say">— say it AH-ha</span></h1>
+  <p class="lede">SirReel's automated After Hours Assistant. It answers texts at <b>(747) 335-1665</b>, any hour of the night.</p>
+</div>
+
+<section>
+  <h2><span class="num">1</span>Text it a fleet question</h2>
+  <ul>
+    <li>“Who's on Cube 27?” → the job, the dates, the driver's name and cell, the delivery address</li>
+    <li>“Has Lunch Rush come back?” → still out, or every unit checked in</li>
+    <li>“What's on SR-JOB-0231?” → units, dates, contacts and their numbers</li>
+    <li>Works from your phone, no login. <b>Your mobile has to be on your HQ user record first</b> — set it on /admin/assistant under Mobile</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">2</span>It takes the 2am calls for you</h2>
+  <ul>
+    <li>A driver locked out at the gate texts AHA instead of calling you</li>
+    <li>AHA checks them against the job, then gives the gate code and that truck's lockbox code</li>
+    <li>It only opens a truck on a live job, and only for a number or name already on that job</li>
+    <li>Every release is logged and emailed to the team, with who got it</li>
+  </ul>
+</section>
+
+<section class="keep">
+  <h2><span class="num">3</span>Three things fleet has to keep current</h2>
+  <ul>
+    <li><b>Lockbox code on every truck.</b> Fleet page, vehicle summary panel. No code on file means AHA can't release it — the driver is stuck and the team gets an email saying so</li>
+    <li><b>The gate code.</b> /admin/assistant. If it's wrong, nobody gets in</li>
+    <li><b>Driver cell numbers on the job.</b> That's how AHA knows a driver is really theirs</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">4</span>When it can't help</h2>
+  <ul>
+    <li>Driver at one of our trucks that AHA can't verify → it texts on-call their name and number, and releases nothing</li>
+    <li>A real emergency → it texts on-call and gives the caller their direct numbers</li>
+    <li>The office line <b>(888) 477-7335 is business hours only.</b> AHA is the after-hours front door</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">5</span>It will never</h2>
+  <ul>
+    <li>Give out a code for a job that's wrapped, cancelled, or not running today</li>
+    <li>Quote pricing or availability</li>
+    <li>Pretend to be a person — it says it's automated every time</li>
+  </ul>
+</section>
+
+<div class="foot">
+  <span>Text AHA <span class="big">(747) 335-1665</span></span>
+  <span>Office <span class="big">(888) 477-7335</span> · business hours</span>
+  <span>sirreel.com/help</span>
+</div>
+
+</body></html>
