@@ -2318,12 +2318,40 @@ const driverTone = (d: any): string => {
         </div>
       </div>
 
-      {/* Orders — directly under the paperwork tiles, with Reservations
-          and the units right behind them (Wes 2026-09-14: "the orders and
-          reservations should be at the top of the job page for us too").
-          The rental is what someone opens a job to see; COI / WC /
-          agreement are the paperwork BEHIND it and now sit below, with
-          the tiles above still jumping to them.
+      {/* Reservations — one row per booking, with where it came from.
+          First of the rental block, and above the unit grid on purpose:
+          two cards for two vans look identical whether that is one
+          two-van rental or the same rental held twice, and only the
+          booking-level view separates them. */}
+      {showSec('reservations') && (
+      <JobBookingsSection
+        bookings={(job.bookings ?? []).map((b: any) => ({
+          id: b.id,
+          bookingNumber: b.bookingNumber,
+          status: b.status,
+          startDate: b.startDate,
+          endDate: b.endDate,
+          planyoCartId: b.planyoCartId ?? null,
+          source: b.source ?? null,
+          items: (b.items ?? []).map((i: any) => ({
+            id: i.id,
+            category: i.category ?? null,
+            assignments: (i.assignments ?? []).map((a: any) => ({
+              id: a.id, status: a.status, asset: a.asset ?? null,
+            })),
+          })),
+        }))}
+        onChanged={load}
+      />
+      )}
+
+      {/* Orders — directly below the Reservations they bill (Wes
+          2026-09-14, twice: "the orders and reservations should be at the
+          top of the job page for us too", then "the orders should be
+          directly below the reservations"). The rental is what someone
+          opens a job to see, so the pair sits under the paperwork tiles;
+          COI / WC / agreement are the paperwork BEHIND it and sit below,
+          with the tiles above still jumping to them.
 
           Phase 7 Pass B collapsible cards: click the row to expand the
           booked scope, signed agreements, invoices, and any per-vehicle
@@ -2548,32 +2576,6 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
-      )}
-
-      {/* Reservations — one row per booking, with where it came from.
-          Above the unit grid on purpose: two cards for two vans look
-          identical whether that is one two-van rental or the same rental
-          held twice, and only the booking-level view separates them. */}
-      {showSec('reservations') && (
-      <JobBookingsSection
-        bookings={(job.bookings ?? []).map((b: any) => ({
-          id: b.id,
-          bookingNumber: b.bookingNumber,
-          status: b.status,
-          startDate: b.startDate,
-          endDate: b.endDate,
-          planyoCartId: b.planyoCartId ?? null,
-          source: b.source ?? null,
-          items: (b.items ?? []).map((i: any) => ({
-            id: i.id,
-            category: i.category ?? null,
-            assignments: (i.assignments ?? []).map((a: any) => ({
-              id: a.id, status: a.status, asset: a.asset ?? null,
-            })),
-          })),
-        }))}
-        onChanged={load}
-      />
       )}
 
       {/* Reserved assets → each opens its reservation on the calendar */}
