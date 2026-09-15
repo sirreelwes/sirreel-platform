@@ -242,15 +242,15 @@ function IncompleteBadge({ gaps }: { gaps?: Array<{ key: string; label: string }
 // the memoized row re-renders only when ITS state string flips).
 type DropState = 'none' | 'source' | 'valid' | 'valid-hover' | 'invalid'
 // The rule between vehicle types (Jose, 2026-09-14). Inline rather than
-// `border-t-gray-300` because the row already carries `border-gray-300`,
+// `border-t-gray-300` because the row already carries `border-gray-400`,
 // which sets all four border COLORS — whether the directional override
 // wins is a question about Tailwind's emit order, and a hairline that
 // silently comes out the wrong grey is exactly the bug nobody reports.
 // Both columns' rows set an explicit height with box-sizing:border-box,
 // so the 1px costs no vertical space and the label column stays aligned
-// with the grid. One step darker than the gray-300 grid lines (Oliver,
-// 2026-09-15: "make the grid lines darker") so a type break still reads.
-const CATEGORY_RULE = { borderTop: '1px solid #6b7280' } as const
+// with the grid. One step darker than the gray-400 grid lines (Oliver,
+// 2026-09-15: "make the grid lines darker", then "one more step") so a type break still reads.
+const CATEGORY_RULE = { borderTop: '1px solid #4b5563' } as const
 
 const DROP_STATE_CLASS: Record<DropState, string> = {
   none: '',
@@ -361,7 +361,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
         <div
           key={d.ds}
           style={{ width: dayWidth, minWidth: dayWidth }}
-          className={`flex-shrink-0 border-r border-gray-300 ${d.weekend ? 'bg-gray-200/60' : ''}`}
+          className={`flex-shrink-0 border-r border-gray-400 ${d.weekend ? 'bg-gray-200/60' : ''}`}
         />
       ))}
     </div>
@@ -373,7 +373,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
       <div
         data-unit-assetid={entry.unit.assetId}
         data-unit-name={entry.unit.unitName}
-        className={`relative border-b border-gray-300 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
+        className={`relative border-b border-gray-400 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
         style={{ height: mainRowHeight, ...(entry.startsCategory ? CATEGORY_RULE : null) }}
         onClick={(ev) => onRowClick(entry.unit, ev)}
       >
@@ -474,7 +474,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           clicks delegate to the same asset-row handler. */}
       {hasBackups && (
         <div
-          className={`relative border-b border-gray-300 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
+          className={`relative border-b border-gray-400 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
           style={{ height: backupRowHeight }}
           onClick={(ev) => onRowClick(entry.unit, ev)}
         >
@@ -1944,7 +1944,7 @@ export function GanttBoard() {
                   return (
                     <div
                       key={`d-${i}`}
-                      className={`h-6 border-b border-gray-300 px-3 flex items-center ${accentClass}`}
+                      className={`h-6 border-b border-gray-400 px-3 flex items-center ${accentClass}`}
                     >
                       <span className={`text-[9px] uppercase tracking-wide font-semibold ${textClass}`}>
                         {entry.label}
@@ -1957,7 +1957,7 @@ export function GanttBoard() {
                     <div
                       key={`tb-${i}`}
                       style={{ height: entry.bandHeight }}
-                      className="border-b-2 border-gray-300 px-3 flex flex-col justify-center bg-rose-50/40"
+                      className="border-b-2 border-gray-500 px-3 flex flex-col justify-center bg-rose-50/40"
                     >
                       {(() => {
                         const holdCount = entry.tasks.filter((t: any) => t.kind === 'hold').length
@@ -1991,7 +1991,7 @@ export function GanttBoard() {
                 return (
                   <div key={`u-${entry.unit.assetId}`}>
                     <div
-                      className={`border-b border-gray-300 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}
+                      className={`border-b border-gray-400 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}
                       style={{ height: laneRowHeight(entry.primaryLaneCount), ...(entry.startsCategory ? CATEGORY_RULE : null) }}
                     >
                       <div
@@ -2064,7 +2064,7 @@ export function GanttBoard() {
                     </div>
                     {hasBackups && (
                       <div
-                        className="border-b border-gray-300 px-3 flex items-center gap-2 bg-gray-100/70"
+                        className="border-b border-gray-400 px-3 flex items-center gap-2 bg-gray-100/70"
                         style={{ height: laneRowHeight(entry.backupLaneCount) }}
                       >
                         <span className="text-[9px] text-gray-400">└</span>
@@ -2086,7 +2086,7 @@ export function GanttBoard() {
               filteredJobs.map((job, i) => (
                 <div
                   key={i}
-                  className="h-8 border-b border-gray-300 px-3 flex items-center cursor-pointer hover:bg-gray-100 bg-gray-50"
+                  className="h-8 border-b border-gray-400 px-3 flex items-center cursor-pointer hover:bg-gray-100 bg-gray-50"
                   onClick={() => setSelected(job)}
                 >
                   <div className="min-w-0">
@@ -2109,7 +2109,7 @@ export function GanttBoard() {
                 <div
                   key={d.ds}
                   style={{ width: dayWidth, minWidth: dayWidth }}
-                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-300 ${d.isToday ? TODAY_HEADER_CLASS : d.weekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
+                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-400 ${d.isToday ? TODAY_HEADER_CLASS : d.weekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
                 >
                   {d.label}
                 </div>
@@ -2130,14 +2130,14 @@ export function GanttBoard() {
                 rowEntries.map((entry, i) => {
                   if (entry.type === 'divider') {
                     const dividerBg = entry.accent === 'warn' ? 'bg-rose-50' : 'bg-gray-100'
-                    return <div key={`d-${i}`} className={`h-6 border-b border-gray-300 ${dividerBg}`} />
+                    return <div key={`d-${i}`} className={`h-6 border-b border-gray-400 ${dividerBg}`} />
                   }
                   if (entry.type === 'taskBand') {
                     return (
                       <div
                         key={`tb-${i}`}
                         style={{ height: entry.bandHeight }}
-                        className="relative border-b-2 border-gray-300 bg-rose-50/30"
+                        className="relative border-b-2 border-gray-500 bg-rose-50/30"
                       >
                         {/* Grid */}
                         <div className="absolute inset-0 flex pointer-events-none">
@@ -2145,7 +2145,7 @@ export function GanttBoard() {
                             <div
                               key={d.ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-300 ${d.weekend ? 'bg-gray-200/60' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-400 ${d.weekend ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -2252,13 +2252,13 @@ export function GanttBoard() {
                 })
               ) : (
                 filteredJobs.map((job, i) => (
-                  <div key={i} className="relative h-8 border-b border-gray-300">
+                  <div key={i} className="relative h-8 border-b border-gray-400">
                     <div className="absolute inset-0 flex pointer-events-none">
                       {dayMeta.map(d => (
                         <div
                           key={d.ds}
                           style={{ width: dayWidth, minWidth: dayWidth }}
-                          className={`flex-shrink-0 border-r border-gray-300 ${d.weekend ? 'bg-gray-200/60' : ''}`}
+                          className={`flex-shrink-0 border-r border-gray-400 ${d.weekend ? 'bg-gray-200/60' : ''}`}
                         />
                       ))}
                     </div>
