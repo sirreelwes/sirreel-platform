@@ -31,7 +31,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
-import { resolveJobSession, type ResolvedPortalAccess } from '@/lib/portal/jobMagicLink'
+import { resolveJobSession, resolvePortalOrder, type ResolvedPortalAccess } from '@/lib/portal/jobMagicLink'
 
 /** Long enough to walk from the job page to the portal, short enough that a
  *  pasted link is useless by the time it reaches anyone else. */
@@ -136,6 +136,8 @@ export async function resolvePreviewAccess(orderId: string): Promise<ResolvedPor
       orderNumber: true,
       portalSlug: true,
       portalSunsetAt: true,
+      status: true,
+      jobId: true,
       company: { select: { id: true, name: true } },
       job: {
         select: {
@@ -149,22 +151,34 @@ export async function resolvePreviewAccess(orderId: string): Promise<ResolvedPor
   })
   if (!order || !order.company) return null
   const person = order.job?.jobContacts[0]?.person ?? null
+  // The preview must show what the CLIENT sees, which means following a dead
+  // order to the job's live one exactly as their own session does. Previewing
+  // the cancelled row and calling it "see what they see" is the lie this whole
+  // change is about.
+  const followed = await resolvePortalOrder(
+    {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      portalSlug: order.portalSlug,
+      portalSunsetAt: order.portalSunsetAt,
+      status: order.status,
+      jobId: order.jobId,
+      company: order.company,
+    },
+    new Date(),
+  )
   return {
     // No row exists, and nothing may write against this id — every write path
     // refuses a preview cookie before it gets here.
     portalAccessId: 'preview',
-    orderId: order.id,
+    orderId: followed.order.id,
     contactId: person?.id ?? 'preview',
     contact: person
       ? { id: person.id, firstName: person.firstName, lastName: person.lastName ?? '', email: person.email ?? '' }
       : { id: 'preview', firstName: 'Staff', lastName: 'Preview', email: '' },
-    order: {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      portalSlug: order.portalSlug,
-      company: order.company,
-      portalSunsetAt: order.portalSunsetAt,
-    },
+    order: followed.order,
+    followedFrom: followed.followedFrom,
+    jobSlugs: followed.jobSlugs,
   }
 }
 

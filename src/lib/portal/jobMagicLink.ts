@@ -18,18 +18,107 @@ import { generateMagicLinkToken } from '@/lib/portal/jobSession'
 
 const LINK_TTL_DAYS = 7
 
+/**
+ * Orders that are over. A portal must not speak for one. CANCELLED is the
+ * only such value on OrderStatus — LOST belongs to OrderQuoteStatus and VOID
+ * to invoices. CLOSED is deliberately live here: a wrapped rental still has a
+ * portal worth reading.
+ */
+const DEAD_ORDER_STATUSES: string[] = ['CANCELLED']
+
+/** The order fields a portal session needs — see resolvePortalOrder. */
+export interface PortalOrderShape {
+  id: string
+  orderNumber: string
+  portalSlug: string | null
+  portalSunsetAt: Date | null
+  status: string
+  jobId: string
+  company: { id: string; name: string }
+}
+
+const PORTAL_ORDER_SELECT = {
+  id: true,
+  orderNumber: true,
+  portalSlug: true,
+  portalSunsetAt: true,
+  status: true,
+  jobId: true,
+  company: { select: { id: true, name: true } },
+} as const
+
+/**
+ * The order this portal should actually speak for.
+ *
+ * A PortalAccess row is minted against ONE order, and nothing re-pointed it
+ * when that order died. Rebuilding an order is ordinary desk work — cancel
+ * S260915-004, book S260915-005 with the same vans on the same day — and it
+ * left the client reading the cancelled row: a cancelled total, a progress
+ * tracker stuck at stage 0, and every write they could make (approve the
+ * quote, sign the agreement, drop a COI, name a driver) landing on a dead
+ * order. Wrong Number / SR-JOB-0273, Wes 2026-09-15.
+ *
+ * So the session follows, under the same rule `assignUnit` uses for units:
+ * with exactly ONE live order left on the job it is unambiguous. With none,
+ * or with more than one, we serve the order the link names and the portal
+ * says out loud that it is cancelled — never a silent guess between two live
+ * orders, which would show a client somebody else's rental.
+ *
+ * `jobSlugs` is every portal address on that job. The client's saved link and
+ * their emailed link are different orders' slugs after a rebuild, and both
+ * have to keep working — see the slug check in /api/portal/job/data.
+ */
+export async function resolvePortalOrder(
+  linkOrder: PortalOrderShape,
+  now: Date,
+): Promise<{
+  order: PortalOrderShape
+  followedFrom: { id: string; orderNumber: string } | null
+  jobSlugs: string[]
+}> {
+  const siblings = await prisma.order.findMany({
+    where: { jobId: linkOrder.jobId, archivedAt: null },
+    select: PORTAL_ORDER_SELECT,
+  })
+  const jobSlugs = siblings
+    .map((o) => o.portalSlug)
+    .filter((v): v is string => !!v)
+  if (linkOrder.portalSlug && !jobSlugs.includes(linkOrder.portalSlug)) jobSlugs.push(linkOrder.portalSlug)
+
+  if (!DEAD_ORDER_STATUSES.includes(linkOrder.status)) {
+    return { order: linkOrder, followedFrom: null, jobSlugs }
+  }
+
+  const live = siblings.filter(
+    (o) =>
+      o.id !== linkOrder.id
+      && !DEAD_ORDER_STATUSES.includes(o.status)
+      // Never follow into a portal that has already sunset — that gate is
+      // about the client's window closing, and following past it would
+      // reopen a door someone deliberately shut.
+      && !(o.portalSunsetAt && o.portalSunsetAt.getTime() < now.getTime()),
+  )
+  if (live.length !== 1) {
+    return { order: linkOrder, followedFrom: null, jobSlugs }
+  }
+  return {
+    order: live[0],
+    followedFrom: { id: linkOrder.id, orderNumber: linkOrder.orderNumber },
+    jobSlugs,
+  }
+}
+
 export interface ResolvedPortalAccess {
   portalAccessId: string
+  /** The order the portal speaks for — followed past a dead one, see resolvePortalOrder. */
   orderId: string
   contactId: string
   contact: { id: string; firstName: string; lastName: string; email: string } | null
-  order: {
-    id: string
-    orderNumber: string
-    portalSlug: string | null
-    company: { id: string; name: string }
-    portalSunsetAt: Date | null
-  }
+  order: PortalOrderShape
+  /** The dead order the link was minted against, when we followed off it. */
+  followedFrom: { id: string; orderNumber: string } | null
+  /** Every portal address on this job — all of them stay valid for this session. */
+  jobSlugs: string[]
 }
 
 export async function issueJobMagicLink(args: {
@@ -117,16 +206,7 @@ export async function resolveJobMagicLink(args: {
     where: { magicLinkToken: args.token },
     include: {
       contact: { select: { id: true, firstName: true, lastName: true, email: true } },
-      order: {
-        select: {
-          id: true,
-          orderNumber: true,
-          portalSlug: true,
-          portalSunsetAt: true,
-          company: { select: {
-      id: true, name: true } },
-        },
-      },
+      order: { select: PORTAL_ORDER_SELECT },
     },
   })
   if (!row) return null
@@ -151,12 +231,15 @@ export async function resolveJobMagicLink(args: {
     }).catch(() => {})
   }
 
+  const resolved = await resolvePortalOrder(row.order, now)
   return {
     portalAccessId: row.id,
-    orderId: row.orderId,
+    orderId: resolved.order.id,
     contactId: row.contactId,
     contact: row.contact,
-    order: row.order,
+    order: resolved.order,
+    followedFrom: resolved.followedFrom,
+    jobSlugs: resolved.jobSlugs,
   }
 }
 
@@ -175,15 +258,7 @@ export async function resolveJobSession(args: {
     where: { id: args.portalAccessId },
     include: {
       contact: { select: { id: true, firstName: true, lastName: true, email: true } },
-      order: {
-        select: {
-          id: true,
-          orderNumber: true,
-          portalSlug: true,
-          portalSunsetAt: true,
-          company: { select: { id: true, name: true } },
-        },
-      },
+      order: { select: PORTAL_ORDER_SELECT },
     },
   })
   if (!row) return null
@@ -191,12 +266,15 @@ export async function resolveJobSession(args: {
   if (!row.order) return null
   if (row.order.portalSunsetAt && row.order.portalSunsetAt.getTime() < now.getTime()) return null
 
+  const resolved = await resolvePortalOrder(row.order, now)
   return {
     portalAccessId: row.id,
-    orderId: row.orderId,
+    orderId: resolved.order.id,
     contactId: row.contactId,
     contact: row.contact,
-    order: row.order,
+    order: resolved.order,
+    followedFrom: resolved.followedFrom,
+    jobSlugs: resolved.jobSlugs,
   }
 }
 

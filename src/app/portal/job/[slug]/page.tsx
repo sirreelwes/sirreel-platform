@@ -270,6 +270,11 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'Cancelled',
 };
 
+/** What to tell the client when the order they are reading is over. */
+const ORDER_IS_OVER: Record<string, string> = {
+  CANCELLED: 'This order was cancelled.',
+};
+
 const STATUS_STAGE: { key: string; label: string; matches: string[] }[] = [
   { key: 'quote', label: 'Quote', matches: ['QUOTE_DRAFT', 'QUOTE_SENT', 'QUOTE_ACKNOWLEDGED', 'QUOTE_DISCUSSING'] },
   { key: 'booked', label: 'Booked', matches: ['BOOKED', 'PICKUP_CONFIRMED'] },
@@ -697,8 +702,28 @@ export default function JobPortalPage() {
             )}
           </div>
 
+          {/* A cancelled order has no stage in any map, so it fell through to
+              0 and the tracker rendered a cheerful "Quote" — the comment on
+              currentStage said "the banner elsewhere carries that news" and
+              there was no such banner. A client holding a link to a rebuilt
+              order read the dead one as live (Wes 2026-09-15). The session
+              follows to the live order where there is exactly one; this is
+              what they see when there isn't. */}
+          {ORDER_IS_OVER[data.order.status] ? (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+              <div className="text-sm font-semibold text-rose-900">
+                {ORDER_IS_OVER[data.order.status]}
+              </div>
+              <p className="mt-1 text-xs text-rose-800 leading-relaxed">
+                Nothing below is still booked. If this is a surprise, reply to your
+                rep or call us at {data.afterHoursLine || '(888) 477-7335'} — we
+                answer 24/7.
+              </p>
+            </div>
+          ) : null}
+
           {/* Status progress bar */}
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 ${ORDER_IS_OVER[data.order.status] ? 'opacity-40' : ''}`}>
             {STATUS_STAGE.map((stage, i) => {
               const reached = i <= currentStage;
               return (

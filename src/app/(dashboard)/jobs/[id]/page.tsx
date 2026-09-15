@@ -6,6 +6,7 @@ import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, deriveOrderWindow, isoDate } from '@/lib/jobs/dateRange';
+import { buildReservedAssets, DEAD_ORDER_STATUSES } from '@/lib/jobs/reservedAssets';
 import { daysUntil, fmtPickup, pickupLabel } from '@/lib/sales/quoteUrgency';
 import { isStageLineItem } from '@/lib/orders/stageLines';
 import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
@@ -511,6 +512,7 @@ const ASSIGN_BADGE: Record<string, string> = {
   RETURNED:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   SWAPPED:     'bg-zinc-100 text-zinc-700 border-zinc-300',
 };
+
 
 export default function JobDetailPage() {
   // Wes 2026-09-03: "money value of jobs should not be visible in
@@ -1346,49 +1348,7 @@ const driverTone = (d: any): string => {
   return 'text-zinc-600'
 }
 
-  const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; attachedOrder: { id: string; orderNumber: string; warehouseOrderExpected: boolean } | null; drivers: any[]; currentDriverId: string | null; unitReturned: boolean; driverReturnedAt: string | null; driverReturnMileage: number | null }>()
-    for (const b of job.bookings) {
-      if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
-      for (const it of b.items) {
-        for (const a of it.assignments) {
-          // SWAPPED is a unit that was taken OFF this job — released, or
-          // replaced by another truck. It is terminal-but-auditable, kept
-          // so history reads back; it is not a reserved asset. Rendering
-          // it here put a released Cube 5 in E.L.F. Project Sooth's
-          // "1 unit" count with nothing to do about it (Wes 2026-09-10),
-          // and because this map is first-wins per asset it could also
-          // shadow the LIVE assignment for the same unit.
-          if (a.status === 'SWAPPED') continue
-          if (!seen.has(a.asset.id)) {
-            seen.set(a.asset.id, {
-              assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
-              startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
-              bookingAssignmentId: a.id,
-              // The order this unit goes out ON (BookingAssignment.orderId).
-              attachedOrder: (a as any).order
-                ? {
-                    id: (a as any).order.id,
-                    orderNumber: (a as any).order.orderNumber,
-                    // "A warehouse order is coming on this reservation"
-                    // (Wes 2026-09-14) — the tile is where it gets acted
-                    // on, because "+ Warehouse order" is right there.
-                    warehouseOrderExpected: !!(a as any).order.warehouseOrderExpected,
-                  }
-                : null,
-              drivers: (a as any).driverAssignments ?? [],
-              currentDriverId: (a as any).checkoutRecords?.[0]?.driverId ?? null,
-              unitReturned: !!(a as any).checkoutRecords?.[0]?.returnTime,
-              // A driver self return on a blind drop (selfReturn.ts): filed, not yet received.
-              driverReturnedAt: (a as any).checkoutRecords?.[0]?.driverReturnedAt ?? null,
-              driverReturnMileage: (a as any).checkoutRecords?.[0]?.mileageIn ?? null,
-            })
-          }
-        }
-      }
-    }
-    return [...seen.values()].sort((x, y) => x.unitName.localeCompare(y.unitName, undefined, { numeric: true }))
-  })()
+  const reservedAssets = buildReservedAssets(job.bookings as any)
 
   // Held categories with no unit picked yet. A driver attaches to a UNIT
   // (BookingAssignment), so these have nothing to name a driver onto — the
@@ -2614,7 +2574,7 @@ const driverTone = (d: any): string => {
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {reservedAssets.map((a) => (
               <div
-                key={a.assetId}
+                key={a.bookingAssignmentId}
                 className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
               <Link
@@ -2689,10 +2649,22 @@ const driverTone = (d: any): string => {
               <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200 pt-2 text-[11px]">
                 {a.attachedOrder ? (
                   <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {/* A DEAD order named here is not "the order this truck
+                        goes out on" — it is drift, and rendering it as an
+                        ordinary chip is how three vans went out tomorrow
+                        under a cancelled S260915-004. Say which. */}
                     <Link
                       href={`/orders/${a.attachedOrder.id}`}
-                      className="inline-flex items-center gap-1 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 font-mono font-semibold text-violet-700 hover:bg-violet-100"
-                      title="This unit goes out on this order"
+                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold ${
+                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
+                          ? 'border border-rose-200 bg-rose-50 text-rose-700 line-through decoration-rose-400 hover:bg-rose-100'
+                          : 'border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                      }`}
+                      title={
+                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
+                          ? `This unit is still attached to ${a.attachedOrder.orderNumber}, which is ${a.attachedOrder.status.toLowerCase()} — put it on the live order`
+                          : 'This unit goes out on this order'
+                      }
                     >
                       {a.attachedOrder.orderNumber}
                     </Link>

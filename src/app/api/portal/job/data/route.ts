@@ -112,8 +112,15 @@ export async function GET(req: NextRequest) {
   // address. Refusing here (rather than silently swapping jobs) drops the
   // page onto its recovery screen, where "Email me a secure link" mints a
   // link for the job actually being asked for.
+  // Every portal address on THIS job is accepted, not just the one order the
+  // link was minted against. Rebuilding an order mints a new slug, and the
+  // client's saved bookmark still carries the old one — comparing against a
+  // single order dropped them onto the recovery screen for a job they are
+  // legitimately holding. The guarantee that matters is unchanged: a slug
+  // belonging to a DIFFERENT job is still refused rather than silently
+  // swapping which job they are reading.
   const wantSlug = req.nextUrl.searchParams.get('slug')
-  if (wantSlug && resolved.order.portalSlug !== wantSlug) {
+  if (wantSlug && !resolved.jobSlugs.includes(wantSlug)) {
     return NextResponse.json({ error: 'Session is for a different job' }, { status: 401 })
   }
 
@@ -291,7 +298,7 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
+  const [latestCoi, paperworkPortal, vehicleAssignmentsOnBooking] = await Promise.all([
     // The certificate that governs this job: its own upload, else the
     // account's certificate on file carried forward (Wes, 2026-09-02 — annual
     // COIs). Resolving by jobId alone made an annual account look uninsured
@@ -328,6 +335,11 @@ export async function GET(req: NextRequest) {
       ? prisma.bookingAssignment.findMany({
           where: {
             status: { in: ['ASSIGNED', 'CHECKED_OUT', 'RETURNED'] },
+            // Booking-wide on purpose — narrowed to THIS order below. The
+            // booking is JOB-level (holdOnQuoteSend appends to the job's
+            // newest one), so every order on the job shares it, and a raw
+            // booking scope handed the client vehicle paperwork for trucks
+            // that are not on their order at all.
             bookingItem: { bookingId: order.bookingId },
             // Department, never the slug. This read `slug: { contains:
             // 'vehicle' }`, and NOT ONE live VEHICLES slug contains that
@@ -345,6 +357,8 @@ export async function GET(req: NextRequest) {
             id: true,
             startDate: true,
             endDate: true,
+            // Which order this unit goes out on — the narrowing below.
+            orderId: true,
             asset: {
               // AUDIT CHECKPOINT — fields below are the entire client-visible
               // surface for an Asset. Do NOT add insuranceCardUrl,
@@ -370,6 +384,34 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve([]),
   ])
+
+  // ── Narrow the booking's units to THIS order ─────────────────────────
+  // The query above is booking-scoped and the booking is job-level, so on a
+  // job carrying more than one order it returned other orders' trucks. On
+  // Wrong Number (SR-JOB-0273) the client's portal listed a SuperCube out
+  // Sep 10 – Oct 3 in "Vehicle paperwork (for the cab)" beside the three
+  // passenger vans they had actually rented for the 16th (Wes 2026-09-15).
+  //
+  // `BookingAssignment.orderId` is the precise link, but it is only stamped
+  // from the day assignUnit started writing it — 460 of 555 live rows carry
+  // none. So: prefer the units stamped to THIS order, and fall back to the
+  // UNSTAMPED ones. On a legacy job where nothing is stamped that is the
+  // whole list, exactly as before; on a modern job it is this order's trucks
+  // and nobody else's; and a truck stamped to a SIBLING order is excluded
+  // either way, which is the case that was leaking.
+  //
+  // The order we FOLLOWED OFF counts as this order. A rebuild leaves the vans
+  // stamped to the cancelled row until someone re-homes them, and the client
+  // is holding the link that row minted — those are their trucks either way.
+  // Without this the narrowing inverted on exactly the job it was written
+  // for: the three vans dropped out and only the unstamped SuperCube was
+  // left.
+  const ownIds = new Set([order.id, resolved.followedFrom?.id].filter((v): v is string => !!v))
+  const ownedByThisOrder = vehicleAssignmentsOnBooking.filter((va) => va.orderId && ownIds.has(va.orderId))
+  const vehicleAssignments =
+    ownedByThisOrder.length > 0
+      ? ownedByThisOrder
+      : vehicleAssignmentsOnBooking.filter((va) => va.orderId === null)
 
   // A catalog photo per reserved vehicle class, for the client's "Assets
   // reserved" tiles (Wes 2026-09-12: "possibly with little icon pictures of

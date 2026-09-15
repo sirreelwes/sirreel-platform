@@ -14,6 +14,7 @@ import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
 import { transitionCadenceState, rebaselineCadenceForOrder } from "@/lib/cadence/scheduler";
 import { projectCadenceFromOrderStatus } from "@/lib/orders/cadenceProjection";
 import { notifySubRentalsBooked, notifySubRentalsCancelled } from '@/lib/sub-rentals/lifecycleNotices';
+import { rehomeUnitsFromDeadOrder } from '@/lib/orders/rehomeUnitsFromDeadOrder';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -454,6 +455,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
       } catch (err) {
         console.error('[orders/PUT] sub-rental cancel notices failed:', err);
       }
+    }
+
+    // A unit does not go out on a dead order. The assignment→order stamp is
+    // the only precise link an order has to its trucks, and nothing used to
+    // clear it, so every "which order is this unit on" surface went on
+    // naming the cancelled row. Moves to the job's single live order when
+    // there is exactly one, otherwise clears. Non-fatal by design — the
+    // cancel itself is already written.
+    if (
+      status !== undefined
+      && priorStatus !== null
+      && status !== priorStatus
+      && status === 'CANCELLED'
+    ) {
+      const actor = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+      const rehomed = await rehomeUnitsFromDeadOrder(id, actor?.id ?? null);
+      if (rehomed.error) console.error('[orders/PUT] unit re-home failed:', rehomed.error);
     }
 
     // If pickup/return dates moved, re-baseline the cadence so all future

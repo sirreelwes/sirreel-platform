@@ -65,6 +65,7 @@
     "test:kit-reconcile": "tsx tests/orders/kit-reconcile.test.ts",
     "test:kit-completeness": "tsx tests/orders/kit-completeness.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
+    "test:reserved-assets": "tsx tests/jobs/reserved-assets.test.ts",
     "test:counter-explanation": "tsx tests/contract-review/counter-explanation.test.ts",
     "test:logo-from-website": "tsx tests/companies/logo-from-website.test.ts",
     "test:coi-confirmation": "tsx tests/coi/job-confirmation.test.ts",
