@@ -13,6 +13,12 @@ import { recordOutboundOnThread, startThreadForJob } from '@/lib/email/recordOut
 import { fileThreadInJobIfUnfiled } from '@/lib/jobs/attachThreadToJob'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
+import {
+  COUNTER_SENT_ACTION,
+  counterProposalFilename,
+  latestCounterProposalForJob,
+  readCounterProposalBytes,
+} from '@/lib/contracts/jobCounterProposal'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,12 +52,12 @@ export const dynamic = 'force-dynamic'
  */
 const MAX_JOB_EMAIL_CC = 15
 
-async function actor(): Promise<{ email: string; name: string | null; role: string } | null> {
+async function actor(): Promise<{ id: string; email: string; name: string | null; role: string } | null> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return null
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true },
   })
   return user ?? null
 }
@@ -200,6 +206,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     cc?: unknown
     subject?: unknown
     body?: unknown
+    /** Attach this job's counter-proposal PDF (the "Send to client" button
+     *  on the job page's counter-proposal card and the review desk). */
+    counterReviewId?: unknown
   }
 
   // Re-parsed server-side. The browser's validation is a convenience, not
@@ -219,6 +228,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const bodyText = typeof payload.body === 'string' ? payload.body.trim() : ''
   if (!subject) return NextResponse.json({ ok: false, error: 'A subject is required.' }, { status: 400 })
   if (!bodyText) return NextResponse.json({ ok: false, error: 'The message is empty.' }, { status: 400 })
+
+  // The counter-proposal attachment. Re-checked here: the review must be
+  // THIS job's current counter-proposal, the same one the client portal
+  // shows — never an id the browser picked from another production.
+  let attachments: { filename: string; content: Buffer }[] | undefined
+  let counterReviewId: string | null = null
+  if (typeof payload.counterReviewId === 'string' && payload.counterReviewId) {
+    const current = await latestCounterProposalForJob(job.id)
+    if (!current || current.id !== payload.counterReviewId || !current.counterPdfKey) {
+      return NextResponse.json(
+        { ok: false, error: 'That counter-proposal is not the current one on this job — reload and try again.' },
+        { status: 409 },
+      )
+    }
+    const bytes = await readCounterProposalBytes(current.counterPdfKey).catch(() => null)
+    if (!bytes) {
+      return NextResponse.json(
+        { ok: false, error: 'Could not read the counter-proposal PDF to attach it. Nothing was sent.' },
+        { status: 502 },
+      )
+    }
+    attachments = [{ filename: counterProposalFilename(job.jobCode), content: bytes }]
+    counterReviewId = current.id
+  }
 
   const jobName = resolveDisplayJobName({
     jobName: job.name,
@@ -253,7 +286,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     subject,
     html,
     text,
-    label: 'job-email',
+    attachments,
+    label: counterReviewId ? 'job-email/counter-proposal' : 'job-email',
   })
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.reason || 'Send failed.' }, { status: 502 })
@@ -261,6 +295,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Everything below is best-effort: the email has gone out, and a filing
   // failure is not a failed send. It is reported, not thrown.
+  if (counterReviewId) {
+    // The card's "Sent to … on …" line reads this back.
+    await prisma.auditLog
+      .create({
+        data: {
+          userId: me.id,
+          action: COUNTER_SENT_ACTION,
+          entityType: 'contract_review',
+          entityId: counterReviewId,
+          newValues: { jobId: job.id, to, cc: ccWithTeam, subject },
+        },
+      })
+      .catch((err) => console.error('[job-email] counter-proposal audit failed:', err))
+  }
   let threadId: string | null = null
   if (payload.threadId) {
     const existing = await prisma.emailThread.findFirst({

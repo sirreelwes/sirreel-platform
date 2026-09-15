@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Mail, X, Plus } from 'lucide-react'
+import { Mail, Paperclip, X, Plus } from 'lucide-react'
 import { splitCcInput } from '@/lib/email/ccList'
 
 interface Contact {
@@ -71,6 +71,8 @@ export function JobEmailButton({
   threadId,
   label = 'Email client',
   onSent,
+  preset,
+  buttonClassName,
 }: {
   jobId: string
   /** Opens addressed to this specific conversation (the per-thread Reply). */
@@ -81,6 +83,13 @@ export function JobEmailButton({
    *  this the reply is invisible until the page is reloaded, which reads
    *  as "did it go?" */
   onSent?: () => void
+  /** Open pre-written — the counter-proposal's "Send to client" (Wes
+   *  2026-09-15). The agent still reads and can edit every word; the
+   *  subject is used only when there is no thread to reply on, so a reply
+   *  keeps threading in the client's inbox. `counterReviewId` has the send
+   *  route attach that job's counter-proposal PDF. */
+  preset?: { title: string; subject: string; body: string; counterReviewId?: string; attachmentLabel?: string }
+  buttonClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -111,7 +120,8 @@ export function JobEmailButton({
         setActiveThreadId(d.thread?.id ?? null)
         setTo(d.to ?? '')
         setCc(d.cc)
-        setSubject(d.subject)
+        setSubject(preset && !d.thread ? preset.subject : d.subject)
+        if (preset) setBody((cur) => cur || preset.body)
       } catch (e) {
         setErr(e instanceof Error ? e.message : 'Could not compose the email.')
       } finally {
@@ -157,7 +167,7 @@ export function JobEmailButton({
       const r = await fetch(`/api/jobs/${jobId}/email`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body }),
+        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body, counterReviewId: preset?.counterReviewId }),
       })
       const j = await r.json()
       if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
@@ -177,8 +187,11 @@ export function JobEmailButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-lt-hairline px-3 py-1.5 text-xs font-semibold text-lt-fg2 hover:text-lt-fg hover:border-lt-fg3"
-        title="Write the client an email from here"
+        className={
+          buttonClassName ??
+          'inline-flex items-center gap-1.5 rounded-lg border border-lt-hairline px-3 py-1.5 text-xs font-semibold text-lt-fg2 hover:text-lt-fg hover:border-lt-fg3'
+        }
+        title={preset ? preset.title : 'Write the client an email from here'}
       >
         <Mail className="w-3.5 h-3.5" /> {label}
       </button>
@@ -188,7 +201,7 @@ export function JobEmailButton({
           <div className="w-full max-w-2xl rounded-2xl bg-lt-card shadow-xl my-8">
             <div className="flex items-center justify-between gap-3 border-b border-lt-hairline px-5 py-3">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-lt-fg">Email client</div>
+                <div className="text-sm font-semibold text-lt-fg">{preset?.title ?? 'Email client'}</div>
                 <div className="text-xs text-lt-fg3 truncate">
                   {draft ? `${draft.job.name} · ${draft.job.jobCode}` : 'Composing…'}
                 </div>
@@ -348,6 +361,13 @@ export function JobEmailButton({
                       become paragraphs.
                     </span>
                   </label>
+
+                  {preset?.counterReviewId && (
+                    <div className="flex items-center gap-2 rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs text-lt-fg2">
+                      <Paperclip className="w-3.5 h-3.5 shrink-0 text-lt-fg3" />
+                      {preset.attachmentLabel ?? 'The counter-proposal PDF is attached.'}
+                    </div>
+                  )}
 
                   <dl className="space-y-1 border-t border-lt-hairline pt-2.5 text-xs">
                     <div className="flex gap-2">

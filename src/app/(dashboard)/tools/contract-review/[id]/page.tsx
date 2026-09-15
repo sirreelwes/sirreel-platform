@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ReviewResultPanel, type DecisionState, type ClauseDecisionValue } from '@/components/reviews/ReviewResultPanel';
 import { CounterPdfPreview } from '@/components/reviews/CounterPdfPreview';
 import { CounterProposalEmail } from '@/components/reviews/CounterProposalEmail';
+import { JobCounterProposalPanel } from '@/components/jobs/JobCounterProposalPanel';
 import { AlertTriangle, Circle, FileText } from 'lucide-react'
 
 const RISK_BADGE: Record<string, string> = {
@@ -465,6 +466,29 @@ export default function ContractReviewDetailPage() {
                   regenerating={generating}
                   canRegenerate={canGenerate}
                 />
+                {/* Wes 2026-09-15: the generated PDF goes to the job — the
+                    client's portal and the job page — and is sent from
+                    there. The same card, so the desk and the job page
+                    offer one send, not two. Remounts on regenerate. */}
+                {record.job ? (
+                  <JobCounterProposalPanel
+                    key={record.counterGeneratedAt || 'none'}
+                    jobId={record.job.id}
+                    reviewId={record.id}
+                    fallback={
+                      <div className="rounded-lg border border-chip-warn-fg/20 bg-chip-warn-bg px-3 py-2 text-[12px] text-chip-warn-fg">
+                        This counter-PDF isn&rsquo;t on the job page or the client&rsquo;s portal — it was generated
+                        before posting existed, or a newer review on the job has one. Regenerate it to post it.
+                      </div>
+                    }
+                  />
+                ) : (
+                  <div className="rounded-lg border border-chip-warn-fg/20 bg-chip-warn-bg px-3 py-2 text-[12px] text-chip-warn-fg">
+                    This review isn&rsquo;t linked to a job, so there is no job page or client portal to post it to.
+                    Copy the email below instead.
+                  </div>
+                )}
+                {!record.job && (
                 <CounterProposalEmail
                   aiChanges={aiChanges}
                   decisions={(record.changeDecisions || []).map((d) => ({
@@ -474,13 +498,11 @@ export default function ContractReviewDetailPage() {
                     changeIndex: d.changeIndex,
                   }))}
                   company={{ name: record.company?.name || null }}
-                  job={{
-                    jobCode: record.job?.jobCode || null,
-                    name: record.job?.name || null,
-                  }}
+                  job={null}
                   primaryContact={null}
                   senderName={record.uploadedBy?.name || 'the SirReel team'}
                 />
+                )}
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-3">

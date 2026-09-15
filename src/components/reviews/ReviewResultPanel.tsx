@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
 import { clauseMatches, type MarkupManifest } from '@/lib/contracts/markupShared';
 import { diffClause, hasRealChange } from '@/lib/contracts/clauseDiff';
@@ -93,6 +93,44 @@ export function ReviewResultPanel({
   discussions,
 }: ReviewResultPanelProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
+  // Wes 2026-09-15: "when you click to review a clause … it scrolls all the
+  // way down to the top of the next section and the clause gets lost above."
+  // Two things moved the page under the click: the previously open clause
+  // ABOVE collapsing, and the browser's scroll anchoring holding the card
+  // BELOW in place while the new body pushed the clicked header up out of
+  // view. So record where the clicked header sat on screen, and after the
+  // re-render scroll by however far it moved — the header stays exactly
+  // under the cursor and its body opens downward from it.
+  const headerRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const pinRef = useRef<{ index: number; top: number; scroller: HTMLElement | null } | null>(null);
+  const toggleExpanded = (i: number) => {
+    const el = headerRefs.current[i];
+    if (el) {
+      // The dashboard scrolls <main>, not the window — find whichever
+      // ancestor actually scrolls, and turn its scroll anchoring off so the
+      // browser's own adjustment cannot fight the correction below.
+      let scroller: HTMLElement | null = el.parentElement;
+      while (scroller) {
+        const oy = getComputedStyle(scroller).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && scroller.scrollHeight > scroller.clientHeight) break;
+        scroller = scroller.parentElement;
+      }
+      if (scroller) scroller.style.overflowAnchor = 'none';
+      pinRef.current = { index: i, top: el.getBoundingClientRect().top, scroller };
+    }
+    setExpanded((cur) => (cur === i ? null : i));
+  };
+  useLayoutEffect(() => {
+    const pin = pinRef.current;
+    pinRef.current = null;
+    if (!pin) return;
+    const el = headerRefs.current[pin.index];
+    if (!el) return;
+    const delta = el.getBoundingClientRect().top - pin.top;
+    if (Math.abs(delta) < 1) return;
+    if (pin.scroller) pin.scroller.scrollTop += delta;
+    else window.scrollBy(0, delta);
+  }, [expanded]);
   const [baselineOpen, setBaselineOpen] = useState<Record<number, boolean>>({});
   // Discuss threads keyed by clauseKey; seeded from the persisted
   // messages once, then appended to locally as turns complete.
@@ -154,7 +192,7 @@ export function ReviewResultPanel({
       </div>
 
       {/* Changes */}
-      <div className="space-y-2">
+      <div className="space-y-2 [overflow-anchor:none]">
         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Proposed Changes ({review.changes?.length || 0})</div>
         {review.changes?.map((change: any, i: number) => {
           const cfg = TYPE_CONFIG[change.type as keyof typeof TYPE_CONFIG] || TYPE_CONFIG.needs_review;
@@ -165,7 +203,11 @@ export function ReviewResultPanel({
           const needsOperatorReview = change.needsOperatorReview === true;
           return (
             <div key={i} className={`rounded-xl border p-3 ${cfg.color}`}>
-              <div className="flex items-start justify-between gap-2 cursor-pointer" onClick={() => setExpanded(expanded === i ? null : i)}>
+              <div
+                ref={(el) => { headerRefs.current[i] = el; }}
+                className="flex items-start justify-between gap-2 cursor-pointer"
+                onClick={() => toggleExpanded(i)}
+              >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="font-bold text-sm flex-shrink-0">{cfg.icon}</span>
                   <div className="min-w-0">

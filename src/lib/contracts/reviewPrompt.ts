@@ -33,7 +33,6 @@ CRITICAL RISK — always classify these as "not_acceptable":
 - Removal of additional-insured requirements naming SirReel.
 - Changes to arbitration venue (clause 26) away from Los Angeles, CA / JAMS.
 - Changes to governing law (clause 25) away from California.
-- Removal of subrogation rights (clause 15).
 - Removal of the police-report requirement for theft (within clause 14).
 - Any clause attempting to make SirReel responsible for the client's production losses, lost profits, or business interruption.
 - Changes to the Fleet Agreement section that weaken LCDW exclusions or shift loss-of-use risk.
@@ -46,6 +45,7 @@ MEDIUM RISK — classify as "needs_review":
 - Modifications to the missing equipment return policy (15-day rule).
 - Changes to LCDW or fuel policy.
 - Removal of "rent shall not be prorated during repairs" language (clause 17) — generally accepted but worth flagging.
+- Removal or narrowing of subrogation rights (clause 15), or removal/narrowing of the waiver of subrogation in clause 9 (mutual waiver, "where obtainable", "to the extent permitted by the policy"). SirReel softened this position on 2026-09-15: counter with the playbook's fallback language, never classify it "not_acceptable" on its own. EXCEPTION: wording that releases the Lessee from paying SirReel for loss or damage to the Equipment is a clause 2 / clause 14 change and stays CRITICAL.
 - Changes to the certificate of insurance requirement (clause 11).
 - Changes to driver requirements (clause 12).
 - Removal of the 10% administrative fee paragraph (in rental policies section before clause 1).

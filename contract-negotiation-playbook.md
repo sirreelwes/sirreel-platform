@@ -164,23 +164,31 @@ Lapse, reduction, or cancellation of required insurance = immediate automatic de
 
 > Lapse, reduction in coverage or cancellation of the required insurance, if not cured within three (3) business days after written notice from us, shall be deemed to be a default of this agreement.
 
+Waiver of subrogation (softened 2026-09-15, Wes) — any of these is acceptable, in this order:
+
+> All insurance maintained by you pursuant to the foregoing provisions shall contain a waiver of subrogation rights in favor of us, to the extent such a waiver is available from your insurers.
+
+> Each party waives, and shall cause its insurers to waive, rights of subrogation against the other to the extent of any loss covered by that party's insurance.
+
+- A mutual waiver is fine. A waiver "where obtainable" / "to the extent permitted by the policy" is fine.
+- Deleting the waiver outright is negotiable, not a deal-breaker: counter with the first fallback above, and accept the deletion on a second round if the client's broker cannot endorse it.
+
 ### Hard Musts
 
 - Lessee bears all deductibles and self-insured retentions (no cap, regardless of dollar amount)
-- Waiver of subrogation rights in favor of SirReel
 - SirReel's right to procure backstop coverage at lessee's cost preserved
 - Notification obligation if coverage lapses
 
 ### Do Not Accept
 
 - Cap on deductible reimbursement (any dollar amount)
-- Removal of subrogation waiver
 - Removal of SirReel's right to procure backstop coverage
 - Cure window longer than 3 business days for insurance lapse
+- Any "waiver" wording that releases the LESSEE from paying SirReel for loss or damage to the Equipment (that is a Clause 2 / Clause 14 change wearing a subrogation label — judge it there)
 
 ### Rationale
 
-The "auto-default with no notice" language reads as predatory but practically you'd notice and act in 3 days anyway. Adding the cure window removes a friction point without changing real exposure. Cap on deductible reimbursement is the line. The whole point of pass-through deductibles is no cap on SirReel's recovery. Capping reintroduces SirReel's exposure to the very risk the deductible clause is meant to shift.
+Subrogation waivers are routinely struck or narrowed by production brokers because not every policy can carry a blanket endorsement; holding the line cost negotiation rounds without changing real exposure, since the lessee still owes SirReel directly for loss and damage under Clauses 2 and 14. The "auto-default with no notice" language reads as predatory but practically you'd notice and act in 3 days anyway. Adding the cure window removes a friction point without changing real exposure. Cap on deductible reimbursement is the line. The whole point of pass-through deductibles is no cap on SirReel's recovery. Capping reintroduces SirReel's exposure to the very risk the deductible clause is meant to shift.
 
 ---
 
@@ -301,12 +309,40 @@ Common reasonable positions:
 
 ---
 
+## Clause 15 — Subrogation
+
+### Preferred
+
+> You hereby agree that we shall be allowed to subrogated for any recovery rights you may have for damage to the Equipment.
+
+### Acceptable Fallback
+
+> To the extent we have not been paid by you for loss of or damage to the Equipment, we shall be subrogated to any recovery rights you may have against third parties for that loss or damage.
+
+- Narrowing subrogation to the unpaid portion of the loss is acceptable on the first counter.
+- Deleting Clause 15 outright is acceptable on a second round, provided Clauses 2 and 14 are intact (the lessee still owes SirReel for loss and damage).
+- Classify a Clause 15 change as needs_review, never not_acceptable on its own.
+
+### Hard Musts
+
+- None on this clause by itself. The protection that matters — the lessee's direct responsibility for loss and damage — lives in Clauses 2 and 14.
+
+### Do Not Accept
+
+- Wording that has SirReel waive recovery against the LESSEE (judge under Clause 2 / 14).
+
+### Rationale
+
+Softened 2026-09-15 (Wes). Clause 15 lets SirReel step into the client's claim against a third party who damaged the truck. It is useful, rarely exercised, and a frequent broker strike. Treating its removal as a deal-breaker produced "not acceptable" verdicts on redlines that did not actually shift SirReel's exposure.
+
+---
+
 ## Other Clauses (Not Currently Contested)
 
 This playbook focuses on clauses that have generated negotiation activity. Other clauses in the agreement follow standard SirReel language and should be retained as drafted. Any client redline that would substantively alter clauses not listed here requires operator review before counter-generation.
 
 Specifically retain without softening:
-- Clause 2 (Loss/Damage), Clause 3 (Protection of Others), Clause 4 (Working Order), Clause 5 (Property Insurance), Clause 7 (Liability Insurance), Clause 11 (Certificates), Clause 12 (Drivers), Clause 14 (Valuation/Liability Limit), Clause 15 (Subrogation), Clause 16 (Bailment), Clause 17 (Condition), Clause 18 (Identity), Clause 19 (Expenses), Clause 20 (Accident Reports), Clause 22 (Return), Clause 23 (Additional Equipment), Clause 24 (Entire Agreement), Clause 27 (Severability), Clause 28 (Facsimile), Clause 29 (Non-smoking)
+- Clause 2 (Loss/Damage), Clause 3 (Protection of Others), Clause 4 (Working Order), Clause 5 (Property Insurance), Clause 7 (Liability Insurance), Clause 11 (Certificates), Clause 12 (Drivers), Clause 14 (Valuation/Liability Limit), Clause 16 (Bailment), Clause 17 (Condition), Clause 18 (Identity), Clause 19 (Expenses), Clause 20 (Accident Reports), Clause 22 (Return), Clause 23 (Additional Equipment), Clause 24 (Entire Agreement), Clause 27 (Severability), Clause 28 (Facsimile), Clause 29 (Non-smoking)
 
 ---
 
@@ -315,6 +351,7 @@ Specifically retain without softening:
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-05-12 | Initial playbook created. Captures structural calls and friction softenings from review of RA_2026_PM_rdl-counter.pdf | Wes / Claude review session |
+| 2026-09-15 | Softened subrogation: Clause 9 waiver of subrogation moved from Hard Must / Do Not Accept to acceptable fallbacks (mutual, "where obtainable", deletion on second round); new Clause 15 section — narrowing or (second round) deleting is acceptable, needs_review not not_acceptable. | Wes / Claude |
 | 2026-05-12 | Added Non-Negotiable Hard Limits section. Third-party-only indemnity elevated to absolute rule; never offered as fallback regardless of pushback. | Wes / Claude |
 
 ---

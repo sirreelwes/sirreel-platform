@@ -172,6 +172,9 @@ interface PortalData {
       documentToSignUrl?: string | null;
       signedDocumentUrl?: string | null;
     } | null;
+    /** SirReel's answer to the client's redline, once generated. Null once
+     *  the negotiated agreement is out to sign. */
+    counterProposal?: { url: string; generatedAt: string } | null;
     stageContract: { contractType: string; status: string; documentType: string; signedAt: string | null; signerName: string | null; documentToSignUrl?: string | null; signedDocumentUrl?: string | null } | null;
     coi: {
       id: string;
@@ -1210,6 +1213,36 @@ export default function JobPortalPage() {
             )}
 
             <div className="space-y-3">
+              {/* Our answer to their redline (Wes 2026-09-15: the generated
+                  counter-proposal goes straight to the portal). Above the
+                  agreement row because it is what that row is waiting on. */}
+              {data.paperwork.counterProposal && (
+                <PaperworkRow label="Our response to your redline" status="Ready to read" statusKind="warning">
+                  <div className="text-xs text-zinc-600 leading-relaxed">
+                    We&rsquo;ve gone through each change you proposed to the rental agreement. This shows what we
+                    accepted, where we&rsquo;ve offered other wording, and what stays as written
+                    {' '}({fmtDate(data.paperwork.counterProposal.generatedAt)}). Reply to your rep with any
+                    questions — once it&rsquo;s agreed, the final agreement appears below to sign.
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <a
+                      href={data.paperwork.counterProposal.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-zinc-900 underline"
+                    >
+                      Read it
+                    </a>
+                    <a
+                      href={`${data.paperwork.counterProposal.url}?download=1`}
+                      className="text-xs font-semibold text-zinc-500 underline"
+                    >
+                      Download PDF
+                    </a>
+                  </div>
+                </PaperworkRow>
+              )}
+
               {/* Rental Agreement */}
               <PaperworkRow
                 label="Rental Agreement"

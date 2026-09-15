@@ -1,4 +1,5 @@
 import { categoryNameForLine, catalogClientCode } from '@/lib/catalog/display'
+import { latestCounterProposalForJob } from '@/lib/contracts/jobCounterProposal'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
@@ -487,6 +488,21 @@ export async function GET(req: NextRequest) {
   // Partition signedAgreements by contractType — one entry can fire per type.
   const rentalAgreement = order.signedAgreements.find((a) => a.contractType === 'RENTAL_AGREEMENT') ?? null
   const stageContract = order.signedAgreements.find((a) => a.contractType === 'STAGE_CONTRACT') ?? null
+
+  // SirReel's counter-proposal to the client's redline (Wes 2026-09-15: the
+  // generated PDF goes to the portal). Shown until the negotiated agreement
+  // itself is out to sign — from then the row above carries the document
+  // they sign, and a second "response to your redline" beside it would read
+  // as two versions in play.
+  const counterReview = order.jobId ? await latestCounterProposalForJob(order.jobId) : null
+  const negotiatedOut =
+    rentalAgreement?.status === 'NEGOTIATED_READY' ||
+    rentalAgreement?.status === 'SIGNED_NEGOTIATED' ||
+    !!rentalAgreement?.signedAt
+  const counterProposal =
+    counterReview?.counterGeneratedAt && !negotiatedOut
+      ? { url: '/api/portal/job/counter-proposal', generatedAt: counterReview.counterGeneratedAt.toISOString() }
+      : null
   if (rentalAgreement?.signedAt && rentalAgreement.signerName) {
     activity.push({
       at: rentalAgreement.signedAt.toISOString(),
@@ -814,6 +830,7 @@ export async function GET(req: NextRequest) {
       dotSheetUrl: order.dotSheetGeneratedAt ? '/api/portal/job/dot-sheet' : null,
       dotSheetGeneratedAt: order.dotSheetGeneratedAt,
       agreement: rentalAgreement,
+      counterProposal,
       stageContract,
       coi: governingCoi
         ? {

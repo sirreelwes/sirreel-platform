@@ -62,6 +62,7 @@ import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementM
 import { JobLcdwPanel } from '@/components/jobs/JobLcdwPanel';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
+import { JobCounterProposalPanel } from '@/components/jobs/JobCounterProposalPanel';
 import { JobConditionPanel } from '@/components/jobs/JobConditionPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
@@ -3248,6 +3249,11 @@ const driverTone = (d: any): string => {
         )}
       </div>
       )}
+
+      {/* The counter-proposal to the client's redline, posted here and to
+          their portal the moment it is generated, with "Send to client"
+          (Wes 2026-09-15). Renders nothing when there isn't one. */}
+      <JobCounterProposalPanel jobId={job.id} />
 
       {/* Rental / stage agreement — job-level coverage. A job is attached
           as an addendum to an on-file (often annual) master agreement. */}

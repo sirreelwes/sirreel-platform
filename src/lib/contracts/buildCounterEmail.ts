@@ -52,6 +52,12 @@ export interface BuildCounterEmailArgs {
   job: CounterEmailJob | null
   primaryContact: CounterEmailContact | null
   senderName: string
+  /** Leave the typed sign-off off — for senders whose email frame signs
+   *  with the agent's name already (the job-page composer). Its line also
+   *  names the legal entity, which client mail does not otherwise use. */
+  omitSignature?: boolean
+  /** A paragraph placed just before the closing line. */
+  extraParagraph?: string
 }
 
 export interface BuiltCounterEmail {
@@ -205,8 +211,9 @@ export function buildCounterEmail(args: BuildCounterEmailArgs): BuiltCounterEmai
       ['A few specifics:', ...userNotes.map((n) => `- §${n.ref}: ${n.text}`)].join('\n')
     )
   }
+  if (args.extraParagraph?.trim()) sections.push(args.extraParagraph.trim())
   sections.push(closing)
-  sections.push(signature)
+  if (!args.omitSignature) sections.push(signature)
 
   const body = sections.join('\n\n')
 
