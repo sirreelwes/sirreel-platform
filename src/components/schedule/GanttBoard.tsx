@@ -28,12 +28,12 @@ import {
   ART_DEPT_TAG_CHIP,
   readinessLabelClass,
   readinessMeterStyle,
-  readinessMeterTitle,
 } from '@/lib/scheduling/statusTokens';
 import type { JobReadiness } from '@/lib/jobs/readiness';
 import StatusLegend, { TierKey } from '@/components/scheduling/StatusLegend';
 import { StageAreasPicker } from '@/components/scheduling/StageAreasPicker';
 import OutBackStrip from '@/components/scheduling/OutBackStrip';
+import { BarHoverCard, hideBarHover, showBarHover, type BarHoverInfo } from '@/components/schedule/BarHoverCard';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -108,6 +108,29 @@ function computeBar(start: string, end: string, renderedStartDate: string, rende
   const e = Math.min(renderedDays - 1, diffDays(renderedStartDate, end))
   if (e < 0 || s >= renderedDays) return null
   return { left: s * dayWidth, width: Math.max((e - s + 1) * dayWidth - 2, dayWidth - 2) }
+}
+
+// Hover-card payload for a booking bar. Order numbers: the unit-level
+// attachment is the specific claim; otherwise the booking's orders, then
+// any RW orders on the job.
+function barHoverInfo(b: any, rdy: JobReadiness | undefined, extra?: Partial<BarHoverInfo>): BarHoverInfo {
+  const hq: string[] = b.attachedOrder
+    ? [b.attachedOrder.orderNumber]
+    : (b.orders || []).map((o: any) => o?.orderNumber).filter(Boolean)
+  const rw: string[] = (b.rwOrderNumbers || []).map((n: string) => `RW ${n}`)
+  return {
+    client: b.clientName ?? b.company ?? '',
+    jobName: b.jobName,
+    jobCode: b.jobCode,
+    start: b.start ?? b.startDate,
+    end: b.end ?? b.endDate,
+    stage: b.stage ?? b.status,
+    agent: b.agent || null,
+    orders: [...hq, ...rw],
+    readiness: rdy,
+    blindPickup: !!b.blindPickup && (b.stage === 'booked' || b.stage === 'order'),
+    ...extra,
+  }
 }
 
 // ── Lane packing — overlapping bookings on one unit's row stack into
@@ -270,6 +293,17 @@ function unitAtPoint(x: number, y: number): { assetId: string; unit: string } | 
   return { assetId, unit: el.getAttribute('data-unit-name') || '' }
 }
 
+// Board span buttons. Days, not weeks, so the 3-day zoom fits the same state.
+const SPAN_OPTIONS = [
+  { days: 3, label: '3D' },
+  { days: 7, label: '1W' },
+  { days: 14, label: '2W' },
+  { days: 21, label: '3W' },
+  { days: 28, label: '4W' },
+] as const
+/** The sticky unit-label column (`w-48`). */
+const LABEL_COL_W = 192
+
 // Precomputed per-day-cell metadata (fix for per-render Date construction in
 // every grid cell across all lanes).
 interface DayMeta { ds: string; weekend: boolean; isToday: boolean; label: string }
@@ -406,14 +440,16 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           return (
             <div
               key={`p-${j}`}
-              title={rdy ? readinessMeterTitle(rdy) : undefined}
+              onPointerEnter={(ev) => showBarHover(ev, barHoverInfo(b, rdy, { unit: [entry.unit.unitName, entry.unit.resourceName].filter(Boolean).join(' · ') }))}
+              onPointerLeave={hideBarHover}
               className={`absolute h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'} ${b.dimmed ? 'opacity-25' : ''}`}
               style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH, ...meter }}
-              onPointerDown={canBindUnit ? (ev) => onBarPointerDown(ev, b, entry.unit) : undefined}
+              onPointerDown={(ev) => { hideBarHover(); if (canBindUnit) onBarPointerDown(ev, b, entry.unit) }}
               onPointerMove={canBindUnit ? onBarPointerMove : undefined}
               onPointerUp={canBindUnit ? onBarPointerUp : undefined}
               onClick={(ev) => {
                 ev.stopPropagation()
+                hideBarHover()
                 onBarClick(b, entry.unit)
               }}
             >
@@ -457,9 +493,11 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
                 style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH, ...meter }}
                 onClick={(ev) => {
                   ev.stopPropagation()
+                  hideBarHover()
                   onBackupClick(b, entry.unit, rank)
                 }}
-                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}${rdy ? `\n${readinessMeterTitle(rdy)}` : ''}`}
+                onPointerEnter={(ev) => showBarHover(ev, barHoverInfo(b, rdy, { flag: `${rankLabel} hold`, unit: [entry.unit.unitName, entry.unit.resourceName].filter(Boolean).join(' · ') }))}
+                onPointerLeave={hideBarHover}
               >
                 <IncompleteBadge gaps={b.infoGaps} />
                 <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
@@ -583,7 +621,9 @@ export function GanttBoard() {
   }, [dragging])
   const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
-  const [weeks, setWeeks] = useState(2)
+  // Visible span in DAYS. 3D exists for one-day rentals (Wes 2026-09-15:
+  // "zoom in tighter with fewer days so we can see more of the job").
+  const [spanDays, setSpanDays] = useState(14)
   const [catFilter, setCatFilter] = useState('all')
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -679,8 +719,17 @@ export function GanttBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const totalDays = weeks * 7
-  const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
+  const totalDays = spanDays
+  // Day columns STRETCH to fill the board, so the span buttons are a real
+  // zoom. They used to be fixed widths (48/36/28px) — 1W drew the same
+  // 48px columns as 2W with more buffer beside them, and a one-day bar
+  // stayed one 48px sliver that could not show a client name. The old
+  // widths remain the floor, so no span ever renders tighter than before.
+  const [boardWidth, setBoardWidth] = useState(0)
+  const minDayWidth = spanDays <= 14 ? 48 : spanDays <= 21 ? 36 : 28
+  const dayWidth = boardWidth > 0
+    ? Math.max(minDayWidth, Math.floor((boardWidth - LABEL_COL_W) / totalDays))
+    : minDayWidth
   // Top task lane: chip height + per-day stack slot pitch (chip + gap).
   const TASK_CHIP_H = 18
   const TASK_SLOT = 20
@@ -893,6 +942,16 @@ export function GanttBoard() {
   // pan operators reported.
   const lastProgrammaticScrollLeft = useRef<number | null>(null)
 
+  // Track the board's inner width for the stretch-to-fit day columns.
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setBoardWidth(el.clientWidth))
+    ro.observe(el)
+    setBoardWidth(el.clientWidth)
+    return () => ro.disconnect()
+  }, [])
+
   useEffect(() => {
     const el = scrollContainerRef.current
     if (!el) return
@@ -907,9 +966,10 @@ export function GanttBoard() {
     // Read back the value the browser actually applied (it clamps to
     // [0, maxScroll]); that's what the echoing onScroll will report.
     lastProgrammaticScrollLeft.current = el.scrollLeft
-  }, [anchorDate, weeks, totalDays, dayWidth])
+  }, [anchorDate, totalDays, dayWidth])
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    hideBarHover() // the card is fixed-positioned; it would float off its bar
     const el = e.currentTarget
     // Ignore scroll events caused by our own programmatic scrollLeft
     // writes — only react to genuine user pans. Keep ignoring while the
@@ -1708,7 +1768,7 @@ export function GanttBoard() {
     }
     return { rowEntries: entries }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredUnits, unassignedHolds, catFilter, tokens, weeks, startDate, totalDays])
+  }, [filteredUnits, unassignedHolds, catFilter, tokens, startDate, totalDays])
 
   return (
     <div>
@@ -1795,8 +1855,8 @@ export function GanttBoard() {
           </div>
           <span className="text-[11px] font-semibold text-gray-500 px-1">{rangeLabel}</span>
           <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {[1,2,3,4].map(w => (
-              <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
+            {SPAN_OPTIONS.map(o => (
+              <button key={o.days} onClick={() => setSpanDays(o.days)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${spanDays === o.days ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{o.label}</button>
             ))}
           </div>
           {/* The ONE create button, same chooser as the /jobs toolbar
@@ -1851,7 +1911,7 @@ export function GanttBoard() {
         className="border border-gray-200 rounded-lg overflow-auto bg-white relative"
         style={{ height: 'calc(100vh - 210px)' }}
       >
-        <div className="flex" style={{ width: 192 + renderedDays * dayWidth, minWidth: '100%' }}>
+        <div className="flex" style={{ width: LABEL_COL_W + renderedDays * dayWidth, minWidth: '100%' }}>
           {/* ── LEFT: labels column (sticky left:0) ── */}
           <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200">
             {/* Top-left corner — sticky on both axes. In Asset view it hosts the
@@ -2120,8 +2180,18 @@ export function GanttBoard() {
                                 key={`uh-${k}`}
                                 className={`absolute rounded border border-dashed flex items-center overflow-hidden bg-rose-100 border-rose-500 text-rose-900 ${canBindUnit ? 'cursor-pointer hover:bg-rose-200 transition-colors' : ''}`}
                                 style={{ left: bar.left, width: bar.width, top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H, ...meter }}
-                                onClick={canBindUnit ? (ev) => { ev.stopPropagation(); setAssignBookingItemId(t.bookingItemId) } : undefined}
-                                title={`Needs a unit — ${t.categoryName}${detail ? ` · ${detail}` : ''}${canBindUnit ? ' · click to pick a unit' : ''}${rdy ? `\n${readinessMeterTitle(rdy)}` : ''}`}
+                                onClick={canBindUnit ? (ev) => { ev.stopPropagation(); hideBarHover(); setAssignBookingItemId(t.bookingItemId) } : undefined}
+                                onPointerEnter={(ev) => showBarHover(ev, {
+                                  client: t.clientName,
+                                  jobName: t.jobName,
+                                  jobCode: t.jobCode,
+                                  start: t.start,
+                                  end: t.end,
+                                  flag: canBindUnit ? 'Needs a unit · click to pick one' : 'Needs a unit',
+                                  unit: `${t.categoryName}${t.needed > 1 ? ` ×${t.needed}` : ''}`,
+                                  readiness: rdy,
+                                })}
+                                onPointerLeave={hideBarHover}
                               >
                                 <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
                                   {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
@@ -2201,17 +2271,21 @@ export function GanttBoard() {
                       const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage }) : undefined
                       return (
                         <div
-                          title={rdy ? readinessMeterTitle(rdy) : undefined}
+                          onPointerEnter={(ev) => showBarHover(ev, barHoverInfo(job, rdy, {
+                            unit: job.items?.length ? `${job.items.length} unit${job.items.length !== 1 ? 's' : ''}` : null,
+                          }))}
+                          onPointerLeave={hideBarHover}
                           className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 ${canSetStatus && job.bookingId ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:opacity-90 overflow-hidden`}
                           // touchAction none ONLY on the bar: a sideways drag here
                           // is the gesture, while the board still pans from
                           // anywhere else (these boards get used on tablets).
                           style={{ left: bar.left, width: bar.width, ...meter, ...(canSetStatus && job.bookingId ? { touchAction: 'none' as const } : null) }}
-                          onPointerDown={canSetStatus && job.bookingId ? (ev) => onJobBarPointerDown(ev, job) : undefined}
+                          onPointerDown={(ev) => { hideBarHover(); if (canSetStatus && job.bookingId) onJobBarPointerDown(ev, job) }}
                           onPointerMove={canSetStatus && job.bookingId ? onJobBarPointerMove : undefined}
                           onPointerUp={canSetStatus && job.bookingId ? onJobBarPointerUp : undefined}
                           onPointerCancel={canSetStatus && job.bookingId ? onJobBarPointerCancel : undefined}
                           onClick={() => {
+                            hideBarHover()
                             // The drag just ended on this bar — don't also open it.
                             if (suppressBarClick.current) { suppressBarClick.current = false; return }
                             setSelected(job)
@@ -2235,6 +2309,8 @@ export function GanttBoard() {
           </div>
         </div>
       </div>
+
+      <BarHoverCard />
 
       {/* Detail modal */}
       {selected && (
