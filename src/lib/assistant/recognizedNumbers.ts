@@ -17,6 +17,9 @@
  *              CURRENT job (currentJobWhere: ±7 days). Their own job's
  *              details, a message to their agent, and — with the unit or
  *              VIN last 4 — that job's truck codes (phone factor).
+ *   partner  — identifySender() via partnerIdentity.ts: a VendorContact
+ *              phone or the Vendor's phone on a partner's record. Their own
+ *              company's bookings through SirReel; never a production name.
  *   driver   — verifyAndRelease(): the checkout driver on an assignment
  *              that is ASSIGNED / CHECKED_OUT within a day of today. Truck
  *              codes for that unit with the unit or VIN last 4.
@@ -27,9 +30,10 @@ import { prisma } from '@/lib/prisma'
 import { phoneTail } from '@/lib/assistant/phoneFactor'
 import { currentJobWhere, currentWindow } from '@/lib/assistant/senderIdentity'
 import { levelForRole, levelFromGrant, type AhaLevel } from '@/lib/assistant/access'
+import { loadPartnerVendors, partnerPhones } from '@/lib/assistant/partnerIdentity'
 
 /** grant = added by hand; blocked = taken away by hand. Both live in sr_aha_grants. */
-export type RecognizedTier = 'staff' | 'contact' | 'driver' | 'grant' | 'blocked'
+export type RecognizedTier = 'staff' | 'contact' | 'partner' | 'driver' | 'grant' | 'blocked'
 
 export interface RecognizedNumber {
   tier: RecognizedTier
@@ -62,9 +66,10 @@ const DRIVER_GRANTS = 'That truck\'s gate + lockbox codes with the unit or VIN l
 const STAFF_GRANTS = 'Fleet and job lookups (who is on a unit, has a job come back, drivers + numbers)'
 const ADMIN_GRANTS = 'Everything staff can, plus the platform memory and recent admin activity'
 const BLOCKED_GRANTS = 'Nothing — told to call the office'
+const PARTNER_GRANTS = 'Their own company\'s bookings through SirReel (unit, dates, status), a message to SirReel — never a production name, pricing or codes'
 
 function grantsForLevel(level: AhaLevel): string {
-  return level === 'admin' ? ADMIN_GRANTS : level === 'staff' ? STAFF_GRANTS : level === 'contact' ? CONTACT_GRANTS : level === 'blocked' ? BLOCKED_GRANTS : 'Public'
+  return level === 'admin' ? ADMIN_GRANTS : level === 'staff' ? STAFF_GRANTS : level === 'contact' ? CONTACT_GRANTS : level === 'partner' ? PARTNER_GRANTS : level === 'blocked' ? BLOCKED_GRANTS : 'Public'
 }
 
 function display(raw: string | null | undefined): string {
@@ -178,6 +183,22 @@ export async function listRecognizedNumbers(now = new Date()): Promise<Recognize
     }
     for (const jc of j.jobContacts) push(jc.person, String(jc.role), 'Job contact')
     for (const b of j.bookings) if (b.person) push(b.person, 'REQUESTER', 'Booking requester')
+  }
+
+  // ── Partner contacts — the same rows identifySender reads. A number that is
+  // also staff, a contact or a grant resolves to that instead (partner is only
+  // ever the fallback before public), so it is listed as overridden here.
+  const higher = new Set(rows.filter((r) => r.tier === 'staff' || r.tier === 'contact' || r.tier === 'grant' || r.tier === 'blocked').map((r) => r.tail))
+  for (const p of partnerPhones(await loadPartnerVendors())) {
+    const over = higher.has(p.tail)
+    rows.push({
+      tier: 'partner', level: over ? 'public' : 'partner', tail: p.tail, phone: p.phone,
+      name: p.personName ? `${p.personName} · ${p.vendorName}` : p.vendorName,
+      reason: `${p.field} on ${p.vendorName}'s partner record${over ? ' — a higher tier above wins for this number' : ''}`,
+      grants: over ? 'See the other row for this number' : PARTNER_GRANTS,
+      manageHref: '/crm/portals#partners', manageLabel: `${p.vendorName} contacts`,
+      until: null,
+    })
   }
 
   // ── Checkout drivers on live assignments — the same window verifyAndRelease uses ──

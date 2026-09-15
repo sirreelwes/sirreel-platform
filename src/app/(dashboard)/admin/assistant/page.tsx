@@ -49,8 +49,8 @@ type Usage = {
   lastUsedAt: string | null
 }
 type RecognizedNumber = {
-  tier: 'staff' | 'contact' | 'driver' | 'grant' | 'blocked'
-  level: 'blocked' | 'public' | 'contact' | 'staff' | 'admin'
+  tier: 'staff' | 'contact' | 'partner' | 'driver' | 'grant' | 'blocked'
+  level: 'blocked' | 'public' | 'partner' | 'contact' | 'staff' | 'admin'
   tail: string
   phone: string
   name: string
@@ -142,6 +142,7 @@ const TIER_LABEL: Record<RecognizedNumber['tier'], { label: string; chip: string
   blocked: { label: 'Blocked', chip: 'bg-red-600/20 text-red-300 border-red-600/40', blurb: 'Taken off the list here' },
   staff: { label: 'HQ user', chip: 'bg-amber-600/20 text-amber-300 border-amber-600/40', blurb: 'Level follows their HQ role' },
   contact: { label: 'Production contact', chip: 'bg-sky-600/20 text-sky-300 border-sky-600/40', blurb: 'Own job, message to agent, that job’s truck codes' },
+  partner: { label: 'Partner', chip: 'bg-teal-600/20 text-teal-300 border-teal-600/40', blurb: 'Their own company’s bookings through SirReel' },
   driver: { label: 'Checkout driver', chip: 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40', blurb: 'That truck’s codes' },
 }
 
@@ -149,6 +150,7 @@ const LEVEL_CHIP: Record<RecognizedNumber['level'], string> = {
   admin: 'bg-amber-600/20 text-amber-200 border-amber-500/50',
   staff: 'bg-amber-600/10 text-amber-300 border-amber-600/30',
   contact: 'bg-sky-600/20 text-sky-300 border-sky-600/40',
+  partner: 'bg-teal-600/20 text-teal-300 border-teal-600/40',
   public: 'bg-zinc-700/40 text-zinc-300 border-zinc-600',
   blocked: 'bg-red-600/20 text-red-300 border-red-600/40',
 }
@@ -253,7 +255,7 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
     if (digits.length >= 3 && r.tail.includes(digits)) return true
     return r.name.toLowerCase().includes(needle) || (r.jobCode ?? '').toLowerCase().includes(needle) || (r.jobName ?? '').toLowerCase().includes(needle) || (r.unit ?? '').toLowerCase().includes(needle)
   })
-  const counts = { grant: 0, blocked: 0, staff: 0, contact: 0, driver: 0 } as Record<RecognizedNumber['tier'], number>
+  const counts = { grant: 0, blocked: 0, staff: 0, contact: 0, partner: 0, driver: 0 } as Record<RecognizedNumber['tier'], number>
   for (const r of rows) counts[r.tier]++
   const distinct = new Set(rows.map((r) => r.tail)).size
 
@@ -273,8 +275,8 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
           "Can ask for" column repeating the same text on every row. */}
       <details className="mt-3">
         <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">What each level can ask for</summary>
-        <div className="mt-2 grid gap-2 md:grid-cols-5">
-          {(['admin', 'staff', 'contact', 'public', 'blocked'] as const).map((l) => (
+        <div className="mt-2 grid gap-2 md:grid-cols-6">
+          {(['admin', 'staff', 'contact', 'partner', 'public', 'blocked'] as const).map((l) => (
             <div key={l} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
               <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CHIP[l]}`}>{LEVEL_CAPABILITIES[l].label}</span>
               <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-400">
@@ -291,7 +293,7 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
       {rowErr && <div className="mt-2 text-xs text-red-300">{rowErr}</div>}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {(['all', 'grant', 'blocked', 'staff', 'contact', 'driver'] as const).map((t) => (
+        {(['all', 'grant', 'blocked', 'staff', 'contact', 'partner', 'driver'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTier(t)}

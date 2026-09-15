@@ -7,6 +7,7 @@
  *   staffLookupUnit  — "who's on Cube 27?"  (staff)
  *   staffLookupJob   — "has Forgotten Island come back?"  (staff)
  *   contactJobInfo   — "what's on my booking / when is pickup?"  (contact)
+ *   partnerBookings  — "when is the Suburban coming back?"  (partner)
  *
  * Everything returned is names, numbers, dates and statuses — never a gate
  * or lockbox code (those stay behind verify_and_release_code) and never
@@ -135,6 +136,76 @@ export async function contactJobInfo(id: SenderIdentity) {
         delivery: b.deliveryAddress ? { address: b.deliveryAddress, time: b.deliveryTime } : null,
         items: b.items.map((it) => ({ category: it.category.name, units: it.assignments.map(shapeAssignment) })),
       })),
+    })),
+  }
+}
+
+/** What a partner's own booking status means, in their words. */
+export function partnerStatusWords(r: { status: string; vendorConfirmedAt: Date | null; vendorDeclinedAt: Date | null }): string {
+  switch (r.status) {
+    case 'ESTIMATED': return 'pitched — quoted to a client for these dates, nothing held yet'
+    case 'REQUESTED':
+      if (r.vendorDeclinedAt) return 'hold requested — you said you could not hold it; SirReel is following up'
+      return r.vendorConfirmedAt ? 'held — you confirmed the hold' : 'hold requested — waiting on you to confirm on your booking page'
+    case 'CONFIRMED': return 'confirmed'
+    case 'PICKED_UP': return 'picked up'
+    case 'ON_RENT': return 'out on rent'
+    case 'RETURNED': return 'returned'
+    default: return r.status.toLowerCase()
+  }
+}
+
+/**
+ * partnerBookings — "when is the Suburban coming back?" (partner).
+ *
+ * The partner's OWN sub-rentals, from a week back to ninety days out.
+ * Deliberately leaves out everything the sub-rental conduit keeps from a
+ * partner or a spoofed number should not learn: the production's name and
+ * company, addresses and on-site contacts, rates and totals, codes. The job
+ * code stays in — it is the booking number printed on their booking page and
+ * the reference they invoice against.
+ *
+ * Out/back is only as good as the status: PICKED_UP / ON_RENT / RETURNED
+ * are set by hand in HQ today, so the model is told to give the scheduled
+ * dates and not to promise a unit is physically back.
+ */
+export async function partnerBookings(id: SenderIdentity, now = new Date()) {
+  if (id.level !== 'partner' || !id.partner || id.partner.vendors.length === 0) return { error: 'not authorized' }
+  const today = new Date(now); today.setUTCHours(0, 0, 0, 0)
+  const back = new Date(today); back.setUTCDate(back.getUTCDate() - 7)
+  const ahead = new Date(today); ahead.setUTCDate(ahead.getUTCDate() + 90)
+  const rows = await prisma.subRental.findMany({
+    where: {
+      vendorId: { in: id.partner.vendors.map((v) => v.id) },
+      status: { not: 'CANCELLED' },
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: back } }] },
+        { OR: [{ startDate: null }, { startDate: { lte: ahead } }] },
+      ],
+    },
+    orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+    take: 40,
+    select: {
+      itemDescription: true, quantity: true, startDate: true, endDate: true, status: true,
+      vendorConfirmedAt: true, vendorDeclinedAt: true, driverName: true, vendorId: true,
+      subcontractedVehicle: { select: { name: true } },
+      job: { select: { jobCode: true, returnedAt: true } },
+    },
+  })
+  const name = new Map(id.partner.vendors.map((v) => [v.id, v.name]))
+  return {
+    today: d(today),
+    note: 'Scheduled dates. Out/back status is updated by SirReel staff and can lag the lot.',
+    bookings: rows.map((r) => ({
+      partner: id.partner!.vendors.length > 1 ? name.get(r.vendorId) ?? null : undefined,
+      unit: r.subcontractedVehicle?.name ?? r.itemDescription,
+      quantity: r.quantity,
+      from: d(r.startDate),
+      to: d(r.endDate),
+      status: partnerStatusWords(r),
+      yourDriver: r.driverName ?? null,
+      sirreelBooking: r.job?.jobCode ?? null,
+      sirreelMarkedJobReturned: Boolean(r.job?.returnedAt),
     })),
   }
 }

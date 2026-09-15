@@ -11,6 +11,8 @@
  *              during an active job. Gets their own job's details and can
  *              leave a message for their agent without it being an
  *              emergency.
+ *   partner  — a number on a partner's record (partnerIdentity.ts). Their
+ *              own company's bookings through SirReel, nothing else.
  *
  * "Current job" = not archived, not LOST/WRAPPED, and with an order or a
  * live booking whose window is within the grace band around today — the
@@ -24,6 +26,7 @@ import { prisma } from '@/lib/prisma'
 import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
 import { firstNameOf } from '@/lib/assistant/greeting'
 import { atLeast, levelFromGrant, resolveLevel, type AhaLevel } from '@/lib/assistant/access'
+import { partnersForNumber } from '@/lib/assistant/partnerIdentity'
 
 /** Days either side of today an order/booking window may sit and still count as current. */
 const CURRENT_GRACE_DAYS = 7
@@ -32,6 +35,8 @@ export interface SenderIdentity {
   /** Non-null at staff and admin level (lookups gate on it). */
   staff: { userId: string; name: string; role: string } | null
   contactJobs: Array<{ jobId: string; jobCode: string; name: string; role: string | null }>
+  /** Non-null at partner level only: the partner company(ies) this number is on. */
+  partner: { vendors: Array<{ id: string; name: string }>; personName: string | null } | null
   /** What to call them — the staff user's or the matched contact's first name. */
   firstName: string | null
   /** The one number that decides the tools: see src/lib/assistant/access.ts. */
@@ -40,7 +45,7 @@ export interface SenderIdentity {
   grant: { id: string; name: string; level: AhaLevel; note: string | null } | null
 }
 
-export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [], firstName: null, level: 'public', grant: null }
+export const NO_IDENTITY: SenderIdentity = { staff: null, contactJobs: [], partner: null, firstName: null, level: 'public', grant: null }
 
 /** Identity for a signed-in HQ user (the authenticated chat on /admin/assistant). Level follows the role. */
 export function identityForUser(user: { id: string; name: string; role: string }): SenderIdentity {
@@ -48,6 +53,7 @@ export function identityForUser(user: { id: string; name: string; role: string }
   return {
     staff: atLeast(level, 'staff') ? { userId: user.id, name: user.name, role: String(user.role) } : null,
     contactJobs: [],
+    partner: null,
     firstName: firstNameOf(user.name),
     level,
     grant: null,
@@ -97,7 +103,7 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
   const grant = await activeGrant(tail)
   // Blocked is decided before anything else is even looked up.
   if (grant?.level === 'blocked') {
-    return { staff: null, contactJobs: [], firstName: firstNameOf(grant.name), level: 'blocked', grant: { id: grant.id, name: grant.name, level: 'blocked', note: grant.note } }
+    return { staff: null, contactJobs: [], partner: null, firstName: firstNameOf(grant.name), level: 'blocked', grant: { id: grant.id, name: grant.name, level: 'blocked', note: grant.note } }
   }
 
   // Staff: the fleet is small enough to scan in memory; the phone columns
@@ -143,7 +149,11 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
     if (j) contactJobs.push({ jobId: j.id, jobCode: j.jobCode, name: j.name, role: 'GRANT' })
   }
 
-  const level = resolveLevel({ grantLevel: grant?.level ?? null, userRole: staffHit?.role ?? null, isContact: contactJobs.length > 0 })
+  // A partner's owner/office/dispatch — only looked up when nothing above
+  // matched, since it can only ever be the fallback before public.
+  const partnerHits = !grant && !staffHit && contactJobs.length === 0 ? await partnersForNumber(senderPhone) : []
+
+  const level = resolveLevel({ grantLevel: grant?.level ?? null, userRole: staffHit?.role ?? null, isContact: contactJobs.length > 0, isPartner: partnerHits.length > 0 })
   // Staff is non-null exactly when the level allows staff tools: an HQ user
   // hit, or a hand-made STAFF/ADMIN grant standing in for one. A CONTACT
   // grant on an HQ user deliberately takes the staff tools away.
@@ -157,7 +167,10 @@ export async function identifySender(senderPhone: string | null | undefined): Pr
   return {
     staff,
     contactJobs: atLeast(level, 'contact') ? contactJobs : [],
-    firstName: firstNameOf(staffHit?.name) ?? firstNameOf(grant?.name) ?? contactFirstName,
+    partner: level === 'partner'
+      ? { vendors: [...new Map(partnerHits.map((p) => [p.vendorId, { id: p.vendorId, name: p.vendorName }])).values()], personName: partnerHits[0]?.personName ?? null }
+      : null,
+    firstName: firstNameOf(staffHit?.name) ?? firstNameOf(grant?.name) ?? contactFirstName ?? (level === 'partner' ? firstNameOf(partnerHits[0]?.personName) : null),
     level,
     grant: grant ? { id: grant.id, name: grant.name, level: grant.level, note: grant.note } : null,
   }
@@ -170,6 +183,9 @@ export function describeSender(id: SenderIdentity): string | null {
   if (id.contactJobs.length) {
     const list = id.contactJobs.slice(0, 3).map((j) => `${j.name} (${j.jobCode}, ${j.role ?? 'contact'})`).join('; ')
     return `A PRODUCTION CONTACT on a current job: ${list}.`
+  }
+  if (id.partner) {
+    return `A PARTNER COMPANY CONTACT${id.partner.personName ? ` — ${id.partner.personName}` : ''} at ${id.partner.vendors.map((v) => v.name).join(' / ')}, a company that rents its vehicles or equipment to SirReel for SirReel's clients. Not a client.`
   }
   return null
 }

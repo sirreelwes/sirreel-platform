@@ -12,15 +12,23 @@
  *   2. hand-made grant          → its level
  *   3. active HQ user by phone  → levelForRole(role)
  *   4. contact on a current job → contact
- *   5. anyone else              → public
+ *   5. number on a partner's record → partner (their own bookings only)
+ *   6. anyone else              → public
+ *
+ * PARTNER is not above PUBLIC in what it can see of SirReel — it is a
+ * sideways lane: one lookup of the partner's OWN sub-rentals, never a
+ * production's name. It sits below CONTACT in LEVEL_ORDER so no
+ * `atLeast(level, 'contact')` gate ever opens for it, and it cannot be
+ * granted by hand (sr_aha_grants' enum has no PARTNER value) — it follows
+ * the partner record, the way contact follows the job.
  *
  * Pure. The DB reads live in senderIdentity.ts; the tool sets live in
  * runAssistant.ts and key off `level`.
  */
-export type AhaLevel = 'blocked' | 'public' | 'contact' | 'staff' | 'admin'
+export type AhaLevel = 'blocked' | 'public' | 'partner' | 'contact' | 'staff' | 'admin'
 
 /** Ordered low → high, for comparisons. */
-export const LEVEL_ORDER: AhaLevel[] = ['blocked', 'public', 'contact', 'staff', 'admin']
+export const LEVEL_ORDER: AhaLevel[] = ['blocked', 'public', 'partner', 'contact', 'staff', 'admin']
 
 export function atLeast(level: AhaLevel, floor: AhaLevel): boolean {
   return LEVEL_ORDER.indexOf(level) >= LEVEL_ORDER.indexOf(floor)
@@ -54,6 +62,15 @@ export const LEVEL_CAPABILITIES: Record<AhaLevel, { label: string; can: string[]
     label: 'Public',
     can: ['Access codes with a job code + a corroborating detail', 'Emergency escalation', 'Gear setup help', 'Office hours, address, where to pay'],
   },
+  partner: {
+    label: 'Partner',
+    can: [
+      'Everything Public can',
+      'Their own company’s bookings through SirReel: which unit, dates, hold/confirmed, out/back',
+      'A message to SirReel about one of those bookings (not only emergencies)',
+      'Never the production’s name, anyone else’s bookings, pricing or codes',
+    ],
+  },
   contact: {
     label: 'Production contact',
     can: [
@@ -82,6 +99,7 @@ export interface LevelInputs {
   grantLevel?: AhaLevel | null
   userRole?: string | null
   isContact?: boolean
+  isPartner?: boolean
 }
 
 export function resolveLevel(i: LevelInputs): AhaLevel {
@@ -89,5 +107,6 @@ export function resolveLevel(i: LevelInputs): AhaLevel {
   if (i.grantLevel && i.grantLevel !== 'public') return i.grantLevel
   const byRole = i.userRole ? levelForRole(i.userRole) : 'public'
   if (byRole !== 'public') return byRole
-  return i.isContact ? 'contact' : 'public'
+  if (i.isContact) return 'contact'
+  return i.isPartner ? 'partner' : 'public'
 }

@@ -43,6 +43,14 @@ const assignments = [
     ],
   },
 ]
+const vendors = [
+  {
+    id: 'v1', name: 'California Rent A Car', phone: '(310) 477-2727', contactName: 'Clifford Fields',
+    contacts: [{ name: 'Clifford Fields', phone: '310-555-0177', role: 'OWNER' }, { name: 'Dup', phone: '+13105550177', role: 'OTHER' }],
+  },
+  // Wes's own mobile on a partner record: staff wins, listed as overridden.
+  { id: 'v2', name: 'King Kong Production Vehicles', phone: null, contactName: null, contacts: [{ name: 'Front desk', phone: '818 515 2389', role: 'DISPATCH' }] },
+]
 let FAIL = false
 
 const origLoad = (Module as never as { _load: (...a: unknown[]) => unknown })._load
@@ -54,6 +62,7 @@ const origLoad = (Module as never as { _load: (...a: unknown[]) => unknown })._l
         user: { findMany: async () => guard(users) },
         job: { findMany: async () => guard(jobs) },
         bookingAssignment: { findMany: async () => guard(assignments) },
+        vendor: { findMany: async () => guard(vendors) },
       },
     }
   }
@@ -84,6 +93,13 @@ async function main() {
   check('booking requester listed as REQUESTER', c.some((r) => r.name === 'Ray Kim' && /REQUESTER/.test(r.reason)))
   check('contact rows link to the job', c.every((r) => r.manageHref === '/jobs/j1' && r.jobCode === 'SR-JOB-0231'))
   check('lapse = latest live date + 7 days (booking 9/14 → 9/21)', c.every((r) => r.until?.startsWith('2026-09-21')), c.map((r) => r.until))
+
+  console.log('partners')
+  const p = by('partner')
+  check('a contact phone and the vendor phone, duplicate tail once', p.filter((r) => r.name.includes('California Rent A Car')).length === 2, p)
+  check('partner rows resolve to partner and link to Portals', p.filter((r) => r.name.includes('California')).every((r) => r.level === 'partner' && r.manageHref === '/crm/portals#partners'))
+  check('a partner number that is also staff is listed as overridden', p.some((r) => r.tail === '8185152389' && r.level === 'public'))
+  check('partner access never lapses on a date', p.every((r) => r.until === null))
 
   console.log('drivers')
   const d = by('driver')

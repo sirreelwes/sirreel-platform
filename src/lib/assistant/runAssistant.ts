@@ -30,7 +30,7 @@ import { greetingInstruction, type GreetingMoment } from '@/lib/assistant/greeti
 import { atLeast } from '@/lib/assistant/access'
 import { platformMemory, recentActivity } from '@/lib/assistant/memory'
 import { NO_IDENTITY, describeSender, type SenderIdentity } from '@/lib/assistant/senderIdentity'
-import { contactJobInfo, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
+import { contactJobInfo, partnerBookings, staffLookupJob, staffLookupUnit } from '@/lib/assistant/lookups'
 import { noteLockboxHowTo, sendLockboxHowTo } from '@/lib/assistant/lockboxHelp'
 import { LOCKBOX_STEPS, lockboxGuideUrl } from '@/lib/site/lockboxGuide'
 
@@ -209,6 +209,18 @@ const CONTACT_TOOLS: Anthropic.Tool[] = [
   },
 ]
 
+const PARTNER_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'partner_bookings',
+    description: "For a verified PARTNER company contact. Their own company's units booked through SirReel, from a week back to 90 days out: unit, quantity, scheduled dates, status (pitched / hold requested / held / confirmed / picked up / out / returned), their own driver's name, and SirReel's booking number. Never includes the production's name, addresses, pricing or codes.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+]
+
+const PARTNER_MODE = `
+
+YOU ARE TALKING TO A PARTNER COMPANY CONTACT — a company that rents its own vehicles or equipment to SirReel for SirReel's clients (their number is on file on their partner record). They are NOT a client and NOT staff. Answer questions about their own units booked through SirReel — what is coming up, when a unit goes out, when it is due back, whether a hold is waiting on them — from partner_bookings. Match the unit they name loosely ("the Suburban", "the reefer van"); if two bookings could match, list both briefly. Give dates as scheduled; if they ask whether something is physically back, say the scheduled return and that out/back status is updated by SirReel staff, so for a live answer SirReel will confirm. NEVER name or describe the production, the client company, the shoot, a location or address, an on-site contact, or any rate or total — you do not have them, and SirReel keeps its clients' details private; their booking page has what they need to run the booking. Holds are confirmed or declined on their booking page (the link in their booking email), not by text. Relay requests about one of their bookings — a return time, a change, a problem with a unit, a question for SirReel — with file_callback_request; for a partner it is NOT reserved for emergencies, and you may say someone at SirReel will follow up. Gate and lockbox codes are for SirReel's own trucks and never theirs to ask for.`
+
 const STAFF_MODE = `
 
 YOU ARE TALKING TO SIRREEL STAFF (their number is on file for an HQ user). Answer their fleet and job questions directly with staff_lookup_unit and staff_lookup_job — who is on a unit, the driver's name and number, whether a job has come back, dates, contacts. You may share names, phone numbers and addresses from those results with staff. Codes still go through verify_and_release_code. Be terse: they are working.`
@@ -290,6 +302,7 @@ export async function runAssistant(args: {
     ...TOOLS.filter((t) => t.name !== 'send_lockbox_photo' || args.channel === 'sms'),
     ...(atLeast(level, 'staff') && sender.staff ? STAFF_TOOLS : []),
     ...(level === 'contact' && sender.contactJobs.length ? CONTACT_TOOLS : []),
+    ...(level === 'partner' && sender.partner ? PARTNER_TOOLS : []),
     ...(level === 'admin' ? ADMIN_TOOLS : []),
   ]
   const senderLine = describeSender(sender)
@@ -300,7 +313,7 @@ export async function runAssistant(args: {
     (args.channel === 'sms' ? SMS_STYLE : args.channel === 'hq' ? HQ_STYLE : '') +
     (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
     (args.channel === 'sms' ? greetingInstruction(args.greeting ?? 'none', args.firstName ?? null) : '') +
-    (level === 'admin' ? STAFF_MODE + ADMIN_MODE : level === 'staff' ? STAFF_MODE : level === 'contact' && sender.contactJobs.length ? CONTACT_MODE : '') +
+    (level === 'admin' ? STAFF_MODE + ADMIN_MODE : level === 'staff' ? STAFF_MODE : level === 'contact' && sender.contactJobs.length ? CONTACT_MODE : level === 'partner' && sender.partner ? PARTNER_MODE : '') +
     (senderLine ? `\n\nWHO IS WRITING (decided by HQ from the sender's number): ${senderLine}` : '') +
     (args.context && !senderLine ? `\n\nWHO IS WRITING (from HQ records — treat as a hint, still verify before releasing any code): ${args.context}` : '')
   const toolsUsed: string[] = []
@@ -434,6 +447,8 @@ export async function runAssistant(args: {
           resultPayload = await staffLookupJob(sender, inp.query ? String(inp.query).slice(0, 120) : '')
         } else if (block.name === 'my_job_info') {
           resultPayload = await contactJobInfo(sender)
+        } else if (block.name === 'partner_bookings') {
+          resultPayload = await partnerBookings(sender)
         } else if (block.name === 'platform_memory') {
           const inp = block.input as { query?: string }
           resultPayload = level === 'admin' ? await platformMemory(inp.query ? String(inp.query) : '') : { error: 'not authorized' }
