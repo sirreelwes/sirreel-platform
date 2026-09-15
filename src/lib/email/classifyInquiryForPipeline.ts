@@ -169,11 +169,28 @@ export function classifyInquiryForPipeline(input: InquiryClassifyInput): Inquiry
 const PORTAL_PAPERWORK_SUBJECT =
   /^\s*(rental agreement signed|lcdw decision submitted|card authorization submitted|studio contract signed)\s*\|/i
 
+// The Cognito "Order Request" form — SirReel's INTERNAL purchase-approval
+// request ("Order Request - Hugo Servin - 1,100": staff asking an approver
+// to buy a speaker, extinguisher mounts…). Not a client lead. It comes from
+// the same notifications@cognitoforms.com sender as real inquiries, and the
+// extractor calls roughly one copy in three an 'inquiry', so it kept
+// landing in New inbound (1,091 / 1,092 / 1,093 / 1,100). Anchored on the
+// trailing entry number so a client who happens to write "Order request"
+// in a subject still gets through.
+export const INTERNAL_ORDER_REQUEST_SUBJECT = /^\s*order request\s+-\s+.+\s+-\s+[\d,]+\s*$/i
+
 function classifyBySubject(
   strippedSubject: string,
   inReplyTo: string | null,
   reasonPrefix = '',
 ): InquiryClassifyResult {
+  if (INTERNAL_ORDER_REQUEST_SUBJECT.test(strippedSubject)) {
+    return {
+      include: false,
+      classification: 'other',
+      reason: `${reasonPrefix}subject matches the internal Cognito Order Request (purchase approval) form`,
+    }
+  }
   if (PORTAL_PAPERWORK_SUBJECT.test(strippedSubject)) {
     return {
       include: false,
