@@ -66,6 +66,7 @@ scripts/*
 !scripts/seed-walkie-kit-pieces.ts
 !scripts/walkies-one-product.ts
 !scripts/walkie-kit-client-hidden.ts
+!scripts/walkie-client-note.ts
 !scripts/supply-catalog-seed.ts
 !scripts/supply-catalog-seed.json
 !scripts/verify-rw-token.ts
