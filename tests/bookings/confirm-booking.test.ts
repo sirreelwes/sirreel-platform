@@ -19,7 +19,7 @@
  */
 
 import { BookingStatus } from '@prisma/client'
-import { CONFIRMABLE_FROM } from '../../src/lib/bookings/confirmBooking'
+import { CONFIRMABLE_FROM, confirmOutcome, reservationsForOrder } from '../../src/lib/bookings/confirmBooking'
 import { BOOKING_STATUS_VALUES, type BookingStatusValue } from '../../src/lib/bookings/status'
 
 const failures: string[] = []
@@ -70,6 +70,19 @@ console.log('\nEvery real status is deliberately in or out')
     `no status exists that this file has never considered${unmirrored.length ? ` (${unmirrored.join(', ')})` : ''}`,
   )
 }
+
+console.log('\nreservationsForOrder — every booking the order stands behind')
+check(JSON.stringify(reservationsForOrder('b-video', [{ status: 'ASSIGNED', bookingId: 'b-video' }, { status: 'ASSIGNED', bookingId: 'b-cargo39' }])) === JSON.stringify(['b-video', 'b-cargo39']),
+  'Lunch Rush: the linked booking AND the second hold bound to the order (Cargo 39)')
+check(JSON.stringify(reservationsForOrder(null, [{ status: 'ASSIGNED', bookingId: 'b1' }])) === JSON.stringify(['b1']),
+  'an order with no booking link still confirms the hold its truck is on')
+check(JSON.stringify(reservationsForOrder('b1', [{ status: 'SWAPPED', bookingId: 'b-old' }])) === JSON.stringify(['b1']),
+  'a SWAPPED truck does not drag its old booking along')
+check(JSON.stringify(reservationsForOrder('b1', [{ status: 'CHECKED_OUT', bookingId: 'b2' }, { status: 'RETURNED', bookingId: 'b2' }])) === JSON.stringify(['b1', 'b2']),
+  'duplicates collapse; checked-out and returned trucks still count')
+check(reservationsForOrder(null, []).length === 0, 'nothing bound, nothing to confirm')
+check(confirmOutcome({ ok: true, changed: true, previousStatus: 'REQUEST', booking: { id: 'x', bookingNumber: null, status: 'CONFIRMED', confirmedAt: null } }) === 'REQUEST→CONFIRMED', 'audit words for a real confirm')
+check(confirmOutcome({ ok: false, reason: 'archived', booking: { id: 'x', bookingNumber: null, status: 'REQUEST', confirmedAt: null } }) === 'skipped:archived', 'audit words for a refusal')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} failure(s):\n`)

@@ -109,3 +109,34 @@ export async function confirmBooking(db: Db, bookingId: string): Promise<Confirm
     },
   }
 }
+
+/**
+ * Every reservation an order stands behind — the order's own booking link
+ * first, then any other booking holding a truck for this order.
+ *
+ * Lunch Rush, 2026-09-15: S260904-002 was booked and its linked reservation
+ * (the Video Van's) confirmed, but Cargo 39 sat on a SECOND booking — the
+ * hold Jose made on 9/12 — bound to the same order through
+ * BookingAssignment.orderId. Nothing looked there, so that hold stayed
+ * REQUEST, and the OPS Today board (CONFIRMED/ACTIVE only) never showed the
+ * van going out or coming back. A truck bound to a booked order is the client
+ * commitment just as much as the linked booking is.
+ *
+ * SWAPPED assignments do not count — that truck was replaced and its booking
+ * is not what the order is standing behind. Pure; de-duplicated; stable order.
+ */
+export function reservationsForOrder(
+  orderBookingId: string | null | undefined,
+  assignments: Array<{ status: string; bookingId: string | null | undefined }>,
+): string[] {
+  const out: string[] = []
+  const add = (id: string | null | undefined) => { if (id && !out.includes(id)) out.push(id) }
+  add(orderBookingId)
+  for (const a of assignments) if (a.status !== 'SWAPPED') add(a.bookingId)
+  return out
+}
+
+/** The outcome of one confirm, in the words the order.booked audit row stores. */
+export function confirmOutcome(res: ConfirmBookingResult): string {
+  return res.ok ? (res.changed ? `${res.previousStatus}→CONFIRMED` : 'already-confirmed') : `skipped:${res.reason}`
+}

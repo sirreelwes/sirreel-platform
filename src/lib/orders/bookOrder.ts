@@ -41,6 +41,11 @@
  * reservation still read REQUEST. That was 8 of the 16 booked-or-later
  * orders carrying a booking link. See lib/bookings/confirmBooking.ts;
  * it touches status and confirmedAt only, never the items.
+ *
+ * And as of 2026-09-15, EVERY reservation holding a truck for the order —
+ * not only the one Order.bookingId points at. A second hold bound through
+ * BookingAssignment.orderId (Cargo 39 on Lunch Rush) was left at REQUEST
+ * and so never appeared on the OPS Today board. See reservationsForOrder().
  */
 
 import { Prisma } from '@prisma/client'
@@ -55,7 +60,7 @@ import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
 import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 import { notifySubRentalsBooked } from '@/lib/sub-rentals/lifecycleNotices'
 import { advanceOrdersToOnJob, projectOnJob } from '@/lib/orders/onJobFromVehicleOut'
-import { confirmBooking } from '@/lib/bookings/confirmBooking'
+import { confirmBooking, confirmOutcome, reservationsForOrder } from '@/lib/bookings/confirmBooking'
 import { PARTNER_SUB_RENTAL_WHERE, partnerRouting } from '@/lib/orders/partnerLines'
 
 export interface LaneRouting {
@@ -297,13 +302,21 @@ export async function bookOrder(args: {
       // Non-confirmable outcomes are recorded rather than thrown — an
       // order with no booking, or one whose reservation was already
       // confirmed by the Timeline, is normal and must still book.
-      let bookingConfirmed: string | null = null
-      if (order.bookingId) {
-        const res = await confirmBooking(tx, order.bookingId)
-        bookingConfirmed = res.ok
-          ? (res.changed ? `${res.previousStatus}→CONFIRMED` : 'already-confirmed')
-          : `skipped:${res.reason}`
+      // Every booking with a truck bound to THIS order counts too, not only
+      // the linked one — see reservationsForOrder().
+      const boundAssignments = await tx.bookingAssignment.findMany({
+        where: { orderId },
+        select: { status: true, bookingItem: { select: { bookingId: true } } },
+      })
+      const reservationIds = reservationsForOrder(
+        order.bookingId,
+        boundAssignments.map((a) => ({ status: a.status, bookingId: a.bookingItem.bookingId })),
+      )
+      const reservationsConfirmed: Record<string, string> = {}
+      for (const id of reservationIds) {
+        reservationsConfirmed[id] = confirmOutcome(await confirmBooking(tx, id))
       }
+      const bookingConfirmed: string | null = order.bookingId ? reservationsConfirmed[order.bookingId] ?? null : null
 
       // AuditLog. action is `order.booked`; oldValues capture pre-book
       // state, newValues capture the snapshot + routing summary.
@@ -332,6 +345,8 @@ export async function bookOrder(args: {
             // not be confirmed leaves a trace instead of nothing.
             bookingId: order.bookingId,
             bookingConfirmed,
+            // Every reservation touched, the linked one included.
+            reservationsConfirmed,
           },
         },
       })
