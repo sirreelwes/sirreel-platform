@@ -23,6 +23,15 @@
  * the inquiry); fall back to the acting user. Matches the new-Job
  * path's "agent of record" semantics.
  *
+ * Web-form carts (sourceMetadata.kind production-order / supply-order
+ * with a non-empty cart) do NOT take this path: nothing is written, and
+ * the rep is sent to /orders/new?inquiryId=…&jobId=… instead, where the
+ * builder seeds the cart lines onto the picked job and the save mints
+ * the vehicle holds and closes the inquiry (convertedOrderId). The blank
+ * order this route creates never got the cart — SR-REQ-0064 (ONA
+ * Creative, 2 SuperCubes) converted on 2026-09-15 into an empty DRAFT
+ * and dropped out of New inbound, so the request looked lost.
+ *
  * Contact handling: deliberately NOT touched. The rep manages
  * contacts in the quote builder — auto-attaching the inquirer as a
  * JobContact on an existing job would surprise reps who triage to a
@@ -66,6 +75,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         assignedToId: true,
         convertedJobId: true,
         convertedOrderId: true,
+        sourceMetadata: true,
       },
     }),
     prisma.job.findUnique({
@@ -88,6 +98,22 @@ export async function POST(req: NextRequest, { params }: Params) {
       { error: 'inquiry is already converted', existingOrderId: inquiry.convertedOrderId },
       { status: 409 },
     )
+  }
+
+  // A web-form cart goes through the order builder (see header) — no
+  // blank order, and the inquiry stays open until that order is saved.
+  const meta = inquiry.sourceMetadata as { kind?: unknown; cart?: unknown } | null
+  if (
+    (meta?.kind === 'production-order' || meta?.kind === 'supply-order') &&
+    Array.isArray(meta.cart) &&
+    meta.cart.length > 0
+  ) {
+    return NextResponse.json({
+      ok: true,
+      order: null,
+      inquiry: { id: inquiry.id, status: inquiry.status, convertedOrderId: null },
+      redirectTo: `/orders/new?inquiryId=${encodeURIComponent(inquiry.id)}&jobId=${encodeURIComponent(job.id)}`,
+    })
   }
 
   const agentId = inquiry.assignedToId ?? me.id

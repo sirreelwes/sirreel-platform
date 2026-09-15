@@ -994,8 +994,8 @@ function AddOnModal({
         <div className="mb-3">
           <h3 className="text-base font-semibold text-gray-900">Add on to an existing job</h3>
           <p className="mt-1 text-xs text-gray-500">
-            Picks a job and creates a new order on it for this inquiry. The new order will
-            be marked as an add-on.
+            Picks a job and creates a new order on it for this inquiry. A web-form request
+            opens in the order builder with its items already filled in.
           </p>
         </div>
 
