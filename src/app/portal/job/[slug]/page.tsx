@@ -11,6 +11,7 @@ import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSec
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
 import { JobCoiUpload } from '@/components/portal/JobCoiUpload';
 import { JobPortalShell, chromeFromPortalData } from '@/components/portal/JobPortalChrome';
+import { CounterExplanationModal } from '@/components/contracts/CounterExplanationModal';
 import { ChevronDown, FileText, Lock, Send, Truck, Upload } from 'lucide-react';
 
 /**
@@ -394,6 +395,7 @@ export default function JobPortalPage() {
   // treats release as best-effort, so "approved" and "ready to sign" are
   // two different facts — never promise the second on the first.
   const [agreementReady, setAgreementReady] = useState(false);
+  const [explanationOpen, setExplanationOpen] = useState(false);
   // The annual-agreement ask. Optimistic on success so the line changes
   // under the client's finger; the server is idempotent per account, so a
   // double-tap (or a colleague on another show) never stacks a duplicate.
@@ -1239,7 +1241,23 @@ export default function JobPortalPage() {
                     >
                       Download PDF
                     </a>
+                    {/* Wes 2026-09-15: our reasoning right next to the PDF,
+                        so "not exactly your redline" arrives with the why. */}
+                    <button
+                      type="button"
+                      onClick={() => setExplanationOpen(true)}
+                      className="inline-flex items-center rounded-lg bg-amber-600 hover:bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white"
+                    >
+                      Why we landed here
+                    </button>
                   </div>
+                  {explanationOpen && (
+                    <CounterExplanationModal
+                      url={`${data.paperwork.counterProposal.url}/explanation`}
+                      pdfUrl={data.paperwork.counterProposal.url}
+                      onClose={() => setExplanationOpen(false)}
+                    />
+                  )}
                 </PaperworkRow>
               )}
 

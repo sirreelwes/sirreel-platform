@@ -18,8 +18,9 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, FileText } from 'lucide-react'
+import { ExternalLink, FileText, MessageSquareText } from 'lucide-react'
 import { JobEmailButton } from '@/components/jobs/JobEmailButton'
+import { CounterExplanationModal } from '@/components/contracts/CounterExplanationModal'
 
 interface Counter {
   reviewId: string
@@ -54,6 +55,7 @@ export function JobCounterProposalPanel({
 }) {
   const [counter, setCounter] = useState<Counter | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [explainOpen, setExplainOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +72,15 @@ export function JobCounterProposalPanel({
   useEffect(() => {
     void load()
   }, [load])
+
+  // Warm the client's "Why we landed here". Writing it takes about a minute
+  // (81s on SR-JOB-0347), and without this the first client to click it
+  // would be the one waiting. A no-op once it is stored for this PDF.
+  const counterStamp = counter?.generatedAt ?? null
+  useEffect(() => {
+    if (!counterStamp) return
+    void fetch(`/api/jobs/${jobId}/counter-proposal/explanation`).catch(() => {})
+  }, [jobId, counterStamp])
 
   if (!counter || (reviewId && counter.reviewId !== reviewId)) return loaded ? <>{fallback ?? null}</> : null
 
@@ -114,6 +125,16 @@ export function JobCounterProposalPanel({
           >
             <FileText className="w-3.5 h-3.5" /> View PDF
           </a>
+          {/* What the client reads from "Why we landed here" beside the PDF
+              on their portal — previewable and rewritable here. */}
+          <button
+            type="button"
+            onClick={() => setExplainOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-lt-hairline px-3 py-1.5 text-xs font-semibold text-lt-fg2 hover:text-lt-fg hover:border-lt-fg3"
+            title="The clause-by-clause explanation the client can open next to the PDF"
+          >
+            <MessageSquareText className="w-3.5 h-3.5" /> Client explanation
+          </button>
           {reviewId ? (
             <Link
               href={`/jobs/${jobId}#counter-proposal`}
@@ -144,6 +165,14 @@ export function JobCounterProposalPanel({
           />
         </div>
       </div>
+      {explainOpen && (
+        <CounterExplanationModal
+          url={`/api/jobs/${jobId}/counter-proposal/explanation`}
+          rewriteUrl={`/api/jobs/${jobId}/counter-proposal/explanation`}
+          pdfUrl={`/api/tools/contract-review/${counter.reviewId}/counter-pdf`}
+          onClose={() => setExplainOpen(false)}
+        />
+      )}
     </div>
   )
 }
