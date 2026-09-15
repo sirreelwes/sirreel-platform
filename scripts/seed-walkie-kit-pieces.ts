@@ -180,12 +180,16 @@ async function main() {
           rounding: piece.kit.rounding,
           minQty: piece.kit.minQty,
           billing: 'FREE',
+          // Client sees only the Motorola CP200 (Wes 2026-09-15); the
+          // accessory still pulls, packs and checks in.
+          clientVisible: false,
         },
         update: {
           qtyPer: piece.kit.qtyPer,
           perUnits: piece.kit.perUnits,
           rounding: piece.kit.rounding,
           minQty: piece.kit.minQty,
+          clientVisible: false,
         },
         select: { id: true },
       })

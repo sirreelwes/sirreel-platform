@@ -234,8 +234,8 @@ accessory SKUs:
 SirReel rents ONE walkie: the Motorola CP200. Whether a given radio is
 analog or digital is the warehouse's call, never a separate line — "analog
 walkies" and "digital radios" are both just walkies. Keep "analog" /
-"digital" OUT of \`description\`; if the client asked for a type, put it in
-\`qualifier\` so the rep sees the preference.
+"digital" out of \`description\` AND \`qualifier\` — the client only ever
+sees a Motorola CP200.
 
 The canonical SirReel names are "Surveillance Kit" and "Hand Mics" — but
 the AI should use the spelling the client wrote in the description field

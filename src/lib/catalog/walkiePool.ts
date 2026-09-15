@@ -25,6 +25,7 @@ import {
   WALKIE_ORDER_CODE,
   isStockOnlyCode,
   isWalkieFamilyCode,
+  walkieClientQualifier,
   walkieShortfall,
   type WalkieDemand,
   type WalkieShortfall,
@@ -187,7 +188,7 @@ export function walkieSupplyForOrder(book: WalkieBook, orderId: string): OrderWa
  * stock-only row in the first place; this is what catches a stale client,
  * a reorder of an old line, or a hand-built request.
  */
-export async function orderableWalkieLine<T extends { inventoryItemId?: string | null; description?: string | null }>(
+export async function orderableWalkieLine<T extends { inventoryItemId?: string | null; description?: string | null; qualifier?: string | null }>(
   line: T,
   db: Db = prisma,
 ): Promise<T> {
@@ -205,5 +206,11 @@ export async function orderableWalkieLine<T extends { inventoryItemId?: string |
     })
     if (target) inventoryItemId = target.id
   }
-  return { ...line, inventoryItemId, description: WALKIE_NAME }
+  return {
+    ...line,
+    inventoryItemId,
+    description: WALKIE_NAME,
+    // The qualifier prints on the client's quote — no radio type in it.
+    ...(line.qualifier !== undefined ? { qualifier: walkieClientQualifier(line.qualifier) } : {}),
+  }
 }

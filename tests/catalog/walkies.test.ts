@@ -17,6 +17,7 @@ import {
   isStockOnlyCode,
   isWalkieFamilyCode,
   walkieClientName,
+  walkieClientQualifier,
   walkieShortfall,
   type WalkieDemand,
 } from '../../src/lib/catalog/walkies'
@@ -40,6 +41,13 @@ check(walkieClientName('Motorola CP200 6-Bank Charger') === 'Motorola CP200 6-Ba
 check(walkieClientName('Motorola CP200 Battery') === 'Motorola CP200 Battery', 'the battery keeps its name')
 check(walkieClientName('Walkies') === 'Walkies', "a rep's own words are left alone")
 check(walkieClientName(null) === null, 'null stays null')
+
+console.log('\nthe qualifier')
+check(walkieClientQualifier('analog') === null, '"analog" alone leaves no qualifier')
+check(walkieClientQualifier('digital, for the DP') === 'for the DP', 'the type goes, the rest stays')
+check(walkieClientQualifier('for the DP') === 'for the DP', 'no type word, untouched')
+check(walkieClientQualifier('no surveillance kits') === 'no surveillance kits', '"surveillance" is not "sub"')
+check(walkieClientQualifier(null) === null, 'null stays null')
 
 console.log('\nthe rows')
 check(isWalkieFamilyCode('104387') && isWalkieFamilyCode('103733'), 'digital and analog are both walkie stock')

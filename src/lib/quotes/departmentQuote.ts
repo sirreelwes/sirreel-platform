@@ -35,6 +35,7 @@ import {
 } from '@/lib/sub-rentals/vehicles'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
+import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 
 const ACCENT = '#0F7A93'
 const HEADER_BG = '#0f172a'
@@ -154,6 +155,7 @@ export async function composeDepartmentQuote(
           id: true, description: true, rate: true, rateType: true, quantity: true,
           billableDays: true, lineTotal: true, pickupDate: true, returnDate: true,
           assetCategoryId: true,
+          ...CLIENT_KIT_VISIBILITY,
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -185,7 +187,7 @@ export async function composeDepartmentQuote(
     .filter((v): v is NonNullable<typeof v> => !!v)
 
   const lines = await Promise.all(
-    order.lineItems.map(async (l) => ({
+    order.lineItems.filter((l) => !hiddenFromClient(l)).map(async (l) => ({
       description: l.description,
       dates: dateRange(l.pickupDate, l.returnDate),
       qty: l.quantity,

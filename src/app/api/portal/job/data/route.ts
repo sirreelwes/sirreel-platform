@@ -39,6 +39,7 @@ import { loadOrderReplacementValue, toClientReplacementValue } from '@/lib/coi/r
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
+import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 
 export const dynamic = 'force-dynamic'
 
@@ -225,6 +226,8 @@ export async function GET(req: NextRequest) {
             usageEstimated: true,
             parentLineItemId: true,
             autoKitPieceId: true,
+            lineTotal: true,
+            ...CLIENT_KIT_VISIBILITY,
             // The next two feed the BOOKING-DETAILS block only, and are not
             // serialized to the client. `department` picks out the vehicle
             // lines; `subRentals` answers "is this a partner's unit" (never
@@ -798,7 +801,8 @@ export async function GET(req: NextRequest) {
     // sees only their own line as they signed it. The internal sub-rental
     // surfaces read OrderLineItem.subRentals directly and never come
     // through this DTO.
-    lineItems: order.lineItems.map((li) => ({
+    // Hidden included accessories stay off the portal (lib/orders/clientLines.ts).
+    lineItems: order.lineItems.filter((li) => !hiddenFromClient(li)).map((li) => ({
       id: li.id,
       type: li.type,
       description: li.description,

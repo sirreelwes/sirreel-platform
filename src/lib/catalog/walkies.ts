@@ -84,6 +84,23 @@ export function walkieClientName(text: string | null): string | null {
   return text.replace(VARIANT_NAME_RE, WALKIE_NAME)
 }
 
+/**
+ * A walkie line's qualifier with the radio TYPE taken out — "analog",
+ * "digital", "sub". The qualifier prints on the client's quote, and which
+ * CP200 goes out is the warehouse's call. Anything else the client said
+ * ("for the DP") stays. Null when nothing is left.
+ */
+export function walkieClientQualifier(q: string | null | undefined): string | null {
+  if (!q) return null
+  const out = q
+    .replace(/\b(?:analogue|analog|digital|sub(?:-?rent(?:al|ed)?|bed)?)\b/gi, '')
+    .replace(/\s*[,;/]\s*(?=[,;/]|$)/g, '')
+    .replace(/^\s*[,;/-]\s*/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return out ? out : null
+}
+
 // ── The pool: does HQ have enough radios, or does it need to sub? ──────
 
 /** One order's walkies, on inclusive calendar days (yyyy-mm-dd). */
