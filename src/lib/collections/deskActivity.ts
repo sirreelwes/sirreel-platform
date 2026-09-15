@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { openArTotal } from '@/lib/collections/collectible'
 import { pacificDayRange, pacificToday } from '@/lib/collections/eodReport'
+import { chargeCountsAsCollected, paymentsEchoingDeskCharges } from '@/lib/collections/deskChargePayments'
 
 /**
  * The collections desk, live.
@@ -19,7 +20,9 @@ import { pacificDayRange, pacificToday } from '@/lib/collections/eodReport'
  * `RwCollectionCharge` with `chargedById`; every non-card collection writes
  * `JobFinalInvoice.collectedAt/collectedById`; HQ-native invoices write a
  * `Payment` with `recordedById`. Three tables, three ways money arrives, all
- * attributed.
+ * attributed. A desk card charge on an HQ invoice writes BOTH a charge and a
+ * Payment — the Payment is dropped here so it counts once, as the charge
+ * (see deskChargePayments.ts).
  *
  * OUTREACH is counted, not judged. Ana's mailbox is already ingested by the
  * Gmail Pub/Sub watcher (see watchedInboxes.ts), so an email she sends is a
@@ -106,7 +109,8 @@ export interface DeskMoney {
   card: MoneyBucket
   /** Wire / ACH / Zelle / check marked collected on a queued final invoice. */
   bank: MoneyBucket
-  /** Payments against HQ-native invoices. */
+  /** Payments against HQ-native invoices — other than a desk card charge,
+   *  which is already in `card`. */
   hq: MoneyBucket
   total: number
 }
@@ -288,7 +292,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     charges,
     reversals,
     finals,
-    payments,
+    allPayments,
     paidMarks,
     triages,
     reviews,
@@ -302,7 +306,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
       where: { chargedAt: { gte: priorSince } },
       select: {
         chargedAt: true, amount: true, status: true, reversedAt: true, chargedById: true,
-        customerName: true, invoiceNumber: true, cardLast4: true, rwInvoiceId: true,
+        customerName: true, invoiceNumber: true, cardLast4: true, rwInvoiceId: true, retref: true,
       },
       orderBy: { chargedAt: 'desc' },
     }),
@@ -331,6 +335,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     prisma.payment.findMany({
       where: { receivedAt: { gte: priorSince }, voidedAt: null, NOT: { status: 'FAILED' } },
       select: {
+        id: true, invoiceId: true, gatewayRefId: true,
         receivedAt: true, amount: true, method: true, recordedById: true,
         invoice: { select: { invoiceNumber: true } },
       },
@@ -379,6 +384,12 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     openArTotal(),
     prisma.user.findMany({ select: { id: true, name: true, email: true } }),
   ])
+
+  // A desk card charge on an HQ invoice is also a Payment on that invoice.
+  // Every read below uses `payments` for the HQ bucket, so the echo comes
+  // out here, once, rather than in each loop.
+  const echoed = paymentsEchoingDeskCharges(charges, allPayments)
+  const payments = allPayments.filter((p) => !echoed.has(p.id))
 
   // ── Name resolution ──────────────────────────────────────────────────
   // Most tables carry a user id; RwInvoiceReview carries a free-text
@@ -433,7 +444,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
 
     for (const c of charges) {
       // A reversed charge is money that came back; it never counts as collected.
-      if (c.status !== 'APPROVED' || c.reversedAt || !inWin(c.chargedAt)) continue
+      if (!chargeCountsAsCollected(c) || !inWin(c.chargedAt)) continue
       add(card, money(c.amount))
     }
     for (const f of finals) {
@@ -493,7 +504,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
 
   let previousMonth = 0
   for (const c of charges) {
-    if (c.status === 'APPROVED' && !c.reversedAt && inPrior(c.chargedAt)) previousMonth += money(c.amount)
+    if (chargeCountsAsCollected(c) && inPrior(c.chargedAt)) previousMonth += money(c.amount)
   }
   for (const f of finals) {
     if (f.collectedVia !== 'CARD' && inPrior(f.collectedAt)) previousMonth += money(f.amount)
@@ -511,8 +522,12 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   // What the month's paid-marks were carrying. One extra round trip, and the
   // difference between a desk that looks like it cleared $12.8k and one that
   // cleared $51k — see DeskWins.clearedFromAr.
+  // Only charges that actually collected: a declined or reversed charge put
+  // nothing in `collected`, so an RW paid-mark on that invoice is the money.
+  // (`hq:` anchors never equal an RW invoice id, so HQ charges drop out of
+  // this comparison on their own.)
   const chargedIds = new Set(
-    charges.filter((c) => c.chargedAt >= since).map((c) => c.rwInvoiceId),
+    charges.filter((c) => c.chargedAt >= since && chargeCountsAsCollected(c)).map((c) => c.rwInvoiceId),
   )
   const markedIds = paidMarks
     .filter((m) => m.markedAt >= since && !chargedIds.has(m.rwInvoiceId))
@@ -533,7 +548,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
     if (!biggest || amount > biggest.amount) biggest = { label, amount, at: at.toISOString() }
   }
   for (const c of charges) {
-    if (c.status === 'APPROVED' && !c.reversedAt && c.chargedAt >= since) {
+    if (chargeCountsAsCollected(c) && c.chargedAt >= since) {
       considerWin(c.customerName ?? 'a client', money(c.amount), c.chargedAt)
     }
   }
@@ -576,7 +591,7 @@ export async function buildDeskActivity(now: Date = new Date()): Promise<DeskAct
   }
 
   for (const c of charges) {
-    if (c.status !== 'APPROVED' || c.reversedAt || c.chargedAt < since) continue
+    if (!chargeCountsAsCollected(c) || c.chargedAt < since) continue
     add(op(c.chargedById, nameOf(c.chargedById)).charged, money(c.amount))
   }
   for (const f of finals) {
