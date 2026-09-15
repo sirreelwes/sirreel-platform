@@ -1139,44 +1139,35 @@ export function GanttBoard() {
   // via PATCH /assets/[id]/summary; the older POST /assets/[id]/tier endpoint
   // remains live for API parity but has no UI caller here anymore.)
 
-  // Reassign a booking item to a different unit for the SAME dates via the exact
-  // endpoints AssignUnitsModal uses (unassign old → assign new). The assign route
-  // hard-blocks a fully-assigned item, so the old pick MUST be released first.
-  // If binding the new unit then fails, we RESTORE the old assignment on the
-  // server. Dates never change here.
+  // Reassign a booking item to a different unit for the SAME dates — ONE
+  // call. It used to be release-then-rebind, because the assign route
+  // hard-blocked a fully-assigned item; a failed rebind then had to
+  // RESTORE the old assignment, and a failed restore left the job with no
+  // truck at all. `replaceAssetId` (2026-09-14) does both halves inside
+  // the assign route's own transaction, so the hold is never momentarily
+  // uncovered and there is no restore path to get wrong. It runs the same
+  // rank / capacity / buffer / out-of-service checks as every other bind —
+  // that was the objection to a separate reassign endpoint, and this is
+  // not one.
   //
-  // OPTIMISTIC DROP: the bar moves in LOCAL state the moment it's dropped; the
-  // two mutations run in the background. Every failure path rolls the local
-  // move back via the INVERSE move (never a snapshot restore, so a concurrent
-  // drop's optimistic state can't be clobbered) AND surfaces a readable error —
-  // the board is never silently wrong. refreshTimeline() stays the eventual
-  // truth-reconciler after the mutations settle. A combined single-call
-  // reassign endpoint was considered and rejected: it would fork the assign
-  // route's rank/capacity/buffer validation (not a small, safe addition).
+  // It also fixes the DAYS. The old rebind named no window, so the server
+  // re-resolved one from the quoted blocks and could stamp the new truck
+  // on a different date block than the bar that was dragged. Naming the
+  // outgoing unit makes its own days the window.
+  //
+  // OPTIMISTIC DROP: the bar moves in LOCAL state the moment it's dropped;
+  // the mutation runs in the background. Every failure path rolls the
+  // local move back via the INVERSE move (never a snapshot restore, so a
+  // concurrent drop's optimistic state can't be clobbered) AND surfaces a
+  // readable error — the board is never silently wrong. refreshTimeline()
+  // stays the eventual truth-reconciler after the mutation settles.
   const doReassign = useCallback(async (bookingItemId: string, fromAssetId: string, toAssetId: string, toUnit: string, bufferOverride = false) => {
-    const assignUnit = async (assetId: string, override: boolean) => {
-      const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId, bufferDays: 1, bufferOverride: override }),
-      })
-      return { status: r.status, ok: r.ok, j: await r.json().catch(() => ({} as any)) }
-    }
-    const unassignUnit = async (assetId: string) => {
-      const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/unassign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId }),
-      })
-      return { ok: r.ok, j: await r.json().catch(() => ({} as any)) }
-    }
-
     // Optimistic: the bar lands on the target row NOW.
     setUnits((prev) => moveBookingLocal(prev, bookingItemId, fromAssetId, toAssetId))
     const rollback = () => setUnits((prev) => moveBookingLocal(prev, bookingItemId, toAssetId, fromAssetId))
 
     // Register the in-flight reassign: a new drag on THIS booking is blocked
-    // until these mutations settle (other bookings stay draggable), and the
+    // until the mutation settles (other bookings stay draggable), and the
     // reconciling refetch is DEFERRED to settle-time so a mid-flight snapshot
     // can never clobber the optimistic state. This is the drag-back 404/409
     // fix — the second drag used the optimistic row while the server was
@@ -1186,42 +1177,40 @@ export function GanttBoard() {
     setDragBusy(true)
     setDragErr(null)
     try {
-      // 1. Release the old unit. If this fails (e.g. checked out), the server
-      //    never changed — undo the local move.
-      const u = await unassignUnit(fromAssetId)
-      if (!u.ok || !u.j.ok) {
-        rollback()
-        setDragErr(u.j.reason || u.j.error || 'Could not release the current unit — move undone.')
-        return
-      }
-      // 2. Bind the new unit. Success → the optimistic state already matches
-      //    the server; the settle path refetches to reconcile derived fields.
-      const a = await assignUnit(toAssetId, bufferOverride)
-      if (a.ok && a.j.ok) {
+      const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId: toAssetId,
+          bufferDays: 1,
+          bufferOverride,
+          // The swap: drop this unit and bind the new one together, on the
+          // days the dragged bar already had.
+          replaceAssetId: fromAssetId,
+        }),
+      })
+      const j = await r.json().catch(() => ({} as any))
+      if (r.ok && j.ok) {
+        // The optimistic state already matches the server; the settle path
+        // refetches to reconcile derived fields.
         setDragBuffer(null)
         pendingRefetch.current = true
         return
       }
-      // 3. New unit rejected — restore the old assignment on the server, and
-      //    undo the local move either way.
+      // Refused — nothing moved on the server, so the local undo is the
+      // whole repair.
       rollback()
-      const restore = await assignUnit(fromAssetId, true)
-      if (!restore.ok || !restore.j.ok) {
-        setDragErr(`Move failed and the old unit couldn't be restored (${restore.j.reason || restore.j.error || 'unknown'}). Reassign via “change units”.`)
-        pendingRefetch.current = true // board truth diverged (item unassigned) — reconcile at settle
-        return
-      }
-      // Old is back exactly where it was, on server and screen.
-      if (a.status === 409 && a.j.error === 'buffer-encroachment' && a.j.needsOverride) {
+      if (r.status === 409 && j.error === 'buffer-encroachment' && j.needsOverride) {
         // Confirming the override re-runs doReassign(..., true), which
         // re-applies the optimistic move.
-        setDragBuffer({ bookingItemId, fromAssetId, toAssetId, toUnit, reason: a.j.reason || 'This move encroaches a turnaround buffer.' })
+        setDragBuffer({ bookingItemId, fromAssetId, toAssetId, toUnit, reason: j.reason || 'This move encroaches a turnaround buffer.' })
         return
       }
-      setDragErr(a.j.reason || a.j.error || `Reassign failed (${a.status}) — move undone.`)
+      setDragErr(j.reason || j.error || `Reassign failed (${r.status}) — move undone.`)
     } catch (e) {
-      // Network failure mid-sequence — server state unknown. Roll the local
-      // move back, say so, and reconcile at settle.
+      // Network failure — the write either committed whole or not at all,
+      // but this end can't tell which. Undo locally, say so, reconcile at
+      // settle.
       rollback()
       setDragErr(`${e instanceof Error ? e.message : String(e)} — move undone.`)
       pendingRefetch.current = true
