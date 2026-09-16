@@ -20,13 +20,21 @@
  * confidently wrong rate on a client's invoice is far worse than a line
  * that visibly needs a person.
  *
+ * The list opens UPWARD when there is no room under the input
+ * (2026-09-16, Oliver: Sal adding a ratchet strap could only see the
+ * first hit — the "Add to the order" card is the last thing above the
+ * notes box, so the list ran off the bottom of the screen). Measured
+ * against the viewport each time it opens; the card itself must not clip
+ * it either (see CheckReportForm — the card no longer carries
+ * overflow-hidden for exactly this reason).
+ *
  * Deliberately does NOT guess. Nothing here auto-selects a match for
  * typed text, however good it looks: "cp battery" hitting "CP200 -
  * Battery" is a coin flip against "CP200 - Battery, High Capacity", and
  * the wrong side of that flip is money.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Search, X } from 'lucide-react'
 
 interface Hit {
@@ -35,6 +43,9 @@ interface Hit {
   description: string
   category: { name: string } | null
 }
+
+/** max-h-60 (240px) plus the 4px gap — what the list needs to fit whole. */
+const LIST_MAX_PX = 244
 
 export interface ExtraItemValue {
   description: string
@@ -53,6 +64,7 @@ export function ExtraItemPicker({
   const [hits, setHits] = useState<Hit[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [openUp, setOpenUp] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
 
   // Close on an outside click. A dropdown that stays open over the next
@@ -88,6 +100,30 @@ export function ExtraItemPicker({
   }, [value.description, value.inventoryItemId])
 
   const named = !!value.inventoryItemId
+  const showList = open && hits.length > 0 && !named
+
+  // Which way the list opens. The list is capped at LIST_MAX_PX; if that
+  // much does not fit under the box but does fit above it, open above.
+  // Re-measured on scroll/resize while open, since the sheet is a long
+  // scrolling page and the box moves under the viewport edge.
+  useLayoutEffect(() => {
+    if (!showList) return
+    const measure = () => {
+      const el = boxRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const below = window.innerHeight - r.bottom
+      const above = r.top
+      setOpenUp(below < LIST_MAX_PX && above > below)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [showList])
 
   return (
     <div ref={boxRef} className="relative flex-1 min-w-0">
@@ -127,8 +163,12 @@ export function ExtraItemPicker({
         </p>
       )}
 
-      {open && hits.length > 0 && !named && (
-        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-lt-hairline bg-lt-card shadow-lg max-h-60 overflow-y-auto">
+      {showList && (
+        <div
+          className={`absolute z-20 left-0 right-0 rounded-lg border border-lt-hairline bg-lt-card shadow-lg max-h-60 overflow-y-auto ${
+            openUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
+        >
           <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-lt-hairline">
             <span className="text-[11px] uppercase tracking-wide font-semibold text-lt-fg3">
               Is it one of these?

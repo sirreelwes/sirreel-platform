@@ -1345,9 +1345,13 @@ export function CheckReportForm({
 
       {/* Things that went that were never on the order. Recorded and
           flagged, never priced here — the yard cannot see rates, and a
-          line added at $0 would silently under-bill the job. */}
-      <div className="border border-lt-hairline bg-lt-card rounded-xl overflow-hidden mb-4">
-        <div className="px-3 py-2 bg-lt-inner border-b border-lt-hairline">
+          line added at $0 would silently under-bill the job.
+          NO overflow-hidden on this card: the catalog list under each
+          row is absolutely positioned and the clip cut it off at the
+          card's bottom edge (Oliver, 2026-09-16 — Sal could see one hit
+          of "ratchet"). The header rounds its own top corners instead. */}
+      <div className="border border-lt-hairline bg-lt-card rounded-xl mb-4">
+        <div className="px-3 py-2 bg-lt-inner border-b border-lt-hairline rounded-t-xl">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
             {isOut ? 'Add to the order' : 'Came back, not on the order'}
           </span>
