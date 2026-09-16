@@ -58,6 +58,7 @@ scripts/*
 !scripts/backfillContactRoles.ts
 !scripts/backfillContactRolesAi.ts
 !scripts/rollupCompanySpend.ts
+!scripts/audit-liftgate-categories.ts
 !scripts/sync-company-coi-expiry.ts
 !scripts/archive-dormant-jobs.ts
 !scripts/flag-specialty-vehicles.ts
