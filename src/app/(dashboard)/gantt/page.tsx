@@ -102,16 +102,18 @@ function ScheduleSurface() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <header className="mb-3 flex items-start justify-between gap-2 flex-wrap">
-        <div>
-        <h1 className="text-xl font-semibold text-gray-900">Agenda</h1>
-        <p className="text-[12px] text-gray-500 mt-0.5">
-          What goes out and what comes back, day by day.{' '}
-          <Link href="/gantt?view=timeline" className="underline underline-offset-2 text-gray-700">
-            Timeline view
-          </Link>{' '}
-          <span className="text-gray-400">(best on desktop)</span>
-        </p>
+      {/* One line, not three: the explanation wrapped to most of a
+          thumb's worth of screen above the first day card, every visit
+          (Wes 2026-09-16 on the board's legend — same complaint). */}
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-gray-900 leading-none">Agenda</h1>
+          <p className="text-[11px] text-gray-500 mt-1">
+            Out and back, day by day ·{' '}
+            <Link href="/gantt?view=timeline" className="underline underline-offset-2 text-gray-700">
+              Timeline
+            </Link>
+          </p>
         </div>
         <ScheduleViewToggle current="agenda" />
       </header>
