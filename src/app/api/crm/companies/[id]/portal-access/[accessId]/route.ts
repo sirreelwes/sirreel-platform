@@ -64,6 +64,7 @@ export async function PATCH(
     role?: unknown
     sendInvite?: unknown
     customBody?: unknown
+    variant?: unknown
   }
 
   if (body.sendInvite === true) {
@@ -80,6 +81,7 @@ export async function PATCH(
       base: portalBase(req),
       fallbackRep: { name: user.name ?? null, email: user.email ?? null },
       customBody,
+      variant: body.variant === 'overview' ? 'overview' : 'standard',
     })
     if (!composition.ok) {
       return NextResponse.json({ error: composition.error }, { status: composition.status })

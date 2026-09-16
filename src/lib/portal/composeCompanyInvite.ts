@@ -10,6 +10,12 @@
  * while the shell (annual-agreement callout, portal button, sign-off)
  * stays — those are facts about the account, not the rep's to retype.
  *
+ * Two variants (Wes 2026-09-16): 'standard', the original, and 'overview',
+ * which opens with what SirReel has built and the fact that the account's
+ * rates reach every team. The rep picks one in the modal; the composer only
+ * passes it through and reports whether the account HAS negotiated rates, so
+ * the rates highlight is never a promise nobody made.
+ *
  * Never writes. The send route stamps `invitedAt` after Resend accepts.
  */
 
@@ -34,6 +40,14 @@ export interface CompanyInviteCompositionOk {
   repName: string
   companyName: string
   alreadyInvitedAt: string | null
+  /** Which invite this is — the modal's picker reflects it back. */
+  variant: 'standard' | 'overview'
+  /**
+   * Whether the account has negotiated rates on file. The overview variant's
+   * rates highlight is suppressed without them, and the modal warns the rep
+   * so they are not surprised by its absence in the preview.
+   */
+  hasNegotiatedRates: boolean
 }
 
 export type CompanyInviteComposition =
@@ -48,7 +62,10 @@ export async function composeCompanyPortalInvite(args: {
   /** The signed-in rep, used when the account has no default agent. */
   fallbackRep: { name: string | null; email: string | null }
   customBody?: string | null
+  /** Defaults to 'standard' — every existing caller is unchanged. */
+  variant?: 'standard' | 'overview'
 }): Promise<CompanyInviteComposition> {
+  const variant: 'standard' | 'overview' = args.variant === 'overview' ? 'overview' : 'standard'
   const access = await prisma.companyPortalAccess.findFirst({
     where: { id: args.accessId, companyId: args.companyId },
     select: {
@@ -64,10 +81,13 @@ export async function composeCompanyPortalInvite(args: {
     return { ok: false, status: 400, error: 'That access is revoked — restore it before sending an invite.' }
   }
 
-  const [annual, pending, others] = await Promise.all([
+  const [annual, pending, others, rateCount] = await Promise.all([
     findCompanyAnnualCoverage(access.company.id),
     findPendingAnnual(access.company.id),
     listOtherAccessHolders(access.company.id, access.id),
+    // Just "is there a deal", never the figures — see ratesCallout() in
+    // companyPortal.ts for why no number reaches the mail.
+    prisma.companyRate.count({ where: { companyId: access.company.id } }),
   ])
   const rep = access.company.defaultAgent
   const repName = rep?.name || args.fallbackRep.name || 'Your SirReel rep'
@@ -84,6 +104,8 @@ export async function composeCompanyPortalInvite(args: {
         ? { title: pending.title, signUrl: `${args.base}/portal/company/${access.company.id}/sign/annual` }
         : null,
     otherPeople: others,
+    variant,
+    hasNegotiatedRates: rateCount > 0,
   }
   const defaultBody = defaultCompanyPortalInviteBody(input)
   const custom = (args.customBody ?? '').trim()
@@ -103,5 +125,7 @@ export async function composeCompanyPortalInvite(args: {
     repName,
     companyName: access.company.name,
     alreadyInvitedAt: access.invitedAt ? access.invitedAt.toISOString() : null,
+    variant,
+    hasNegotiatedRates: rateCount > 0,
   }
 }

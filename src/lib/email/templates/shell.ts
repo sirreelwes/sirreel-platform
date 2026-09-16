@@ -90,6 +90,29 @@ export function detailTable(rows: Array<{ label: string; value: string }>): stri
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">${body}</table>`
 }
 
+/**
+ * A bullet list. A table, not `<ul>` — Outlook's Word engine indents and
+ * spaces a real list unpredictably, and Gmail strips the margin it relies
+ * on. The glyph sits in its own fixed cell so a wrapped second line stays
+ * aligned under the first rather than tucking under the bullet.
+ *
+ * Items may carry inline HTML (a `<strong>` lead-in reads well here); the
+ * CALLER escapes anything that came from a person.
+ */
+export function bulletList(items: string[], accent: string = GOLD): string {
+  if (items.length === 0) return ''
+  const rows = items
+    .map(
+      (html) => `
+      <tr>
+        <td width="18" style="width:18px;padding:0 0 9px;font-family:${FONT};font-size:15px;line-height:1.55;color:${accent};vertical-align:top;">&bull;</td>
+        <td style="padding:0 0 9px;font-family:${FONT};font-size:15px;line-height:1.55;color:${BODY_TEXT};vertical-align:top;">${html}</td>
+      </tr>`,
+    )
+    .join('')
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 10px;">${rows}</table>`
+}
+
 /** Gold-edged callout — reference numbers, "what happens next". */
 export function calloutBox(html: string, accent: string = GOLD): string {
   return `

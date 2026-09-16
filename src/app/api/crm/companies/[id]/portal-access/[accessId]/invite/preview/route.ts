@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
   if ('error' in g) return g.error
   const user = g.user
 
-  const body = (await req.json().catch(() => ({}))) as { customBody?: unknown }
+  const body = (await req.json().catch(() => ({}))) as { customBody?: unknown; variant?: unknown }
   const customBody =
     typeof body.customBody === 'string' && body.customBody.trim() ? body.customBody.trim().slice(0, 5000) : null
 
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     base: portalBase(req),
     fallbackRep: { name: user.name ?? null, email: user.email ?? null },
     customBody,
+    variant: body.variant === 'overview' ? 'overview' : 'standard',
   })
   if (!composition.ok) return NextResponse.json({ error: composition.error }, { status: composition.status })
   return NextResponse.json(composition)

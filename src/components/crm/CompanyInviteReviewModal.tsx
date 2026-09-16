@@ -30,6 +30,8 @@ interface Composition {
   repName: string
   companyName: string
   alreadyInvitedAt: string | null
+  variant: 'standard' | 'overview'
+  hasNegotiatedRates: boolean
 }
 
 export function CompanyInviteReviewModal({
@@ -49,16 +51,19 @@ export function CompanyInviteReviewModal({
   const [refreshing, setRefreshing] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Which invite. Switching it reseeds the compose box from that variant's
+  // own prose — an unedited box must never keep the other version's words.
+  const [variant, setVariant] = useState<'standard' | 'overview'>('standard')
   const seeded = useRef(false)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const previewUrl = `/api/crm/companies/${companyId}/portal-access/${accessId}/invite/preview`
 
-  async function fetchPreview(customBody: string | null) {
+  async function fetchPreview(customBody: string | null, v: 'standard' | 'overview' = variant) {
     const res = await fetch(previewUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customBody }),
+      body: JSON.stringify({ customBody, variant: v }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(json?.error || 'Could not build the preview.')
@@ -113,6 +118,26 @@ export function CompanyInviteReviewModal({
 
   const edited = !!comp && body.trim() !== comp.defaultBody.trim()
 
+  async function switchVariant(next: 'standard' | 'overview') {
+    if (next === variant) return
+    // An edited message is the rep's work — switching would silently throw it
+    // away, so ask. Unedited, the box just reseeds.
+    if (edited && !confirm('Switch versions? Your edits to the message will be replaced.')) return
+    setVariant(next)
+    setRefreshing(true)
+    setError(null)
+    try {
+      const c = await fetchPreview(null, next)
+      setComp(c)
+      setBody(c.defaultBody)
+      seeded.current = true
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not build the preview.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   async function send() {
     if (!comp) return
     setSending(true)
@@ -121,7 +146,7 @@ export function CompanyInviteReviewModal({
       const res = await fetch(`/api/crm/companies/${companyId}/portal-access/${accessId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sendInvite: true, customBody: edited ? body : null }),
+        body: JSON.stringify({ sendInvite: true, customBody: edited ? body : null, variant }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || 'Send failed')
@@ -167,6 +192,41 @@ export function CompanyInviteReviewModal({
           <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <div className="p-5 border-b lg:border-b-0 lg:border-r border-lt-hairline flex flex-col min-h-0">
               <div className="flex items-baseline justify-between gap-3 mb-2">
+              {/* Which invite. 'Standard' is the original; 'Overview' opens
+                  with what SirReel has built and the account's rates
+                  (Wes 2026-09-16). */}
+              <div className="mb-3">
+                <div className="text-[11px] uppercase tracking-widest text-lt-fg3 font-semibold mb-1.5">Version</div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {([
+                    { v: 'standard' as const, label: 'Standard', hint: 'You have access, here is how it works.' },
+                    { v: 'overview' as const, label: 'Overview + rates', hint: 'Opens with what we have built, and that their rates cover every team.' },
+                  ]).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => switchVariant(o.v)}
+                      aria-pressed={variant === o.v}
+                      title={o.hint}
+                      className={`rounded-md border px-2.5 py-1.5 text-[12px] font-medium ${
+                        variant === o.v
+                          ? 'border-amber-600 bg-amber-600 text-white'
+                          : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {variant === 'overview' && !comp.hasNegotiatedRates && (
+                  <p className="mt-2 text-[11px] leading-snug text-chip-warn-fg bg-chip-warn-bg rounded px-2 py-1.5">
+                    {comp.companyName} has no negotiated rates on file, so the rates highlight is left
+                    out — the rest of the overview still sends. Add their rates first if you meant to
+                    promise them.
+                  </p>
+                )}
+              </div>
+
                 <label className="text-[11px] uppercase tracking-widest text-lt-fg3 font-semibold">The message</label>
                 {edited && (
                   <button
@@ -174,7 +234,7 @@ export function CompanyInviteReviewModal({
                     onClick={() => setBody(comp.defaultBody)}
                     className="text-[11px] text-lt-fg2 hover:text-lt-fg underline"
                   >
-                    Back to the standard wording
+                    Back to the suggested wording
                   </button>
                 )}
               </div>
@@ -186,7 +246,8 @@ export function CompanyInviteReviewModal({
               />
               <p className="text-[11px] text-lt-fg3 mt-2 leading-relaxed">
                 Edit the words above. The portal button, the annual-agreement note and the sign-off stay
-                as they are — they are read from the account, not typed here.
+                as they are — they are read from the account, not typed here. On the overview version the
+                bullet list and the rates note stay too.
               </p>
             </div>
             <div className="p-5 min-h-0 flex flex-col">

@@ -25,7 +25,62 @@ import {
   p,
   detailTable,
   calloutBox,
+  bulletList,
 } from '@/lib/email/templates/shell'
+
+/**
+ * WHAT SIRREEL BUILT, for an executive who has thirty seconds.
+ *
+ * Wes 2026-09-16 asked for "a high-level, bullet-pointed overview of the
+ * innovation SirReel has implemented" on the account invite. This is that
+ * list, and it lives in ONE place so it cannot drift between the email, a
+ * deck and the site.
+ *
+ * Every line is something that is actually shipped and client-visible — an
+ * executive who forwards this to a coordinator must not be contradicted by
+ * the coordinator's experience a week later. Short lead-in, then the payoff
+ * in THEIR terms (what their team stops having to do), never ours.
+ *
+ * Deliberately NOT here: anything internal (pick lists, barcodes as a
+ * warehouse process, our own dashboards), and anything with a number on it.
+ * See the rates note below.
+ */
+export const SIRREEL_CAPABILITIES: ReadonlyArray<string> = [
+  '<strong>A live page for every show, with no login.</strong> Your coordinator opens a link and sees the dates, the paperwork, the pickup details and who to call — updated as things change, so nobody is chasing a status by phone.',
+  '<strong>Sign once, not per show.</strong> An annual master agreement covers everything your company books; each job is logged under it with a one-page addendum instead of a fresh contract.',
+  '<strong>Certificates checked the moment they land.</strong> We read each COI as it arrives, flag it if the named insured does not match the production company, and tell your broker the replacement value to cover — before it becomes a problem on load-in day.',
+  '<strong>After-hours help by text, around the clock.</strong> An automated assistant answers at any hour and can get a driver into a vehicle or a lock box without waiting for a callback.',
+  '<strong>Gear we do not own, on the same order.</strong> Our partner network is quoted, delivered and billed by us, so your team places one order and reconciles one invoice.',
+  '<strong>High-value units scanned out and back.</strong> Radios, generators and the like are tracked by unit, so what went out and what came home is a record rather than a memory test.',
+]
+
+/**
+ * The rates line — the reason this variant exists (Wes 2026-09-16:
+ * "highlights that they are being offered these rates for their teams").
+ *
+ * NO FIGURES, EVER. This is a one-to-one invite, but email forwards, and the
+ * share template at the bottom of this file already holds the line for the
+ * same reason: "a negotiated rate in a forwarded mail is a rate card in the
+ * wild." What the mail says is that the deal EXISTS and that it reaches every
+ * team under the account; the numbers stay behind the portal sign-in.
+ */
+function ratesCallout(companyName: string): string {
+  return calloutBox(
+    `<strong>Your rates travel with the account.</strong> The pricing we agreed with ` +
+      `${esc(companyName)} applies to every production your company books — not only the ` +
+      `show that earned it. Anyone you add to the account books at those rates, and they ` +
+      `are shown on every quote your teams receive.`,
+  )
+}
+
+/** Plain-text twin of the callout above, so both halves say the same thing. */
+function ratesLine(companyName: string): string {
+  return (
+    `Your rates travel with the account: the pricing we agreed with ${companyName} applies ` +
+    `to every production your company books, not only the show that earned it. Anyone you ` +
+    `add to the account books at those rates.`
+  )
+}
 
 function esc(s: string): string {
   return s
@@ -71,6 +126,26 @@ export interface CompanyPortalInviteInput {
    * defaultCompanyPortalInviteBody so an edit starts from the real copy.
    */
   customBody?: string | null
+  /**
+   * Which invite this is (Wes 2026-09-16: "a version of the invite … that
+   * gives a high-level, bullet-pointed overview of the innovation").
+   *
+   *   'standard' — the original: you have access, here is how it works.
+   *   'overview' — the same access, opened with what SirReel has built and
+   *                the fact that the account's rates reach every team. For
+   *                an executive being brought on rather than a coordinator
+   *                who already knows us.
+   *
+   * Defaults to 'standard', so every existing caller is unchanged.
+   */
+  variant?: 'standard' | 'overview'
+  /**
+   * Whether this company actually has negotiated rates on file. The rates
+   * highlight is the point of the overview variant, but promising a deal to
+   * an account that has not been given one would be a lie the first quote
+   * exposes — so no rates row, no rates line.
+   */
+  hasNegotiatedRates?: boolean
 }
 
 function joinNames(people: { name: string; title: string | null }[]): string {
@@ -83,6 +158,27 @@ function joinNames(people: { name: string; title: string | null }[]): string {
  *  and what `customBody` replaces when the rep edits it. */
 export function defaultCompanyPortalInviteBody(i: CompanyPortalInviteInput): string {
   const others = i.otherPeople ?? []
+  if (i.variant === 'overview') {
+    // The bullets and the rates line are NOT in this seed on purpose: they
+    // are facts about SirReel and about the account, not the rep's prose to
+    // retype, so the renderer inserts them after whatever prose survives an
+    // edit — exactly how the annual-agreement callout already behaves. A
+    // placeholder marker here would ship to the client verbatim the moment
+    // somebody edited the box.
+    return [
+      `${i.firstName},`,
+      ``,
+      i.addedByName
+        ? `${i.addedByName} added you to the ${i.companyName} account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
+        : `You now have account-level access to SirReel for ${i.companyName}. Before you open it, here is what we have built for companies that work with us repeatedly:`,
+      ``,
+      `Your account page pulls it together: every show your teams have with us, who is leading each one, the invoices, and the agreements on file.`,
+      ``,
+      others.length === 0
+        ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. Add colleagues under People with access and they'll get an email like this one.`
+        : `Sign in with this email address; there's no password. Access is by invitation, not by link — the people who can open this account are you and ${joinNames(others)}. Add colleagues under People with access and they'll get an email like this one.`,
+    ].join('\n')
+  }
   const opener = i.addedByName
     ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
     : `You now have account-level access to SirReel for ${i.companyName} — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
@@ -114,9 +210,24 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
   html: string
   text: string
 } {
-  const subject = `Your ${i.companyName} account portal at SirReel`
+  const overview = i.variant === 'overview'
+  const subject = overview
+    ? `${i.companyName} at SirReel — your account, and what we have built`
+    : `Your ${i.companyName} account portal at SirReel`
   const others = i.otherPeople ?? []
   const custom = (i.customBody ?? '').trim()
+
+  // The two blocks that make this variant what it is. Inserted by the
+  // RENDERER, never by the rep's prose, so an edited message still carries
+  // them — same rule the annual-agreement callout follows.
+  const capabilities = overview ? bulletList([...SIRREEL_CAPABILITIES]) : ''
+  const rates = overview && i.hasNegotiatedRates ? ratesCallout(i.companyName) : ''
+
+  const overviewOpener = i.addedByName
+    ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
+    : `You now have account-level access to SirReel for <strong>${esc(i.companyName)}</strong>. Before you open it, here is what we have built for companies that work with us repeatedly:`
+
+  const accountLine = `Your account page pulls it together: every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
 
   const opener = i.addedByName
     ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
@@ -138,21 +249,33 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
           )
         : ''
   const body = custom
-    ? [proseHtml(custom), annualCallout].join('')
-    : [
-        p(`${esc(i.firstName)},`),
-        p(opener),
-        annualCallout,
-        p(accessLine),
-        p(
-          `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
-        ),
-      ].join('')
+    ? [proseHtml(custom), capabilities, rates, annualCallout].join('')
+    : overview
+      ? [
+          p(`${esc(i.firstName)},`),
+          p(overviewOpener),
+          capabilities,
+          rates,
+          p(accountLine),
+          annualCallout,
+          p(accessLine),
+        ].join('')
+      : [
+          p(`${esc(i.firstName)},`),
+          p(opener),
+          annualCallout,
+          p(accessLine),
+          p(
+            `You can also choose which updates you want — job starts, invoices paid, shows closing out — from the bottom of the page.`,
+          ),
+        ].join('')
 
   const html = renderEmailShell({
-    heading: 'Your account portal',
+    heading: overview ? 'Your account at SirReel' : 'Your account portal',
     eyebrow: i.companyName,
-    preheader: `Every ${i.companyName} show with SirReel, in one place.`,
+    preheader: overview
+      ? `What we have built for ${i.companyName}, and the rates your teams book at.`
+      : `Every ${i.companyName} show with SirReel, in one place.`,
     bodyHtml: body,
     cta: { label: 'Open your account portal', href: i.portalUrl },
     footNote: i.repEmail
@@ -160,16 +283,29 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
       : `Questions? Reply to this email.`,
   })
 
+  // The text half carries the same two blocks, tags stripped — a plain-text
+  // reader must not get a shorter pitch than the HTML one.
+  const capabilitiesText = overview
+    ? SIRREEL_CAPABILITIES.map((line) => `  - ${line.replace(/<[^>]+>/g, '')}`)
+    : []
+
   const text = renderEmailText([
     ...(custom
       ? [custom]
       : [
           `${i.firstName},`,
           '',
-          i.addedByName
-            ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
-            : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
+          overview
+            ? i.addedByName
+              ? `${i.addedByName} added you to the ${i.companyName} account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
+              : `You now have account-level access to SirReel for ${i.companyName}. Before you open it, here is what we have built for companies that work with us repeatedly:`
+            : i.addedByName
+              ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
+              : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
         ]),
+    ...(capabilitiesText.length ? ['', ...capabilitiesText] : []),
+    ...(rates ? ['', ratesLine(i.companyName)] : []),
+    ...(overview && !custom ? ['', accountLine] : []),
     '',
     `Open your account portal: ${i.portalUrl}`,
     '',
