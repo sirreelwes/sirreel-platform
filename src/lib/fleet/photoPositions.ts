@@ -48,12 +48,13 @@ export type PhotoGroup =
   | 'Rear & inside'
   | 'Remote & paperwork'
   | 'Driver'
+  | 'Seating'
   | 'Earlier angles'
 
 /** Section order for the capture screen and the filed record. */
 export const PHOTO_GROUPS: readonly PhotoGroup[] = [
   'Cab', 'Driver side', 'Front', 'Passenger side', 'Rear & inside', 'Remote & paperwork', 'Driver',
-  'Earlier angles',
+  'Seating', 'Earlier angles',
 ] as const
 
 /** The one slot that is about the PERSON, not the truck. */
@@ -146,8 +147,43 @@ export const LEGACY_POSITIONS: readonly PhotoPosition[] = [
   { id: 'FUEL_GAUGE',     label: 'Fuel gauge',     hint: 'Needle clearly visible', group: 'Earlier angles' },
 ] as const
 
+/**
+ * Seat rows — passenger vans only (Julian, 2026-09-15: "for the pass vans
+ * we take pictures of each row. Can you add a couple extra spots").
+ *
+ * OPTIONAL, and offered on BOTH ends: a row photo is only worth taking if
+ * there is one to compare it to, and the rows are where a passenger van
+ * actually gets damaged — torn seat backs, stained cloth, missing belts.
+ * Not in the 23: a Cube has no rows, and padding every truck's required
+ * count with slots that do not apply is how a crew learns to ignore the
+ * counter.
+ *
+ * A 15-passenger van walks four rows behind the driver; a 12 walks three
+ * and leaves the last one empty. Optional means an empty slot is not a
+ * deficiency, so one list covers both without asking the tech which van
+ * they are standing in front of.
+ */
+export const SEATING_POSITIONS: readonly PhotoPosition[] = [
+  { id: 'SEATS_ROW_2', label: 'Second row',  hint: 'Whole row — seat backs, cushions and belts', group: 'Seating' },
+  { id: 'SEATS_ROW_3', label: 'Third row',   hint: 'Whole row — seat backs, cushions and belts', group: 'Seating' },
+  { id: 'SEATS_ROW_4', label: 'Fourth row',  hint: 'Whole row — seat backs, cushions and belts', group: 'Seating' },
+  { id: 'SEATS_ROW_5', label: 'Back row',    hint: 'The last row — and the floor behind it', group: 'Seating' },
+] as const
+
+/**
+ * The extra slots a particular unit earns, by its CATEGORY NAME (the
+ * yard screens have the name, not the code). Everything here is optional
+ * — `positionsFor` is still the contract both ends share.
+ */
+export function extraPositionsFor(categoryName: string | null | undefined): readonly PhotoPosition[] {
+  if (!categoryName) return []
+  // "Passenger Van" today; matches a split/renamed row ("15-Passenger
+  // Van", "Pass Van") without a second registry to keep in step.
+  return /passenger van|pass van/i.test(categoryName) ? SEATING_POSITIONS : []
+}
+
 /** Every slot id that has ever been valid. */
-export const ALL_POSITIONS: readonly PhotoPosition[] = [...WALKAROUND, ...LEGACY_POSITIONS]
+export const ALL_POSITIONS: readonly PhotoPosition[] = [...WALKAROUND, ...SEATING_POSITIONS, ...LEGACY_POSITIONS]
 
 /** Close-ups of specific damage. Unlimited, and never required. */
 export const DAMAGE_POSITION = 'DAMAGE'

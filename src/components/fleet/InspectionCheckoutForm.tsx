@@ -20,7 +20,7 @@
 import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto } from './GuidedPhotoCapture';
-import { missingPositions, positionLabel, REQUIRED_POSITIONS, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions';
+import { missingPositions, positionLabel, REQUIRED_POSITIONS, DRIVERS_LICENSE_POSITION, extraPositionsFor } from '@/lib/fleet/photoPositions';
 import { WalkaroundCrewPicker } from './WalkaroundCrewPicker';
 import { FUEL_LEVELS } from '@/lib/fleet/fuelLevels';
 
@@ -81,7 +81,15 @@ function TapSelector({
   );
 }
 
-export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignmentId: string }) {
+export function InspectionCheckoutForm({
+  bookingAssignmentId,
+  categoryName,
+}: {
+  bookingAssignmentId: string
+  /** The unit's category — decides the optional extras (seat rows on a
+   *  passenger van). Absent means no extras, never a broken form. */
+  categoryName?: string | null
+}) {
   // Empty until someone taps their name — never the login (fleet@ is shared).
   const [inspectorName, setInspectorName] = useState('');
   const [condition, setCondition] = useState<string>('GOOD');
@@ -182,6 +190,7 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
         bookingAssignmentId={bookingAssignmentId}
         onChange={onPhotosChange}
         requiredPositions={REQUIRED_POSITIONS}
+        optionalPositions={extraPositionsFor(categoryName)}
         title="Check-out photos"
       />
 

@@ -2392,7 +2392,11 @@ export function GanttBoard() {
             {selected.bookingId && (
               <BlindHandoffToggles
                 orders={Array.isArray(selected.orders) ? selected.orders : []}
-                canEdit={canSetStatus}
+                // Deliberately NOT gated on the sales permission (Wes
+                // 2026-09-15: "always allow the fleet guy to change to a
+                // blind pickup"). Whoever is standing in front of the
+                // truck knows first; the board is staff-only anyway.
+                canEdit
                 onChanged={(next) => {
                   setSelected((prev: any) =>
                     prev

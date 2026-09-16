@@ -267,7 +267,7 @@ export default async function FleetReturnPage({ params }: Params) {
           </a>
         </div>
       )}
-      <InspectionReturnForm bookingAssignmentId={assignment.id} checkout={checkout} />
+      <InspectionReturnForm bookingAssignmentId={assignment.id} checkout={checkout} categoryName={assignment.asset.category.name} />
     </Shell>
   )
 }

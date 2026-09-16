@@ -15,6 +15,8 @@
  */
 
 import {
+  SEATING_POSITIONS,
+  extraPositionsFor,
   REQUIRED_POSITIONS,
   RETURN_POSITIONS,
   ALL_POSITIONS,
@@ -87,6 +89,19 @@ check('driver return: 4 required sides', RETURN_REQUIRED_POSITIONS.length === 4)
 check('driver return: 3 optional', RETURN_OPTIONAL_POSITIONS.length === 3)
 
 check('missing counts against the list passed', missingPositions(['DASH'], RETURN_POSITIONS).length === RETURN_POSITIONS.length - 1)
+
+// Seat rows — passenger vans only, optional, both ends (Julian 2026-09-15).
+check('a passenger van earns the seat rows', extraPositionsFor('Passenger Van').length === SEATING_POSITIONS.length)
+check('a renamed/split passenger row still earns them', extraPositionsFor('15-Passenger Van').length === SEATING_POSITIONS.length)
+check('a cube truck earns none', extraPositionsFor('SuperCube Truck').length === 0)
+check('no category, no extras', extraPositionsFor(null).length === 0)
+check('seat rows are NOT in the required 23', REQUIRED_POSITIONS.every((p) => !SEATING_POSITIONS.some((s) => s.id === p.id)))
+check('seat rows are NOT in the check-in walk', RETURN_POSITIONS.every((p) => !SEATING_POSITIONS.some((s) => s.id === p.id)))
+check('seat row ids still store', SEATING_POSITIONS.every((s) => normalizePosition(s.id) === s.id))
+check('seat rows are named out of context', positionLabel('SEATS_ROW_2') === 'Second row')
+check('seat rows have their own section', PHOTO_GROUPS.includes('Seating'))
+check('a seat row never counts as missing on the 23',
+  missingPositions([], REQUIRED_POSITIONS).every((p) => !SEATING_POSITIONS.some((s) => s.id === p.id)))
 
 // Who did it.
 check('crew buttons are Julian, Andy, Frankie', WALKAROUND_CREW.join() === 'Julian,Andy,Frankie')

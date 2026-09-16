@@ -28,7 +28,7 @@
 
 import type { InspectionType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { positionsFor, LEGACY_POSITIONS, DAMAGE_POSITION, positionLabel, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { positionsFor, LEGACY_POSITIONS, SEATING_POSITIONS, DAMAGE_POSITION, positionLabel, type PhotoPosition } from '@/lib/fleet/photoPositions'
 import { inspectorDisplayName } from '@/lib/fleet/walkaroundCrew'
 
 /** Which end of the rental a filed form belongs to. */
@@ -313,6 +313,10 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
   const onFile = new Set([...i.photos, ...(other?.photos ?? [])].map((p) => p.position))
   const walk: readonly PhotoPosition[] = [
     ...positionsFor(edge),
+    // Optional extras (passenger-van seat rows) and retired angles alike:
+    // listed only when a photo actually sits in one, so a Cube's record
+    // does not grow four empty seating slots.
+    ...SEATING_POSITIONS.filter((slot) => onFile.has(slot.id)),
     ...LEGACY_POSITIONS.filter((slot) => onFile.has(slot.id)),
   ]
   const slots: FiledSlot[] = walk.map((slot) => ({

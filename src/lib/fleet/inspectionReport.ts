@@ -16,7 +16,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { positionLabel, RETURN_POSITIONS, LEGACY_POSITIONS, DAMAGE_POSITION, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
+import { positionLabel, RETURN_POSITIONS, LEGACY_POSITIONS, SEATING_POSITIONS, DAMAGE_POSITION, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
 import { inspectorDisplayName } from '@/lib/fleet/walkaroundCrew'
 
 export interface ReportPhoto {
@@ -184,6 +184,7 @@ export async function buildInspectionReport(
   const onFile = new Set([...(out?.photos ?? []), ...(back?.photos ?? [])].map((p) => p.position))
   const pairs: ReportPair[] = [
     ...RETURN_POSITIONS,
+    ...SEATING_POSITIONS.filter((slot) => onFile.has(slot.id)),
     ...LEGACY_POSITIONS.filter((slot) => onFile.has(slot.id)),
   ].map((slot) => ({
     position: slot.id,

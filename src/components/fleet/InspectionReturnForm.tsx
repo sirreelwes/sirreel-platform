@@ -24,7 +24,7 @@
 import { useCallback, useState } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { GuidedPhotoCapture, type StagedPhoto, type ComparePhoto } from './GuidedPhotoCapture';
-import { missingPositions, positionLabel, RETURN_POSITIONS } from '@/lib/fleet/photoPositions';
+import { missingPositions, positionLabel, RETURN_POSITIONS, extraPositionsFor } from '@/lib/fleet/photoPositions';
 import { WalkaroundCrewPicker } from './WalkaroundCrewPicker';
 import { FUEL_LEVELS, cameBackLower } from '@/lib/fleet/fuelLevels';
 
@@ -106,9 +106,13 @@ function TapSelector({
 export function InspectionReturnForm({
   bookingAssignmentId,
   checkout,
+  categoryName,
 }: {
   bookingAssignmentId: string;
   checkout: CheckoutSnapshot | null;
+  /** Same extras the check-out offered — a row photo is only worth
+   *  taking if there is one to compare it to. */
+  categoryName?: string | null;
 }) {
   // Empty until someone taps their name — never the login (fleet@ is shared).
   const [inspectorName, setInspectorName] = useState('');
@@ -298,6 +302,7 @@ export function InspectionReturnForm({
         compareTo={checkout?.photos}
         onChange={onPhotosChange}
         requiredPositions={RETURN_POSITIONS}
+        optionalPositions={extraPositionsFor(categoryName)}
         title="Check-in photos"
       />
 

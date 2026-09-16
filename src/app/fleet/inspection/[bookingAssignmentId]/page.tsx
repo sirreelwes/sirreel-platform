@@ -135,7 +135,7 @@ export default async function FleetInspectionPage({ params }: Params) {
             </a>
           </div>
         ) : (
-          <InspectionCheckoutForm bookingAssignmentId={assignment.id} />
+          <InspectionCheckoutForm bookingAssignmentId={assignment.id} categoryName={assignment.asset.category.name} />
         )}
       </div>
     </main>
