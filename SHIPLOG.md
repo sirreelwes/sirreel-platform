@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA: what "checked out" actually means
 
-`SHA_PLACEHOLDER` aha: derive one honest checkout state, and stop conflating two kinds of pickup
+`ecf3e20` aha: derive one honest checkout state, and stop conflating two kinds of pickup
 
 Wes, working a scenario — a production contact texts to ask whether the vans have been picked up tomorrow morning, then: "have they completed check out yet?" AHA could answer, but one of its answers was wrong.
 
