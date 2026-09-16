@@ -21,13 +21,15 @@
  * ON PASS we release two secrets, both behind the same bar:
  *   • Gate code   — the standing lot code (SiteSetting.gateCode).
  *   • Lockbox code — the per-vehicle code (Asset.accessCode) once the
- *                    specific vehicle is pinned.
+ *                    specific vehicle is pinned, and only when that
+ *                    vehicle's pickup or return is blind (Wes 2026-09-16).
  * Failures collapse to a single NOT_VERIFIED so the assistant never leaks
  * whether a job/vehicle exists or who is on a booking.
  */
 
 import { prisma } from '@/lib/prisma'
 import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
+import { blindHandoffForBooking } from '@/lib/fleet/blindHandoff'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { sendSms } from '@/lib/sms/sendSms'
 
@@ -75,7 +77,9 @@ export type ReleaseResult =
       gateCode: string | null // the standing lot gate code; null = not on file
       lockboxCode: string | null // per-vehicle code; null = not resolved / none on file
       vehicle: string | null // unit name the lockbox code belongs to
-      lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE'
+      /** STAFFED: the pinned vehicle's handoff is not blind — SirReel hands
+       *  the keys over, so no lockbox code is released (Wes 2026-09-16). */
+      lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE' | 'STAFFED'
       lockboxCandidates?: string[]
     }
   | {
@@ -246,6 +250,8 @@ export async function verifyAndRelease(input: {
         select: {
           booking: {
             select: {
+              id: true,
+              jobId: true,
               jobName: true,
               person: { select: { firstName: true, lastName: true, phone: true, mobile: true } },
               job: {
@@ -380,12 +386,27 @@ export async function verifyAndRelease(input: {
       : assets
 
   let target: ResolvedAsset | null = null
-  let lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE' = 'OK'
+  let lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE' | 'STAFFED' = 'OK'
   let lockboxCode: string | null = null
   if (lockboxCandidates.length === 1) {
     target = lockboxCandidates[0]
-    lockboxCode = target.accessCode?.trim() || null
-    if (!lockboxCode) lockboxHint = 'NO_CODE_ON_FILE'
+    // The lockbox code goes out only on a BLIND pickup or return of this
+    // vehicle (Wes 2026-09-16) — lib/fleet/blindHandoff, per booking.
+    const pinnedId = target.id
+    const bookingsForTarget = assignments.filter((a) => a.asset.id === pinnedId).map((a) => a.bookingItem.booking)
+    let blind = false
+    for (const b of bookingsForTarget) {
+      if ((await blindHandoffForBooking(b)).any) {
+        blind = true
+        break
+      }
+    }
+    if (!blind) {
+      lockboxHint = 'STAFFED'
+    } else {
+      lockboxCode = target.accessCode?.trim() || null
+      if (!lockboxCode) lockboxHint = 'NO_CODE_ON_FILE'
+    }
   } else if (lockboxCandidates.length === 0) {
     lockboxHint = 'NEED_VEHICLE'
   } else {

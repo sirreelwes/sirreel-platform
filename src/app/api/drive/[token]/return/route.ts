@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { blindHandoffForBooking } from '@/lib/fleet/blindHandoff'
 import { prisma } from '@/lib/prisma'
 import { completeSelfReturn, SelfReturnError } from '@/lib/drivers/selfReturn'
 
@@ -29,21 +30,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     select: {
       id: true,
       bookingAssignment: {
-        select: { bookingItem: { select: { booking: { select: { jobId: true } } } } },
+        select: { bookingItem: { select: { booking: { select: { id: true, jobId: true } } } } },
       },
     },
   })
   if (!da) return NextResponse.json({ error: 'invalid link' }, { status: 404 })
 
-  // The ORDER says whether the return is unattended. Re-read here rather
-  // than trusted from the client.
+  // Same derivation the page uses: the orders for THIS vehicle's booking
+  // say whether the handoff is unattended (lib/fleet/blindHandoff). Re-read
+  // here rather than trusted from the client.
   const jobId = da.bookingAssignment.bookingItem.booking.jobId
-  const blind = jobId
-    ? await prisma.order.findFirst({
-        where: { jobId, status: { not: 'CANCELLED' }, blindReturn: true },
-        select: { id: true },
-      })
-    : null
+  const blind = (await blindHandoffForBooking(da.bookingAssignment.bookingItem.booking)).blindReturn
   if (!blind) {
     return NextResponse.json(
       { error: 'This return is staffed — SirReel will check the vehicle in with you at the yard.' },

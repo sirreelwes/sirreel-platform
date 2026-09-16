@@ -18,6 +18,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { blindFlags, loadJobBlindContext, ordersForBooking } from '@/lib/fleet/blindHandoff'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { afterHoursPayload } from '@/lib/afterHours/instructions'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
@@ -34,6 +35,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const MAX_EXTRA_RECIPIENTS = 5
 
 export interface PickupVehicle extends VehiclePickupVehicle {
+  /** Blind pickup or return for this vehicle — the only time its lock box code may go out. */
+  blind: boolean
   assetId: string
   startDate: string
   endDate: string
@@ -62,6 +65,7 @@ export async function jobPickupVehicles(jobId: string): Promise<PickupVehicle[]>
       startDate: true,
       endDate: true,
       status: true,
+      bookingItem: { select: { booking: { select: { id: true } } } },
       asset: {
         select: {
           id: true,
@@ -73,11 +77,15 @@ export async function jobPickupVehicles(jobId: string): Promise<PickupVehicle[]>
       },
     },
   })
+  // Blind per vehicle (lib/fleet/blindHandoff): the lock box code is only
+  // ever handed out on a blind pickup or return (Wes 2026-09-16).
+  const ctx = await loadJobBlindContext(jobId)
   // First-wins per asset, like the job page: the earliest live window is
   // the one a pickup email is about.
   const seen = new Map<string, PickupVehicle>()
   for (const r of rows) {
     if (seen.has(r.asset.id)) continue
+    const blind = blindFlags(ordersForBooking(ctx.orders, r.bookingItem.booking.id, ctx.liveBookingIds)).any
     const start = fmtDay(r.startDate)
     const end = fmtDay(r.endDate)
     seen.set(r.asset.id, {
@@ -86,6 +94,7 @@ export async function jobPickupVehicles(jobId: string): Promise<PickupVehicle[]>
       category: r.asset.category?.name ?? null,
       licensePlate: r.asset.licensePlate?.trim() || null,
       lockboxCode: r.asset.accessCode?.trim() || null,
+      blind,
       window: start === end ? start : `${start} – ${end}`,
       startDate: r.startDate.toISOString(),
       endDate: r.endDate.toISOString(),
@@ -102,6 +111,7 @@ export type VehiclePickupFailure =
   | 'no_gate_code'
   | 'no_vehicles'
   | 'no_lockbox_code'
+  | 'not_blind'
   | 'no_recipient'
   | 'send_failed'
 
@@ -167,6 +177,21 @@ export async function sendVehiclePickupInstructions(args: {
       message: all.length
         ? 'None of the selected units are on this job any more. Reload and pick again.'
         : 'No unit is reserved on this job yet. Assign the vehicle first — the email names the unit, its plate and its lock box code.',
+    }
+  }
+  // No lock box code on a staffed handoff — the keys are handed over by
+  // SirReel (Wes 2026-09-16). Refuse and name the unit; marking the
+  // handoff blind is the deliberate step that makes a code sendable.
+  const staffed = vehicles.filter((v) => !v.blind)
+  if (staffed.length) {
+    return {
+      ok: false,
+      reason: 'not_blind',
+      message: `${staffed.map((v) => v.unitName).join(', ')} ${
+        staffed.length > 1 ? "aren't" : "isn't"
+      } a blind pickup or return, so no lock box code goes out — SirReel hands the keys over. Mark the handoff blind on the job, or leave ${
+        staffed.length > 1 ? 'them' : 'it'
+      } out of this send.`,
     }
   }
   // A missing lock box code reads as "there is no lock box" to a driver at
