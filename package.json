@@ -27,6 +27,7 @@
     "test:tent-first": "tsx tests/sales/tent-first.test.ts",
     "test:line-type": "tsx tests/orders/line-type.test.ts",
     "test:walkaround-slots": "tsx tests/fleet/walkaround-slots.test.ts",
+    "test:photo-section": "tsx tests/sub-rentals/photo-shoot-roster.test.ts",
     "test:tent-sandbags": "tsx tests/sales/tent-sandbags.test.ts",
     "test:alias-match": "tsx tests/sales/alias-match.test.ts",
     "test:public-query": "tsx tests/site/public-query-match.test.ts",

@@ -39,6 +39,7 @@ export type Department =
   | 'GE'
   | 'ART'
   | 'WARDROBE_MAKEUP'
+  | 'PHOTO_SHOOT'
 
 export interface PickListLine {
   department: Department
@@ -160,7 +161,7 @@ export interface PickListDocumentProps {
 // list flows in the same order as the quote the client approved.
 // ─────────────────────────────────────────────────────────────────────
 
-const DEPT_LABELS: Record<Department, string> = {
+export const DEPT_LABELS: Record<Department, string> = {
   VEHICLES: 'Vehicles',
   COMMUNICATIONS: 'Communications',
   STAGES: 'Studios',
@@ -169,15 +170,17 @@ const DEPT_LABELS: Record<Department, string> = {
   GE: 'Grip & Electric',
   ART: 'Art Department',
   WARDROBE_MAKEUP: 'Wardrobe & Makeup',
+  PHOTO_SHOOT: 'Photo Shoot Rentals',
 }
 
-const DEPT_ORDER: Department[] = [
+export const DEPT_ORDER: Department[] = [
   'PRO_SUPPLIES',
   'GE',
   'COMMUNICATIONS',
   'EXPENDABLES',
   'ART',
   'WARDROBE_MAKEUP',
+  'PHOTO_SHOOT',
   'STAGES',
   'VEHICLES',
 ]

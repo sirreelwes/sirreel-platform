@@ -783,6 +783,51 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   deploy (see memory "enum add before deploy"). A new department touches ~27
   files — grep an existing one (WARDROBE_MAKEUP) and add beside every hit.
 
+## The photo section, built from VSM gear (2026-09-16 — Wes)
+- Wes: "let's build the photo section for SirReel using VSM gear." 2026-09-11
+  shipped the CLASS — department, catalog section, 3-day week, quote heading.
+  Nothing was ever put IN it, so `#photo-shoot` was a heading over an empty
+  page: the section on /vehicles renders only while a signed partner has a
+  LISTED unit in it.
+- **The gear is `src/lib/sub-rentals/photoShootRoster.ts`** (plain data, no
+  prisma): 14 units across strobes, modifiers, continuous LED, seamless and
+  painted backings, backdrop support, stills grip, a tether cart and a
+  medium-format camera kit. Seeded by `npx tsx scripts/onboard-vsm-planet.ts
+  [--dry] [--email … --phone … --receive …]` — idempotent, matched on (vendor,
+  name), journaled by captured id.
+- **What is known vs placeholder.** VSM Planet Rentals (Vic Hartounian,
+  vsmplanetrentals.com) is a Hollywood house, 23+ years, ~500 rental types
+  "from cameras and backings to Sprinter van packages", specialising in
+  **Profoto** — that much is public. The individual units are the SHAPE of
+  that catalog, not a stock list: their site is egress-blocked to us, so
+  every seeded row carries a staff-only note to confirm model, pack size and
+  rate with Vic, and model detail is kept loose ("Pro pack & head kit — 2400
+  W/s", never a SKU) so a call CORRECTS a row instead of discovering it was
+  invented. **Rates are EMPTY** — Vic proposes from his page, HQ accepts.
+- **Their Sprinter van packages are deliberately NOT on the roster** — that
+  is our own fleet's lane (the GreenLite caveat). If Wes wants them they go
+  under Specialty Vehicles or Cars & SUVs, never under Photo Shoot Rentals.
+- **WILL_CALL is the partner default**, set on the Vendor and left NULL on
+  every unit so it is one edit on the Portals row. A stills rental house is a
+  counter business: DELIVERY would ask Vic for a window and a contact he
+  never agreed to, PICKUP would ask him for a driver he does not have.
+- **`vehicleType` starts "Photo shoot — " on every unit, on purpose.**
+  `/api/catalog/search` matches a partner unit on name + type only and
+  partner units have no alias table, so a rep typing the name of the section
+  got nothing back. The prefix answers "photo" / "shoot" / "photo shoot";
+  the half after the dash keeps "strobe", "backdrop", "grip", "camera"
+  working. **Staff can quote the gear the moment the script runs** — the
+  typeahead needs only `isActive` + `offeredToSirReel`, not a public listing.
+- **Bug fixed alongside: PHOTO_SHOOT was missing from `PickListDocument`.**
+  It is a WAREHOUSE department (`WAREHOUSE_DEPARTMENTS` in jobs/stage.ts), so
+  an owned photo-shoot line reaches the pull sheet — and grouped under an
+  `undefined` heading, because `DEPT_LABELS` / `DEPT_ORDER` were left behind
+  when the department was added. Both maps are exported now and the test
+  asserts every `LINE_ITEM_DEPARTMENT_ORDER` key has a label and a slot.
+- Nothing reaches sirreel.com until a unit is listed, has a photo AND the
+  Partner Equipment Agreement is signed (`SUB_LISTED_WHERE`), so seeding is
+  safe before the call rather than after it. `npm run test:photo-section`.
+
 ## Partner lines stay off the pick list (2026-09-11 — Wes)
 - Wes: "keep partner lines off the pick list." A partner's unit is delivered
   by the partner or collected from them — never through our warehouse.
