@@ -24,6 +24,13 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-16
 
+### Order lines carry their reserved truck; gear says which truck it loads on
+
+`66bec271` Order lines carry their reserved truck, and gear says which truck it loads on
+
+A reserved unit knew its order but not its LINE, so removing "1× Cube Truck" released nothing specific (or, at quantity zero, deleted the shared hold and every sibling order's trucks), and re-picking a cargo van line as a cube truck changed the quote while the reservation kept the van. Now `BookingAssignment.orderLineItemId` (additive column, script run) is stamped by every binder; `lib/orders/lineUnits.ts` reads it back; line delete / quantity / class edits release or move exactly that truck (a class change is refused with `USE_SWITCH_CLASS` and hands off to Switch class). Gear orders name the reserved vehicle they load on (`PATCH /api/orders/[id]/gear-handoff`, job-scoped, live units only) — read on the order page, the pick page and the pick-list PDF. Verified live: `tmp/verify-line-unit-throughline.ts`.
+
+
 ### The photo section, built from VSM gear
 
 `edd92df` build the Photo Shoot Rentals section out of VSM Planet's gear
