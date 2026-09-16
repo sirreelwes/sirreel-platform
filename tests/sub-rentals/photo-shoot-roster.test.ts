@@ -19,7 +19,7 @@
  *
  * Run: npm run test:photo-section
  */
-import { VSM_PLANET, VSM_PLANET_NAME, VSM_PLANET_ROSTER, rosterByType } from '@/lib/sub-rentals/photoShootRoster'
+import { FEATURED_FIRST, VSM_PLANET, VSM_PLANET_NAME, VSM_PLANET_ROSTER, rosterByType } from '@/lib/sub-rentals/photoShootRoster'
 import { isPartnerSectionKey, partnerSection, partnerUnitDepartment, resolvePartnerSection } from '@/lib/site/partnerSections'
 import { defaultReceiveMethodFor, usesPartnerDriver } from '@/lib/sub-rentals/partnerKind'
 import { LINE_ITEM_DEPARTMENT_ORDER } from '@/lib/orders/lineItemDepartments'
@@ -115,6 +115,15 @@ eq('VSM defaults to the photo section', VSM_PLANET.catalogSection, 'PHOTO_SHOOT'
 yes('website is https', /^https:\/\//.test(VSM_PLANET.website))
 yes('no address is guessed', !('lotAddress' in VSM_PLANET))
 yes('no email is guessed', !('email' in VSM_PLANET))
+
+// ── the two to feature ────────────────────────────────────────────────
+eq('two units are featured', FEATURED_FIRST.length, 2)
+yes('every featured name is a real roster unit', FEATURED_FIRST.every((n) => names.includes(n)))
+// One light, one background — not two of the same thing.
+const featuredTypes = FEATURED_FIRST.map((n) => VSM_PLANET_ROSTER.find((u) => u.name === n)!.vehicleType)
+eq('the pair spans two kinds of gear', new Set(featuredTypes).size, 2)
+yes('one of them is a light', featuredTypes.some((t) => /lighting/.test(t)))
+yes('one of them is a backing', featuredTypes.some((t) => /backdrops/.test(t)))
 
 // ── the grouping the run prints ───────────────────────────────────────
 const grouped = rosterByType()

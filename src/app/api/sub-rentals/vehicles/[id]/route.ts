@@ -18,6 +18,7 @@ import { parseMoney } from '@/lib/pricing/resolveRate'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { parsePercent } from '@/lib/sub-rentals/vehicles'
 import { isPartnerSectionKey } from '@/lib/site/partnerSections'
+import { listingBlockers } from '@/lib/sub-rentals/publicListing'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,9 +28,50 @@ const VENDOR_SELECT = {
   select: {
     id: true, name: true, contactName: true, email: true, phone: true,
     website: true, address: true, notes: true, partnerSharePercent: true,
-    partnerKind: true, catalogSection: true,
+    partnerKind: true, catalogSection: true, isActive: true,
+    // Whether the partner has signed — one of the six things
+    // SUB_LISTED_WHERE tests, and the one the roster page could not see.
+    // `take: 1`: existence, not a list.
+    agreements: {
+      where: { deletedAt: null, signedAt: { not: null } },
+      select: { id: true },
+      take: 1,
+    },
   },
 } as const
+
+const VEHICLE_INCLUDE = {
+  vendor: VENDOR_SELECT,
+  _count: { select: { photos: true } },
+} as const
+
+type VehicleWithListingFacts = {
+  offeredToSirReel: boolean
+  isActive: boolean
+  publiclyListed: boolean
+  publicSlug: string | null
+  _count: { photos: number }
+  vendor: { isActive: boolean; agreements: { id: string }[] }
+}
+
+/**
+ * Why this unit is or is not on sirreel.com. Derived on the SERVER, from
+ * the same facts SUB_LISTED_WHERE tests, so the roster page can never
+ * assemble a slightly different answer from the catalog's own gate — which
+ * is how a unit came to read "Listed — anyone browsing sirreel.com can find
+ * it" while the catalog skipped it for a missing photo. See publicListing.ts.
+ */
+function blockersFor(v: VehicleWithListingFacts) {
+  return listingBlockers({
+    offeredToSirReel: v.offeredToSirReel,
+    isActive: v.isActive,
+    publiclyListed: v.publiclyListed,
+    publicSlug: v.publicSlug,
+    photoCount: v._count.photos,
+    vendorActive: v.vendor.isActive,
+    vendorHasSignedAgreement: v.vendor.agreements.length > 0,
+  })
+}
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const gate = await requireSubVehicleAccess()
@@ -37,10 +79,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const vehicle = await prisma.subcontractedVehicle.findUnique({
     where: { id: params.id },
-    include: { vendor: VENDOR_SELECT },
+    include: VEHICLE_INCLUDE,
   })
   if (!vehicle) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json({ vehicle })
+  return NextResponse.json({ vehicle, listingBlockers: blockersFor(vehicle) })
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -120,9 +162,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const vehicle = await prisma.subcontractedVehicle.update({
       where: { id: params.id },
       data,
-      include: { vendor: VENDOR_SELECT },
+      include: VEHICLE_INCLUDE,
     })
-    return NextResponse.json({ vehicle })
+    return NextResponse.json({ vehicle, listingBlockers: blockersFor(vehicle) })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
       return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -142,9 +184,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const vehicle = await prisma.subcontractedVehicle.update({
       where: { id: params.id },
       data: { isActive: false },
-      include: { vendor: VENDOR_SELECT },
+      include: VEHICLE_INCLUDE,
     })
-    return NextResponse.json({ vehicle })
+    return NextResponse.json({ vehicle, listingBlockers: blockersFor(vehicle) })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
       return NextResponse.json({ error: 'not found' }, { status: 404 })

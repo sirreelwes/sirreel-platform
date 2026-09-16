@@ -827,6 +827,32 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Nothing reaches sirreel.com until a unit is listed, has a photo AND the
   Partner Equipment Agreement is signed (`SUB_LISTED_WHERE`), so seeding is
   safe before the call rather than after it. `npm run test:photo-section`.
+- **Two units to FEATURE (Wes 2026-09-16: "find a couple of items … and
+  let's make them live"): `FEATURED_FIRST` in photoShootRoster.ts** — the
+  **Profoto Pack & Head Kit — 2400 W/s** and the **Seamless Paper Backdrop —
+  107 in roll**. One light, one background: the two things every stills
+  shoot needs, and between them they show the section has range. NOT the
+  medium-format camera kit despite being the highest-ticket row — its detail
+  is the loosest in the file, and featuring the row most likely to need
+  correcting after Vic's call is the wrong first impression.
+- **"Listed" was NOT the same as live, and the roster page said it was.**
+  `SUB_LISTED_WHERE` tests SIX things; the Public catalog switch set one
+  (`publiclyListed`) and then reported "Listed — anyone browsing sirreel.com
+  can find it" beside a sirreel.com/vehicles/<slug> link. With no photo or an
+  unsigned partner that sentence was false and the link 404'd, and the only
+  warning was about a missing slug. `src/lib/sub-rentals/publicListing.ts`
+  now names all seven blockers (six where-keys; `vendor` carries two) with a
+  fix each; the API derives them SERVER-side on GET/PATCH/DELETE so the page
+  cannot assemble them differently from the catalog's own gate; the card
+  lists what is missing and **withholds the link until the unit is really
+  live**. `VehiclePhotosCard` gained `onChanged` so adding a photo — the
+  commonest fix — re-reads them. `npm run test:public-listing` fails if
+  `SUB_LISTED_WHERE` grows a condition this rule does not model.
+- **Making a VSM unit live needs two things no code can supply**: at least
+  one PHOTO on the unit, and a SIGNED agreement on the vendor. Both are in
+  `PARTNER_APPROVED_VENDOR_WHERE` / `SUB_LISTED_WHERE`. Do not fetch photos
+  from the partner's website — the partner uploads from their account page
+  (that path already exists and tells HQ), or HQ uploads what Vic sends.
 - **A photo HOME TILE was considered and PARKED (Wes 2026-09-16: "I'm not
   sure we will ever use it but remember the idea").** Not rejected, not
   queued — written down so it is not re-derived from scratch. If it is ever

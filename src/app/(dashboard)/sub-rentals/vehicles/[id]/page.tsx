@@ -21,6 +21,7 @@ import VehicleFeesCard from '@/components/sub-rentals/VehicleFeesCard'
 import VehiclePhotosCard from '@/components/sub-rentals/VehiclePhotosCard'
 import ClientPageCard from '@/components/sub-rentals/ClientPageCard'
 import { PARTNER_SECTIONS, partnerSection } from '@/lib/site/partnerSections'
+import type { ListingBlocker } from '@/lib/sub-rentals/publicListing'
 
 interface Vehicle {
   id: string
@@ -103,6 +104,9 @@ const TERMS = [
 export default function SubcontractedVehiclePage() {
   const params = useParams<{ id: string }>()
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
+  // Why this unit is / is not on sirreel.com — server-derived, so it cannot
+  // drift from the catalog's own gate. Every write path returns it too.
+  const [blockers, setBlockers] = useState<ListingBlocker[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -122,6 +126,7 @@ export default function SubcontractedVehiclePage() {
       }
       const j = await r.json()
       setVehicle(j.vehicle)
+      setBlockers(j.listingBlockers ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'load failed')
     } finally {
@@ -143,6 +148,7 @@ export default function SubcontractedVehiclePage() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? `save failed (${r.status})`)
       setVehicle(j.vehicle)
+      setBlockers(j.listingBlockers ?? [])
       setEditing(false)
       setDraft(null)
     } catch (e) {
@@ -378,7 +384,7 @@ export default function SubcontractedVehiclePage() {
       </div>
 
       <div className="mt-4">
-        <VehiclePhotosCard vehicleId={vehicle.id} />
+        <VehiclePhotosCard vehicleId={vehicle.id} onChanged={load} />
       </div>
 
       {/* The client-facing half of this page: an unlisted photo/spec page
@@ -391,6 +397,7 @@ export default function SubcontractedVehiclePage() {
           publicToken={vehicle.publicToken}
           publiclyListed={vehicle.publiclyListed}
           publicSlug={vehicle.publicSlug}
+          blockers={blockers}
           onChanged={load}
         />
       </div>

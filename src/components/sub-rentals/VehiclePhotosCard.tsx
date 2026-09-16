@@ -26,7 +26,16 @@ interface Photo {
   reviewedAt?: string | null
 }
 
-export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) {
+export default function VehiclePhotosCard({
+  vehicleId,
+  onChanged,
+}: {
+  vehicleId: string
+  /** Fired after any add/remove. A photo is one of the six things the
+   *  public catalog tests, so the listing card next to this one has to
+   *  re-read when the count changes. */
+  onChanged?: () => void
+}) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +72,7 @@ export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) 
         if (!r.ok) throw new Error(j.error ?? `upload failed (${r.status})`)
       }
       await load()
+      onChanged?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'upload failed')
     } finally {
@@ -84,6 +94,7 @@ export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) 
         throw new Error(j.error ?? `update failed (${r.status})`)
       }
       await load()
+      onChanged?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'update failed')
     }
@@ -98,6 +109,7 @@ export default function VehiclePhotosCard({ vehicleId }: { vehicleId: string }) 
         throw new Error(j.error ?? `delete failed (${r.status})`)
       }
       await load()
+      onChanged?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'delete failed')
     }

@@ -16,6 +16,7 @@
 
 import { useEffect, useState } from 'react'
 import SendEstimateModal from './SendEstimateModal'
+import type { ListingBlocker } from '@/lib/sub-rentals/publicListing'
 
 export default function ClientPageCard({
   vehicleId,
@@ -23,6 +24,7 @@ export default function ClientPageCard({
   publicToken,
   publiclyListed,
   publicSlug,
+  blockers = [],
   onChanged,
 }: {
   vehicleId: string
@@ -30,6 +32,10 @@ export default function ClientPageCard({
   publicToken: string | null
   publiclyListed: boolean
   publicSlug: string | null
+  /** Everything keeping this unit off sirreel.com — computed server-side
+   *  against the SAME conditions the catalog queries through. See
+   *  publicListing.ts for why the switch cannot be trusted on its own. */
+  blockers?: ListingBlocker[]
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -50,6 +56,10 @@ export default function ClientPageCard({
   }, [vehicleId])
 
   const url = publicToken ? `https://sirreel.com/unit/${publicToken}` : null
+  // Everything except the switch itself — what to show whether it is on
+  // (why the unit is not live) or off (what else to line up first).
+  const otherBlockers = blockers.filter((b) => b.code !== 'not-listed')
+  const live = publiclyListed && otherBlockers.length === 0
 
   async function mint(replacing: boolean) {
     if (replacing && !confirm('Re-minting creates a new URL and immediately kills the current one. Anyone holding the old link will get a 404. Continue?')) return
@@ -193,12 +203,17 @@ export default function ClientPageCard({
           <div>
             <div className="text-sm font-semibold text-gray-900">Public catalog</div>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed max-w-[46ch]">
-              {publiclyListed
-                ? 'Listed — anyone browsing sirreel.com can find it.'
-                : 'Not listed. Only people you send the link above to can see it.'}
+              {!publiclyListed
+                ? 'Not listed. Only people you send the link above to can see it.'
+                : live
+                  ? 'Listed — anyone browsing sirreel.com can find it.'
+                  : 'Listed, but NOT on sirreel.com yet — the catalog still skips it.'}
               {' '}The partner is never named either way.
             </p>
-            {publiclyListed && publicSlug && (
+            {/* The link only appears once the catalog would really return
+                it. Printing it while something is missing is what sent
+                people to a 404 and told them nothing. */}
+            {live && publicSlug && (
               <a
                 href={`https://sirreel.com/vehicles/${publicSlug}`}
                 target="_blank"
@@ -225,10 +240,25 @@ export default function ClientPageCard({
             />
           </button>
         </div>
-        {publiclyListed && !publicSlug && (
-          <p className="mt-2 text-xs text-amber-700">
-            Listed but no catalog URL yet — save the vehicle to generate one.
-          </p>
+        {otherBlockers.length > 0 && (
+          <div
+            className={`mt-2.5 rounded border px-2.5 py-2 ${
+              publiclyListed ? 'bg-chip-warn-bg border-chip-warn-fg/25' : 'bg-lt-inner border-lt-hairline'
+            }`}
+          >
+            <div className={`text-xs font-semibold ${publiclyListed ? 'text-chip-warn-fg' : 'text-lt-fg2'}`}>
+              {publiclyListed
+                ? `Not visible on sirreel.com — ${otherBlockers.length === 1 ? 'one thing is' : `${otherBlockers.length} things are`} missing`
+                : 'Before this can go live'}
+            </div>
+            <ul className="mt-1 space-y-1">
+              {otherBlockers.map((b) => (
+                <li key={b.code} className="text-xs leading-relaxed text-lt-fg2">
+                  <span className="font-medium text-lt-fg">{b.label}.</span> {b.fix}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 

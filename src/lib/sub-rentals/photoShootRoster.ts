@@ -112,6 +112,33 @@ export const VSM_PLANET = {
     'Photo shoot rentals partner. Hollywood studio/production rental house, 23+ years, ~500 rental types from cameras and backings to Sprinter van packages; specialises in the Profoto line. Deal on file 35% to SirReel, will flex to 43% to keep a client (partnerMaxSharePercent). Their Sprinter van packages are deliberately NOT on the roster — that is our own fleet’s lane.',
 } as const
 
+/**
+ * The two units to FEATURE first (Wes 2026-09-16: "let's find a couple of
+ * items from VSM Planet to feature on our website and let's make them
+ * live") — `FEATURED_FIRST` below, matched by name.
+ *
+ * One light and one background: the two things every stills shoot needs,
+ * and between them they show the section has RANGE rather than two
+ * variations on the same object.
+ *
+ *   · Profoto Pack & Head Kit — 2400 W/s. The house specialism is Profoto,
+ *     this is the most-ordered thing in a stills package, and the name does
+ *     the selling on its own.
+ *   · Seamless Paper Backdrop — 107 in roll. The other half of the shoot,
+ *     completely different in kind, and the one unit that photographs
+ *     obviously — a catalog card of a paper sweep reads instantly.
+ *
+ * NOT the medium-format camera kit, though it is the highest-ticket row:
+ * its detail is the loosest in this file (body and back unconfirmed), and
+ * featuring the row most likely to need correcting after Vic's call is the
+ * wrong first impression. NOT the C-stand package either — true and useful,
+ * but it reads as commodity and does not say "photo" to someone scanning.
+ */
+export const FEATURED_FIRST: readonly string[] = [
+  'Profoto Pack & Head Kit — 2400 W/s',
+  'Seamless Paper Backdrop — 107 in roll',
+] as const
+
 export const VSM_PLANET_ROSTER: readonly PhotoShootUnit[] = [
   {
     name: 'Profoto Pack & Head Kit — 2400 W/s',
