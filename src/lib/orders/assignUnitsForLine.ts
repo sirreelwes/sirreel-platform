@@ -81,6 +81,10 @@ export async function assignUnitsForLine(args: {
    *  same class often enough that the order span is the wrong answer —
    *  the line that was just added knows its own pickup and return. */
   lineWindow?: { start: Date | string | null; end: Date | string | null } | null
+  /** THE LINE the unit is for — stamped on the assignment so the order
+   *  page prints the truck on that line and a later delete / quantity /
+   *  class edit releases exactly it (Wes 2026-09-16, lineUnits.ts). */
+  orderLineItemId?: string | null
 }): Promise<UnitAssignmentOutcome> {
   const mode = args.request.mode ?? 'next'
   const out: UnitAssignmentOutcome = { mode, categoryId: args.categoryId, bookingItemId: null, assigned: [], note: null }
@@ -177,6 +181,7 @@ export async function assignUnitsForLine(args: {
           assetId,
           bufferOverride: true,
           orderId: order.id,
+          orderLineItemId: args.orderLineItemId ?? null,
           windowStart,
           windowEnd,
         })
@@ -221,6 +226,7 @@ export async function assignUnitsForLine(args: {
         bookingItemId: item.id,
         assetId: next.assetId,
         orderId: order.id,
+        orderLineItemId: args.orderLineItemId ?? null,
         windowStart,
         windowEnd,
       })
@@ -269,54 +275,55 @@ export async function assignNextAvailableForOrder(
       bookingId: true,
       lineItems: {
         select: {
+          id: true,
           type: true,
           department: true,
           quantity: true,
           pickupDate: true,
           returnDate: true,
           assetCategoryId: true,
+          parentLineItemId: true,
           inventoryItem: { select: { legacyAssetCategoryId: true, department: true } },
         },
-        orderBy: { pickupDate: 'asc' },
+        orderBy: [{ pickupDate: 'asc' }, { sortOrder: 'asc' }],
       },
     },
   })
   if (!order?.bookingId) return []
-  // Grouped by class AND by date block. Two vans from the 28th and two
-  // more from the 29th is FOUR trucks across two windows, not four
-  // trucks across one — binding the lot to a single span holds each of
-  // them days it isn't needed and burns availability that isn't gone.
-  const byBlock = new Map<string, { categoryId: string; start: Date; end: Date; quantity: number }>()
-  for (const li of order.lineItems) {
-    if (li.type === 'FEE' || li.type === 'DISCOUNT' || li.type === 'LABOR' || li.type === 'EXPENDABLE') continue
-    const dept = li.inventoryItem?.department ?? li.department
-    if (!ASSET_BEARING_DEPARTMENTS.has(dept)) continue
-    const categoryId = li.assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null
-    if (!categoryId) continue
-    const key = `${categoryId}|${li.pickupDate.toISOString().slice(0, 10)}|${li.returnDate.toISOString().slice(0, 10)}`
-    const existing = byBlock.get(key)
-    if (existing) existing.quantity += Math.max(1, li.quantity)
-    else byBlock.set(key, { categoryId, start: li.pickupDate, end: li.returnDate, quantity: Math.max(1, li.quantity) })
-  }
+  // One pass PER LINE, in date order. Each line binds its own trucks for
+  // its own days and each assignment is stamped with the line it is for
+  // — that stamp is what lets the order page print "Cube 34" on the
+  // cube-truck line and a later edit release exactly that truck. Two
+  // lines of one class on the same block share the hold: the second
+  // line's pass sees the first's units occupying the window and binds
+  // only what is still short (assignUnitsForLine counts by window).
   const outcomes: UnitAssignmentOutcome[] = []
   // Named picks are per class, so they are handed out in date order and
-  // each block takes what the earlier ones did not.
+  // each line takes what the earlier ones did not.
   const remainingPicks = new Map<string, string[]>()
   for (const [categoryId, ids] of Object.entries(named)) {
     remainingPicks.set(categoryId, ids.filter((id) => typeof id === 'string' && id.length > 0))
   }
-  for (const block of byBlock.values()) {
-    const pool = remainingPicks.get(block.categoryId) ?? []
-    const picks = pool.splice(0, block.quantity)
+  for (const li of order.lineItems) {
+    if (li.type === 'FEE' || li.type === 'DISCOUNT' || li.type === 'LABOR' || li.type === 'EXPENDABLE') continue
+    if (li.parentLineItemId) continue
+    const dept = li.inventoryItem?.department ?? li.department
+    if (!ASSET_BEARING_DEPARTMENTS.has(dept)) continue
+    const categoryId = li.assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null
+    if (!categoryId) continue
+    const quantity = Math.max(1, li.quantity)
+    const pool = remainingPicks.get(categoryId) ?? []
+    const picks = pool.splice(0, quantity)
     const request: UnitAssignmentRequest =
       picks.length > 0 ? { mode: 'named', assetIds: picks } : { mode: 'next' }
     outcomes.push(
       await assignUnitsForLine({
         orderId,
-        categoryId: block.categoryId,
-        quantity: block.quantity,
+        categoryId,
+        quantity,
         request,
-        lineWindow: { start: block.start, end: block.end },
+        lineWindow: { start: li.pickupDate, end: li.returnDate },
+        orderLineItemId: li.id,
       }),
     )
   }

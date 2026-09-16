@@ -56,6 +56,15 @@ export interface RenderPickListResult {
 export type RenderPickListFailure =
   | { ok: false; error: string; status: 404 | 400 | 500 }
 
+async function loadsOnUnitNameFor(order: { gearHandoff: string | null; gearLoadsOnAssignmentId: string | null }): Promise<string | null> {
+  if (order.gearHandoff !== 'LOAD_ON' || !order.gearLoadsOnAssignmentId) return null
+  const a = await prisma.bookingAssignment.findUnique({
+    where: { id: order.gearLoadsOnAssignmentId },
+    select: { status: true, asset: { select: { unitName: true } } },
+  })
+  return a && (a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT') ? a.asset.unitName : null
+}
+
 export async function renderPickListPdf(
   orderId: string,
   opts: { lineIds?: string[]; receipt?: boolean } = {},
@@ -108,6 +117,10 @@ export async function renderPickListPdf(
     },
   })
   if (!order) return { ok: false, error: 'Order not found', status: 404 }
+
+  // The reserved vehicle this gear loads onto, when the order says so and
+  // that reservation is still live (Order.gearLoadsOnAssignmentId).
+  const loadsOnUnitName = await loadsOnUnitNameFor(order)
 
   // Physical goods only — fees, discounts, and labor have nothing to
   // pull off a shelf.
@@ -292,7 +305,13 @@ export async function renderPickListPdf(
       companyName: order.company.name,
       jobCode: order.job?.jobCode ?? null,
       jobName: order.job?.name ?? null,
-      deliveryType: order.deliveryRequested ? 'DELIVER' : 'WILL CALL',
+      // Where the gear goes: delivered, loaded on a reserved vehicle (the
+      // order's own note, Wes 2026-09-16), or will call at the warehouse.
+      deliveryType: order.deliveryRequested
+        ? 'DELIVER'
+        : loadsOnUnitName
+          ? `LOAD ON ${loadsOnUnitName.toUpperCase()}`
+          : 'WILL CALL',
       assignedToName: order.pickList?.assignedTo?.name ?? null,
       agentName: order.agent.name,
       startDate: order.startDate,

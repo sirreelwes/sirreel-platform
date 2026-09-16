@@ -1272,6 +1272,29 @@ model BookingAssignment {
   orderId String? @map("order_id")
   order   Order?  @relation("AssignmentOrder", fields: [orderId], references: [id], onDelete: SetNull)
 
+  // WHICH LINE OF THAT ORDER THIS UNIT IS.
+  //
+  // Wes, 2026-09-16: "If we remove a cube truck from an order, it should
+  // be a specific cube truck so that, in that order line, we can even see
+  // cube 34 or whatever the actual vehicle is. They need to be tied
+  // together."
+  //
+  // orderId says which ORDER a truck goes out on; an order quotes the
+  // same class on two lines often enough (two blocks of days, two
+  // quantities) that the order alone cannot say which of its lines a
+  // unit belongs to. This is that link — the through line from a quoted
+  // vehicle line to the truck reserved for it. Written when a line
+  // binds a unit (line add, switch class, the picker opened from a
+  // line); read by the order page to print the unit ON the line, and
+  // by the line's delete / quantity / class edits to release or move
+  // exactly this truck and no sibling's.
+  //
+  // Nullable: every row before 2026-09-16, and units bound from the
+  // board with no line in view. SetNull — the FK is dropped by the DB
+  // the moment the line goes, so the delete path reads it FIRST.
+  orderLineItemId String?        @map("order_line_item_id")
+  orderLineItem   OrderLineItem? @relation("AssignmentLine", fields: [orderLineItemId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -1283,6 +1306,7 @@ model BookingAssignment {
   driverAssignments DriverAssignment[]
 
   @@index([orderId])
+  @@index([orderLineItemId])
   @@map("booking_assignments")
 }
 
@@ -4306,6 +4330,9 @@ model OrderLineItem {
   // Internal-only — read by /admin and /sub-rentals surfaces, never by
   // any client-facing serializer (portal, quote PDF, invoice PDF).
   subRentals    SubRental[]
+  // The specific units reserved FOR THIS LINE — the other end of
+  // BookingAssignment.orderLineItemId. "Cube 34" on the cube-truck line.
+  unitAssignments BookingAssignment[] @relation("AssignmentLine")
 
   @@index([packageInstanceId])
   @@index([autoKitPieceId])

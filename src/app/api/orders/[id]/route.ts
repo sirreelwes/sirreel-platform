@@ -52,6 +52,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
                 select: {
                   id: true,
                   orderId: true,
+                  // WHICH LINE the unit is reserved for — printed on that
+                  // line of the order (Wes 2026-09-16, lineUnits.ts).
+                  orderLineItemId: true,
+                  order: { select: { orderNumber: true } },
                   startDate: true,
                   endDate: true,
                   status: true,
@@ -126,6 +130,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
                     select: {
                       id: true,
                       orderId: true,
+                      orderLineItemId: true,
+                      order: { select: { orderNumber: true } },
                       startDate: true,
                       endDate: true,
                       status: true,
@@ -225,6 +231,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       status: true,
       startDate: true,
       endDate: true,
+      orderLineItemId: true,
       asset: { select: { id: true, unitName: true } },
       bookingItem: { select: { id: true, category: { select: { name: true } }, booking: { select: { id: true, bookingNumber: true } } } },
     },

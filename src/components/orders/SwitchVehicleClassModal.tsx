@@ -25,6 +25,12 @@ export interface SwitchClassLine {
   rateType: string
   pickupDate: string
   returnDate: string
+  /** Open with this class already chosen — the edit form hands off here
+   *  when a catalog re-pick changed the vehicle type. */
+  initialCategoryId?: string | null
+  /** The trucks reserved for this line right now — they come off with
+   *  the switch, so the modal says so by name. */
+  reservedUnits?: string[]
 }
 
 interface ClassRow {
@@ -58,7 +64,7 @@ export function SwitchVehicleClassModal({
   const end = line.returnDate.slice(0, 10)
   const [classes, setClasses] = useState<ClassRow[] | null>(null)
   const [avail, setAvail] = useState<Record<string, Avail | 'loading'>>({})
-  const [picked, setPicked] = useState<string | null>(null)
+  const [picked, setPicked] = useState<string | null>(line.initialCategoryId ?? null)
   const [keepRate, setKeepRate] = useState(true)
   const [unitMode, setUnitMode] = useState<'next' | 'named' | 'none'>('next')
   const [unitIds, setUnitIds] = useState<string[]>([])
@@ -159,6 +165,11 @@ export function SwitchVehicleClassModal({
             <p className="text-lt-fg2 text-[13px] mt-0.5">
               {line.quantity > 1 ? `${line.quantity}× ` : ''}{line.description} on {orderNumber} · {start} – {end} · quoted {fmtMoney(line.rate)}/{line.rateType === 'WEEKLY' ? 'wk' : 'day'}.
               The quote keeps that rate unless you change it below.
+              {line.reservedUnits && line.reservedUnits.length > 0 && (
+                <>
+                  {' '}<span className="text-lt-fg font-semibold">{line.reservedUnits.join(', ')}</span> {line.reservedUnits.length === 1 ? 'is' : 'are'} reserved for this line and {line.reservedUnits.length === 1 ? 'comes' : 'come'} off with the switch — a unit of the new class takes {line.reservedUnits.length === 1 ? 'its' : 'their'} place.
+                </>
+              )}
             </p>
           </div>
           <button onClick={onClose} aria-label="Close" className="text-lt-fg3 hover:text-lt-fg p-1">

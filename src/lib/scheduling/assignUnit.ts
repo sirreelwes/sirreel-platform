@@ -58,6 +58,15 @@ export interface AssignUnitArgs {
    */
   replaceAssetId?: string | null
   /**
+   * WHICH LINE of that order this truck is — the through line from a
+   * quoted vehicle line to its unit (Wes 2026-09-16). Set by the line
+   * add, the class switch and the picker opened from a line; a swap
+   * inherits the outgoing unit's line the way it inherits its order.
+   * Verified against the order so a stray id cannot pin a truck to
+   * somebody else's line. See lib/orders/lineUnits.ts.
+   */
+  orderLineItemId?: string | null
+  /**
    * Who is picking, for the audit row a REVIVED line writes. Same shape
    * as a release's actor (lib/scheduling/releaseBookingItem) so the two
    * halves of a hold's life read alike in the trail.
@@ -70,6 +79,7 @@ export interface AssignedUnit {
   status: string
   startDate: Date
   endDate: Date
+  orderLineItemId: string | null
   asset: { id: string; unitName: string; tier: string }
 }
 
@@ -103,7 +113,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       // occupies nothing, and one for another date block is not in the way.
       assignments: {
         where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
-        select: { id: true, assetId: true, startDate: true, endDate: true, status: true, orderId: true },
+        select: { id: true, assetId: true, startDate: true, endDate: true, status: true, orderId: true, orderLineItemId: true },
       },
     },
   })
@@ -126,7 +136,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // Resolved first: it must not count against capacity, must not crowd
   // the window resolver into a different block, and its order is what
   // the replacement inherits.
-  let outgoing: { id: string; assetId: string; status: string; orderId: string | null; startDate: Date; endDate: Date } | null = null
+  let outgoing: { id: string; assetId: string; status: string; orderId: string | null; orderLineItemId: string | null; startDate: Date; endDate: Date } | null = null
   if (args.replaceAssetId) {
     const found = bookingItem.assignments.find((a) => a.assetId === args.replaceAssetId)
     if (!found) {
@@ -168,6 +178,23 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   const inheritedOrderId = outgoing?.orderId && candidateIds.has(outgoing.orderId) ? outgoing.orderId : null
   const attachOrderId =
     requestedOrderId ?? inheritedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
+
+  // ── Which LINE of that order? ─────────────────────────────────────
+  // Named by the caller, or inherited on a swap (the replacement truck is
+  // the same line's truck). A line that is not on the attached order is
+  // refused outright rather than silently dropped — a wrong stamp would
+  // print "Cube 34" on the wrong line and release the wrong truck later.
+  const requestedLineId = typeof args.orderLineItemId === 'string' && args.orderLineItemId ? args.orderLineItemId : null
+  let attachLineId: string | null = null
+  if (requestedLineId) {
+    const line = await prisma.orderLineItem.findUnique({ where: { id: requestedLineId }, select: { orderId: true } })
+    if (!line || (attachOrderId && line.orderId !== attachOrderId) || (!attachOrderId && !candidateIds.has(line.orderId))) {
+      return refuse(400, { ok: false, error: 'line-not-on-order', reason: 'that order line does not belong to the order this unit is going out on' })
+    }
+    attachLineId = requestedLineId
+  } else if (outgoing?.orderLineItemId && (attachOrderId === outgoing.orderId || !attachOrderId)) {
+    attachLineId = outgoing.orderLineItemId
+  }
 
   // ── Which DAYS? ───────────────────────────────────────────────────
   // Not the booking envelope (it spans every order on the job) and not
@@ -380,12 +407,14 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         endDate: windowEnd,
         status: 'ASSIGNED',
         orderId: attachOrderId,
+        orderLineItemId: attachLineId,
       },
       select: {
         id: true,
         status: true,
         startDate: true,
         endDate: true,
+        orderLineItemId: true,
         asset: { select: { id: true, unitName: true, tier: true } },
       },
     })

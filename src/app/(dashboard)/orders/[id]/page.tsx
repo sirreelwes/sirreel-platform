@@ -67,6 +67,7 @@ import {
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
+import { GearLoadOnCard, type ReservedUnitChoice } from '@/components/orders/GearLoadOnCard';
 import { closureOn, calendarDayLabel } from '@/lib/site/yardHours';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
@@ -194,6 +195,11 @@ type HoldItem = {
   assignments: Array<{
     id: string;
     orderId: string | null;
+    /** WHICH LINE of that order the unit is reserved for — the through
+     *  line from a quoted vehicle line to its truck (2026-09-16). Null on
+     *  rows bound before the stamp existed or from the board. */
+    orderLineItemId?: string | null;
+    order?: { orderNumber: string } | null;
     startDate: string;
     endDate: string;
     status: string;
@@ -664,6 +670,8 @@ export default function OrderDetailPage() {
   const [liHoldable, setLiHoldable] = useState<boolean | null>(null);
   // The hold a "Change unit…" click opens the picker on.
   const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
+  /** The LINE the picker was opened from — the unit picked is that line's. */
+  const [assignForLine, setAssignForLine] = useState<{ orderId: string; lineId: string } | null>(null);
   const [unitNotice, setUnitNotice] = useState<string | null>(null);
 
   const [liStartDate, setLiStartDate] = useState("");
@@ -2251,6 +2259,56 @@ export default function OrderDetailPage() {
     return live[0] ?? null;
   };
 
+  /** THE TRUCKS RESERVED FOR THIS LINE — the through line (Wes 2026-09-16:
+   *  "in that order line, we can even see cube 34"). Rows stamped with the
+   *  line win; a line with no stamp (bound before 2026-09-16, or from the
+   *  board) falls back to this order's unstamped units on the hold whose
+   *  dates match the line's block, capped at the line's quantity. Mirrors
+   *  lib/orders/lineUnits.ts, which is what the delete and edit paths
+   *  release by — so what the row shows is what the row would give back. */
+  const unitsForLine = (li: LineItem): { hold: HoldItem; units: HoldItem['assignments']; exact: boolean } | null => {
+    const hold = holdForLine(li);
+    if (!hold) return null;
+    const live = hold.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT');
+    const stamped = live.filter((a) => a.orderLineItemId === li.id);
+    if (stamped.length > 0) return { hold, units: stamped, exact: true };
+    const day = (v: string) => v.slice(0, 10);
+    const mine = live
+      .filter((a) => a.orderId === orderId && !a.orderLineItemId)
+      .filter((a) => day(a.startDate) === day(li.pickupDate) && day(a.endDate) === day(li.returnDate))
+      .slice(0, Math.max(0, li.quantity));
+    return { hold, units: mine, exact: false };
+  };
+
+  /** Every LIVE reservation on the job — the vehicles a gear order may
+   *  load onto. Union of the job's bookings and the order's own, keyed
+   *  per assignment (two trips of one van are two choices). */
+  const reservedUnitChoices: ReservedUnitChoice[] = (() => {
+    if (!order) return [];
+    const seen = new Map<string, ReservedUnitChoice>();
+    const pools: HoldItem[] = [
+      ...(order.job?.bookings ?? []).flatMap((b) => b.items),
+      ...(order.booking?.items ?? []),
+    ];
+    for (const it of pools) {
+      if (it.status !== 'REQUESTED' && it.status !== 'ASSIGNED') continue;
+      for (const a of it.assignments) {
+        if (a.status !== 'ASSIGNED' && a.status !== 'CHECKED_OUT') continue;
+        if (seen.has(a.id)) continue;
+        seen.set(a.id, {
+          assignmentId: a.id,
+          unitName: a.asset.unitName,
+          category: it.category?.name ?? null,
+          startDate: a.startDate,
+          endDate: a.endDate,
+          orderNumber: a.order?.orderNumber ?? null,
+          orderId: a.orderId,
+        });
+      }
+    }
+    return [...seen.values()].sort((x, y) => x.startDate.localeCompare(y.startDate) || x.unitName.localeCompare(y.unitName, undefined, { numeric: true }));
+  })();
+
   const addLineItem = async () => {
     if (!liDesc || !liRate) return;
     if (liType === "FEE" && liFeeId && selectedFee?.unit === "PERCENT" && !(parseFloat(liPercentBase) > 0)) return;
@@ -2549,6 +2607,25 @@ export default function OrderDetailPage() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      // A vehicle line changing CLASS is refused here on purpose — the
+      // reservation's held unit has to move with it, and Switch class is
+      // the one path that does both. Open it on the class just picked.
+      if (res.status === 409 && data.code === 'USE_SWITCH_CLASS' && editingLine) {
+        setSavingLineId(null);
+        setEditingLineId(null);
+        setSwitchLine({
+          id: editingLine.id,
+          description: editingLine.description,
+          quantity: editingLine.quantity,
+          rate: Number(editingLine.rate),
+          rateType: editingLine.rateType,
+          pickupDate: editingLine.pickupDate,
+          returnDate: editingLine.returnDate,
+          initialCategoryId: typeof data.newCategoryId === 'string' ? data.newCategoryId : null,
+          reservedUnits: Array.isArray(data.units) ? data.units.filter((u: unknown): u is string => typeof u === 'string') : [],
+        });
+        return;
+      }
       // Inverted-date guard, dept-gate, and capacity conflicts all
       // surface as non-2xx with a `reason` string — alert is the
       // simplest "tell the rep what went wrong" path that doesn't
@@ -2581,10 +2658,24 @@ export default function OrderDetailPage() {
   // it with the same shape (description, rate, dates, etc.).
   const deleteLineItem = async (li: LineItem) => {
     const snapshot = li; // capture before fetchOrder() invalidates references
+    // A vehicle line with a truck on it is a reservation, not a row:
+    // removing it takes THAT truck off the schedule (lineUnits.ts), so
+    // say which before it goes. Lines holding nothing stay frictionless.
+    const reserved = li.department === 'VEHICLES' ? unitsForLine(li) : null;
+    const unitNames = reserved?.units.map((a) => a.asset.unitName) ?? [];
+    if (unitNames.length > 0) {
+      const list = unitNames.length === 1 ? unitNames[0] : `${unitNames.slice(0, -1).join(', ')} and ${unitNames[unitNames.length - 1]}`;
+      const ok = window.confirm(
+        `Remove ${li.description}?\n\n${list} ${unitNames.length === 1 ? 'comes' : 'come'} off the reservation with it.`,
+      );
+      if (!ok) return;
+    }
     await fetch(`/api/orders/${orderId}/line-items/${li.id}`, { method: "DELETE" });
     await fetchOrder();
     setLineItemUndoToast({
-      label: snapshot.description || "(line item)",
+      label: unitNames.length > 0
+        ? `${snapshot.description || "(line item)"} — ${unitNames.join(', ')} released`
+        : snapshot.description || "(line item)",
       onUndo: async () => {
         // Re-POST with the captured shape. The endpoint at
         // /api/orders/[id]/line-items accepts type/description/rate
@@ -2869,16 +2960,21 @@ export default function OrderDetailPage() {
           // this is the staff-side readout, with the picker one click away
           // so the agent can reassign. A held line with no unit says so.
           if (li.parentLineItemId || li.type === 'FEE' || li.type === 'DISCOUNT') return null;
-          const hold = holdForLine(li);
-          if (!hold) return null;
-          const units = hold.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT');
-          const remaining = Math.max(0, hold.quantity - units.length);
+          const forLine = unitsForLine(li);
+          if (!forLine) return null;
+          const { hold, units, exact } = forLine;
+          // THIS line's shortfall — its own quantity against its own
+          // trucks, not the shared hold's. Removing the line gives back
+          // exactly these units (lineUnits.ts), so the row says which.
+          const remaining = Math.max(0, li.quantity - units.length);
           return (
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
               {units.map((a) => (
                 <span
                   key={a.id}
-                  title={a.orderId && a.orderId !== orderId ? 'Reserved on this job, attached to another order' : 'Reserved on this order — internal only, never on the quote'}
+                  title={exact
+                    ? 'Reserved for this line — removing the line releases this unit. Internal only, never on the quote.'
+                    : 'Reserved on this order for these dates (bound before lines carried their unit) — internal only, never on the quote.'}
                   className="inline-flex items-center gap-1 rounded bg-lt-inner border border-lt-hairline px-1.5 py-0.5 font-semibold text-lt-fg"
                 >
                   {a.asset.unitName}
@@ -2892,7 +2988,7 @@ export default function OrderDetailPage() {
               {canManageSubRentals && (
                 <button
                   type="button"
-                  onClick={() => setAssignHoldId(hold.id)}
+                  onClick={() => { setAssignForLine({ orderId, lineId: li.id }); setAssignHoldId(hold.id); }}
                   className="text-lt-fg3 hover:text-amber-800 hover:underline underline-offset-2"
                   title="Pick or change the unit on this line — the class stays held either way"
                 >
@@ -3117,6 +3213,7 @@ export default function OrderDetailPage() {
                       rateType: li.rateType,
                       pickupDate: li.pickupDate,
                       returnDate: li.returnDate,
+                      reservedUnits: unitsForLine(li)?.units.map((a) => a.asset.unitName) ?? [],
                     })}
                     title="Move this line to another vehicle class — the quoted rate stays unless you change it"
                     className="text-lt-fg3 hover:text-amber-800 text-xs mr-2"
@@ -3455,7 +3552,9 @@ export default function OrderDetailPage() {
                 <span className="text-lt-fg">
                   loads on{' '}
                   <span className="font-semibold">
-                    {(order.loadsOn ?? []).find((a) => a.id === order.gearLoadsOnAssignmentId)?.asset.unitName ?? 'a reserved vehicle (unit not bound yet)'}
+                    {reservedUnitChoices.find((a) => a.assignmentId === order.gearLoadsOnAssignmentId)?.unitName
+                      ?? (order.loadsOn ?? []).find((a) => a.id === order.gearLoadsOnAssignmentId)?.asset.unitName
+                      ?? 'a vehicle that is no longer reserved — set it again below'}
                   </span>
                 </span>
               )}
@@ -4624,6 +4723,26 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
+
+      {/* WHERE THIS GEAR LOADS — at the bottom of the order, for orders
+          carrying anything that is not a vehicle (Wes 2026-09-16). The
+          choices are the job's live reservations; nothing else. */}
+      {(() => {
+        const hasGear = order.lineItems.some((l) => !l.parentLineItemId && l.type !== 'FEE' && l.type !== 'DISCOUNT' && l.department !== 'VEHICLES');
+        const over = ['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED', 'CANCELLED'].includes(order.status);
+        if (!hasGear && !order.gearHandoff) return null;
+        return (
+          <GearLoadOnCard
+            orderId={orderId}
+            jobId={order.job?.id ?? null}
+            gearHandoff={order.gearHandoff}
+            gearLoadsOnAssignmentId={order.gearLoadsOnAssignmentId}
+            reservedUnits={reservedUnitChoices}
+            canEdit={!over}
+            onChanged={fetchOrder}
+          />
+        );
+      })()}
 
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6">
         <div className="flex items-baseline justify-between mb-1">
@@ -6056,7 +6175,8 @@ export default function OrderDetailPage() {
         <AssignUnitsModal
           bookingItemId={assignHoldId}
           bufferDays={1}
-          onClose={() => setAssignHoldId(null)}
+          forLine={assignForLine}
+          onClose={() => { setAssignHoldId(null); setAssignForLine(null); }}
           onChanged={fetchOrder}
         />
       )}
