@@ -51,9 +51,14 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
       receiveMethod: (receive as ReceiveMethodKey | null) ?? null,
     })
     const made = dryRun ? r.wouldCreate.length : r.createdUnitIds.length
-    const headline = dryRun
-      ? `Dry run — ${made} unit${made === 1 ? '' : 's'} would be created, ${r.existingUnitIds.length} already there.`
-      : `${made} unit${made === 1 ? '' : 's'} created, ${r.existingUnitIds.length} already there.`
+    // The skipped-roster case is the headline when it happens: "0 units
+    // created" on its own reads like a failure, when in fact the vendor's
+    // own fields were set and the roster was withheld on purpose.
+    const headline = r.skippedRoster
+      ? `Vendor "${r.matchedName}" updated. Roster left alone — it already has units this task did not create.`
+      : dryRun
+        ? `Dry run — ${made} unit${made === 1 ? '' : 's'} would be created, ${r.existingUnitIds.length} already there.`
+        : `${made} unit${made === 1 ? '' : 's'} created, ${r.existingUnitIds.length} already there.`
     return { log: r.log, createdIds: r.createdUnitIds, headline }
   },
 }

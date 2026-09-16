@@ -59,6 +59,8 @@ export interface SeedVsmResult {
   vendorExisted: boolean
   /** The name the vendor was actually found under, when it already existed. */
   matchedName: string | null
+  /** True when the vendor already carried units this task did not write. */
+  skippedRoster: boolean
   /** Fields asserted on every run — what files them under Photo Shoot Rentals. */
   asserted: Record<string, string>
   /** Fields written only because they were empty. */
@@ -141,7 +143,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
 
   const log: string[] = []
   const result: SeedVsmResult = {
-    dryRun, vendorId: null, vendorExisted: false, matchedName: null, asserted: {}, filled: [],
+    dryRun, vendorId: null, vendorExisted: false, matchedName: null, skippedRoster: false, asserted: {}, filled: [],
     createdUnitIds: [], existingUnitIds: [], wouldCreate: [], accountUrl: null, deal: null, log,
   }
 
@@ -169,16 +171,22 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
   }
 
   /**
-   * A roster this task did not write is not ours to add to.
+   * A roster this task did not write is not ours to ADD TO — but that is a
+   * reason to skip the roster, NOT to abandon the run.
    *
-   * The live row carries ten units researched off VSM's own published
-   * categories — better provenance than this file's inferred shape, and
-   * including Sprinter van packages the roster here deliberately omits.
-   * Seeding 14 more on top would leave 24 units of mixed origin, some
-   * duplicating each other, and no way to tell which a rep should quote.
-   * So: report them and stop. A human decides whether to adopt, replace or
-   * re-section them.
+   * This started life as a thrown refusal, which was wrong within the hour:
+   * the vendor fields below (kind, section, receive method, the deal) are
+   * exactly what a partner filed by an earlier session is likely to be
+   * MISSING, and refusing outright left no way to set them short of hand-written
+   * SQL. Skip the half that would duplicate; still do the half that fixes.
+   *
+   * The ten units on file came off VSM's own published categories — better
+   * provenance than this file's inferred shape, and they include the Sprinter
+   * van packages the roster here deliberately omits. Seeding 14 more on top
+   * would leave 24 of mixed origin, overlapping, with no way to tell which a
+   * rep should quote. Which set survives is a person's call.
    */
+  let skipRoster: string | null = null
   if (existing && existing._count.subcontractedVehicles > 0) {
     const theirs = await prisma.subcontractedVehicle.findMany({
       where: { vendorId: existing.id },
@@ -188,12 +196,13 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
     const mine = new Set<string>(VSM_PLANET_ROSTER.map((u) => u.name))
     const foreign = theirs.filter((u) => !mine.has(u.name))
     if (foreign.length > 0) {
-      throw new SeedRefused(
-        `"${existing.name}" already has ${theirs.length} unit${theirs.length === 1 ? '' : 's'} this task did not create` +
-          ` — ${foreign.slice(0, 6).map((u) => u.name).join(', ')}${foreign.length > 6 ? `, +${foreign.length - 6} more` : ''}.`,
-        'Adding the 14-unit roster on top would leave two overlapping sets and no way to tell which to quote. ' +
-          'Decide first on /sub-rentals/vehicles: keep those and just file them under Photo Shoot Rentals, or retire them and seed this roster.',
-      )
+      skipRoster =
+        `ROSTER SKIPPED — "${existing.name}" already has ${theirs.length} unit${theirs.length === 1 ? '' : 's'} this task did not create ` +
+        `(${foreign.slice(0, 4).map((u) => u.name).join(', ')}${foreign.length > 4 ? `, +${foreign.length - 4} more` : ''}). ` +
+        'Adding 14 on top would leave two overlapping sets. The vendor’s own fields are still being set; ' +
+        'decide on /sub-rentals/vehicles which roster survives.'
+      result.skippedRoster = true
+      log.push(skipRoster)
     }
   }
 
@@ -282,7 +291,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
       (vendor.email ? ` · ${vendor.email}` : ' · NO EMAIL ON FILE — pass one before inviting'),
   )
 
-  for (const u of VSM_PLANET_ROSTER) {
+  for (const u of skipRoster ? [] : VSM_PLANET_ROSTER) {
     const found = await prisma.subcontractedVehicle.findFirst({
       where: { vendorId: vendor.id, name: u.name },
       select: { id: true },
