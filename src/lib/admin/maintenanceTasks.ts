@@ -36,6 +36,9 @@ export interface MaintenanceParam {
   key: string
   label: string
   placeholder?: string
+  /** Pre-filled in the form. Only for a value someone has CONFIRMED — a
+   *  guess that arrives pre-typed is a guess nobody re-reads. */
+  defaultValue?: string
   /** Shown under the field — why you would fill it in. */
   help?: string
   /** A fixed set renders as a picker instead of a text box. */
@@ -69,7 +72,10 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     writes: 'vendors (one row, upserted) · sub_contracted_vehicles (up to 14 rows) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/onboard-vsm-planet.ts',
     params: [
-      { key: 'email', label: 'Contact email', placeholder: 'vic@vsmplanetrentals.com', help: 'Only written if given. Never overwrites what is already on file.' },
+      // Confirmed by Wes 2026-09-16, so it is pre-filled — typing an address
+      // on a phone keyboard is exactly where a typo goes unnoticed. Still
+      // fill-if-empty: it never overwrites an address already on file.
+      { key: 'email', label: 'Contact email', defaultValue: 'vic@vsmplanetrentals.com', placeholder: 'vic@vsmplanetrentals.com', help: 'Vic Hartounian. Only written if the vendor has no email yet — it never overwrites one.' },
       { key: 'phone', label: 'Contact phone', placeholder: '(323) 555-0142', help: 'Same — blank leaves the existing number alone.' },
       { key: 'receiveMethod', label: 'How gear changes hands', options: ['WILL_CALL', 'DELIVERY', 'PICKUP'], help: 'Will-call: the production collects from their Hollywood counter. Change it if Vic says otherwise.' },
     ],

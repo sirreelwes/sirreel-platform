@@ -30,7 +30,7 @@ interface RunResult {
 
 function TaskCard({ task }: { task: MaintenanceTaskMeta }) {
   const [params, setParams] = useState<Record<string, string>>(() =>
-    Object.fromEntries((task.params ?? []).map((p) => [p.key, p.options ? p.options[0] : ''])),
+    Object.fromEntries((task.params ?? []).map((p) => [p.key, p.defaultValue ?? (p.options ? p.options[0] : '')])),
   )
   const [busy, setBusy] = useState<false | 'dry' | 'real'>(false)
   const [result, setResult] = useState<RunResult | null>(null)

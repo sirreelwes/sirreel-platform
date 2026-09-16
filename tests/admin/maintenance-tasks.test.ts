@@ -63,6 +63,13 @@ for (const t of MAINTENANCE_TASKS) {
   eq(`${t.id}: param keys unique`, new Set(params.map((p) => p.key)).size, params.length)
   yes(`${t.id}: every param has a label`, params.every((p) => p.key.length > 0 && p.label.length > 2))
   yes(`${t.id}: option lists are non-empty`, params.every((p) => !p.options || p.options.length > 0))
+  // A pre-filled value is submitted as typed, so it has to be plausible on
+  // its face — a malformed default is worse than an empty box.
+  yes(
+    `${t.id}: any pre-filled email is well-formed`,
+    params.every((p) => !(p.key === 'email' && p.defaultValue) || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.defaultValue!)),
+  )
+  yes(`${t.id}: a default matching an option list is in it`, params.every((p) => !p.options || !p.defaultValue || p.options.includes(p.defaultValue)))
 }
 
 // The audit action is a stable string — old rows are read by it.
