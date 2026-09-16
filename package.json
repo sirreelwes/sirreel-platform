@@ -62,6 +62,7 @@
     "test:aha-owners": "tsx tests/assistant/owners.test.ts",
     "test:aha-grant-expiry": "tsx tests/assistant/grant-expiry.test.ts",
     "test:checkout-state": "tsx tests/assistant/checkout-state.test.ts",
+    "test:aha-topics": "tsx tests/assistant/topics.test.ts",
     "test:phone-factor": "tsx tests/assistant/phone-factor.test.ts",
     "test:vehicle-pickup": "tsx tests/afterHours/vehicle-pickup-email.test.ts",
     "test:bounce-event": "tsx tests/email/bounce-event.test.ts",

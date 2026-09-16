@@ -24,6 +24,7 @@ import {
 import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
+import { listTopics } from '@/lib/assistant/topics'
 import { ASSISTANT_EXPANSION, ASSISTANT_NAME, ASSISTANT_SMS_INTRO } from '@/lib/assistant/identity'
 import { greetingInstruction, type GreetingMoment } from '@/lib/assistant/greeting'
 import { atLeast } from '@/lib/assistant/access'
@@ -79,6 +80,12 @@ EMERGENCIES: If — and ONLY if — the caller clearly states a GENUINE emergenc
 GEAR SETUP HELP — you may walk clients through setting up rented gear using the knowledge below. Work the fixes in the order given, one step at a time, and link the full guide when it helps. NEVER state a Wi-Fi password or any access credential from this section — you do not have them; they are printed on the case label and the setup card in the kit. If a client can't find theirs, give them ${PUBLIC_CONTACT.phone} for business hours.
 
 ${GEAR_GUIDES_BLOCK}
+
+TRUCK TROUBLESHOOTING — when something on the vehicle itself has gone wrong, work the matching topic from the TROUBLESHOOTING TOPICS section below one step at a time, asking what happened after each. Two rules override everything in them:
+1. The STOP conditions are a hard boundary, not advice. The moment one is true, stop troubleshooting, say plainly why you are stopping, and get them a person — alert_on_call_team if it is a genuine emergency, otherwise file_callback_request. Do not offer one more thing to try.
+2. Never invent a location, a part, or a procedure. The topics say "varies by truck" where the fleet actually varies; if they cannot find something, that is a hand-off, not a guessing game. No tools, no opening panels, no hydraulics, no wiring, and never bypassing a safety interlock.
+Safety comes before the rental every time: a person standing in the road at night, or a truck left running and unsecured, matters more than getting the gate working.
+If no topic below matches what they describe, do NOT improvise a repair — take the details and get them a person.
 
 STYLE: brief, warm, practical. One question at a time. Never make up policy, pricing, or availability. Anything you can't answer → offer file_callback_request so an agent picks it up, and give ${PUBLIC_CONTACT.phone} for business hours. Refuse anything unrelated to SirReel.`
 
@@ -284,11 +291,29 @@ export async function runAssistant(args: {
     ...(level === 'contact' && sender.contactJobs.length ? CONTACT_TOOLS : []),
     ...(level === 'admin' ? ADMIN_TOOLS : []),
   ]
+  // Topics are edited on /admin/assistant, so they are read per request
+  // rather than baked in at module load. A read failure must never take the
+  // assistant down — it just loses the tutorials for that message.
+  const topics = await listTopics().catch((err) => {
+    console.error('[assistant] topic load failed:', err)
+    return []
+  })
+  const topicsBlock = topics.length
+    ? `\n\nTROUBLESHOOTING TOPICS:\n\n${topics
+        .map(
+          (t) =>
+            `${t.assistantBrief}\n- Full guide (send them this link): ${PUBLIC_SITE_URL}/help/fix/${t.slug}${
+              t.tellUs.length ? `\n- On hand-off, collect: ${t.tellUs.join('; ')}.` : ''
+            }`,
+        )
+        .join('\n\n')}`
+    : ''
   const senderLine = describeSender(sender)
   const ip = args.ip
   const messages: Anthropic.MessageParam[] = args.turns.map((t) => ({ role: t.role, content: t.content.slice(0, MAX_CHARS) }))
   const system =
     SYSTEM_PROMPT +
+    topicsBlock +
     (args.channel === 'sms' ? SMS_STYLE : args.channel === 'hq' ? HQ_STYLE : '') +
     (args.channel === 'sms' && args.turns.length <= 1 ? SMS_FIRST_REPLY : '') +
     (args.channel === 'sms' ? greetingInstruction(args.greeting ?? 'none', args.firstName ?? null) : '') +

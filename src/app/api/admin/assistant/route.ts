@@ -20,6 +20,8 @@ import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
 import { resolveTwilioConfig } from '@/lib/sms/sendSms'
 import { listRecognizedNumbers } from '@/lib/assistant/recognizedNumbers'
 import { resolveGrantExpiry } from '@/lib/assistant/grantExpiry'
+import { lines } from '@/lib/assistant/topics'
+import { TROUBLESHOOTING_GUIDES } from '@/lib/site/troubleshooting'
 import { phoneTail } from '@/lib/assistant/phoneFactor'
 import { levelForRole } from '@/lib/assistant/access'
 import { firstNameOf } from '@/lib/assistant/greeting'
@@ -117,7 +119,40 @@ export async function GET() {
     select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true, phone: true },
   })
 
+  // Topics for the editor: the stored rows, disabled ones included, plus a
+  // flag saying whether AHA is currently running on them or on the built-in
+  // seed. Without that flag an empty list looks like "AHA has no tutorials"
+  // when it actually has three.
+  let topics: Array<Record<string, unknown>> = []
+  let topicsSeeded = false
+  try {
+    topics = await prisma.ahaTopic.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+      select: {
+        id: true, slug: true, title: true, eyebrow: true, summary: true, symptoms: true,
+        checks: true, stopIf: true, tellUs: true, assistantBrief: true, openQuestions: true,
+        enabled: true, sortOrder: true, updatedAt: true,
+      },
+    })
+  } catch (err) {
+    console.error('[admin/assistant] topics unavailable:', err)
+  }
+  if (topics.length === 0) {
+    topicsSeeded = true
+    topics = TROUBLESHOOTING_GUIDES.map((g, i) => ({
+      id: `seed:${g.slug}`, slug: g.slug, title: g.title, eyebrow: g.eyebrow, summary: g.summary,
+      symptoms: g.symptoms.join('\n'),
+      checks: g.checks.map((c) => `${c.title} — ${c.body}`).join('\n'),
+      stopIf: g.stopIf.join('\n'), tellUs: g.tellUs.join('\n'),
+      assistantBrief: '', openQuestions: g.openQuestions.join('\n'),
+      enabled: true, sortOrder: i, updatedAt: null,
+    }))
+  }
+
   return NextResponse.json({
+    topics,
+    /** True = these are the built-in defaults; saving one makes it editable. */
+    topicsSeeded,
     gateCode: s?.gateCode ?? '',
     gateCodeUpdatedAt: s?.gateCodeUpdatedAt ?? null,
     gateCodeUpdatedBy,
@@ -147,7 +182,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string; expiresAt?: string
+        action?: string; gateCode?: string; containerCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string; phone?: string; expiresAt?: string; topic?: Record<string, unknown>; topicId?: string
         name?: string; level?: string; note?: string; jobCode?: string; grantId?: string
       }
     | null
@@ -157,6 +192,8 @@ export async function POST(req: NextRequest) {
   // Wes 2026-09-11. One active row per number: adding again replaces. Rows
   // are never deleted — revoked, so the history says who granted what.
   const GRANTS_MISSING = 'The AHA grants table is not in the database yet — run `npx prisma db push` (see docs), then try again.'
+const TOPICS_MISSING =
+  'Could not save the topic. If the sr_aha_topics table is missing, run `npx prisma db push` — until then AHA falls back to the built-in tutorials.'
   if (body.action === 'add-grant') {
     if (gate.user.role !== 'ADMIN') return NextResponse.json({ error: 'only an admin can change the AHA list' }, { status: 403 })
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : ''
@@ -226,6 +263,86 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('[admin/assistant] revoke-grant failed:', err)
       return NextResponse.json({ error: GRANTS_MISSING }, { status: 500 })
+    }
+  }
+
+  // ── Troubleshooting topics (Wes 2026-09-16: sections ops can modify) ──
+  // Any user who can reach this page may edit a topic; these are published
+  // instructions, not access. Every save is audited with the old text so a
+  // bad edit is recoverable from the log.
+  if (body.action === 'save-topic') {
+    const t = (body.topic ?? {}) as Record<string, unknown>
+    const str = (k: string, max: number) => (typeof t[k] === 'string' ? (t[k] as string).trim().slice(0, max) : '')
+    const slug = str('slug', 60).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+    const title = str('title', 120)
+    if (!slug) return NextResponse.json({ error: 'a slug is required (letters, numbers and hyphens)' }, { status: 400 })
+    if (!title) return NextResponse.json({ error: 'a title is required' }, { status: 400 })
+    const checksText = str('checks', 8000)
+    if (lines(checksText).length === 0) return NextResponse.json({ error: 'add at least one step' }, { status: 400 })
+    // A topic with no stop condition is the dangerous shape: AHA would keep
+    // suggesting things with no boundary. Refuse it rather than ship it.
+    const stopText = str('stopIf', 4000)
+    if (lines(stopText).length === 0) {
+      return NextResponse.json({ error: 'add at least one "stop and call us" condition — a topic without one lets AHA troubleshoot forever' }, { status: 400 })
+    }
+    const data = {
+      slug, title,
+      eyebrow: str('eyebrow', 60) || 'Troubleshooting',
+      summary: str('summary', 600),
+      symptoms: str('symptoms', 2000),
+      checks: checksText,
+      stopIf: stopText,
+      tellUs: str('tellUs', 2000),
+      assistantBrief: str('assistantBrief', 8000) || null,
+      openQuestions: str('openQuestions', 4000) || null,
+      enabled: t.enabled !== false,
+      sortOrder: Number.isFinite(Number(t.sortOrder)) ? Number(t.sortOrder) : 0,
+    }
+    try {
+      const before = await prisma.ahaTopic.findUnique({ where: { slug }, select: { id: true, title: true, checks: true, stopIf: true, enabled: true } })
+      const row = await prisma.ahaTopic.upsert({
+        where: { slug },
+        create: { ...data, createdById: gate.user.id, updatedById: gate.user.id },
+        update: { ...data, updatedById: gate.user.id },
+        select: { id: true, slug: true },
+      })
+      await prisma.auditLog.create({
+        data: {
+          userId: gate.user.id,
+          action: before ? 'admin.aha_topic_updated' : 'admin.aha_topic_created',
+          entityType: 'AhaTopic', entityId: row.id,
+          oldValues: before ? { title: before.title, checks: before.checks, stopIf: before.stopIf, enabled: before.enabled } : {},
+          newValues: { slug, title, enabled: data.enabled, steps: lines(checksText).length, stops: lines(stopText).length, at: new Date().toISOString() },
+        },
+      }).catch(() => {})
+      return NextResponse.json({ ok: true, slug: row.slug })
+    } catch (err) {
+      console.error('[admin/assistant] save-topic failed:', err)
+      return NextResponse.json({ error: TOPICS_MISSING }, { status: 500 })
+    }
+  }
+
+  if (body.action === 'delete-topic') {
+    if (gate.user.role !== 'ADMIN') return NextResponse.json({ error: 'only an admin can delete a topic' }, { status: 403 })
+    const topicId = typeof body.topicId === 'string' ? body.topicId : ''
+    if (!topicId) return NextResponse.json({ error: 'topicId required' }, { status: 400 })
+    try {
+      // The whole text is kept in the audit row — deleting a topic should
+      // not be the thing that loses six months of refined instructions.
+      const before = await prisma.ahaTopic.findUnique({ where: { id: topicId } })
+      if (!before) return NextResponse.json({ error: 'not found' }, { status: 404 })
+      await prisma.ahaTopic.delete({ where: { id: topicId } })
+      await prisma.auditLog.create({
+        data: {
+          userId: gate.user.id, action: 'admin.aha_topic_deleted', entityType: 'AhaTopic', entityId: topicId,
+          oldValues: { slug: before.slug, title: before.title, summary: before.summary, symptoms: before.symptoms, checks: before.checks, stopIf: before.stopIf, tellUs: before.tellUs, assistantBrief: before.assistantBrief },
+          newValues: { at: new Date().toISOString() },
+        },
+      }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    } catch (err) {
+      console.error('[admin/assistant] delete-topic failed:', err)
+      return NextResponse.json({ error: TOPICS_MISSING }, { status: 500 })
     }
   }
 

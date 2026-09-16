@@ -22,6 +22,25 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-16 (later)
+
+### AHA tutorials, and ops owns them
+
+`SHA_PLACEHOLDER` aha: editable troubleshooting topics, seeded with lift gate / battery / lost keys
+
+Wes: "let's set up AHA tutorials ... sectioned in AHA for things like lift gate troubleshooting, battery issues, lost keys", then the part that set the design — "a bunch of sections in AHA that **we can modify**". So this is not a code registry; it is rows ops edits.
+
+- **`AhaTopic` (`sr_aha_topics`, additive push)** + /admin/assistant → Troubleshooting topics. Edits are live on the next message: `listTopics()` assembles the prompt block per request rather than at module load, which is why the topic block had to come out of the static SYSTEM_PROMPT.
+- **The brief AHA reads is generated** from the steps and the stop conditions. The setup-guide module already warns that a separate prompt field drifts from the published steps; here the same trap would be worse, because a person edits the steps and never sees the prompt. `assistantBrief` survives as an explicit override.
+- **List fields are textareas, one item per line.** A structured step-builder is what stops someone correcting a wrong instruction at 6pm on a Friday.
+- **A topic with no stop condition is refused by the API.** That shape is the dangerous one: AHA keeps suggesting things with no boundary, around a hydraulic machine, in the dark. The prompt treats `stopIf` as hard — on a match it stops, says why, and escalates rather than offering one more idea, and it is told never to invent a location or part, touch hydraulics/wiring/panels, or bypass an interlock.
+- **Three seeded tutorials** in `src/lib/site/troubleshooting.ts`, which doubles as the fallback so AHA has tutorials before anything is seeded. Lift gate (engine running, parking brake interlock, gate power cutoff, stow pins, overload); battery (the sound IS the diagnosis, the two things that drain a production truck, jump-start order with the don't-jump list); lost keys (the three places keys go, never force a door, securing the truck beats finding the key).
+- **What is deliberately NOT in them.** No unit-specific facts — which gate makes we run, where each cutoff switch sits, the spare-key policy. Those vary or are unknown to me, and a confident wrong answer at 10pm is worse than "call us". Each topic carries `openQuestions` for fleet, internal-only, never rendered and never in the prompt.
+- Public `/help/fix/[slug]` renders from the same source with the STOP list above the steps, since someone skimming on a phone should hit the danger first. `smsNumberDisplay()` was a private copy inside /sms-terms; extracted to `src/lib/sms/number.ts` rather than made a third copy.
+- `npm run test:aha-topics` pins the line parsing, the step split, the generated brief carrying its STOP boundary, and the seed content's safety. The interlock check had to learn the difference between "NEVER suggest bypassing" and an instruction to bypass. Build green, ten assistant suites pass.
+
+**Next, per Wes: lift gate is the first topic to develop.** It needs fleet answers — see its `openQuestions`.
+
 ## 2026-09-16
 
 ### AHA: what "checked out" actually means

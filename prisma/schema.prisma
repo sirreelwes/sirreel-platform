@@ -9811,6 +9811,59 @@ model AhaGrant {
   @@map("sr_aha_grants")
 }
 
+/// An AHA troubleshooting section — "lift gate will not work", "truck
+/// will not start", "lost keys". Wes 2026-09-16: "a bunch of sections in
+/// AHA that we can modify regarding specific troubleshooting tasks that we
+/// encounter from our clients." The point is that ops edits these, not a
+/// developer: the rows are the source of truth and AHA's prompt is built
+/// from them on every request.
+///
+/// The list fields are NEWLINE-DELIMITED TEXT on purpose. A structured
+/// editor for nested steps is what stops a non-developer from fixing a
+/// wrong instruction at 6pm; a textarea does not.
+///
+/// src/lib/site/troubleshooting.ts holds the seed content and the same
+/// shape in code — it is the fallback when this table is empty or missing,
+/// so AHA keeps its tutorials either way.
+model AhaTopic {
+  id      String @id @default(uuid())
+  /// URL slug for /help/fix/<slug>. Lowercase, hyphenated.
+  slug    String @unique
+  title   String @db.VarChar(120)
+  eyebrow String @default("Troubleshooting") @db.VarChar(60)
+  summary String @db.Text
+
+  /// One per line. Plain words a caller might use — helps AHA pick this topic.
+  symptoms String @db.Text
+  /// One per line, in the order to try them. "Title — body" renders as a step.
+  checks   String @db.Text
+  /// One per line. HARD boundaries: when any is true AHA stops and gets a person.
+  stopIf   String @db.Text
+  /// One per line. What to collect from the caller on hand-off.
+  tellUs   String @db.Text
+
+  /// Optional hand-written override for what AHA is told. Left empty, the
+  /// brief is GENERATED from the fields above so editing a step updates
+  /// AHA's knowledge without anyone rewriting prompt text.
+  assistantBrief String? @db.Text
+
+  /// Off = keeps the row but drops it from AHA and the public page.
+  enabled   Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  /// SirReel facts still to confirm. Internal only — never rendered, never
+  /// in the prompt.
+  openQuestions String? @map("open_questions") @db.Text
+
+  createdById String?  @map("created_by_id")
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled, sortOrder])
+  @@map("sr_aha_topics")
+}
+
 model SmsThread {
   id             String    @id @default(uuid())
   /// E.164, unique — the thread key.

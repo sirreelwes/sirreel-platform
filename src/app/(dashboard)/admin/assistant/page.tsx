@@ -81,7 +81,27 @@ type Data = {
   smsProblem?: string | null
   emergencyContacts: EmergencyContact[]
   recognized?: RecognizedNumber[]
+  topics?: TopicRow[]
+  topicsSeeded?: boolean
   me?: Me
+}
+
+/** An editable AHA troubleshooting section. List fields are one item per line. */
+type TopicRow = {
+  id: string
+  slug: string
+  title: string
+  eyebrow: string
+  summary: string
+  symptoms: string
+  checks: string
+  stopIf: string
+  tellUs: string
+  assistantBrief: string | null
+  openQuestions: string | null
+  enabled: boolean
+  sortOrder: number
+  updatedAt: string | null
 }
 
 /**
@@ -423,6 +443,136 @@ function RecognizedSection({ rows, isAdmin, onChanged }: { rows: RecognizedNumbe
         </table>
       </div>
     </Panel>
+  )
+}
+
+
+/**
+ * Troubleshooting topics — the part of AHA ops owns.
+ *
+ * Wes 2026-09-16: "a bunch of sections in AHA that we can modify regarding
+ * specific troubleshooting tasks that we encounter from our clients."
+ *
+ * Every list is a plain textarea, one item per line. A structured
+ * step-builder is what stops someone fixing a wrong instruction at 6pm on a
+ * Friday; a textarea does not. What AHA is told is GENERATED from the steps
+ * and the stop conditions, so editing a step changes what it says without
+ * anyone touching prompt text.
+ */
+function TopicEditor({ topic, seeded, onSaved }: { topic: TopicRow; seeded: boolean; onSaved: () => void }) {
+  const [t, setT] = useState(topic)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { setT(topic); setSaved(false) }, [topic])
+
+  const set = (k: keyof TopicRow) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setT((p) => ({ ...p, [k]: e.target.value }))
+
+  async function save() {
+    setBusy(true); setErr(null); setSaved(false)
+    try {
+      const res = await fetch('/api/admin/assistant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-topic', topic: t }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(j.error || 'Could not save.'); return }
+      setSaved(true); onSaved()
+    } finally { setBusy(false) }
+  }
+
+  const field = 'w-full rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none'
+  const label = 'block text-[11px] uppercase tracking-wider text-zinc-400 mb-1'
+  const count = (v: string) => v.split('\n').map((x) => x.trim()).filter(Boolean).length
+
+  return (
+    <details className="rounded-lg border border-zinc-800 bg-zinc-950">
+      <summary className="cursor-pointer list-none px-3 py-2 text-sm text-zinc-100 flex items-center justify-between gap-3">
+        <span className="truncate">
+          {t.title || t.slug}
+          {!t.enabled && <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase text-zinc-400">off</span>}
+          {seeded && <span className="ml-2 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] uppercase text-amber-200">built-in</span>}
+        </span>
+        <span className="shrink-0 text-[11px] text-zinc-500">{count(t.checks)} steps · {count(t.stopIf)} stops</span>
+      </summary>
+      <div className="grid gap-3 border-t border-zinc-800 p-3">
+        <div className="flex flex-wrap gap-3">
+          <div className="grow"><label className={label} htmlFor={`t-title-${t.id}`}>Title</label>
+            <input id={`t-title-${t.id}`} className={field} value={t.title} onChange={set('title')} /></div>
+          <div className="w-52"><label className={label} htmlFor={`t-slug-${t.id}`}>Link name</label>
+            <input id={`t-slug-${t.id}`} className={`${field} font-mono`} value={t.slug} onChange={set('slug')} /></div>
+        </div>
+        <div><label className={label} htmlFor={`t-sum-${t.id}`}>One-line summary</label>
+          <input id={`t-sum-${t.id}`} className={field} value={t.summary} onChange={set('summary')} /></div>
+        <div><label className={label} htmlFor={`t-sym-${t.id}`}>What the caller might say · one per line</label>
+          <textarea id={`t-sym-${t.id}`} rows={3} className={`${field} font-mono text-[12.5px]`} value={t.symptoms} onChange={set('symptoms')} /></div>
+        <div>
+          <label className={label} htmlFor={`t-chk-${t.id}`}>Steps, in order · one per line · &quot;Step name — what to do&quot;</label>
+          <textarea id={`t-chk-${t.id}`} rows={7} className={`${field} font-mono text-[12.5px]`} value={t.checks} onChange={set('checks')} />
+        </div>
+        <div>
+          <label className={label} htmlFor={`t-stop-${t.id}`}>Stop and call us if · one per line</label>
+          <textarea id={`t-stop-${t.id}`} rows={5} className={`${field} font-mono text-[12.5px]`} value={t.stopIf} onChange={set('stopIf')} />
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Hard boundaries. AHA stops troubleshooting the moment one is true and gets a person. A topic with none is refused.
+          </p>
+        </div>
+        <div><label className={label} htmlFor={`t-tell-${t.id}`}>Collect on hand-off · one per line</label>
+          <textarea id={`t-tell-${t.id}`} rows={4} className={`${field} font-mono text-[12.5px]`} value={t.tellUs} onChange={set('tellUs')} /></div>
+        <details className="rounded border border-zinc-800 p-2">
+          <summary className="cursor-pointer text-[12px] text-zinc-400">Advanced — override what AHA is told, and internal notes</summary>
+          <div className="mt-2 grid gap-3">
+            <div><label className={label} htmlFor={`t-brief-${t.id}`}>Override AHA&apos;s wording (leave empty to generate it from the steps)</label>
+              <textarea id={`t-brief-${t.id}`} rows={5} className={`${field} font-mono text-[12.5px]`} value={t.assistantBrief ?? ''} onChange={set('assistantBrief')} /></div>
+            <div><label className={label} htmlFor={`t-oq-${t.id}`}>Open questions for fleet · internal, never shown to a client</label>
+              <textarea id={`t-oq-${t.id}`} rows={4} className={`${field} font-mono text-[12.5px]`} value={t.openQuestions ?? ''} onChange={set('openQuestions')} /></div>
+          </div>
+        </details>
+        <div className="flex items-center gap-3">
+          <button onClick={() => void save()} disabled={busy} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          <label className="flex items-center gap-1.5 text-[12px] text-zinc-400">
+            <input type="checkbox" id={`t-on-${t.id}`} checked={t.enabled} onChange={(e) => setT((p) => ({ ...p, enabled: e.target.checked }))} />
+            On — AHA uses this topic
+          </label>
+          {saved && <span className="text-[12px] text-emerald-400">Saved. AHA uses it on the next message.</span>}
+          {err && <span className="text-[12px] text-red-300">{err}</span>}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+const BLANK_TOPIC: TopicRow = {
+  id: 'new', slug: '', title: '', eyebrow: 'Troubleshooting', summary: '',
+  symptoms: '', checks: '', stopIf: '', tellUs: '', assistantBrief: '', openQuestions: '',
+  enabled: true, sortOrder: 99, updatedAt: null,
+}
+
+function TopicsPanel({ data, reload }: { data: Data; reload: () => void }) {
+  const [adding, setAdding] = useState(false)
+  const topics = data.topics ?? []
+  return (
+    <div className="grid gap-2">
+      {data.topicsSeeded && (
+        <p className="rounded border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-[12px] text-amber-200">
+          These are the built-in tutorials AHA ships with. Saving one stores your own copy — from then on this page is
+          the source of truth and the built-in version is no longer used.
+        </p>
+      )}
+      {topics.map((t) => (
+        <TopicEditor key={t.id} topic={t} seeded={Boolean(data.topicsSeeded)} onSaved={reload} />
+      ))}
+      {adding ? (
+        <TopicEditor topic={BLANK_TOPIC} seeded={false} onSaved={() => { setAdding(false); reload() }} />
+      ) : (
+        <button onClick={() => setAdding(true)} className="justify-self-start rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-amber-500 hover:text-white">
+          + Add a topic
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -968,6 +1118,21 @@ export default function AssistantAdminPage() {
           <HqAssistantPanel level={data.me?.level ?? 'staff'} firstName={data.me?.firstName ?? null} />
 
           {/* Release log */}
+          <Panel
+            title="Troubleshooting topics"
+            summary={`${(data.topics ?? []).filter((t) => t.enabled).length} on${data.topicsSeeded ? ' · built-in' : ''}`}
+          >
+            {/* The sections AHA walks a client through when something on the
+                truck has gone wrong. Edited here, live on the next message —
+                no deploy. */}
+            <p className="mb-2 text-[12px] text-zinc-400">
+              What AHA talks a client through when something on the truck goes wrong. Edits are live on the next
+              message. AHA works the steps in order, one at a time, and stops the moment a &quot;stop and call us&quot;
+              line is true.
+            </p>
+            <TopicsPanel data={data} reload={() => void load()} />
+          </Panel>
+
           <Panel title="Recent access log" summary={`${data.audit.length} event${data.audit.length === 1 ? '' : 's'}`}>
             {/* Same shape as the other two lists: one line per event, capped
                 box, sticky header. */}

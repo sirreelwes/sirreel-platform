@@ -303,6 +303,34 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the agent confirm a time rather than quoting the wrong leg. Both times
   are free text ("6-7a", "first light") and are repeated as written;
   `pickupTime` was never selected by the lookups before this.
+- **AHA troubleshooting TOPICS are ops-editable** (Wes 2026-09-16: "a bunch
+  of sections in AHA that we can modify regarding specific troubleshooting
+  tasks that we encounter from our clients"). `AhaTopic` (`sr_aha_topics`,
+  **additive `prisma db push`**) holds the sections; /admin/assistant →
+  **Troubleshooting topics** edits them and the change is live on the NEXT
+  message — the prompt is assembled per request by `listTopics()`
+  (`src/lib/assistant/topics.ts`), not baked in at module load.
+  - List fields are NEWLINE-DELIMITED TEXT on purpose. A structured
+    step-builder is what stops someone fixing a wrong instruction at 6pm.
+  - **The brief AHA reads is GENERATED** from the steps + stop conditions
+    (`buildBrief`), so editing a step updates what AHA says with no prompt
+    rewrite. `assistantBrief` is an optional override only.
+  - **Every topic must carry at least one `stopIf`** — the API refuses a
+    save without one. It is a hard boundary: AHA stops troubleshooting the
+    moment one is true and gets a person, and is told never to invent a
+    location, part or procedure, touch hydraulics/wiring/panels, or bypass
+    a safety interlock.
+  - `src/lib/site/troubleshooting.ts` is the SEED + the fallback: until
+    `scripts/seed-aha-topics.ts --write` runs (idempotent, never overwrites
+    an edited row) AHA serves the same three tutorials from code — lift
+    gate, battery/won't start, lost keys. Seeding changes who can EDIT
+    them, not whether they exist.
+  - `openQuestions` on each topic is fleet's to-do list (which gate makes,
+    where each cutoff switch is, the spare-key policy) — internal only,
+    never rendered and never in the prompt, because a confident wrong
+    answer in the dark is worse than "call us".
+  - Public page `/help/fix/[slug]` renders from the SAME source, stop
+    conditions FIRST. `npm run test:aha-topics`.
 - **"Who AHA recognises" on /admin/assistant** (Wes 2026-09-11: "where do I
   manage what numbers have access to what") — `listRecognizedNumbers()` in
   `src/lib/assistant/recognizedNumbers.ts` lists every number in a tier

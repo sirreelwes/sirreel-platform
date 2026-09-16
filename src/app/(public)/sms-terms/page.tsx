@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { smsNumberDisplay } from '@/lib/sms/number'
 import Link from 'next/link'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import SmsOptInForm from '@/components/site/SmsOptInForm'
@@ -22,13 +23,6 @@ export const metadata: Metadata = {
 
 const EFFECTIVE = 'September 7, 2026'
 
-/** The sending number, formatted for people. Falls back to a phrase until
- *  TWILIO_FROM_NUMBER is set in the environment. */
-function smsNumberDisplay(): string {
-  const raw = (process.env.TWILIO_FROM_NUMBER || '').replace(/\D/g, '')
-  const d = raw.length === 11 && raw.startsWith('1') ? raw.slice(1) : raw
-  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : 'our SirReel text number'
-}
 const SMS_NUMBER_DISPLAY = smsNumberDisplay()
 const H2 = 'text-[20px] sm:text-[22px] font-black tracking-tight mt-10 mb-3'
 const P = 'text-[15px] leading-relaxed text-[#3d392f] mb-4'
