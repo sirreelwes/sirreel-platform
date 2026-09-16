@@ -619,7 +619,15 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
 /**
  * @deprecated Use reconcileHoldFirmness — approval alone is no longer
  * enough to make a hold firm (Wes 2026-09-01). Kept as a thin shim so
- * existing call sites keep compiling while they migrate.
+ * existing call sites keep compiling while they migrate. It has NO
+ * callers left.
+ *
+ * DO NOT WIRE THIS BACK UP. It promotes every rank-2 REQUESTED item on
+ * the job's bookings to rank 1 in one updateMany, which since 2026-09-16
+ * would silently turn a deliberate 2nd Hold — a student project placed
+ * behind the queue on purpose, at half rate — into a first hold that
+ * consumes capacity. holdRank is a human's queue decision now; nothing
+ * automatic may move it.
  */
 export async function promoteHoldsOnApproval(orderId: string): Promise<{ promoted: number; error: string | null }> {
   try {

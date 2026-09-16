@@ -1049,7 +1049,13 @@ export function MakeReservationModal({
         if (!bookingItemId) {
           note = `The ${category.name} line was added but its hold could not be read back — check the order.`
         } else if (queuedBehind) {
-          note = `${category.name}: queued as the ${holdRankLabel(placedRank!)} Hold — no unit until the hold ahead releases.`
+          // Two different sentences, because a 2nd Hold can now be chosen
+          // with NOTHING ahead of it (Wes 2026-09-16, the student-rate
+          // case). Telling that agent to wait for "the hold ahead" would
+          // describe a hold that does not exist.
+          note = rowQueue(r).incumbents.length > 0
+            ? `${category.name}: queued as the ${holdRankLabel(placedRank!)} Hold — no unit until the hold ahead releases.`
+            : `${category.name}: placed as the ${holdRankLabel(placedRank!)} Hold — nothing is ahead of it, and it takes no unit and no capacity, so a later reservation books ahead of it.`
         } else if (canBindUnit && (assignNext || r.unitIds.length > 0)) {
           // The units the agent NAMED go on first, in the order they
           // were picked. A named unit is a deliberate human choice, so
@@ -1359,6 +1365,55 @@ export function MakeReservationModal({
                 }.`
               : `Bound to ${chosen.length === 1 ? 'this unit' : 'these units'}.`}
         </p>
+      </div>
+    )
+  }
+
+  /**
+   * Queue position when NOTHING is in the way — the quiet twin of
+   * queueBlock.
+   *
+   * REVERSES "ranking should always default to 1 and only present other
+   * options when there is a conflict" (Wes 2026-09-09). Wes 2026-09-16,
+   * from Jose: a student project at half rate should START as a 2nd Hold
+   * so a full-rate job supersedes it — a decision made precisely when
+   * there is no conflict, which a conflict-gated control can never reach.
+   *
+   * The DEFAULT is untouched: `queueChoice: 'none'` still writes rank 1.
+   * Only the option is new, and it stays quiet (no amber, no blocker) so
+   * the at-capacity panel keeps its urgency.
+   */
+  const quietRankChoice = (r: Row) => {
+    const { stackFull } = rowQueue(r)
+    if (stackFull) return null
+    const second = r.queueChoice === 'second'
+    return (
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-[11px] text-lt-fg3">Place as</span>
+        <button
+          type="button"
+          onClick={() => patchRow(r.key, { queueChoice: 'none' })}
+          className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+            !second ? 'bg-lt-fg text-white border-lt-fg' : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:border-lt-fg3'
+          }`}
+        >
+          1st Hold
+        </button>
+        <button
+          type="button"
+          onClick={() => patchRow(r.key, { queueChoice: 'second', unitIds: [] })}
+          className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+            second ? 'bg-lt-fg text-white border-lt-fg' : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:border-lt-fg3'
+          }`}
+        >
+          2nd Hold
+        </button>
+        {second && (
+          <span className="text-[11px] text-lt-fg3 basis-full">
+            Takes no unit and no capacity, so a later reservation books ahead of it. For tentative and
+            reduced-rate work.
+          </span>
+        )}
       </div>
     )
   }
@@ -1855,6 +1910,10 @@ export function MakeReservationModal({
                           name. Backups never consume capacity, so a 2nd
                           Hold costs the production ahead nothing. */}
                       {atCap && !written && queueBlock(r)}
+                      {/* Same decision with nothing in the way — see
+                          quietRankChoice. Deliberately does NOT replace the
+                          panel above; that one is the conflict. */}
+                      {!atCap && !written && category && !dup && quietRankChoice(r)}
                     </div>
                   )
                 })}

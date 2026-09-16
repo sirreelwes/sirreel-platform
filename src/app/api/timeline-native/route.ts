@@ -731,23 +731,33 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // ── Same lane: HOLDS that consume capacity but are bound to no unit. ──
-  //    Only REQUESTED rank-1 items count — those are exactly the rows
-  //    `getCategoryAvailability` subtracts from availableToHold (backups
-  //    queue without consuming; UNFULFILLED was deliberately released).
+  // ── Same lane: REQUESTED holds bound to no unit. ──
+  //    Rank-1 rows are the ones `getCategoryAvailability` subtracts from
+  //    availableToHold, and they read as a nag: a unit is owed.
+  //
+  //    Rank ≥ 2 rows ride the same lane but mean the opposite (Jose,
+  //    2026-09-16): a hold deliberately placed behind the queue — a
+  //    student project at half rate — owes nobody a unit and consumes no
+  //    capacity. They were excluded here, which meant a reservation
+  //    created as a 2nd Hold had NOWHERE on this board to appear: no
+  //    assignment, so no bar on a unit row, and filtered out of this
+  //    lane. It simply vanished. They are included now and rendered
+  //    distinctly (blue, "queued") rather than as a red to-do.
+  //    UNFULFILLED stays out either way — that one was released.
+  //
   //    A partially-bound item shows its REMAINING uncovered quantity, so
   //    a qty-3 hold with 1 unit bound reads "2 need a unit" — matching
   //    the same arithmetic the availability engine does.
   const unboundItems = await prisma.bookingItem.findMany({
     where: {
       status: 'REQUESTED',
-      holdRank: 1,
       booking: { archivedAt: null, startDate: { lte: to }, endDate: { gte: from } },
     },
     select: {
       id: true,
       quantity: true,
       categoryId: true,
+      holdRank: true,
       category: { select: { id: true, name: true, reservableOnGantt: true } },
       booking: {
         select: {
@@ -791,6 +801,8 @@ export async function GET(req: NextRequest) {
       categoryId: i.categoryId,
       categoryName: i.category?.name ?? '',
       cat: mapCategoryName(i.category?.name ?? ''),
+      // 1 = owes a unit. ≥2 = queued behind on purpose; owes nothing.
+      holdRank: i.holdRank,
       needed: i.quantity - i._count.assignments,
       quantity: i.quantity,
       start: ymd(i.booking.startDate),

@@ -46,6 +46,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       categoryId: true,
       quantity: true,
       status: true,
+      holdRank: true,
       booking: {
         select: { id: true, bookingNumber: true, jobName: true, jobId: true, startDate: true, endDate: true },
       },
@@ -204,6 +205,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // item when there are no quoted lines to divide it by.
       quantity: activeBlock?.quantity ?? bookingItem.quantity,
       status: bookingItem.status,
+      // Queue position. The picker needs it because a BACKUP is allowed
+      // to bind to a unit that is already out — that is the whole point
+      // of one — while a primary is not. Without it the drawer disabled
+      // every booked candidate, so a 2nd hold could never be pointed at
+      // the truck it was queued behind (Jose, 2026-09-16).
+      holdRank: bookingItem.holdRank,
       assignedCount: activeBlock ? coverageOfBlock(activeBlock, liveAssignments) : assignedAssetIds.size,
       remaining: Math.max(
         0,
