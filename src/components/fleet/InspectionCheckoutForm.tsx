@@ -84,11 +84,15 @@ function TapSelector({
 export function InspectionCheckoutForm({
   bookingAssignmentId,
   categoryName,
+  licenseOnFileFor = null,
 }: {
   bookingAssignmentId: string
   /** The unit's category — decides the optional extras (seat rows on a
    *  passenger van). Absent means no extras, never a broken form. */
   categoryName?: string | null
+  /** Name of this unit's driver whose licence is already on file — the
+   *  licence shot is then dropped from the walk-around. */
+  licenseOnFileFor?: string | null
 }) {
   // Empty until someone taps their name — never the login (fleet@ is shared).
   const [inspectorName, setInspectorName] = useState('');
@@ -114,7 +118,12 @@ export function InspectionCheckoutForm({
   // A PROMPT, never a lock — see the note in GuidedPhotoCapture. A tech
   // in front of a truck at 6am has to be able to record what they can
   // see; an unshot angle is recorded as unshot rather than blocking.
-  const missingAll = missingPositions(photos.map((p) => p.position), REQUIRED_POSITIONS);
+  // Wes 2026-09-16: fleet only photographs the licence when the production
+  // hasn't already put one on file.
+  const walkPositions = licenseOnFileFor
+    ? REQUIRED_POSITIONS.filter((p) => p.id !== DRIVERS_LICENSE_POSITION)
+    : REQUIRED_POSITIONS;
+  const missingAll = missingPositions(photos.map((p) => p.position), walkPositions);
   // The licence is called out on its own line: it is the one shot that is
   // about the driver, and the one a walk-around done the day before can't
   // have. It can still be added at handover.
@@ -186,10 +195,15 @@ export function InspectionCheckoutForm({
       <WalkaroundCrewPicker value={inspectorName} onChange={setInspectorName} label="Who's checking it out?" />
 
       {/* Same slots the return screen will expect — see the note above. */}
+      {licenseOnFileFor && (
+        <p className="text-emerald-400 text-[13px]">
+          {licenseOnFileFor}&rsquo;s license is already on file — no license photo needed.
+        </p>
+      )}
       <GuidedPhotoCapture
         bookingAssignmentId={bookingAssignmentId}
         onChange={onPhotosChange}
-        requiredPositions={REQUIRED_POSITIONS}
+        requiredPositions={walkPositions}
         optionalPositions={extraPositionsFor(categoryName)}
         title="Check-out photos"
       />
@@ -287,8 +301,8 @@ export function InspectionCheckoutForm({
 
       {licenseMissing && (
         <p className="text-amber-300 text-sm bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2">
-          No driver&rsquo;s license photo. If the driver isn&rsquo;t here yet, take it on the handover
-          screen when they pick up — even if a license is already on file.
+          No driver&rsquo;s license photo, and none on file. If the driver isn&rsquo;t here yet, the
+          handover screen asks for it when they pick up.
         </p>
       )}
       {missing.length > 0 && (

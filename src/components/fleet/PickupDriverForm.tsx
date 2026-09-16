@@ -8,13 +8,15 @@
  * something the API will then refuse. The server is still the authority;
  * this is a preview, not a substitute.
  *
- * Every blocker is actionable in place — send/open the upload link, mark
- * a licence checked, add a driver who isn't in the system. A rep holding
+ * Every blocker is actionable in place — photograph the licence (the fleet
+ * tech does it on their own phone), mark a licence checked, add a driver who
+ * isn't in the system; a link for the driver is the fallback when they
+ * aren't at the counter. A rep holding
  * a truck at the gate needs the fix, not just the refusal.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, KeyRound, CheckCircle2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, KeyRound, CheckCircle2, Camera } from 'lucide-react';
 import { evaluateLicenseGate, type LicenseGateResult } from '@/lib/drivers/licenseGate'
 
 interface DriverRow {
@@ -32,6 +34,9 @@ interface DriverRow {
 
 interface Props {
   checkoutId: string
+  /** The filed check-out walk-around — a licence photo taken here also
+   *  fills its DRIVERS_LICENSE slot. */
+  inspectionId?: string | null
   /** Drivers already named on this job — this unit's first. They are the
    *  list; the rest of the driver file is reached by searching. */
   namedDrivers?: { id: string; forThisUnit: boolean }[]
@@ -49,7 +54,8 @@ function toGateInput(d: DriverRow) {
   }
 }
 
-export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = [] }: Props) {
+export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriver, namedDrivers = [] }: Props) {
+  const licenseInput = useRef<HTMLInputElement>(null)
   const [drivers, setDrivers] = useState<DriverRow[] | null>(null)
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -150,6 +156,24 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
                 : j.smsError || 'unknown'}) — copy it instead`)
       }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not create link') }
+    finally { setBusy(null) }
+  }
+
+  // The fleet tech photographs the licence on their own phone (Wes
+  // 2026-09-16) — never "hand the device to the driver". Only asked when
+  // the driver has no licence on file, or the one on file has expired.
+  async function takeLicensePhoto(file: File) {
+    if (!selected) return
+    setBusy('license'); setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (inspectionId) fd.append('inspectionId', inspectionId)
+      const res = await fetch(`/api/drivers/${selected.id}/license-photo`, { method: 'POST', body: fd })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not save the license photo')
+      await load()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the license photo') }
     finally { setBusy(null) }
   }
 
@@ -318,6 +342,50 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
         )}
       </div>
 
+      {/* The licence photo. Wes 2026-09-16: fleet only takes one when the
+          production hasn't already put one on file — and takes it
+          themselves. */}
+      {selected && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+          <input
+            ref={licenseInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (f) void takeLicensePhoto(f)
+            }}
+          />
+          {selected.hasFront && gate?.code !== 'EXPIRED' ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-emerald-400">
+                <CheckCircle2 size={14} aria-hidden /> License on file — no photo needed
+              </span>
+              <a href={`/api/drivers/${selected.id}/license/front`} target="_blank" rel="noopener noreferrer"
+                className="text-xs font-semibold text-zinc-300 underline">View</a>
+            </div>
+          ) : (
+            <>
+              <div className="text-[15px] font-semibold text-white">
+                {gate?.code === 'EXPIRED' ? 'The license on file has expired' : 'No license on file'}
+              </div>
+              <p className="mt-0.5 text-[13px] text-zinc-400">
+                Photograph the front of {selected.name.split(' ')[0]}&rsquo;s license — it goes on their file for next time
+                {inspectionId ? ' and on this check-out' : ''}.
+              </p>
+              <button type="button" onClick={() => licenseInput.current?.click()} disabled={busy === 'license'}
+                className="mt-2 w-full min-h-[48px] rounded-lg bg-amber-600 px-4 text-base font-semibold text-white hover:bg-amber-500 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                <Camera size={16} aria-hidden />
+                {busy === 'license' ? 'Saving…' : 'Take license photo'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Verdict + the way out of it */}
       {selected && gate && (
         <div className={`rounded-xl border p-4 ${
@@ -349,13 +417,15 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
             <div className="mt-3 space-y-2">
               {gate.code === 'NO_LICENSE' && (
                 <>
+                  {/* Secondary: the driver isn't at the counter yet. The photo
+                      button above is the normal path. */}
                   <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
-                    className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
-                    {busy === 'link' ? 'Creating…' : 'Get upload link'}
+                    className="w-full rounded-lg border border-zinc-600 px-4 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-40">
+                    {busy === 'link' ? 'Creating…' : 'Not here yet? Get a link to send them'}
                   </button>
                   {link && (
                     <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
-                      <p className="text-xs text-zinc-400">Open this on the tablet and photograph their licence, or text it to them.</p>
+                      <p className="text-xs text-zinc-400">Text or copy this to the driver so they can upload it themselves.</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-zinc-300">{link}</p>
                       {smsNote && <p className="mt-1 text-[11px] font-semibold text-amber-400">{smsNote}</p>}
                       <div className="mt-2 flex gap-2">
@@ -392,8 +462,8 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
               )}
               {gate.code === 'EXPIRED' && (
                 <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
-                  className="w-full rounded-lg border border-zinc-600 px-4 py-2.5 text-sm font-semibold text-zinc-200 disabled:opacity-40">
-                  {busy === 'link' ? 'Creating…' : 'Get link for a current licence'}
+                  className="w-full rounded-lg border border-zinc-600 px-4 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-40">
+                  {busy === 'link' ? 'Creating…' : 'Not here yet? Get a link for a current license'}
                 </button>
               )}
             </div>

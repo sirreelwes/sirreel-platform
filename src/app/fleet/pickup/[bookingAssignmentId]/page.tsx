@@ -19,9 +19,7 @@ import { Lock, ClipboardList, Flag } from 'lucide-react'
 import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess'
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
-import { HandoverLicensePhoto } from '@/components/fleet/HandoverLicensePhoto'
 import { VehicleBlindToggle } from '@/components/fleet/VehicleBlindToggle'
-import { DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
 
@@ -171,17 +169,6 @@ export default async function FleetPickupPage({ params }: Params) {
     )
   }
 
-  // The licence shot belongs to the check-out walk-around (slot 23), but
-  // a walk-around done before the driver arrived can't have it — so it is
-  // offered here too, into the same slot. Newest wins on the record.
-  const licensePhoto = checkout.checkoutInspectionId
-    ? await prisma.inspectionPhoto.findFirst({
-        where: { inspectionId: checkout.checkoutInspectionId, position: DRIVERS_LICENSE_POSITION },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      })
-    : null
-
   // The drivers the client or office already NAMED — for this unit first,
   // then anywhere else on the job. The picker used to open on the first
   // eight names of the whole driver file, A–Z: on Cube 28 (2026-09-15)
@@ -209,14 +196,11 @@ export default async function FleetPickupPage({ params }: Params) {
   return (
     <Shell>
       {header}
-      {checkout.checkoutInspectionId && (
-        <HandoverLicensePhoto
-          inspectionId={checkout.checkoutInspectionId}
-          existingPhotoId={licensePhoto?.id ?? null}
-        />
-      )}
+      {/* The licence is asked for per DRIVER inside the form — only when
+          none is on file, and the fleet tech takes it (Wes 2026-09-16). */}
       <PickupDriverForm
         checkoutId={checkout.id}
+        inspectionId={checkout.checkoutInspectionId}
         namedDrivers={namedDrivers}
         assignedDriver={
           checkout.driver

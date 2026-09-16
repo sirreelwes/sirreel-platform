@@ -65,6 +65,13 @@ export default async function FleetInspectionPage({ params }: Params) {
           },
         },
       },
+      // Named drivers for this unit — if one already has a licence on file
+      // (the production or the driver uploaded it), the walk-around does not
+      // ask fleet to photograph it again (Wes 2026-09-16).
+      driverAssignments: {
+        where: { status: { not: 'CANCELLED' } },
+        select: { driver: { select: { firstName: true, lastName: true, licenseFrontUrl: true } } },
+      },
       inspections: {
         where: { type: 'CHECKOUT' },
         select: {
@@ -135,7 +142,15 @@ export default async function FleetInspectionPage({ params }: Params) {
             </a>
           </div>
         ) : (
-          <InspectionCheckoutForm bookingAssignmentId={assignment.id} categoryName={assignment.asset.category.name} />
+          <InspectionCheckoutForm
+            bookingAssignmentId={assignment.id}
+            categoryName={assignment.asset.category.name}
+            licenseOnFileFor={
+              assignment.driverAssignments
+                .filter((d) => d.driver.licenseFrontUrl)
+                .map((d) => `${d.driver.firstName} ${d.driver.lastName}`.trim())[0] ?? null
+            }
+          />
         )}
       </div>
     </main>

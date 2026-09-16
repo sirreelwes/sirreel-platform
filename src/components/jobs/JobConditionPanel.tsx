@@ -23,7 +23,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Camera, ArrowRight, AlertTriangle } from 'lucide-react'
-import { positionsFor, positionLabel, DAMAGE_POSITION } from '@/lib/fleet/photoPositions'
+import { positionsFor, positionLabel, DAMAGE_POSITION, DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
 
 type Photo = { id: string; filename: string | null; position: string | null }
 
@@ -64,9 +64,13 @@ function Side({ label, insp }: { label: 'Out' | 'Back'; insp: Inspection | undef
   // Counted against the walk-around for THIS end — the check-in has no
   // licence slot — and only against slots still in it, so an older
   // photo under a retired angle doesn't inflate "N of M".
-  const positions = positionsFor(label === 'Back' ? 'IN' : 'OUT')
-  const damage = insp.photos.filter((p) => p.position === DAMAGE_POSITION)
   const have = new Set(insp.photos.map((p) => p.position).filter(Boolean) as string[])
+  // The licence shot is conditional now (only when none on file — Wes
+  // 2026-09-16): counted when present, never reported missing.
+  const positions = positionsFor(label === 'Back' ? 'IN' : 'OUT').filter(
+    (s) => s.id !== DRIVERS_LICENSE_POSITION || have.has(s.id),
+  )
+  const damage = insp.photos.filter((p) => p.position === DAMAGE_POSITION)
   const shotCount = positions.filter((s) => have.has(s.id)).length
   const missing = positions.filter((s) => !have.has(s.id))
 
