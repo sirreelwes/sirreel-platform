@@ -876,6 +876,47 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## Run a task without a laptop — /admin/maintenance (2026-09-16 — Wes)
+- Wes: "I need to be able to run these scripts from my iPad with no access
+  to my actual laptop." Everything seedable had ONE way in — `npx tsx
+  scripts/…` with `DATABASE_URL` exported by hand — so being away from the
+  laptop meant the work waited.
+- **A web button cannot shell out to `scripts/`.** They are not traced into
+  the Vercel lambda (next.config.js only includes the markdown AHA reads),
+  `tsx` is a devDependency, and spawning a process out of a serverless
+  function is not a thing to build a production seed on. So the WORK moves
+  into a lib module with **two entry points**: the CLI script (journal file)
+  and `/admin/maintenance` (AuditLog row). One implementation — a seed that
+  behaves differently depending on which button started it is worse than one
+  that only runs in a terminal. First one extracted:
+  `src/lib/sub-rentals/seedVsmPlanet.ts`; `scripts/onboard-vsm-planet.ts` is
+  now argv + journal + exit code and nothing else. **Add behaviour to the
+  lib, or the phone loses it.**
+- **Registry, split in two like partnerSections.ts:**
+  `src/lib/admin/maintenanceTasks.ts` is plain metadata (the page is a client
+  component and imports it), `maintenanceRunners.ts` is id → function,
+  server-side. `maintenanceRunner()` refuses any id not in the metadata
+  registry — that IS the allowlist.
+- **Four safety properties, all deliberate:** ADMIN-only via `requireAdmin`
+  (a dry run still reads production); the request picks an ID out of a map
+  and never a path, command or script name; **dry run is the default and
+  fails closed** — a write needs `dryRun: false` AND `confirm: <task id>`;
+  and every real run writes an AuditLog `admin.maintenance_run` carrying the
+  CREATED IDS, which is what keeps "cleanup by captured id only" workable
+  when the run happened on a phone with no journal file.
+- **No schema changes here, on purpose.** `MaintenanceCategory` has no DDL
+  member so the type system refuses one. The `add-*-columns` / `add-*-table`
+  / `ALTER TYPE` scripts stay on a laptop: the live DB carries objects no
+  schema file knows and their failure mode is a half-migrated production
+  database. Tasks that DEPEND on a migration preflight it and refuse with a
+  fix line (see the PHOTO_SHOOT enum check) rather than 500-ing a page.
+- Page is built for a phone: 16px inputs (anything smaller makes iOS Safari
+  zoom on focus), full-width controls, dry run as the primary button, "Run
+  for real" behind a second tap. Nav: Admin → **Run a Task**.
+- `npm run test:maintenance-tasks` guards the registry both directions — a
+  runner with no metadata is an undocumented endpoint, metadata with no
+  runner is a button that 404s — and that no task advertises DDL.
+
 ## Partner lines stay off the pick list (2026-09-11 — Wes)
 - Wes: "keep partner lines off the pick list." A partner's unit is delivered
   by the partner or collected from them — never through our warehouse.

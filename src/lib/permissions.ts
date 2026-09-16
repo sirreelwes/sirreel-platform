@@ -838,6 +838,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // What clients can find on the order form + site search. The
         // publicVisible flag had no UI at all until 2026-09-09.
         { id: 'public-catalog', label: 'Public Catalog', icon: 'Eye', href: '/admin/public-catalog' },
+        // Seeds and backfills that used to need a laptop and a terminal
+        // (Wes 2026-09-16, working from an iPad). Registry-gated, dry-run
+        // first, audited; no schema changes.
+        { id: 'maintenance', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
         // Payroll. Email-gated like Data Exports, NOT role-gated: ADMIN is
