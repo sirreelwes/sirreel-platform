@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
-type Member = { id: string; name: string; title: string; published: boolean; sortOrder: number; hasPhoto: boolean }
+type Member = { id: string; name: string; title: string; published: boolean; sortOrder: number; hasPhoto: boolean; userId: string | null }
+type HqUser = { id: string; name: string; email: string }
 
 export default function WhoWeAreAdminPage() {
   const [members, setMembers] = useState<Member[]>([])
+  const [users, setUsers] = useState<HqUser[]>([])
   const [enabled, setEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -23,6 +25,7 @@ export default function WhoWeAreAdminPage() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const d = await res.json()
       setMembers(d.members || [])
+      setUsers(d.users || [])
       setEnabled(!!d.enabled)
       setError(null)
     } catch (e) {
@@ -51,6 +54,18 @@ export default function WhoWeAreAdminPage() {
       body: JSON.stringify(body),
     })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+  }
+
+  async function linkUser(id: string, userId: string) {
+    const next = userId || null
+    setMembers((ms) => ms.map((m) => (m.id === id ? { ...m, userId: next } : m)))
+    try {
+      await patch(id, { userId: next })
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not link that HQ login')
+      load()
+    }
   }
 
   async function toggleEnabled() {
@@ -226,6 +241,24 @@ export default function WhoWeAreAdminPage() {
                     className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white focus:border-amber-500 focus:outline-none" />
                   <input defaultValue={m.title} onBlur={(e) => saveField(m.id, 'title', e.target.value)} placeholder="Job title"
                     className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-300 focus:border-amber-500 focus:outline-none" />
+                  {/* The HQ login this person is. Linked, their photo and
+                      title ride on the rep card in client email — same
+                      picture the public site shows. */}
+                  <label className="sm:col-span-2 flex items-center gap-2 text-[11px] text-zinc-500">
+                    <span className="shrink-0">HQ login</span>
+                    <select
+                      value={m.userId ?? ''}
+                      onChange={(e) => linkUser(m.id, e.target.value)}
+                      className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="">Not linked — photo stays on the site only</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} · {u.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 {/* controls */}
                 <div className="flex items-center gap-1.5">

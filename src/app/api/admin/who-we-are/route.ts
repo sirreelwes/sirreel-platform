@@ -2,7 +2,11 @@
  * /api/admin/who-we-are — team roster for the public "Who we are" section.
  * requireAdmin on every method.
  *
- *  GET  → { enabled, members[] }
+ *  GET  → { enabled, members[], users[] }
+ *
+ * `users` is the HQ-login picker behind each roster row. Linking the two
+ * (TeamMember.userId) is what lets CLIENT EMAIL show the same photo and
+ * title the public site shows — see src/lib/email/repCard.ts.
  *  POST → { action: 'create', name, title }
  *         { action: 'set-enabled', enabled }
  */
@@ -17,12 +21,34 @@ export async function GET() {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
 
-  const [members, settings] = await Promise.all([
-    prisma.teamMember.findMany({
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, name: true, title: true, published: true, sortOrder: true, photoUrl: true },
-    }),
+  const [members, settings, users] = await Promise.all([
+    // userId is a newer column (scripts/add-team-member-user-column.ts).
+    // Until it exists the roster still loads, just without the link.
+    prisma.teamMember
+      .findMany({
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          title: true,
+          published: true,
+          sortOrder: true,
+          photoUrl: true,
+          userId: true,
+        },
+      })
+      .catch(() =>
+        prisma.teamMember.findMany({
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, name: true, title: true, published: true, sortOrder: true, photoUrl: true },
+        }),
+      ),
     prisma.siteSetting.findFirst({ select: { whoWeAreEnabled: true } }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, email: true },
+    }),
   ])
 
   return NextResponse.json({
@@ -34,7 +60,9 @@ export async function GET() {
       published: m.published,
       sortOrder: m.sortOrder,
       hasPhoto: Boolean(m.photoUrl),
+      userId: 'userId' in m ? (m.userId ?? null) : null,
     })),
+    users,
   })
 }
 

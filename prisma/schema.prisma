@@ -2408,6 +2408,7 @@ model User {
   touchPlanEnrollments     TouchPlanEnrollment[] @relation("TouchPlanOwner")
   orderDocumentsUploaded   OrderDocument[]       @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
+  teamMember               TeamMember?           @relation("TeamMemberUser")
   personMergesPerformed    PersonMerge[]         @relation("PersonMergeOperator")
   personMergesReversed     PersonMerge[]         @relation("PersonMergeReverser")
   rateChangesApplied       RateChangeLog[]       @relation("RateChangeApplier")
@@ -6135,8 +6136,17 @@ model TeamMember {
   photoFilename String?  @map("photo_filename")
   sortOrder     Int      @default(0) @map("sort_order")
   published     Boolean  @default(true)
+  /// The HQ login this person is, when they have one — set on
+  /// /admin/who-we-are. It is what lets CLIENT EMAIL reach the same photo
+  /// and title the public "Who we are" section shows, instead of a second
+  /// copy drifting from it (Wes 2026-09-16, the rep card on the welcome).
+  /// Nullable: the roster can carry people with no HQ account. Unique: one
+  /// login is one roster row.
+  userId        String?  @unique @map("user_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User? @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("team_members")
 }

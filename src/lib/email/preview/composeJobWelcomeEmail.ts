@@ -15,6 +15,7 @@ import { buildJobWelcomeEmail } from '@/lib/email/templates/jobWelcome'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { defaultJobWelcomeBody } from '@/lib/jobs/welcomeReminder'
+import { resolveRepCard } from '@/lib/email/resolveRepCard'
 
 export interface JobWelcomeCompositionOk {
   ok: true
@@ -27,6 +28,10 @@ export interface JobWelcomeCompositionOk {
   attachments: []
   /** Seeded into the compose box — Wes's wording, addressed to `to`. */
   defaultBody: string
+  /** True when the rep card rendered. The send route reads it to mark the
+   *  rep visible on the portal, so the job page agrees with the email the
+   *  client was just introduced through. */
+  repCardShown: boolean
   /** The modal header block. The portal order when there is one, else
    *  the job code (composeCardAuthEmail's treatment). */
   order: {
@@ -67,7 +72,7 @@ export async function composeJobWelcomeEmail(
       jobCode: true,
       name: true,
       company: { select: { name: true } },
-      agent: { select: { name: true, phone: true, email: true } },
+      agent: { select: { id: true, name: true, phone: true, email: true, displayTitle: true } },
       jobContacts: {
         orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }],
         select: {
@@ -120,6 +125,11 @@ export async function composeJobWelcomeEmail(
   const defaultBody = defaultJobWelcomeBody(to.name.split(' ')[0] || null)
   const body = args.customMessage?.trim() || defaultBody
 
+  // The card is drawn only when the rep actually has a photo — see
+  // repCard.ts. No photo, no card, and the mail is byte-for-byte what it
+  // was before this shipped.
+  const rep = await resolveRepCard(job.agent)
+
   const { subject, html, text } = buildJobWelcomeEmail({
     jobName,
     body,
@@ -127,6 +137,7 @@ export async function composeJobWelcomeEmail(
     repName: job.agent?.name || 'the SirReel team',
     repPhone: job.agent?.phone || null,
     repEmail: job.agent?.email || null,
+    rep,
   })
 
   const order = job.orders[0]
@@ -142,6 +153,7 @@ export async function composeJobWelcomeEmail(
     text,
     attachments: [],
     defaultBody,
+    repCardShown: !!rep,
     order: {
       id: order?.id ?? job.id,
       orderNumber: order?.orderNumber ?? job.jobCode,

@@ -26,6 +26,7 @@ import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { WELCOME_SENT_ACTION } from '@/lib/jobs/welcomeReminder'
+import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,6 +101,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       label: 'job-welcome',
       orderId: resolved.portalOrder.id,
     }).catch((e) => console.error('[job-welcome] delivery record failed', e))
+  }
+
+  // The client has now been introduced to this rep by name AND by face, so
+  // the portal should agree with the email they just received — the exact
+  // case Order.repVisibleToClient exists for. Fire-and-forget, like every
+  // other caller of it: a display flag must never fail a delivered send.
+  if (composition.repCardShown) {
+    await markRepVisibleToClient(resolved.portalOrder.id)
   }
 
   // The fact the tile and the button read. Never a column: the send is a

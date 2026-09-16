@@ -31,6 +31,7 @@ scripts/*
 !scripts/add-will-call-receive-method.ts
 !scripts/add-partner-sms-columns.ts
 !scripts/add-collector-columns.ts
+!scripts/add-team-member-user-column.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts

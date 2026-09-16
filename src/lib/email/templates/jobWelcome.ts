@@ -13,6 +13,8 @@
  * "SirReel" — never the legal entity (Wes 2026-09-04).
  */
 
+import { repCardHtml, type RepCard } from '@/lib/email/repCard'
+
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 // Footer mark: the S, not the wordmark (Wes 2026-09-14). Black-on-transparent,
 // the companion to /s-logo-white.png — s-logo.jpg is opaque white-backed and
@@ -36,6 +38,11 @@ export interface JobWelcomeEmailInput {
   repName: string
   repPhone?: string | null
   repEmail?: string | null
+  /** The rep card above the button — a face, a title and a number (Wes
+   *  2026-09-16). Null, or a card with no photoUrl, renders NOTHING: the
+   *  card exists to carry the photo, and without one it would only repeat
+   *  the sign-off a few lines below it. Built by resolveRepCard(). */
+  rep?: RepCard | null
   /** Magic-link TTL, matches jobMagicLink.ts. */
   expirationDays?: number
 }
@@ -83,6 +90,7 @@ export function buildJobWelcomeEmail(input: JobWelcomeEmailInput): JobWelcomeEma
     '',
     'Best,',
     repName,
+    input.rep?.title ?? '',
     repPhone,
     repEmail,
     '',
@@ -141,6 +149,8 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               ${proseHtml(input.body)}
             </td>
           </tr>
+
+${repCardHtml(input.rep ?? null)}
 
           <tr>
             <td style="padding:16px 36px 8px;text-align:center;">

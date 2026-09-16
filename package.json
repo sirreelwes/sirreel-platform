@@ -38,6 +38,7 @@
     "test:cc": "tsx tests/email/cc-list.test.ts",
     "test:thread-participants": "tsx tests/email/thread-participants.test.ts",
     "test:client-email-body": "tsx tests/email/client-email-body.test.ts",
+    "test:rep-card": "tsx tests/email/rep-card.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:closed-day": "tsx tests/orders/closed-day-handoff.test.ts",
     "test:invite-delivery": "tsx tests/drivers/invite-delivery.test.ts",
