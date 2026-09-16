@@ -12,6 +12,7 @@
  *   {
  *     personalNote?: string | null,
  *     photoDocumentId?: string | null,
+ *     photoSource?: 'weekly' | 'order' | 'none',
  *     to?: string,           // optional override (defaults to jobContact.email)
  *   }
  *
@@ -28,7 +29,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { SEND_FROM, sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
-import { orderPhotoProxyUrl } from '@/lib/orders/orderPhotoProxy'
+import { parsePhotoSource, resolveThankYouPhoto } from '@/lib/orders/thankYouPhoto'
 import { ThankYouStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     personalNote?: string | null
     photoDocumentId?: string | null
     photoCaption?: string | null
-    photoUrlOverride?: string | null
+    photoSource?: string | null
     to?: string
   }
 
@@ -79,40 +80,18 @@ export async function POST(req: NextRequest, { params }: Params) {
   const to = body.to?.trim() || order.jobContact?.email
   if (!to) return NextResponse.json({ error: 'no recipient (jobContact has no email and no override supplied)' }, { status: 422 })
 
-  // Resolve photo URL. Priority:
-  //   1) photoUrlOverride (weekly-candid path, not an OrderDocument)
-  //   2) explicit photoDocumentId (rep picked an order JOB_PHOTO)
-  //   3) suggestion's pinned photoDocumentId
-  //   4) latest JOB_PHOTO uploaded to this order
-  let photoDocumentId: string | null = body.photoUrlOverride
-    ? null
-    : (body.photoDocumentId ?? order.thankYouSuggestion.photoDocumentId)
-  // Order JOB_PHOTOs live in the private blob store, so the email must
-  // embed the PUBLIC-by-uuid proxy URL, not the raw (403) blob URL.
-  // photoUrlOverride is the weekly-candid path (a User candid blob, not
-  // an OrderDocument); that blob is ALSO private and would 403 in the
-  // recipient's inbox — a separate pre-existing gap that needs its own
-  // public proxy, untouched by this order-document fix.
-  let photoUrl: string | null = body.photoUrlOverride ?? null
-  if (!photoUrl && photoDocumentId) {
-    const doc = await prisma.orderDocument.findUnique({
-      where: { id: photoDocumentId },
-      select: { orderId: true },
-    })
-    if (doc && doc.orderId === id) photoUrl = orderPhotoProxyUrl(photoDocumentId)
-    else photoDocumentId = null
-  }
-  if (!photoUrl && !body.photoUrlOverride) {
-    const latest = await prisma.orderDocument.findFirst({
-      where: { orderId: id, type: 'JOB_PHOTO' },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
-    if (latest) {
-      photoUrl = orderPhotoProxyUrl(latest.id)
-      photoDocumentId = latest.id
-    }
-  }
+  // Which picture, resolved server-side from the SOURCE the rep chose —
+  // never a URL the browser supplied. Both stores are private blobs, so
+  // both come back as public proxy URLs; a raw blob URL 403s in the
+  // client's inbox and the candid silently never arrives. Same resolver
+  // the preview ran, so the mail matches the iframe the rep approved.
+  const { photoUrl, photoDocumentId } = await resolveThankYouPhoto({
+    orderId: id,
+    agentId: order.agent.id,
+    source: parsePhotoSource(body.photoSource),
+    photoDocumentId: body.photoDocumentId,
+    pinnedDocumentId: order.thankYouSuggestion.photoDocumentId,
+  })
 
   const rendered = buildThankYouEmail({
     clientFirstName: order.jobContact?.firstName ?? null,

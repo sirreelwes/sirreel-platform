@@ -7,6 +7,11 @@
  *   - agent (sales rep on this order — also the reply-to on send)
  *   - photo status (any OrderDocument.JOB_PHOTO on the order, or the
  *     pinned suggestion.photoDocumentId)
+ *   - agentCandid: the ORDER AGENT'S most recent weekly candid, which is
+ *     the other picture the thank-you can carry. The agent's, not the
+ *     viewer's: the photo sits above a sign-off in the agent's name.
+ *     `viewerId` is returned alongside so the compose page knows whether
+ *     the person looking IS that agent — only they can upload a new one.
  *   - wrap date (Order.endDate) + age days
  *   - warn flags: open Incident on the order, unresolved L&D
  *
@@ -108,6 +113,25 @@ export async function GET(req: NextRequest) {
     },
   })
 
+  // One query for every agent on the page, then newest-per-agent in JS —
+  // a per-row lookup would be up to 100 round trips.
+  const agentIds = Array.from(
+    new Set(rows.map((r) => r.order.agent?.id).filter((v): v is string => !!v)),
+  )
+  const candidRows = agentIds.length
+    ? await prisma.agentWeeklyCandid
+        .findMany({
+          where: { userId: { in: agentIds } },
+          orderBy: { capturedAt: 'desc' },
+          select: { id: true, userId: true, capturedAt: true },
+        })
+        .catch(() => [])
+    : []
+  const newestCandid = new Map<string, { id: string; capturedAt: Date }>()
+  for (const c of candidRows) {
+    if (!newestCandid.has(c.userId)) newestCandid.set(c.userId, { id: c.id, capturedAt: c.capturedAt })
+  }
+
   const items = rows.map((r) => {
     const ageDays = Math.floor((Date.now() - r.createdAt.getTime()) / 86_400_000)
     const wrapDays = r.order.endDate
@@ -132,6 +156,7 @@ export async function GET(req: NextRequest) {
       wrapDays,
       company: r.order.company,
       agent: r.order.agent,
+      agentCandid: r.order.agent ? (newestCandid.get(r.order.agent.id) ?? null) : null,
       jobContact: r.order.jobContact,
       job: r.order.job,
       jobPhotos: r.order.documents,
@@ -156,6 +181,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     items,
+    viewerId: user.id,
     counts: counts.reduce<Record<string, number>>((acc, c) => {
       acc[c.status] = c._count._all
       return acc

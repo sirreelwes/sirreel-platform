@@ -46,6 +46,8 @@ interface SuggestionResp {
   jobContact: { firstName: string; lastName: string; email: string } | null
   job: { name: string } | null
   jobPhotos: { id: string; fileUrl: string }[]
+  /** The agent's most recent weekly candid, from /api/orders/thank-yous. */
+  agentCandid: { id: string; capturedAt: string } | null
 }
 
 interface PreviewResp {
@@ -73,7 +75,12 @@ export default function ThankYouComposePage() {
   // and switches to that source.
   const [photoSource, setPhotoSource] = useState<'weekly' | 'order' | 'none'>('weekly')
   const [pickedPhotoId, setPickedPhotoId] = useState<string | null>(null)
-  const [weeklyCandid, setWeeklyCandid] = useState<{ fileUrl: string; capturedAt: string; isThisWeek: boolean; ageDays: number | null } | null>(null)
+  // The ORDER AGENT'S candid, not the viewer's — the photo sits directly
+  // above a sign-off in the agent's name. Addressed by the public proxy
+  // (/api/public/agent-photo), never the raw private blob: that URL 403s,
+  // which is exactly why the candid never reached a client's inbox.
+  const [weeklyCandid, setWeeklyCandid] = useState<{ photoUrl: string; capturedAt: string; ageDays: number | null } | null>(null)
+  const [viewerIsAgent, setViewerIsAgent] = useState(false)
   const [preview, setPreview] = useState<PreviewResp | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -97,6 +104,21 @@ export default function ThankYouComposePage() {
       setItem(hit)
       setPersonalNote(hit.personalNote ?? '')
       setPickedPhotoId(hit.photoDocumentId)
+
+      const agentId: string | null = hit.agent?.id ?? null
+      setViewerIsAgent(!!agentId && agentId === data.viewerId)
+      const candid = hit.agentCandid
+      if (agentId && candid) {
+        const ageDays = Math.floor((Date.now() - new Date(candid.capturedAt).getTime()) / 86_400_000)
+        setWeeklyCandid({
+          photoUrl: `/api/public/agent-photo/${agentId}?v=${encodeURIComponent(candid.id)}`,
+          capturedAt: candid.capturedAt,
+          ageDays,
+        })
+      } else {
+        setWeeklyCandid(null)
+        setPhotoSource((cur) => (cur === 'weekly' ? 'none' : cur))
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'load failed')
     }
@@ -112,55 +134,34 @@ export default function ThankYouComposePage() {
     }
   }, [orderId])
 
-  const loadWeeklyCandid = useCallback(async () => {
-    try {
-      const res = await fetch('/api/users/me/weekly-candid')
-      const data = await res.json()
-      if (res.ok && data.current) {
-        setWeeklyCandid({
-          fileUrl: data.current.fileUrl,
-          capturedAt: data.current.capturedAt,
-          isThisWeek: !!data.isThisWeek,
-          ageDays: data.ageDays,
-        })
-      } else {
-        setWeeklyCandid(null)
-        // Fall back to 'order' if there's no weekly candid AND the
-        // order has JOB_PHOTOs; otherwise 'none'.
-        setPhotoSource((cur) => (cur === 'weekly' ? 'none' : cur))
-      }
-    } catch {
-      /* swallow */
-    }
-  }, [])
+  useEffect(() => { loadItem(); loadDocs() }, [loadItem, loadDocs])
 
-  useEffect(() => { loadItem(); loadDocs(); loadWeeklyCandid() }, [loadItem, loadDocs, loadWeeklyCandid])
-
-  // Build the photo payload that goes to preview/send. Weekly =
-  // pass the candid's fileUrl as override; order = use pickedPhotoId;
-  // none = clear both.
-  const photoPayload = useCallback((): { photoUrlOverride: string | null; photoDocumentId: string | null } => {
+  // NAME the source; the server resolves which picture and builds the public
+  // URL (src/lib/orders/thankYouPhoto.ts). This used to post the candid's raw
+  // blob URL for the email to embed — a private URL that 403'd in the
+  // client's inbox, and an arbitrary url the server trusted.
+  const photoPayload = useCallback((): { photoSource: 'weekly' | 'order' | 'none'; photoDocumentId: string | null } => {
     if (photoSource === 'weekly' && weeklyCandid) {
-      return { photoUrlOverride: weeklyCandid.fileUrl, photoDocumentId: null }
+      return { photoSource: 'weekly', photoDocumentId: null }
     }
     if (photoSource === 'order' && pickedPhotoId) {
-      return { photoUrlOverride: null, photoDocumentId: pickedPhotoId }
+      return { photoSource: 'order', photoDocumentId: pickedPhotoId }
     }
-    return { photoUrlOverride: null, photoDocumentId: null }
+    return { photoSource: 'none', photoDocumentId: null }
   }, [photoSource, weeklyCandid, pickedPhotoId])
 
   const runPreview = useCallback(async () => {
     setLoadingPreview(true)
     setErr(null)
     try {
-      const { photoUrlOverride, photoDocumentId } = photoPayload()
+      const { photoSource: source, photoDocumentId } = photoPayload()
       const res = await fetch(`/api/orders/${orderId}/thank-you/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personalNote: personalNote.trim() || null,
           photoCaption: photoCaption.trim() || null,
-          photoUrlOverride,
+          photoSource: source,
           photoDocumentId,
         }),
       })
@@ -194,7 +195,7 @@ export default function ThankYouComposePage() {
         setErr(data?.error || `upload HTTP ${res.status}`)
         return
       }
-      await loadWeeklyCandid()
+      await loadItem()
       setPhotoSource('weekly')
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'upload failed')
@@ -239,14 +240,14 @@ export default function ThankYouComposePage() {
     setSending(true)
     setErr(null)
     try {
-      const { photoUrlOverride, photoDocumentId } = photoPayload()
+      const { photoSource: source, photoDocumentId } = photoPayload()
       const res = await fetch(`/api/orders/${orderId}/thank-you/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personalNote: personalNote.trim() || null,
           photoCaption: photoCaption.trim() || null,
-          photoUrlOverride,
+          photoSource: source,
           photoDocumentId,
         }),
       })
@@ -343,20 +344,24 @@ export default function ThankYouComposePage() {
                   className="mt-1"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-gray-900 font-medium">My weekly candid</div>
+                  <div className="text-sm text-gray-900 font-medium">
+                    {viewerIsAgent ? 'My weekly candid' : `${item?.agent?.name ?? 'The rep'}'s weekly candid`}
+                  </div>
                   {weeklyCandid ? (
                     <div className="flex items-center gap-3 mt-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={weeklyCandid.fileUrl} alt="weekly candid" className="w-16 h-16 object-cover rounded border border-gray-200" />
+                      <img src={weeklyCandid.photoUrl} alt="weekly candid" className="w-16 h-16 object-cover rounded border border-gray-200" />
                       <div className="text-xs text-gray-600">
-                        {weeklyCandid.isThisWeek
-                          ? 'Set for this week.'
-                          : `Captured ${weeklyCandid.ageDays ?? '?'}d ago — consider a fresh one.`}
+                        {(weeklyCandid.ageDays ?? 0) <= 7
+                          ? 'Taken this week.'
+                          : `Taken ${weeklyCandid.ageDays ?? '?'}d ago${viewerIsAgent ? ' — consider a fresh one.' : '.'}`}
                       </div>
                     </div>
                   ) : (
                     <div className="text-xs text-gray-500 mt-1">
-                      No weekly candid uploaded yet. Take one below or set one on the dashboard widget.
+                      {viewerIsAgent
+                        ? 'No weekly candid yet. Take one below or set one on the dashboard widget.'
+                        : `${item?.agent?.name ?? 'The rep'} has no weekly candid on file — only they can add one.`}
                     </div>
                   )}
                 </div>
@@ -412,7 +417,11 @@ export default function ThankYouComposePage() {
               </label>
             </div>
 
-            {/* Take-a-new-photo-right-now */}
+            {/* Take-a-new-photo-right-now. Only for the agent on this order:
+                the upload writes the VIEWER's weekly candid, so offering it
+                to anyone else would save a photo that never appears here. */}
+            {viewerIsAgent && (
+            <>
             <input
               ref={weeklyFileInputRef}
               type="file"
@@ -433,6 +442,8 @@ export default function ThankYouComposePage() {
             <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">
               Replaces your weekly candid · aim for SirReel sign, warehouse crew, fleet, or gear in the background · candid feels better than posed.
             </p>
+            </>
+            )}
 
             {/* Caption */}
             <div className="mt-4 pt-4 border-t border-gray-200">

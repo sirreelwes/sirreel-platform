@@ -8,7 +8,12 @@
  * sees exactly what lands.
  *
  * Body:
- *   { personalNote?: string | null, photoDocumentId?: string | null }
+ *   { personalNote?, photoCaption?, photoDocumentId?, photoSource? }
+ *
+ * photoSource ('weekly' | 'order' | 'none') NAMES the picture; the server
+ * resolves it (src/lib/orders/thankYouPhoto.ts). It replaces the old
+ * photoUrlOverride, which let the browser hand us a raw private blob URL
+ * that 403'd in the client's inbox — see that file's header.
  *
  * Returns:
  *   { to, from, replyTo, subject, html, text, photoUrl }
@@ -21,7 +26,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
-import { orderPhotoProxyUrl } from '@/lib/orders/orderPhotoProxy'
+import { parsePhotoSource, resolveThankYouPhoto } from '@/lib/orders/thankYouPhoto'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +44,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     photoCaption?: string | null
     /** When set, render with the agent's weekly candid URL directly
      *  (skips the OrderDocument lookup). */
-    photoUrlOverride?: string | null
+    photoSource?: string | null
   }
 
   const order = await prisma.order.findUnique({
@@ -50,48 +55,27 @@ export async function POST(req: NextRequest, { params }: Params) {
       endDate: true,
       jobContact: { select: { firstName: true, lastName: true, email: true } },
       job: { select: { name: true } },
-      agent: { select: { name: true, email: true, displayTitle: true, phone: true } },
+      agent: { select: { id: true, name: true, email: true, displayTitle: true, phone: true } },
     },
   })
   if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
   if (!order.agent) return NextResponse.json({ error: 'order has no agent' }, { status: 422 })
 
-  // Resolve the photo: photoUrlOverride wins (weekly-candid path,
-  // not an OrderDocument), then explicit photoDocumentId, then the
-  // suggestion's pinned photoDocumentId, then the most recent
-  // JOB_PHOTO uploaded to this order.
-  //
-  // Order JOB_PHOTOs are private blobs → the preview/email must use the
-  // PUBLIC-by-uuid proxy URL, never the raw (403) blob URL, so the
-  // preview iframe matches exactly what the client receives.
-  // photoUrlOverride (weekly candid) is a separate private blob with no
-  // public proxy yet — pre-existing gap, untouched here.
-  let photoUrl: string | null = null
-  if (body.photoUrlOverride) {
-    photoUrl = body.photoUrlOverride
-  }
-  if (!photoUrl && body.photoDocumentId) {
-    const doc = await prisma.orderDocument.findUnique({
-      where: { id: body.photoDocumentId },
-      select: { orderId: true },
-    })
-    if (doc && doc.orderId === id) photoUrl = orderPhotoProxyUrl(body.photoDocumentId)
-  }
-  if (!photoUrl) {
-    const suggestion = await prisma.thankYouSuggestion.findUnique({
-      where: { orderId: id },
-      select: { photoDocumentId: true },
-    })
-    if (suggestion?.photoDocumentId) photoUrl = orderPhotoProxyUrl(suggestion.photoDocumentId)
-  }
-  if (!photoUrl) {
-    const latest = await prisma.orderDocument.findFirst({
-      where: { orderId: id, type: 'JOB_PHOTO' },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
-    if (latest) photoUrl = orderPhotoProxyUrl(latest.id)
-  }
+  // Both photo sources are PRIVATE blobs, so the preview and the mail both
+  // carry a public proxy URL — never a raw blob URL, which 403s in an inbox.
+  // Same resolver as the send route, so the iframe the rep approves is the
+  // mail the client gets.
+  const suggestion = await prisma.thankYouSuggestion.findUnique({
+    where: { orderId: id },
+    select: { photoDocumentId: true },
+  })
+  const { photoUrl } = await resolveThankYouPhoto({
+    orderId: id,
+    agentId: order.agent.id,
+    source: parsePhotoSource(body.photoSource),
+    photoDocumentId: body.photoDocumentId,
+    pinnedDocumentId: suggestion?.photoDocumentId,
+  })
 
   const rendered = buildThankYouEmail({
     clientFirstName: order.jobContact?.firstName ?? null,
