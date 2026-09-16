@@ -5,24 +5,25 @@
  * honestly carry.
  *
  * DESKTOP gets the gantt: units down, days across, drag to assign.
- * PHONE gets the agenda (components/scheduling/AgendaView) — the same
- * /api/timeline-native data read one day at a time. The gantt is NOT
- * shrunk down to a phone: a two-axis grid at 390px either loses the
- * unit axis or renders a day four pixels wide, and a schedule you can
- * misread is worse than one you have to open a laptop for.
+ * PHONE opens on the agenda (components/scheduling/AgendaView) — the
+ * same /api/timeline-native data read one day at a time.
  *
- * The board is picked by a media query rather than a CSS `hidden`,
- * because the gantt is a 6k-line client tree that fetches the full
- * window and computes lane layout on mount; rendering it invisibly
+ * `?view=timeline` is the escape hatch, and as of 2026-09-16 it is a
+ * REAL one rather than a pinch-zoom apology. The old note here said a
+ * two-axis grid at 390px must either lose the unit axis or draw a
+ * four-pixel day; that was true of a 7-day span against a 192px label
+ * column. Below `md` the board now opens at THREE days against a 112px
+ * label column — ~85px a day, enough for a client name. Wes: "I like 3
+ * day view but default to agenda is fine as long as I can select
+ * timeline 3d view in portrait mode."
+ *
+ * The surface is still picked by a media query rather than a CSS
+ * `hidden`, because the gantt is a 6k-line client tree that fetches the
+ * full window and computes lane layout on mount; rendering it invisibly
  * behind a phone would cost the whole thing for nothing.
- *
- * `?view=timeline` is the escape hatch — a phone can still force the
- * gantt (pinch-zoom works, it just isn't the default), and the mobile
- * notice links to it both ways.
  */
 
 import { Suspense, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 import { GanttBoard } from '@/components/schedule/GanttBoard'
@@ -49,11 +50,11 @@ function ScheduleSurface() {
   const searchParams = useSearchParams()
   const forced = searchParams?.get('view')
 
-  // /gantt?assign=<bookingItemId> on a NARROW screen. The timeline board
-  // consumes this param itself, but a phone lands on the Agenda, where the
-  // board is never mounted — so the picker never opened and the link read
-  // as a dead end (Wes 2026-09-05, trying to put Cube 29 on a hold from
-  // his phone). Read once, strip, and open the same picker here.
+  // /gantt?assign=<bookingItemId> while the AGENDA is showing. The
+  // timeline board consumes this param itself, but the agenda never
+  // mounts it, so the picker never opened and the link read as a dead
+  // end (Wes 2026-09-05, trying to put Cube 29 on a hold from his
+  // phone). Read once, strip, and open the same picker here.
   const [agendaAssign, setAgendaAssign] = useState<string | null>(null)
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search)
@@ -77,27 +78,13 @@ function ScheduleSurface() {
 
   const showAgenda = forced === 'agenda' || (narrow && forced !== 'timeline')
 
+  // No "best viewed on desktop" notice any more: below `md` the board
+  // opens at three days and fits the screen, so the old banner would be
+  // telling the operator a problem that has been fixed. Getting here on
+  // a phone is a deliberate tap on Timeline, and the same toggle at the
+  // top of the board is the way back.
   if (!showAgenda) {
-    return (
-      <>
-        {narrow && (
-          <div className="md:hidden mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5">
-            <div className="text-[12px] font-bold text-amber-900">Best viewed on desktop</div>
-            <p className="text-[11px] text-amber-800 mt-0.5">
-              The timeline is a units × days grid — it needs the width. Pinch to zoom, or
-              read the same reservations as a day-by-day list.
-            </p>
-            <Link
-              href="/gantt?view=agenda"
-              className="inline-flex items-center mt-1.5 min-h-[44px] text-[12px] font-bold text-amber-900 underline underline-offset-2"
-            >
-              Open the agenda →
-            </Link>
-          </div>
-        )}
-        <GanttBoard />
-      </>
-    )
+    return <GanttBoard />
   }
 
   return (
@@ -108,12 +95,7 @@ function ScheduleSurface() {
       <header className="mb-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900 leading-none">Agenda</h1>
-          <p className="text-[11px] text-gray-500 mt-1">
-            Out and back, day by day ·{' '}
-            <Link href="/gantt?view=timeline" className="underline underline-offset-2 text-gray-700">
-              Timeline
-            </Link>
-          </p>
+          <p className="text-[11px] text-gray-500 mt-1">Out and back, day by day</p>
         </div>
         <ScheduleViewToggle current="agenda" />
       </header>
