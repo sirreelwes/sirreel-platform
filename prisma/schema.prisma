@@ -10190,12 +10190,18 @@ model SmsMessage {
   /// Anchors, when known.
   jobId       String?      @map("job_id")
   subRentalId String?      @map("sub_rental_id")
+  /// The driver invite this text IS, so the job page can say whether it
+  /// reached them (Wes 2026-09-15: "how can i know if the drivers that i
+  /// already named received their texts?"). Plain id, no relation — the
+  /// message outlives the assignment it was about.
+  driverAssignmentId String? @map("driver_assignment_id")
   /// Staff user who pressed send, for 'staff' rows.
   sentById    String?      @map("sent_by_id")
   createdAt   DateTime     @default(now()) @map("created_at")
 
   @@index([threadId, createdAt])
   @@index([jobId])
+  @@index([driverAssignmentId])
   @@map("sr_sms_messages")
 }
 

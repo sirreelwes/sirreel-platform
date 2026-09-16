@@ -80,6 +80,8 @@ export async function recordOutbound(args: {
   errorText?: string | null
   jobId?: string | null
   subRentalId?: string | null
+  /** The driver invite this text IS — so the job page can report it. */
+  driverAssignmentId?: string | null
   sentById?: string | null
 }) {
   const [row] = await prisma.$transaction([
@@ -87,7 +89,8 @@ export async function recordOutbound(args: {
       data: {
         threadId: args.threadId, direction: 'OUTBOUND', body: args.body.slice(0, 4000), source: args.source,
         twilioSid: args.twilioSid ?? null, status: args.status ?? 'sent', errorText: args.errorText ?? null,
-        jobId: args.jobId ?? null, subRentalId: args.subRentalId ?? null, sentById: args.sentById ?? null,
+        jobId: args.jobId ?? null, subRentalId: args.subRentalId ?? null,
+        driverAssignmentId: args.driverAssignmentId ?? null, sentById: args.sentById ?? null,
       },
       select: { id: true },
     }),
@@ -277,6 +280,9 @@ export async function sendTracked(args: {
   source: 'assistant' | 'staff' | 'system'
   jobId?: string | null
   subRentalId?: string | null
+  /** The driver invite this text IS — so a row can be reported as
+   *  delivered (or not) beside that driver on the job page. */
+  driverAssignmentId?: string | null
   sentById?: string | null
   /** Staff pressing send may text at any hour. */
   overrideQuietHours?: boolean
@@ -297,7 +303,7 @@ export async function sendTracked(args: {
   const media = (args.mediaUrls ?? []).filter((u) => (u || '').trim().startsWith('https://'))
   const logged = media.length ? `${text}\n[photo: ${args.mediaLabel || 'attached'}]` : text
   const log = (status: string, extra: { twilioSid?: string | null; errorText?: string | null } = {}) =>
-    recordOutbound({ threadId: thread.id, body: logged, source: args.source, status, jobId: args.jobId, subRentalId: args.subRentalId, sentById: args.sentById, ...extra })
+    recordOutbound({ threadId: thread.id, body: logged, source: args.source, status, jobId: args.jobId, subRentalId: args.subRentalId, driverAssignmentId: args.driverAssignmentId, sentById: args.sentById, ...extra })
 
   if (thread.optedOutAt) { await log('skipped-opted-out'); return { ok: false, status: 'skipped-opted-out', error: 'number opted out' } }
   if (args.source !== 'staff' && !args.overrideQuietHours && inQuietHours()) { await log('skipped-quiet'); return { ok: false, status: 'skipped-quiet', error: 'quiet hours' } }

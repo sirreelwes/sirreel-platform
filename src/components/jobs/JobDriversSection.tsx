@@ -30,6 +30,17 @@ interface DriverRow {
   id: string
   status: string
   emailSentTo: string | null
+  /** Where a TEXTED invite went. */
+  smsSentTo?: string | null
+  /** Whether that text reached them — lib/drivers/inviteDelivery. INVITED
+   *  / VIEWED is about the LINK; this is about the message. */
+  textDelivery?: {
+    state: 'delivered' | 'sent' | 'pending' | 'failed' | 'not-sent'
+    label: string
+    raw: string
+    at: string | null
+    error: string | null
+  } | null
   firstViewedAt: string | null
   invitedBySource: string
   /** Stamped by a driver self check-out (blind pickup) or the staff handover. */
@@ -433,9 +444,31 @@ export function JobDriversSection({
                           {dr.phone && <span className="text-zinc-600"> · {dr.phone}</span>}
                         </div>
                         <div className="text-[11px] text-zinc-600 truncate">
-                          {d.emailSentTo}
+                          {d.emailSentTo || d.smsSentTo}
                           {d.invitedBySource === 'CLIENT' && ' · named by client'}
                         </div>
+                        {/* Did the text arrive? A message Twilio never
+                            delivered looked exactly like one sitting unread
+                            on a phone, and the difference is whether anyone
+                            is coming for the truck (Wes 2026-09-15). */}
+                        {d.textDelivery && (
+                          <div
+                            className={`text-[11px] truncate ${
+                              d.textDelivery.state === 'failed'
+                                ? 'font-semibold text-rose-700'
+                                : d.textDelivery.state === 'delivered'
+                                  ? 'text-emerald-700'
+                                  : 'text-zinc-600'
+                            }`}
+                            title={[
+                              `Twilio: ${d.textDelivery.raw}`,
+                              d.textDelivery.error,
+                            ].filter(Boolean).join(' · ')}
+                          >
+                            {d.textDelivery.label}
+                            {d.textDelivery.at && ` · ${new Date(d.textDelivery.at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+                          </div>
+                        )}
                         {d.status === 'PICKED_UP' && d.pickedUpAt && (
                           <div className="text-[11px] text-violet-700 truncate">
                             {d.checkoutInspectionId ? 'Checked out by the driver' : 'Handed over'}

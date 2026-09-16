@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isPlaceholderJobName } from '@/lib/jobs/displayName'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { textDeliveryForAssignments } from '@/lib/drivers/inviteDelivery'
 import { loadJobReplacementValue } from '@/lib/coi/replacementValue'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
@@ -288,6 +289,9 @@ export async function GET(
                         id: true,
                         status: true,
                         emailSentTo: true,
+                        // Where a TEXTED invite went. The card names the
+                        // address or the number the link actually went to.
+                        smsSentTo: true,
                         firstViewedAt: true,
                         invitedBySource: true,
                         // A driver self check-out (blind pickup) stamps
@@ -650,9 +654,29 @@ export async function GET(
       ],
     })).filter((sig) => sig.others.length > 0)
 
+    // Did each texted invite actually arrive? INVITED/VIEWED is about the
+    // LINK; this is about the message (lib/drivers/inviteDelivery).
+    const driverAssignmentIds = job.bookings.flatMap((b) =>
+      b.items.flatMap((it) => it.assignments.flatMap((a) => (a.driverAssignments ?? []).map((d) => d.id))),
+    )
+    const textDelivery = await textDeliveryForAssignments(driverAssignmentIds)
+
     return NextResponse.json({
       job: {
         ...job,
+        bookings: job.bookings.map((b) => ({
+          ...b,
+          items: b.items.map((it) => ({
+            ...it,
+            assignments: it.assignments.map((a) => ({
+              ...a,
+              driverAssignments: (a.driverAssignments ?? []).map((d) => ({
+                ...d,
+                textDelivery: textDelivery.get(d.id) ?? null,
+              })),
+            })),
+          })),
+        })),
         selfServeUnquoted,
         duplicateSignals,
         replacementValue,

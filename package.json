@@ -40,6 +40,7 @@
     "test:client-email-body": "tsx tests/email/client-email-body.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:closed-day": "tsx tests/orders/closed-day-handoff.test.ts",
+    "test:invite-delivery": "tsx tests/drivers/invite-delivery.test.ts",
     "test:invite-sms": "tsx tests/drivers/invite-sms.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:driver-sweep-window": "tsx tests/drivers/request-sweep-window.test.ts",

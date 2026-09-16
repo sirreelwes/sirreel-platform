@@ -232,6 +232,7 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
       }),
       source: 'staff',
       jobId: booking.jobId ?? null,
+      driverAssignmentId: da.id,
       sentById: args.invitedByUserId ?? null,
     })
     return {
