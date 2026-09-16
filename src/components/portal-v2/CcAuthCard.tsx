@@ -6,9 +6,10 @@ import { formatPhone } from '@/lib/format/phone'
 import type { PaymentPreference } from '@/lib/payments/paymentPreference'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
-import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
+import { CardShell, ContextChip, LockedNote } from './CardShell'
+import { ClientCardRows, useClientCards } from '@/components/portal/ClientCardsOnFile'
 import type { V2Booking, V2Intake } from './types'
-import { Check, CreditCard } from 'lucide-react'
+import { Check, CheckCircle2, CreditCard } from 'lucide-react'
 
 /**
  * Credit-card authorization card. Wraps the EXISTING CardPointe/CardSecure
@@ -85,6 +86,11 @@ export function CcAuthCard({
    *  from `error`, which is about the submit. */
   const [cardError, setCardError] = useState('')
   const [seeded, setSeeded] = useState(false)
+  // "Add another card" — the client whose card is already on file and wants
+  // to pay with a different one. Adding IS authorizing, so this re-opens the
+  // capture form below rather than cloning it, and the card already on file
+  // stays there (Wes 2026-09-03: "we don't wanna remove the first card").
+  const [addingCard, setAddingCard] = useState(false)
 
   // Seed cardholder name + deposit estimate from the collect-once intake the
   // first time real data is available. Fields stay editable — the cardholder
@@ -105,7 +111,7 @@ export function CcAuthCard({
   // Lazy-load the CardSecure iframe when the card is first opened —
   // same endpoint the live portal uses.
   useEffect(() => {
-    if (!open || iframeUrl || done || locked) return
+    if (!open || iframeUrl || locked || (done && !addingCard)) return
     // card-on-file: this token is STORED and charged later, merchant-initiated.
     // The CVV-free tokenizer keeps a CVV from riding along on those charges —
     // see /api/cardpointe/config.
@@ -118,7 +124,7 @@ export function CcAuthCard({
       // Unknown means DON'T collect. Failing closed is the safe direction
       // for a card form.
       .catch(() => setCardLive(false))
-  }, [open, iframeUrl, done, locked])
+  }, [open, iframeUrl, done, locked, addingCard])
 
   // CardSecure posts the token back via window message — identical
   // capture pattern to the live portal.
@@ -199,8 +205,8 @@ export function CcAuthCard({
     >
       {locked && !done ? (
         <LockedNote title="Credit Card Authorization" />
-      ) : done ? (
-        <DoneNote title="Credit Card Authorized" sub="Authorization on file with SirReel" />
+      ) : done && !addingCard ? (
+        <CardsOnFilePanel token={token} onAddAnother={() => setAddingCard(true)} />
       ) : cardLive === false ? (
         // Card capture is not live. Rather than a dead step, point the client
         // at the form that genuinely holds their details today. Says nothing
@@ -471,6 +477,17 @@ export function CcAuthCard({
                   return
                 }
                 onAuthorized()
+                // Back to the list, which reloads on mount and shows the card
+                // just added next to the one that was already there. The
+                // capture state is cleared with it so "Add another card" a
+                // second time starts on an empty form and a fresh iframe.
+                setAddingCard(false)
+                setCpToken('')
+                setIframeUrl('')
+                setSig(null)
+                setAcknowledged(false)
+                setExpMonth('')
+                setExpYear('')
               } catch (err: any) {
                 setError(err?.message || 'Failed to submit')
               } finally {
@@ -518,5 +535,55 @@ export function CcAuthCard({
         </div>
       )}
     </CardShell>
+  )
+}
+
+/**
+ * What a client sees on this step once a card is on file: the cards their
+ * company has, which one we charge, and a way to add another.
+ *
+ * Before this the step rendered a "Credit Card Authorized" note and nothing
+ * else — so the job portal's "Authorize a different card for this job →"
+ * button, and the card-authorization email's button, both landed a client
+ * who wanted to change cards on a page that only told them they were done.
+ *
+ * Its own component so the fetch fires only for a client who actually has a
+ * card on file — a hook at the top of CcAuthCard would call the endpoint on
+ * every portal open, including first-time authorizations.
+ */
+function CardsOnFilePanel({ token, onAddAnother }: { token: string; onAddAnother: () => void }) {
+  const { cards, busy, msg, makeDefault } = useClientCards(token)
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+        <div className="mb-1 flex justify-center text-emerald-500"><CheckCircle2 size={24} aria-hidden /></div>
+        <div className="text-emerald-800 font-bold text-sm">Credit Card Authorized</div>
+        <div className="text-emerald-600 text-xs mt-0.5">Authorization on file with SirReel</div>
+      </div>
+
+      <div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Your payment options</div>
+        <p className="text-[11px] text-gray-500 mb-3">
+          Add a card any time, and choose which one we charge. Adding a card never removes one you
+          already gave us.
+        </p>
+        <ClientCardRows cards={cards} busy={busy} onUse={(id) => void makeDefault(id)} />
+        {msg && <p className="mt-3 text-[12px] text-emerald-700">{msg}</p>}
+      </div>
+
+      <button
+        type="button"
+        onClick={onAddAnother}
+        className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+        style={{ backgroundColor: PORTAL.ink }}
+      >
+        Add another card
+      </button>
+      <p className="text-[11px] text-gray-400 text-center">
+        Your card details are entered on our processor&rsquo;s secure form — SirReel never sees or
+        stores the full number.
+      </p>
+    </div>
   )
 }
