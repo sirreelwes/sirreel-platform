@@ -2,25 +2,23 @@
  * The rep card in client email — a face, a name, a title and a number,
  * above the button.
  *
- * Wes 2026-09-16: "candid photos of our sales agents … in the HQ emails."
- * The photo already exists in two places and this file is the one rule that
- * decides which one a client sees:
+ * Wes 2026-09-16: "candid photos of our sales agents … in the HQ emails",
+ * then, once it was built: "for now let's just include the photos from who
+ * we are page." So the card's photo is ONE source — the person's published
+ * "Who we are" row (`TeamMember.photoUrl`), uploaded and curated on
+ * /admin/who-we-are and linked to their HQ login there.
  *
- *   1. The rep's WEEKLY CANDID (`AgentWeeklyCandid`) while it is fresh —
- *      the rep's own photo of themselves, uploaded from the dashboard
- *      widget, and already the picture on the post-job thank-you. This is
- *      the one Wes asked for, so it wins while it is current.
- *   2. Their published "Who we are" HEADSHOT (`TeamMember.photoUrl`) —
- *      curated, admin-managed, and it does not go stale.
- *   3. A weekly candid of ANY age, when there is no headshot at all. An old
- *      candid still shows the person; nothing shows nobody.
- *   4. Nothing — and then NO CARD RENDERS. The card exists to carry a face;
- *      without one it would only repeat the sign-off six lines above it.
+ * WHY THAT AND NOT THE WEEKLY CANDID. The candid (`AgentWeeklyCandid`) is a
+ * better picture for this — it is what Wes asked for originally — but it
+ * only exists once a rep uploads one, and it goes stale by design. The
+ * roster photos are already on file, already approved for the public site,
+ * and do not rot. "For now" is doing real work in that sentence: the candid
+ * plumbing is untouched and still carries the post-job thank-you, so
+ * promoting it back to the card later is a change to `pickRepPhoto` and
+ * nothing else.
  *
- * The ladder is pure and lives here because TWO callers have to agree about
- * it: the composer (which decides whether to draw the card at all) and
- * `/api/public/agent-photo/[id]` (which serves the bytes to the inbox). If
- * they disagreed the email would carry a broken-image icon.
+ * No published photo means NO CARD RENDERS. The card exists to carry a face;
+ * without one it would only repeat the sign-off a few lines below it.
  *
  * Email HTML rules, same as the templates this renders into: table layout,
  * inline styles, absolute URLs, fixed width AND height on the img so a
@@ -31,42 +29,29 @@ import { PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 
 const ACCENT = '#0F7A93'
 
-/**
- * How old a weekly candid may be and still outrank a curated headshot.
- * A "weekly" candid from last spring is not what Wes is describing, but it
- * is still a better picture of the person than their initials — hence rung
- * 3 of the ladder rather than a hard cutoff.
- */
-export const CANDID_FRESH_DAYS = 45
-
 export interface RepPhotoSources {
-  /** The rep's most recent weekly candid, if any. */
-  candid: { id: string; capturedAt: Date } | null
   /** Their published Who-we-are row, only when it actually has a photo. */
   headshot: { id: string } | null
 }
 
-export type RepPhotoChoice =
-  | { source: 'candid'; id: string }
-  | { source: 'headshot'; id: string }
-  | null
+export type RepPhotoChoice = { source: 'headshot'; id: string } | null
 
-/** The ladder. Pure — same answer in the composer and in the image route. */
-export function pickRepPhoto(sources: RepPhotoSources, now: Date): RepPhotoChoice {
-  const { candid, headshot } = sources
-  if (candid) {
-    const ageDays = (now.getTime() - candid.capturedAt.getTime()) / 86_400_000
-    if (ageDays <= CANDID_FRESH_DAYS) return { source: 'candid', id: candid.id }
-  }
-  if (headshot) return { source: 'headshot', id: headshot.id }
-  if (candid) return { source: 'candid', id: candid.id }
-  return null
+/**
+ * Which photo the card carries. One source today (see the header), kept as a
+ * named function because TWO callers must agree about it: the composer, which
+ * decides whether to draw the card at all, and `/api/public/agent-photo/[id]`,
+ * which serves the bytes to the inbox. If they disagreed the email would
+ * carry a broken-image icon.
+ */
+export function pickRepPhoto(sources: RepPhotoSources): RepPhotoChoice {
+  return sources.headshot ? { source: 'headshot', id: sources.headshot.id } : null
 }
 
 /**
- * The absolute URL an inbox fetches. `v` pins WHICH photo, so the mail stays
- * a record of the week it was sent rather than silently becoming next
- * month's candid when the client reopens the thread.
+ * The absolute URL an inbox fetches. `v` pins WHICH photo, so a mail stays a
+ * record of the picture it was sent with rather than silently changing when
+ * the photo behind it is replaced and the client reopens the thread. Also
+ * used by the thank-you, whose photo IS a weekly candid.
  */
 export function agentPhotoEmailUrl(userId: string, photoId: string): string {
   return `${PUBLIC_SITE_URL}/api/public/agent-photo/${userId}?v=${encodeURIComponent(photoId)}`

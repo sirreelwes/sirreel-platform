@@ -6,10 +6,13 @@
  * GET /api/users/me/weekly-candid — return the user's most recent
  * candid + a `staleness` field so the dashboard widget can prompt
  * for a fresh one when the current candid is from a previous week.
- * It also reports `repCard` — whether the candid is live on client
- * email yet, and whether this viewer is the one testing it — so the
- * shell's prompt can tell the team the truth about where their photo
- * goes instead of implying it is already reaching clients.
+ * It also reports `candidUse` — where this viewer's candid can actually
+ * go right now. Since 2026-09-16 the welcome email's rep card reads the
+ * published "Who we are" photo instead (Wes: "for now let's just include
+ * the photos from who we are page"), so the candid's only destination is
+ * the post-job thank-you — which is itself held behind the rollout switch.
+ * The shell's prompt reads this so it never asks someone for a photo that
+ * has nowhere to go.
  *
  * Storage: Vercel Blob at `agents/<userId>/<yyyy>/<mm>/candid-<uuid>...`.
  * Mirrors the claim/order upload helpers' `access: 'private' as
@@ -24,7 +27,7 @@ import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
 import { weekStartPacific } from '@/lib/orders/weekStart'
-import { repCardEnabled, isRepCardTester } from '@/lib/email/repCardRollout'
+import { repCardEnabled, maySendThankYou } from '@/lib/email/repCardRollout'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,20 +103,21 @@ export async function GET(_req: NextRequest) {
 
   // Whose face ends up in front of a client: the sales roles plus the
   // admins who backstop them. A warehouse login gets no prompt.
-  const onClientEmail = ['AGENT', 'ADMIN', 'MANAGER'].includes(user.role)
+  const clientFacingRole = ['AGENT', 'ADMIN', 'MANAGER'].includes(user.role)
+  // …and only if the one email that uses a candid is open to them. While
+  // the thank-you is held, that is the testers alone.
+  const canSendThankYou = maySendThankYou(session.user.email, await repCardEnabled())
 
   return NextResponse.json({
     current,
     isThisWeek,
     ageDays,
     thisWeekStart: thisWeekStart.toISOString().slice(0, 10),
-    repCard: {
-      /** Live for everyone, or still dark while it is being tested. */
-      enabled: await repCardEnabled(),
-      /** This viewer is the one testing it — their own jobs carry it now. */
-      viewerIsTester: isRepCardTester(session.user.email),
-      /** Whether this viewer's photo can reach a client at all. */
-      onClientEmail,
+    candidUse: {
+      /** The candid has somewhere to go for this viewer — prompt them. */
+      wanted: clientFacingRole && canSendThankYou,
+      /** What it is for, so the prompt can say so without guessing. */
+      destination: 'thank-you',
     },
   })
 }

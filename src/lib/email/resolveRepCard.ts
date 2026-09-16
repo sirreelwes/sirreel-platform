@@ -13,9 +13,10 @@
  * rollout costs the send nothing.
  *
  * Fails soft on `TeamMember.user_id` not existing yet (see
- * scripts/add-team-member-user-column.ts): the headshot rung is skipped and
- * the weekly candid still carries the card, rather than the send 500ing on a
- * column the live DB has not been given.
+ * scripts/add-team-member-user-column.ts): no link means no photo means no
+ * card, rather than the send 500ing on a column the live DB has not been
+ * given. That is also the whole setup step — until a roster row is linked to
+ * an HQ login on /admin/who-we-are, that person's mail is unchanged.
  */
 
 import { prisma } from '@/lib/prisma'
@@ -38,16 +39,8 @@ export interface RepAgent {
 }
 
 export async function loadRepPhotoSources(userId: string): Promise<RepPhotoSources> {
-  const candid = await prisma.agentWeeklyCandid
-    .findFirst({
-      where: { userId },
-      orderBy: { capturedAt: 'desc' },
-      select: { id: true, capturedAt: true },
-    })
-    .catch(() => null)
-
   // The Who-we-are link is a newer column; a checkout that has not run the
-  // additive-SQL script still sends mail, just without this rung.
+  // additive-SQL script still sends mail, just without the card.
   const headshot = await prisma.teamMember
     .findFirst({
       where: { userId, published: true, photoUrl: { not: null } },
@@ -61,7 +54,7 @@ export async function loadRepPhotoSources(userId: string): Promise<RepPhotoSourc
       return null
     })
 
-  return { candid, headshot }
+  return { headshot }
 }
 
 /** The title line: the curated one if there is a roster row, else the User's. */
@@ -76,10 +69,7 @@ async function repTitle(agent: RepAgent): Promise<string | null> {
  * The card for a job's agent, or null when there is no photo to show —
  * which is the signal NOT to render the card at all.
  */
-export async function resolveRepCard(
-  agent: RepAgent | null | undefined,
-  now: Date = new Date(),
-): Promise<RepCard | null> {
+export async function resolveRepCard(agent: RepAgent | null | undefined): Promise<RepCard | null> {
   if (!agent?.id || !agent.name?.trim()) return null
 
   // Is the card live for this agent at all? Checked first: while the rollout
@@ -87,8 +77,7 @@ export async function resolveRepCard(
   // agent's mail is untouched.
   if (!repCardVisibleFor(agent.email, await repCardEnabled())) return null
 
-  const sources = await loadRepPhotoSources(agent.id)
-  const pick: RepPhotoChoice = pickRepPhoto(sources, now)
+  const pick: RepPhotoChoice = pickRepPhoto(await loadRepPhotoSources(agent.id))
   if (!pick) return null
 
   return {

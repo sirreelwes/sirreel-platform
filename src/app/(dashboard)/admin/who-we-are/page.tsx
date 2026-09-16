@@ -84,8 +84,8 @@ export default function WhoWeAreAdminPage() {
     if (next && !confirm(
       'Turn this on for the whole team?\n\n' +
       'Two things go live at once:\n' +
-      '  • every welcome email from an agent with a candid carries their ' +
-      'photo, name, title and number\n' +
+      '  • every welcome email from an agent with a published photo here ' +
+      'carries their photo, name, title and number\n' +
       '  • the team can send post-job thank-you emails\n\n' +
       'Only do this once you have sent yourself both and read them in a ' +
       'real inbox — the thank-you copy is still marked PLACEHOLDER.'
@@ -172,7 +172,9 @@ export default function WhoWeAreAdminPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-semibold text-lt-fg">Who We Are</h1>
       <p className="mt-1 text-sm text-lt-fg2">
-        Manage the team roster shown in the &ldquo;Who we are&rdquo; section on the public contact page.
+        The team roster shown in the &ldquo;Who we are&rdquo; section on the public contact page &mdash;
+        and, once a person is linked to their HQ login below, the photo and title
+        that ride on the welcome email their clients get.
       </p>
 
       {error && (
@@ -206,7 +208,7 @@ export default function WhoWeAreAdminPage() {
             <div className="text-sm font-semibold">Rep photos on client emails</div>
             <div className="text-xs text-zinc-500 mt-0.5">
               {repCardEnabled
-                ? 'LIVE for the team — welcome emails carry the agent\u2019s photo, title and number, and anyone can send a post-job thank-you.'
+                ? 'LIVE for the team — welcome emails carry the agent\u2019s roster photo, title and number, and anyone can send a post-job thank-you.'
                 : 'Testing. Welcome emails carry the card only on your own jobs, and only you can send a thank-you. Nothing changes for the rest of the team.'}
             </div>
           </div>
@@ -221,12 +223,12 @@ export default function WhoWeAreAdminPage() {
         </div>
         {!repCardEnabled && (
           <ol className="mt-3 space-y-1 border-t border-zinc-800 pt-3 text-xs text-zinc-400 list-decimal list-inside">
-            <li>Take a candid from the prompt at the top of any HQ page.</li>
+            <li>Add a photo to your own roster row below, and link it to your HQ login.</li>
             <li>Open a job where you are the agent and send yourself the welcome email.</li>
             <li>Send yourself a thank-you too, from the queue on your dashboard.</li>
             <li>Read both on your phone and on desktop &mdash; check the photo actually loads.</li>
             <li>Fix the thank-you&rsquo;s placeholder wording.</li>
-            <li>Happy? Flip this on.</li>
+            <li>Happy? Flip this on &mdash; then give everyone else a roster photo.</li>
           </ol>
         )}
       </section>
@@ -301,13 +303,13 @@ export default function WhoWeAreAdminPage() {
                       title ride on the rep card in client email — same
                       picture the public site shows. */}
                   <label className="sm:col-span-2 flex items-center gap-2 text-[11px] text-zinc-500">
-                    <span className="shrink-0">HQ login</span>
+                    <span className="shrink-0" title="Linking a roster row to an HQ login is what puts this photo on that person's client emails.">HQ login</span>
                     <select
                       value={m.userId ?? ''}
                       onChange={(e) => linkUser(m.id, e.target.value)}
                       className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 focus:border-amber-500 focus:outline-none"
                     >
-                      <option value="">Not linked — photo stays on the site only</option>
+                      <option value="">Not linked &mdash; photo stays on the public site only</option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.name} · {u.email}

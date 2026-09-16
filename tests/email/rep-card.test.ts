@@ -5,8 +5,10 @@
  *   npm run test:rep-card
  *
  * Pure + offline. Three things are guarded here:
- *   1. The photo LADDER (pickRepPhoto), which the composer and the public
- *      image route both run. If they could disagree, an inbox would show a
+ *   1. WHERE THE PHOTO COMES FROM (pickRepPhoto) — the published "Who we
+ *      are" roster row, and nothing else (Wes 2026-09-16: "for now let's
+ *      just include the photos from who we are page"). The composer and the
+ *      public image route must agree about it or an inbox shows a
  *      broken-image icon instead of a rep.
  *   2. That no photo means NO CARD — the welcome email has to come out
  *      byte-for-byte as it did before this shipped, for every job whose
@@ -19,7 +21,6 @@ import {
   pickRepPhoto,
   repCardHtml,
   agentPhotoEmailUrl,
-  CANDID_FRESH_DAYS,
   type RepCard,
 } from '../../src/lib/email/repCard'
 import { repCardVisibleFor, isRepCardTester, maySendThankYou } from '../../src/lib/email/repCardRollout'
@@ -33,35 +34,12 @@ function eq(got: unknown, want: unknown, why: string): void {
 }
 function ok(cond: boolean, why: string): void { eq(cond, true, why) }
 
-const NOW = new Date('2026-09-16T17:00:00Z')
-const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000)
-
-console.log('pickRepPhoto — the ladder')
-eq(pickRepPhoto({ candid: null, headshot: null }, NOW), null, 'nothing on file → no photo, so no card')
+console.log('pickRepPhoto — the Who-we-are photo, and only that')
+eq(pickRepPhoto({ headshot: null }), null, 'no published roster photo → no photo, so no card')
 eq(
-  pickRepPhoto({ candid: { id: 'c1', capturedAt: daysAgo(2) }, headshot: { id: 'h1' } }, NOW),
-  { source: 'candid', id: 'c1' },
-  'a fresh candid beats the headshot — the candid is what Wes asked for',
-)
-eq(
-  pickRepPhoto({ candid: { id: 'c1', capturedAt: daysAgo(CANDID_FRESH_DAYS + 1) }, headshot: { id: 'h1' } }, NOW),
+  pickRepPhoto({ headshot: { id: 'h1' } }),
   { source: 'headshot', id: 'h1' },
-  'a stale candid loses to a curated headshot',
-)
-eq(
-  pickRepPhoto({ candid: { id: 'c1', capturedAt: daysAgo(400) }, headshot: null }, NOW),
-  { source: 'candid', id: 'c1' },
-  'an old candid still beats nothing when there is no headshot',
-)
-eq(
-  pickRepPhoto({ candid: null, headshot: { id: 'h1' } }, NOW),
-  { source: 'headshot', id: 'h1' },
-  'headshot alone carries the card',
-)
-eq(
-  pickRepPhoto({ candid: { id: 'c1', capturedAt: daysAgo(CANDID_FRESH_DAYS) }, headshot: { id: 'h1' } }, NOW),
-  { source: 'candid', id: 'c1' },
-  'exactly at the freshness limit still counts as fresh',
+  'a published roster photo carries the card',
 )
 
 console.log('\nagentPhotoEmailUrl')

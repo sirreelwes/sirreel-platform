@@ -13,16 +13,19 @@
  * What it exposes is one active staff member's photo, keyed by an opaque
  * uuid, and nothing else — no name, no number, no jobs.
  *
- * `?v=` pins WHICH photo, so a mail sent in September still shows September's
- * candid when the thread is reopened in November. An absent or unrecognised
- * `v` falls back to the same ladder the composer used (`pickRepPhoto`), so
- * the two cannot disagree and leave a broken image in an inbox.
+ * TWO stores reach this route, because two emails use it: the welcome's rep
+ * card carries a published "Who we are" headshot, and the thank-you carries
+ * the rep's weekly candid.
+ *
+ * `?v=` pins WHICH photo, so a mail sent in September still shows the picture
+ * it was sent with when the thread is reopened in November. Every send builds
+ * one, so the no-`v` path below is only a safety net — it prefers the roster
+ * headshot (what the card would have used) and falls back to the newest
+ * candid, so a stray link resolves to a face rather than a broken image.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
-import { pickRepPhoto } from '@/lib/email/repCard'
-import { loadRepPhotoSources } from '@/lib/email/resolveRepCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,27 +60,32 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   if (!fileUrl) {
-    const pick = pickRepPhoto(await loadRepPhotoSources(userId), new Date())
-    if (!pick) return notFound()
-    if (pick.source === 'candid') {
-      const row = await prisma.agentWeeklyCandid
-        .findUnique({ where: { id: pick.id }, select: { fileUrl: true } })
-        .catch(() => null)
-      fileUrl = row?.fileUrl ?? null
-    } else {
-      const row = await prisma.teamMember
-        .findUnique({ where: { id: pick.id }, select: { photoUrl: true } })
-        .catch(() => null)
-      fileUrl = row?.photoUrl ?? null
-    }
+    const member = await prisma.teamMember
+      .findFirst({
+        where: { userId, published: true, photoUrl: { not: null } },
+        select: { photoUrl: true },
+      })
+      .catch(() => null)
+    fileUrl = member?.photoUrl ?? null
+  }
+  if (!fileUrl) {
+    const candid = await prisma.agentWeeklyCandid
+      .findFirst({
+        where: { userId },
+        orderBy: { capturedAt: 'desc' },
+        select: { fileUrl: true },
+      })
+      .catch(() => null)
+    fileUrl = candid?.fileUrl ?? null
   }
 
   if (!fileUrl) return notFound()
 
   const res = await streamPrivateBlobAsResponse({ fileUrl, filename: `${userId}.jpg` })
   // Public so Gmail's proxy caches it instead of re-fetching on every open.
-  // An hour rather than a day: the candid is meant to change weekly, and a
-  // pinned `?v=` is what keeps an already-sent mail stable.
+  // An hour rather than a day: a candid is meant to change weekly and a
+  // roster photo can be replaced at any time, while a pinned `?v=` is what
+  // keeps an already-sent mail stable.
   res.headers.set('Cache-Control', 'public, max-age=3600')
   return res
 }

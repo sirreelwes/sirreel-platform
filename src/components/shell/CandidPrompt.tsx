@@ -10,8 +10,14 @@
  * this shell already proven to be unmissable.
  *
  * It is quiet by design:
- *   - only for people whose face can reach a client (sales + the admins who
- *     backstop them — a warehouse login never sees it)
+ *   - only when the candid has somewhere to GO for this viewer, which the
+ *     server decides (`candidUse.wanted`): a client-facing role AND the
+ *     thank-you actually open to them. Since the welcome email's rep card
+ *     switched to the published "Who we are" photo (Wes 2026-09-16), the
+ *     thank-you is the candid's only destination — and while that is held
+ *     behind the rollout switch, only a tester sees this. Nagging the team
+ *     for a photo with nowhere to go is asking them to pose for an audience
+ *     that does not exist.
  *   - only when the candid is missing or from a previous week
  *   - dismissable, and the dismissal holds while the shell stays mounted,
  *     which covers a whole working session of navigating around HQ
@@ -19,11 +25,6 @@
  * Dismissal is component state, NOT localStorage — banned by CLAUDE.md, and
  * an override that survives a reload is exactly the kind of thing that went
  * unnoticed for days the last time.
- *
- * WHAT IT SAYS depends on the rollout (src/lib/email/repCardRollout.ts). While
- * the rep card is dark the prompt says so plainly — your photo is not going
- * to clients yet, Wes is testing it — because a nudge that implies otherwise
- * is asking the team to pose for an audience that does not exist.
  *
  * Light shell: lt-* / chip-* tokens, never raw zinc (CLAUDE.md).
  */
@@ -34,10 +35,9 @@ interface Resp {
   current: { fileUrl: string; capturedAt: string } | null
   isThisWeek: boolean
   ageDays: number | null
-  repCard?: {
-    enabled: boolean
-    viewerIsTester: boolean
-    onClientEmail: boolean
+  candidUse?: {
+    wanted: boolean
+    destination: string
   }
 }
 
@@ -81,23 +81,17 @@ export function CandidPrompt() {
   }
 
   if (!resp || dismissed) return null
-  if (!resp.repCard?.onClientEmail) return null
+  if (!resp.candidUse?.wanted) return null
   if (resp.current && resp.isThisWeek) return null
 
-  const isTester = !!resp.repCard.viewerIsTester
-  const live = !!resp.repCard.enabled
   const age = resp.ageDays
-
   const headline = resp.current
     ? `Your candid is ${age ?? '?'} days old`
     : "You don't have a candid yet"
 
-  // The honest version of "where does this go", per rollout state.
-  const destination = live
-    ? 'It rides on the welcome email your clients get.'
-    : isTester
-      ? 'Live on your own jobs only — you are testing this before the team gets it.'
-      : 'Not going to clients yet — Wes is testing it first. This just gets you ready.'
+  // Where it actually goes. The welcome email uses your Who-we-are photo;
+  // this one is for the thank-you a client gets after their job wraps.
+  const destination = 'It goes on the thank-you a client gets after their job wraps.'
 
   return (
     <div className="mb-3 rounded-lg border border-lt-hairline bg-lt-card px-3 py-2.5">
