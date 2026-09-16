@@ -120,10 +120,10 @@ export function ExtraItemPicker({
       {value.description.trim() !== '' && (
         <p className={`mt-0.5 text-[11px] ${named ? 'text-chip-good-fg' : 'text-chip-warn-fg'}`}>
           {named
-            ? 'Named from the catalog — this line prices itself.'
+            ? 'Picked from the catalog — goes on the order at the client’s rate.'
             : searching
               ? 'Looking for it in the catalog…'
-              : 'Not named — the line goes on with no price and an agent has to set one.'}
+              : 'Pick the item from the list to add it.'}
         </p>
       )}
 

@@ -97,6 +97,12 @@ export async function addCheckoutAddOns(args: {
     }))
     .filter((i) => i.description)
   if (items.length === 0) throw new CheckoutAddOnError('Nothing to add.')
+  // The exact catalog item, like sales adds it (Wes 2026-09-16) — no
+  // free-text rows for someone to price later.
+  const unnamed = items.filter((i) => !i.inventoryItemId)
+  if (unnamed.length) {
+    throw new CheckoutAddOnError(`Pick ${unnamed.map((i) => `"${i.description}"`).join(', ')} from the catalog list.`)
+  }
   if (!args.addedBy.trim()) throw new CheckoutAddOnError('Say who is adding it.')
 
   const order = await prisma.order.findUnique({

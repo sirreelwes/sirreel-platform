@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { resolveScan, type ScanResolution } from '@/lib/warehouse/resolveScan'
 import {
@@ -72,7 +73,8 @@ const summaryRowSelect = {
   inImplied: true,
   missingOut: true,
   missingIn: true,
-  inventoryUnit: { select: { description: true, inventoryItem: { select: { unitChecks: true } } } },
+  inventoryItemId: true,
+  inventoryUnit: { select: { description: true, inventoryItem: { select: { unitChecks: true, description: true } } } },
 } satisfies Prisma.OrderUnitScanSelect
 
 async function loadSummary(orderId: string, lineIds: string[]): Promise<UnitScanSummary> {
@@ -94,6 +96,8 @@ async function loadSummary(orderId: string, lineIds: string[]): Promise<UnitScan
       checks: r.inventoryUnit.inventoryItem?.unitChecks ?? [],
       missingOut: r.missingOut,
       missingIn: r.missingIn,
+      inventoryItemId: r.inventoryItemId,
+      catalogName: r.inventoryUnit.inventoryItem?.description ?? null,
     })),
   )
 }
@@ -155,17 +159,35 @@ function toLive(
 }
 
 export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanResult> {
-  const order = await prisma.order.findUnique({
-    where: { id: args.orderId },
-    select: {
-      id: true,
-      orderNumber: true,
-      lineItems: {
-        select: { id: true, inventoryItemId: true, description: true, quantity: true, sortOrder: true },
-        orderBy: { sortOrder: 'asc' },
+  // Speed (Wes 2026-09-16: "make the time it takes the system to register
+  // each barcode scan shorter"). Every read that does not depend on another
+  // runs at once, and the writes go as ONE batched transaction rather than
+  // an interactive one (which is a network round trip per statement plus
+  // BEGIN/COMMIT to Neon). Same reads, same writes, same answers.
+  const liveSelect = {
+    id: true, orderId: true, orderLineItemId: true, inventoryUnitId: true, barcode: true,
+    outScannedAt: true, inScannedAt: true, order: { select: { orderNumber: true } },
+  } satisfies Prisma.OrderUnitScanSelect
+
+  const [order, res, thisOrderRows] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id: args.orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        lineItems: {
+          select: { id: true, inventoryItemId: true, description: true, quantity: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        },
       },
-    },
-  })
+    }),
+    resolveScan(args.raw) as Promise<ScanResolution>,
+    prisma.orderUnitScan.findMany({
+      where: { orderId: args.orderId, voidedAt: null },
+      select: liveSelect,
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
   if (!order) {
     return { ok: false, status: 404, code: 'order', reason: 'order not found', override: null }
   }
@@ -177,47 +199,34 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
     sortOrder: l.sortOrder,
   }))
   const lineIds = lines.map((l) => l.orderLineItemId)
-
-  const res: ScanResolution = await resolveScan(args.raw)
-
-  const liveSelect = {
-    id: true, orderId: true, orderLineItemId: true, inventoryUnitId: true, barcode: true,
-    outScannedAt: true, inScannedAt: true, order: { select: { orderNumber: true } },
-  } satisfies Prisma.OrderUnitScanSelect
-
-  const thisOrderRows = await prisma.orderUnitScan.findMany({
-    where: { orderId: order.id, voidedAt: null },
-    select: liveSelect,
-    orderBy: { createdAt: 'asc' },
-  })
   const thisOrder = thisOrderRows.map(toLive)
 
   let openElsewhere: LiveScan | null = null
-  if (res.kind === 'unit') {
-    const rows = await prisma.orderUnitScan.findMany({
-      where: {
-        inventoryUnitId: res.unit.id,
-        orderId: { not: order.id },
-        voidedAt: null,
-        outScannedAt: { not: null },
-        inScannedAt: null,
-      },
-      select: liveSelect,
-      orderBy: { outScannedAt: 'desc' },
-      take: 1,
-    })
-    openElsewhere = rows[0] ? toLive(rows[0]) : null
-  }
-
   // What every copy of this item must carry ("Antenna", "Battery") —
   // returned with the scan so the desk can mark one missing.
-  const checks =
-    res.kind === 'unit'
-      ? (await prisma.inventoryItem.findUnique({
-          where: { id: res.inventoryItemId },
-          select: { unitChecks: true },
-        }))?.unitChecks ?? []
-      : []
+  let checks: string[] = []
+  if (res.kind === 'unit') {
+    const [rows, item] = await Promise.all([
+      prisma.orderUnitScan.findMany({
+        where: {
+          inventoryUnitId: res.unit.id,
+          orderId: { not: order.id },
+          voidedAt: null,
+          outScannedAt: { not: null },
+          inScannedAt: null,
+        },
+        select: liveSelect,
+        orderBy: { outScannedAt: 'desc' },
+        take: 1,
+      }),
+      prisma.inventoryItem.findUnique({
+        where: { id: res.inventoryItemId },
+        select: { unitChecks: true },
+      }),
+    ])
+    openElsewhere = rows[0] ? toLive(rows[0]) : null
+    checks = item?.unitChecks ?? []
+  }
 
   const ctx = { lines, thisOrder, openElsewhere, allowOver: args.allowOver, closeOpen: args.closeOpen }
   const now = new Date()
@@ -243,28 +252,32 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
       }
     }
 
-    const created = await prisma.$transaction(async (tx) => {
-      if (d.closeScanId) {
-        await tx.orderUnitScan.update({
-          where: { id: d.closeScanId },
-          data: { inScannedAt: now, inScannedById: args.userId, inImplied: true },
-        })
-        await tx.auditLog.create({
-          data: {
-            userId: args.userId,
-            action: 'order.unit_scanned_in',
-            entityType: 'OrderUnitScan',
-            entityId: d.closeScanId,
-            oldValues: { inScannedAt: null },
-            newValues: {
-              inScannedAt: now.toISOString(), implied: true, barcode: res.scanned,
-              closedBy: { orderId: order.id, orderNumber: order.orderNumber },
-            },
-          },
-        })
-      }
-      const row = await tx.orderUnitScan.create({
+    const createdId = randomUUID()
+    await prisma.$transaction([
+      ...(d.closeScanId
+        ? [
+            prisma.orderUnitScan.update({
+              where: { id: d.closeScanId },
+              data: { inScannedAt: now, inScannedById: args.userId, inImplied: true },
+            }),
+            prisma.auditLog.create({
+              data: {
+                userId: args.userId,
+                action: 'order.unit_scanned_in',
+                entityType: 'OrderUnitScan',
+                entityId: d.closeScanId,
+                oldValues: { inScannedAt: null },
+                newValues: {
+                  inScannedAt: now.toISOString(), implied: true, barcode: res.scanned,
+                  closedBy: { orderId: order.id, orderNumber: order.orderNumber },
+                },
+              },
+            }),
+          ]
+        : []),
+      prisma.orderUnitScan.create({
         data: {
+          id: createdId,
           orderId: order.id,
           orderLineItemId: d.orderLineItemId,
           inventoryUnitId: res.unit.id,
@@ -274,22 +287,22 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
           outScannedById: args.userId,
         },
         select: { id: true },
-      })
-      await tx.auditLog.create({
+      }),
+      prisma.auditLog.create({
         data: {
           userId: args.userId,
           action: 'order.unit_scanned_out',
           entityType: 'OrderUnitScan',
-          entityId: row.id,
+          entityId: createdId,
           newValues: {
             orderId: order.id, orderNumber: order.orderNumber, orderLineItemId: d.orderLineItemId,
             inventoryUnitId: res.unit.id, barcode: res.scanned, over: d.over,
             closedOpenScanId: d.closeScanId,
           },
         },
-      })
-      return row
-    })
+      }),
+    ])
+    const created = { id: createdId }
 
     const line = d.orderLineItemId ? lines.find((l) => l.orderLineItemId === d.orderLineItemId) : null
     const where = line
@@ -323,12 +336,12 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
   }
 
   if (d.kind === 'close') {
-    await prisma.$transaction(async (tx) => {
-      await tx.orderUnitScan.update({
+    await prisma.$transaction([
+      prisma.orderUnitScan.update({
         where: { id: d.scanId },
         data: { inScannedAt: now, inScannedById: args.userId, inImplied: false },
-      })
-      await tx.auditLog.create({
+      }),
+      prisma.auditLog.create({
         data: {
           userId: args.userId,
           action: 'order.unit_scanned_in',
@@ -340,8 +353,8 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
             scannedAt: { orderId: order.id, orderNumber: order.orderNumber },
           },
         },
-      })
-    })
+      }),
+    ])
     const line = thisOrder.find((s) => s.id === d.scanId)?.orderLineItemId
     const desc = line ? lines.find((l) => l.orderLineItemId === line)?.description : null
     return {
@@ -354,9 +367,11 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
   }
 
   // attach-in
-  const row = await prisma.$transaction(async (tx) => {
-    const r = await tx.orderUnitScan.create({
+  const rowId = randomUUID()
+  await prisma.$transaction([
+    prisma.orderUnitScan.create({
       data: {
+        id: rowId,
         orderId: order.id,
         orderLineItemId: d.orderLineItemId,
         inventoryUnitId: res.unit.id,
@@ -366,21 +381,21 @@ export async function recordUnitScan(args: RecordScanArgs): Promise<RecordScanRe
         inScannedById: args.userId,
       },
       select: { id: true },
-    })
-    await tx.auditLog.create({
+    }),
+    prisma.auditLog.create({
       data: {
         userId: args.userId,
         action: 'order.unit_scanned_in',
         entityType: 'OrderUnitScan',
-        entityId: r.id,
+        entityId: rowId,
         newValues: {
           orderId: order.id, orderNumber: order.orderNumber, orderLineItemId: d.orderLineItemId,
           inventoryUnitId: res.unit.id, barcode: res.scanned, neverScannedOut: true,
         },
       },
-    })
-    return r
-  })
+    }),
+  ])
+  const row = { id: rowId }
   return {
     ok: true, outcome: 'attached-in', scanId: row.id, orderLineItemId: d.orderLineItemId, unit, checks,
     message: `${res.scanned}${unit.description ? ` ${unit.description}` : ''} is back — it was never scanned out, so it's recorded now.`,

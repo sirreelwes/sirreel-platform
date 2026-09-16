@@ -37,6 +37,7 @@ export function UnitScanPanel({
   trackedLines,
   summary,
   onSummary,
+  initialCode,
 }: {
   orderId: string
   edge: Edge
@@ -44,6 +45,9 @@ export function UnitScanPanel({
   trackedLines: number
   summary: UnitScanSummary
   onSummary: (s: UnitScanSummary) => void
+  /** A barcode scanned on the reports page to FIND this order — recorded
+   *  here once, since the person is holding that unit. */
+  initialCode?: string | null
 }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,10 +63,41 @@ export function UnitScanPanel({
     setFeed((prev) => [{ ...f, key: `${Date.now()}-${Math.random()}` }, ...prev].slice(0, 6))
   }
 
-  async function submit(raw: string, flags: { allowOver?: boolean; closeOpen?: boolean } = {}) {
+  // Scans QUEUE (Wes 2026-09-16: registering each scan was slowing the
+  // floor down). The box never locks: a scanner fires the next label while
+  // the last one is still on its way to the server, and it is simply next
+  // in line instead of being typed into a disabled input and lost.
+  const queue = useRef<Array<{ code: string; flags: { allowOver?: boolean; closeOpen?: boolean } }>>([])
+  const running = useRef(false)
+  const [queued, setQueued] = useState(0)
+
+  function submit(raw: string, flags: { allowOver?: boolean; closeOpen?: boolean } = {}) {
     const trimmed = raw.trim()
-    if (!trimmed || busy) return
+    if (!trimmed) return
+    queue.current.push({ code: trimmed, flags })
+    setQueued(queue.current.length)
+    setCode('')
+    void drain()
+  }
+
+  async function drain() {
+    if (running.current) return
+    running.current = true
     setBusy(true)
+    try {
+      while (queue.current.length) {
+        const next = queue.current.shift()!
+        setQueued(queue.current.length)
+        await send(next.code, next.flags)
+      }
+    } finally {
+      running.current = false
+      setBusy(false)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }
+
+  async function send(trimmed: string, flags: { allowOver?: boolean; closeOpen?: boolean }) {
     try {
       const res = await fetch(`/api/orders/${orderId}/unit-scans`, {
         method: 'POST',
@@ -107,14 +142,25 @@ export function UnitScanPanel({
       })
       if (data.summary) onSummary(data.summary)
     } catch (e) {
-      push({ tone: 'bad', text: e instanceof Error ? e.message : 'Scan failed.' })
-    } finally {
-      setBusy(false)
-      setCode('')
-      // Back to the box: the next label is already in the other hand.
-      requestAnimationFrame(() => inputRef.current?.focus())
+      push({ tone: 'bad', text: e instanceof Error ? `${trimmed}: ${e.message}` : `${trimmed}: scan failed.` })
     }
   }
+
+  const initialDone = useRef(false)
+  useEffect(() => {
+    if (!initialCode || initialDone.current) return
+    initialDone.current = true
+    submit(initialCode)
+    // Drop ?scan= so a reload does not record it a second time.
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('scan')
+      window.history.replaceState(null, '', url.toString())
+    } catch {
+      /* cosmetic */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode])
 
   const stillOut = summary.lines.reduce((n, l) => n + l.stillOut, 0) + summary.unlisted.filter((u) => u.outAt && !u.inAt).length
 
@@ -173,15 +219,14 @@ export function UnitScanPanel({
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
-          disabled={busy}
           className="flex-1 min-w-0 bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2.5 text-[16px] font-mono text-lt-fg placeholder:text-lt-fg3 placeholder:font-sans focus:border-amber-500 focus:outline-none"
         />
         <button
           type="submit"
-          disabled={busy || !code.trim()}
+          disabled={!code.trim()}
           className="flex-none text-[14px] font-semibold rounded-lg px-3 py-2.5 bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
         >
-          {busy ? '…' : 'Scan'}
+          {busy ? (queued > 0 ? `+${queued}` : '…') : 'Scan'}
         </button>
       </form>
       <p className="text-[12px] text-lt-fg3 mt-1.5">

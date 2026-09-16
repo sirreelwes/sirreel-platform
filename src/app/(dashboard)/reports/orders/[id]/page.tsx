@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 type Props = {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ edge?: string }>
+  searchParams: Promise<{ edge?: string; scan?: string }>
 }
 
 export default async function OrderCheckReportPage({ params, searchParams }: Props) {
@@ -46,5 +46,11 @@ export default async function OrderCheckReportPage({ params, searchParams }: Pro
     )
   }
 
-  return <CheckReportForm draft={draft} viewerName={user.name} />
+  return (
+    <CheckReportForm
+      draft={draft}
+      viewerName={user.name}
+      initialScan={typeof sp.scan === 'string' && sp.scan.trim() ? sp.scan.trim().slice(0, 64) : null}
+    />
+  )
 }

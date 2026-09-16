@@ -296,6 +296,10 @@ export interface UnitScanUnit {
   inImplied: boolean
   /** The parent item's per-unit checks ("Antenna", "Battery"). */
   checks: string[]
+  /** The catalog item this unit is a copy of — what an unlisted scan is
+   *  added to the order AS (Wes 2026-09-16: the exact line item). */
+  inventoryItemId?: string | null
+  catalogName?: string | null
   /** Which of those were NOT with the unit at each edge. */
   missingOut: string[]
   missingIn: string[]
@@ -331,6 +335,8 @@ export interface SummaryRow {
   checks?: string[]
   missingOut?: string[]
   missingIn?: string[]
+  inventoryItemId?: string | null
+  catalogName?: string | null
 }
 
 /**
@@ -376,6 +382,8 @@ export function summarizeUnitScans(lineIds: string[], rows: SummaryRow[]): UnitS
     checks: r.checks ?? [],
     missingOut: r.missingOut ?? [],
     missingIn: r.missingIn ?? [],
+    inventoryItemId: r.inventoryItemId ?? null,
+    catalogName: r.catalogName ?? null,
   })
   const byLine = new Map<string, SummaryRow[]>()
   const unlisted: SummaryRow[] = []

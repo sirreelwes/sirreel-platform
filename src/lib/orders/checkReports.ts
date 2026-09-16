@@ -650,7 +650,14 @@ export async function submitCheckReport(opts: {
   // client is never emailed a document with a $0 row on it.
   const orderLinesChanged =
     edge === 'OUT' && (differing.some((l) => l.orderLineItemId) || willAdd.length > 0)
-  const applyToOrder = edge === 'OUT' && differing.length > 0
+  // Gear the warehouse ADDED as a named catalog item is on the order at the
+  // client's rate — it needs no agent sign-off (Wes 2026-09-16: "There is
+  // no need for sales to come in and approve the add-on, it should just be
+  // on the order"). Every OTHER difference (a short count, a swap) still
+  // flags the agent; an added row that could not be priced is caught by
+  // the unpriced-line block on the invoice, not by this flag.
+  const applyToOrder =
+    edge === 'OUT' && differing.some((l) => !(l.change === 'ADDED' && !l.orderLineItemId && l.inventoryItemId))
 
   const changes: string[] = differing.map((l) => describeCheckChange(l, l.change))
 

@@ -139,6 +139,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         })
         invId = inv?.id ?? null
       }
+      // Wes 2026-09-16: gear the warehouse adds at check-out goes on "the
+      // same way that sales adds an item" — the exact catalog item and a
+      // quantity, no free-text note for someone to price later. A row the
+      // floor could not name is refused here (the form will not send one).
+      // Check-in rows are records of what came back, never order lines.
+      if (edge === 'OUT' && !invId && actual > 0) {
+        return NextResponse.json(
+          {
+            error: 'item not picked',
+            reason: `Pick "${description}" from the list — added gear goes on the order as the exact catalog item.`,
+          },
+          { status: 400 },
+        )
+      }
       lines.push({
         orderLineItemId: null,
         inventoryItemId: invId,

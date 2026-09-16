@@ -17,6 +17,8 @@
  * trying to talk them back onto the scanner.
  */
 
+import { CheckEdgeTabs } from '@/components/reports/CheckEdgeTabs'
+import { OrderReportSearch, CheckInBarcodeJump } from '@/components/reports/OrderReportSearch'
 import Link from 'next/link'
 import { Lock, ClipboardList, Check, AlertTriangle, ArrowRight, History } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
@@ -97,19 +99,35 @@ export default async function OrderReportsPage() {
         </p>
       </header>
 
-      <Lane
-        title="Check out — going out"
-        empty="No booked orders going out in this window."
-        rows={out}
-        today={today}
-        edge="OUT"
-      />
-      <Lane
-        title="Check in — coming back"
-        empty="No orders due back in this window."
-        rows={back}
-        today={today}
-        edge="IN"
+      {/* Wes 2026-09-16, from the warehouse: find any order by job or
+          company, the same Check out / Check in toggle the vehicle page
+          has (no scrolling past every check-out to reach the returns),
+          and on Check in a barcode bar that opens the order a unit is on. */}
+      <OrderReportSearch />
+      <CheckEdgeTabs
+        outDue={out.filter((r) => !r.filed || r.filed.partial).length}
+        backDue={back.filter((r) => !r.filed || r.filed.partial).length}
+        out={
+          <Lane
+            title="Check out — going out"
+            empty="No booked orders going out in this window."
+            rows={out}
+            today={today}
+            edge="OUT"
+          />
+        }
+        back={
+          <>
+            <CheckInBarcodeJump />
+            <Lane
+              title="Check in — coming back"
+              empty="No orders due back in this window."
+              rows={back}
+              today={today}
+              edge="IN"
+            />
+          </>
+        }
       />
     </div>
   )

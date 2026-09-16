@@ -145,7 +145,16 @@ const fmtDay = (ymd: string | null) => {
   }).format(new Date(Date.UTC(y, m - 1, d)))
 }
 
-export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; viewerName: string | null }) {
+export function CheckReportForm({
+  draft,
+  viewerName,
+  initialScan = null,
+}: {
+  draft: ReportDraft
+  viewerName: string | null
+  /** A barcode scanned on the reports page to open this sheet. */
+  initialScan?: string | null
+}) {
   const router = useRouter()
   const isOut = draft.edge === 'OUT'
   const draftById = useMemo(() => new Map(draft.lines.map((l) => [l.orderLineItemId, l])), [draft.lines])
@@ -663,15 +672,33 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               ? `Saved — ${done.offSheet} line${done.offSheet === 1 ? '' : 's'} still to ${isOut ? 'pull' : 'count'}`
               : isOut ? 'Check-out report filed' : 'Check-in report filed'}
           </h1>
+          {/* Print, right under the check mark (Wes 2026-09-16, from the
+              warehouse: "can there also be a print option on that screen,
+              so they can give the driver their order / check out contract
+              receipt"). It was at the bottom of this card, under every
+              message, and nobody found it. */}
+          {isOut && (
+            <a
+              href={`/api/orders/${draft.orderId}/pick-list-pdf?receipt=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="mx-auto mt-2 mb-3 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-amber-600 px-6 text-[16px] font-bold text-white hover:bg-amber-500"
+            >
+              <Printer size={18} aria-hidden />
+              Print driver receipt
+            </a>
+          )}
           {done.passBy && done.countedThisPass > 0 && (
             <p className="text-lt-fg2 text-[14px] mb-2">
               {done.countedThisPass} line{done.countedThisPass === 1 ? '' : 's'} credited to <b className="text-lt-fg">{done.passBy}</b>.
             </p>
           )}
-          {done.changedOrder ? (
+          {done.changedOrder || done.added.length > 0 ? (
             <>
               <p className="text-lt-fg2 text-[15px] max-w-[52ch] mx-auto">
-                {done.orderLinesChanged
+                {!done.changedOrder
+                  ? 'The added gear is on the order.'
+                  : done.orderLinesChanged
                   ? `The order has been updated and ${draft.agentName || 'the agent'} has been flagged to review what changed.`
                   : `${draft.agentName || 'The agent'} has been flagged to review what went out.`}
               </p>
@@ -785,19 +812,8 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               Not offered on the IN edge: a check-in is a count of what
               came back, and nobody is driving away with it. */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {isOut && (
-              // A plain anchor, not next/link — it is an API route that
-              // streams a PDF, and the router must not prefetch it.
-              <a
-                href={`/api/orders/${draft.orderId}/pick-list-pdf?receipt=1`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[13px] font-bold px-3 py-2 rounded-lg bg-amber-600 hover:bg-chip-warn-bg0 text-white inline-flex items-center gap-1.5"
-              >
-                <Printer size={14} aria-hidden />
-                Print the driver&rsquo;s copy
-              </a>
-            )}
+            {/* The receipt button sits under the check mark now; a second
+                copy here was the one nobody scrolled down to. */}
             <Link
               href="/reports/orders"
               className={`text-[13px] px-3 py-2 rounded-lg ${
@@ -1047,6 +1063,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
           trackedLines={trackedLines}
           summary={unitScans}
           onSummary={applySummary}
+          initialCode={initialScan}
         />
       )}
 
@@ -1332,10 +1349,12 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
       <div className="border border-lt-hairline bg-lt-card rounded-xl overflow-hidden mb-4">
         <div className="px-3 py-2 bg-lt-inner border-b border-lt-hairline">
           <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
-            Not on the order
+            {isOut ? 'Add to the order' : 'Came back, not on the order'}
           </span>
           <span className="text-[12px] text-lt-fg3 ml-2">
-            Flagged to the agent to price — nothing is added to the order here.
+            {isOut
+              ? 'Pick the exact item and how many — it goes on the order at the client’s rate when you file.'
+              : 'Recorded for the agent — a check-in never adds to the order.'}
           </span>
         </div>
         {/* Units the scanner recorded that matched no line. Each one is
@@ -1348,7 +1367,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
             <ul className="space-y-1">
               {unitScans.unlisted.map((u) => {
                 const name = u.description ?? u.barcode
-                const listed = extras.some((e) => e.description.trim() === `${name} (${u.barcode})`)
+                const listed = extras.some((e) => e.key === `scan-${u.scanId}`)
                 return (
                   <li key={u.scanId} className="flex items-center gap-2 text-[13px] text-chip-warn-fg">
                     <span className="font-mono">{u.barcode}</span>
@@ -1363,10 +1382,12 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                             ...prev,
                             {
                               key: `scan-${u.scanId}`,
-                              description: `${name} (${u.barcode})`,
-                              inventoryItemId: null,
+                              // The scanned unit knows its catalog item, so
+                              // the row is already the exact line to add.
+                              description: u.catalogName ?? `${name} (${u.barcode})`,
+                              inventoryItemId: u.inventoryItemId ?? null,
                               actualQty: 1,
-                              note: '',
+                              note: u.catalogName ? `Unit ${u.barcode}` : '',
                             },
                           ])
                         }
@@ -1547,14 +1568,11 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
           it cheaply — afterwards it is an agent chasing a rate for gear
           that is already on a job. */}
       {isOut && unnamedExtras > 0 && !confirming && (
-        <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
+        <p className="mb-3 text-[14px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded-lg px-3 py-2 flex items-start gap-2">
           <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
           <span>
-            {unnamedExtras === 1 ? 'One written-in row is' : `${unnamedExtras} written-in rows are`}{' '}
-            not named from the catalog. {unnamedExtras === 1 ? 'It goes' : 'They go'} onto the order
-            with <b>no price</b>, which stops the invoice until an agent sets one. Naming{' '}
-            {unnamedExtras === 1 ? 'it' : 'them'} here prices {unnamedExtras === 1 ? 'it' : 'them'}{' '}
-            automatically.
+            Pick {unnamedExtras === 1 ? 'the added item' : `the ${unnamedExtras} added items`} from the list
+            before filing — added gear goes on the order as the exact catalog item.
           </span>
         </p>
       )}
@@ -1707,7 +1725,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
               if (diffs > 0 || shortfalls.length > 0) { setConfirming('file'); return }
               void submit()
             }}
-            disabled={saving || uncounted.length > 0 || nameMissing}
+            disabled={saving || uncounted.length > 0 || nameMissing || (isOut && unnamedExtras > 0)}
             className="px-4 py-2.5 bg-amber-600 hover:bg-chip-warn-bg0 text-white text-[15px] font-semibold rounded-lg disabled:opacity-50"
           >
             {saving
@@ -1733,7 +1751,7 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
                 if (diffs > 0 || shortfalls.length > 0) { setConfirming('save'); return }
                 void submit(true)
               }}
-              disabled={saving || nameMissing}
+              disabled={saving || nameMissing || (isOut && unnamedExtras > 0)}
               className="px-4 py-2.5 border border-amber-600 text-amber-700 hover:bg-chip-warn-bg text-[15px] font-semibold rounded-lg disabled:opacity-50"
             >
               {saving ? 'Saving…' : `Save what’s done (${countedRows} of ${onSheetIds.length})`}

@@ -8,9 +8,9 @@
  *
  * Built for a phone at the truck: one tap on a chip adds the usual asks
  * (straps, pads, a dolly), +/− sets the count, search covers anything else,
- * and one button puts it all on the order. Catalog picks price themselves
- * off the client's rates; something typed free-hand lands "needs a price"
- * for the agent — never a silent $0 (lib/orders/checkoutAddOns).
+ * and one button puts it all on the order. Every add is an exact catalog
+ * item priced off the client's rates — no free text, no agent sign-off
+ * (Wes 2026-09-16) — lib/orders/checkoutAddOns.
  *
  * Used on the dark handover screen and the light check-out sheet, hence
  * `tone`.
@@ -270,17 +270,9 @@ export function CheckoutAddOnsCard({
                     {h.description}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = q.trim()
-                    bump({ key: `text:${text.toLowerCase()}`, inventoryItemId: null, description: text, label: text })
-                    setQ('')
-                  }}
-                  className={`block w-full text-left px-3 py-2.5 text-[13px] ${c.menuItem}`}
-                >
-                  Add &ldquo;{q.trim()}&rdquo; as typed <span className={c.warn}>· the agent prices it</span>
-                </button>
+                {hits.length === 0 && (
+                  <p className={`px-3 py-2.5 text-[13px] ${c.muted}`}>No catalog item matches — try another word.</p>
+                )}
               </div>
             )}
           </div>
@@ -290,7 +282,6 @@ export function CheckoutAddOnsCard({
             <div key={p.key} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${c.row}`}>
               <div className="min-w-0 flex-1">
                 <div className={`text-[14px] font-medium truncate ${c.title}`}>{p.label}</div>
-                {!p.inventoryItemId && <div className={`text-[12px] ${c.warn}`}>Not a catalog item — the agent prices it</div>}
               </div>
               <button type="button" onClick={() => bump(p, -1)} className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center" aria-label="One fewer">
                 <Minus size={16} aria-hidden />
