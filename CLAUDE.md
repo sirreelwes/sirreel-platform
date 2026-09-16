@@ -1153,6 +1153,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `findVsmVendor()` is the only lookup a VSM code path may use; the seed
   REFUSES rather than adding a roster on top of units it did not create.
 
+## One thread per job — DESIGN ONLY, not built (2026-09-16 — Wes)
+- Wes: "figure out a way to have individual jobs stay on one thread. For the
+  client to have a single thread would be better … Is it that we open a chat
+  within the job itself and that chat feeds a single email thread to the
+  client?" Decision + troubleshooting + sketch:
+  `docs/specs/job-thread-one-conversation.md`. Read it before touching how
+  client mail is sent or filed.
+- **Why it shatters today, in one line:** no send carries proof of its job.
+  91 sites go through `sendAgreementEmail` with no In-Reply-To/References,
+  five different subjects, three different Reply-Tos (rep / billing@ /
+  hello@); `EmailThread` is keyed per MAILBOX (`gmailThreadId`), the pubsub
+  never sets `jobId`, and HQ never learns its own Message-IDs (which is the
+  root of the hello@ capture trick for wes@).
+- **The design:** the email thread IS the job conversation, written from
+  the job page, internal notes interleaved. Three anchors on every send —
+  (A) HQ-minted Message-ID + References chain, stored in the existing
+  `rfc822MessageId` column so `hasKnownConversationLink` matches replies;
+  (B) `jobs+<jobcode>@sirreel.com` on Cc (the driver-relay plus-address
+  mechanism, already parsed in the pubsub route) — Cc, never Reply-To;
+  (C) one stable subject per job. Ingest then files anchored threads to
+  the job fill-only. Staff replying from their own Gmail land on the same
+  thread for free — Gmail is a door, the job page is the home.
+- Phase 1 (anchors + auto-filing) needs NO schema and NO admin change and
+  gives the client one thread by itself. Phase 2 is the Conversation
+  panel + `sr_job_threads` / `sr_job_thread_notes` (additive SQL). Phase 3
+  (optional) is Gmail-native sending via a `gmail.send` DWD scope.
+- Do NOT resurrect `job_messages` (legacy, keyed by RW order number) for
+  internal notes. Do NOT put the job address in Reply-To. Do NOT widen the
+  wes@ LINKED filter — anchors add proof, nothing else.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

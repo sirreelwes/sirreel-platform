@@ -24,6 +24,11 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-16
 
+### One thread per job — design written, nothing built
+
+(docs only) `docs/specs/job-thread-one-conversation.md` — Wes asked how a job can stay on ONE email thread for the client, and whether that means a chat inside the job that feeds the thread, or letting Oliver/Jose/Wes/Dani/Ana work from their own email. Answer: the email thread IS the job conversation (written from the job page, internal notes interleaved), and with three anchors on every send — an HQ-minted Message-ID + References chain, `jobs+<jobcode>@` on Cc, one subject per job — a reply from anyone's own Gmail files onto the same thread, so the two options are one design. Troubleshooting from the code: 91 send sites set no threading headers, five subjects, three Reply-Tos, per-mailbox `EmailThread` keys, an ingest that never sets `jobId`, and HQ never learning its own Message-IDs. Phase 1 needs no schema or admin change. Five decisions listed for Wes.
+
+
 ### The photo section, built from VSM gear
 
 `edd92df` build the Photo Shoot Rentals section out of VSM Planet's gear
