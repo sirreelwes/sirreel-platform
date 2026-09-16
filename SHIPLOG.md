@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### The photo section, built from VSM gear
 
-`PENDING` build the Photo Shoot Rentals section out of VSM Planet's gear
+`edd92df` build the Photo Shoot Rentals section out of VSM Planet's gear
 
 Wes: "let's build the photo section for SirReel using VSM gear." On 2026-09-11 Photo Shoot Rentals became a CLASS — a `LineItemDepartment` with its own quote heading and subtotal, a `PartnerCatalogSection` at `#photo-shoot`, a 3-day rental week for gear SirReel carries there. Nothing was ever put in it. The section on /vehicles renders only while a signed partner has a LISTED unit in it, so for five days it has been a heading over an empty page, and a rep typing "photo" into the order form got nothing back.
 
