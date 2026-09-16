@@ -827,6 +827,28 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Nothing reaches sirreel.com until a unit is listed, has a photo AND the
   Partner Equipment Agreement is signed (`SUB_LISTED_WHERE`), so seeding is
   safe before the call rather than after it. `npm run test:photo-section`.
+- **A photo HOME TILE was considered and PARKED (Wes 2026-09-16: "I'm not
+  sure we will ever use it but remember the idea").** Not rejected, not
+  queued — written down so it is not re-derived from scratch. If it is ever
+  built: gate it the way Standing Sets is gated (`hasPublishedSpaces` in
+  `src/app/(public)/home/page.tsx`) on a LISTED PHOTO_SHOOT unit existing, so
+  it turns itself on the day Vic's listing goes live and points at nothing
+  until then; meanwhile it would carry the Grip & Electric shape,
+  `contactPrefillHref('Equipment quote: Photo Shoot Rentals')`, which needs
+  no listing. Four costs, all real: a 9th band narrows every resting sliver
+  (the geometry takes any N — `--hovergrow` is N−1 — but eight is what the
+  diagonal home was drawn for); Wes's ordering rule puts a long label in the
+  INTERIOR, never a flush edge; each tile's media is its own `SiteSetting`
+  column, so this is `tilePhotoShootUrl` by **additive SQL, never `db
+  push`** — and with no photo it renders solid-colour beside eight
+  photographed bands; and the tile palette is nearly exhausted (amber, teal,
+  purple, pink, orange, blue, green, red are taken — a deep indigo or a warm
+  chartreuse is about what stays distinct under the duotone multiply).
+- **The cheaper front door, also NOT done:** one quote-mode line in
+  `publicNav.ts` putting "Photo Shoot Rentals" in the Equipment ▾ menu
+  beside Lighting & Electric and the Grip Packages. No column, no geometry,
+  no photo. Worth reaching for before the tile if the service ever needs a
+  public entrance.
 
 ## Partner lines stay off the pick list (2026-09-11 — Wes)
 - Wes: "keep partner lines off the pick list." A partner's unit is delivered
