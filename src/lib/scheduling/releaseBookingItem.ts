@@ -69,6 +69,33 @@ export interface ReleaseOptions {
    * unit picked" remainder row on the job's release list). Defaults to 0.
    */
   pooledSlots?: number
+  /**
+   * WHO asked, for the audit row this function writes.
+   *
+   * Releasing a hold used to leave no trace anywhere: on 2026-09-15 all
+   * three lines on SR-JOB-0391 read UNFULFILLED with a van still going
+   * out the next morning, and the question "who released this — did the
+   * client do it?" was unanswerable from the data. Every release surface
+   * goes through this function, so the record belongs here rather than
+   * in five routes that would each forget it.
+   *
+   * Optional so no caller breaks, but pass it: an audit row with a null
+   * actor and no source is only marginally better than none.
+   */
+  actor?: ReleaseActor
+}
+
+export interface ReleaseActor {
+  /** The user who clicked. Null for cron/system paths, which name
+   *  themselves in `source` instead. */
+  userId?: string | null
+  /** The surface that asked — 'release-route', 'job-holds',
+   *  'switch-class', 'planyo-auto-release'. Reads in the audit trail as
+   *  the answer to "where was this done from". */
+  source: string
+  /** Free text the surface already had (a mark-lost reason, the class a
+   *  line switched to). */
+  reason?: string | null
 }
 
 export type ReleaseOutcome =
@@ -87,6 +114,64 @@ export type ReleaseOutcome =
     }
   | { ok: false; reason: string; code: 'NOT_FOUND' | 'TERMINAL' }
 
+/**
+ * The trail. NON-FATAL and after the fact, the same contract the rank
+ * route's audit follows — a logging outage must never be the reason a
+ * truck stays held.
+ *
+ * Written from here rather than from the routes so every surface is
+ * covered by construction: the release endpoint, the job's Release-holds
+ * list, switch-class and the Planyo auto-release cron all land the same
+ * row shape, and a surface added later inherits it without remembering to.
+ */
+async function recordRelease(args: {
+  item: {
+    id: string
+    status: string
+    quantity: number
+    category: { name: string } | null
+    booking: { bookingNumber: string | null; jobName: string | null; jobId: string | null } | null
+    assignments: { assetId: string; asset: { unitName: string } | null }[]
+  }
+  actor: ReleaseActor | undefined
+  outcome: { mode: 'ITEM' | 'UNITS'; status: string; quantity: number; swappedAssignmentCount: number; alreadyReleased: boolean }
+  releasedAssetIds: string[]
+}): Promise<void> {
+  const { item, actor, outcome } = args
+  const nameOf = new Map(item.assignments.map((a) => [a.assetId, a.asset?.unitName ?? a.assetId]))
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: actor?.userId ?? null,
+        action: 'booking_item.released',
+        entityType: 'BookingItem',
+        entityId: item.id,
+        oldValues: { status: item.status, quantity: item.quantity },
+        newValues: {
+          status: outcome.status,
+          quantity: outcome.quantity,
+          mode: outcome.mode,
+          // Named units in WORDS. "Cargo 35 handed back" is the line a
+          // human is looking for; the id is no use at 6am in the yard.
+          units: args.releasedAssetIds.map((id) => nameOf.get(id) ?? id),
+          swappedAssignmentCount: outcome.swappedAssignmentCount,
+          // TRUE means the line was already dead and this call only swept
+          // stranded assignments — not a second release of live capacity.
+          alreadyReleased: outcome.alreadyReleased,
+          category: item.category?.name ?? null,
+          bookingNumber: item.booking?.bookingNumber ?? null,
+          jobName: item.booking?.jobName ?? null,
+          jobId: item.booking?.jobId ?? null,
+          source: actor?.source ?? 'unattributed',
+          reason: actor?.reason ?? null,
+        },
+      },
+    })
+  } catch (err) {
+    console.error('[releaseBookingItem] audit failed:', err instanceof Error ? err.message : err)
+  }
+}
+
 export async function releaseBookingItem(
   bookingItemId: string,
   options: ReleaseOptions = {},
@@ -97,9 +182,14 @@ export async function releaseBookingItem(
       id: true,
       status: true,
       quantity: true,
+      // Read for the audit row as much as for the release: a trail that
+      // says only "BookingItem eae833f7" makes whoever reads it go
+      // looking for the job anyway.
+      category: { select: { name: true } },
+      booking: { select: { bookingNumber: true, jobName: true, jobId: true } },
       assignments: {
         where: { status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
-        select: { id: true, assetId: true },
+        select: { id: true, assetId: true, asset: { select: { unitName: true } } },
       },
     },
   })
@@ -155,16 +245,18 @@ export async function releaseBookingItem(
       })
       return res.count
     })
-    return {
-      ok: true,
+    const outcome = {
+      ok: true as const,
       alreadyReleased: false,
       bookingItemId: item.id,
       swappedAssignmentCount: swapped,
-      mode: 'UNITS',
+      mode: 'UNITS' as const,
       quantity: plan.newQuantity,
       status: plan.newStatus,
       unmatchedAssetIds: plan.unmatchedAssetIds,
     }
+    await recordRelease({ item, actor: options.actor, outcome, releasedAssetIds: plan.releaseAssetIds })
+    return outcome
   }
 
   // ── Whole line ───────────────────────────────────────────────────────
@@ -173,19 +265,31 @@ export async function releaseBookingItem(
       where: { bookingItemId: item.id, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
       data: { status: 'SWAPPED' },
     })
-    return {
-      ok: true,
+    const outcome = {
+      ok: true as const,
       alreadyReleased: true,
       bookingItemId: item.id,
       swappedAssignmentCount: healed.count,
-      mode: 'ITEM',
+      mode: 'ITEM' as const,
       quantity: item.quantity,
-      status: 'UNFULFILLED',
+      status: 'UNFULFILLED' as const,
       unmatchedAssetIds: plan?.unmatchedAssetIds ?? [],
     }
+    // Only when something actually moved. A no-op re-release of a line
+    // that is already dead and already swept is noise, and the trail is
+    // only worth reading if every row in it is an event.
+    if (healed.count > 0) {
+      await recordRelease({
+        item,
+        actor: options.actor,
+        outcome,
+        releasedAssetIds: item.assignments.map((a) => a.assetId),
+      })
+    }
+    return outcome
   }
 
-  return prisma.$transaction(async (tx) => {
+  const outcome = await prisma.$transaction(async (tx) => {
     const swapped = await tx.bookingAssignment.updateMany({
       where: { bookingItemId: item.id, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
       data: { status: 'SWAPPED' },
@@ -202,4 +306,11 @@ export async function releaseBookingItem(
       unmatchedAssetIds: plan?.unmatchedAssetIds ?? [],
     }
   })
+  await recordRelease({
+    item,
+    actor: options.actor,
+    outcome,
+    releasedAssetIds: item.assignments.map((a) => a.assetId),
+  })
+  return outcome
 }

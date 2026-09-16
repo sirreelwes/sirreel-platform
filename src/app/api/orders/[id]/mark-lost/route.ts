@@ -167,7 +167,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   // A dead quote must not keep a unit spoken-for (Wes 2026-08-31):
   // release its rank-2 soft holds. Non-fatal like the cadence step —
   // the classification already landed.
-  const releaseResult = await releaseHoldsOnLost(id)
+  const releaseResult = await releaseHoldsOnLost(id, {
+    userId: (session.user as { id?: string }).id ?? null,
+    source: 'order-mark-lost',
+    reason,
+  })
   if (releaseResult.error) {
     console.error('[orders/mark-lost] hold release failed:', releaseResult.error)
   }

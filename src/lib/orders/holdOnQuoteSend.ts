@@ -47,6 +47,7 @@ import { newestFullCoi, OWN_COI_TAKE } from '@/lib/coi/companyCoi'
 import { deriveVehicleScope } from '@/lib/coi/vehicleScope'
 import { companiesWithWalletCards } from '@/lib/payments/jobCardOnFile'
 import { createAgentDirectBooking } from '@/lib/paperwork/ensurePaperworkBooking'
+import { releaseBookingItem, type ReleaseActor } from '@/lib/scheduling/releaseBookingItem'
 import { peakConcurrent, type HoldWindow } from '@/lib/orders/peakConcurrentHold'
 
 export interface HoldOnQuoteResult {
@@ -665,7 +666,13 @@ export async function promoteHoldsOnApproval(orderId: string): Promise<{ promote
  *
  * NON-FATAL by the same contract as the rest of this module.
  */
-export async function releaseHoldsOnLost(orderId: string): Promise<{
+export async function releaseHoldsOnLost(
+  orderId: string,
+  /** Who marked it lost — carried into the release's audit row so a
+   *  hold that came down with a dead quote is attributable like any
+   *  other release. */
+  actor?: ReleaseActor,
+): Promise<{
   released: number
   bookingsCancelled: number
   error: string | null
@@ -695,17 +702,14 @@ export async function releaseHoldsOnLost(orderId: string): Promise<{
         select: { id: true },
       })
       for (const item of items) {
-        await prisma.$transaction([
-          prisma.bookingAssignment.updateMany({
-            where: { bookingItemId: item.id, status: 'ASSIGNED' },
-            data: { status: 'SWAPPED' },
-          }),
-          prisma.bookingItem.update({
-            where: { id: item.id },
-            data: { status: 'UNFULFILLED' },
-          }),
-        ])
-        out.released++
+        // The canonical recipe rather than a second copy of it (2026-09-15):
+        // this path had drifted to sweeping only ASSIGNED assignments, and
+        // it left no audit row, so a quote marked lost took trucks off the
+        // board anonymously.
+        const rel = await releaseBookingItem(item.id, {
+          actor: actor ?? { userId: null, source: 'mark-lost' },
+        })
+        if (rel.ok) out.released++
       }
       // Cancel the booking only when it is still a bare request with
       // nothing live left on it.

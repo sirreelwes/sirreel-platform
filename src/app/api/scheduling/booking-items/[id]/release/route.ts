@@ -1,7 +1,8 @@
 /**
  * POST /api/scheduling/booking-items/[id]/release
  *   body (all optional): { assetId?: string, assetIds?: string[],
- *                          pooledSlots?: number, planyoReservationId?: string }
+ *                          pooledSlots?: number, planyoReservationId?: string,
+ *                          source?: string }
  *
  * Release a hold at any active state.
  *
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
   const actor = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { role: true },
+    select: { id: true, role: true },
   })
   if (!actor || !can(actor.role, 'canCreateBooking')) {
     return NextResponse.json(
@@ -70,6 +71,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         assetIds?: unknown
         pooledSlots?: unknown
         planyoReservationId?: unknown
+        source?: unknown
       }
     | null
   const namedAssets = [
@@ -99,10 +101,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   })
   if (!item) return NextResponse.json({ error: 'booking item not found' }, { status: 404 })
 
-  const outcome = await releaseBookingItem(
-    params.id,
-    namedAssets.length || pooledSlots ? { assetIds: namedAssets, pooledSlots } : {},
-  )
+  // `source` names the SURFACE the rep clicked from — a Gantt bar, the
+  // stale-holds sweep, the Planyo cancellations desk all POST here. It is
+  // the half of "who released this" that the user id cannot answer.
+  const source = typeof body?.source === 'string' && body.source ? body.source.slice(0, 60) : 'release-route'
+  const outcome = await releaseBookingItem(params.id, {
+    ...(namedAssets.length || pooledSlots ? { assetIds: namedAssets, pooledSlots } : {}),
+    actor: { userId: actor.id, source },
+  })
   if (!outcome.ok) {
     return NextResponse.json(
       { error: outcome.code === 'NOT_FOUND' ? 'booking item not found' : 'cannot release', reason: outcome.reason, bookingItemId: params.id },

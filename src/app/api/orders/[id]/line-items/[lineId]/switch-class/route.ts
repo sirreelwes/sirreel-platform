@@ -219,7 +219,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       // vehicle line of that class on the job (project_release_by_asset).
       const mine = oldItem.assignments.slice(0, qty)
       const pooledSlots = Math.max(0, qty - mine.length)
-      const rel = await releaseBookingItem(oldItem.id, { assetIds: mine.map((a) => a.assetId), pooledSlots })
+      const rel = await releaseBookingItem(oldItem.id, {
+        assetIds: mine.map((a) => a.assetId),
+        pooledSlots,
+        actor: {
+          userId: operatorId,
+          source: 'switch-class',
+          reason: `line switched to ${target.description ?? target.code ?? 'another class'}`,
+        },
+      })
       if (rel.ok) released = { units: mine.map((a) => a.asset.unitName), pooledSlots }
       else console.error('[switch-class] old-class release failed:', rel.reason)
     }

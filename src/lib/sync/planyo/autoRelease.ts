@@ -171,7 +171,12 @@ export async function autoReleaseCandidates(events: SyncEvent[]): Promise<AutoRe
 
   for (const t of toRelease) {
     base.attempted++
-    const out = await releaseBookingItem(t.bookingItemId)
+    const out = await releaseBookingItem(t.bookingItemId, {
+      // No user behind this one. Saying so in the trail is the point:
+      // "planyo-auto-release" is a complete answer to "who released it",
+      // and a null actor with no source is not.
+      actor: { userId: null, source: 'planyo-auto-release', reason: `Planyo reservation ${t.rid} cancelled` },
+    })
     if (!out.ok) {
       base.failed.push({ planyoReservationId: t.rid, reason: out.reason })
       continue

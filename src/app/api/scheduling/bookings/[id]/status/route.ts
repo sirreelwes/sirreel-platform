@@ -80,12 +80,19 @@ export async function POST(req: NextRequest, { params }: Params) {
   // untouched. Backups on the same window belong to OTHER bookings and
   // are not affected by cancelling this one.
   let driversReleased = 0;
+  // Captured inside the transaction, audited after it — cancelling a
+  // reservation hands its whole hold back, and that was invisible in the
+  // trail until 2026-09-15. Same action string as every other release
+  // (see lib/scheduling/releaseBookingItem), so one query answers "who
+  // released this" whichever door it came through.
+  let sweptItems: { id: string; status: string; quantity: number }[] = [];
   const updated = await prisma.$transaction(async (tx) => {
     if (target === "CANCELLED") {
       const items = await tx.bookingItem.findMany({
         where: { bookingId: id, status: { in: ["REQUESTED", "ASSIGNED"] } },
-        select: { id: true },
+        select: { id: true, status: true, quantity: true },
       });
+      sweptItems = items;
       if (items.length) {
         const itemIds = items.map((i) => i.id);
         await tx.bookingAssignment.updateMany({
@@ -130,6 +137,38 @@ export async function POST(req: NextRequest, { params }: Params) {
       select: { id: true, status: true },
     });
   });
+  // One row per line the cancellation handed back. Non-fatal, after the
+  // fact — a logging outage must not roll back a cancellation the rep
+  // already saw succeed.
+  if (sweptItems.length) {
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      select: { bookingNumber: true, jobName: true, jobId: true },
+    });
+    await prisma.auditLog
+      .createMany({
+        data: sweptItems.map((it) => ({
+          userId: actor.id,
+          action: "booking_item.released",
+          entityType: "BookingItem",
+          entityId: it.id,
+          oldValues: { status: it.status, quantity: it.quantity },
+          newValues: {
+            status: "UNFULFILLED",
+            quantity: it.quantity,
+            mode: "ITEM",
+            alreadyReleased: false,
+            bookingNumber: booking?.bookingNumber ?? null,
+            jobName: booking?.jobName ?? null,
+            jobId: booking?.jobId ?? null,
+            source: "booking-cancelled",
+            reason: null,
+          },
+        })),
+      })
+      .catch((err) => console.error("[bookings/status] audit failed:", err));
+  }
+
   // Surfaced so the caller can say "3 drivers lost access" rather than the
   // change happening silently.
   return NextResponse.json({ ok: true, status: updated.status, driversReleased });

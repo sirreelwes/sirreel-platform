@@ -110,7 +110,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   // outside the transaction and non-fatal, same contract as the order-
   // level route. WON siblings' promoted (rank-1) holds are untouched.
   for (const orderId of lostOrderIds) {
-    const releaseResult = await releaseHoldsOnLost(orderId);
+    const releaseResult = await releaseHoldsOnLost(orderId, {
+      userId,
+      source: 'job-mark-lost',
+      reason,
+    });
     if (releaseResult.error) {
       console.error('[jobs/mark-lost] hold release failed:', orderId, releaseResult.error);
     }

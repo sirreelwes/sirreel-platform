@@ -379,10 +379,10 @@ export async function releaseJobHolds(
       const namedOnly = !sel.wholeLine && (liveAssetIds.length > 0 || pooledSlots > 0)
       if (!sel.wholeLine && !namedOnly) continue // every row on it was stale
 
-      const outcome = await releaseBookingItem(
-        item.id,
-        namedOnly ? { assetIds: liveAssetIds, pooledSlots } : {},
-      )
+      const outcome = await releaseBookingItem(item.id, {
+        ...(namedOnly ? { assetIds: liveAssetIds, pooledSlots } : {}),
+        actor: { userId: actorId, source: 'job-holds' },
+      })
       if (!outcome.ok) {
         out.skipped.push(...sel.rowIds)
         continue
@@ -394,23 +394,10 @@ export async function releaseJobHolds(
         : liveAssetIds.length + (pooledSlots > 0 ? 1 : 0)
       out.unitsFreed += outcome.swappedAssignmentCount
       touchedBookings.add(item.bookingId)
-      await prisma.auditLog.create({
-        data: {
-          action: 'job.hold_released',
-          entityType: 'BookingItem',
-          entityId: item.id,
-          userId: actorId,
-          oldValues: { status: item.status, holdRank: item.holdRank, quantity: item.quantity },
-          newValues: {
-            status: outcome.status,
-            quantity: outcome.quantity,
-            mode: outcome.mode,
-            releasedAssetIds: namedOnly ? liveAssetIds : assignedIds,
-            assignmentsSwapped: outcome.swappedAssignmentCount,
-            jobId,
-          },
-        },
-      }).catch(() => {})
+      // The audit row is written by releaseBookingItem itself as of
+      // 2026-09-15 — one action string ('booking_item.released') for every
+      // release surface, where this path used to be the only one that left
+      // any trace at all. Historic rows keep reading 'job.hold_released'.
     }
 
     // A reservation with nothing live left on it is not a reservation.
