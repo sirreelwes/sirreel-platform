@@ -99,7 +99,13 @@ export function JobDriversSection({
    *  the calendar deep link, which a phone cannot use — see the job page. */
   onAssign?: (bookingItemId: string) => void
 }) {
-  const [formOpen, setFormOpen] = useState(false)
+  // WHERE the form is open, not just whether. It used to render only at
+  // the top of the card, so "+ Name a driver" on the fourth unit opened a
+  // form the rep could not see and the click read as a dead button (Wes
+  // 2026-09-15, Pass 10 on SR-JOB-0273). 'HEADER' is the card-level
+  // button; anything else is that row's own id and renders under it.
+  const [openFor, setOpenFor] = useState<string | null>(null)
+  const formOpen = openFor !== null
   const [target, setTarget] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   // Text or email — the crew rarely has a driver's address and always has
@@ -112,7 +118,18 @@ export function JobDriversSection({
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
-  const only = vehicles.length === 1 ? vehicles[0].bookingAssignmentId : null
+  // A rental that is over is HISTORY: nobody names a driver onto a van
+  // that came back. Its drivers stay on the row — who took it is the
+  // record — but it offers no invite and is not a target (Wes
+  // 2026-09-15: Pass 10's Sep 3 trip still asked for a driver).
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+  const isOver = (v: Vehicle) =>
+    !!v.unitReturned || !!(v.endDate && v.endDate.slice(0, 10) < today)
+  const nameable = vehicles.filter((v) => !isOver(v))
+
+  const only = nameable.length === 1 ? nameable[0].bookingAssignmentId : null
 
   // One vehicle on the job means there is no choice to make — preselect it
   // so the prompt reads as a confirmation rather than a one-option quiz.
@@ -121,13 +138,13 @@ export function JobDriversSection({
   }, [formOpen, only, target])
 
   const openForm = useCallback((preselect?: string) => {
-    setFormOpen(true)
+    setOpenFor(preselect ?? 'HEADER')
     setTarget(preselect ?? only ?? null)
     setErr(null); setMsg(null)
   }, [only])
 
   const closeForm = useCallback(() => {
-    setFormOpen(false); setTarget(null); setEmail(''); setPhone(''); setFirst('')
+    setOpenFor(null); setTarget(null); setEmail(''); setPhone(''); setFirst('')
   }, [])
 
   async function removeDriver(driverAssignmentId: string, name: string) {
@@ -205,51 +222,10 @@ export function JobDriversSection({
   // Nothing reserved at all — there is genuinely nothing to say here.
   if (vehicles.length === 0 && pendingHolds.length === 0) return null
 
-  return (
-    <div id="drivers" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
-      <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Drivers</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-zinc-600">{vehicles.length} unit{vehicles.length === 1 ? '' : 's'}</span>
-          {vehicles.length > 0 && (
-            <button
-              type="button"
-              onClick={() => (formOpen ? closeForm() : openForm())}
-              className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
-            >
-              {formOpen ? 'Cancel' : '+ Name a driver'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {msg && <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{msg}</div>}
-      {err && <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">{err}</div>}
-
-      {/* Units with no driver, and the client is the one who knows. The
-          ask lands on the drivers section of their portal; the driver
-          then gets their own link and uploads their own licence. */}
-      {jobId && vehicles.some((v) => v.drivers.length === 0) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <div className="min-w-0 text-[12px] text-amber-900">
-            {driverRequest
-              ? <>Asked <span className="font-semibold">{driverRequest.sentTo}</span> on {new Date(driverRequest.sentAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — no driver named yet.</>
-              : <>Don&rsquo;t have the driver&rsquo;s email? Ask {askContactName || 'the client'} to add it from their portal — the driver uploads their own licence.</>}
-          </div>
-          <button
-            type="button"
-            onClick={askClient}
-            disabled={asking || busy}
-            className="min-h-[40px] rounded-lg bg-amber-600 px-3 text-[12px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
-          >
-            {asking ? 'Sending…' : driverRequest ? 'Ask again' : `Ask ${askContactName ? askContactName.split(' ')[0] : 'the client'} to name the driver`}
-          </button>
-        </div>
-      )}
-
-      {/* Driver first, vehicle second — the order the information actually
-          arrives in. */}
-      {formOpen && vehicles.length > 0 && (
+  // The invite form itself. Rendered EITHER under the row whose button
+  // was pressed or, from the card-level button, at the top — one
+  // definition so the two can never drift.
+  const inviteForm = (
         <div className="mb-3 rounded-xl border border-zinc-300 bg-zinc-50 p-3">
           {/* How the link travels. Text is here because half the roster
               has no email on file and a rep on the phone with a driver
@@ -284,18 +260,18 @@ export function JobDriversSection({
               They get the link by text and add their own email and licence on the page it opens.
             </p>
           )}
-
+  
           <div className="mt-2.5">
             <div className="text-[12px] font-semibold text-zinc-700">Assign this driver to:</div>
             {only ? (
               <div className="mt-1 text-[13px] text-zinc-900">
-                {vehicles[0].unitName}
-                <span className="text-zinc-600"> · {vehicles[0].category}</span>
-                {dateRange(vehicles[0]) && <span className="text-zinc-600"> · {dateRange(vehicles[0])}</span>}
+                {nameable[0].unitName}
+                <span className="text-zinc-600"> · {nameable[0].category}</span>
+                {dateRange(nameable[0]) && <span className="text-zinc-600"> · {dateRange(nameable[0])}</span>}
               </div>
             ) : (
               <div className="mt-1.5 space-y-1">
-                {vehicles.map((v) => (
+                {nameable.map((v) => (
                   <label
                     key={v.bookingAssignmentId}
                     className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors ${
@@ -326,7 +302,7 @@ export function JobDriversSection({
               </div>
             )}
           </div>
-
+  
           <div className="mt-2.5 flex items-center gap-2">
             <button onClick={invite} disabled={busy || !target || !(channel === 'SMS' ? phone.trim() : email.trim())}
               className="rounded-lg bg-amber-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
@@ -338,7 +314,53 @@ export function JobDriversSection({
             </button>
           </div>
         </div>
+  )
+
+  return (
+    <div id="drivers" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+      <div className="flex items-center justify-between mb-2.5">
+        <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Drivers</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-zinc-600">{vehicles.length} unit{vehicles.length === 1 ? '' : 's'}</span>
+          {nameable.length > 0 && (
+            <button
+              type="button"
+              onClick={() => (formOpen ? closeForm() : openForm())}
+              className="text-[13px] font-semibold text-amber-700 hover:text-amber-700"
+            >
+              {formOpen ? 'Cancel' : '+ Name a driver'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {msg && <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{msg}</div>}
+      {err && <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">{err}</div>}
+
+      {/* Units with no driver, and the client is the one who knows. The
+          ask lands on the drivers section of their portal; the driver
+          then gets their own link and uploads their own licence. */}
+      {jobId && nameable.some((v) => v.drivers.length === 0) && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <div className="min-w-0 text-[12px] text-amber-900">
+            {driverRequest
+              ? <>Asked <span className="font-semibold">{driverRequest.sentTo}</span> on {new Date(driverRequest.sentAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — no driver named yet.</>
+              : <>Don&rsquo;t have the driver&rsquo;s email? Ask {askContactName || 'the client'} to add it from their portal — the driver uploads their own licence.</>}
+          </div>
+          <button
+            type="button"
+            onClick={askClient}
+            disabled={asking || busy}
+            className="min-h-[40px] rounded-lg bg-amber-600 px-3 text-[12px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
+          >
+            {asking ? 'Sending…' : driverRequest ? 'Ask again' : `Ask ${askContactName ? askContactName.split(' ')[0] : 'the client'} to name the driver`}
+          </button>
+        </div>
       )}
+
+      {/* Driver first, vehicle second — the order the information actually
+          arrives in. */}
+      {openFor === 'HEADER' && nameable.length > 0 && inviteForm}
 
       <div className="space-y-2">
         {vehicles.map((v) => (
@@ -351,13 +373,27 @@ export function JobDriversSection({
                   {dateRange(v) && <span className="text-zinc-600"> · {dateRange(v)}</span>}
                 </div>
               </div>
-              <button
-                onClick={() => openForm(v.bookingAssignmentId)}
-                className="flex-shrink-0 text-[13px] font-semibold text-amber-700 hover:text-amber-700"
-              >
-                {v.drivers.length ? '+ Another' : '+ Name a driver'}
-              </button>
+              {isOver(v) ? (
+                /* Came back (or the dates have passed). Who drove it stays
+                   below; there is nobody left to invite. */
+                <span className="flex-shrink-0 text-[12px] text-zinc-500">
+                  {v.unitReturned ? 'Returned' : 'Rental ended'}
+                </span>
+              ) : (
+                <button
+                  onClick={() => (openFor === v.bookingAssignmentId ? closeForm() : openForm(v.bookingAssignmentId))}
+                  className="flex-shrink-0 text-[13px] font-semibold text-amber-700 hover:text-amber-700"
+                >
+                  {openFor === v.bookingAssignmentId
+                    ? 'Cancel'
+                    : v.drivers.length ? '+ Another' : '+ Name a driver'}
+                </button>
+              )}
             </div>
+
+            {/* Opened from THIS row — so the form is where the rep just
+                pressed, not scrolled off the top of the card. */}
+            {openFor === v.bookingAssignmentId && <div className="mt-2.5">{inviteForm}</div>}
 
             {v.drivers.length > 0 && (
               <div className="mt-2 space-y-1.5">
