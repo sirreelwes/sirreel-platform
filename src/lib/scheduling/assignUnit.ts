@@ -57,6 +57,12 @@ export interface AssignUnitArgs {
    * binds the replacement.
    */
   replaceAssetId?: string | null
+  /**
+   * Who is picking, for the audit row a REVIVED line writes. Same shape
+   * as a release's actor (lib/scheduling/releaseBookingItem) so the two
+   * halves of a hold's life read alike in the trail.
+   */
+  actor?: { userId?: string | null; source: string }
 }
 
 export interface AssignedUnit {
@@ -102,6 +108,19 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     },
   })
   if (!bookingItem) return refuse(404, { error: 'booking item not found' })
+
+  // SUBSTITUTED is the one state a pick must not touch. The line was
+  // replaced by another line, so binding a truck here would hold the
+  // same demand twice — once on the substitute, once on a row nothing
+  // reads. releaseBookingItem refuses it for the mirror-image reason.
+  // (UNFULFILLED is NOT refused: see the revive at the write below.)
+  if (bookingItem.status === 'SUBSTITUTED') {
+    return refuse(409, {
+      ok: false,
+      error: 'item-substituted',
+      reason: 'that line was substituted out — pick the unit on the line that replaced it',
+    })
+  }
 
   // ── The outgoing unit, on a swap ──────────────────────────────────
   // Resolved first: it must not count against capacity, must not crowd
@@ -373,13 +392,63 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     // Counted for THIS window — the item is "assigned" when the block being
     // booked has its trucks, not when some other date block does.
     const newAssignedCount = occupying.length + 1
+    const covered = newAssignedCount >= bookingItem.quantity
     let updatedItemStatus: string = bookingItem.status
-    if (newAssignedCount >= bookingItem.quantity && bookingItem.status === 'REQUESTED') {
+    // A RELEASED line that someone is now picking a unit for is being
+    // re-asserted — so say so on the line, don't leave the truck bound to
+    // a dead row.
+    //
+    // This used to fall through: the status write only ever fired on
+    // REQUESTED, so an assign onto an UNFULFILLED line created a live
+    // ASSIGNED assignment and left the line released. SR-JOB-0391 spent
+    // 2026-09-15 that way — Cargo 35 bound for the morning under a job
+    // the board painted "Released — nothing is still held", because
+    // holdsFullyReleased reads the LINE and the yard reads the
+    // ASSIGNMENT. Capacity was counted from neither.
+    //
+    // Revived to ASSIGNED only when this window is actually covered;
+    // otherwise REQUESTED, which puts it back in the assign lane where a
+    // part-covered line belongs. The whole-line release is reversible by
+    // definition (nothing else undoes one — `promote` refuses an
+    // UNFULFILLED row), so refusing here would strand the rep instead.
+    if (bookingItem.status === 'UNFULFILLED') {
+      const revived = covered ? ('ASSIGNED' as const) : ('REQUESTED' as const)
+      await tx.bookingItem.update({ where: { id: bookingItem.id }, data: { status: revived } })
+      updatedItemStatus = revived
+    } else if (covered && bookingItem.status === 'REQUESTED') {
       await tx.bookingItem.update({ where: { id: bookingItem.id }, data: { status: 'ASSIGNED' } })
       updatedItemStatus = 'ASSIGNED'
     }
     return { created, newAssignedCount, updatedItemStatus }
   })
+
+  // The mirror of 'booking_item.released'. A hold coming BACK is as much
+  // of an event as one going away, and without this the trail would show
+  // a release with no matching revival and a line that is somehow live
+  // again. Non-fatal and after the fact, same contract as the release.
+  if (bookingItem.status === 'UNFULFILLED') {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: args.actor?.userId ?? null,
+          action: 'booking_item.revived_by_assign',
+          entityType: 'BookingItem',
+          entityId: bookingItem.id,
+          oldValues: { status: 'UNFULFILLED', quantity: bookingItem.quantity },
+          newValues: {
+            status: result.updatedItemStatus,
+            quantity: bookingItem.quantity,
+            assignedCount: result.newAssignedCount,
+            unit: asset.unitName,
+            orderId: attachOrderId,
+            source: args.actor?.source ?? 'unattributed',
+          },
+        },
+      })
+    } catch (err) {
+      console.error('[assignUnit] revive audit failed:', err instanceof Error ? err.message : err)
+    }
+  }
 
   return {
     ok: true,

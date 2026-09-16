@@ -172,6 +172,7 @@ export async function assignUnitsForLine(args: {
       for (const assetId of (args.request.assetIds ?? []).slice(0, want)) {
         if (taken.has(assetId)) continue
         const res = await assignUnitToBookingItem({
+          actor: { userId: null, source: 'order-line-add' },
           bookingItemId: item.id,
           assetId,
           bufferOverride: true,
@@ -216,6 +217,7 @@ export async function assignUnitsForLine(args: {
         return out
       }
       const res = await assignUnitToBookingItem({
+        actor: { userId: null, source: 'order-line-add' },
         bookingItemId: item.id,
         assetId: next.assetId,
         orderId: order.id,

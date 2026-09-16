@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const actor = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { role: true },
+    select: { id: true, role: true },
   })
   if (!actor || !can(actor.role, 'canCreateBooking')) {
     return NextResponse.json(
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     windowStart: body.windowStart,
     windowEnd: body.windowEnd,
     replaceAssetId: body.replaceAssetId,
+    actor: { userId: actor.id, source: 'assign-route' },
   })
   if (!result.ok) return NextResponse.json(result.body, { status: result.status })
 
