@@ -13,7 +13,7 @@
  * requests for panels nobody has looked at.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronRight, Eye, FileCheck2, ShieldCheck, Users } from 'lucide-react'
 
@@ -35,6 +35,7 @@ export function CompanyPortalRow({
   coiAwaiting = 0,
   peopleCount,
   uninvited,
+  defaultOpen = false,
   children,
 }: {
   companyId: string
@@ -47,13 +48,21 @@ export function CompanyPortalRow({
   coiAwaiting?: number
   peopleCount: number
   uninvited: number
+  /** Arrive open and scrolled to — the New portal button lands here so the
+   *  logo and invite are the next thing on screen. */
+  defaultOpen?: boolean
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(false)
-  const [everOpened, setEverOpened] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
+  const [everOpened, setEverOpened] = useState(defaultOpen)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (defaultOpen) rootRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [defaultOpen])
 
   return (
-    <div className="bg-lt-card border border-lt-hairline rounded-xl">
+    <div ref={rootRef} className="bg-lt-card border border-lt-hairline rounded-xl scroll-mt-4">
       {/* The header is a toggle BUTTON plus one sibling link — "See what
           they see" (Wes 2026-09-06) must not nest inside the button, so the
           row is a flex of the two. */}

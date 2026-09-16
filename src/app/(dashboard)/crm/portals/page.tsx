@@ -29,6 +29,7 @@ import { canEditCompanyTerms } from '@/lib/portal/companyTermsEditors'
 import { CompanyDiscountsPanel } from '@/components/crm/CompanyDiscountsPanel'
 import { CompanyPortalAccessPanel } from '@/components/crm/CompanyPortalAccessPanel'
 import { CompanyPortalRow, type ChipTone } from '@/components/crm/CompanyPortalRow'
+import { NewCompanyPortalButton, type DealSource } from '@/components/crm/NewCompanyPortalButton'
 import { CompanyCoiReviewList } from '@/components/crm/CompanyCoiReviewList'
 import { staffAccountCois, type StaffAccountCoiState } from '@/lib/portal/companyPortalCois'
 import { PortalsTabs } from '@/components/crm/PortalsTabs'
@@ -90,7 +91,7 @@ function coiChip(
   return { tone: 'neutral', label: 'COI per job' }
 }
 
-export default async function CompanyPortalsPage() {
+export default async function CompanyPortalsPage({ searchParams }: { searchParams?: { open?: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) redirect('/login')
   const canEdit = canEditCompanyTerms(session.user.email)
@@ -106,14 +107,22 @@ export default async function CompanyPortalsPage() {
       id: true,
       name: true,
       logoUrl: true,
+      // A vector mark (logoSvg) is a logo too — Happy Place, Smuggler.
+      logoSvg: true,
       coiOnFile: true,
       coiExpiry: true,
       portalAccesses: {
         where: { revokedAt: null },
         select: { id: true, invitedAt: true },
       },
+      _count: { select: { negotiatedRates: true, discounts: { where: { isActive: true } } } },
     },
   })
+
+  // "Same deal as …" on the New portal button: every account that has one.
+  const dealSources: DealSource[] = companies
+    .filter((c) => c._count.negotiatedRates + c._count.discounts > 0)
+    .map((c) => ({ companyId: c.id, name: c.name, rates: c._count.negotiatedRates, discounts: c._count.discounts }))
 
   const coiStates = await staffAccountCois(companies.map((c) => c.id), now)
   const noCois: StaffAccountCoiState = { awaiting: [], approved: [], coveringThrough: null }
@@ -347,6 +356,7 @@ export default async function CompanyPortalsPage() {
         </div>
         {/* The other direction: this page is who HAS a portal, and the
             template is how the rest get offered one. */}
+        <div className="shrink-0 flex flex-wrap items-center justify-end gap-2">
         <Link
           href="/outreach?template=exec-portal-invite"
           className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-lt-hairline text-sm text-lt-fg2 hover:border-lt-fg2 hover:text-lt-fg"
@@ -354,6 +364,8 @@ export default async function CompanyPortalsPage() {
           <Send className="w-4 h-4" />
           Invite more executives
         </Link>
+        {canEdit && <NewCompanyPortalButton dealSources={dealSources} />}
+        </div>
       </div>
 
       <PortalsTabs
@@ -367,8 +379,7 @@ export default async function CompanyPortalsPage() {
                 <div className="bg-lt-card border border-lt-hairline rounded-xl p-8 text-center">
                   <Building2 className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
                   <p className="text-sm text-lt-fg2">
-                    No client has a portal yet. Open a company under Clients and use &ldquo;Account
-                    portal access&rdquo; to add their executives.
+                    No client has a portal yet. Use &ldquo;New portal&rdquo; above to open one.
                   </p>
                 </div>
               }
@@ -379,7 +390,8 @@ export default async function CompanyPortalsPage() {
             <CompanyPortalRow
               companyId={c.id}
               name={c.name}
-              hasLogo={!!c.logoUrl}
+              defaultOpen={searchParams?.open === c.id}
+              hasLogo={!!(c.logoUrl || c.logoSvg)}
               annual={c.annualChip}
               coi={c.coiChip}
               coiAwaiting={c.coiState.awaiting.length}
@@ -391,7 +403,7 @@ export default async function CompanyPortalsPage() {
               <CompanyPortalAccessPanel
                 companyId={c.id}
                 companyName={c.name}
-                hasLogo={!!c.logoUrl}
+                hasLogo={!!(c.logoUrl || c.logoSvg)}
                 canEdit={canEdit}
               />
             </CompanyPortalRow>
