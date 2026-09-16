@@ -20,7 +20,7 @@ export const WALKAROUND_CREW: readonly string[] = ['Julian', 'Andy', 'Frankie']
 
 /** The warehouse floor (Wes 2026-09-16) — pulls, check-out sheets, and the
  *  driver's last-minute add-ons. Same rule: one tap, never the login. */
-export const WAREHOUSE_CREW: readonly string[] = ['Albert', 'Carlos', 'Hugo', 'Pedro', 'Oscar']
+export const WAREHOUSE_CREW: readonly string[] = ['Albert', 'Carlos', 'Hugo', 'Pedro', 'Oscar', 'Salvador']
 
 const MAX_LEN = 60
 
