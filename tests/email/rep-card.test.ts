@@ -22,7 +22,7 @@ import {
   CANDID_FRESH_DAYS,
   type RepCard,
 } from '../../src/lib/email/repCard'
-import { repCardVisibleFor, isRepCardTester } from '../../src/lib/email/repCardRollout'
+import { repCardVisibleFor, isRepCardTester, maySendThankYou } from '../../src/lib/email/repCardRollout'
 import { buildJobWelcomeEmail } from '../../src/lib/email/templates/jobWelcome'
 
 const failures: string[] = []
@@ -138,6 +138,18 @@ eq(repCardVisibleFor('wes@sirreel.com', true), true, 'live: the tester too')
 eq(repCardVisibleFor(null, false), false, 'no agent email → no card')
 eq(repCardVisibleFor(undefined, false), false, 'undefined → no card')
 eq(repCardVisibleFor('', true), true, 'live is live even with no agent email')
+
+console.log('\nthe same switch holds the thank-you SEND')
+eq(maySendThankYou('jose@sirreel.com', false), false, 'dark: a rep cannot send one yet')
+eq(maySendThankYou('oliver@sirreel.com', false), false, 'dark: nor the other rep')
+eq(maySendThankYou('wes@sirreel.com', false), true, 'dark: the tester can')
+eq(maySendThankYou('jose@sirreel.com', true), true, 'live: the team can send')
+eq(maySendThankYou(null, false), false, 'no session email → held')
+eq(
+  maySendThankYou('dani@sirreel.com', false),
+  false,
+  'dark: ADMIN is not the test — the copy is still PLACEHOLDER',
+)
 
 console.log('\nthe tester list is an EMAIL allowlist, not a role')
 eq(isRepCardTester('wes@sirreel.com'), true, 'Wes')

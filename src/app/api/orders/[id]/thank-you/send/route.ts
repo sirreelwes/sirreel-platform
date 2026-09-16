@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { SEND_FROM, sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
 import { parsePhotoSource, resolveThankYouPhoto } from '@/lib/orders/thankYouPhoto'
+import { repCardEnabled, maySendThankYou, THANK_YOU_HELD_MESSAGE } from '@/lib/email/repCardRollout'
 import { ThankYouStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -46,6 +47,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     select: { id: true },
   })
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  // The rollout gate. While the thank-you is still being tested only a
+  // tester may send one — its copy is still marked PLACEHOLDER and nothing
+  // has ever gone out through it. Preview is deliberately NOT gated:
+  // reading it is how the wording gets reviewed. One switch, shared with
+  // the welcome email's rep card (src/lib/email/repCardRollout.ts).
+  if (!maySendThankYou(session.user.email, await repCardEnabled())) {
+    return NextResponse.json({ error: THANK_YOU_HELD_MESSAGE }, { status: 403 })
+  }
 
   const { id } = await params
   const body = await req.json().catch(() => ({})) as {

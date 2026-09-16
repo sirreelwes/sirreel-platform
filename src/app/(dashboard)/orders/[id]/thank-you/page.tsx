@@ -81,6 +81,9 @@ export default function ThankYouComposePage() {
   // which is exactly why the candid never reached a client's inbox.
   const [weeklyCandid, setWeeklyCandid] = useState<{ photoUrl: string; capturedAt: string; ageDays: number | null } | null>(null)
   const [viewerIsAgent, setViewerIsAgent] = useState(false)
+  // The rollout gate. While the thank-you is still being tested only a
+  // tester may send; previewing stays open so the copy can be reviewed.
+  const [sendGate, setSendGate] = useState<{ enabled: boolean; viewerMaySend: boolean; message: string } | null>(null)
   const [preview, setPreview] = useState<PreviewResp | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -104,6 +107,8 @@ export default function ThankYouComposePage() {
       setItem(hit)
       setPersonalNote(hit.personalNote ?? '')
       setPickedPhotoId(hit.photoDocumentId)
+
+      setSendGate(data.sendGate ?? null)
 
       const agentId: string | null = hit.agent?.id ?? null
       setViewerIsAgent(!!agentId && agentId === data.viewerId)
@@ -295,6 +300,15 @@ export default function ThankYouComposePage() {
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900 mb-4">
         PLACEHOLDER COPY — needs Wes review before first real send. Template structural shell is final; subject line and body prose are starter drafts. Search for <code>[[PLACEHOLDER]]</code> in <code>src/lib/email/templates/thankYouTemplate.ts</code>.
       </div>
+
+      {/* The rollout hold, said up front — a rep who writes a note and only
+          then hits a 403 on Send has wasted their time and lost the note. */}
+      {sendGate?.viewerMaySend === false && (
+        <div className="bg-gray-100 border border-gray-300 rounded p-3 text-sm text-gray-800 mb-4">
+          <div className="font-semibold">Sending is on hold</div>
+          <div className="mt-0.5 text-[13px] leading-snug">{sendGate.message}</div>
+        </div>
+      )}
 
       {item && (
         <div className="mb-4">
@@ -509,10 +523,11 @@ export default function ThankYouComposePage() {
             <button
               type="button"
               onClick={send}
-              disabled={sending || !preview || item?.status === 'SENT'}
+              disabled={sending || !preview || item?.status === 'SENT' || sendGate?.viewerMaySend === false}
+              title={sendGate?.viewerMaySend === false ? sendGate.message : undefined}
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded disabled:opacity-50"
             >
-              {sending ? 'Sending…' : 'Review & send'}
+              {sending ? 'Sending…' : sendGate?.viewerMaySend === false ? 'Sending is on hold' : 'Review & send'}
             </button>
             <button
               type="button"

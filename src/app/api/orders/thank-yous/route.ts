@@ -12,6 +12,9 @@
  *     viewer's: the photo sits above a sign-off in the agent's name.
  *     `viewerId` is returned alongside so the compose page knows whether
  *     the person looking IS that agent — only they can upload a new one.
+ *   - sendGate: whether thank-you sending is live yet, and whether THIS
+ *     viewer may send while it is being tested. The compose page reads it so
+ *     a blocked rep sees why up front instead of a 403 after writing a note.
  *   - wrap date (Order.endDate) + age days
  *   - warn flags: open Incident on the order, unresolved L&D
  *
@@ -31,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { OrderDocType, ThankYouStatus } from '@prisma/client'
+import { repCardEnabled, maySendThankYou, THANK_YOU_HELD_MESSAGE } from '@/lib/email/repCardRollout'
 
 export const dynamic = 'force-dynamic'
 
@@ -179,9 +183,16 @@ export async function GET(req: NextRequest) {
     _count: { _all: true },
   })
 
+  const sendEnabled = await repCardEnabled()
+
   return NextResponse.json({
     items,
     viewerId: user.id,
+    sendGate: {
+      enabled: sendEnabled,
+      viewerMaySend: maySendThankYou(session.user.email, sendEnabled),
+      message: THANK_YOU_HELD_MESSAGE,
+    },
     counts: counts.reduce<Record<string, number>>((acc, c) => {
       acc[c.status] = c._count._all
       return acc

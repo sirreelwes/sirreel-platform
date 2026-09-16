@@ -82,10 +82,13 @@ export default function WhoWeAreAdminPage() {
   async function toggleRepCard() {
     const next = !repCardEnabled
     if (next && !confirm(
-      'Turn the rep photo on for the whole team?\n\n' +
-      'Every welcome email from an agent who has a candid will carry their ' +
-      'photo, name, title and number. Only do this once you have sent ' +
-      'yourself one and read it in a real inbox.'
+      'Turn this on for the whole team?\n\n' +
+      'Two things go live at once:\n' +
+      '  • every welcome email from an agent with a candid carries their ' +
+      'photo, name, title and number\n' +
+      '  • the team can send post-job thank-you emails\n\n' +
+      'Only do this once you have sent yourself both and read them in a ' +
+      'real inbox — the thank-you copy is still marked PLACEHOLDER.'
     )) return
     try {
       await post({ action: 'set-rep-card', enabled: next })
@@ -200,11 +203,11 @@ export default function WhoWeAreAdminPage() {
       <section className="mt-3 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold">Rep photo on client emails</div>
+            <div className="text-sm font-semibold">Rep photos on client emails</div>
             <div className="text-xs text-zinc-500 mt-0.5">
               {repCardEnabled
-                ? 'LIVE for the team — every agent with a candid gets their photo, title and number above the button on the welcome email.'
-                : 'Testing. Only your own jobs carry the card; nothing changes for the rest of the team.'}
+                ? 'LIVE for the team — welcome emails carry the agent\u2019s photo, title and number, and anyone can send a post-job thank-you.'
+                : 'Testing. Welcome emails carry the card only on your own jobs, and only you can send a thank-you. Nothing changes for the rest of the team.'}
             </div>
           </div>
           <button
@@ -220,7 +223,9 @@ export default function WhoWeAreAdminPage() {
           <ol className="mt-3 space-y-1 border-t border-zinc-800 pt-3 text-xs text-zinc-400 list-decimal list-inside">
             <li>Take a candid from the prompt at the top of any HQ page.</li>
             <li>Open a job where you are the agent and send yourself the welcome email.</li>
-            <li>Read it on your phone and on desktop &mdash; check the photo actually loads.</li>
+            <li>Send yourself a thank-you too, from the queue on your dashboard.</li>
+            <li>Read both on your phone and on desktop &mdash; check the photo actually loads.</li>
+            <li>Fix the thank-you&rsquo;s placeholder wording.</li>
             <li>Happy? Flip this on.</li>
           </ol>
         )}
