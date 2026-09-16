@@ -820,6 +820,15 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
     {
       label: 'Admin',
       items: [
+        // FIRST in Admin on purpose (Wes 2026-09-16: "move it up so it's
+        // easier to find"). It had been 17th of 20 in the last section of
+        // the nav — the bottom of ~44 items, which is a long scroll on an
+        // iPad, and this is the surface someone reaches for when they are
+        // away from a laptop and cannot fall back to a terminal.
+        // id is NOT 'maintenance': that belongs to the vehicle Maintenance
+        // page, and badgeCounts is keyed by nav id — sharing it would light
+        // this row up with a count of trucks due for service.
+        { id: 'run-task', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
         { id: 'fleet-pricing', label: 'Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
         { id: 'fees', label: 'Fees', icon: 'Receipt', href: '/admin/fees' },
@@ -838,13 +847,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // What clients can find on the order form + site search. The
         // publicVisible flag had no UI at all until 2026-09-09.
         { id: 'public-catalog', label: 'Public Catalog', icon: 'Eye', href: '/admin/public-catalog' },
-        // Seeds and backfills that used to need a laptop and a terminal
-        // (Wes 2026-09-16, working from an iPad). Registry-gated, dry-run
-        // first, audited; no schema changes.
-        // id is NOT 'maintenance': that belongs to the vehicle Maintenance
-        // page, and badgeCounts is keyed by nav id — sharing it would light
-        // this row up with a count of trucks due for service.
-        { id: 'run-task', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
         // Payroll. Email-gated like Data Exports, NOT role-gated: ADMIN is
