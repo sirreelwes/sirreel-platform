@@ -166,6 +166,29 @@ export function VendorAccountView({ v, token, preview = false }: { v: View; toke
           </section>
         </div>
 
+        {/* The walkthrough, on their own page rather than a PDF nobody keeps
+            (Wes 2026-09-15). Sits above the people list because that is where
+            a new partner stops reading and starts setting themselves up. */}
+        <section style={{ ...CARD, marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+            <div style={{ ...H2, margin: 0, fontSize: 18 }}>New to working with us?</div>
+            <p style={{ fontSize: 14, color: '#6b6560', margin: '4px 0 0', lineHeight: 1.55 }}>
+              A booking end to end — the emails you get, what we need back, what you&apos;re paid, and the paperwork.
+            </p>
+          </div>
+          <a
+            href={preview ? undefined : `/vendor/account/${token}/how-it-works`}
+            aria-disabled={preview}
+            style={{
+              background: '#0F7A93', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 700,
+              padding: '10px 20px', borderRadius: 999, whiteSpace: 'nowrap',
+              opacity: preview ? 0.5 : 1, pointerEvents: preview ? 'none' : 'auto',
+            }}
+          >
+            See how it would work &rarr;
+          </a>
+        </section>
+
         {/* Their own people — owner, accounting, dispatch (Wes 2026-09-11). */}
         <VendorContactsCard token={token} preview={preview} />
 
