@@ -73,7 +73,15 @@ interface CandidateOrder {
 
 interface PickerData {
   ok: boolean
-  bookingItem: { id: string; quantity: number; status: string; assignedCount: number; remaining: number }
+  bookingItem: {
+    id: string
+    quantity: number
+    status: string
+    assignedCount: number
+    remaining: number
+    /** 1 = primary, ≥2 = a backup queued behind one. */
+    holdRank?: number
+  }
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
   orderId: string | null
   category: { id: string; name: string; slug: string }
@@ -414,6 +422,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
           a.endDate.slice(0, 10) >= data.window.start.slice(0, 10))),
   )
   const isFull = !!data && data.bookingItem.remaining === 0
+  /** This hold is queued BEHIND another one (2nd / 3rd). It is allowed to
+   *  point at a unit that is already out — see the candidate list. */
+  const isBackupItem = (data?.bookingItem.holdRank ?? 1) >= 2
   const unitNameOf = (assetId: string) =>
     data?.currentAssignments.find((a) => a.asset.id === assetId)?.asset.unitName ?? 'the current unit'
 
@@ -700,17 +711,30 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                   trucks. */}
               <section>
                 <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">
-                  {isFull ? 'Swap in a different unit · best first' : 'Available units · best first'}
+                  {isFull
+                    ? 'Swap in a different unit · best first'
+                    : isBackupItem
+                      ? 'Which unit is this hold queued behind? · best first'
+                      : 'Available units · best first'}
                 </div>
                 <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
                   {data.candidates.length === 0 && (
                     <li className="px-3 py-3 text-sm text-zinc-500">
-                      {isFull ? 'No other unit in this class is free' : 'No units available'}{' '}
+                      {isFull
+                        ? 'No other unit in this class is free'
+                        : isBackupItem
+                          ? 'No unit in this class to queue behind'
+                          : 'No units available'}{' '}
                       {fmtDay(data.window.start)} → {fmtDay(data.window.end)}.
                     </li>
                   )}
                   {data.candidates.map((c) => {
-                    const isBooked = c.state === 'booked'
+                    // A BACKUP may be pointed at a unit that is already
+                    // out — queueing behind the truck the client actually
+                    // wants is what a 2nd hold IS, and assignUnit's
+                    // rank-aware guard permits it (only rank 1 is refused
+                    // on a booked unit). A primary still cannot.
+                    const isBooked = c.state === 'booked' && !isBackupItem
                     const isPendingThis = submitting === c.assetId
                     const confirmHere = pendingBuffer?.asset.assetId === c.assetId ? pendingBuffer : null
                     const swapHere = pendingSwap?.asset.assetId === c.assetId ? pendingSwap : null
@@ -736,7 +760,15 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                             disabled={isBooked || !!submitting}
                             className="shrink-0 min-h-[44px] sm:min-h-0 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[13px] sm:text-xs font-semibold px-3 sm:px-2.5 py-1 rounded"
                           >
-                            {isPendingThis ? (isFull ? 'Swapping…' : 'Assigning…') : isFull ? 'Swap in' : 'Assign'}
+                            {isPendingThis
+                              ? isFull
+                                ? 'Swapping…'
+                                : 'Assigning…'
+                              : isFull
+                                ? 'Swap in'
+                                : isBackupItem && c.state === 'booked'
+                                  ? 'Queue behind'
+                                  : 'Assign'}
                           </button>
                         </div>
 

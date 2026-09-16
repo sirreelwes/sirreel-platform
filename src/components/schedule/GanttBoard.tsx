@@ -15,6 +15,7 @@ import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 import { NA_DURATION_PRESETS, naEndForDays, naReturnLine, naDayLabel, addDaysYmd } from '@/lib/scheduling/naDuration';
 import { pacificYmd } from '@/lib/fleet/checkWindow';
+import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks';
 import { canCreateOrders, getPermissions } from '@/lib/permissions';
 import { readViewAsCookie } from '@/lib/auth/viewAs';
 import {
@@ -1614,11 +1615,11 @@ export function GanttBoard() {
   // sibling trucks on a 2× line down too (Wes 2026-09-10).
   const onBarClick = useCallback((b: any, unit: any) => {
     if (suppressBarClick.current) { suppressBarClick.current = false; return }
-    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: 1 })
+    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, categoryName: unit.resourceName || unit.cat || '', isUnit: true, holdRank: 1 })
   }, [])
 
   const onBackupClick = useCallback((b: any, unit: any, rank: number) => {
-    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
+    setSelected({ ...b, unitName: unit.unitName, assetId: (b as any).assetId ?? unit.assetId, categoryId: (b as any).categoryId ?? unit.categoryId, categoryName: unit.resourceName || unit.cat || '', isUnit: true, holdRank: rank, isBackup: true })
   }, [])
 
   // "Other units on this job" chip click — switch the open pop-up to
@@ -1642,6 +1643,7 @@ export function GanttBoard() {
             unitName: u.unitName,
             assetId: b.assetId ?? u.assetId,
             categoryId: b.categoryId ?? u.categoryId,
+            categoryName: u.resourceName || u.cat || '',
             isUnit: true,
             holdRank: rank,
             isBackup: rank >= 2,
@@ -1652,6 +1654,37 @@ export function GanttBoard() {
     },
     [units],
   )
+
+  // ── Where a SECOND hold on the selected unit would land ──────────
+  // Jose, 2026-09-16: "there is no way for me to create second holds for
+  // vehicles or stages". The queue itself has existed since 2026-09-09 —
+  // what was missing was a way in. The only gesture that ever opened the
+  // modal in backup mode was a row click on a date the unit is already
+  // booked (openHoldOnAssetRow), and a booked date is covered by its own
+  // bar, whose onClick stopPropagation's. The row is 32px, the bar is 24
+  // of them, so the target was the 4px sliver above or below it. The
+  // button below is the real entry point: click the reservation that is
+  // in the way and queue behind it.
+  //
+  // The rank is computed the way POST /api/scheduling/holds computes it —
+  // deepest live rank across the whole CATEGORY over this window, +1, not
+  // per unit. A 2nd hold sitting on the Black Box pushes a new backup on
+  // the LED/Volume Stage to 3rd, and the button has to say so rather than
+  // promise a "2nd Hold" the server will file as a 3rd.
+  const selectedUnitQueue = useMemo(() => {
+    if (!selected?.isUnit || !selected?.assetId || !selected?.categoryId) return null
+    if (!selected.start || !selected.end) return null
+    let deepest = 0
+    for (const u of units as any[]) {
+      if (u.categoryId !== selected.categoryId) continue
+      for (const b of (Array.isArray(u.bookings) ? u.bookings : []) as any[]) {
+        if (!b || b.start > selected.end || b.end < selected.start) continue
+        deepest = Math.max(deepest, typeof b.holdRank === 'number' ? b.holdRank : 1)
+      }
+    }
+    const nextRank = Math.max(2, deepest + 1)
+    return { nextRank, full: nextRank > MAX_HOLD_RANK }
+  }, [selected, units])
 
   // ── Row entries ──
   // Units render in canonical order (category, then numeric unitName)
@@ -2550,6 +2583,47 @@ export function GanttBoard() {
               </div>
             )}
 
+            {/* Second hold — queue behind THIS reservation on THIS unit.
+                The gesture sales actually has: click the booking that is
+                in the way. Sales-gated like every other create; the rank
+                is the server's own arithmetic (see selectedUnitQueue), so
+                the button never promises a place in the queue that the
+                POST would refuse. */}
+            {selected.isUnit && selected.assetId && selected.categoryId && canSetStatus && selectedUnitQueue && (
+              <div className="mb-3">
+                {selectedUnitQueue.full ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+                    Holds go 1st, 2nd, 3rd — this class already has {MAX_HOLD_RANK} on these dates. Release one that is
+                    no longer live, or sub-rent the unit.
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setHoldModal({
+                        asset: { id: selected.assetId, unitName: selected.unitName },
+                        categoryId: selected.categoryId,
+                        categoryName: selected.categoryName || selected.unitName,
+                        startDate: selected.start,
+                        endDate: selected.end,
+                        asBackup: true,
+                      })
+                      closeModal()
+                    }}
+                    className="w-full text-left rounded-lg border border-dashed border-blue-400 bg-blue-50 px-3 py-2 hover:bg-blue-100 transition-colors"
+                    title={`Queue a backup hold on ${selected.unitName} behind this reservation`}
+                  >
+                    <span className="block text-[12px] font-semibold text-blue-900">
+                      + {holdRankLabel(selectedUnitQueue.nextRank)} hold on {selected.unitName}
+                    </span>
+                    <span className="block text-[11px] text-blue-800/80">
+                      Queues behind this reservation for {fMonth(selected.start)} – {fMonth(selected.end)}. Dates and
+                      client are yours to set in the next step.
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Booking notes — what the agent wrote when the hold was
                 created, including supplies asked for on the vehicle. */}
             {resContext?.notes && (
@@ -2969,10 +3043,12 @@ export function GanttBoard() {
         </div>
       )}
 
-      {/* +Hold modal — opens from an asset-row click only
-          (asset-bound). The category-only entry point lives on the
-          Job detail page ("+ New reservation" in JobQuickActions) —
-          reservations are created from inside a Job. */}
+      {/* +Hold modal — asset-bound, from an asset-row click on a free
+          day, or from the selected reservation's "+ Nth hold on this
+          unit" button (asBackup, queueing behind that very bar). The
+          category-only entry point lives on the Job detail page ("+ New
+          reservation" in JobQuickActions) — reservations are created
+          from inside a Job. */}
       {holdModal && (
         <NewHoldModal
           categoryId={holdModal.categoryId}

@@ -8,7 +8,9 @@
  * outcomes the modal handles:
  *
  *   201 ok                              → success, close + notify
- *   409 { error: 'over-capacity' }     → red banner, no override
+ *   409 { error: 'over-capacity' }     → blue banner offering "place it
+ *                                        as a backup hold instead", which
+ *                                        re-submits at rank ≥ 2
  *   409 { error: 'buffer-encroachment',
  *         needsOverride: true }        → yellow banner with "Force" button
  *
@@ -196,6 +198,17 @@ export function NewHoldModal({
   const [submitting, setSubmitting] = useState(false)
   const [hardError, setHardError] = useState<string | null>(null)
   const [bufferWarning, setBufferWarning] = useState<{ reason: string; availability: AvailabilitySummary } | null>(null)
+  // Backup mode is a MODE, not just the prop it starts in. The caller
+  // decides it up front (the gantt's "+ 2nd hold on this unit"), but an
+  // over-capacity refusal is the other half of the same question — the
+  // class is full, which is exactly when a queue is what the client
+  // wants. Before this, that 409 was a red banner and a dead end (Jose,
+  // 2026-09-16: no way to create second holds), so an agent who reached
+  // it from the job page had to abandon the reservation.
+  const [backupMode, setBackupMode] = useState(asBackup)
+  // The over-capacity 409, kept apart from hardError because it is not a
+  // dead end: it carries the one button that finishes the job.
+  const [capacityBlock, setCapacityBlock] = useState<{ reason: string; availability: AvailabilitySummary | null } | null>(null)
   // Post-create OPTIONAL unit-pick phase: after an asset-bearing hold is
   // created with no pre-bound unit, the same modal hands off to the
   // AssignUnitsModal drawer for an optional specific-unit pick.
@@ -286,10 +299,15 @@ export function NewHoldModal({
     }
   }
 
-  async function submit(bufferOverride: boolean) {
+  async function submit(bufferOverride: boolean, backupOverride?: boolean) {
     if (!contactReady) return
+    // `backupOverride` rather than reading state back: the "place it as a
+    // backup instead" button sets the mode and re-submits in the same
+    // handler, and the state write would not be visible to this call.
+    const wantsBackup = backupOverride ?? backupMode
     setSubmitting(true)
     setHardError(null)
+    setCapacityBlock(null)
     if (!bufferOverride) setBufferWarning(null)
     try {
       // Inline contact create — the Person must exist before the hold
@@ -354,7 +372,7 @@ export function NewHoldModal({
           notes: notes.trim() || null,
           bufferDays,
           bufferOverride,
-          isBackup: asBackup,
+          isBackup: wantsBackup,
           expectsOrder,
         }),
       })
@@ -386,7 +404,7 @@ export function NewHoldModal({
             const assignRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ assetId: asset.id, bufferDays, bufferOverride: asBackup }),
+              body: JSON.stringify({ assetId: asset.id, bufferDays, bufferOverride: wantsBackup }),
             })
             const assignJson = await assignRes.json()
             if (assignRes.ok && assignJson.ok) {
@@ -432,6 +450,21 @@ export function NewHoldModal({
       }
       if (res.status === 409 && json.error === 'buffer-encroachment' && json.needsOverride) {
         setBufferWarning({ reason: json.reason, availability: json.availability })
+        return
+      }
+      // Full class. The holds route already says "place a backup hold" in
+      // its own suggestion; render that suggestion as the button it
+      // always should have been. Never offered when this submit WAS the
+      // backup — a rank ≥ 2 skips the capacity gate, so an over-capacity
+      // answer to a backup would mean something else entirely.
+      if (res.status === 409 && json.error === 'over-capacity' && !wantsBackup) {
+        setCapacityBlock({
+          reason:
+            json.reason === 'requested quantity exceeds availableToHold'
+              ? `Nothing free in ${categoryName} for those dates.`
+              : json.reason || 'That class is fully booked for those dates.',
+          availability: (json.availability as AvailabilitySummary) ?? null,
+        })
         return
       }
       // Surface the server's real reason (the holds route puts the
@@ -486,12 +519,12 @@ export function NewHoldModal({
         <header className="flex items-start justify-between px-6 py-4 border-b border-zinc-200">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">
-              {asBackup ? 'New backup hold' : 'New hold'}
+              {backupMode ? 'New backup hold' : 'New hold'}
               {asset ? ` on ${asset.unitName}` : ''}
             </h2>
             <p className="text-sm text-zinc-600 mt-0.5">
               {categoryName} · bufferDays={bufferDays}
-              {asBackup ? ' · queues behind existing holds (rank assigned by server)' : ''}
+              {backupMode ? ' · queues behind existing holds (rank assigned by server)' : ''}
               {asset
                 ? canBindUnit
                   ? ' · will bind to this specific unit on create'
@@ -775,6 +808,34 @@ export function NewHoldModal({
               <div className="text-xs text-amber-700 mt-1">
                 free {bufferWarning.availability.freeCount} · buffer {bufferWarning.availability.bufferCount} · booked{' '}
                 {bufferWarning.availability.bookedCount} · capacity {bufferWarning.availability.availableToHold}
+              </div>
+            </div>
+          )}
+
+          {capacityBlock && (
+            <div className="rounded border border-dashed border-blue-400 bg-blue-50 px-3 py-2 text-sm space-y-2">
+              <div className="font-medium text-blue-900">Fully booked for those dates</div>
+              <div className="text-blue-800">{capacityBlock.reason}</div>
+              {capacityBlock.availability && (
+                <div className="text-xs text-blue-700">
+                  free {capacityBlock.availability.freeCount} · buffer {capacityBlock.availability.bufferCount} ·
+                  booked {capacityBlock.availability.bookedCount} · capacity{' '}
+                  {capacityBlock.availability.availableToHold}
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setBackupMode(true)
+                  void submit(false, true)
+                }}
+                disabled={submitting}
+                className="rounded border border-blue-400 bg-white px-3 py-1.5 text-sm font-medium text-blue-900 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {submitting ? 'Queueing…' : 'Place it as a backup hold instead'}
+              </button>
+              <div className="text-xs text-blue-700">
+                A backup queues behind the holds already on those dates and converts when one releases. Holds go 1st,
+                2nd, 3rd — no deeper.
               </div>
             </div>
           )}
