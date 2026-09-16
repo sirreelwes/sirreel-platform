@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### AHA tutorials, and ops owns them
 
-`SHA_PLACEHOLDER` aha: editable troubleshooting topics, seeded with lift gate / battery / lost keys
+`1cfba44` aha: editable troubleshooting topics, seeded with lift gate / battery / lost keys
 
 Wes: "let's set up AHA tutorials ... sectioned in AHA for things like lift gate troubleshooting, battery issues, lost keys", then the part that set the design — "a bunch of sections in AHA that **we can modify**". So this is not a code registry; it is rows ops edits.
 
