@@ -22,6 +22,21 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-16
+
+### AHA: what "checked out" actually means
+
+`SHA_PLACEHOLDER` aha: derive one honest checkout state, and stop conflating two kinds of pickup
+
+Wes, working a scenario — a production contact texts to ask whether the vans have been picked up tomorrow morning, then: "have they completed check out yet?" AHA could answer, but one of its answers was wrong.
+
+- **The walk-around was reporting itself as a checkout.** `CheckoutRecord` is created by the pre-rental inspection with `driverId` NULL (`/api/fleet/inspections`), so `checkoutTime` is set hours before anyone takes the keys. `shapeAssignment` handed that straight to the model as `checkedOutAt`. A van inspected and sitting on the lot would have been reported to the client as "checked out at 2:14pm". Meanwhile `BookingAssignment.status` only reaches CHECKED_OUT on the driver's own self-checkout — `selfCheckout.ts` says so in a comment, "the staff walk-around leaves the row ASSIGNED because the driver may not have turned up yet" — so the reliable field was the coarse one and the precise field was the lying one.
+- **`checkoutState()`** now collapses the assignment status, the record's `driverId`, the return times and `DriverAssignment.status`/`pickedUpAt` into one of four words: **booked / ready / out / returned**. A checkout counts as done only when a driver is attached or the driver's own row says PICKED_UP. `checkedOutAt` is populated only in `out`; the walk-around's timestamp is exposed separately as `preppedAt` and the prompt is told never to offer it as a pickup time. `stateSays` carries the plain-words version so the model does not invent its own.
+- **"Ready" is the state that did not exist** and is the one a client actually wants the night before: inspected, waiting, driver has not arrived. `staffLookupJob`'s rollup gained it too ("prepped and waiting on the driver").
+- **Two pickups, told apart.** `delivery` is us bringing units out; `pickupAddress`/`pickupTime` (now surfaced as `collection`) is us taking them back. Neither is the client driving to Lankershim to collect, which has no time field anywhere — so AHA gives the date, says where the unit stands, and offers to have the agent confirm a time instead of quoting the wrong leg. `pickupTime` had never been selected by the lookups at all, so a client collecting from the yard could previously only be told a date; the prompt had been promising "pickup and return" the whole time.
+- Free-text times are repeated as written — productions answer "6-7a" and "first light", and the schema comment says forcing a picker "would turn a real answer into a wrong one".
+- `npm run test:checkout-state` pins all four states, with the walk-around case called out as the bug it exists to prevent. Build green, nine assistant suites pass.
+
 ## 2026-09-15 (later still)
 
 ### AHA: access that expires on its own

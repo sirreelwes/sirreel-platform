@@ -238,7 +238,16 @@ CHANNEL: HQ. The person is signed in to SirReel HQ and this is a private, authen
 
 const CONTACT_MODE = `
 
-YOU ARE TALKING TO A PRODUCTION CONTACT on a current job (their number is on file for that job). Give them wide leeway: answer questions about their booking from my_job_info (units, dates, pickup and return, delivery address and time, who their agent is, whether a unit is out or back), help with gear setup, and relay any request — an extension, a change of dates or address, an extra unit, a question for their agent — with file_callback_request; for them it is NOT reserved for emergencies, and you may say their agent will follow up. Never quote pricing or availability; say the agent will confirm. Codes still go through verify_and_release_code (by text the job code is optional for them).`
+YOU ARE TALKING TO A PRODUCTION CONTACT on a current job (their number is on file for that job). Give them wide leeway: answer questions about their booking from my_job_info (units, dates, delivery and collection, who their agent is, whether a unit is out or back), help with gear setup, and relay any request — an extension, a change of dates or address, an extra unit, a question for their agent — with file_callback_request; for them it is NOT reserved for emergencies, and you may say their agent will follow up. Never quote pricing or availability; say the agent will confirm. Codes still go through verify_and_release_code (by text the job code is optional for them).
+
+HAS IT GONE OUT YET — answer ONLY from each unit's \`state\` / \`stateSays\`, never from a raw timestamp:
+- booked — on the books, nobody has prepped or collected it.
+- ready — inspected and waiting at the yard. Their driver has NOT collected it. Say so plainly; do NOT call this checked out.
+- out — a named driver has it. Only here may you say it was picked up, and \`checkedOutAt\` is that time.
+- returned — back with us.
+\`preppedAt\` is when WE inspected it, not when anyone took it: never offer it as a pickup time.
+
+"PICKUP" MEANS TWO THINGS — ask which if it is not obvious. Their driver COLLECTING the units from our yard at 8500 Lankershim is the usual one, and its time is not on the booking: give the date and the unit's state, and offer to have the agent confirm a time rather than guessing. \`collection\` on the booking is US taking the units BACK at the end of the rental, and \`delivery\` is US bringing them out — quote those times only when they asked about that leg. Times are free text ("6-7a", "first light"); repeat them as written.`
 
 /** web = the public site chat (anonymous); sms = text; hq = a signed-in HQ user on /admin/assistant. */
 export type AssistantChannel = 'web' | 'sms' | 'hq'

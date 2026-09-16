@@ -281,6 +281,28 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `my_job_info` + free use of file_callback_request ("wide leeway", Wes).
   Lookups in `src/lib/assistant/lookups.ts`, read-only, never codes or
   pricing. Web chat gets none of this — there is no number to match.
+- **"Has it gone out yet" is DERIVED, never read off a timestamp** (Wes
+  2026-09-16: "have they completed check out yet?"). The two raw fields
+  disagree and the tempting one is wrong: `CheckoutRecord.checkoutTime` is
+  written by the pre-rental WALK-AROUND with `driverId` NULL, hours before
+  anyone takes the keys, while `BookingAssignment.status` only reaches
+  CHECKED_OUT on the driver's own self-checkout (see the comment in
+  `src/lib/drivers/selfCheckout.ts`). So a van inspected and parked on the
+  lot reported a checkout time. `checkoutState()` in
+  `src/lib/assistant/lookups.ts` collapses both, plus
+  `DriverAssignment.status`/`pickedUpAt`, into one word — **booked /
+  ready / out / returned** — and the prompt answers only from that.
+  `checkedOutAt` is now populated ONLY when a driver really has it;
+  the walk-around's time is exposed separately as `preppedAt`.
+  `npm run test:checkout-state`.
+- **"Pickup" means two different things — the prompt now says which.**
+  `Booking.deliveryAddress/deliveryTime` is US bringing units out;
+  `Booking.pickupAddress/pickupTime` (surfaced as `collection`) is US
+  taking them BACK. Neither is the client driving to Lankershim to collect,
+  which has no time field at all — AHA gives the date and offers to have
+  the agent confirm a time rather than quoting the wrong leg. Both times
+  are free text ("6-7a", "first light") and are repeated as written;
+  `pickupTime` was never selected by the lookups before this.
 - **"Who AHA recognises" on /admin/assistant** (Wes 2026-09-11: "where do I
   manage what numbers have access to what") — `listRecognizedNumbers()` in
   `src/lib/assistant/recognizedNumbers.ts` lists every number in a tier
