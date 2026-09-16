@@ -4990,10 +4990,18 @@ enum SubRentalStatus {
 /// WILL_CALL (2026-09-15, California Rent A Car) = the PRODUCTION picks it up
 /// at the partner's lot and returns it there, like any rental. No partner
 /// driver, no call time, no set location for the partner.
+/// DELIVER_TO_SIRREEL (2026-09-16, Wes) = the partner delivers to 8500
+/// Lankershim and it goes out on OUR truck with the rest of the order. It
+/// exists because DELIVERY carries two destinations depending on whether the
+/// row has a roster unit — our yard on an ad-hoc sub-lease, set on a partner
+/// unit — and "to our yard" had no way to be said about a partner unit.
+/// This is the ONE receive method whose gear reaches the warehouse, so it is
+/// the one exception to partner lines staying off the pick list.
 enum ReceiveMethod {
   PICKUP
   DELIVERY
   WILL_CALL
+  DELIVER_TO_SIRREEL
 }
 
 model SubRental {

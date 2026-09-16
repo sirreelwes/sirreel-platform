@@ -30,6 +30,7 @@ import { parseMoney } from '@/lib/pricing/resolveRate'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 import { checkSubRentalCoi, isCoiGatedSubRentalStatus } from '@/lib/sub-rentals/coiGate'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => null) as {
     vendorId?: string
-    receiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+    receiveMethod?: ReceiveMethodKey | null
     collectorName?: string | null
     itemDescription?: string
     quantity?: number

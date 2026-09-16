@@ -16,7 +16,7 @@
  * hairline, the turquoise CTA — rather than introducing a second look for one
  * page.
  */
-import { partnerVocab } from '@/lib/sub-rentals/partnerKind'
+import { partnerVocab, type ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 import { partnerTerms } from '@/lib/sub-rentals/partnerTerms'
 
 const CARD: React.CSSProperties = { background: '#fff', border: '1px solid #e2ddd0', borderRadius: 14, padding: 20 }
@@ -38,7 +38,7 @@ export interface PartnerWalkthroughProps {
   vendorName: string
   kind: string | null
   /** How their units normally reach the production — decides the pickup half. */
-  receiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL'
+  receiveMethod: ReceiveMethodKey
   sharePercent: number | null
   maxSharePercent: number | null
   lotAddress: string | null

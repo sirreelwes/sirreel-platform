@@ -24,7 +24,20 @@ eq(partnerRouting({ lane: 'FLEET', pickStatus: null }, true), { lane: 'FLEET', p
 eq(partnerRouting({ lane: 'STAGE', pickStatus: null }, true), { lane: 'STAGE', pickStatus: null }, 'stage routing is untouched')
 
 console.log('What counts as a partner line')
-eq(PARTNER_SUB_RENTAL_WHERE, { subcontractedVehicleId: { not: null }, status: { not: 'CANCELLED' } }, 'a roster unit, booking not cancelled — an ad-hoc gear sub-rental stays on the list')
+eq(
+  PARTNER_SUB_RENTAL_WHERE,
+  {
+    subcontractedVehicleId: { not: null },
+    status: { not: 'CANCELLED' },
+    // 2026-09-16: a roster unit the partner DROPS AT OUR YARD is not a
+    // partner line in the sense this module means. The premise of the whole
+    // file is that a partner's unit never passes through Lankershim; gear
+    // delivered to us does, and has to be pulled, counted and loaded like
+    // anything else — under the "Partner" heading (warehouse/pickSections.ts).
+    NOT: { receiveMethod: 'DELIVER_TO_SIRREEL' },
+  },
+  'a roster unit, booking live, not delivered to our yard — ad-hoc sub-leases and delivered-to-us partner gear both stay on the list',
+)
 eq((PARTNER_LINE_WHERE.OR ?? []).length, 2, 'the line itself, or the line it rides under')
 
 console.log('On a loaded order (the pull sheet)')

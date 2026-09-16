@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, netCost } from '@/lib/sub-rentals/vehicles'
 import { PARTNER_SECTIONS, partnerSection } from '@/lib/site/partnerSections'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 interface VehicleRow {
   id: string
@@ -29,7 +30,7 @@ interface VehicleRow {
   listMonthlyRate: string | null
   discountPercent: string | null
   catalogSection: string | null
-  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+  defaultReceiveMethod: ReceiveMethodKey | null
   vendor: { id: string; name: string; partnerSharePercent: string | null; partnerKind: 'VEHICLES' | 'EQUIPMENT'; catalogSection: string | null }
 }
 
@@ -49,7 +50,7 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
   // '' = the vendor's default section; a key = this unit's own.
   const [section, setSection] = useState('')
   // '' = decide per booking; PowerTrip's gear defaults to DELIVERY below.
-  const [receive, setReceive] = useState<'' | 'PICKUP' | 'DELIVERY' | 'WILL_CALL'>('')
+  const [receive, setReceive] = useState<'' | ReceiveMethodKey>('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -175,7 +176,7 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reaches set by</label>
-              <select value={receive} onChange={(e) => setReceive(e.target.value as '' | 'PICKUP' | 'DELIVERY' | 'WILL_CALL')} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+              <select value={receive} onChange={(e) => setReceive(e.target.value as '' | ReceiveMethodKey)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                 <option value="">Decide per booking</option>
                 <option value="PICKUP">Driver takes it (their roster)</option>
                 <option value="DELIVERY">They deliver &amp; collect it</option>

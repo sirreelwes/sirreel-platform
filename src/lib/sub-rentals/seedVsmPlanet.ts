@@ -26,9 +26,14 @@
 import { prisma } from '@/lib/prisma'
 import { ensureVendorPortalToken, vendorAccountUrl } from '@/lib/sub-rentals/vendorAccount'
 import { VSM_PLANET, VSM_PLANET_NAME, VSM_PLANET_ROSTER } from '@/lib/sub-rentals/photoShootRoster'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
-export type ReceiveMethodKey = 'PICKUP' | 'DELIVERY' | 'WILL_CALL'
-export const RECEIVE_METHODS: readonly ReceiveMethodKey[] = ['PICKUP', 'DELIVERY', 'WILL_CALL']
+// Re-exported, never re-declared: this list had drifted from partnerKind's
+// the moment a fourth method was added.
+export type { ReceiveMethodKey }
+export const RECEIVE_METHODS: readonly ReceiveMethodKey[] = [
+  'WILL_CALL', 'DELIVERY', 'DELIVER_TO_SIRREEL', 'PICKUP',
+]
 
 /** A refusal the operator can act on — never a stack trace on a phone. */
 export class SeedRefused extends Error {

@@ -3,6 +3,13 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, Svg, Rect, StyleSheet } from '@react-pdf/renderer'
 import { code39Geometry } from './code39'
+import {
+  PICK_GROUP_ORDER,
+  pickGroupLabel,
+  isPickSection,
+  type PickGroupKey,
+  type PickSectionKey,
+} from '@/lib/warehouse/pickSections'
 
 // Shared hyphenation policy — registered once, see that module.
 import '@/lib/pdf/hyphenation'
@@ -43,6 +50,18 @@ export type Department =
 
 export interface PickListLine {
   department: Department
+  /**
+   * Borrowed gear prints under its own heading rather than its department
+   * (Wes 2026-09-16). Null = our own gear, filed by department as before.
+   */
+  section?: PickSectionKey | null
+  /**
+   * "Back to PowerTrip Rentals" — where this goes when it comes in. Only on
+   * borrowed lines, and the reason the headings exist at all: a sub-leased
+   * fixture that came back unlabelled used to end up on our shelf looking
+   * like ours.
+   */
+  returnTo?: string | null
   /** InventoryItem.code — the scannable SKU. Null on custom lines. */
   code: string | null
   description: string
@@ -185,23 +204,33 @@ export const DEPT_ORDER: Department[] = [
   'VEHICLES',
 ]
 
-function groupByDepartment(lines: PickListLine[]): Array<{ dept: Department; lines: PickListLine[]; total: number }> {
-  const buckets = new Map<Department, PickListLine[]>()
+/**
+ * Group by BORROWED-GEAR SECTION first, department second — a line carrying
+ * a `section` leaves its department and files under Partner or Sub-Rental.
+ *
+ * Unknown keys still fall through to the end rather than being dropped,
+ * which is what kept PHOTO_SHOOT lines printing (under an `undefined`
+ * heading) when the department was added and these maps were not.
+ */
+function groupForSheet(lines: PickListLine[]): Array<{ key: PickGroupKey; lines: PickListLine[]; total: number }> {
+  const buckets = new Map<PickGroupKey, PickListLine[]>()
   for (const l of lines) {
-    const list = buckets.get(l.department) ?? []
+    const key: PickGroupKey = l.section ?? l.department
+    const list = buckets.get(key) ?? []
     list.push(l)
-    buckets.set(l.department, list)
+    buckets.set(key, list)
   }
-  const ordered: Array<{ dept: Department; lines: PickListLine[]; total: number }> = []
-  for (const dept of DEPT_ORDER) {
-    const list = buckets.get(dept)
+  const ordered: Array<{ key: PickGroupKey; lines: PickListLine[]; total: number }> = []
+  const total = (list: PickListLine[]) => list.reduce((s, l) => s + l.ordered, 0)
+  for (const key of PICK_GROUP_ORDER) {
+    const list = buckets.get(key)
     if (list && list.length > 0) {
-      ordered.push({ dept, lines: list, total: list.reduce((s, l) => s + l.ordered, 0) })
-      buckets.delete(dept)
+      ordered.push({ key, lines: list, total: total(list) })
+      buckets.delete(key)
     }
   }
-  for (const [dept, list] of buckets) {
-    ordered.push({ dept, lines: list, total: list.reduce((s, l) => s + l.ordered, 0) })
+  for (const [key, list] of buckets) {
+    ordered.push({ key, lines: list, total: total(list) })
   }
   return ordered
 }
@@ -358,6 +387,16 @@ const styles = StyleSheet.create({
   },
   notesText: { fontSize: 8, color: C.muted },
   notesLabel: { fontFamily: 'Helvetica-Bold' },
+  // Under a Partner / Sub-Rental heading: said once, so the picker knows
+  // before the first row that nothing below it is ours.
+  borrowedNote: {
+    fontSize: 7.5,
+    color: C.muted,
+    fontFamily: 'Helvetica-Oblique',
+    paddingHorizontal: 6,
+    paddingTop: 2,
+    paddingBottom: 1,
+  },
   // Columns sum to 100
   colCode:      { width: '12%', fontSize: 8.5, paddingRight: 3 },
   colDesc:      { width: '38%', fontSize: 8.5, paddingRight: 4 },
@@ -481,7 +520,7 @@ const styles = StyleSheet.create({
 
 export function PickListDocument(props: PickListDocumentProps) {
   const generatedAt = props.generatedAt ?? new Date()
-  const sections = groupByDepartment(props.lines)
+  const sections = groupForSheet(props.lines)
   // The pull sheet counts what to pull; the receipt counts what left.
   const receipt = props.receipt ?? null
   const grandTotal = props.lines.reduce((s, l) => s + (receipt ? l.out : l.ordered), 0)
@@ -626,10 +665,21 @@ export function PickListDocument(props: PickListDocumentProps) {
 
         {/* Sections */}
         {sections.map((section) => (
-          <View key={section.dept}>
+          <View key={section.key}>
             <View style={styles.deptHeader}>
-              <Text style={styles.deptHeaderText}>{DEPT_LABELS[section.dept]}</Text>
+              <Text style={styles.deptHeaderText}>
+                {pickGroupLabel(section.key, (k) => DEPT_LABELS[k as Department] ?? k)}
+              </Text>
             </View>
+            {/* Said once per section rather than per line: everything under
+                these two headings is on loan and goes back. */}
+            {isPickSection(section.key) && (
+              <Text style={styles.borrowedNote}>
+                {section.key === 'PARTNER'
+                  ? 'Partner gear delivered to us — not ours. Check it in and send it back.'
+                  : 'Sub-leased from another house — not ours. Check it in and send it back.'}
+              </Text>
+            )}
             {section.lines.map((line, idx) => (
               <View key={idx} wrap={false}>
                 <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
@@ -666,6 +716,14 @@ export function PickListDocument(props: PickListDocumentProps) {
                       : `SHORT \u2014 ${line.ordered - line.out} of ${line.ordered} did not go out`}
                   </Text>
                 ) : null}
+                {line.returnTo ? (
+                  <View style={styles.notesRow}>
+                    <Text style={styles.notesText}>
+                      <Text style={styles.notesLabel}>Return: </Text>
+                      {line.returnTo}
+                    </Text>
+                  </View>
+                ) : null}
                 {line.unitChecks && line.unitChecks.length > 0 ? (
                   <View style={styles.notesRow}>
                     <Text style={styles.notesText}>
@@ -686,7 +744,9 @@ export function PickListDocument(props: PickListDocumentProps) {
               </View>
             ))}
             <View style={styles.totalRow} wrap={false}>
-              <Text style={styles.totalLabel}>Total for {DEPT_LABELS[section.dept]}</Text>
+              <Text style={styles.totalLabel}>
+                Total for {pickGroupLabel(section.key, (k) => DEPT_LABELS[k as Department] ?? k)}
+              </Text>
               {receipt ? (
                 <Text style={styles.receiptTotalValue}>
                   {section.lines.reduce((sum, l) => sum + l.out, 0)}

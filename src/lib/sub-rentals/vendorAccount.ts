@@ -30,7 +30,7 @@ import { vendorPageUrl } from '@/lib/sub-rentals/conduit'
 import { workspaceLinkForVendor, hqLandingPath } from '@/lib/hq-white-label/workspace'
 import { PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { effectiveSharePercent, partnerNet } from '@/lib/sub-rentals/partnerShare'
-import type { PartnerKindKey } from '@/lib/sub-rentals/partnerKind'
+import type { PartnerKindKey, ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 import { resolvePartnerSection, type PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
 
 export function vendorAccountPath(token: string): string {
@@ -126,7 +126,7 @@ export interface VendorAccountFleetUnit {
   /** Where it sits on sirreel.com when listed. */
   section: PartnerCatalogSectionKey
   /** How it normally reaches set; null = decided per booking. */
-  receiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+  receiveMethod: ReceiveMethodKey | null
   listed: boolean
   active: boolean
   daily: number | null
@@ -232,7 +232,7 @@ async function buildVendorAccount(vendor: {
   sirreelContactUserId: string | null
   partnerKind: PartnerKindKey
   catalogSection: string | null
-  defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+  defaultReceiveMethod?: ReceiveMethodKey | null
 }, portalToken: string | null): Promise<VendorAccountView> {
   const [rows, rosterCount, fleetRows, agreementRow, hqWorkspace] = await Promise.all([
     prisma.subRental.findMany({

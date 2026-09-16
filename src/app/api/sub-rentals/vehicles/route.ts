@@ -16,6 +16,7 @@ import { parseMoney } from '@/lib/pricing/resolveRate'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { parsePercent } from '@/lib/sub-rentals/vehicles'
 import { isPartnerSectionKey } from '@/lib/site/partnerSections'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     /** Public-catalog section override (null = the vendor's default). */
     catalogSection?: string | null
     /** PICKUP (driven to set) or DELIVERY (the partner brings it). */
-    defaultReceiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+    defaultReceiveMethod?: ReceiveMethodKey | null
   } | null
   if (!body?.name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })

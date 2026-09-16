@@ -13,6 +13,12 @@
  * POST /api/sub-rentals) has no roster unit — our crew usually collects that
  * gear and pulls it with the order — so it stays on the list.
  *
+ * ONE EXCEPTION, 2026-09-16: a roster unit on DELIVER_TO_SIRREEL. The partner
+ * drops it at Lankershim and it leaves on our truck, so it DOES pass through
+ * the warehouse and does belong on the sheet — under its own "Partner"
+ * heading, beside the sub-leased gear under "Sub-Rental". Both have to go
+ * back to the house they came from, which is why the sheet names it.
+ *
  * A would-be WAREHOUSE line that is a partner line gets NO lane and NO pick
  * status (every warehouse reader keys on fulfillmentLane === 'WAREHOUSE').
  * FLEET and STAGE routings are left alone — that is not the pick list.
@@ -24,10 +30,22 @@ import type { FulfillmentLane, LineItemPickStatus, Prisma, PrismaClient } from '
 
 type Db = PrismaClient | Prisma.TransactionClient
 
-/** A partner's roster unit booked on the line, and still live. */
+/**
+ * A partner's roster unit booked on the line, still live, AND never reaching
+ * our warehouse.
+ *
+ * DELIVER_TO_SIRREEL is excluded on purpose (Wes 2026-09-16: "if they are
+ * delivered, they should be on the Pick List"). The whole basis of this
+ * module — see the header — is that a partner's unit never passes through
+ * Lankershim, so a pick task for it is a task nobody can do. Gear the
+ * partner drops at our yard breaks that premise: it sits on our floor and
+ * goes out on our truck, so it needs pulling, counting and loading like
+ * anything else. It is not a partner line in the sense this file means.
+ */
 export const PARTNER_SUB_RENTAL_WHERE: Prisma.SubRentalWhereInput = {
   subcontractedVehicleId: { not: null },
   status: { not: 'CANCELLED' },
+  NOT: { receiveMethod: 'DELIVER_TO_SIRREEL' },
 }
 
 /** The line, or the line it rides under, is fulfilled by a partner's unit. */

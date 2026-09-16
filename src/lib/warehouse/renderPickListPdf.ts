@@ -16,7 +16,24 @@
  */
 
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
-import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
+import { isPartnerLineIn } from '@/lib/orders/partnerLines'
+import { pickSectionFor, returnToLabel } from '@/lib/warehouse/pickSections'
+
+/**
+ * The JS twin of PARTNER_SUB_RENTAL_WHERE — a roster unit, still live, that
+ * never reaches our floor. The query now loads EVERY live sub-rental (the
+ * sheet needs the ad-hoc ones too), so the "keep partner lines off the list"
+ * predicate has to be applied here instead of by the where-clause.
+ * tests/warehouse/pick-sections.test.ts pins the two together.
+ */
+function withPartnerSubs<T extends { subRentals?: { subcontractedVehicleId: string | null; receiveMethod: string | null }[] | null }>(li: T) {
+  return {
+    ...li,
+    subRentals: (li.subRentals ?? []).filter(
+      (sr) => sr.subcontractedVehicleId != null && sr.receiveMethod !== 'DELIVER_TO_SIRREEL',
+    ),
+  }
+}
 import { pullGapsForLine } from '@/lib/orders/pullAmbiguity'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
@@ -70,7 +87,21 @@ export async function renderPickListPdf(
       lineItems: {
         include: {
           inventoryItem: { select: { code: true, description: true, unitChecks: true } },
-          subRentals: { where: PARTNER_SUB_RENTAL_WHERE, select: { id: true } },
+          // EVERY live sub-rental on the line, not only the partner ones:
+          // the sheet has to tell Partner from Sub-Rental and name the house
+          // each goes back to (Wes 2026-09-16). Prisma cannot select one
+          // relation twice under two names, so the partner subset is derived
+          // in JS below — from the same predicate PARTNER_SUB_RENTAL_WHERE
+          // encodes, which is why that is asserted in the test.
+          subRentals: {
+            where: { status: { not: 'CANCELLED' } },
+            select: {
+              id: true,
+              subcontractedVehicleId: true,
+              receiveMethod: true,
+              vendor: { select: { name: true } },
+            },
+          },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -83,7 +114,11 @@ export async function renderPickListPdf(
   // A partner's unit never passes through our warehouse (Wes 2026-09-11:
   // "keep partner lines off the pick list"; partnerLines.ts).
   const pickable = order.lineItems.filter(
-    (li) => li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR' && !isPartnerLineIn(li, order.lineItems),
+    (li) =>
+      li.type !== 'FEE' &&
+      li.type !== 'DISCOUNT' &&
+      li.type !== 'LABOR' &&
+      !isPartnerLineIn(withPartnerSubs(li), order.lineItems.map(withPartnerSubs)),
   )
   if (pickable.length === 0) {
     return { ok: false, error: 'Order has no pickable line items', status: 400 }
@@ -211,6 +246,12 @@ export async function renderPickListPdf(
   }
 
   const lines: PickListLine[] = onSheet.map((li) => {
+    const subs = (li.subRentals ?? []).map((sr) => ({
+      subcontractedVehicleId: sr.subcontractedVehicleId,
+      vendorName: sr.vendor?.name ?? null,
+    }))
+    const section = pickSectionFor({ subRentals: subs })
+    const returnTo = section ? returnToLabel({ subRentals: subs }) : null
     // "Out" = already pulled. Warehouse lines advance through the
     // digital picking floor; fleet lines flip in bulk when the fleet
     // lane is stamped ready. Pre-book lines (no lane yet) are all
@@ -225,6 +266,8 @@ export async function renderPickListPdf(
     const sheet = counted?.get(li.id) ?? null
     return {
       department: li.department as Department,
+      section,
+      returnTo,
       code: li.inventoryItem?.code ?? null,
       description: li.description,
       // A receipt is a record, so it carries what the floor wrote next

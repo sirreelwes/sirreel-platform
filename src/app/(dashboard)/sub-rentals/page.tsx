@@ -16,7 +16,7 @@
  * out; the API double-checks on its own.
  */
 
-import { RECEIVE_METHOD_LABEL } from '@/lib/sub-rentals/partnerKind'
+import { RECEIVE_METHOD_LABEL, type ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -26,7 +26,7 @@ type SubRentalStatus =
 interface Row {
   id: string
   status: SubRentalStatus
-  receiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+  receiveMethod: ReceiveMethodKey | null
   itemDescription: string
   quantity: number
   startDate: string | null

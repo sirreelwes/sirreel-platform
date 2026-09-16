@@ -77,7 +77,7 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
       // fill-if-empty: it never overwrites an address already on file.
       { key: 'email', label: 'Contact email', defaultValue: 'vic@vsmplanetrentals.com', placeholder: 'vic@vsmplanetrentals.com', help: 'Vic Hartounian. Only written if the vendor has no email yet — it never overwrites one.' },
       { key: 'phone', label: 'Contact phone', placeholder: '(323) 555-0142', help: 'Same — blank leaves the existing number alone.' },
-      { key: 'receiveMethod', label: 'How gear changes hands', options: ['WILL_CALL', 'DELIVERY', 'PICKUP'], help: 'Will-call: the production collects from their Hollywood counter. Change it if Vic says otherwise.' },
+      { key: 'receiveMethod', label: 'How gear changes hands', options: ['WILL_CALL', 'DELIVERY', 'DELIVER_TO_SIRREEL', 'PICKUP'], defaultValue: 'WILL_CALL', help: 'WILL_CALL: the production collects at their Hollywood counter (VSM\u2019s default). DELIVER_TO_SIRREEL: they drop it at Sun Valley and it goes out on our truck. DELIVERY: they take it to set. PICKUP: their driver takes it to set.' },
     ],
   },
 ] as const

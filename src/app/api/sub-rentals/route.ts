@@ -26,6 +26,7 @@ import { Prisma, SubRentalStatus, ReceiveMethod } from '@prisma/client'
 import { parseMoney } from '@/lib/pricing/resolveRate'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     orderLineItemId?: string | null
     inventoryItemId?: string | null
     vendorId?: string
-    receiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+    receiveMethod?: ReceiveMethodKey | null
     itemDescription?: string
     quantity?: number
     startDate?: string | null

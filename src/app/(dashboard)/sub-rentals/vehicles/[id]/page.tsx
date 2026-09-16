@@ -22,6 +22,7 @@ import VehiclePhotosCard from '@/components/sub-rentals/VehiclePhotosCard'
 import ClientPageCard from '@/components/sub-rentals/ClientPageCard'
 import { PARTNER_SECTIONS, partnerSection } from '@/lib/site/partnerSections'
 import type { ListingBlocker } from '@/lib/sub-rentals/publicListing'
+import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 interface Vehicle {
   id: string
@@ -46,7 +47,7 @@ interface Vehicle {
   /** Public-catalog section override; null = the vendor's default. */
   catalogSection: string | null
   /** How it reaches set; null = decided per booking. */
-  defaultReceiveMethod: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+  defaultReceiveMethod: ReceiveMethodKey | null
   updatedAt: string
   vendor: {
     id: string

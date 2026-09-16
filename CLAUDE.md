@@ -990,6 +990,50 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   runner with no metadata is an undocumented endpoint, metadata with no
   runner is a button that 404s — and that no task advertises DDL.
 
+## Deliver to SirReel — Sun Valley, and borrowed gear on the sheet (2026-09-16 — Wes)
+- Wes: "we need to have the option Deliver to SirReel - Sun Valley" … "if
+  they are delivered, they should be on the Pick List but in a different
+  section (Partner). How do we handle this with sub leased equipment? It
+  should be the same as that but under a different heading. **Both subbed and
+  partner equipment have to be returned to their host warehouse.**"
+- **Why a FOURTH ReceiveMethod and not just DELIVERY.** `DELIVERY` already
+  carries two destinations: the enum's original meaning is "vendor drops at
+  SirReel's location" (an ad-hoc sub-lease), and on a PARTNER unit it was
+  re-pointed 2026-09-10 to "the partner delivers to SET". One value, two
+  places, depending on whether the row happens to carry a roster unit — so
+  "to our yard" had no way to be said about a partner unit without re-reading
+  every existing DELIVERY row and guessing which sense was meant.
+  `DELIVER_TO_SIRREEL` says it once. Enum value by `scripts/add-deliver-to-
+  sirreel-receive-method.ts` (additive ALTER TYPE, **run before the deploy**);
+  from an iPad it is one statement in the Neon console.
+- **`usesPartnerDriver` is now a positive list** (`m === 'PICKUP' || m == null`).
+  It was `!== 'DELIVERY' && !== 'WILL_CALL'`, which defaulted an unknown value
+  to TRUE — adding the fourth method would silently have started asking the
+  partner for a driver's name and a call time.
+- **The ONE exception to "partner lines stay off the pick list."**
+  `PARTNER_SUB_RENTAL_WHERE` now excludes `DELIVER_TO_SIRREEL`: that gear sits
+  on our floor and leaves on our truck, so it needs pulling, counting and
+  loading. Everything else about that rule is unchanged.
+- **Two new headings ABOVE the departments** (`src/lib/warehouse/pickSections.ts`,
+  pure): **Partner** (a roster unit delivered to us) and **Sub-Rental** (ad-hoc
+  gear sub-leased from another house — always on the sheet, but previously
+  scattered through the department sections and indistinguishable from gear
+  SirReel owns). Borrowed gear sorts FIRST: it is somebody else's property and
+  may not have arrived yet, which is worth discovering at the top of the sheet.
+- **Each borrowed line prints "Back to <house>"**, and each section carries a
+  one-line "not ours — check it in and send it back". That naming IS the
+  feature: the heading alone would just be tidier filing. A sub-leased fixture
+  that came back unlabelled used to end up on our shelf looking like ours.
+- **Prisma cannot select one relation twice**, so the sheet loads EVERY live
+  sub-rental and the "partner line" predicate is applied in JS
+  (`withPartnerSubs` in renderPickListPdf). `npm run test:pick-sections` pins
+  that twin against `PARTNER_SUB_RENTAL_WHERE` — the thing most likely to drift.
+- The receive-method union was duplicated as a literal in 12 files; all of them
+  now import `ReceiveMethodKey` from partnerKind.ts.
+- NOT done: nothing yet TRACKS the return leg — the sheet says where gear goes
+  back, but there is no board that says whether it got there. `SubRentalStatus`
+  already has RETURNED and /sub-rentals is earmarked as the returns board.
+
 ## Partner lines stay off the pick list (2026-09-11 — Wes)
 - Wes: "keep partner lines off the pick list." A partner's unit is delivered
   by the partner or collected from them — never through our warehouse.

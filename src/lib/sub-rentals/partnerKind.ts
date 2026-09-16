@@ -69,10 +69,10 @@ export function isPartnerKind(v: unknown): v is PartnerKindKey {
   return v === 'VEHICLES' || v === 'EQUIPMENT'
 }
 
-export type ReceiveMethodKey = 'PICKUP' | 'DELIVERY' | 'WILL_CALL'
+export type ReceiveMethodKey = 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | 'DELIVER_TO_SIRREEL'
 
 export function isReceiveMethod(v: unknown): v is ReceiveMethodKey {
-  return v === 'PICKUP' || v === 'DELIVERY' || v === 'WILL_CALL'
+  return v === 'PICKUP' || v === 'DELIVERY' || v === 'WILL_CALL' || v === 'DELIVER_TO_SIRREEL'
 }
 
 /**
@@ -83,7 +83,10 @@ export function isReceiveMethod(v: unknown): v is ReceiveMethodKey {
  * set on every creation path — and keeps the driver flow it always had.
  */
 export function usesPartnerDriver(m: string | null | undefined): boolean {
-  return m !== 'DELIVERY' && m !== 'WILL_CALL'
+  // Listed positively, not as "everything except…". The old form defaulted
+  // an unknown value to TRUE, so adding DELIVER_TO_SIRREEL would silently
+  // have started asking Vic for a driver's name and call time.
+  return m === 'PICKUP' || m == null
 }
 
 /** Labels, HQ-side and partner-side. */
@@ -91,6 +94,14 @@ export const RECEIVE_METHOD_LABEL: Record<ReceiveMethodKey, { hq: string; partne
   PICKUP: { hq: 'Driver takes it (their roster)', partner: 'driven to set', short: 'their driver' },
   DELIVERY: { hq: 'They deliver & collect it', partner: 'you deliver', short: 'they deliver' },
   WILL_CALL: { hq: 'Production picks up at their lot', partner: 'picked up at your lot', short: 'pickup at their lot' },
+  // The partner drives, like DELIVERY — the difference is the address. It
+  // lands at Lankershim and goes out on our truck, which is why this is the
+  // only receive method whose gear reaches the pick list.
+  DELIVER_TO_SIRREEL: {
+    hq: 'Deliver to SirReel — Sun Valley',
+    partner: 'you deliver to our Sun Valley yard',
+    short: 'delivered to us',
+  },
 }
 
 /** The receive method a NEW booking should start with for a unit: the unit's
