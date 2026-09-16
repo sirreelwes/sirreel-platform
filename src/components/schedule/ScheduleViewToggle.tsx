@@ -22,8 +22,13 @@ type View = 'month' | 'gantt' | 'agenda'
 export function ScheduleViewToggle({ current }: { current: View }) {
   return (
     <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-xs font-semibold">
+      {/* ?view=timeline, not a bare /gantt: below `md` a bare /gantt is
+          the AGENDA, so on a phone this button navigated from the agenda
+          straight back to the agenda and the timeline could not be
+          selected at all (found 2026-09-16, the one thing Wes asked to
+          work in portrait). Desktop resolves both to the same board. */}
       <Link
-        href="/gantt"
+        href="/gantt?view=timeline"
         className={`px-3 py-1.5 min-h-[44px] md:min-h-0 flex items-center ${
           current === 'gantt'
             ? 'bg-gray-900 text-white'

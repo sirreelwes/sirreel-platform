@@ -305,8 +305,23 @@ const SPAN_OPTIONS = [
   { days: 21, label: '3W' },
   { days: 28, label: '4W' },
 ] as const
-/** The sticky unit-label column (`w-48`). */
+/** The sticky unit-label column, desktop (`w-48`). */
 const LABEL_COL_W = 192
+/**
+ * …and on a phone. 192px is 49% of a 390px screen — half the board
+ * spent on names, leaving room for about two and a half days. This
+ * hands the difference to the day columns (Wes 2026-09-16: the timeline
+ * "doesn't work in vertical") without starving the names: the cell also
+ * carries the tier dot and the row's ⋯ menu, and at 112px what was left
+ * rendered "Carg…", which cannot tell Cargo 25 from Cargo 31. 140px
+ * fits the unit name whole and still leaves ~74px a day at the 3-day
+ * span — wider than the desktop board's own 48px floor.
+ */
+const LABEL_COL_W_NARROW = 140
+/** Span the board OPENS on below `md` — Wes: "a three day timeline view". */
+const NARROW_SPAN_DAYS = 3
+/** The mobile shell's top bar plus the page's own padding. */
+const MOBILE_CHROME_PX = 92
 
 // Precomputed per-day-cell metadata (fix for per-render Date construction in
 // every grid cell across all lanes).
@@ -731,9 +746,17 @@ export function GanttBoard() {
   // stayed one 48px sliver that could not show a client name. The old
   // widths remain the floor, so no span ever renders tighter than before.
   const [boardWidth, setBoardWidth] = useState(0)
+  // Phone portrait, measured after mount so the server render is
+  // unaffected. It decides three things: the span the board opens on,
+  // how much width the sticky label column may take, and whether the
+  // board sizes itself to the viewport it has left rather than to the
+  // desktop's fixed offset.
+  const [narrow, setNarrow] = useState(false)
+  const [narrowHeight, setNarrowHeight] = useState(0)
+  const labelColW = narrow ? LABEL_COL_W_NARROW : LABEL_COL_W
   const minDayWidth = spanDays <= 14 ? 48 : spanDays <= 21 ? 36 : 28
   const dayWidth = boardWidth > 0
-    ? Math.max(minDayWidth, Math.floor((boardWidth - LABEL_COL_W) / totalDays))
+    ? Math.max(minDayWidth, Math.floor((boardWidth - labelColW) / totalDays))
     : minDayWidth
   // Top task lane: chip height + per-day stack slot pitch (chip + gap).
   const TASK_CHIP_H = 18
@@ -946,6 +969,41 @@ export function GanttBoard() {
   // which writes scrollLeft again → onScroll → … → the wild left↔right
   // pan operators reported.
   const lastProgrammaticScrollLeft = useRef<number | null>(null)
+
+  // Open a phone on THREE DAYS (Wes 2026-09-16). Runs ONCE, on mount:
+  // after that the span buttons belong to the operator, and rotating
+  // the phone must not throw their choice away. `narrow` itself keeps
+  // tracking, because the label column and the board height should
+  // follow a rotation.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(max-width: 767px)')
+    const sync = () => setNarrow(mq.matches)
+    sync()
+    if (mq.matches) setSpanDays(NARROW_SPAN_DAYS)
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  // On a phone the chrome above the grid wraps to however many rows it
+  // needs — about 600px of an 844px screen — so the desktop's fixed
+  // `100vh - 210px` leaves the board a letterbox that never grows.
+  // Size it to the SCREEN instead (less the shell's top bar) and let the
+  // page scroll the chrome away: scroll down once and the grid has the
+  // whole phone. `window.innerHeight` rather than `100vh` because it
+  // tracks iOS Safari's collapsing address bar, which `vh` does not —
+  // the same reason the shell reaches for `100dvh`.
+  useEffect(() => {
+    if (!narrow) return
+    const measure = () => setNarrowHeight(Math.max(320, window.innerHeight - MOBILE_CHROME_PX))
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('orientationchange', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('orientationchange', measure)
+    }
+  }, [narrow])
 
   // Track the board's inner width for the stretch-to-fit day columns.
   useEffect(() => {
@@ -1784,7 +1842,9 @@ export function GanttBoard() {
           <ScheduleViewToggle current="gantt" />
           {loading && <span className="text-[11px] text-gray-400">Loading...</span>}
           {!loading && (
-            <span className="text-[11px] text-gray-400">
+            // Hidden below `md`: on a phone it buys nothing the list
+            // does not already show, and it wraps into a row of its own.
+            <span className="hidden md:inline text-[11px] text-gray-400">
               {tokens.length > 0
                 ? `${filteredUnits.length} of ${units.length} units · ${filteredJobs.length} of ${jobs.length} jobs match`
                 : `${units.length} units · ${jobs.length} jobs · Live`}
@@ -1818,7 +1878,11 @@ export function GanttBoard() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: without it this row is one unbreakable ~500px item,
+            and at 390px it pushed the whole DOCUMENT 111px wider than the
+            viewport — the page scrolled sideways, which is what breaks the
+            sticky label column (Wes 2026-09-16). */}
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Window pager — steps by the current visible width. Today
               resets to the default anchor (today − 3d). */}
           {/* Hugo, 2026-09-03: "we need arrows to navigate left and right
@@ -1858,7 +1922,7 @@ export function GanttBoard() {
               title={`Forward ${totalDays} days`}
             ><ChevronsRight size={16} aria-hidden /></button>
           </div>
-          <span className="text-[11px] font-semibold text-gray-500 px-1">{rangeLabel}</span>
+          <span className="text-[11px] font-semibold text-gray-500 px-1 whitespace-nowrap">{rangeLabel}</span>
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             {SPAN_OPTIONS.map(o => (
               <button key={o.days} onClick={() => setSpanDays(o.days)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${spanDays === o.days ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{o.label}</button>
@@ -1914,11 +1978,14 @@ export function GanttBoard() {
         ref={scrollContainerRef}
         onScroll={handleScroll}
         className="border border-gray-200 rounded-lg overflow-auto bg-white relative"
-        style={{ height: 'calc(100vh - 210px)' }}
+        style={{ height: narrow && narrowHeight > 0 ? narrowHeight : 'calc(100vh - 210px)' }}
       >
-        <div className="flex" style={{ width: LABEL_COL_W + renderedDays * dayWidth, minWidth: '100%' }}>
+        <div className="flex" style={{ width: labelColW + renderedDays * dayWidth, minWidth: '100%' }}>
           {/* ── LEFT: labels column (sticky left:0) ── */}
-          <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200">
+          <div
+            className="flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200"
+            style={{ width: labelColW }}
+          >
             {/* Top-left corner — sticky on both axes. In Asset view it hosts the
                 category filter (sits directly above the unit list it filters);
                 Job view keeps the plain "Client" column header. */}

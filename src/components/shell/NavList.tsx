@@ -43,7 +43,6 @@ export function NavList({
   activeHref,
   role,
   badgeCounts,
-  badgeHrefs,
   onNavigate,
   touch = false,
 }: {
@@ -55,12 +54,6 @@ export function NavList({
    *  warning rather than a backlog; the panel lives on the /jobs landing)
    *  and 'paperwork' (COIs and client redlines nobody has ruled on) today. */
   badgeCounts: Record<string, number>;
-  /** Optional per-item override of where a BADGED row links, applied only
-   *  on the touch (sheet) mount. The phone's /jobs is the list; the
-   *  landing panel that holds the Action Items is behind ?panel=incoming,
-   *  so a badged Jobs row goes there — otherwise the tap lands on a list
-   *  with nothing to show for the number. Desktop keeps item.href. */
-  badgeHrefs?: Record<string, string>;
   onNavigate?: () => void;
   /** Sheet mount: pad rows out to a 44px tap target. */
   touch?: boolean;
@@ -95,11 +88,10 @@ export function NavList({
             const Icon = NAV_ICONS[item.icon] ?? Circle;
             const isActive = item.href === activeHref;
             const count = badgeCounts[item.id] ?? 0;
-            const href = touch && count > 0 && badgeHrefs?.[item.id] ? badgeHrefs[item.id] : item.href;
             return (
               <Link
                 key={item.id}
-                href={href}
+                href={item.href}
                 onClick={onNavigate}
                 className={`group relative flex items-center gap-3 pl-3 pr-2 rounded-lg mb-0.5 transition-all duration-150 ${
                   touch ? 'py-2.5 min-h-[44px] text-[14px]' : 'py-2 text-[13px]'

@@ -111,22 +111,32 @@ export default function CalendarPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
+      {/* flex-wrap, and the toggle FIRST on a phone. Without wrapping this
+          row overflowed 390px and pushed the view toggle off the right
+          edge — the month view had no way back to the timeline or the
+          agenda, on the one screen where the left nav is behind a
+          hamburger (Wes 2026-09-16: "if you click on month there is no
+          way to navigate back"). */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-3 flex-wrap order-2 md:order-1">
           <h1 className="text-lg font-bold text-gray-900">{monthLabel}</h1>
           <div className="flex gap-1">
             <button onClick={prevMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">‹</button>
             <button onClick={goToday} className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200">Today</button>
             <button onClick={nextMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">›</button>
           </div>
+        </div>
+        <div className="order-1 md:order-2 w-full md:w-auto">
           <ScheduleViewToggle current="month" />
         </div>
-        <StatusLegend>
-          <div className="flex items-center gap-1">
-            <span><Wrench size={16} aria-hidden /></span>
-            <span className="text-gray-500">Maintenance pill</span>
-          </div>
-        </StatusLegend>
+        <div className="order-3">
+          <StatusLegend>
+            <div className="flex items-center gap-1">
+              <span><Wrench size={16} aria-hidden /></span>
+              <span className="text-gray-500">Maintenance pill</span>
+            </div>
+          </StatusLegend>
+        </div>
       </div>
 
       {/* Calendar grid */}
