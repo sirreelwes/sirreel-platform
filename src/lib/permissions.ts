@@ -841,7 +841,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // Seeds and backfills that used to need a laptop and a terminal
         // (Wes 2026-09-16, working from an iPad). Registry-gated, dry-run
         // first, audited; no schema changes.
-        { id: 'maintenance', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
+        // id is NOT 'maintenance': that belongs to the vehicle Maintenance
+        // page, and badgeCounts is keyed by nav id — sharing it would light
+        // this row up with a count of trucks due for service.
+        { id: 'run-task', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
         // Payroll. Email-gated like Data Exports, NOT role-gated: ADMIN is
