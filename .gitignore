@@ -32,6 +32,7 @@ scripts/*
 !scripts/add-partner-sms-columns.ts
 !scripts/add-collector-columns.ts
 !scripts/add-team-member-user-column.ts
+!scripts/thank-you-queue-report.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts
