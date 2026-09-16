@@ -67,9 +67,9 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     title: 'Seed VSM Planet’s photo roster',
     summary: 'Creates the 14 Photo Shoot Rentals units on VSM Planet Rentals, and mints their account link.',
     detail:
-      'Files VSM Planet as an EQUIPMENT partner in the Photo Shoot Rentals section with will-call handover, then adds any of the 14 roster units that are not already there — matched by name, so running it twice adds nothing. Rates are left empty on purpose: Vic proposes them from his own page. Nothing reaches sirreel.com until a unit is listed, has a photo, and the agreement is signed.',
+      'Files VSM Planet as an EQUIPMENT partner in the Photo Shoot Rentals section with will-call handover, then adds any of the 14 roster units that are not already there — matched by name, so running it twice adds nothing. If the vendor carries no deal it seeds Wes\u2019s 35% to SirReel / 43% ceiling; it never overwrites one already there. Unit rates are left empty on purpose: Vic proposes them from his own page. Nothing reaches sirreel.com until a unit is listed, has a photo, and the agreement is signed.',
     category: 'seed',
-    writes: 'vendors (one row, upserted) · sub_contracted_vehicles (up to 14 rows) · sr_audit_logs',
+    writes: 'vendors (one row, upserted — including the 35% / max 43% deal if it has none) · sub_contracted_vehicles (up to 14 rows) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/onboard-vsm-planet.ts',
     params: [
       // Confirmed by Wes 2026-09-16, so it is pre-filled — typing an address

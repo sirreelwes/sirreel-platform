@@ -77,16 +77,26 @@ const CONFIRM = 'Exact model and pack size confirmed at booking'
 export const VSM_PLANET_NAME = 'VSM Planet Rentals'
 
 /**
- * The partner facts the onboarding script asserts. Email and phone are
- * deliberately ABSENT: VSM Planet is already a partner row in the live DB
- * with a deal on it (35% / max 43%), so whatever contact is on file there is
- * better than anything this file could assert. The script only writes them
- * when passed on the command line.
+ * The partner facts the onboarding task asserts.
  *
- * `lotAddress` is null for the same reason in the other direction — the site
- * says Hollywood and a directory listing says Glendale, and a wrong address
- * on a WILL_CALL partner sends a production to the wrong door. Vic sets it
- * from his account page; the portal's "You pick up" card reads it.
+ * CORRECTED 2026-09-16: this file, and CLAUDE.md's discount-waterfall note,
+ * both said VSM Planet was already a partner row in the live DB carrying the
+ * 35% / max 43% deal. **It was not.** The first dry run reported "vendor does
+ * not exist" and Wes confirmed against the vendor list. The deal was agreed in
+ * conversation on 2026-09-11 and written down; the row was never created. So
+ * the numbers below are seeded HERE, because otherwise the first VSM unit
+ * quotes against a partner with no deal at all and `stampVendorCost` pays
+ * them list.
+ *
+ * Every one of these is FILL-IF-EMPTY at the seed — none overwrites a value
+ * already on the vendor. Email and phone stay absent from this object on
+ * purpose and are passed in at run time, because an address is the one field
+ * worth a human confirming each time.
+ *
+ * `lotAddress` is null in the other direction — the site says Hollywood and a
+ * directory listing says Glendale, and a wrong address on a WILL_CALL partner
+ * sends a production to the wrong door. Vic sets it from his account page;
+ * the portal's "You pick up" card reads it.
  */
 export const VSM_PLANET = {
   name: VSM_PLANET_NAME,
@@ -104,6 +114,15 @@ export const VSM_PLANET = {
    * /crm/portals#partners, if Vic says otherwise on the call.
    */
   defaultReceiveMethod: 'WILL_CALL' as const,
+  /**
+   * Wes's deal, 2026-09-11: VSM gives SirReel 35% off list, and will go to
+   * 43% to keep a client. `partnerSharePercent` is SirReel's cut, and
+   * `partnerMaxSharePercent` is the ceiling the discount waterfall may raise
+   * it to before the rest comes out of SirReel's own share
+   * (discountWaterfall.ts). Seeded only when the vendor has neither.
+   */
+  partnerSharePercent: 35,
+  partnerMaxSharePercent: 43,
   supplies:
     'photo shoot rentals — Profoto strobe packs, heads and monolights, light modifiers, continuous LED, seamless and painted backdrops, backdrop support, stands and stills grip, tethering carts and camera kits',
   deliveryTerms:

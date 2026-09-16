@@ -1134,9 +1134,17 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   partner whose agreement was filed earlier.
 - Not guarded: a discount landing on a partner's ANCILLARY fee lines (paid
   to them in full) comes out of SirReel; a partner unit ADDED under an
-  existing discount is caught at send/book, not at the add. VSM Planet is
-  in the DB (2026-09-11: 35% deal, 43% max). The column went in by targeted `ALTER TABLE … ADD
-  COLUMN IF NOT EXISTS` — the live DB has drift, never `db push` blind.
+  existing discount is caught at send/book, not at the add. The column went
+  in by targeted `ALTER TABLE … ADD COLUMN IF NOT EXISTS` — the live DB has
+  drift, never `db push` blind.
+- **CORRECTION 2026-09-16: VSM Planet was NOT in the DB.** This note used to
+  read "VSM Planet is in the DB (2026-09-11: 35% deal, 43% max)". The deal was
+  agreed in conversation and written down here; the Vendor row was never
+  created, which the first dry run of the photo-roster seed caught ("vendor
+  does not exist") and Wes confirmed against the vendor list. The numbers are
+  real and are now seeded by that task (`VSM_PLANET` in photoShootRoster.ts),
+  fill-if-empty. **A deal recorded in this file is not a deal in the
+  database** — check the row before relying on one.
 
 ## Active Roadmap
 1. AI fleet optimization

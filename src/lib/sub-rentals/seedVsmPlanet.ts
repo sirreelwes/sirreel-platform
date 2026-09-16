@@ -68,6 +68,8 @@ export interface SeedVsmResult {
   /** Dry run only: the units that would be created, by name. */
   wouldCreate: string[]
   accountUrl: string | null
+  /** The deal this run wrote, or null when one was already on file. */
+  deal: { sharePercent: number; maxSharePercent: number } | null
   /** Human-readable trace, in order. */
   log: string[]
 }
@@ -106,7 +108,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
   const log: string[] = []
   const result: SeedVsmResult = {
     dryRun, vendorId: null, vendorExisted: false, asserted: {}, filled: [],
-    createdUnitIds: [], existingUnitIds: [], wouldCreate: [], accountUrl: null, log,
+    createdUnitIds: [], existingUnitIds: [], wouldCreate: [], accountUrl: null, deal: null, log,
   }
 
   log.push(`${dryRun ? '[dry run] ' : ''}Building the Photo Shoot Rentals section from ${VSM_PLANET_NAME}…`)
@@ -118,6 +120,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
       id: true, email: true, phone: true, partnerKind: true, catalogSection: true,
       defaultReceiveMethod: true, contactName: true, website: true, supplies: true,
       deliveryTerms: true, notes: true, lotAddress: true,
+      partnerSharePercent: true, partnerMaxSharePercent: true,
     },
   })
   result.vendorExisted = !!existing
@@ -143,11 +146,30 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
   fillIfEmpty('notes', VSM_PLANET.notes)
   if (opts.email) fill.email = opts.email
   if (opts.phone) fill.phone = opts.phone
-  result.filled = Object.keys(fill)
+
+  // THE DEAL. Written only when the vendor carries neither number — never
+  // over a figure someone negotiated. It is here because the row turned out
+  // not to exist (2026-09-16) while this repo had recorded the deal since
+  // 2026-09-11: without it the first VSM unit quotes against a partner with
+  // no deal and stampVendorCost pays them list.
+  const deal: Record<string, number> = {}
+  if (!existing?.partnerSharePercent && !existing?.partnerMaxSharePercent) {
+    deal.partnerSharePercent = VSM_PLANET.partnerSharePercent
+    deal.partnerMaxSharePercent = VSM_PLANET.partnerMaxSharePercent
+  }
+  result.deal = Object.keys(deal).length
+    ? { sharePercent: VSM_PLANET.partnerSharePercent, maxSharePercent: VSM_PLANET.partnerMaxSharePercent }
+    : null
+  result.filled = [...Object.keys(fill), ...Object.keys(deal)]
 
   log.push(existing ? `vendor exists (${existing.id})` : 'vendor does not exist — it will be created')
   log.push(`  assert: ${Object.entries(asserted).map(([k, v]) => `${k}=${v}`).join(' · ')}`)
   log.push(`  fill  : ${result.filled.length ? result.filled.join(', ') : '(nothing — everything already set)'}`)
+  log.push(
+    result.deal
+      ? `  DEAL  : ${result.deal.sharePercent}% to SirReel, up to ${result.deal.maxSharePercent}% — seeded because the vendor had none. Confirm it on /crm/portals#partners.`
+      : '  deal  : already on the vendor — left alone.',
+  )
 
   if (dryRun && !existing) {
     log.push('[dry run] nothing written. Re-run for real to create the vendor and its roster.')
@@ -159,7 +181,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
     ? existing!
     : await prisma.vendor.upsert({
         where: { name: VSM_PLANET_NAME },
-        update: { ...asserted, ...fill },
+        update: { ...asserted, ...fill, ...deal },
         create: {
           name: VSM_PLANET_NAME,
           ...asserted,
@@ -170,6 +192,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
           notes: VSM_PLANET.notes,
           ...(opts.email ? { email: opts.email } : {}),
           ...(opts.phone ? { phone: opts.phone } : {}),
+          ...deal,
         },
         select: {
           id: true, email: true, phone: true, partnerKind: true,

@@ -115,6 +115,12 @@ eq('VSM defaults to the photo section', VSM_PLANET.catalogSection, 'PHOTO_SHOOT'
 yes('website is https', /^https:\/\//.test(VSM_PLANET.website))
 yes('no address is guessed', !('lotAddress' in VSM_PLANET))
 yes('no email is guessed', !('email' in VSM_PLANET))
+// The deal was recorded in this repo since 2026-09-11 but the vendor row did
+// not exist, so the seed carries it. Wes's numbers, not derived.
+eq('SirReel\u2019s share of a VSM unit', VSM_PLANET.partnerSharePercent, 35)
+eq('the ceiling it may rise to', VSM_PLANET.partnerMaxSharePercent, 43)
+yes('the ceiling is above the deal', VSM_PLANET.partnerMaxSharePercent > VSM_PLANET.partnerSharePercent)
+yes('both are percentages', [VSM_PLANET.partnerSharePercent, VSM_PLANET.partnerMaxSharePercent].every((n) => n > 0 && n < 100))
 
 // ── the two to feature ────────────────────────────────────────────────
 eq('two units are featured', FEATURED_FIRST.length, 2)
