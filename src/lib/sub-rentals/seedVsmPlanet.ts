@@ -84,18 +84,50 @@ const PLACEHOLDER_NOTE =
  * than failing here. Ran 2026-09-11; the check is for a restored or fresh
  * database, and it is the one thing this task will not do for you.
  */
-async function preflight(): Promise<string> {
+async function enumLabels(typname: string): Promise<string[]> {
   const rows = await prisma.$queryRawUnsafe<{ enumlabel: string }[]>(
-    `SELECT e.enumlabel FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid WHERE t.typname = 'PartnerCatalogSection'`,
+    `SELECT e.enumlabel FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid WHERE t.typname = $1`,
+    typname,
   )
-  const labels = rows.map((r) => r.enumlabel)
-  if (!labels.includes('PHOTO_SHOOT')) {
+  return rows.map((r) => r.enumlabel)
+}
+
+/**
+ * EVERY enum value this run is about to write, checked against the database
+ * before anything is written.
+ *
+ * The PartnerCatalogSection half has been here since the start. The
+ * ReceiveMethod half was NOT, and that is the gap: the day
+ * DELIVER_TO_SIRREEL was added to the schema, the deployed Prisma client
+ * knew the label and Postgres did not, so choosing it in the picker sent a
+ * value the database rejects — surfacing as a 500 and "the task failed"
+ * rather than the one sentence that would have fixed it. A migration this
+ * task depends on has to be checked BY this task; the generated client is
+ * not evidence the column or label exists.
+ */
+async function preflight(receiveMethod: ReceiveMethodKey): Promise<string[]> {
+  const sections = await enumLabels('PartnerCatalogSection')
+  if (!sections.includes('PHOTO_SHOOT')) {
     throw new SeedRefused(
-      `PartnerCatalogSection has no PHOTO_SHOOT value (has: ${labels.join(', ')}).`,
-      'This one needs a laptop: run scripts/add-photo-shoot-enum-values.ts, deploy, then run this again.',
+      `PartnerCatalogSection has no PHOTO_SHOOT value (has: ${sections.join(', ')}).`,
+      'Run this one statement in the Neon console, then try again:\n' +
+        `ALTER TYPE "PartnerCatalogSection" ADD VALUE IF NOT EXISTS 'PHOTO_SHOOT';`,
     )
   }
-  return '✓ preflight: PartnerCatalogSection.PHOTO_SHOOT exists'
+
+  const methods = await enumLabels('ReceiveMethod')
+  if (!methods.includes(receiveMethod)) {
+    throw new SeedRefused(
+      `The database does not know the receive method ${receiveMethod} yet (it has: ${methods.join(', ')}).`,
+      'Either pick one of the methods it does know, or run this one statement in the Neon console and try again:\n' +
+        `ALTER TYPE "ReceiveMethod" ADD VALUE IF NOT EXISTS '${receiveMethod}';`,
+    )
+  }
+
+  return [
+    '✓ preflight: PartnerCatalogSection.PHOTO_SHOOT exists',
+    `✓ preflight: ReceiveMethod.${receiveMethod} exists`,
+  ]
 }
 
 export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult> {
@@ -112,7 +144,7 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
   }
 
   log.push(`${dryRun ? '[dry run] ' : ''}Building the Photo Shoot Rentals section from ${VSM_PLANET_NAME}…`)
-  log.push(await preflight())
+  log.push(...(await preflight(receiveMethod)))
 
   const existing = await prisma.vendor.findUnique({
     where: { name: VSM_PLANET_NAME },
