@@ -385,7 +385,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `/help/lockbox` is a static segment, so it wins over `/help/[slug]` and
   needs no SetupGuide row. `npm run test:lockbox-howto`.
 
-## Second holds — pick the queue position when you create it (2026-09-16 — Wes/Jose)
+## Second holds & LiteHold — pick the position when you create it (2026-09-16 — Wes/Jose)
+- **Two different things wear `holdRank >= 2`, and Wes named the second one
+  LiteHold** (2026-09-16: "I don't want to call them 'Student Holds' let's
+  call them LiteHold"):
+  - **2nd / 3rd Hold** — a QUEUE POSITION behind a production that has the
+    unit. You want it; somebody got there first. Keeps the desk's own words
+    (Wes 2026-09-09). Reached from the board's "+ Nth hold on this unit" and
+    from the over-capacity escape.
+  - **LiteHold** — placed behind DELIBERATELY with nothing ahead, typically
+    at a reduced rate (Jose's student projects at 50%). It yields: any later
+    reservation books straight past it. Reached from the create-time choice.
+- **Nothing in the DB separates them** — both are a rank ≥ 2 BookingItem.
+  The distinction is carried in the UI only: `queuedBehindSomebody` state in
+  NewHoldModal, `rowQueue(r).incumbents.length === 0` in
+  MakeReservationModal. So the timeline chip still says "2nd", and no report
+  can count LiteHolds. Giving LiteHold its own marker is the same schema
+  change as the tentative-hold concept below — do them together or not at all.
 - Jose: "there is no way for me to create second holds for vehicles or
   stages." The queue shipped 2026-09-09 (`BookingItem.holdRank`, 1st/2nd/3rd,
   /rank, /promote, the backup sub-lane). What was missing was a door.
@@ -407,13 +423,13 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   that as a button. `backupMode` is state now, not just the prop it starts
   in, and `submit(bufferOverride, backupOverride)` takes it explicitly.
 - **REVERSES "only present other options when there is a conflict"**
-  (Wes 2026-09-09). Jose: student projects pay 50% and should START as a 2nd
-  Hold so a full-rate job supersedes them — a decision made when NOTHING is
-  in the way, which a conflict-gated control can never reach. Both create
-  paths now offer "Place as 1st / 2nd Hold" unconditionally
-  (`quietRankChoice` in MakeReservationModal, the segmented control in
-  NewHoldModal). **The default is unchanged — rank 1** — which was the other
-  half of the 9/9 rule and stays.
+  (Wes 2026-09-09). Jose: student projects pay 50% and should START behind
+  the queue so a full-rate job supersedes them — a decision made when
+  NOTHING is in the way, which a conflict-gated control can never reach.
+  Both create paths now offer "Place as 1st Hold / LiteHold"
+  unconditionally (`quietRankChoice` in MakeReservationModal, the segmented
+  control in NewHoldModal). **The default is unchanged — rank 1** — which was
+  the other half of the 9/9 rule and stays.
 - **A backup takes NO unit.** Binding one makes that unit read `booked` to
   `getCategoryAvailability` (the assignments query has no rank filter), and
   the later full-rate hold is then REFUSED with `backup-has-dibs` — the
@@ -432,15 +448,15 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `holdRank`; the drawer reads "Which unit is this hold queued behind?" →
   "Queue behind". A primary still cannot.
 - **NOT done, deliberately (Wes 2026-09-16 chose "create-time choice for
-  now"):** nothing TELLS anyone when a full-rate job supersedes a student
-  hold — it just sits at rank 2 with no unit. And a backup that HAS been
+  now"):** nothing TELLS anyone when a full-rate job supersedes a LiteHold
+  — it just sits at rank 2 with no unit. And a backup that HAS been
   bound to a unit still blocks a new primary on that unit rather than
   yielding. A real "tentative hold that gets bumped" is a different concept
   from "backup queued behind, waiting to be promoted"; this ships the door,
   not the new concept.
 - `promoteHoldsOnApproval` in holdOnQuoteSend.ts is dead (no callers) and
   must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
-  which would silently promote every student hold.
+  which would silently promote every LiteHold.
 
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth

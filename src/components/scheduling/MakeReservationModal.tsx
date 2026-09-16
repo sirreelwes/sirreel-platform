@@ -253,6 +253,10 @@ interface RowResult {
   label: string
   bookingNumber: string | null
   holdRank?: number
+  /** True when the rank ≥ 2 was chosen with NOTHING ahead of it — a
+   *  LiteHold, not a queue position. `holdRank` alone cannot tell the
+   *  two apart; nothing in the DB distinguishes them yet. */
+  lite?: boolean
   demoted?: { bookingNumber: string; from: number; to: number }[]
   assigned: string[]
   note: string | null
@@ -1049,13 +1053,14 @@ export function MakeReservationModal({
         if (!bookingItemId) {
           note = `The ${category.name} line was added but its hold could not be read back — check the order.`
         } else if (queuedBehind) {
-          // Two different sentences, because a 2nd Hold can now be chosen
-          // with NOTHING ahead of it (Wes 2026-09-16, the student-rate
-          // case). Telling that agent to wait for "the hold ahead" would
-          // describe a hold that does not exist.
+          // Two sentences, because the same rank means two different
+          // things: a QUEUE POSITION behind somebody, or a LiteHold placed
+          // behind on purpose with nothing ahead (Wes 2026-09-16). Telling
+          // the LiteHold agent to wait for "the hold ahead" would describe
+          // a hold that does not exist.
           note = rowQueue(r).incumbents.length > 0
             ? `${category.name}: queued as the ${holdRankLabel(placedRank!)} Hold — no unit until the hold ahead releases.`
-            : `${category.name}: placed as the ${holdRankLabel(placedRank!)} Hold — nothing is ahead of it, and it takes no unit and no capacity, so a later reservation books ahead of it.`
+            : `${category.name}: placed as a LiteHold — nothing is ahead of it, and it takes no unit and no capacity, so a later reservation books ahead of it.`
         } else if (canBindUnit && (assignNext || r.unitIds.length > 0)) {
           // The units the agent NAMED go on first, in the order they
           // were picked. A named unit is a deliberate human choice, so
@@ -1150,6 +1155,7 @@ export function MakeReservationModal({
           label,
           bookingNumber: hold?.booking?.bookingNumber ?? null,
           holdRank: placedRank,
+          lite: (placedRank ?? 1) > 1 && rowQueue(r).incumbents.length === 0,
           demoted,
           assigned,
           note,
@@ -1370,14 +1376,25 @@ export function MakeReservationModal({
   }
 
   /**
-   * Queue position when NOTHING is in the way — the quiet twin of
-   * queueBlock.
+   * The LiteHold choice — placing a hold behind on purpose when NOTHING
+   * is in the way. The quiet twin of queueBlock.
+   *
+   * TWO DIFFERENT THINGS wear rank ≥ 2, and they are not the same act
+   * (Wes 2026-09-16, naming it):
+   *
+   *   2nd / 3rd Hold  — a QUEUE POSITION behind a production that has the
+   *                     unit. You want it; somebody else got there first.
+   *                     That is `queueBlock`, below, and it keeps those
+   *                     words — they are the desk's own (Wes 2026-09-09).
+   *   LiteHold        — placed behind DELIBERATELY with nothing ahead,
+   *                     typically at a reduced rate (Jose's student
+   *                     projects at 50%). It yields: any later hold books
+   *                     straight past it.
    *
    * REVERSES "ranking should always default to 1 and only present other
-   * options when there is a conflict" (Wes 2026-09-09). Wes 2026-09-16,
-   * from Jose: a student project at half rate should START as a 2nd Hold
-   * so a full-rate job supersedes it — a decision made precisely when
-   * there is no conflict, which a conflict-gated control can never reach.
+   * options when there is a conflict" (Wes 2026-09-09) — a LiteHold is
+   * decided precisely when there is no conflict, which a conflict-gated
+   * control can never reach.
    *
    * The DEFAULT is untouched: `queueChoice: 'none'` still writes rank 1.
    * Only the option is new, and it stays quiet (no amber, no blocker) so
@@ -1406,7 +1423,7 @@ export function MakeReservationModal({
             second ? 'bg-lt-fg text-white border-lt-fg' : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:border-lt-fg3'
           }`}
         >
-          2nd Hold
+          LiteHold
         </button>
         {second && (
           <span className="text-[11px] text-lt-fg3 basis-full">
@@ -1534,7 +1551,7 @@ export function MakeReservationModal({
                   <div key={rr.key}>
                     <span className="font-semibold text-lt-fg">{rr.label}</span>
                     {rr.holdRank != null && rr.holdRank > 1 && (
-                      <> · queued as the {holdRankLabel(rr.holdRank)} Hold</>
+                      <> · {rr.lite ? 'placed as a LiteHold' : `queued as the ${holdRankLabel(rr.holdRank)} Hold`}</>
                     )}
                     {rr.assigned.length > 0 && (
                       <> · <span className="font-semibold text-lt-fg">{rr.assigned.join(', ')}</span></>
@@ -2289,7 +2306,9 @@ export function MakeReservationModal({
                       `row:${r.key}`,
                       `Reserving ${rowCat(r)?.name ?? 'the vehicle'} × ${r.quantity}` +
                         (r.queueChoice === 'second'
-                          ? ` as the ${holdRankLabel(rowQueue(r).nextFreeRank)} Hold`
+                          ? rowQueue(r).incumbents.length === 0
+                            ? ' as a LiteHold'
+                            : ` as the ${holdRankLabel(rowQueue(r).nextFreeRank)} Hold`
                           : ''),
                     ),
                   )}

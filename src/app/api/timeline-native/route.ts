@@ -736,9 +736,12 @@ export async function GET(req: NextRequest) {
   //    availableToHold, and they read as a nag: a unit is owed.
   //
   //    Rank ≥ 2 rows ride the same lane but mean the opposite (Jose,
-  //    2026-09-16): a hold deliberately placed behind the queue — a
-  //    student project at half rate — owes nobody a unit and consumes no
-  //    capacity. They were excluded here, which meant a reservation
+  //    2026-09-16): a LITEHOLD — a hold deliberately placed behind the
+  //    queue, typically at a reduced rate (Jose's student projects at
+  //    50%) — owes nobody a unit and consumes no capacity. A backup
+  //    queued behind a real production lands here too; nothing in the DB
+  //    separates them, so the chip says the rank either way.
+  //    They were excluded here, which meant a reservation
   //    created as a 2nd Hold had NOWHERE on this board to appear: no
   //    assignment, so no bar on a unit row, and filtered out of this
   //    lane. It simply vanished. They are included now and rendered

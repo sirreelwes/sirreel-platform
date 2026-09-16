@@ -624,10 +624,10 @@ export async function reconcileHoldFirmness(orderId: string): Promise<{
  *
  * DO NOT WIRE THIS BACK UP. It promotes every rank-2 REQUESTED item on
  * the job's bookings to rank 1 in one updateMany, which since 2026-09-16
- * would silently turn a deliberate 2nd Hold — a student project placed
- * behind the queue on purpose, at half rate — into a first hold that
- * consumes capacity. holdRank is a human's queue decision now; nothing
- * automatic may move it.
+ * would silently turn every LiteHold — a hold placed behind the queue on
+ * purpose, typically at a reduced rate — into a first hold that consumes
+ * capacity. holdRank is a human's decision now; nothing automatic may
+ * move it.
  */
 export async function promoteHoldsOnApproval(orderId: string): Promise<{ promoted: number; error: string | null }> {
   try {

@@ -206,6 +206,20 @@ export function NewHoldModal({
   // 2026-09-16: no way to create second holds), so an agent who reached
   // it from the job page had to abandon the reservation.
   const [backupMode, setBackupMode] = useState(asBackup)
+  /**
+   * Is something actually AHEAD of this hold?
+   *
+   * `backupMode` says the rank will be ≥ 2. It does NOT say why, and the
+   * two whys read differently to the desk (Wes 2026-09-16):
+   *   true  → a 2ND HOLD. A queue position behind a production that has
+   *           the unit. Set when the board opened this modal on a booked
+   *           bar, and when the over-capacity escape below is taken.
+   *   false → a LITEHOLD. Placed behind deliberately with nothing ahead,
+   *           typically at a reduced rate. It yields to anything later.
+   * Labels only — the write is identical, because nothing in the DB
+   * separates them yet.
+   */
+  const [queuedBehindSomebody, setQueuedBehindSomebody] = useState(asBackup)
   // The over-capacity 409, kept apart from hardError because it is not a
   // dead end: it carries the one button that finishes the job.
   const [capacityBlock, setCapacityBlock] = useState<{ reason: string; availability: AvailabilitySummary | null } | null>(null)
@@ -450,8 +464,9 @@ export function NewHoldModal({
         if (wantsBackup && !asset) {
           setHeldNotice({
             hold: created,
-            message:
-              'Queued as a backup. It holds no unit and no capacity — a later reservation books ahead of it.',
+            message: queuedBehindSomebody
+              ? 'Queued as a backup. It holds no unit and no capacity — it becomes real when a hold ahead releases.'
+              : 'Placed as a LiteHold. It holds no unit and no capacity — a later reservation books ahead of it.',
           })
           return
         }
@@ -533,12 +548,16 @@ export function NewHoldModal({
         <header className="flex items-start justify-between px-6 py-4 border-b border-zinc-200">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">
-              {backupMode ? 'New backup hold' : 'New hold'}
+              {backupMode ? (queuedBehindSomebody ? 'New backup hold' : 'New LiteHold') : 'New hold'}
               {asset ? ` on ${asset.unitName}` : ''}
             </h2>
             <p className="text-sm text-zinc-600 mt-0.5">
               {categoryName} · bufferDays={bufferDays}
-              {backupMode ? ' · queues behind existing holds (rank assigned by server)' : ''}
+              {backupMode
+                ? queuedBehindSomebody
+                  ? ' · queues behind existing holds (rank assigned by server)'
+                  : ' · yields to any later reservation'
+                : ''}
               {asset
                 ? canBindUnit
                   ? ' · will bind to this specific unit on create'
@@ -598,12 +617,18 @@ export function NewHoldModal({
             />
           </label>
 
-          {/* Queue position, chosen up front — REVERSES "only present
-              other options when there is a conflict" (Wes 2026-09-09).
-              Wes 2026-09-16, from Jose: a student project at half rate
-              should START life as a 2nd hold so a full-rate job supersedes
-              it, and that decision is made when there is NOTHING in the
-              way. A conflict-gated control can never be reached for it.
+          {/* Chosen up front — REVERSES "only present other options when
+              there is a conflict" (Wes 2026-09-09).
+
+              TWO THINGS wear rank ≥ 2 and the label follows which one this
+              is (Wes 2026-09-16, naming it). Opened from the board's
+              "+ Nth hold on this unit" the modal carries an `asset` and
+              something IS ahead of it — that is a 2ND HOLD, a queue
+              position. Opened with no unit named, nothing is ahead and the
+              agent is placing a hold behind DELIBERATELY, typically at a
+              reduced rate (Jose's student projects at 50%) — that is a
+              LITEHOLD, and it yields to any later reservation.
+
               The DEFAULT is unchanged — 1st hold unless somebody says
               otherwise — which was the other half of the 9/9 rule. */}
           <div>
@@ -613,22 +638,30 @@ export function NewHoldModal({
                 <button
                   key={String(backup)}
                   type="button"
-                  onClick={() => setBackupMode(backup)}
+                  onClick={() => {
+                    setBackupMode(backup)
+                    // Picking it by hand with nothing named is a LiteHold;
+                    // only the board and the capacity escape put somebody
+                    // ahead of it.
+                    if (backup && !asset) setQueuedBehindSomebody(false)
+                  }}
                   className={`rounded border px-3 py-1.5 text-sm font-medium ${
                     backupMode === backup
                       ? 'border-zinc-800 bg-zinc-800 text-white'
                       : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
                   }`}
                 >
-                  {backup ? '2nd hold' : '1st hold'}
+                  {backup ? (queuedBehindSomebody ? '2nd hold' : 'LiteHold') : '1st hold'}
                 </button>
               ))}
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               {backupMode
-                ? asset
-                  ? `Queues behind whatever already has ${asset.unitName} on these dates. A backup consumes no capacity.`
-                  : 'Queues behind the holds on these dates and takes no unit, so a later reservation can still book the class. Use it for tentative and reduced-rate work.'
+                ? queuedBehindSomebody
+                  ? asset
+                    ? `Queues behind whatever already has ${asset.unitName} on these dates. A backup consumes no capacity.`
+                    : 'Queues behind the holds already on these dates. A backup consumes no capacity.'
+                  : 'Takes no unit and no capacity, so any later reservation books straight past it. Use it for tentative and reduced-rate work.'
                 : 'The normal reservation — holds the capacity, and the unit once one is picked.'}
             </p>
           </div>
@@ -875,6 +908,9 @@ export function NewHoldModal({
               <button
                 onClick={() => {
                   setBackupMode(true)
+                  // Everything is booked, so this one really is queued
+                  // behind somebody — a 2nd hold, not a LiteHold.
+                  setQueuedBehindSomebody(true)
                   void submit(false, true)
                 }}
                 disabled={submitting}
