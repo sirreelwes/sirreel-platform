@@ -2065,11 +2065,22 @@ export function GanttBoard() {
                       className="border-b-2 border-gray-500 px-3 flex flex-col justify-center bg-rose-50/40"
                     >
                       {(() => {
-                        const holdCount = entry.tasks.filter((t: any) => t.kind === 'hold').length
-                        const taskCount = entry.tasks.length - holdCount
-                        const label = holdCount > 0 && taskCount > 0 ? 'Unassigned' : holdCount > 0 ? 'No unit' : 'Tasks'
+                        const holds = entry.tasks.filter((t: any) => t.kind === 'hold')
+                        // A backup owes nobody a unit — it is queued there
+                        // on purpose. Counting it as a to-do would put a
+                        // permanent red number on the board.
+                        const queuedCount = holds.filter((t: any) => (t.holdRank ?? 1) >= 2).length
+                        const holdCount = holds.length - queuedCount
+                        const taskCount = entry.tasks.length - holds.length
+                        const label =
+                          holdCount + queuedCount > 0 && taskCount > 0
+                            ? 'Unassigned'
+                            : holdCount + queuedCount > 0
+                              ? 'No unit'
+                              : 'Tasks'
                         const parts = [
                           holdCount > 0 ? `${holdCount} hold${holdCount === 1 ? '' : 's'} need${holdCount === 1 ? 's' : ''} a unit` : null,
+                          queuedCount > 0 ? `${queuedCount} queued behind` : null,
                           taskCount > 0 ? `${taskCount} task${taskCount === 1 ? '' : 's'} need${taskCount === 1 ? 's' : ''} assignment` : null,
                         ].filter(Boolean)
                         return (
@@ -2266,6 +2277,11 @@ export function GanttBoard() {
                           // category reading "0 available" while its units
                           // look free.
                           if (t.kind === 'hold') {
+                            // Queued on purpose, not owed a unit — the blue
+                            // dashed treatment the backup sub-lane already
+                            // uses, so the two read as the same thing.
+                            const queued = (t.holdRank ?? 1) >= 2
+                            const rankWord = holdRankLabel(t.holdRank ?? 2)
                             const fromPlanyo = Boolean(t.planyoCartId)
                             const hint = (t.planyoUnits ?? []).join(', ')
                             const detail = [
@@ -2283,7 +2299,11 @@ export function GanttBoard() {
                             return (
                               <div
                                 key={`uh-${k}`}
-                                className={`absolute rounded border border-dashed flex items-center overflow-hidden bg-rose-100 border-rose-500 text-rose-900 ${canBindUnit ? 'cursor-pointer hover:bg-rose-200 transition-colors' : ''}`}
+                                className={`absolute rounded border border-dashed flex items-center overflow-hidden ${
+                                  queued
+                                    ? `bg-blue-100 border-blue-400 text-blue-900 ${canBindUnit ? 'hover:bg-blue-200' : ''}`
+                                    : `bg-rose-100 border-rose-500 text-rose-900 ${canBindUnit ? 'hover:bg-rose-200' : ''}`
+                                } ${canBindUnit ? 'cursor-pointer transition-colors' : ''}`}
                                 style={{ left: bar.left, width: bar.width, top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H, ...meter }}
                                 onClick={canBindUnit ? (ev) => { ev.stopPropagation(); hideBarHover(); setAssignBookingItemId(t.bookingItemId) } : undefined}
                                 onPointerEnter={(ev) => showBarHover(ev, {
@@ -2292,7 +2312,11 @@ export function GanttBoard() {
                                   jobCode: t.jobCode,
                                   start: t.start,
                                   end: t.end,
-                                  flag: canBindUnit ? 'Needs a unit · click to pick one' : 'Needs a unit',
+                                  flag: queued
+                                    ? `${rankWord} hold · queued behind, no unit held`
+                                    : canBindUnit
+                                      ? 'Needs a unit · click to pick one'
+                                      : 'Needs a unit',
                                   unit: `${t.categoryName}${t.needed > 1 ? ` ×${t.needed}` : ''}`,
                                   contact: t.primaryContact ?? null,
                                   readiness: rdy,
@@ -2300,6 +2324,7 @@ export function GanttBoard() {
                                 onPointerLeave={hideBarHover}
                               >
                                 <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
+                                  {queued ? `${rankWord} · ` : ''}
                                   {t.categoryName}{t.needed > 1 ? ` ×${t.needed}` : ''} · {t.clientName}
                                 </span>
                               </div>

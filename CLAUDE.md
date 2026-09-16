@@ -385,6 +385,63 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `/help/lockbox` is a static segment, so it wins over `/help/[slug]` and
   needs no SetupGuide row. `npm run test:lockbox-howto`.
 
+## Second holds — pick the queue position when you create it (2026-09-16 — Wes/Jose)
+- Jose: "there is no way for me to create second holds for vehicles or
+  stages." The queue shipped 2026-09-09 (`BookingItem.holdRank`, 1st/2nd/3rd,
+  /rank, /promote, the backup sub-lane). What was missing was a door.
+- **On the board:** the only gesture that opened NewHoldModal in backup mode
+  was `openHoldOnAssetRow`, which infers backup from "the clicked date is
+  already booked" — but a booked date is covered by its own bar, whose
+  onClick stopPropagation's. Row 32px, bar 24px at top:4 → the whole target
+  was a 4px sliver. The selected reservation now carries the action itself
+  ("+ 2nd hold on Cube 27"), seeded with that bar's unit/class/dates. The
+  rank in the label runs the SERVER's arithmetic (deepest live rank across
+  the CATEGORY over the window, +1), so it reads "3rd" when a 2nd already
+  exists elsewhere in the class, and at `MAX_HOLD_RANK` it explains instead.
+- **Stages made it urgent:** Lankershim's three rooms share ONE class, so
+  wanting a specific stage that is taken never reads as the class being
+  full — `MakeReservationModal`'s queue panel is gated on `rowAtCapacity`
+  and could never fire for it.
+- **An over-capacity 409 is no longer a dead end.** The holds route already
+  said "place a backup hold" in its own `suggestion`; NewHoldModal renders
+  that as a button. `backupMode` is state now, not just the prop it starts
+  in, and `submit(bufferOverride, backupOverride)` takes it explicitly.
+- **REVERSES "only present other options when there is a conflict"**
+  (Wes 2026-09-09). Jose: student projects pay 50% and should START as a 2nd
+  Hold so a full-rate job supersedes them — a decision made when NOTHING is
+  in the way, which a conflict-gated control can never reach. Both create
+  paths now offer "Place as 1st / 2nd Hold" unconditionally
+  (`quietRankChoice` in MakeReservationModal, the segmented control in
+  NewHoldModal). **The default is unchanged — rank 1** — which was the other
+  half of the 9/9 rule and stays.
+- **A backup takes NO unit.** Binding one makes that unit read `booked` to
+  `getCategoryAvailability` (the assignments query has no rank filter), and
+  the later full-rate hold is then REFUSED with `backup-has-dibs` — the
+  opposite of superseding. So a rank ≥ 2 created with no asset skips the
+  unit-pick drawer in both modals. Unbound, it consumes no capacity and a
+  later reservation books straight past it.
+- **An unbound backup used to be INVISIBLE** — no assignment, so no bar on a
+  unit row, and `timeline-native`'s unassigned lane filtered to `holdRank: 1`.
+  A reservation created as a 2nd Hold appeared nowhere. That lane now carries
+  rank ≥ 2 too, in blue ("2nd · Cube Truck · Acme", "queued behind") rather
+  than the rose "needs a unit" nag, and the band counts them separately.
+- **The unit picker lets a backup point at a booked unit.** `assignUnit`'s
+  guard is rank-aware (only rank 1 is refused on a booked unit) but
+  AssignUnitsModal disabled every booked candidate, so a 2nd hold could never
+  be aimed at the truck it was queued behind. `available-units` returns
+  `holdRank`; the drawer reads "Which unit is this hold queued behind?" →
+  "Queue behind". A primary still cannot.
+- **NOT done, deliberately (Wes 2026-09-16 chose "create-time choice for
+  now"):** nothing TELLS anyone when a full-rate job supersedes a student
+  hold — it just sits at rank 2 with no unit. And a backup that HAS been
+  bound to a unit still blocks a new primary on that unit rather than
+  yielding. A real "tentative hold that gets bumped" is a different concept
+  from "backup queued behind, waiting to be promoted"; this ships the door,
+  not the new concept.
+- `promoteHoldsOnApproval` in holdOnQuoteSend.ts is dead (no callers) and
+  must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
+  which would silently promote every student hold.
+
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
   `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING

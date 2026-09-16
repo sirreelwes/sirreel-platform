@@ -441,6 +441,20 @@ export function NewHoldModal({
         // OPTIONAL unit-pick drawer for the new BookingItem. Bulk/supply
         // categories (no discrete units) and pre-bound holds finish now.
         const dept = (json as { department?: string }).department
+        // A backup deliberately takes NO unit — binding one would make
+        // that unit read `booked` to the availability engine and refuse
+        // the very reservation this hold is meant to make way for
+        // (assignUnit's `backup-has-dibs`). Same rule MakeReservationModal
+        // already follows for a queued line. A unit can still be pointed
+        // at later from the board, which is a deliberate act.
+        if (wantsBackup && !asset) {
+          setHeldNotice({
+            hold: created,
+            message:
+              'Queued as a backup. It holds no unit and no capacity — a later reservation books ahead of it.',
+          })
+          return
+        }
         if (!asset && dept && ASSET_BEARING.has(dept)) {
           setAssignPhase({ bookingItemId: created.bookingItem.id, hold: created })
           return
@@ -583,6 +597,41 @@ export function NewHoldModal({
               className="mt-1 block w-32 rounded border-zinc-300 text-sm px-2 py-1.5 disabled:bg-zinc-100 disabled:text-zinc-500"
             />
           </label>
+
+          {/* Queue position, chosen up front — REVERSES "only present
+              other options when there is a conflict" (Wes 2026-09-09).
+              Wes 2026-09-16, from Jose: a student project at half rate
+              should START life as a 2nd hold so a full-rate job supersedes
+              it, and that decision is made when there is NOTHING in the
+              way. A conflict-gated control can never be reached for it.
+              The DEFAULT is unchanged — 1st hold unless somebody says
+              otherwise — which was the other half of the 9/9 rule. */}
+          <div>
+            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Place as</span>
+            <div className="flex gap-2">
+              {[false, true].map((backup) => (
+                <button
+                  key={String(backup)}
+                  type="button"
+                  onClick={() => setBackupMode(backup)}
+                  className={`rounded border px-3 py-1.5 text-sm font-medium ${
+                    backupMode === backup
+                      ? 'border-zinc-800 bg-zinc-800 text-white'
+                      : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
+                  }`}
+                >
+                  {backup ? '2nd hold' : '1st hold'}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              {backupMode
+                ? asset
+                  ? `Queues behind whatever already has ${asset.unitName} on these dates. A backup consumes no capacity.`
+                  : 'Queues behind the holds on these dates and takes no unit, so a later reservation can still book the class. Use it for tentative and reduced-rate work.'
+                : 'The normal reservation — holds the capacity, and the unit once one is picked.'}
+            </p>
+          </div>
 
           <div>
             <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">
