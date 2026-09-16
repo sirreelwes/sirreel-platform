@@ -80,6 +80,16 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
       { key: 'receiveMethod', label: 'How gear changes hands', options: ['WILL_CALL', 'DELIVERY', 'DELIVER_TO_SIRREEL', 'PICKUP'], defaultValue: 'WILL_CALL', help: 'WILL_CALL: the production collects at their Hollywood counter (VSM\u2019s default). DELIVER_TO_SIRREEL: they drop it at Sun Valley and it goes out on our truck. DELIVERY: they take it to set. PICKUP: their driver takes it to set.' },
     ],
   },
+  {
+    id: 'cargo-vans-no-lift-gate',
+    title: 'Cargo 20–25: file as Cargo Van w/o Liftgate',
+    summary: 'Moves the six vans out of the w/ Liftgate class, folds any duplicate row (the second Cargo 25) into the original, and fixes both unit counts.',
+    detail:
+      'Wes 2026-09-16: Cargo 20 through 25 have no lift gate. They were seeded under "Cargo Van w/ Liftgate" and the first fix added a second Cargo 25 to the w/o class instead of moving the original. This re-files each ORIGINAL row (same id, same trips, same access code) into "Cargo Van w/o Liftgate"; where a duplicate exists it is folded into the original — every reservation, check-out, inspection and maintenance row re-pointed, missing facts copied over — and then retired under a name that says it was a duplicate. Nothing is deleted. The w/o class is un-archived if it was, and both classes’ unit counts are set to what is actually in them. A hold filed under w/ that is on one of these vans is NAMED in the log and left for a person to re-class. Running it twice changes nothing.',
+    category: 'backfill',
+    writes: 'assets (the six rows re-filed; a duplicate retired) · booking_assignments, checkout_records, maintenance_records, dispatch_tasks, inspections, insurance claims, incidents, lot checks, BIT inspections (re-pointed off a duplicate) · asset_categories + inventory_items (unit counts; the w/o class un-archived) · audit_log',
+    cliEquivalent: 'npx tsx scripts/cargo-vans-no-lift-gate.ts',
+  },
 ] as const
 
 export function maintenanceTask(id: string): MaintenanceTaskMeta | null {

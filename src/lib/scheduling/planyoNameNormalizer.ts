@@ -31,21 +31,19 @@
  */
 
 /**
- * Cross-category unit overrides — Planyo's categorization is stale for
- * these units: it files them under "Cargo Vans w/o Liftgate" but the
- * physical vans live in HQ's "Cargo Van w/ Liftgate" category. Ruling
- * by Wes 2026-07-15: bind to the HQ w/-Liftgate assets. Keyed by
- * NORMALIZED unit name; consulted ONLY after a zero-match in the
- * reservation's own resolved category (Cargo 22/25 exist in w/o and
- * resolve normally — deliberately absent here). Applies to both the
- * ongoing importer and the backfill binder. Dies at Planyo cutover.
+ * Cross-category unit overrides — EMPTY since 2026-09-16.
+ *
+ * Ruling by Wes 2026-07-15 filed Cargo 20/21/23/24 here as living in HQ's
+ * "Cargo Van w/ Liftgate" class, overruling Planyo's "Cargo Vans w/o
+ * Liftgate" filing as stale. Planyo was right: Wes 2026-09-16, Cargo 20–25
+ * have no lift gate, and the `cargo-vans-no-lift-gate` maintenance task
+ * moves the rows. Once they sit in w/o, the reservation's own category
+ * matches and an override would never be consulted — so the map is empty
+ * rather than pointing at the class the vans just left. The lookup stays,
+ * for the importer and the binder, keyed by NORMALIZED unit name and
+ * consulted ONLY after a zero-match in the reservation's own category.
  */
-export const PLANYO_UNIT_CATEGORY_OVERRIDES: Record<string, string> = {
-  'Cargo 20': 'Cargo Van w/ Liftgate',
-  'Cargo 21': 'Cargo Van w/ Liftgate',
-  'Cargo 23': 'Cargo Van w/ Liftgate',
-  'Cargo 24': 'Cargo Van w/ Liftgate',
-}
+export const PLANYO_UNIT_CATEGORY_OVERRIDES: Record<string, string> = {}
 
 /**
  * Planyo unit_assignment strings whose normalized form is a DIFFERENT
