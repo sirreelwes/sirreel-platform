@@ -20,6 +20,8 @@ import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
 import { VehicleBlindToggle } from '@/components/fleet/VehicleBlindToggle'
+import { CheckoutAddOnsCard } from '@/components/orders/CheckoutAddOnsCard'
+import { ordersForBooking } from '@/lib/fleet/blindHandoff'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,7 +69,7 @@ export default async function FleetPickupPage({ params }: Params) {
         select: {
           booking: {
             select: {
-              bookingNumber: true, jobName: true, jobId: true, company: { select: { name: true } },
+              id: true, bookingNumber: true, jobName: true, jobId: true, company: { select: { name: true } },
               // Blind handoff lives on the order, and the rep standing at
               // the gate is often the first to know it just became one
               // (Wes 2026-09-15: "always allow the fleet guy to change to
@@ -76,7 +78,7 @@ export default async function FleetPickupPage({ params }: Params) {
                 select: {
                   orders: {
                     where: { status: { not: 'CANCELLED' } },
-                    select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true },
+                    select: { id: true, orderNumber: true, status: true, bookingId: true, blindPickup: true, blindReturn: true },
                     orderBy: { createdAt: 'asc' },
                   },
                 },
@@ -169,6 +171,24 @@ export default async function FleetPickupPage({ params }: Params) {
     )
   }
 
+  // Which order the driver's add-ons go on: the order carrying THIS
+  // vehicle's booking (lib/fleet/blindHandoff's binding rule), newest live
+  // one first. Straps for Cube 28 belong on Cube 28's order.
+  const liveBookingIds = new Set(
+    booking.jobId
+      ? (
+          await prisma.booking.findMany({
+            where: { jobId: booking.jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
+            select: { id: true },
+          })
+        ).map((b) => b.id)
+      : [],
+  )
+  const addOnOrder =
+    ordersForBooking(booking.job?.orders ?? [], booking.id, liveBookingIds)
+      .filter((o) => !['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED', 'CANCELLED'].includes(o.status))
+      .slice(-1)[0] ?? null
+
   // The drivers the client or office already NAMED — for this unit first,
   // then anywhere else on the job. The picker used to open on the first
   // eight names of the whole driver file, A–Z: on Cube 28 (2026-09-15)
@@ -212,6 +232,17 @@ export default async function FleetPickupPage({ params }: Params) {
             : null
         }
       />
+      {/* After the driver: the last-minute extras they ask for as they
+          load (Wes 2026-09-16). Straight onto this vehicle's order. */}
+      <div className="mt-5" />
+      {addOnOrder && (
+        <CheckoutAddOnsCard
+          orderId={addOnOrder.id}
+          orderNumber={addOnOrder.orderNumber}
+          driverName={checkout.driver ? `${checkout.driver.firstName} ${checkout.driver.lastName}`.trim() : ''}
+          tone="dark"
+        />
+      )}
     </Shell>
   )
 }

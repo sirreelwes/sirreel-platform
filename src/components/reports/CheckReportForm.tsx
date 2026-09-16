@@ -46,6 +46,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { CheckoutAddOnsCard } from '@/components/orders/CheckoutAddOnsCard'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
@@ -1013,6 +1014,12 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
           </button>
         )}
       </div>
+
+      {/* Last-minute extras the driver asks for — straight onto the order,
+          without filing the sheet again (Wes 2026-09-16). */}
+      {isOut && (
+        <CheckoutAddOnsCard orderId={draft.orderId} orderNumber={draft.orderNumber} tone="light" />
+      )}
 
       {unitScans && (
         <UnitScanPanel

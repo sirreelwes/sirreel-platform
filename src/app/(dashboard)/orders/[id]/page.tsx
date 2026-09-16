@@ -16,6 +16,7 @@ import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
 import { ReplacementValueCard, type ReplacementValueData } from "@/components/orders/ReplacementValueCard";
 import { WarehouseLineFlag, WarehouseAddedLines, UnpricedLinesBanner, type OrderWarehouseFlags } from "@/components/orders/WarehouseLineFlag";
+import { CheckoutAddOnsSummary } from "@/components/orders/CheckoutAddOnsSummary";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -4516,6 +4517,14 @@ export default function OrderDetailPage() {
             order. It is never added as a line here (the yard cannot see
             rates and a $0 line would under-bill the job), so this is the
             only place on the order it appears at all. */}
+        {/* Driver add-ons put on at check-out (Wes 2026-09-16) — ordinary
+            lines in the table above, said together here with who asked. */}
+        {order?.id && (
+          <div className="px-6 pb-2 empty:hidden">
+            <CheckoutAddOnsSummary orderId={order.id} refreshKey={order.total} />
+          </div>
+        )}
+
         {!!order?.warehouseFlags?.added.length && (
           <div className="px-6 pb-2">
             <WarehouseAddedLines
