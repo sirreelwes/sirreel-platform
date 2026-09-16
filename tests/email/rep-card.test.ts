@@ -4,13 +4,16 @@
  *   npx tsx tests/email/rep-card.test.ts
  *   npm run test:rep-card
  *
- * Pure + offline. Two things are guarded here:
+ * Pure + offline. Three things are guarded here:
  *   1. The photo LADDER (pickRepPhoto), which the composer and the public
  *      image route both run. If they could disagree, an inbox would show a
  *      broken-image icon instead of a rep.
  *   2. That no photo means NO CARD — the welcome email has to come out
  *      byte-for-byte as it did before this shipped, for every job whose
  *      agent has not uploaded anything.
+ *   3. The ROLLOUT gate — dark by default, testers only until Wes turns it
+ *      on. Getting this backwards puts a photo in front of every client the
+ *      day it deploys, which is the one outcome he asked to avoid.
  */
 import {
   pickRepPhoto,
@@ -19,6 +22,7 @@ import {
   CANDID_FRESH_DAYS,
   type RepCard,
 } from '../../src/lib/email/repCard'
+import { repCardVisibleFor, isRepCardTester } from '../../src/lib/email/repCardRollout'
 import { buildJobWelcomeEmail } from '../../src/lib/email/templates/jobWelcome'
 
 const failures: string[] = []
@@ -124,6 +128,27 @@ ok(
   }).html.includes('Your SirReel rep') === false,
   'a card with no photo renders nothing in the template either',
 )
+
+console.log('\nthe rollout gate — dark until Wes says so')
+eq(repCardVisibleFor('jose@sirreel.com', false), false, 'dark: a rep\'s mail carries no card')
+eq(repCardVisibleFor('oliver@sirreel.com', false), false, 'dark: nor the other rep\'s')
+eq(repCardVisibleFor('wes@sirreel.com', false), true, 'dark: the tester\'s own jobs do')
+eq(repCardVisibleFor('jose@sirreel.com', true), true, 'live: everyone')
+eq(repCardVisibleFor('wes@sirreel.com', true), true, 'live: the tester too')
+eq(repCardVisibleFor(null, false), false, 'no agent email → no card')
+eq(repCardVisibleFor(undefined, false), false, 'undefined → no card')
+eq(repCardVisibleFor('', true), true, 'live is live even with no agent email')
+
+console.log('\nthe tester list is an EMAIL allowlist, not a role')
+eq(isRepCardTester('wes@sirreel.com'), true, 'Wes')
+eq(isRepCardTester('WES@SirReel.com'), true, 'case and stray case are normalised')
+eq(isRepCardTester('  wes@sirreel.com  '), true, 'whitespace trimmed')
+eq(
+  isRepCardTester('dani@sirreel.com'),
+  false,
+  'Dani is ADMIN too — which is exactly why this is not a role check',
+)
+eq(isRepCardTester(null), false, 'null is not a tester')
 
 if (failures.length) { console.log(`\n${failures.length} failure(s)`); process.exit(1) }
 console.log('\nall passed')

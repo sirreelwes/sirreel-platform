@@ -10,6 +10,7 @@ export default function WhoWeAreAdminPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [users, setUsers] = useState<HqUser[]>([])
   const [enabled, setEnabled] = useState(false)
+  const [repCardEnabled, setRepCardEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
@@ -27,6 +28,7 @@ export default function WhoWeAreAdminPage() {
       setMembers(d.members || [])
       setUsers(d.users || [])
       setEnabled(!!d.enabled)
+      setRepCardEnabled(!!d.repCardEnabled)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -74,6 +76,23 @@ export default function WhoWeAreAdminPage() {
       setEnabled((v) => !v)
     } catch (e) {
       alert('Failed: ' + (e instanceof Error ? e.message : 'error'))
+    }
+  }
+
+  async function toggleRepCard() {
+    const next = !repCardEnabled
+    if (next && !confirm(
+      'Turn the rep photo on for the whole team?\n\n' +
+      'Every welcome email from an agent who has a candid will carry their ' +
+      'photo, name, title and number. Only do this once you have sent ' +
+      'yourself one and read it in a real inbox.'
+    )) return
+    try {
+      await post({ action: 'set-rep-card', enabled: next })
+      setRepCardEnabled(next)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to change the rep photo rollout')
     }
   }
 
@@ -173,6 +192,38 @@ export default function WhoWeAreAdminPage() {
         >
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${enabled ? 'left-6' : 'left-1'}`} />
         </button>
+      </section>
+
+      {/* Rep card on client email — the rollout switch. Wes 2026-09-16:
+          "I want to test the system personally before we make it live for
+          team." Off = only a tester's own jobs carry the card. */}
+      <section className="mt-3 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold">Rep photo on client emails</div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              {repCardEnabled
+                ? 'LIVE for the team — every agent with a candid gets their photo, title and number above the button on the welcome email.'
+                : 'Testing. Only your own jobs carry the card; nothing changes for the rest of the team.'}
+            </div>
+          </div>
+          <button
+            onClick={toggleRepCard}
+            role="switch"
+            aria-checked={repCardEnabled}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${repCardEnabled ? 'bg-amber-600' : 'bg-zinc-700'}`}
+          >
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${repCardEnabled ? 'left-6' : 'left-1'}`} />
+          </button>
+        </div>
+        {!repCardEnabled && (
+          <ol className="mt-3 space-y-1 border-t border-zinc-800 pt-3 text-xs text-zinc-400 list-decimal list-inside">
+            <li>Take a candid from the prompt at the top of any HQ page.</li>
+            <li>Open a job where you are the agent and send yourself the welcome email.</li>
+            <li>Read it on your phone and on desktop &mdash; check the photo actually loads.</li>
+            <li>Happy? Flip this on.</li>
+          </ol>
+        )}
       </section>
 
       {/* Add member */}

@@ -6,6 +6,10 @@
  * GET /api/users/me/weekly-candid — return the user's most recent
  * candid + a `staleness` field so the dashboard widget can prompt
  * for a fresh one when the current candid is from a previous week.
+ * It also reports `repCard` — whether the candid is live on client
+ * email yet, and whether this viewer is the one testing it — so the
+ * shell's prompt can tell the team the truth about where their photo
+ * goes instead of implying it is already reaching clients.
  *
  * Storage: Vercel Blob at `agents/<userId>/<yyyy>/<mm>/candid-<uuid>...`.
  * Mirrors the claim/order upload helpers' `access: 'private' as
@@ -20,6 +24,7 @@ import { prisma } from '@/lib/prisma'
 import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
 import { weekStartPacific } from '@/lib/orders/weekStart'
+import { repCardEnabled, isRepCardTester } from '@/lib/email/repCardRollout'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +82,7 @@ export async function GET(_req: NextRequest) {
   }
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, role: true },
   })
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -93,10 +98,22 @@ export async function GET(_req: NextRequest) {
     ? Math.floor((Date.now() - current.capturedAt.getTime()) / 86_400_000)
     : null
 
+  // Whose face ends up in front of a client: the sales roles plus the
+  // admins who backstop them. A warehouse login gets no prompt.
+  const onClientEmail = ['AGENT', 'ADMIN', 'MANAGER'].includes(user.role)
+
   return NextResponse.json({
     current,
     isThisWeek,
     ageDays,
     thisWeekStart: thisWeekStart.toISOString().slice(0, 10),
+    repCard: {
+      /** Live for everyone, or still dark while it is being tested. */
+      enabled: await repCardEnabled(),
+      /** This viewer is the one testing it — their own jobs carry it now. */
+      viewerIsTester: isRepCardTester(session.user.email),
+      /** Whether this viewer's photo can reach a client at all. */
+      onClientEmail,
+    },
   })
 }

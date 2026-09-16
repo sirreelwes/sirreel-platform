@@ -8,7 +8,11 @@
  * (TeamMember.userId) is what lets CLIENT EMAIL show the same photo and
  * title the public site shows — see src/lib/email/repCard.ts.
  *  POST → { action: 'create', name, title }
- *         { action: 'set-enabled', enabled }
+ *         { action: 'set-enabled', enabled }      — public Who-we-are section
+ *         { action: 'set-rep-card', enabled }     — the rep card on client
+ *           EMAIL. Off until Wes has sent himself one and read it in a real
+ *           inbox; while off only a tester's own jobs carry it. See
+ *           src/lib/email/repCardRollout.ts.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -43,7 +47,11 @@ export async function GET() {
           select: { id: true, name: true, title: true, published: true, sortOrder: true, photoUrl: true },
         }),
       ),
-    prisma.siteSetting.findFirst({ select: { whoWeAreEnabled: true } }),
+    prisma.siteSetting
+      .findFirst({ select: { whoWeAreEnabled: true, repCardEnabled: true } })
+      // rep_card_enabled is a newer column — until the additive SQL has run
+      // the page still loads and the rep card simply reads as off.
+      .catch(() => prisma.siteSetting.findFirst({ select: { whoWeAreEnabled: true } })),
     prisma.user.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' },
@@ -53,6 +61,8 @@ export async function GET() {
 
   return NextResponse.json({
     enabled: settings?.whoWeAreEnabled ?? false,
+    repCardEnabled:
+      settings && 'repCardEnabled' in settings ? (settings.repCardEnabled ?? false) : false,
     members: members.map((m) => ({
       id: m.id,
       name: m.name,
@@ -85,6 +95,26 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     })
     return NextResponse.json({ ok: true, id: m.id })
+  }
+
+  if (body.action === 'set-rep-card') {
+    const enabled = Boolean(body.enabled)
+    try {
+      await prisma.siteSetting.upsert({
+        where: { id: SINGLETON },
+        create: { id: SINGLETON, repCardEnabled: enabled },
+        update: { repCardEnabled: enabled },
+      })
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'P2022') {
+        return NextResponse.json(
+          { error: 'Run scripts/add-rep-card-rollout-column.ts first.' },
+          { status: 409 },
+        )
+      }
+      throw err
+    }
+    return NextResponse.json({ ok: true, repCardEnabled: enabled })
   }
 
   if (body.action === 'set-enabled') {

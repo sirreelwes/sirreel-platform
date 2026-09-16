@@ -12,6 +12,7 @@ import InboxBell from '@/components/ui/InboxBell';
 import { NavList } from '@/components/shell/NavList';
 import { UserMenu, ROLE_LABELS } from '@/components/shell/UserMenu';
 import { MobileNav } from '@/components/shell/MobileNav';
+import { CandidPrompt } from '@/components/shell/CandidPrompt';
 import { PAPERWORK_QUEUE_EVENT } from '@/lib/paperwork/reviewQueueClient';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -293,6 +294,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </button>
               </div>
             )}
+            {/* This week's candid. Self-hiding: it renders only for people
+                whose face can reach a client and only when theirs is
+                missing or stale (Wes 2026-09-16, "prompt a candid to be
+                taken somewhere prominent"). */}
+            <CandidPrompt />
             {children}
           </main>
           {aiOpen && perms.ai && (

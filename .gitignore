@@ -33,6 +33,7 @@ scripts/*
 !scripts/add-collector-columns.ts
 !scripts/add-team-member-user-column.ts
 !scripts/thank-you-queue-report.ts
+!scripts/add-rep-card-rollout-column.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/seed-unit-checks.ts

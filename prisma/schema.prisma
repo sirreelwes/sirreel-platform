@@ -8452,6 +8452,15 @@ model SiteSetting {
   /// added to the live DB by ALTER TABLE on 2026-09-11 (additive).
   lockboxInstructionsUrl String? @map("lockbox_instructions_url")
 
+  /// Master switch for the REP CARD on client email — the agent's candid,
+  /// name, title and number above the button on the job welcome
+  /// (src/lib/email/repCard.ts). OFF until Wes has sent himself one and
+  /// read it in a real inbox (2026-09-16: "I want to test the system
+  /// personally before we make it live for team"); while off, only a
+  /// tester's own jobs carry the card. Toggled on /admin/who-we-are.
+  /// Column added to the live DB by additive SQL, never db push.
+  repCardEnabled Boolean @default(false) @map("rep_card_enabled")
+
   /// Master switch for the public "Who we are" team section on /contact.
   /// Off until the roster + photos are set in /admin/who-we-are.
   whoWeAreEnabled Boolean @default(false) @map("who_we_are_enabled")

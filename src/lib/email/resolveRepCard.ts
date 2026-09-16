@@ -7,6 +7,11 @@
  *   - the email composer, which decides whether a card is drawn, and
  *   - `/api/public/agent-photo/[id]`, which serves the bytes to the inbox.
  *
+ * Also the ROLLOUT gate: while the card is still dark (Wes testing before
+ * the team gets it), only a tester's own jobs carry one — see
+ * repCardRollout.ts. The gate is checked BEFORE any photo lookup, so a dark
+ * rollout costs the send nothing.
+ *
  * Fails soft on `TeamMember.user_id` not existing yet (see
  * scripts/add-team-member-user-column.ts): the headshot rung is skipped and
  * the weekly candid still carries the card, rather than the send 500ing on a
@@ -14,6 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { repCardEnabled, repCardVisibleFor } from '@/lib/email/repCardRollout'
 import {
   pickRepPhoto,
   agentPhotoEmailUrl,
@@ -75,6 +81,11 @@ export async function resolveRepCard(
   now: Date = new Date(),
 ): Promise<RepCard | null> {
   if (!agent?.id || !agent.name?.trim()) return null
+
+  // Is the card live for this agent at all? Checked first: while the rollout
+  // is dark this is one settings read and then nothing, and every other
+  // agent's mail is untouched.
+  if (!repCardVisibleFor(agent.email, await repCardEnabled())) return null
 
   const sources = await loadRepPhotoSources(agent.id)
   const pick: RepPhotoChoice = pickRepPhoto(sources, now)
