@@ -429,8 +429,11 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
                       <p className="mt-1 break-all font-mono text-[11px] text-zinc-300">{link}</p>
                       {smsNote && <p className="mt-1 text-[11px] font-semibold text-amber-400">{smsNote}</p>}
                       <div className="mt-2 flex gap-2">
-                        <a href={link} target="_blank" rel="noopener noreferrer"
-                          className="rounded-lg bg-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-900">Open here ↗</a>
+                        {/* No "open here": the link is the DRIVER's own upload
+                            page, for when they aren't at the counter. At the
+                            counter the driver hands over their license and
+                            fleet photographs it — nobody passes a phone
+                            (Wes 2026-09-16). */}
                         <button type="button" onClick={() => navigator.clipboard?.writeText(link)}
                           className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200">Copy</button>
                         {/* Their number is already on the file when the

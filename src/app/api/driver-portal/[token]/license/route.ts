@@ -11,8 +11,9 @@ const MAX_BYTES = 12 * 1024 * 1024
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 
 /**
- * POST /api/driver-portal/[token]/license — the driver (or staff on a
- * tablet at pickup) uploads one side of the licence. Multipart:
+ * POST /api/driver-portal/[token]/license — the driver uploads one side of
+ * the licence from their own phone. (At pickup, fleet photograph it through
+ * /api/drivers/[id]/license-photo instead — never by handing a device over.) Multipart:
  *   file: the image
  *   side: 'front' | 'back'
  *

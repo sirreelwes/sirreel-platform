@@ -5,9 +5,10 @@
  * the credential, so the page shows as little as possible (first name
  * only) and never reads back what was uploaded.
  *
- * Built phone-first because that is where it gets used: either the driver
- * opens the link on their own phone, or staff hand them a tablet at the
- * counter during pickup. Both sides are separate uploads so a driver can
+ * Built phone-first because that is where it gets used: the driver opens
+ * the link on their OWN phone. Staff never hand a device across at pickup
+ * (Wes 2026-09-16) — at the counter the driver hands over the licence and
+ * fleet photographs it (POST /api/drivers/[id]/license-photo). Both sides are separate uploads so a driver can
  * do the front, get interrupted, and come back for the back.
  */
 
