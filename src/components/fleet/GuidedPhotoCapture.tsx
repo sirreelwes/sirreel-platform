@@ -193,6 +193,12 @@ export function GuidedPhotoCapture({
   );
   const byPosition = new Map(photos.filter((p) => p.position).map((p) => [p.position as string, p]));
   const damagePhotos = photos.filter((p) => p.position === DAMAGE_POSITION);
+  /* DamageID ends its grid with a "+ Take More Pictures" tile — Julian's
+     interior shots went there (Wes, 2026-09-15, with a screenshot of it).
+     Unlimited and unnamed: stored with NO position, which is already how
+     a free-form extra is filed, so the record page and the condition
+     report list them under "Other photos" without another registry. */
+  const extraPhotos = photos.filter((p) => p.position === null);
   const doneRequired = requiredPositions.filter((s) => byPosition.has(s.id)).length;
   /* The staff walk-around is numbered and sectioned — the crew knows the
      DamageID sequence by number. A driver's four sides are neither: a
@@ -376,6 +382,47 @@ export function GuidedPhotoCapture({
             </section>
           );
         })}
+      </div>
+
+      <div className="rounded-xl border border-zinc-700 bg-zinc-800/40 p-3">
+        <div className="flex items-baseline justify-between gap-2 mb-2">
+          <span className="text-white text-sm font-semibold">More pictures</span>
+          <span className="text-zinc-500 text-[11px]">
+            {extraPhotos.length > 0 ? `${extraPhotos.length} added` : 'As many as you want'}
+          </span>
+        </div>
+        <p className="text-zinc-500 text-xs mb-2">
+          Anything the slots above don't cover — seat rows, the lift gate, whatever the truck needs.
+        </p>
+        {extraPhotos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            {extraPhotos.map((p) => (
+              <div key={p.localId} className="relative aspect-square rounded-lg overflow-hidden bg-zinc-900 border border-zinc-700">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.preview} alt="extra photo" className="w-full h-full object-cover" />
+                <Overlay p={p} />
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => pick(null, 'camera')}
+            className="min-h-[48px] bg-zinc-800 border border-zinc-700 active:bg-zinc-700 text-zinc-200 text-sm font-semibold rounded-lg inline-flex items-center justify-center gap-2"
+          >
+            <Camera size={16} aria-hidden />
+            Take more
+          </button>
+          <button
+            type="button"
+            onClick={() => pick(null, 'library')}
+            className="min-h-[48px] bg-zinc-800 border border-zinc-700 active:bg-zinc-700 text-zinc-200 text-sm font-semibold rounded-lg inline-flex items-center justify-center gap-2"
+          >
+            <Images size={16} aria-hidden />
+            Camera roll
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-zinc-700 bg-zinc-800/40 p-3">

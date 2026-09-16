@@ -20,6 +20,7 @@ import { getVehicleHandoverUser } from '@/lib/fleet/requireVehicleHandoverAccess
 import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
 import { HandoverLicensePhoto } from '@/components/fleet/HandoverLicensePhoto'
+import { VehicleBlindToggle } from '@/components/fleet/VehicleBlindToggle'
 import { DRIVERS_LICENSE_POSITION } from '@/lib/fleet/photoPositions'
 
 export const dynamic = 'force-dynamic'
@@ -67,7 +68,22 @@ export default async function FleetPickupPage({ params }: Params) {
       bookingItem: {
         select: {
           booking: {
-            select: { bookingNumber: true, jobName: true, jobId: true, company: { select: { name: true } } },
+            select: {
+              bookingNumber: true, jobName: true, jobId: true, company: { select: { name: true } },
+              // Blind handoff lives on the order, and the rep standing at
+              // the gate is often the first to know it just became one
+              // (Wes 2026-09-15: "always allow the fleet guy to change to
+              // a blind pickup").
+              job: {
+                select: {
+                  orders: {
+                    where: { status: { not: 'CANCELLED' } },
+                    select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true },
+                    orderBy: { createdAt: 'asc' },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -104,6 +120,14 @@ export default async function FleetPickupPage({ params }: Params) {
         {assignment.asset.licensePlate ? ` · ${assignment.asset.licensePlate}` : ''}
         {' · out '}{assignment.startDate.toISOString().slice(0, 10)}
       </p>
+      {/* Nobody meeting the driver? Say so here — it opens the driver's
+          own check-out and the codes on their /drive page. */}
+      <VehicleBlindToggle
+        orders={booking.job?.orders ?? []}
+        kinds={['blindPickup', 'blindReturn']}
+        tone="dark"
+        className="mt-3"
+      />
     </header>
   )
 

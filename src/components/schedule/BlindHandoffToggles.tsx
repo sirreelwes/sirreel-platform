@@ -36,6 +36,7 @@ export function BlindHandoffToggles({
   onChanged,
   kinds = ['blindPickup', 'blindReturn'],
   size = 'sm',
+  tone = 'light',
   className = 'mb-3',
 }: {
   orders: BlindOrder[]
@@ -44,6 +45,9 @@ export function BlindHandoffToggles({
   kinds?: Kind[]
   /** 'md' for yard terminals, read standing up. */
   size?: 'sm' | 'md'
+  /** 'dark' for the phone screens in the yard, which paint their own
+   *  opaque zinc-900 — a light chip there is a flashlight. */
+  tone?: 'light' | 'dark'
   className?: string
   /** Called with the orders as they now stand, after the write lands. */
   onChanged: (next: BlindOrder[]) => void
@@ -99,7 +103,9 @@ export function BlindHandoffToggles({
         className={`inline-flex items-center gap-1 rounded-md border font-semibold ${size === 'md' ? 'px-2.5 py-1.5 text-[13px]' : 'px-2 py-1 text-[12px]'} transition-colors disabled:cursor-not-allowed ${
           active
             ? 'border-violet-600 bg-violet-500 text-white hover:bg-violet-600'
-            : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-800'
+            : tone === 'dark'
+              ? 'border-zinc-700 bg-zinc-800 text-zinc-200 active:bg-zinc-700'
+              : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-800'
         } ${live.length === 0 ? 'opacity-50' : ''} ${pending === kind ? 'opacity-60' : ''}`}
       >
         <EyeOff size={size === 'md' ? 14 : 12} aria-hidden />
@@ -108,14 +114,14 @@ export function BlindHandoffToggles({
     )
   }
 
-  const note = size === 'md' ? 'text-[13px]' : 'text-[11px]'
+  const note = `${size === 'md' ? 'text-[13px]' : 'text-[11px]'} ${tone === 'dark' ? 'text-zinc-400' : 'text-lt-fg3'}`
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       {kinds.includes('blindPickup') && chip('blindPickup', 'Blind pickup')}
       {kinds.includes('blindReturn') && chip('blindReturn', 'Blind return')}
-      {live.length === 0 && <span className={`${note} text-lt-fg3`}>Needs an order first</span>}
-      {live.length > 1 && <span className={`${note} text-lt-fg3`}>Applies to all {live.length} orders on this job</span>}
-      {err && <span className={`${note} text-rose-700`}>{err}</span>}
+      {live.length === 0 && <span className={note}>Needs an order first</span>}
+      {live.length > 1 && <span className={note}>Applies to all {live.length} orders on this job</span>}
+      {err && <span className={`${note} !text-rose-500`}>{err}</span>}
     </div>
   )
 }
