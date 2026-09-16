@@ -36,6 +36,8 @@ interface Vehicle {
   category: string | null;
   licensePlate: string | null;
   lockboxCode: string | null;
+  /** Blind pickup or return — the only handoff a lock box code goes out on. */
+  blind: boolean;
   window: string | null;
   status: string;
 }
@@ -86,7 +88,7 @@ export function JobVehiclePickupPanel({ jobId }: { jobId: string }) {
       setState(j);
       setPersonId(j.recipient?.personId || '');
       // Default: every unit that can actually be sent.
-      setPicked(new Set(j.vehicles.filter((v) => v.lockboxCode).map((v) => v.assetId)));
+      setPicked(new Set(j.vehicles.filter((v) => v.lockboxCode && v.blind).map((v) => v.assetId)));
     } catch {
       setError('Could not load the pickup details.');
     } finally {
@@ -216,7 +218,9 @@ export function JobVehiclePickupPanel({ jobId }: { jobId: string }) {
                   </div>
                   <ul className="space-y-1.5">
                     {state.vehicles.map((v) => {
-                      const sendable = !!v.lockboxCode;
+                      // Lock box codes go out on blind handoffs only (Wes
+                      // 2026-09-16) — a staffed unit is listed, not sendable.
+                      const sendable = !!v.lockboxCode && v.blind;
                       return (
                         <li key={v.assetId}>
                           <label
@@ -255,6 +259,11 @@ export function JobVehiclePickupPanel({ jobId }: { jobId: string }) {
                                 <span className="font-mono font-semibold">
                                   {v.lockboxCode || <span className="text-amber-700 font-sans font-normal">not on file — record it under Fleet</span>}
                                 </span>
+                                {!v.blind && (
+                                  <span className="block text-[11px] text-amber-700">
+                                    Not a blind pickup or return — SirReel hands the keys over, so no lock box code goes out.
+                                  </span>
+                                )}
                               </span>
                             </span>
                           </label>

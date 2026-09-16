@@ -196,12 +196,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     jobs: actionItemCount,
     paperwork: paperworkCount,
   };
-  // Where a badged row should land on a PHONE: plain /jobs is the list
-  // there, and the landing panel (Action Items included) only shows
-  // behind ?panel=incoming. Desktop /jobs shows the panel already.
-  const badgeHrefs: Record<string, string> = {
-    jobs: '/jobs?panel=incoming',
-  };
+  // No per-badge href override any more. Until 2026-09-16 a badged Jobs
+  // row sent the PHONE to /jobs?panel=incoming so the number had somewhere
+  // to land — but that panel claims the viewport, and the toolbar that
+  // could take you back hides itself there, so tapping Jobs on a phone
+  // buried the job tiles with no route out. Wes: "the jobs tiles are the
+  // more important and should be shown in vertical mode if I have to
+  // choose." Jobs goes to the tiles; the landing panel is one tap away
+  // from the toolbar's phone-only Action items chip.
 
   return (
     // Column on a phone (top bar over content), row on desktop
@@ -216,7 +218,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         actualRole={actualRole}
         viewAsRole={viewAsRole}
         badgeCounts={badgeCounts}
-        badgeHrefs={badgeHrefs}
         user={user}
         canCreateJob={canCreateJob}
       />

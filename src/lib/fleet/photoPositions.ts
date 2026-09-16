@@ -111,7 +111,7 @@ const WALKAROUND: readonly PhotoPosition[] = [
 
   { id: 'REMOTE',                 label: 'Remote',           hint: 'Every remote going out with the vehicle', group: 'Remote & paperwork' },
   { id: 'PAPERWORK',              label: 'Paperwork',        hint: 'Registration and insurance card, readable', group: 'Remote & paperwork' },
-  { id: DRIVERS_LICENSE_POSITION, label: 'Driver’s license', hint: 'Whoever is driving it off — front of the card, readable. Shoot it even if one is on file: drivers get swapped', group: 'Driver' },
+  { id: DRIVERS_LICENSE_POSITION, label: 'Driver’s license', hint: 'Whoever is driving it off — front of the card, readable. Only when their license isn’t already on file', group: 'Driver' },
 ] as const
 
 /** Check-out: all 23, in order. */

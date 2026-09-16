@@ -18,8 +18,8 @@
  */
 
 import Link from 'next/link'
-import { useRef } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ListChecks, X } from 'lucide-react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import { IncomingPill } from './IncomingPill'
@@ -105,6 +105,12 @@ export function JobsToolbar() {
             the queue lives. Count = pending inbound, both streams.
             Same component as the copy at the top of the left nav. */}
         <IncomingPill />
+
+        {/* PHONE ONLY — the landing panel (Action Items, New inbound,
+            Quotes out) claims the whole viewport below `md`, so it needs
+            a door of its own now that the nav's Jobs row lands on the
+            tiles (Wes 2026-09-16). Desktop already shows both panes. */}
+        <ActionItemsChip />
 
         {/* Wes 2026-09-03: clearing the search meant holding backspace
             through the whole query. The X only appears once there is
@@ -248,5 +254,39 @@ export function JobsToolbar() {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * "Action items · N" — the phone's route into /jobs?panel=incoming.
+ * Same count the left nav badges (HIGH priority only), from the same
+ * cheap endpoint, so the number in the hamburger and the number here
+ * cannot disagree. Silent when there is nothing to answer for.
+ */
+function ActionItemsChip() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/action-items?count=1')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.ok) setCount(d.count || 0) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  if (count === 0) return null
+
+  return (
+    <Link
+      href="/jobs?panel=incoming"
+      className="md:hidden min-h-[44px] flex items-center gap-1.5 px-2.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50"
+    >
+      <ListChecks size={13} aria-hidden className="text-zinc-500" />
+      <span className="text-[12px] font-semibold text-zinc-800">Action items</span>
+      <span className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded bg-red-600 text-white">
+        {count}
+      </span>
+    </Link>
   )
 }

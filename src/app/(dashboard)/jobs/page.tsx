@@ -25,7 +25,9 @@
  * — the point of the merge is that it never leaves the page.
  */
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useJobsList } from '@/components/jobs/JobsListProvider'
 import { ActionItemsPanel } from '@/components/actionItems/ActionItemsPanel'
@@ -59,6 +61,16 @@ export default function JobsLandingPage() {
           layout renders above the split — Wes 2026-08-28); this header is
           just the landing-panel-specific controls. */}
       <header className="flex items-center justify-end gap-2 flex-wrap">
+        {/* PHONE ONLY — below `md` this panel takes the whole viewport
+            and the JobsToolbar hides itself, so without this there is no
+            way back to the job tiles (Wes 2026-09-16). Desktop shows the
+            rail beside this panel and needs no link. */}
+        <Link
+          href="/jobs"
+          className="md:hidden mr-auto min-h-[44px] flex items-center gap-1 pr-2 text-[12px] font-semibold text-zinc-600"
+        >
+          <ChevronLeft size={14} aria-hidden /> Job list
+        </Link>
         <CopyIntakeLinkButton />
         <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-[12px] font-semibold">
           <button

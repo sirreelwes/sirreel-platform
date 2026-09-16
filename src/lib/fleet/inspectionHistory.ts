@@ -28,7 +28,7 @@
 
 import type { InspectionType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { positionsFor, LEGACY_POSITIONS, SEATING_POSITIONS, DAMAGE_POSITION, positionLabel, type PhotoPosition } from '@/lib/fleet/photoPositions'
+import { positionsFor, LEGACY_POSITIONS, SEATING_POSITIONS, DAMAGE_POSITION, DRIVERS_LICENSE_POSITION, positionLabel, type PhotoPosition } from '@/lib/fleet/photoPositions'
 import { inspectorDisplayName } from '@/lib/fleet/walkaroundCrew'
 
 /** Which end of the rental a filed form belongs to. */
@@ -312,7 +312,9 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
   // those were real shots and render under "Earlier angles".
   const onFile = new Set([...i.photos, ...(other?.photos ?? [])].map((p) => p.position))
   const walk: readonly PhotoPosition[] = [
-    ...positionsFor(edge),
+    // The licence is shot only when none was on file (Wes 2026-09-16), so
+    // an empty licence slot is not a gap — list it only when filled.
+    ...positionsFor(edge).filter((slot) => slot.id !== DRIVERS_LICENSE_POSITION || onFile.has(slot.id)),
     // Optional extras (passenger-van seat rows) and retired angles alike:
     // listed only when a photo actually sits in one, so a Cube's record
     // does not grow four empty seating slots.

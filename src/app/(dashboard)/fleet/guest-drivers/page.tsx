@@ -113,8 +113,8 @@ export default function GuestDriversPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Drivers</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Everyone who takes a vehicle out. Send a link and they photograph their
-            license from their phone, or open it on a tablet at pickup.
+            Everyone who takes a vehicle out. Send a link and they upload their license
+            from their own phone; at pickup, fleet photographs it when they hand it over.
           </p>
         </div>
         <button

@@ -5,6 +5,7 @@ import { listHours } from '@/lib/drivers/hoursStore'
 import { hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import { todayPacific } from '@/lib/sub-rentals/driverUnitView'
 import { selfCheckoutState } from '@/lib/drivers/selfCheckout'
+import { blindFlags, ordersForBooking } from '@/lib/fleet/blindHandoff'
 import { selfReturnState } from '@/lib/drivers/selfReturn'
 
 export const dynamic = 'force-dynamic'
@@ -63,6 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
             select: {
               booking: {
                 select: {
+                  id: true,
                   jobName: true,
                   company: { select: { name: true } },
                   // assistantAuthCode deliberately NOT selected — it is the
@@ -102,7 +104,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
         where: { jobId, status: { not: 'CANCELLED' } },
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, orderNumber: true,
+          id: true, orderNumber: true, bookingId: true,
           blindPickup: true, blindReturn: true,
           blindPickupInstructions: true, blindReturnInstructions: true,
           lineItems: {
@@ -128,12 +130,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       })
     : []
 
+  // Blind is decided for THIS vehicle's booking, not the job (Wes
+  // 2026-09-16) — see lib/fleet/blindHandoff. The instructions come off the
+  // same orders, so a driver is never shown another vehicle's drop-off plan.
+  const liveBookingIds = jobId
+    ? new Set(
+        (
+          await prisma.booking.findMany({
+            where: { jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
+            select: { id: true },
+          })
+        ).map((b) => b.id),
+      )
+    : new Set<string>()
+  const myOrders = ordersForBooking(orders, booking.id, liveBookingIds)
   const pickupInstructions =
-    orders.find((o) => o.blindPickupInstructions?.trim())?.blindPickupInstructions ?? null
+    myOrders.find((o) => o.blindPickupInstructions?.trim())?.blindPickupInstructions ?? null
   const returnInstructions =
-    orders.find((o) => o.blindReturnInstructions?.trim())?.blindReturnInstructions ?? null
-  const isBlindPickup = orders.some((o) => o.blindPickup)
-  const isBlindReturn = orders.some((o) => o.blindReturn)
+    myOrders.find((o) => o.blindReturnInstructions?.trim())?.blindReturnInstructions ?? null
+  const { blindPickup: isBlindPickup, blindReturn: isBlindReturn } = blindFlags(myOrders)
 
   // What's loaded on the vehicle — the driver's pick list, scoped to this
   // run's dates by the query above.
@@ -333,14 +348,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     },
     access: {
       gateCode,
-      // Only for the vehicle they're driving, only when nobody will be
-      // there to hand over keys — and only once the codes are earned.
-      lockboxCode: isBlindPickup && !codesLocked ? (asg.asset.accessCode ?? null) : null,
+      // Only for the vehicle they're driving, only on a BLIND pickup or
+      // return of it (Wes 2026-09-16: "Lockbox is only distributed when it is
+      // either a blind pickup or a blind return of a vehicle") — and only
+      // once the codes are earned.
+      lockboxCode: (isBlindPickup || isBlindReturn) && !codesLocked ? (asg.asset.accessCode ?? null) : null,
       // Why the codes are withheld, so the page can say what unlocks them
       // instead of silently showing nothing.
       locked: codesLocked,
       // Whether this pickup would carry a lockbox code once unlocked.
-      lockboxApplies: isBlindPickup && !!asg.asset.accessCode,
+      lockboxApplies: (isBlindPickup || isBlindReturn) && !!asg.asset.accessCode,
     },
     loadList,
     checkout: selfCheckout,

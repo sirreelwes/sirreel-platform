@@ -58,7 +58,9 @@ export function evaluateLicenseGate(
     return {
       ok: false,
       code: 'NO_LICENSE',
-      message: 'No license on file. Send this driver a portal link, or photograph their license at the counter.',
+      // Staff never hand their phone to the driver (Wes 2026-09-16): the
+      // driver hands over their license and fleet photographs it.
+      message: 'No license on file. Ask the driver for their license and take the photo yourself.',
     }
   }
   if (expiredNow(driver, now)) {
