@@ -1137,14 +1137,21 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   existing discount is caught at send/book, not at the add. The column went
   in by targeted `ALTER TABLE … ADD COLUMN IF NOT EXISTS` — the live DB has
   drift, never `db push` blind.
-- **CORRECTION 2026-09-16: VSM Planet was NOT in the DB.** This note used to
-  read "VSM Planet is in the DB (2026-09-11: 35% deal, 43% max)". The deal was
-  agreed in conversation and written down here; the Vendor row was never
-  created, which the first dry run of the photo-roster seed caught ("vendor
-  does not exist") and Wes confirmed against the vendor list. The numbers are
-  real and are now seeded by that task (`VSM_PLANET` in photoShootRoster.ts),
-  fill-if-empty. **A deal recorded in this file is not a deal in the
-  database** — check the row before relying on one.
+- **VSM Planet IS in the DB — under the name `VSM Planet`.** Created
+  2026-09-11 23:57 with the 35% / 43% deal, Vic's email, a minted portal
+  token and TEN units drawn from their real published categories (Sprinter
+  Cargo Van Packages ×3, Strobe Lighting & EQ, Continuous Lighting,
+  Electrical & Distro, Grip, Production…), each carrying a note like
+  "Their 'Grip' category — stands, flags, a…". `catalog_section` is NULL on
+  all ten, which is exactly why `#photo-shoot` still rendered empty.
+- **A 2026-09-16 edit "corrected" this note to say the row had never been
+  created. That was WRONG and is retracted.** The photo-roster seed keys on
+  `VSM Planet Rentals`, found nothing, and the absence was read as the
+  database being stale rather than the lookup being too narrow. **Match a
+  vendor by every name it might carry before concluding it does not exist.**
+  `VSM_PLANET_ALIASES` in photoShootRoster.ts is that list and
+  `findVsmVendor()` is the only lookup a VSM code path may use; the seed
+  REFUSES rather than adding a roster on top of units it did not create.
 
 ## Active Roadmap
 1. AI fleet optimization

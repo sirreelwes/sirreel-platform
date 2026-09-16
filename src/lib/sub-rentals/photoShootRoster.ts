@@ -77,16 +77,32 @@ const CONFIRM = 'Exact model and pack size confirmed at booking'
 export const VSM_PLANET_NAME = 'VSM Planet Rentals'
 
 /**
+ * EVERY name this company might already be filed under, most specific first.
+ *
+ * It is filed as `VSM Planet` — created 2026-09-11 with the deal, Vic's
+ * email, a portal token and ten units off their real published categories.
+ * This file keyed on `VSM Planet Rentals`, found nothing, and the absence
+ * was written up as the database being stale. It was not; the lookup was too
+ * narrow, and one more run would have minted a second VSM vendor beside the
+ * first with the deal on the wrong one.
+ *
+ * `Vendor.name` is UNIQUE, so a near-miss does not collide — it silently
+ * makes a twin. Match on all of these before concluding anything is missing.
+ */
+export const VSM_PLANET_ALIASES: readonly string[] = [
+  'VSM Planet Rentals',
+  'VSM Planet',
+  'VSM Planet Rentals Inc',
+  'V.S.M Planet',
+] as const
+
+/**
  * The partner facts the onboarding task asserts.
  *
- * CORRECTED 2026-09-16: this file, and CLAUDE.md's discount-waterfall note,
- * both said VSM Planet was already a partner row in the live DB carrying the
- * 35% / max 43% deal. **It was not.** The first dry run reported "vendor does
- * not exist" and Wes confirmed against the vendor list. The deal was agreed in
- * conversation on 2026-09-11 and written down; the row was never created. So
- * the numbers below are seeded HERE, because otherwise the first VSM unit
- * quotes against a partner with no deal at all and `stampVendorCost` pays
- * them list.
+ * The deal below is NOT new information — it is what the live row already
+ * carries, kept here so a fresh database gets the same terms rather than a
+ * partner with none. It is fill-if-empty at the seed and never overwrites a
+ * negotiated figure.
  *
  * Every one of these is FILL-IF-EMPTY at the seed — none overwrites a value
  * already on the vendor. Email and phone stay absent from this object on

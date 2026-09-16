@@ -25,7 +25,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { ensureVendorPortalToken, vendorAccountUrl } from '@/lib/sub-rentals/vendorAccount'
-import { VSM_PLANET, VSM_PLANET_NAME, VSM_PLANET_ROSTER } from '@/lib/sub-rentals/photoShootRoster'
+import { VSM_PLANET, VSM_PLANET_ALIASES, VSM_PLANET_NAME, VSM_PLANET_ROSTER } from '@/lib/sub-rentals/photoShootRoster'
 import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
 
 // Re-exported, never re-declared: this list had drifted from partnerKind's
@@ -57,6 +57,8 @@ export interface SeedVsmResult {
   dryRun: boolean
   vendorId: string | null
   vendorExisted: boolean
+  /** The name the vendor was actually found under, when it already existed. */
+  matchedName: string | null
   /** Fields asserted on every run — what files them under Photo Shoot Rentals. */
   asserted: Record<string, string>
   /** Fields written only because they were empty. */
@@ -139,23 +141,61 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
 
   const log: string[] = []
   const result: SeedVsmResult = {
-    dryRun, vendorId: null, vendorExisted: false, asserted: {}, filled: [],
+    dryRun, vendorId: null, vendorExisted: false, matchedName: null, asserted: {}, filled: [],
     createdUnitIds: [], existingUnitIds: [], wouldCreate: [], accountUrl: null, deal: null, log,
   }
 
   log.push(`${dryRun ? '[dry run] ' : ''}Building the Photo Shoot Rentals section from ${VSM_PLANET_NAME}…`)
   log.push(...(await preflight(receiveMethod)))
 
-  const existing = await prisma.vendor.findUnique({
-    where: { name: VSM_PLANET_NAME },
+  // EVERY name it might be filed under, not just ours. `Vendor.name` is
+  // unique, so a near-miss does not collide — it silently mints a twin with
+  // the deal on the wrong row. That is what nearly happened on 2026-09-16.
+  const existing = await prisma.vendor.findFirst({
+    where: { name: { in: [...VSM_PLANET_ALIASES] } },
+    orderBy: { createdAt: 'asc' },
     select: {
-      id: true, email: true, phone: true, partnerKind: true, catalogSection: true,
+      id: true, name: true, email: true, phone: true, partnerKind: true, catalogSection: true,
       defaultReceiveMethod: true, contactName: true, website: true, supplies: true,
       deliveryTerms: true, notes: true, lotAddress: true,
       partnerSharePercent: true, partnerMaxSharePercent: true,
+      _count: { select: { subcontractedVehicles: true } },
     },
   })
   result.vendorExisted = !!existing
+  if (existing) {
+    result.matchedName = existing.name
+    log.push(`✓ found the vendor already on file as "${existing.name}" (${existing.id}) — using it, not creating another`)
+  }
+
+  /**
+   * A roster this task did not write is not ours to add to.
+   *
+   * The live row carries ten units researched off VSM's own published
+   * categories — better provenance than this file's inferred shape, and
+   * including Sprinter van packages the roster here deliberately omits.
+   * Seeding 14 more on top would leave 24 units of mixed origin, some
+   * duplicating each other, and no way to tell which a rep should quote.
+   * So: report them and stop. A human decides whether to adopt, replace or
+   * re-section them.
+   */
+  if (existing && existing._count.subcontractedVehicles > 0) {
+    const theirs = await prisma.subcontractedVehicle.findMany({
+      where: { vendorId: existing.id },
+      select: { name: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    const mine = new Set<string>(VSM_PLANET_ROSTER.map((u) => u.name))
+    const foreign = theirs.filter((u) => !mine.has(u.name))
+    if (foreign.length > 0) {
+      throw new SeedRefused(
+        `"${existing.name}" already has ${theirs.length} unit${theirs.length === 1 ? '' : 's'} this task did not create` +
+          ` — ${foreign.slice(0, 6).map((u) => u.name).join(', ')}${foreign.length > 6 ? `, +${foreign.length - 6} more` : ''}.`,
+        'Adding the 14-unit roster on top would leave two overlapping sets and no way to tell which to quote. ' +
+          'Decide first on /sub-rentals/vehicles: keep those and just file them under Photo Shoot Rentals, or retire them and seed this roster.',
+      )
+    }
+  }
 
   // Asserted every run — this is what files them under Photo Shoot Rentals
   // and stops the booking flow asking Vic for a driver he does not have.
@@ -212,7 +252,10 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
   const vendor = dryRun
     ? existing!
     : await prisma.vendor.upsert({
-        where: { name: VSM_PLANET_NAME },
+        // BY ID when the row was found under any of its aliases — keying on
+        // our preferred name would create a second one beside it, and the
+        // name it already carries is not ours to rewrite.
+        where: existing ? { id: existing.id } : { name: VSM_PLANET_NAME },
         update: { ...asserted, ...fill, ...deal },
         create: {
           name: VSM_PLANET_NAME,
