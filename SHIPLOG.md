@@ -24,6 +24,11 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-16
 
+### Cargo 20–25 have no lift gate
+
+`7923c4b` move the originals into "Cargo Van w/o Liftgate", fold the duplicate — Wes: "we've added a second cargo 25 that has no lift gate but cargo 25 with a lift gate still exists." Shipped as the `cargo-vans-no-lift-gate` maintenance task (iPad: /admin/maintenance · laptop: `scripts/cargo-vans-no-lift-gate.ts --write`; dry run by default, NOT YET RUN). The original row survives with its id, trips and access code; every other active row carrying the name — the second Cargo 25, and the Planyo-era Cargo 22/25 that sat in w/o since May — has its nine history tables re-pointed at it and is retired as "Cargo 25 (duplicate — folded <date>)". Nothing deleted. Counts set on both `AssetCategory.totalUnits` and the merged `qtyOwned` the scheduler reads; the w/o class un-archived (it was, since June) and made reservable. Holds filed under w/ on a moved van are named in the log, never re-classed. `PLANYO_UNIT_CATEGORY_OVERRIDES` emptied. `npm run test:cargo-lift-gate`.
+
+
 ### The photo section, built from VSM gear
 
 `edd92df` build the Photo Shoot Rentals section out of VSM Planet's gear
