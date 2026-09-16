@@ -19,6 +19,7 @@ import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { loadDeliveries } from '@/lib/portal/deliveries'
+import { setCollector } from '@/lib/sub-rentals/collector'
 import { notifyLogisticsChanged, receivesLogistics } from '@/lib/sub-rentals/conduit'
 
 export const dynamic = 'force-dynamic'
@@ -65,8 +66,16 @@ export async function POST(req: NextRequest) {
     select: { id: true, status: true, callTime: true, driverNotes: true, receiveMethod: true },
   })
   if (!sub) return NextResponse.json({ error: 'That unit is not on your job.' }, { status: 403 })
-  // Collected at the partner's lot — there is no driver coming to be given a call time.
-  if (sub.receiveMethod === 'WILL_CALL') return NextResponse.json({ error: 'This one is picked up at the rental location, so there is no call time to set.' }, { status: 409 })
+  // Collected at the partner's lot: no call time to set, but the production
+  // does say WHO is collecting — the partner is told (collector.ts).
+  if (sub.receiveMethod === 'WILL_CALL') {
+    if (!('collectorName' in body)) {
+      return NextResponse.json({ error: 'This one is picked up at the rental location, so there is no call time to set.' }, { status: 409 })
+    }
+    const r = await setCollector(subRentalId, body.collectorName, { by: 'client', jobId: ctx.jobId })
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+    return NextResponse.json(await loadDeliveries(ctx.jobId))
+  }
   if (sub.status === 'CANCELLED') return NextResponse.json({ error: 'That unit is no longer coming.' }, { status: 409 })
 
   const unchanged =

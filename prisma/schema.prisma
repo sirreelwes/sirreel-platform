@@ -5044,6 +5044,20 @@ model SubRental {
   driverPhone      String?   @map("driver_phone") @db.VarChar(30)
   driverAssignedAt DateTime? @map("driver_assigned_at")
 
+  /// WHO IS COLLECTING a will-call unit — the production's own person, who
+  /// walks into the partner's office with a licence (Wes 2026-09-15: the
+  /// "it's a go" note promises SirReel will say who is coming, and until now
+  /// that was somebody's job to remember).
+  ///
+  /// A NAME ONLY. The conduit rule is unchanged: the partner learns the name
+  /// they must match to a licence at their counter, never the production's
+  /// number, company or contact — same line potentialSubRental.ts draws for
+  /// the on-site contact.
+  collectorName       String?   @map("collector_name")
+  collectorSetAt      DateTime? @map("collector_set_at")
+  /// The partner has been told THIS name. A later change re-notifies.
+  collectorNotifiedAt DateTime? @map("collector_notified_at")
+
   /// UNION JOB: the driver rides on the PRODUCTION COMPANY's payroll for this
   /// booking, so SirReel does not bill the client for driver labor and the
   /// partner does not invoice us for it (Wes 2026-09-09: "sometimes we will

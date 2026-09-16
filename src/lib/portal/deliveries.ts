@@ -81,6 +81,9 @@ export interface DeliveryUnit {
   handoff: 'DELIVERED' | 'PICKUP'
   /** Where to collect it — PICKUP rows only. */
   pickupAt: { address: string | null } | null
+  /** Who the production is sending to collect it — PICKUP rows only. The
+   *  partner is told this name (collector.ts); it is theirs to set here. */
+  collectorName: string | null
 }
 
 export interface ReportTo {
@@ -179,6 +182,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         driverAckedAt: true,
         driverAckNote: true,
         driverHours: { select: { hours: true } },
+        collectorName: true,
         // NOTE: driverEmail / driverPhone / relayTag / driverToken are NOT
         // selected. Keep it that way — see the header. The vendor is selected
         // for its NAME AND PERMISSION ONLY (partnerAttribution.ts); nothing
@@ -232,6 +236,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         hours: { total: 0, days: 0 },
         handoff: 'PICKUP',
         pickupAt: { address: s.originAddress?.trim() || s.vendor.lotAddress?.trim() || null },
+        collectorName: s.collectorName,
       })
       continue
     }
@@ -259,6 +264,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
       hours: { total: sumHours(s.driverHours), days: s.driverHours.length },
       handoff: 'DELIVERED',
       pickupAt: null,
+      collectorName: null,
     })
   }
 
@@ -298,6 +304,7 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         hours: { total: 0, days: 0 },
         handoff: 'DELIVERED',
         pickupAt: null,
+        collectorName: null,
       })
     }
   }

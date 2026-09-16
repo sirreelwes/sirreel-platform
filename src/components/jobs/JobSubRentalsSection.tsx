@@ -34,6 +34,7 @@ export interface JobSubRental {
   startDate: string | null
   endDate: string | null
   receiveMethod: string | null
+  collectorName?: string | null
   poNumber: string | null
   vendorNotifiedAt: string | null
   vendorHoldRequestedAt: string | null
@@ -279,6 +280,40 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
     [load],
   )
 
+  /**
+   * Who the production is sending to collect a will-call unit. Saving it
+   * emails the partner (and texts them, if they asked) — so the prompt says
+   * so rather than looking like a note to ourselves.
+   */
+  const setCollector = useCallback(
+    async (s: JobSubRental) => {
+      const next = window.prompt(
+        `Who is collecting ${s.vehicleName} from ${s.vendor.name}? They'll be told this name, and it's what the counter checks against a licence.`,
+        s.collectorName ?? '',
+      )
+      if (next === null) return
+      setBusyId(s.id)
+      setErr(null)
+      setMsg(null)
+      try {
+        const r = await fetch(`/api/sub-rentals/${s.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ collectorName: next.trim() }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Could not save it (${r.status})`)
+        setMsg(next.trim() ? `${s.vendor.name} has been told ${next.trim()} is collecting ${s.vehicleName}.` : `Cleared — ${s.vendor.name} keeps the last name we sent them.`)
+        await load()
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Could not save it')
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [load],
+  )
+
   const copy = useCallback(async (s: JobSubRental, which: 'vendor' | 'driver' = 'vendor') => {
     const url = which === 'vendor' ? s.vendorUrl : s.driverUrl
     if (!url) return
@@ -462,6 +497,19 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
               {COMMITTED.includes(s.status) && s.receiveMethod === 'WILL_CALL' && (
                 <div className="mt-1 text-[12px] text-zinc-600">
                   Production picks it up at {s.vendor.name}&rsquo;s lot{s.leavingFrom ? <> — <span className="text-zinc-800">{s.leavingFrom}</span></> : ''} and returns it there. The partner isn&rsquo;t sent the set location or call time.
+                  {' · '}
+                  {s.collectorName ? (
+                    <>Collecting: <span className="text-zinc-800">{s.collectorName}</span> — {s.vendor.name} has been told</>
+                  ) : (
+                    <span className="text-amber-700">nobody named to collect yet — the client sets it on their portal, or name them here</span>
+                  )}
+                  <button
+                    onClick={() => setCollector(s)}
+                    disabled={busy}
+                    className="ml-2 underline text-zinc-600 hover:text-zinc-900 disabled:opacity-50"
+                  >
+                    {s.collectorName ? 'change' : 'name them'}
+                  </button>
                 </div>
               )}
               {COMMITTED.includes(s.status) && s.receiveMethod !== 'WILL_CALL' && (

@@ -52,6 +52,7 @@ interface DeliveryUnit {
   hours: { total: number; days: number }
   handoff?: 'DELIVERED' | 'PICKUP'
   pickupAt?: { address: string | null } | null
+  collectorName?: string | null
 }
 interface Payload {
   units: DeliveryUnit[]
@@ -120,6 +121,10 @@ export function PortalDeliveriesSection() {
   const [unitSaving, setUnitSaving] = useState<string | null>(null)
   const [unitErr, setUnitErr] = useState<Record<string, string>>({})
   const [unitSaved, setUnitSaved] = useState<string | null>(null)
+  // Who is collecting a pickup unit — its own draft, saved on its own.
+  const [collectorDraft, setCollectorDraft] = useState<Record<string, string>>({})
+  const [collectorSaving, setCollectorSaving] = useState<string | null>(null)
+  const [collectorErr, setCollectorErr] = useState<Record<string, string>>({})
 
   // Draft state is separate from `data` so a failed save leaves what they
   // typed on screen rather than reverting it under them.
@@ -229,6 +234,29 @@ export function PortalDeliveriesSection() {
       setUnitSaving(null)
     }
   }
+  async function saveCollector(u: DeliveryUnit) {
+    setCollectorSaving(u.id)
+    setCollectorErr((e) => ({ ...e, [u.id]: '' }))
+    try {
+      const r = await fetch('/api/portal/job/deliveries/unit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId: u.id, collectorName: collectorDraft[u.id] ?? '' }),
+      })
+      const j = await r.json()
+      if (!r.ok) {
+        setCollectorErr((e) => ({ ...e, [u.id]: j.error ?? "That didn't save. Try again in a moment." }))
+        return
+      }
+      hydrate(j as Payload)
+      setCollectorDraft((m) => ({ ...m, [u.id]: '' }))
+    } catch {
+      setCollectorErr((e) => ({ ...e, [u.id]: "That didn't save — check your connection and try again." }))
+    } finally {
+      setCollectorSaving(null)
+    }
+  }
+
   const unitDirty = (u: DeliveryUnit) => {
     const d = unitDraft[u.id]
     return !!d && (d.callTime !== (u.callTime ?? '') || d.driverNotes !== (u.driverNotes ?? ''))
@@ -310,6 +338,36 @@ export function PortalDeliveriesSection() {
               <p className="mt-2 text-[11px] text-gray-500 leading-relaxed">
                 Whoever collects it checks out at the counter with their driver&apos;s license — tell them it&apos;s a
                 SirReel booking. The rental itself is billed through SirReel.
+              </p>
+            </div>
+
+            {/* Who is going. We pass the name on so the rental counter is
+                expecting them; nothing else about them leaves SirReel. */}
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <label className={LABEL} htmlFor={`col-${u.id}`}>Who&apos;s collecting it?</label>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  id={`col-${u.id}`}
+                  className={INPUT}
+                  style={{ maxWidth: 260 }}
+                  placeholder="Name on their driver's license"
+                  value={collectorDraft[u.id] ?? u.collectorName ?? ''}
+                  onChange={(e) => setCollectorDraft((m) => ({ ...m, [u.id]: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  onClick={() => saveCollector(u)}
+                  disabled={collectorSaving === u.id || (collectorDraft[u.id] ?? u.collectorName ?? '') === (u.collectorName ?? '')}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-default transition"
+                >
+                  {collectorSaving === u.id ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+              {collectorErr[u.id] && <div className="mt-1 text-xs text-red-600">{collectorErr[u.id]}</div>}
+              <p className="mt-1 text-[11px] text-gray-500">
+                {u.collectorName
+                  ? `We've told the rental location to expect ${u.collectorName}. Change it here if someone else goes.`
+                  : 'We pass the name to the rental location so they are expecting them. Their license is checked at the counter.'}
               </p>
             </div>
           </article>

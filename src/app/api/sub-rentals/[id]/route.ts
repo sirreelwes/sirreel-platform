@@ -21,6 +21,7 @@
  *
  * PATCH + DELETE require Permissions.subRentals.
  */
+import { setCollector } from '@/lib/sub-rentals/collector'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -64,6 +65,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => null) as {
     vendorId?: string
     receiveMethod?: 'PICKUP' | 'DELIVERY' | 'WILL_CALL' | null
+    collectorName?: string | null
     itemDescription?: string
     quantity?: number
     startDate?: string | null
@@ -139,6 +141,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         derivedClientTotal = line.rate.times(newQty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
       }
     }
+  }
+
+  // Naming who collects tells the partner (collector.ts) — it is not a plain
+  // column write, so it goes through its own path before the rest is saved.
+  if (body.collectorName !== undefined) {
+    const r = await setCollector(params.id, body.collectorName, { by: 'staff' })
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
   }
 
   const updated = await prisma.subRental.update({

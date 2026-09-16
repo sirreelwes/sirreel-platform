@@ -29,7 +29,7 @@ import { sendTracked } from '@/lib/sms/threads'
 import { vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 
-export type PartnerSmsKind = 'estimate' | 'hold' | 'go' | 'released'
+export type PartnerSmsKind = 'estimate' | 'hold' | 'go' | 'released' | 'collector'
 
 const day = (ymd: string | null): string =>
   ymd ? new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'TBC'
@@ -37,7 +37,7 @@ const day = (ymd: string | null): string =>
 /** The words. Pure, so the test reads exactly what a partner would. */
 export function buildPartnerSms(
   kind: PartnerSmsKind,
-  a: { vehicleName: string; startDate: string | null; endDate: string | null; url: string },
+  a: { vehicleName: string; startDate: string | null; endDate: string | null; url: string; collectorName?: string | null },
 ): string {
   const range = a.startDate && a.endDate && a.startDate !== a.endDate ? `${day(a.startDate)}-${day(a.endDate)}` : day(a.startDate)
   const head = `SirReel: ${a.vehicleName}, ${range}.`
@@ -50,6 +50,10 @@ export function buildPartnerSms(
       return `${head} The production booked — it's a go. Details: ${a.url}`
     case 'released':
       return `${head} The production cancelled, so those dates are yours again: ${a.url}`
+    case 'collector':
+      return a.collectorName
+        ? `${head} ${a.collectorName} is collecting it — they'll check out at your counter with their licence. Details: ${a.url}`
+        : `${head} The collection details changed: ${a.url}`
   }
 }
 
@@ -68,7 +72,7 @@ export async function textPartnerAboutBooking(
     const s = await prisma.subRental.findUnique({
       where: { id: subRentalId },
       select: {
-        id: true, itemDescription: true, startDate: true, endDate: true, vendorToken: true,
+        id: true, itemDescription: true, startDate: true, endDate: true, vendorToken: true, collectorName: true,
         subcontractedVehicle: { select: { name: true } },
         vendor: { select: { id: true, contacts: { where: { isActive: true, smsBookings: true, phone: { not: null } }, select: { name: true, phone: true } } } },
       },
@@ -81,6 +85,7 @@ export async function textPartnerAboutBooking(
       startDate: s.startDate ? s.startDate.toISOString().slice(0, 10) : null,
       endDate: s.endDate ? s.endDate.toISOString().slice(0, 10) : null,
       url: `${PUBLIC_SITE_ORIGIN}${vendorPagePath(s.vendorToken)}`,
+      collectorName: s.collectorName,
     })
     for (const p of people) {
       const r = await sendTracked({ to: p.phone!, body, source: 'system', subRentalId: s.id })

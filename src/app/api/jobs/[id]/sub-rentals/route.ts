@@ -53,6 +53,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       startDate: true,
       endDate: true,
       receiveMethod: true,
+      collectorName: true,
       poNumber: true,
       notes: true,
       vendorToken: true,

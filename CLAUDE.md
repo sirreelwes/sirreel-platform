@@ -703,6 +703,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   on the Portals row; resolve via `sirreelContactFor()`. Column added by
   targeted ALTER.
 
+## Who is collecting a will-call unit (2026-09-15 — Wes)
+- The "it's a go" note promises SirReel will say who is picking the unit up;
+  nothing kept that promise. `SubRental.collectorName` (+ setAt / notifiedAt,
+  additive SQL `scripts/add-collector-columns.ts`) records it.
+- `setCollector()` in `sub-rentals/collector.ts` is the ONE path: refuses
+  anything but WILL_CALL, no-ops on the same name, emails the partner
+  (`buildVendorCollectorNotice`) and texts the opted-in (`partnerSms` kind
+  `collector`), stamps `collectorNotifiedAt`, writes AuditLog
+  `sub_rental.collector_set`. Clearing is allowed and announces nothing.
+- Set by the CLIENT on their portal pickup card (POST
+  `/api/portal/job/deliveries/unit` with `collectorName` — that route still
+  refuses a call time on a will-call row) or by staff on the job page.
+  A NAME only: the partner matches it to a licence and still never gets the
+  production's number, company or name.
+- `npm run test:collector`.
+
 ## Partners can ask to hear about bookings by TEXT (2026-09-15 — Wes)
 - `VendorContact.smsBookings` + `smsConsentAt` (additive SQL,
   `scripts/add-partner-sms-columns.ts`). OFF by default and only the PARTNER
