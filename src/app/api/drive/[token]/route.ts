@@ -295,9 +295,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       firstName: da.driver.firstName,
       lastName: da.driver.lastName,
       phone: da.driver.phone,
+      // Theirs to type on the page when the invite came by text — it is
+      // how their NEXT job finds this file, licence and all.
+      email: da.driver.email,
       // An invite only carries an email, so the name we hold may just be
       // the address's local part. The form nags until they confirm it.
       needsDetails,
+      // A texted invite starts with no email at all. Not part of
+      // needsDetails: dispatch needs a NUMBER to run the day, and a
+      // missing email must never read as a blocker on pickup morning.
+      needsEmail: !da.driver.email,
     },
     license: {
       hasFront: !!da.driver.licenseFrontUrl,

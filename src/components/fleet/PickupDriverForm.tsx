@@ -55,6 +55,7 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [smsNote, setSmsNote] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -127,14 +128,27 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
     finally { setBusy(null) }
   }
 
-  async function sendLink() {
+  async function sendLink(channel?: 'SMS') {
     if (!selected) return
-    setBusy('link'); setError(null)
+    setBusy('link'); setError(null); setSmsNote(null)
     try {
-      const res = await fetch(`/api/drivers/${selected.id}/invite`, { method: 'POST' })
+      const res = await fetch(`/api/drivers/${selected.id}/invite`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(channel ? { channel } : {}),
+      })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Could not create link')
       setLink(j.url)
+      if (channel === 'SMS') {
+        setSmsNote(j.smsSent
+          ? `Texted ${j.smsTo}`
+          : `Not texted (${j.smsStatus === 'skipped-opted-out'
+              ? 'that number has texted STOP'
+              : j.smsStatus === 'skipped-unconfigured'
+                ? 'texting is not switched on'
+                : j.smsError || 'unknown'}) — copy it instead`)
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not create link') }
     finally { setBusy(null) }
   }
@@ -335,7 +349,7 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
             <div className="mt-3 space-y-2">
               {gate.code === 'NO_LICENSE' && (
                 <>
-                  <button type="button" onClick={sendLink} disabled={busy === 'link'}
+                  <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
                     className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
                     {busy === 'link' ? 'Creating…' : 'Get upload link'}
                   </button>
@@ -343,11 +357,18 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
                     <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
                       <p className="text-xs text-zinc-400">Open this on the tablet and photograph their licence, or text it to them.</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-zinc-300">{link}</p>
+                      {smsNote && <p className="mt-1 text-[11px] font-semibold text-amber-400">{smsNote}</p>}
                       <div className="mt-2 flex gap-2">
                         <a href={link} target="_blank" rel="noopener noreferrer"
                           className="rounded-lg bg-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-900">Open here ↗</a>
                         <button type="button" onClick={() => navigator.clipboard?.writeText(link)}
                           className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200">Copy</button>
+                        {/* Their number is already on the file when the
+                            driver was added with one — no retyping it at
+                            the gate. */}
+                        <button type="button" onClick={() => void sendLink('SMS')} disabled={busy === 'link' || !selected.phone}
+                          title={selected.phone ? `Text it to ${selected.phone}` : 'No mobile number on their file'}
+                          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200 disabled:opacity-40">Text it</button>
                         <button type="button" onClick={() => void load()}
                           className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-200">Refresh</button>
                       </div>
@@ -370,7 +391,7 @@ export function PickupDriverForm({ checkoutId, assignedDriver, namedDrivers = []
                 </div>
               )}
               {gate.code === 'EXPIRED' && (
-                <button type="button" onClick={sendLink} disabled={busy === 'link'}
+                <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
                   className="w-full rounded-lg border border-zinc-600 px-4 py-2.5 text-sm font-semibold text-zinc-200 disabled:opacity-40">
                   {busy === 'link' ? 'Creating…' : 'Get link for a current licence'}
                 </button>

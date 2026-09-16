@@ -102,6 +102,11 @@ export function JobDriversSection({
   const [formOpen, setFormOpen] = useState(false)
   const [target, setTarget] = useState<string | null>(null)
   const [email, setEmail] = useState('')
+  // Text or email — the crew rarely has a driver's address and always has
+  // their number (Wes 2026-09-15). The driver types their own email on
+  // the page the link opens.
+  const [channel, setChannel] = useState<'EMAIL' | 'SMS'>('EMAIL')
+  const [phone, setPhone] = useState('')
   const [first, setFirst] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -122,7 +127,7 @@ export function JobDriversSection({
   }, [only])
 
   const closeForm = useCallback(() => {
-    setFormOpen(false); setTarget(null); setEmail(''); setFirst('')
+    setFormOpen(false); setTarget(null); setEmail(''); setPhone(''); setFirst('')
   }, [])
 
   async function removeDriver(driverAssignmentId: string, name: string) {
@@ -167,14 +172,30 @@ export function JobDriversSection({
     try {
       const res = await fetch('/api/driver-assignments', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bookingAssignmentId: target, email, firstName: first || undefined }),
+        body: JSON.stringify({
+          bookingAssignmentId: target,
+          channel,
+          email: email || undefined,
+          phone: phone || undefined,
+          firstName: first || undefined,
+        }),
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Could not send that invite')
       const unit = vehicles.find((v) => v.bookingAssignmentId === target)?.unitName ?? 'the vehicle'
-      setMsg(j.emailSent
-        ? `Emailed ${email} — ${unit}.${j.needsLicense ? ' Waiting on their licence.' : ''}`
-        : `Driver added to ${unit}, but the email did not send (${j.emailError || 'unknown'}). Link: ${j.url}`)
+      const waiting = j.needsLicense ? ' Waiting on their licence.' : ''
+      const sent = channel === 'SMS' ? j.smsSent : j.emailSent
+      const how = channel === 'SMS' ? 'Texted' : 'Emailed'
+      const why = channel === 'SMS'
+        ? (j.smsStatus === 'skipped-opted-out'
+            ? 'that number has texted STOP'
+            : j.smsStatus === 'skipped-unconfigured'
+              ? 'texting is not switched on'
+              : j.smsError || 'unknown')
+        : (j.emailError || 'unknown')
+      setMsg(sent
+        ? `${how} ${j.sentTo} — ${unit}.${waiting}`
+        : `Driver added to ${unit}, but the ${channel === 'SMS' ? 'text' : 'email'} did not send (${why}). Link: ${j.url}`)
       closeForm()
       onChanged?.()
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not send that invite') }
@@ -230,12 +251,39 @@ export function JobDriversSection({
           arrives in. */}
       {formOpen && vehicles.length > 0 && (
         <div className="mb-3 rounded-xl border border-zinc-300 bg-zinc-50 p-3">
+          {/* How the link travels. Text is here because half the roster
+              has no email on file and a rep on the phone with a driver
+              has their number, not their address. */}
+          <div className="mb-2 inline-flex rounded-lg border border-zinc-300 bg-white p-0.5">
+            {(['EMAIL', 'SMS'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { setChannel(c); setErr(null) }}
+                className={`rounded-md px-3 py-1 text-[12px] font-semibold ${
+                  channel === c ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:text-zinc-900'
+                }`}
+              >
+                {c === 'EMAIL' ? 'Email it' : 'Text it'}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap gap-2">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Driver email"
-              className="min-w-[180px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
+            {channel === 'EMAIL' ? (
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Driver email"
+                className="min-w-[180px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
+            ) : (
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" placeholder="Mobile number"
+                className="min-w-[180px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
+            )}
             <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name (optional)"
               className="min-w-[140px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-500" />
           </div>
+          {channel === 'SMS' && (
+            <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">
+              They get the link by text and add their own email and licence on the page it opens.
+            </p>
+          )}
 
           <div className="mt-2.5">
             <div className="text-[12px] font-semibold text-zinc-700">Assign this driver to:</div>
@@ -280,9 +328,9 @@ export function JobDriversSection({
           </div>
 
           <div className="mt-2.5 flex items-center gap-2">
-            <button onClick={invite} disabled={busy || !email.trim() || !target}
+            <button onClick={invite} disabled={busy || !target || !(channel === 'SMS' ? phone.trim() : email.trim())}
               className="rounded-lg bg-amber-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
-              {busy ? 'Sending…' : 'Send link'}
+              {busy ? 'Sending…' : channel === 'SMS' ? 'Text link' : 'Send link'}
             </button>
             <button onClick={closeForm} disabled={busy}
               className="text-[12px] font-semibold text-zinc-600 hover:text-zinc-900 disabled:opacity-40">

@@ -46,7 +46,7 @@ const APPLE_MAPS = `https://maps.apple.com/?daddr=${mapsQuery}`
 const GOOGLE_MAPS = `https://maps.google.com/?q=${mapsQuery}`
 
 interface DriveData {
-  driver: { firstName: string | null; lastName: string | null; phone: string | null; needsDetails: boolean }
+  driver: { firstName: string | null; lastName: string | null; phone: string | null; email: string | null; needsDetails: boolean; needsEmail: boolean }
   license: { hasFront: boolean; hasBack: boolean; ok: boolean; code: string; message: string }
   vehicle: { unitName: string; description: string | null; makeModel: string | null; licensePlate: string | null }
   job: { productionName: string; companyName: string | null; startDate: string; endDate: string }
@@ -80,6 +80,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [savingMe, setSavingMe] = useState(false)
   const [meErr, setMeErr] = useState<string | null>(null)
   const [meSaved, setMeSaved] = useState(false)
@@ -100,6 +101,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
     setFirst((v) => v || j.driver?.firstName || '')
     setLast((v) => v || j.driver?.lastName || '')
     setPhone((v) => v || j.driver?.phone || '')
+    setEmail((v) => v || j.driver?.email || '')
   }, [token])
   useEffect(() => { void load() }, [load])
 
@@ -108,7 +110,7 @@ export default function DriverJobPage({ params }: { params: { token: string } })
     try {
       const res = await fetch(`/api/drive/${token}/profile`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ firstName: first, lastName: last, phone }),
+        body: JSON.stringify({ firstName: first, lastName: last, phone, email }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || !j.ok) throw new Error(j.error || 'Could not save that.')
@@ -204,10 +206,12 @@ export default function DriverJobPage({ params }: { params: { token: string } })
           </div>
         )}
 
-        {/* Who they are. An invite carries only an email, so without this
-            the roster shows a guessed name and dispatch has no number to
-            call when someone is late at the gate. Asked of the driver
-            rather than typed by an agent from a phone call. */}
+        {/* Who they are. An invite carries only an email — or, when the
+            crew texted the link, only a number — so without this the
+            roster shows a guessed name and dispatch has nothing to call.
+            Asked of the driver rather than typed by an agent from a phone
+            call. The email box is how a texted-in driver gets a file that
+            their NEXT job can find, with their licence already on it. */}
         <Section title="Your details" tone={data.driver.needsDetails && !meSaved ? 'warn' : undefined}>
           {data.driver.needsDetails && !meSaved && (
             <p className="mb-2.5 text-[14px] leading-relaxed text-zinc-200">
@@ -227,6 +231,12 @@ export default function DriverJobPage({ params }: { params: { token: string } })
             {/* type=tel brings up the phone keypad on a phone. */}
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setMeSaved(false) }}
               type="tel" inputMode="tel" autoComplete="tel" placeholder="Mobile number"
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-3 text-[16px] text-white placeholder:text-zinc-500" />
+            {/* type=email brings up the @ keyboard. Optional: nothing on
+                pickup morning depends on it. */}
+            <input value={email} onChange={(e) => { setEmail(e.target.value); setMeSaved(false) }}
+              type="email" inputMode="email" autoComplete="email"
+              placeholder={data.driver.needsEmail ? 'Email (so we know you next time)' : 'Email'}
               className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-3 text-[16px] text-white placeholder:text-zinc-500" />
             {meErr && <p className="text-[13px] text-rose-300">{meErr}</p>}
             <button type="button" onClick={saveDetails} disabled={savingMe || !first.trim()}

@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   const bookingAssignmentId = String(body?.bookingAssignmentId ?? '').trim()
   const email = String(body?.email ?? '').trim()
+  // 'SMS' texts the link instead of emailing it — the driver types their
+  // own email on the page it opens (Wes 2026-09-15).
+  const channel = body?.channel === 'SMS' ? 'SMS' as const : 'EMAIL' as const
   if (!bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId is required' }, { status: 400 })
   }
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
       firstName: body?.firstName ?? null,
       lastName: body?.lastName ?? null,
       phone: body?.phone ?? null,
+      channel,
       source: 'STAFF',
       invitedByUserId: user?.id ?? null,
     })
@@ -89,8 +93,16 @@ export async function POST(req: NextRequest) {
       // Surfaced so staff can hand over the link verbally when the email
       // bounces or the driver is standing right there.
       url: result.url,
-      emailSent: result.emailResult.ok,
-      emailError: result.emailResult.ok ? null : result.emailResult.reason,
+      channel: result.channel,
+      sentTo: result.sentTo,
+      emailSent: result.emailResult ? result.emailResult.ok : false,
+      emailError: !result.emailResult || result.emailResult.ok ? null : result.emailResult.reason,
+      // The text leg. `smsStatus` carries sendTracked's own word for what
+      // happened (queued / skipped-opted-out / skipped-unconfigured /
+      // failed) so the UI can say WHY nothing went out.
+      smsSent: result.smsResult ? result.smsResult.ok : false,
+      smsStatus: result.smsResult ? result.smsResult.status : null,
+      smsError: result.smsResult?.error ?? null,
     })
   } catch (e) {
     return NextResponse.json(

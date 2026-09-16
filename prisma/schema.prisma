@@ -951,6 +951,11 @@ model DriverAssignment {
   invitedBySource  String    @default("STAFF") @map("invited_by_source") // STAFF | CLIENT
   invitedAt        DateTime  @default(now()) @map("invited_at")
   emailSentTo      String?   @map("email_sent_to")
+  /// Where a TEXTED invite went (E.164). The sibling of emailSentTo:
+  /// a driver onboarded by text has no email until they type one on
+  /// their own page, so "who did we send this to" has to be able to
+  /// answer with a number (Wes 2026-09-15).
+  smsSentTo        String?   @map("sms_sent_to")
   firstViewedAt    DateTime? @map("first_viewed_at")
   /// First time this driver was shown the real gate code. Stamped so a
   /// leaked code can be traced to who had it and from when — the price

@@ -191,7 +191,10 @@ export async function POST(req: NextRequest) {
     })
     // The client gets confirmation, never the driver's link — that link
     // is the driver's credential and belongs only in the driver's inbox.
-    return NextResponse.json({ ok: true, emailSent: result.emailResult.ok })
+    // The client path is always the EMAIL channel, so emailResult is
+    // always there — `?? false` keeps the type honest rather than
+    // asserting it.
+    return NextResponse.json({ ok: true, emailSent: result.emailResult?.ok ?? false })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Could not add that driver' },

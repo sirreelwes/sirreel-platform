@@ -6,11 +6,14 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/drive/[token]/profile — the driver tells us who they are.
  *
- * An invite carries only an email, so until this runs the roster shows
- * whatever we guessed (often the email's local part) and dispatch has no
- * number to call when someone is late at the gate. This is the driver
- * filling that in themselves, which is both faster and more accurate than
- * an agent typing what they heard on the phone.
+ * An invite carries only an email — or, since 2026-09-15, only a phone
+ * number, because a driver can be onboarded by text. Until this runs the
+ * roster shows whatever we guessed and dispatch has no number to call
+ * when someone is late at the gate. This is the driver filling it in
+ * themselves, which is both faster and more accurate than an agent
+ * typing what they heard on the phone. EMAIL is theirs to give here for
+ * the same reason (Wes): it is how their next job finds this file, with
+ * their licence already on it.
  *
  * Scoped by the assignment token; it writes to the DRIVER because a name
  * and a phone number belong to the person, not to one job.
@@ -30,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const firstName = String(body?.firstName ?? '').trim().slice(0, 80)
   const lastName = String(body?.lastName ?? '').trim().slice(0, 80)
   const phoneRaw = String(body?.phone ?? '').trim()
+  const emailRaw = String(body?.email ?? '').trim().toLowerCase()
 
   if (!firstName) {
     return NextResponse.json({ error: 'Please enter your first name.' }, { status: 400 })
@@ -40,6 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (phoneRaw && digits.replace(/\D/g, '').length < 10) {
     return NextResponse.json({ error: 'That phone number looks too short.' }, { status: 400 })
   }
+  if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+    return NextResponse.json({ error: 'That email address does not look right.' }, { status: 400 })
+  }
 
   await prisma.driver.update({
     where: { id: da.driverId },
@@ -47,6 +54,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       firstName,
       lastName,
       ...(phoneRaw ? { phone: digits.slice(0, 30) } : {}),
+      // Blank never clears what is on file: a driver who leaves the box
+      // empty has not asked us to forget their address.
+      ...(emailRaw ? { email: emailRaw } : {}),
     },
   })
   return NextResponse.json({ ok: true })
