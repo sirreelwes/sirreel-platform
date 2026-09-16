@@ -44,6 +44,13 @@ export const GUIDES: Guide[] = [
     roles: SALES,
   },
   {
+    slug: 'holds',
+    title: 'How holds work',
+    summary: 'The three kinds — 1st Hold, a 2nd/3rd behind somebody, and a LiteHold that yields to any later booking.',
+    department: 'Sales',
+    roles: SALES,
+  },
+  {
     slug: 'sending-orders',
     title: 'How to send orders out',
     summary: 'The handoff into Warehouse and Fleet, and why the two lanes are not the same.',
