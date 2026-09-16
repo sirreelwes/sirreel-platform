@@ -29,29 +29,37 @@ import {
 } from '@/lib/email/templates/shell'
 
 /**
- * WHAT SIRREEL BUILT, for an executive who has thirty seconds.
+ * WHAT WE BUILT, said the way Wes says it.
  *
- * Wes 2026-09-16 asked for "a high-level, bullet-pointed overview of the
- * innovation SirReel has implemented" on the account invite. This is that
- * list, and it lives in ONE place so it cannot drift between the email, a
- * deck and the site.
+ * Wes 2026-09-16 on the tone: "something we have added for them that
+ * requires nothing from them. It's casual. It's, we know you need XYZ and
+ * here's what we've done to solve that."
  *
- * Every line is something that is actually shipped and client-visible — an
- * executive who forwards this to a coordinator must not be contradicted by
- * the coordinator's experience a week later. Short lead-in, then the payoff
- * in THEIR terms (what their team stops having to do), never ours.
+ * So every line is PAIN FIRST, then the fix — not a feature and its
+ * benefit. The lead-in names a headache the reader has personally had on a
+ * show; the sentence after it is what we did about it. Nothing in here asks
+ * them to install, sign up, configure or learn anything, because that is the
+ * whole point: it is already on their account.
  *
- * Deliberately NOT here: anything internal (pick lists, barcodes as a
- * warehouse process, our own dashboards), and anything with a number on it.
- * See the rates note below.
+ * Plain words, contractions, no vendor nouns ("solution", "platform",
+ * "seamless"). If a line could appear in any rental company's brochure, it
+ * is the wrong line.
+ *
+ * Every claim is shipped and client-visible — an executive who forwards this
+ * must not be contradicted by their coordinator a week later. Nothing
+ * internal (pick lists, our dashboards) and nothing with a number on it; see
+ * the rates note below.
+ *
+ * One place, so the pitch cannot drift between the email, a deck and the
+ * site.
  */
 export const SIRREEL_CAPABILITIES: ReadonlyArray<string> = [
-  '<strong>A live page for every show, with no login.</strong> Your coordinator opens a link and sees the dates, the paperwork, the pickup details and who to call — updated as things change, so nobody is chasing a status by phone.',
-  '<strong>Sign once, not per show.</strong> An annual master agreement covers everything your company books; each job is logged under it with a one-page addendum instead of a fresh contract.',
-  '<strong>Certificates checked the moment they land.</strong> We read each COI as it arrives, flag it if the named insured does not match the production company, and tell your broker the replacement value to cover — before it becomes a problem on load-in day.',
-  '<strong>After-hours help by text, around the clock.</strong> An automated assistant answers at any hour and can get a driver into a vehicle or a lock box without waiting for a callback.',
-  '<strong>Gear we do not own, on the same order.</strong> Our partner network is quoted, delivered and billed by us, so your team places one order and reconciles one invoice.',
-  '<strong>High-value units scanned out and back.</strong> Radios, generators and the like are tracked by unit, so what went out and what came home is a record rather than a memory test.',
+  "<strong>Nobody should have to call for a status.</strong> Every show gets its own page now — dates, paperwork, pickup details, who to call. Your coordinator opens a link. No login, no account to set up.",
+  "<strong>Signing the same contract every show got old.</strong> So we put one agreement on your account instead. Every job after that is a one-pager that files under it — nothing to re-read, nothing to re-sign.",
+  "<strong>COIs always go wrong at the worst possible moment.</strong> We read every certificate the minute it lands and tell you if something's off — usually days ahead, instead of at the gate on load-in morning. We'll tell your broker the number to insure for, too.",
+  "<strong>Things go sideways at 2am.</strong> There's a number your crew can text at any hour that answers straight away, and it'll get a driver into a truck or a lock box on the spot. No waiting on a callback from somebody's cell.",
+  "<strong>Nobody wants a second vendor to chase.</strong> If we don't own it, we get it from our partners — quoted, delivered and billed by us. Your team places one order and reconciles one invoice.",
+  "<strong>\u201cDid that come back?\u201d shouldn't be a debate.</strong> Radios, generators and the rest get scanned going out and scanned coming in, so what happened is a record instead of an argument.",
 ]
 
 /**
@@ -66,19 +74,19 @@ export const SIRREEL_CAPABILITIES: ReadonlyArray<string> = [
  */
 function ratesCallout(companyName: string): string {
   return calloutBox(
-    `<strong>Your rates travel with the account.</strong> The pricing we agreed with ` +
-      `${esc(companyName)} applies to every production your company books — not only the ` +
-      `show that earned it. Anyone you add to the account books at those rates, and they ` +
-      `are shown on every quote your teams receive.`,
+    `<strong>And your rates come with it.</strong> What we worked out with ` +
+      `${esc(companyName)} applies to every production your company books &mdash; not just ` +
+      `the show that earned it. Add whoever you like to the account; they book at the same ` +
+      `rates without having to ask.`,
   )
 }
 
 /** Plain-text twin of the callout above, so both halves say the same thing. */
 function ratesLine(companyName: string): string {
   return (
-    `Your rates travel with the account: the pricing we agreed with ${companyName} applies ` +
-    `to every production your company books, not only the show that earned it. Anyone you ` +
-    `add to the account books at those rates.`
+    `And your rates come with it. What we worked out with ${companyName} applies to every ` +
+    `production your company books, not just the show that earned it. Add whoever you like ` +
+    `to the account; they book at the same rates without having to ask.`
   )
 }
 
@@ -169,10 +177,12 @@ export function defaultCompanyPortalInviteBody(i: CompanyPortalInviteInput): str
       `${i.firstName},`,
       ``,
       i.addedByName
-        ? `${i.addedByName} added you to the ${i.companyName} account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
-        : `You now have account-level access to SirReel for ${i.companyName}. Before you open it, here is what we have built for companies that work with us repeatedly:`,
+        ? `${i.addedByName} put you on the SirReel account for ${i.companyName}. It's already on — there's nothing for you to set up.`
+        : `You're on the SirReel account for ${i.companyName} now. It's already on — there's nothing for you to set up.`,
       ``,
-      `Your account page pulls it together: every show your teams have with us, who is leading each one, the invoices, and the agreements on file.`,
+      `We've built a fair bit this year, mostly from watching productions run into the same few headaches. The short version:`,
+      ``,
+      `Your account page pulls it together — every show your teams have with us, who's running each one, the invoices, the agreements. Nothing to install and nothing to learn; it's just there when you want it.`,
       ``,
       others.length === 0
         ? `Sign in with this email address; there's no password. Access is by invitation, not by link — right now you're the only person who can open this account. Add colleagues under People with access and they'll get an email like this one.`
@@ -212,7 +222,7 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
 } {
   const overview = i.variant === 'overview'
   const subject = overview
-    ? `${i.companyName} at SirReel — your account, and what we have built`
+    ? `A few things we've set up for ${i.companyName}`
     : `Your ${i.companyName} account portal at SirReel`
   const others = i.otherPeople ?? []
   const custom = (i.customBody ?? '').trim()
@@ -224,10 +234,12 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
   const rates = overview && i.hasNegotiatedRates ? ratesCallout(i.companyName) : ''
 
   const overviewOpener = i.addedByName
-    ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
-    : `You now have account-level access to SirReel for <strong>${esc(i.companyName)}</strong>. Before you open it, here is what we have built for companies that work with us repeatedly:`
+    ? `<strong>${esc(i.addedByName)}</strong> put you on the SirReel account for <strong>${esc(i.companyName)}</strong>. It's already on — there's nothing for you to set up.`
+    : `You're on the SirReel account for <strong>${esc(i.companyName)}</strong> now. It's already on — there's nothing for you to set up.`
 
-  const accountLine = `Your account page pulls it together: every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
+  const overviewIntro = `We've built a fair bit this year, mostly from watching productions run into the same few headaches. The short version:`
+
+  const accountLine = `Your account page pulls it together — every show your teams have with us, who's running each one, the invoices, the agreements. Nothing to install and nothing to learn; it's just there when you want it.`
 
   const opener = i.addedByName
     ? `<strong>${esc(i.addedByName)}</strong> added you to the <strong>${esc(i.companyName)}</strong> account at SirReel — a single page showing every show your teams have with us, who's leading each one, the invoices, and the agreements on file.`
@@ -254,6 +266,7 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
       ? [
           p(`${esc(i.firstName)},`),
           p(overviewOpener),
+          p(overviewIntro),
           capabilities,
           rates,
           p(accountLine),
@@ -271,10 +284,10 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
         ].join('')
 
   const html = renderEmailShell({
-    heading: overview ? 'Your account at SirReel' : 'Your account portal',
+    heading: overview ? "A few things we've set up" : 'Your account portal',
     eyebrow: i.companyName,
     preheader: overview
-      ? `What we have built for ${i.companyName}, and the rates your teams book at.`
+      ? `It's already on — nothing for you to set up.`
       : `Every ${i.companyName} show with SirReel, in one place.`,
     bodyHtml: body,
     cta: { label: 'Open your account portal', href: i.portalUrl },
@@ -297,8 +310,8 @@ export function renderCompanyPortalInvite(i: CompanyPortalInviteInput): {
           '',
           overview
             ? i.addedByName
-              ? `${i.addedByName} added you to the ${i.companyName} account at SirReel. Before you open it, here is what we have built for companies that work with us repeatedly:`
-              : `You now have account-level access to SirReel for ${i.companyName}. Before you open it, here is what we have built for companies that work with us repeatedly:`
+              ? `${i.addedByName} put you on the SirReel account for ${i.companyName}. It's already on — there's nothing for you to set up.\n\nWe've built a fair bit this year, mostly from watching productions run into the same few headaches. The short version:`
+              : `You're on the SirReel account for ${i.companyName} now. It's already on — there's nothing for you to set up.\n\nWe've built a fair bit this year, mostly from watching productions run into the same few headaches. The short version:`
             : i.addedByName
               ? `${i.addedByName} added you to the ${i.companyName} account at SirReel — every show your teams have with us, the invoices, and the agreements on file.`
               : `You now have account-level access to SirReel for ${i.companyName} — every show your teams have with us, the invoices, and the agreements on file.`,
