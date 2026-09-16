@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Minus, PackagePlus, Plus, Search, X } from 'lucide-react'
-import { WALKAROUND_CREW } from '@/lib/fleet/walkaroundCrew'
+import { WALKAROUND_CREW, WAREHOUSE_CREW } from '@/lib/fleet/walkaroundCrew'
 
 interface Quick {
   inventoryItemId: string
@@ -67,6 +67,9 @@ export function CheckoutAddOnsCard({
   tone?: 'dark' | 'light'
 }) {
   const dark = tone === 'dark'
+  // Everyone who checks things out, the likelier side first: fleet on the
+  // handover screen, the warehouse on the check-out sheet.
+  const crewNames = dark ? [...WALKAROUND_CREW, ...WAREHOUSE_CREW] : [...WAREHOUSE_CREW, ...WALKAROUND_CREW]
   const c = dark
     ? {
         card: 'border-zinc-700 bg-zinc-800',
@@ -307,7 +310,7 @@ export function CheckoutAddOnsCard({
           <div>
             <span className={`mb-1 block text-[13px] ${c.sub}`}>Who&rsquo;s adding it?</span>
             <div className="flex flex-wrap gap-2">
-              {WALKAROUND_CREW.map((name) => (
+              {crewNames.map((name) => (
                 <button
                   key={name}
                   type="button"
@@ -318,7 +321,7 @@ export function CheckoutAddOnsCard({
                 </button>
               ))}
               <input
-                value={WALKAROUND_CREW.includes(crew) ? '' : crew}
+                value={crewNames.includes(crew) ? '' : crew}
                 onChange={(e) => setCrew(e.target.value)}
                 placeholder="Someone else"
                 className={`min-w-0 flex-1 rounded-lg border px-3 py-2 text-base ${c.input}`}

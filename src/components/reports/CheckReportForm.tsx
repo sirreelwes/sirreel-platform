@@ -47,6 +47,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CheckoutAddOnsCard } from '@/components/orders/CheckoutAddOnsCard'
+import { WALKAROUND_CREW, WAREHOUSE_CREW } from '@/lib/fleet/walkaroundCrew'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, AlertTriangle, Check, Camera, Printer } from 'lucide-react'
@@ -1002,6 +1003,24 @@ export function CheckReportForm({ draft, viewerName }: { draft: ReportDraft; vie
             }`}
           />
         </label>
+        {/* The floor crew, one tap each (Wes 2026-09-16) — never a silent
+            default from the login. */}
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {[...WAREHOUSE_CREW, ...WALKAROUND_CREW].map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setPreppedBy(name)}
+              className={`min-h-[40px] rounded-lg border px-3 text-[14px] font-medium ${
+                preppedBy.trim() === name
+                  ? 'border-amber-600 bg-chip-warn-bg text-lt-fg'
+                  : 'border-lt-hairline bg-lt-inner text-lt-fg2 hover:border-lt-fg3'
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
         {/* One tap for the common case, never a silent default: the
             floor terminal is signed in as whoever used it last. */}
         {nameMissing && viewerName && (
