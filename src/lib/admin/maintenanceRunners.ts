@@ -10,13 +10,20 @@
  */
 
 import { MAINTENANCE_TASKS, type MaintenanceTaskMeta } from '@/lib/admin/maintenanceTasks'
-import { seedVsmPlanet, SeedRefused, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
+import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
+import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
+import { TaskRefused } from '@/lib/admin/taskRefused'
 
-export { SeedRefused }
+// The one refusal class every task throws. `SeedRefused` is the name the
+// route and the first CLI learned it under.
+export { TaskRefused, TaskRefused as SeedRefused }
 
 export interface MaintenanceRunInput {
   dryRun: boolean
   params: Record<string, string>
+  /** The HQ user who pressed the button — for per-row audit entries a task
+   *  writes itself. Null when there is no session (the CLI). */
+  actorUserId?: string | null
 }
 
 export interface MaintenanceRunResult {
@@ -24,6 +31,9 @@ export interface MaintenanceRunResult {
   log: string[]
   /** Ids created this run. What a later cleanup is allowed to delete BY. */
   createdIds: string[]
+  /** Existing rows this run changed (moved, folded, re-counted). A backfill
+   *  creates nothing, so without this its audit row would say nothing. */
+  touchedIds?: string[]
   /** One line for the audit row and the top of the result card. */
   headline: string
 }
@@ -39,7 +49,7 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
   'seed-vsm-planet-roster': async ({ dryRun, params }) => {
     const receive = clean(params.receiveMethod)
     if (receive && !RECEIVE_METHODS.includes(receive as ReceiveMethodKey)) {
-      throw new SeedRefused(
+      throw new TaskRefused(
         `Unknown receive method "${receive}".`,
         `Pick one of ${RECEIVE_METHODS.join(' / ')}.`,
       )
@@ -60,6 +70,30 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
         ? `Dry run — ${made} unit${made === 1 ? '' : 's'} would be created, ${r.existingUnitIds.length} already there.`
         : `${made} unit${made === 1 ? '' : 's'} created, ${r.existingUnitIds.length} already there.`
     return { log: r.log, createdIds: r.createdUnitIds, headline }
+  },
+
+  'cargo-vans-no-lift-gate': async ({ dryRun, actorUserId }) => {
+    const r = await moveCargoOffLiftGate({ dryRun, actorUserId: actorUserId ?? null })
+    const moved = r.moves.length
+    const folded = r.folds.length
+    const planned = r.plan.filter((p) => p.action === 'move' || p.action === 'merge-and-move').length
+    const toFold = r.plan.reduce((n, p) => n + p.foldIds.length, 0)
+    const parts = (m: number, f: number) => [
+      `${m} van${m === 1 ? '' : 's'} moved to w/o Liftgate`,
+      f ? `${f} duplicate${f === 1 ? '' : 's'} folded` : null,
+      r.classFlags.length ? `${r.classFlags.length} class flag${r.classFlags.length === 1 ? '' : 's'} fixed` : null,
+      r.warnings.length ? `${r.warnings.length} thing${r.warnings.length === 1 ? '' : 's'} to look at` : null,
+    ].filter(Boolean).join(', ')
+    const nothing = r.touchedIds.length === 0 && r.classFlags.length === 0
+    const headline = nothing
+      ? 'Already filed this way — nothing to change.'
+      : dryRun
+        ? `Dry run — ${parts(planned, toFold)}.`
+        : `${parts(moved, folded)}.`
+    // Warnings are the part a person must read, so they ride at the END of
+    // the log where a phone screen lands.
+    const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
+    return { log, createdIds: [], touchedIds: r.touchedIds, headline }
   },
 }
 

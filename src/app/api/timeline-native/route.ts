@@ -445,8 +445,9 @@ export async function GET(req: NextRequest) {
   //    unit is on a job right now is shown by the unit-name cell
   //    color + the bars in its row, not by membership. Category gate
   //    is reservableOnGantt so TEST rigs stay off. Keyed by assetId,
-  //    NOT unitName — "Cargo 22"/"Cargo 25" exist as distinct assets
-  //    in BOTH cargo categories and must not collapse into one row. ──
+  //    NOT unitName — "Cargo 22"/"Cargo 25" existed as distinct assets
+  //    in BOTH cargo categories until 2026-09-16 (folded since), and a
+  //    duplicate name must never collapse two units into one row. ──
   const rosterAssets = await prisma.asset.findMany({
     where: { isActive: true, category: { reservableOnGantt: true } },
     select: {

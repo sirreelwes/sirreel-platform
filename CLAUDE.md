@@ -949,6 +949,49 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## Cargo 20–25 have no lift gate (2026-09-16 — Wes)
+- Wes: "We haven't successfully changed cargos 20 through 25 to be without a
+  lift gate. Instead we've added a second cargo 25 that has no lift gate but
+  cargo 25 with a lift gate still exists." The six were seeded into "Cargo
+  Van w/ Liftgate" (seed_fleet.ts, March) and ruling A of 2026-07-15 filed
+  Planyo's "w/o" placement of them as stale. Planyo was right.
+- **This is a DATA change, shipped as a maintenance task, not a hand edit.**
+  `cargo-vans-no-lift-gate` on /admin/maintenance (iPad) or `npx tsx
+  scripts/cargo-vans-no-lift-gate.ts --write` (laptop) — one implementation,
+  `src/lib/fleet/moveCargoOffLiftGate.ts`. Dry run first; it prints the plan
+  per van and writes nothing. **It has not been run yet** — this session had
+  no database access; Wes runs it.
+- **The ORIGINAL row survives, the duplicate folds into it.** Rules in
+  `src/lib/fleet/cargoLiftGate.ts` (pure, `npm run test:cargo-lift-gate`):
+  the active row in the w/ class (oldest first) is the survivor because it
+  carries the seed id, the odometer, the access code and every trip; every
+  other active row with that name — the second Cargo 25, and the Planyo-era
+  Cargo 22/25 that sat in w/o since May — has its nine history tables
+  (`ASSET_HISTORY_RELATIONS`, pinned against `model Asset` by the test)
+  re-pointed at the survivor, facts the survivor lacks copied over
+  (`fillFromDuplicate`: fill-if-empty, higher odometer, notes appended), and
+  is retired under "Cargo 25 (duplicate — folded 2026-09-16)". **Nothing is
+  deleted.** Inactive rows are never a survivor and never folded.
+- **Counts are set from the rows, on BOTH tables.** The scheduler reads the
+  merged `InventoryItem.qtyOwned` (`getCategoryAvailability`), not the frozen
+  `AssetCategory.totalUnits`; the task sets both to the active-asset count of
+  each class. The w/o class was ARCHIVED in June (exports/catalog-export.json
+  has it `isActive:false`) — the task un-archives it and mirrors the w/
+  class's `reservableOnGantt`, or the moved vans would vanish from every
+  picker.
+- **A HOLD's class is not re-written.** A live reservation filed under w/
+  whose unit is one of these vans is NAMED in the log ("Look at:") and left
+  for a person to re-class on the reservation — the class on a hold is what
+  the quote says. Same for a hold that was assigned both rows of one van
+  (it holds the unit twice after the fold; release one).
+- `PLANYO_UNIT_CATEGORY_OVERRIDES` is now EMPTY — it pointed Cargo 20/21/23/24
+  at the class they are leaving, and once they sit in w/o the reservation's
+  own category matches first. Per-asset AuditLog rows:
+  `asset.category_moved`, `asset.folded_into` (old values included; the CLI
+  journal has the same). `TaskRefused` (`src/lib/admin/taskRefused.ts`) is
+  now the one refusal class every maintenance task throws; `SeedRefused`
+  stays as an alias.
+
 ## Run a task without a laptop — /admin/maintenance (2026-09-16 — Wes)
 - Wes: "I need to be able to run these scripts from my iPad with no access
   to my actual laptop." Everything seedable had ONE way in — `npx tsx
