@@ -42,6 +42,8 @@
  * seeding a checklist onto the wrong item is its own quiet failure.
  */
 
+import { DF50_HAZER_CODES } from '@/lib/inventory/df50Fluid'
+
 export interface KitChecklist {
   /** What the package is called in conversation. */
   label: string
@@ -89,13 +91,17 @@ const MIRROR_NOTE =
 export const KIT_CHECKLISTS: KitChecklist[] = [
   {
     label: 'DF-50 Hazer (water and oil)',
-    codes: ['EFX-DF50-HAZER', '104417', '104418'],
+    codes: [...DF50_HAZER_CODES],
     checks: ['Remote controller', 'Power cord', 'Case'],
     note:
       'Oliver wrote "remote controller, remote" — Wes confirmed 2026-09-14 ' +
       'that is a doubled phrase, one item, so three checks and not four. ' +
-      'The DF-50 goes out pre-juiced; extra fluid is a client request and ' +
-      'is not part of this list.',
+      'The fluid is NOT a check: it is a CHARGED kit piece with its own ' +
+      'line (Wes 2026-09-17: "always goes out. It\'s part of a kit"), ' +
+      'linked by the "DF-50 hazer: fluid goes out with it" task — the ' +
+      'sheet prints it as a row beside the machine, which is what the ' +
+      'floor counts. This note used to say the DF-50 went out already filled ' +
+      'and needed none; that was wrong.',
   },
   {
     label: 'Leaf Blower - Battery Powered (Milwaukee M18)',
