@@ -219,6 +219,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   a production company fixed in HQ clears the named-insured line here too.
   A gear-only job's auto rows stay NA, so we never ask a broker for coverage
   this job does not need.
+- **The sample certificate rides along** (Wes 2026-09-17: "we may want to
+  also add a copy of our sample COI to broker") — the same ACORD the portal
+  and the Forms menu offer, `SAMPLE_COI_PATH` in requirements.ts, absolute on
+  the marketing origin so it resolves from any host or inbox. **Gated on
+  `SiteSetting.formCoiUrl` being set on BOTH surfaces**: `/api/public/forms/
+  [slot]` 404s until an admin uploads the PDF, so the page offers nothing
+  rather than a dead link and `brokerReviewLinkLines({ hasSample })` names it
+  in the email only when one is on file. A broker matching a document beats a
+  broker matching a paragraph; a broker clicking a 404 costs the round trip
+  this feature exists to save.
 - `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
   email and this page name one mailbox. `npm run test:coi-broker`.
 - NOT done: nothing yet nudges when a broker has had the link for days with

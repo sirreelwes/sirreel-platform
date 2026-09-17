@@ -31,6 +31,16 @@ export interface CoiRequirement {
  */
 export const COI_INBOX = 'rentals@sirreel.com'
 
+/**
+ * The sample certificate — the ACORD in the format we need, so a broker can
+ * match a document instead of a paragraph. Served by
+ * `/api/public/forms/[slot]` off `SiteSetting.formCoiUrl`, which means it
+ * **404s until an admin has uploaded the PDF** — every surface that offers it
+ * to a third party must check that field first rather than promising a file
+ * that is not there.
+ */
+export const SAMPLE_COI_PATH = '/api/public/forms/coi'
+
 export const CERTIFICATE_HOLDER = {
   name: 'SirReel Production Vehicles, Inc.',
   address: '8500 Lankershim Blvd, Sun Valley, CA 91352',

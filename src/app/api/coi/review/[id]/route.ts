@@ -498,8 +498,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       )
     }
 
+    // Name the sample only if one is on file — the forms slot 404s until an
+    // admin has uploaded the PDF (src/lib/coi/requirements.ts).
+    const hasSample = await prisma.siteSetting
+      .findUnique({ where: { id: 'singleton' }, select: { formCoiUrl: true } })
+      .then((r) => !!r?.formCoiUrl)
+      .catch(() => false)
+
     const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
-    const linkLines = brokerReviewLinkLines(reviewUrl)
+    const linkLines = brokerReviewLinkLines(reviewUrl, { hasSample })
     const text = [message, '', ...linkLines].join('\n')
     const html =
       `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${escapeHtml(

@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react'
-import { COI_REQUIREMENTS, STICKING_POINT, CERTIFICATE_HOLDER } from '@/lib/coi/requirements'
+import { COI_REQUIREMENTS, STICKING_POINT, CERTIFICATE_HOLDER, SAMPLE_COI_PATH } from '@/lib/coi/requirements'
 import {
   formatReplacementValue,
   replacementValueSentence,
@@ -139,7 +139,7 @@ export function CoiRequirementsBlock({ replacementValue = null }: { replacementV
 
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         <a
-          href="/api/public/forms/coi"
+          href={SAMPLE_COI_PATH}
           target="_blank"
           rel="noreferrer"
           className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"

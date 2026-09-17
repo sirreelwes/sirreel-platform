@@ -10,8 +10,10 @@ import {
   AUTO_PHYSICAL_DAMAGE_NOTE,
   COI_INBOX,
   COI_REQUIREMENTS,
+  SAMPLE_COI_PATH,
   STICKING_POINT,
 } from '@/lib/coi/requirements'
+import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import {
   loadJobReplacementValue,
   replacementValueSentence,
@@ -134,6 +136,22 @@ export default async function CoiBrokerReviewPage({ params }: { params: Promise<
     }
   }
 
+  // Our sample certificate, but ONLY when one has actually been uploaded —
+  // the forms slot 404s off an unset `SiteSetting.formCoiUrl`, and a dead
+  // "download the sample" in front of a broker costs the round trip this
+  // page exists to save. Absolute on the marketing origin, like the
+  // requirements email, so it resolves the same from any host or inbox.
+  let sampleUrl: string | null = null
+  try {
+    const settings = await prisma.siteSetting.findUnique({
+      where: { id: 'singleton' },
+      select: { formCoiUrl: true },
+    })
+    sampleUrl = settings?.formCoiUrl ? `${PUBLIC_SITE_ORIGIN}${SAMPLE_COI_PATH}` : null
+  } catch {
+    sampleUrl = null
+  }
+
   // Their route back: the drop link the client uses, scoped to the same job
   // or company. Nothing about it is broker-specific — a corrected
   // certificate lands and is reviewed exactly like any other.
@@ -157,6 +175,7 @@ export default async function CoiBrokerReviewPage({ params }: { params: Promise<
     approved: coi.humanDecision === 'APPROVED',
     uploadUrl,
     replacementSentence,
+    sampleUrl,
   })
 
   const critical = packet.checks.filter((c) => c.tier === 'CRITICAL')
@@ -268,6 +287,19 @@ export default async function CoiBrokerReviewPage({ params }: { params: Promise<
         <p className="mt-3 rounded-xl border border-[#fcd34d] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#8a5a12] leading-relaxed">
           {AUTO_PHYSICAL_DAMAGE_NOTE}
         </p>
+        {packet.sampleUrl && (
+          <p className="mt-3 text-[14px] text-[#2b2720] leading-relaxed">
+            <a
+              href={packet.sampleUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-[#0C657A] underline underline-offset-2"
+            >
+              Download a sample certificate
+            </a>{' '}
+            showing the format we need — every line above, filled in.
+          </p>
+        )}
         <p className="mt-3 text-[14px] text-[#2b2720] leading-relaxed">
           Certificate holder, additional insured and loss payee:
           <br />

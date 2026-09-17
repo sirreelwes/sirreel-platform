@@ -149,6 +149,15 @@ check(
   'the link block names the page and where it goes back',
   brokerReviewLinkLines('https://tsx.sirreel.com/coi/broker/t').includes('https://tsx.sirreel.com/coi/broker/t'),
 )
+// The sample certificate 404s until an admin uploads the PDF, so the email
+// promises it only when one is on file — a dead sample costs the round trip
+// this whole feature exists to save.
+check(
+  'the email names the sample only when one is on file',
+  brokerReviewLinkLines('https://x/t', { hasSample: true }).join(' ').includes('sample certificate') &&
+    !brokerReviewLinkLines('https://x/t', { hasSample: false }).join(' ').includes('sample') &&
+    !brokerReviewLinkLines('https://x/t').join(' ').includes('sample'),
+)
 
 const anon = buildBrokerFixDraft({
   ai: FAILING,
@@ -174,6 +183,17 @@ check('a passing certificate asks the broker for nothing', clean.issues.length =
 // ── The packet the link opens ──────────────────────────────────────────────
 console.log('\n— what the link opens —')
 
+// No sample PDF uploaded: the page must offer nothing rather than a 404.
+const gearOnlySampleless = buildBrokerReviewPacket({
+  ai: FAILING,
+  match,
+  policyExpiryDate: null,
+  insuredName: null,
+  jobLabel: null,
+  approved: false,
+  uploadUrl: null,
+})
+
 const packet = buildBrokerReviewPacket({
   ai: FAILING,
   match,
@@ -183,11 +203,14 @@ const packet = buildBrokerReviewPacket({
   approved: false,
   uploadUrl: 'https://tsx.sirreel.com/coi/tok',
   replacementSentence: 'Replacement value of the rented equipment on this order: $84,000.',
+  sampleUrl: 'https://sirreel.com/api/public/forms/coi',
 })
 check('the packet carries the same asks as the email', packet.issues.join('|') === draft.issues.join('|'))
 check('the packet carries a verdict per requirement', packet.checks.length === 15)
 check('the packet names the certificate holder', packet.holder.name === 'SirReel Production Vehicles, Inc.')
 check('the packet carries the way back', packet.uploadUrl === 'https://tsx.sirreel.com/coi/tok')
+check('the packet carries the sample certificate', packet.sampleUrl === 'https://sirreel.com/api/public/forms/coi')
+check('an unset forms slot offers no sample', gearOnlySampleless.sampleUrl === null)
 // The disclosure envelope. A row's `note` is model prose about the document
 // and it names requirements this job may not even have — the same leak the
 // client-facing draft was fixed for on 2026-09-09. The summary `notes` field
@@ -208,7 +231,7 @@ check(
   [...keys].every((k) =>
     [
       'insuredName', 'jobLabel', 'policyExpiryDate', 'issues', 'checks',
-      'resolved', 'holder', 'uploadUrl', 'replacementSentence',
+      'resolved', 'holder', 'uploadUrl', 'replacementSentence', 'sampleUrl',
     ].includes(k),
   ),
 )

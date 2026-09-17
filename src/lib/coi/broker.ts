@@ -197,11 +197,25 @@ export function buildBrokerFixDraft(args: {
  * the plain-text and HTML halves of the email cannot describe the link
  * differently.
  */
-export function brokerReviewLinkLines(reviewUrl: string): string[] {
+export function brokerReviewLinkLines(
+  reviewUrl: string,
+  opts?: {
+    /**
+     * Is a sample certificate actually on file? The email names it only when
+     * it exists — the forms slot 404s until an admin uploads the PDF, and
+     * promising a broker a sample we cannot serve costs the round trip this
+     * whole feature exists to save.
+     */
+    hasSample?: boolean
+  },
+): string[] {
+  const tail = opts?.hasSample
+    ? 'It is read-only, carries a sample certificate in the format we need, and tells you where to send the corrected one.'
+    : 'It is read-only, and the page tells you where to send the corrected certificate.'
   return [
     'The full review — every requirement, what the certificate shows today and what is still open — is here:',
     reviewUrl,
-    'It is read-only, and the page tells you where to send the corrected certificate.',
+    tail,
   ]
 }
 
@@ -234,6 +248,12 @@ export interface BrokerReviewPacket {
   uploadUrl: string | null
   /** The equipment-line figure, when the job has one. */
   replacementSentence: string | null
+  /**
+   * Our sample certificate — the ACORD in the format we need. Null when no
+   * PDF has been uploaded to the forms slot; the page offers nothing rather
+   * than sending a broker to a 404.
+   */
+  sampleUrl: string | null
 }
 
 /**
@@ -264,6 +284,8 @@ export function buildBrokerReviewPacket(args: {
   approved: boolean
   uploadUrl: string | null
   replacementSentence?: string | null
+  /** Pass null when no sample PDF is on file — see `sampleUrl` above. */
+  sampleUrl?: string | null
   now?: Date
 }): BrokerReviewPacket {
   const issues = buildCoiFixIssues(args)
@@ -284,5 +306,6 @@ export function buildBrokerReviewPacket(args: {
     holder: CERTIFICATE_HOLDER,
     uploadUrl: args.uploadUrl,
     replacementSentence: args.replacementSentence ?? null,
+    sampleUrl: args.sampleUrl ?? null,
   }
 }
