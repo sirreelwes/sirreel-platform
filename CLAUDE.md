@@ -949,6 +949,36 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
+- Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
+  refused "booking item is fully assigned". Not a driver, not a lock. The
+  PICKER counted exact-day coverage against the QUOTED quantity (the ADV
+  Carrera rule, 2026-09-14) while the WRITE counted every OVERLAPPING
+  assignment against the hold's own quantity — the order is loaded on
+  Cargo 35 + Cargo 45, so the second van's overlap filled the block on the
+  server while the picker still showed the swap. Two answers to "is this
+  block full?" on one screen.
+- **`blockCapacity()` in `src/lib/scheduling/assignWindow.ts` is the one
+  rule** (pure; `npm run test:assign-window`): when the resolved window IS a
+  quoted block, the block's quantity and exact coverage; with no block to be
+  exact against, the hold's quantity and overlap. `available-units` and
+  `assignUnitToBookingItem` both call it. The refusal is now
+  `error: 'fully-assigned'` with a readable `reason`, the counts, and
+  `swappableAssetIds`; nothing matched the old string.
+- **The picker turns that refusal into the swap prompt** ("Which unit does X
+  replace?") and re-reads its counts, instead of a dead-end error. A block
+  whose units are checked out still says so.
+- **On a swap the DRIVER goes with the job, not the van.** `DriverAssignment`
+  rows on the outgoing assignment are re-pointed at the replacement inside
+  the transaction (the driver's page and link survive; it now releases the
+  new van's code); inspections are detached (a walkaround is of the OLD van,
+  it stays on that asset's history); a checkout record on the outgoing unit
+  refuses the swap up front (`replace-checked-out`) — its FK is RESTRICT and
+  would otherwise fail after every other check passed. The replacement is
+  created BEFORE the outgoing row is deleted so those rows have somewhere to
+  go. Response carries `driversMoved`. Nobody is TOLD the driver's van
+  changed — open.
+
 ## Cargo 20–25 have no lift gate (2026-09-16 — Wes)
 - Wes: "We haven't successfully changed cargos 20 through 25 to be without a
   lift gate. Instead we've added a second cargo 25 that has no lift gate but

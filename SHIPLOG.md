@@ -22,6 +22,12 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-17
+
+### "Booking item is fully assigned" — one capacity rule
+
+`(this commit)` the picker and the assign write now answer "is this block full?" with the same function — Jose (Mad Minds, SR-JOB-0389) could not change Cargo 35 for another van: the picker counted exact coverage against the quoted count, the server counted every overlapping assignment (Cargo 45 on the same job) against the hold's quantity, and refused a swap the picker had offered. `blockCapacity()` in assignWindow.ts is the rule for both; the refusal is `fully-assigned` with a reason and the swappable units, and the picker turns it into the "which unit does this replace?" prompt. On a swap the driver's assignment moves to the replacement van (it used to hang off a row being deleted), walkarounds stay with the old van, and a unit with a check-out record refuses up front. `npm run test:assign-window`.
+
 ## 2026-09-16
 
 ### Cargo 20–25 have no lift gate

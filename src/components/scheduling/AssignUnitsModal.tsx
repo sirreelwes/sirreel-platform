@@ -398,6 +398,20 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
         setPendingSwap(null)
         return
       }
+      if (res.status === 409 && json.error === 'fully-assigned' && !replaceAssetId) {
+        // The server's count says this block is full. The rep opened the
+        // picker to CHANGE a unit, so the answer is the swap prompt, not a
+        // dead end — and the counts on screen are re-read so they match
+        // what just refused. If nothing on the block can be swapped
+        // (checked out), the reason says so.
+        const ids: string[] = Array.isArray(json.swappableAssetIds) ? json.swappableAssetIds : []
+        const outs = swappable.filter((a) => ids.length === 0 || ids.includes(a.asset.id))
+        await refresh()
+        if (outs.length > 0) {
+          setPendingSwap({ asset, outAssetId: outs.length === 1 ? outs[0].asset.id : null })
+          return
+        }
+      }
       setError(json.reason || json.error || `Request failed (${res.status})`)
       setErrorAssetId(asset.assetId)
     } catch (e) {
