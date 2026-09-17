@@ -1,25 +1,36 @@
 'use client'
 
 /**
- * The blind-handoff toggle on a /reports/vehicles row. The page is a
- * server component, so this is the client edge: flip the job's live
- * orders, then re-read the page so every row on the same job agrees.
+ * The blind-handoff toggle on a /reports/vehicles row and the handover
+ * screen. Those pages are server components, so this is the client edge:
+ * flip THIS vehicle, then re-read the page so the lane agrees.
  *
  * Julian, 2026-09-15: three vans were set to go out blind and the check
- * list had no way to show it or mark it. Same write as the reservation
- * modal on the board (BlindHandoffToggles), so the two cannot disagree.
+ * list had no way to show it or mark it. Jose, 2026-09-16: it must be
+ * possible to mark only SOME of a job's vehicles — so the row writes the
+ * unit's own override, not the whole job. Same component and same route
+ * as the reservation modal on the board (BlindHandoffToggles), so the two
+ * cannot disagree.
  */
 
 import { useRouter } from 'next/navigation'
 import { BlindHandoffToggles, type BlindKind, type BlindOrder } from '@/components/schedule/BlindHandoffToggles'
 
 export function VehicleBlindToggle({
+  jobId,
+  assignmentId,
+  effective,
   orders,
   kind,
   kinds,
   tone = 'light',
   className = 'mt-1.5',
 }: {
+  jobId: string | null
+  /** The unit the row is about. */
+  assignmentId: string
+  /** Its effective answer, computed server-side (lib/fleet/blindHandoff). */
+  effective: { blindPickup: boolean; blindReturn: boolean }
   orders: BlindOrder[]
   /** One edge — the check list shows the lane it is on. */
   kind?: BlindKind
@@ -32,7 +43,9 @@ export function VehicleBlindToggle({
   const router = useRouter()
   return (
     <BlindHandoffToggles
+      jobId={jobId}
       orders={orders}
+      vehicle={{ assignmentId, effective }}
       canEdit
       kinds={kinds ?? (kind ? [kind] : undefined)}
       size="md"

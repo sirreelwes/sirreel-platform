@@ -30,6 +30,7 @@ const truck = (over: Partial<FleetMovement> = {}): FleetMovement => ({
   category: 'Cargo Van w/ Liftgate',
   bookingNumber: 'SR-2026-0042',
   jobName: 'Holy Water',
+  blind: { blindPickup: false, blindReturn: false },
   company: 'Peacoat Productions LLC',
   deliveryTime: '7:00a',
   pickupTime: '6:00p',

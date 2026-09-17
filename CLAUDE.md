@@ -1251,6 +1251,70 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `findVsmVendor()` is the only lookup a VSM code path may use; the seed
   REFUSES rather than adding a roster on top of units it did not create.
 
+## One thread per job — Phase 1 SHIPPED 2026-09-17 (Wes)
+- Wes 2026-09-16: "figure out a way to have individual jobs stay on one
+  thread. For the client to have a single thread would be better … Is it
+  that we open a chat within the job itself and that chat feeds a single
+  email thread to the client?" Design, troubleshooting, placement and the
+  billing answer: `docs/specs/job-thread-one-conversation.md`. Read it
+  before touching how client mail is sent or filed. Phase 1 is the
+  ANCHORS + AUTO-FILING; Phase 2 (the Conversation panel, internal notes,
+  lanes, Hand to Billing, From = the author) and Phase 3 (Gmail-native
+  sending) are NOT built.
+- **Why it shattered, in one line:** no send carried proof of its job. 91
+  sites went through `sendAgreementEmail` with no In-Reply-To/References,
+  five subjects, three Reply-Tos (rep / billing@ / hello@); `EmailThread`
+  is keyed per MAILBOX (`gmailThreadId`), the pubsub never set `jobId`, and
+  HQ never learned its own Message-IDs (the root of the hello@ capture
+  trick for wes@).
+- **`sendOnJobThread()` in `src/lib/email/jobThread.ts` is the drop-in for
+  `sendAgreementEmail` at any site that knows its job** (same payload +
+  `jobId`, optional `staffEmail`, `separate: true` to opt out). It puts
+  three anchors on the email (rules in `jobThreadRules.ts`, pure, `npm run
+  test:job-thread`): (A) an HQ-minted `<jt.<jobcode>.<uuid>@sirreel.com>`
+  Message-ID + In-Reply-To/References to the job's earliest and newest
+  filed message, stored on the outbound `EmailMessage.rfc822MessageId` so
+  `hasKnownConversationLink` matches a FIRST reply; (B) `jobs+<jobcode>@
+  sirreel.com` on Cc — the driver-relay plus-address mechanism, Cc NEVER
+  Reply-To (Reply-To stays the person); (C) one subject per job, "Re:"
+  once. The root thread is `EmailThread` `hq-job-<jobId>` (deterministic,
+  created on first send, `jobId` set). **Its subject ADOPTS the newest
+  thread already filed to the job** (the client's inquiry) and is minted
+  `<job> — SirReel (<code>)` only when nothing is filed — continuing the
+  client's thread is more "one thread" than starting ours.
+- **Wired (Phase 1):** send-quote, job welcome, paperwork summary, manual
+  follow-up, portal invite, invoice + pre-invoice (Reply-To billing@
+  unchanged — billing rides the same thread, Wes 2026-09-17), and the job
+  page composer (`/api/jobs/[id]/email`; its subject box is read-only
+  now). The four compose helpers in `lib/email/preview/` return the
+  thread subject via `previewJobThreadSubject()` (read-only, creates
+  nothing) so the review modal shows what will go out. NOT wired: the
+  cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
+  `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
+  itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
+  X-Original-To first, then the References chain against stored ids
+  (through a duplicate's canonical row). FILL-ONLY via
+  `fileThreadInJobIfUnfiled`; a thread a person placed is never re-pointed.
+  Also: the job code is checked BEFORE the driver relay (parseRelayTag
+  would claim `jobs+sr-job-…` as a driver tag); HQ's own copy of a send
+  (it lands in jobs@ via the Cc) is folded onto the recorded row by the
+  `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
+  the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
+  message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **Unverified, by design tolerant:** whether Resend honours a caller-set
+  `Message-ID`. If it does not, the ingested own-copy carries the real id
+  on a thread filed to the job, so a client reply referencing it still
+  resolves — one hop later. Check the first live send's headers in jobs@.
+- **What the client sees:** one growing conversation per job instead of a
+  row per document; "Quote", "Invoice" live in the body headings the
+  templates already carry. `rentals@` team Cc unchanged through Phase 1.
+- Do NOT resurrect `job_messages` (legacy, keyed by RW order number) for
+  internal notes. Do NOT put the job address in Reply-To. Do NOT widen the
+  wes@ LINKED filter — anchors add proof, nothing else. `startThreadForJob`
+  in recordOutboundOnThread.ts has no callers now; the root thread comes
+  from `jobThreadContext()`.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

@@ -31,7 +31,7 @@ import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { mergeCc, parseCcList } from '@/lib/email/ccList'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
@@ -149,6 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       id: true,
       orderNumber: true,
       status: true,
+      jobId: true,
       quoteSentAt: true,
       sentAt: true,
       wonAt: true,
@@ -280,7 +281,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // this line and must never be handed a client portal link.
   const clientCc = mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? []
 
-  const emailResult = await sendAgreementEmail({
+  // On the job's thread (lib/email/jobThread): the subject is the job's,
+  // the headers reply to whatever is already filed, and the job address
+  // rides on Cc. `final.subject` is only the off-thread fallback.
+  const emailResult = await sendOnJobThread({
+    jobId: order.jobId,
+    staffEmail: session?.user?.email ?? null,
     to: [primary.email],
     // Replies route to the agent's watched inbox (the Gmail ingest
     // pipeline), not the unmonitored notifications@ sender — same as
@@ -318,7 +324,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       resendMessageId: emailResult.id,
       toAddress: primary.email,
       ccAddresses: others.map((o) => o.email),
-      subject: final.subject,
+      subject: emailResult.subject,
       label: `send-quote:${order.orderNumber}`,
       orderId: order.id,
     })
