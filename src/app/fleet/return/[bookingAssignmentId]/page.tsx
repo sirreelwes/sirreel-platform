@@ -20,7 +20,7 @@
  */
 
 import Link from 'next/link'
-import { Lock, CheckCircle2, ArrowLeft, ArrowRight, FileText } from 'lucide-react'
+import { Lock, CheckCircle2, ArrowLeft, ArrowRight, FileText, Columns2 } from 'lucide-react'
 import { getFleetInspectionUser } from '@/lib/fleet/requireFleetInspectionAccess'
 import { prisma } from '@/lib/prisma'
 import { InspectionReturnForm, type CheckoutSnapshot } from '@/components/fleet/InspectionReturnForm'
@@ -202,6 +202,20 @@ export default async function FleetReturnPage({ params }: Params) {
               <FileText size={12} aria-hidden />
               Condition report (out vs back)
             </a>
+            {/* Out beside back, one angle at a time — what the crew
+                came here for (Julian 2026-09-17: "damage id would
+                position the photos side by side in a check in report,
+                allowing fleet to see side by side comparisons"). It was
+                two taps away through the filed record; this is the tap
+                they actually want, so it goes on the screen they are
+                already standing on. */}
+            <Link
+              href={`/reports/vehicles/${returnRow.id}/compare`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-amber-500 hover:text-amber-500"
+            >
+              <Columns2 size={12} aria-hidden />
+              Compare out vs back
+            </Link>
             {/* The filed record on screen, slot by slot against the
                 check-out. Read-only, and still reachable months later
                 when this screen is long out of anyone's week. */}

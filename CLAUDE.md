@@ -622,7 +622,85 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   close-ups and extras (out first). Arrow keys, filmstrip, Save on each
   frame. `filedInspection().counterpart` now carries its `inspectorName`,
   `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- **Julian's check-in side-by-side was ALREADY this, in four places
+  (2026-09-17: "at checking in of the vehicle, the fleet team takes the
+  same photos they took on checkout prep … damage id would position the
+  photos side by side in a check in report").** Do not build a fifth.
+  (1) DURING check-in capture, `InspectionReturnForm` passes
+  `compareTo={checkout?.photos}` and GuidedPhotoCapture renders the
+  check-out shot directly ABOVE the button that replaces it, so the tech
+  photographs how it is while looking at how it was; (2) the filed record
+  shows each slot beside the other end; (3) `/compare` is the large
+  one-angle-at-a-time viewer; (4) the condition report PDF pairs out/back
+  per slot. What was genuinely missing was the DOOR: the post-check-in
+  screen offered the PDF and the filed record but not the comparison, so
+  it was two taps through a page nobody was aiming for. "Compare out vs
+  back" now sits on the screen the crew is already standing on.
 - `npm run test:photo-stamp`.
+
+## The driver's copy of the checkout sheet, on their phone (2026-09-17 — Wes/Julian)
+- Julian's blind-pickup process: check the vehicle out the day before,
+  fill the sheet, "leave a copy of the checkout sheet inside the assigned
+  vehicle." Wes: "give the drivers a link to the PDF checkout … much
+  better for them to have it on their phone." That paper copy was the ONLY
+  thing putting the recorded condition in the driver's hands — the driver
+  page showed them a photo COUNT and never an image, the self-checkout
+  confirmation email goes to the `driver-checkouts` HQ channel and not to
+  them, and their return card was never given the `compareTo` the STAFF
+  return form has.
+- `GET /api/drive/[token]/condition-report` — same `buildInspectionReport`
+  + `ConditionReportDocument` as the yard's route, so the driver's copy
+  cannot drift from the record it copies. Token is the credential (404
+  invalid / 410 expired / 409 cancelled), scoped to the one assignment.
+  Shown on the page as "Vehicle condition → Open the checkout sheet".
+- **Three things it must never carry, and does not:** the DRIVER'S LICENCE
+  photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
+  side on purpose), the lockbox/gate CODE (the report has never read
+  `Asset.accessCode`; codes reach a driver only through the earned-and-
+  unlocked path on the page), and anyone else's rental.
+- **NOT gated on blind** — Wes said drivers, not blind drivers, and a
+  staffed pickup's driver having the sheet costs nothing. Gated instead on
+  a walk-around actually being FILED on the assignment (staff's or the
+  driver's own); a link to an empty sheet is worse than no link.
+- **`inspectionReportSendingEnabled()` stays dark and is NOT consulted.**
+  That gate is about EMAILING the RENTER a report; handing the person
+  driving the truck the sheet that used to sit on its passenger seat is a
+  different act. Do not wire this route to that flag, and do not wire that
+  flag on to ship a driver copy.
+- Julian's day-before staff walk-around is UNCHANGED and still not gated on
+  blind anywhere. The driver's four sides remain additional, and on a blind
+  pickup they still merge onto the same CHECKOUT Inspection
+  (`adoptedStaffInspection`). **Caveat if both happen: FRONT and REAR are
+  the same slot on both lists and the record page renders the NEWEST photo
+  per slot**, so the driver's pair displays over the staff's from the day
+  before (both are stored; the earlier pair is not visible in the slot grid
+  or the compare view). The driver's other shots (DRIVER_SIDE,
+  PASSENGER_SIDE, ODOMETER, FUEL_GAUGE, INTERIOR) are legacy slots outside
+  Julian's 23 and do not collide.
+- **Drivers are only asked for photos on an UNPLANNED pickup (2026-09-17 —
+  Julian: "we have no need to prompt drivers for checkout photos unless for
+  some reason it is an unplanned pickup").** His process walks the vehicle
+  around the DAY BEFORE, so on a planned blind pickup the condition is
+  already on file before the driver is near the truck and four more sides in
+  a dark yard buy nothing — they also DISPLACE the yard's front and rear on
+  the filed record (same slot ids, newest wins). "Unplanned" is NOT a flag
+  anyone sets: it is DERIVED from whether a CHECKOUT Inspection filed by
+  SIRREEL (`inspectedByDriverId: null`) exists on the assignment. None =
+  nobody got the chance = the four sides stay required, because that truck
+  would otherwise leave with no record either direction.
+  `driverCheckoutDuty()` in `src/lib/drivers/selfCheckout.ts` is the pure
+  rule; `selfCheckoutState` and `completeSelfCheckout` both read it, and the
+  server re-reads the fact rather than trusting the page — this is the gate
+  that lets a truck leave. Mileage follows the same logic (the yard's
+  overnight reading stands). **Photos are never taken AWAY, only
+  un-demanded** — every slot stays offered, because a driver who finds fresh
+  damage in the yard must be able to shoot it, and the notes line records
+  which way it went. `npm run test:driver-checkout-duty`.
+- NOT done: the driver's RETURN card still has no before/after (the staff
+  form's `compareTo`), and nothing warns that a blind pickup is hours away
+  with the driver's invite undelivered, never opened and no inspection
+  filed — there is no action item for blind-pickup readiness and the fleet
+  Today board carries blind + inspection state but no driver-link state.
 
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
