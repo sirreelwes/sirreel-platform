@@ -50,7 +50,7 @@ import { prisma } from '@/lib/prisma'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { unpricedBlock } from '@/lib/orders/unpricedLines'
 import { ensureFreshQuotePdf } from '@/lib/orders/generateQuotePdf'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { mergeCc } from '@/lib/email/ccList'
@@ -142,6 +142,7 @@ export async function resendQuoteOnChange(opts: {
     select: {
       id: true,
       orderNumber: true,
+      jobId: true,
       status: true,
       quoteSentAt: true,
       quotePdfKey: true,
@@ -250,7 +251,8 @@ export async function resendQuoteOnChange(opts: {
   const clientCc = mergeCc(otherContacts, undefined, [primary.email]) ?? []
   const cc = await withTeamCc(mergeCc(clientCc, hq, [primary.email]) ?? [], primary.email)
 
-  const emailResult = await sendAgreementEmail({
+  const emailResult = await sendOnJobThread({
+    jobId: order.jobId,
     to: [primary.email],
     // Replies go to the agent, never to notifications@ — same rule every
     // other client-facing send follows.

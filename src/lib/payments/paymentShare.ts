@@ -108,8 +108,10 @@ export async function sendPaymentShareEmail(args: {
   createdVia: 'PORTAL' | 'PUBLIC_REQUEST' | 'OPERATOR' | 'PAPERWORK_PORTAL'
   portalAccessId?: string | null
   personId?: string | null
-  /** Injected so this module stays free of the email transport. */
-  send: (msg: { to: string[]; replyTo?: string; subject: string; html: string; text: string }) => Promise<{
+  /** Injected so this module stays free of the email transport. The
+   *  caller decides whether the send rides a job's thread (it passes a
+   *  `sendOnJobThread`-backed function with the jobId bound). */
+  send: (msg: { to: string[]; replyTo?: string; subject: string; html: string; text: string; label?: string }) => Promise<{
     ok: boolean
     reason?: string
   }>
@@ -168,7 +170,7 @@ export async function sendPaymentShareEmail(args: {
 
   // The body says "Questions: billing@sirreel.com" — a plain Reply must
   // land there too, not in the unmonitored notifications@ sender.
-  const sent = await args.send({ to: [args.to], replyTo: 'billing@sirreel.com', subject, html, text })
+  const sent = await args.send({ to: [args.to], replyTo: 'billing@sirreel.com', subject, html, text, label: 'payment-share' })
   if (!sent.ok) {
     console.error('[payment-share] send failed to %s: %s', args.to, sent.reason)
     return {

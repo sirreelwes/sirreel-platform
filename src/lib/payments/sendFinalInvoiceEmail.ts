@@ -22,7 +22,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withBillingCc } from '@/lib/email/billingVisibility'
 import { buildFinalInvoiceEmail } from '@/lib/email/templates/finalInvoiceReady'
 import {
@@ -172,7 +172,9 @@ export async function sendFinalInvoicePaymentOptions(
   // (Wes 2026-09-04). Channel-driven — /admin/notifications.
   const ccList = await withBillingCc([], recipient.email)
 
-  const sent = await sendAgreementEmail({
+  // Billing rides the same job thread (Wes 2026-09-17); Reply-To stays billing@.
+  const sent = await sendOnJobThread({
+    jobId: fi.job.id,
     to: [recipient.email],
     cc: ccList.length > 0 ? ccList : undefined,
     replyTo: 'billing@sirreel.com',
