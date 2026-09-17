@@ -6,8 +6,8 @@
  *
  * One implementation (see seedVsmPlanet.ts for why). Idempotent: an
  * existing kit link for the same machine + fluid is brought to these
- * settings, never duplicated. The rule for which row is the fluid and which
- * fluid goes on which machine is pure, in df50Fluid.ts.
+ * settings, never duplicated. Which row is the fluid — the gallon, pinned by
+ * code, on all three machines (Wes 2026-09-17) — is pure, in df50Fluid.ts.
  *
  * The settings are the Rosco fluid settings of 2026-09-15, deliberately:
  * one bottle per machine, CHARGED (Wes: "charge for fluid — it has a price
@@ -23,7 +23,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { TaskRefused } from '@/lib/admin/taskRefused'
-import { DF50_HAZER_CODES, isDf50FluidRow, isDf50MachineRow, pairFluidsToMachines } from '@/lib/inventory/df50Fluid'
+import { DF50_FLUID_CODE, DF50_HAZER_CODES, chooseDf50Fluid, isDf50FluidRow, isDf50MachineRow } from '@/lib/inventory/df50Fluid'
 
 export const DF50_FLUID_PIECE_SETTINGS = {
   qtyPer: 1,
@@ -93,11 +93,12 @@ export async function seedDf50FluidKit(opts: SeedDf50Options): Promise<SeedDf50R
   }
   for (const m of machines) log.push(`${m.isActive ? '✓' : '·'} machine ${name(m)}${m.isActive ? '' : ' — inactive, skipped'}`)
 
-  // ── The fluid: found by name, refused when ambiguous ──────────────────
+  // ── The fluid: the pinned gallon, else a lone fluid-named row ─────────
   const candidates = (await prisma.inventoryItem.findMany({
     where: {
       isActive: true,
       OR: [
+        { code: { equals: DF50_FLUID_CODE, mode: 'insensitive' } },
         { description: { contains: 'df50', mode: 'insensitive' } },
         { description: { contains: 'df-50', mode: 'insensitive' } },
         { description: { contains: 'df 50', mode: 'insensitive' } },
@@ -107,27 +108,22 @@ export async function seedDf50FluidKit(opts: SeedDf50Options): Promise<SeedDf50R
     },
     select: { id: true, code: true, description: true, department: true, type: true, dailyRate: true, isActive: true },
   })) as Row[]
-  const fluids = candidates.filter(isDf50FluidRow)
-  if (fluids.length === 0) {
+  const choice = chooseDf50Fluid(candidates)
+  if (!choice.fluid) {
     throw new TaskRefused(
-      `No active catalog row reads as DF-50 fluid (looked at ${candidates.length} DF-50 row${candidates.length === 1 ? '' : 's'}: ${candidates.map(name).join(', ') || 'none'}).`,
-      'Add the fluid to the catalog (a row whose name says "DF-50" and "fluid"), or re-activate it, then run this again.',
+      `No fluid to link: ${choice.reason}.`,
+      `Give the gallon row the code ${DF50_FLUID_CODE} on /inventory (or re-activate it), then run this again.`,
     )
   }
-  for (const f of fluids) log.push(`✓ fluid ${name(f)} $${String(f.dailyRate)} — ${f.department}/${f.type}`)
-
-  const pairs = pairFluidsToMachines(live, fluids)
-  const unmatched = pairs.filter((p) => !p.piece)
-  if (unmatched.length) {
-    throw new TaskRefused(
-      `Cannot tell which fluid goes on ${unmatched.map((p) => name(p.parent)).join(', ')}: ${unmatched[0].reason}.`,
-      'Name the fluid rows by chemistry ("Water Based" / "Oil Based") to match the machines, or retire the one that is not stocked, then run this again.',
-    )
+  const fluid = choice.fluid
+  log.push(`✓ fluid ${name(fluid)} $${String(fluid.dailyRate)} — ${fluid.department}/${fluid.type} (${choice.reason})`)
+  for (const other of candidates.filter((r) => r.id !== fluid.id && isDf50FluidRow(r))) {
+    log.push(`· other fluid row left alone: ${name(other)} — not linked; retire it on /inventory if it is not stocked`)
   }
+  const pairs = live.map((parent) => ({ parent, piece: fluid }))
 
   // ── The fluid bills once, as an expendable ────────────────────────────
-  const used = new Map(pairs.map((p) => [p.piece!.id, p.piece!]))
-  for (const f of used.values()) {
+  for (const f of [fluid]) {
     const ok = f.department === 'EXPENDABLES' && f.type === 'EXPENDABLE'
     if (Number(f.dailyRate ?? 0) <= 0) {
       result.warnings.push(`${name(f)} has no price — it will print on the quote at $0 until one is set on /inventory.`)
@@ -145,7 +141,7 @@ export async function seedDf50FluidKit(opts: SeedDf50Options): Promise<SeedDf50R
 
   // ── The links ─────────────────────────────────────────────────────────
   for (const p of pairs) {
-    const piece = p.piece!
+    const piece = p.piece
     const existing = await prisma.inventoryKitPiece.findFirst({
       where: { parentItemId: p.parent.id, pieceItemId: piece.id },
       select: { id: true, qtyPer: true, perUnits: true, rounding: true, minQty: true, billing: true, clientVisible: true, suppressIfOrdered: true, isActive: true },
