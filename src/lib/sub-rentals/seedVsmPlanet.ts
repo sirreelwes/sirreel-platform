@@ -286,7 +286,11 @@ export async function seedVsmPlanet(opts: SeedVsmOptions): Promise<SeedVsmResult
 
   result.vendorId = vendor.id
   log.push(
-    `✓ vendor ${VSM_PLANET_NAME} (${vendor.id})` +
+    // The name the ROW carries, not the one this file prefers. Printing
+    // "VSM Planet Rentals" over a row called "VSM Planet" is the exact
+    // confusion that cost a day: it reads as though a second vendor was
+    // created, which is what the alias lookup exists to prevent.
+    `✓ vendor ${result.matchedName ?? VSM_PLANET_NAME} (${vendor.id})` +
       (dryRun ? '' : ` · ${vendor.partnerKind} · ${vendor.catalogSection} · receives ${vendor.defaultReceiveMethod}`) +
       (vendor.email ? ` · ${vendor.email}` : ' · NO EMAIL ON FILE — pass one before inviting'),
   )
