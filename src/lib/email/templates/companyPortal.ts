@@ -46,7 +46,12 @@ import {
  * clients — "we are the most responsive team in the business" — with AHA
  * covering the hours the team is asleep; the partner line is his, verbatim;
  * and the insurance line was rewritten to match them, opening on what we do
- * for the client rather than on the disaster it prevents. Where his phrasing
+ * for the client rather than on the disaster it prevents. That line's claim
+ * is sized to what src/lib/coi/ actually runs — a fifteen-point read against
+ * COI_REQUIREMENTS, tiered critical/alert, each check PASS/FAIL/UNKNOWN/NA
+ * with what the certificate says — not the name match alone. Wes 2026-09-17:
+ * "ai compares it to our requirements and gives quick answers." Widening it
+ * further needs the checks to widen first. Where his phrasing
  * and the pattern disagree, his phrasing wins: it is his voice the client is
  * buying.
  *
@@ -69,7 +74,7 @@ import {
 export const SIRREEL_CAPABILITIES: ReadonlyArray<string> = [
   "<strong>Nobody should have to call for a status.</strong> Every show gets its own page now — dates, paperwork, pickup details, who to call. Your coordinator opens a link. No login, no account to set up.",
   "<strong>Signing the same contract every show got old.</strong> So we put one agreement on your account instead. Every job after that is a one-pager that files under it — nothing to re-read, nothing to re-sign.",
-  "<strong>We keep the insurance side clean for you.</strong> Every certificate gets read the day it arrives, and if the named insured doesn't match the production company you hear about it days ahead — not at the gate on load-in morning. We'll tell your broker the replacement value to cover, too.",
+  "<strong>We keep the insurance side clean for you.</strong> Every certificate is read against our requirements the day it arrives — limits, endorsements, the dates, and whether the named insured is actually the production company — and you get a straight answer back the same day. If anything is short you hear it days ahead, not at the gate on load-in morning. We'll tell your broker the replacement value to cover, too.",
   "<strong>We're the most responsive team in the business.</strong> And for the few hours we're catching sleep before the next day, AHA — our after-hours assistant — picks up. Your crew can text at any hour and get a driver into a truck or a lock box on the spot, instead of leaving a voicemail.",
   "<strong>Find everything you need in one place.</strong> If we don't own it, we get it from our partners — quoted, delivered and billed by us. Your team places one order and reconciles one invoice.",
   "<strong>\u201cDid that come back?\u201d shouldn't be a debate.</strong> Radios, generators and the rest get scanned going out and scanned coming in, so what happened is a record instead of an argument.",
