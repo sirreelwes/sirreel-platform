@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { blindFlags, blindForVehicle, ordersForBooking } from '@/lib/fleet/blindRule'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { getPermissions } from '@/lib/permissions'
 import { effectiveViewRole } from '@/lib/auth/viewAs'
@@ -179,7 +180,7 @@ export async function GET(req: NextRequest) {
             // blindPickup comes from the JOB's orders, not just the booking's.
             // Orders link to a Job; nothing sets Order.bookingId in practice.
             select: {
-              id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true,
+              id: true, orderNumber: true, status: true, bookingId: true, blindPickup: true, blindReturn: true,
               // Asset-bearing lines only — feeds the "order covers more than
               // the reservation" check (Wes 2026-08-22). Supplies lines are
               // deliberately excluded: a truck order that also carries
@@ -204,7 +205,7 @@ export async function GET(req: NextRequest) {
       // Linked Order(s) — id/number/status feed the clickable order
       // links in the reservation detail + the order-badge bar indicator;
       // blindPickup keeps its existing "any order flagged" semantics.
-      orders: { select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true } },
+      orders: { select: { id: true, orderNumber: true, status: true, bookingId: true, blindPickup: true, blindReturn: true } },
       adminNotes: true,
       items: {
         select: {
@@ -220,6 +221,10 @@ export async function GET(req: NextRequest) {
               startDate: true,
               endDate: true,
               status: true,
+              // Per-vehicle blind override (Jose 2026-09-16) — the bar
+              // wears the unit's answer, not the job's.
+              blindPickup: true,
+              blindReturn: true,
               asset: { select: { id: true, unitName: true, categoryId: true, tier: true } },
             },
           },
@@ -236,7 +241,7 @@ export async function GET(req: NextRequest) {
   const bookingExtras = new Map<
     string,
     {
-      orders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>
+      orders: Array<{ id: string; orderNumber: string; status: string; bookingId: string | null; blindPickup: boolean; blindReturn: boolean }>
       units: Array<{ unitName: string; category: string; bookingNumber: string }>
     }
   >()
@@ -321,11 +326,11 @@ export async function GET(req: NextRequest) {
   for (const b of bookings) {
     // Union of the job's orders (the real linkage) and any directly
     // booking-linked orders, deduped by id.
-    const orderById = new Map<string, { id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>()
+    const orderById = new Map<string, { id: string; orderNumber: string; status: string; bookingId: string | null; blindPickup: boolean; blindReturn: boolean }>()
     for (const o of b.job?.orders ?? [])
-      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, bookingId: o.bookingId, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
     for (const o of b.orders)
-      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, bookingId: o.bookingId, blindPickup: o.blindPickup, blindReturn: o.blindReturn })
     const ownUnits = b.items.flatMap((it) =>
       it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '', bookingNumber: b.bookingNumber })),
     )
@@ -346,6 +351,33 @@ export async function GET(req: NextRequest) {
     const own = mapStatus(bookingStatus)
     if (own === 'cancelled') return own
     return (jobId && stageByJob.get(jobId)) || own
+  }
+
+  // ── Blind, per VEHICLE (lib/fleet/blindHandoff; Jose 2026-09-16). A
+  //    unit bar wears its own answer: the assignment's override where
+  //    set, else the orders that speak for its booking. A job-view bar
+  //    (one per booking) wears any of its units' answers, or the orders'
+  //    when nothing is assigned yet. The live-booking set is the window's
+  //    — a job's live booking outside the window reads as "not live" and
+  //    its bound order as unbound, which only ever ADDS violet. ──
+  const liveBookingsByJob = new Map<string, Set<string>>()
+  for (const b of bookings) {
+    if (!b.job?.id || b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
+    const set = liveBookingsByJob.get(b.job.id) ?? new Set<string>()
+    set.add(b.id)
+    liveBookingsByJob.set(b.job.id, set)
+  }
+  const ordersSpeakingFor = (bookingId: string, jobId: string | null | undefined) =>
+    ordersForBooking(bookingExtras.get(bookingId)?.orders ?? [], bookingId, (jobId && liveBookingsByJob.get(jobId)) || new Set<string>())
+  const bookingBlind = (b: (typeof bookings)[number]) => {
+    const orders = ordersSpeakingFor(b.id, b.job?.id)
+    const units = b.items.flatMap((it) => it.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'))
+    if (units.length === 0) {
+      const f = blindFlags(orders)
+      return { blindPickup: f.blindPickup, blindReturn: f.blindReturn }
+    }
+    const each = units.map((a) => blindForVehicle(orders, a))
+    return { blindPickup: each.some((f) => f.blindPickup), blindReturn: each.some((f) => f.blindReturn) }
   }
 
   // ── Build jobs[] — one per Booking. ──
@@ -415,8 +447,7 @@ export async function GET(req: NextRequest) {
       // read `b.orders` (booking-linked only), and nothing sets
       // Order.bookingId, so the violet blind-pickup bar could never appear
       // for an order created natively in HQ.
-      blindPickup: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindPickup),
-      blindReturn: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindReturn),
+      ...bookingBlind(b),
       // Clickable order links for the job detail modal; hasOrder drives
       // the order badge on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
@@ -473,6 +504,9 @@ export async function GET(req: NextRequest) {
       startDate: true,
       endDate: true,
       status: true,
+      // This unit's own blind answer, when sales set one (Jose 2026-09-16).
+      blindPickup: true,
+      blindReturn: true,
       // WHICH order this specific unit goes out on (Hugo, 2026-09-03).
       // Distinct from the booking-level `hasOrder` below: that says the
       // reservation has an order somewhere, this says THIS truck is the
@@ -570,9 +604,12 @@ export async function GET(req: NextRequest) {
       status: mapStatus(a.bookingItem.booking.status),
       stage: stageOf(a.bookingItem.booking.status, a.bookingItem.booking.job?.id),
       bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
-      // See the job-view branch: the union, not the booking's direct orders.
-      blindPickup: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindPickup),
-      blindReturn: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindReturn),
+      // THIS unit's answer — its override, else its booking's orders
+      // (see bookingBlind above).
+      ...(() => {
+        const f = blindForVehicle(ordersSpeakingFor(a.bookingItem.booking.id, a.bookingItem.booking.job?.id), a)
+        return { blindPickup: f.blindPickup, blindReturn: f.blindReturn }
+      })(),
       start: ymd(a.startDate),
       end: ymd(a.endDate),
       adminNotes: '',

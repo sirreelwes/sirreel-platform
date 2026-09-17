@@ -11,6 +11,7 @@ import { getPermissions } from "@/lib/permissions";
 import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
+import { BlindHandoffToggles } from "@/components/schedule/BlindHandoffToggles";
 import PartnerFeesModal from "@/components/orders/PartnerFeesModal";
 import { PasteSupplyListModal } from "@/components/orders/PasteSupplyListModal";
 import { LcdwPrompt } from "@/components/orders/LcdwPrompt";
@@ -4905,6 +4906,26 @@ export default function OrderDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Per vehicle (Jose 2026-09-16): the checkboxes above set the
+            whole order; a job with several vehicles can flip one unit
+            here. Saves on click — it is the unit's own override, not part
+            of this card's Save. lib/fleet/blindHandoff decides the rest. */}
+        {order?.job?.id && (
+          <div className="mt-4 pt-4 border-t border-lt-hairline">
+            <p className="text-xs text-lt-fg3 mb-2">
+              The checkboxes set the whole order. To make only some vehicles blind, flip them here — a
+              vehicle&apos;s own setting wins for that unit (driver check-out, lockbox code, the board).
+            </p>
+            <BlindHandoffToggles
+              jobId={order.job.id}
+              orders={[{ id: order.id, orderNumber: order.orderNumber, status: order.status, blindPickup, blindReturn }]}
+              variant="list"
+              canEdit
+              className=""
+            />
+          </div>
+        )}
 
         {blindMsg && (
           <div className={`mt-3 text-xs ${blindMsg === "Saved." ? "text-chip-good-fg" : "text-chip-bad-fg"}`}>
