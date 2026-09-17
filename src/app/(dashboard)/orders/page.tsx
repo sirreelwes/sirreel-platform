@@ -7,6 +7,11 @@ import { useMoneyFormatter, useMoneyVisible } from "@/hooks/useMoney";
 import { CopyIntakeLinkButton } from "@/components/intake/CopyIntakeLinkButton";
 import { TodayMovementStrip } from "@/components/jobs/TodayMovementStrip";
 import {
+  OrdersDayTallyCard,
+  type DayTallyPayload,
+} from "@/components/orders/OrdersDayTallyCard";
+import { isYmd, pacificToday } from "@/lib/time/pacificDay";
+import {
   ORDER_STATUSES,
   ORDER_STATE_CHIP,
   ORDER_STATE_LABEL,
@@ -70,6 +75,12 @@ export default function OrdersPage() {
   // Toggle reveals them; an explicit status=DRAFT filter overrides
   // either way (the API gives the rep what they asked for).
   const [showDrafts, setShowDrafts] = useState(false);
+  // Created-on filter (Ana, 2026-09-17). Two boxes, both optional: filling one
+  // filters to that single day, filling both spans them. Empty = every day, so
+  // the list opens exactly as it always has.
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
+  const [dayTally, setDayTally] = useState<DayTallyPayload | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [lostFor, setLostFor] = useState<Order | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -83,6 +94,22 @@ export default function OrdersPage() {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 250);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Deep link from the EOD report's "See the orders" — `?createdFrom=…` lands
+  // here already filtered to the day whose figures Ana is checking. Read once,
+  // after mount, off window.location rather than useSearchParams: this page is
+  // a client component and useSearchParams needs a Suspense boundary the route
+  // does not have.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const from = q.get("createdFrom");
+    const to = q.get("createdTo");
+    if (isYmd(from) || isYmd(to)) {
+      setCreatedFrom(isYmd(from) ? from : (to as string));
+      setCreatedTo(isYmd(to) ? to : (from as string));
+      setPage(1);
+    }
+  }, []);
 
   const reqSeq = useRef(0);
   const archivedView = statusFilter === ARCHIVED_VIEW;
@@ -113,6 +140,8 @@ export default function OrdersPage() {
     if (statusFilter === ARCHIVED_VIEW) params.set("archived", "1");
     else if (statusFilter) params.set("status", statusFilter);
     if (showDrafts) params.set("includeDrafts", "1");
+    if (createdFrom) params.set("createdFrom", createdFrom);
+    if (createdTo) params.set("createdTo", createdTo);
     params.set("sort", sort);
     params.set("page", String(page));
     params.set("limit", "25");
@@ -125,10 +154,11 @@ export default function OrdersPage() {
       setOrders(data.orders || []);
       setTotal(data.total || 0);
       setValueTotal(Number(data.valueTotal || 0));
+      setDayTally((data.dayTally as DayTallyPayload | null) ?? null);
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, sort, page, showDrafts]);
+  }, [debouncedSearch, statusFilter, sort, page, showDrafts, createdFrom, createdTo]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -283,6 +313,46 @@ export default function OrdersPage() {
             Show drafts
           </label>
         </div>
+
+        {/* Created-on. Its own row rather than squeezed in beside the status
+            and sort menus: it is two inputs plus shortcuts, and on a laptop it
+            pushed the drafts toggle onto a second line anyway. */}
+        <div className="flex gap-2 mb-4 items-center flex-wrap">
+          <span className="text-xs font-semibold uppercase tracking-wider text-lt-fg3">
+            Created
+          </span>
+          <input
+            type="date"
+            aria-label="Created on or after"
+            value={createdFrom}
+            onChange={(e) => { setCreatedFrom(e.target.value); setPage(1); }}
+            className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
+          />
+          <span className="text-xs text-lt-fg3">to</span>
+          <input
+            type="date"
+            aria-label="Created on or before"
+            value={createdTo}
+            onChange={(e) => { setCreatedTo(e.target.value); setPage(1); }}
+            className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
+          />
+          <DayChip label="Today" onClick={() => { const d = pacificToday(); setCreatedFrom(d); setCreatedTo(d); setPage(1); }} />
+          <DayChip label="Yesterday" onClick={() => { const d = shiftYmd(pacificToday(), -1); setCreatedFrom(d); setCreatedTo(d); setPage(1); }} />
+          <DayChip label="Last 7 days" onClick={() => { const d = pacificToday(); setCreatedFrom(shiftYmd(d, -6)); setCreatedTo(d); setPage(1); }} />
+          {(createdFrom || createdTo) && (
+            <button
+              onClick={() => { setCreatedFrom(""); setCreatedTo(""); setPage(1); }}
+              className="px-2 py-1 text-xs text-lt-fg3 hover:text-lt-fg underline"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+
+        {/* The day's figures, on the EOD report's basis — see
+            OrdersDayTallyCard. Above the table because it answers a different
+            question than the rows do. */}
+        {dayTally && <OrdersDayTallyCard tally={dayTally} />}
 
         {error && (
           <div className="mb-4 px-4 py-3 rounded-lg bg-chip-bad-bg text-chip-bad-fg text-sm flex items-center justify-between">
@@ -477,6 +547,25 @@ export default function OrdersPage() {
         />
       )}
     </div>
+  );
+}
+
+/** Calendar arithmetic on a plain `YYYY-MM-DD`, with no timezone in it. Using
+ *  a Date here would reintroduce the UTC-vs-Pacific slip the API avoids. */
+function shiftYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const t = Date.UTC(y, (m ?? 1) - 1, d ?? 1) + days * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function DayChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-2.5 py-1.5 rounded-lg border border-lt-hairline bg-lt-card text-xs text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner transition-colors"
+    >
+      {label}
+    </button>
   );
 }
 
