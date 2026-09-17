@@ -1,6 +1,14 @@
 # One thread per job — design (2026-09-16, for Wes)
 
-**Status:** Phase 1 SHIPPED 2026-09-17 (anchors + auto-filing —
+**Status:** Phase 2 SHIPPED 2026-09-17 — the Conversation panel on the job
+page (`src/components/jobs/JobConversation.tsx`, `src/lib/email/jobConversation.ts`,
+`conversationRules.ts`; `npm run test:job-conversation`): merged stream,
+internal notes with @mentions, Sales/Billing lanes, the claim with Hand to
+Billing, From = the author, the rail / tab / deep-link placement, "Client
+replied" on the /jobs rail. Tables by `scripts/add-job-thread-tables.ts`
+(additive SQL). Not built: an attachment picker in the composer, mention
+notifications, the optional Billing-lane role gate, Phase 3.
+Phase 1 SHIPPED 2026-09-17 (anchors + auto-filing —
 `src/lib/email/jobThread.ts`, `jobThreadRules.ts`, the pubsub filing, seven
 send sites + the job composer; `npm run test:job-thread`). Phases 2 and 3
 are not built. Two things Phase 1 settled that the design left open: the

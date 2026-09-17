@@ -5256,6 +5256,17 @@ export default function OrderDetailPage() {
       <QuoteFollowUpPanel orderId={orderId} isQuoteSent={order.status === "QUOTE_SENT"} />
 
       <EmailDeliveriesPanel deliveries={order.emailDeliveries} />
+      {/* One thread per job: the client conversation lives on the JOB — no
+          second composer here, one place to write (Phase 2). */}
+      {order.job && (
+        <div className="text-[12px] text-lt-fg3 px-1">
+          Client conversation:{' '}
+          <Link href={`/jobs/${order.job.id}?tab=conversation`} className="font-semibold text-amber-700 hover:text-amber-600">
+            open it on the job →
+          </Link>{' '}
+          — every email on this order rides the job&rsquo;s one thread.
+        </div>
+      )}
 
       {/* Cadence (CRH) */}
       {cadence && (

@@ -353,6 +353,9 @@ function JobTile({
   // Quote out, welcome email not sent (Wes 2026-09-11: "remind us to send
   // the welcome email"). The send lives on the job page — this is the nudge.
   const welcomeDue = j.welcome?.state === 'due'
+  // One-thread-per-job: the client's newest message is newer than our newest
+  // send on any thread filed to this job. Answered from the job page.
+  const clientWaiting = !!j.conversation?.awaitingReply
   const billing = j.billing && BILLING_WORDS[j.billing.state] ? j.billing : null
   // Fleet handed back (Wes 2026-09-08: "the job tile also needs to have
   // released clearly readable and may be a red outline"). It outranks the
@@ -526,7 +529,7 @@ function JobTile({
         {/* Row 5 — what's in the way, and what's owed. Each is a
             sentence-chip, not an abbreviation. Omitted entirely when
             there is nothing to say. */}
-        {(readiness || toBook > 0 || redlines > 0 || welcomeDue || billing) && (
+        {(readiness || toBook > 0 || redlines > 0 || welcomeDue || billing || clientWaiting) && (
           <span className="flex items-center gap-1.5 flex-wrap pt-0.5">
             {redlines > 0 && (
               <span
@@ -543,6 +546,15 @@ function JobTile({
                 className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white"
               >
                 Approved — book it{toBook > 1 ? ` ×${toBook}` : ''}
+              </span>
+            )}
+            {clientWaiting && (
+              <span
+                title={`The client wrote${j.conversation?.lastInboundAt ? ` ${fmtRelative(j.conversation.lastInboundAt)}` : ''} and nobody has answered yet. Open the job → Conversation.`}
+                className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg"
+              >
+                <Mail size={10} aria-hidden />
+                Client replied
               </span>
             )}
             {welcomeDue && (
