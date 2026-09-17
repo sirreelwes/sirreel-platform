@@ -624,6 +624,51 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
 - `npm run test:photo-stamp`.
 
+## The driver's copy of the checkout sheet, on their phone (2026-09-17 — Wes/Julian)
+- Julian's blind-pickup process: check the vehicle out the day before,
+  fill the sheet, "leave a copy of the checkout sheet inside the assigned
+  vehicle." Wes: "give the drivers a link to the PDF checkout … much
+  better for them to have it on their phone." That paper copy was the ONLY
+  thing putting the recorded condition in the driver's hands — the driver
+  page showed them a photo COUNT and never an image, the self-checkout
+  confirmation email goes to the `driver-checkouts` HQ channel and not to
+  them, and their return card was never given the `compareTo` the STAFF
+  return form has.
+- `GET /api/drive/[token]/condition-report` — same `buildInspectionReport`
+  + `ConditionReportDocument` as the yard's route, so the driver's copy
+  cannot drift from the record it copies. Token is the credential (404
+  invalid / 410 expired / 409 cancelled), scoped to the one assignment.
+  Shown on the page as "Vehicle condition → Open the checkout sheet".
+- **Three things it must never carry, and does not:** the DRIVER'S LICENCE
+  photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
+  side on purpose), the lockbox/gate CODE (the report has never read
+  `Asset.accessCode`; codes reach a driver only through the earned-and-
+  unlocked path on the page), and anyone else's rental.
+- **NOT gated on blind** — Wes said drivers, not blind drivers, and a
+  staffed pickup's driver having the sheet costs nothing. Gated instead on
+  a walk-around actually being FILED on the assignment (staff's or the
+  driver's own); a link to an empty sheet is worse than no link.
+- **`inspectionReportSendingEnabled()` stays dark and is NOT consulted.**
+  That gate is about EMAILING the RENTER a report; handing the person
+  driving the truck the sheet that used to sit on its passenger seat is a
+  different act. Do not wire this route to that flag, and do not wire that
+  flag on to ship a driver copy.
+- Julian's day-before staff walk-around is UNCHANGED and still not gated on
+  blind anywhere. The driver's four sides remain additional, and on a blind
+  pickup they still merge onto the same CHECKOUT Inspection
+  (`adoptedStaffInspection`). **Caveat if both happen: FRONT and REAR are
+  the same slot on both lists and the record page renders the NEWEST photo
+  per slot**, so the driver's pair displays over the staff's from the day
+  before (both are stored; the earlier pair is not visible in the slot grid
+  or the compare view). The driver's other shots (DRIVER_SIDE,
+  PASSENGER_SIDE, ODOMETER, FUEL_GAUGE, INTERIOR) are legacy slots outside
+  Julian's 23 and do not collide.
+- NOT done: the driver's RETURN card still has no before/after (the staff
+  form's `compareTo`), and nothing warns that a blind pickup is hours away
+  with the driver's invite undelivered, never opened and no inspection
+  filed — there is no action item for blind-pickup readiness and the fleet
+  Today board carries blind + inspection state but no driver-link state.
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a

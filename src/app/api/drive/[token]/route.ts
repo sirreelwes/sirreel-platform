@@ -207,6 +207,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     })
   }
 
+  // The driver's copy of the condition report — what Julian used to print
+  // and leave on the passenger seat (Wes 2026-09-17: "give the drivers a
+  // link to the PDF checkout … much better for them to have it on their
+  // phone"). Offered only once a walk-around has actually been filed on
+  // this vehicle, whoever filed it: the yard's the day before, or the
+  // driver's own. A link to an empty sheet is worse than no link.
+  const conditionReportFiled = await prisma.inspection.count({
+    where: { bookingAssignmentId: asg.id, type: { in: ['CHECKOUT', 'RETURN'] } },
+  })
+
   // The driver's own check-out (blind pickup). What they already did, if
   // anything, and whether the step is open — see lib/drivers/selfCheckout.
   const selfCheckout = await (async () => {
@@ -364,6 +374,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       lockboxApplies: (isBlindPickup || isBlindReturn) && !!asg.asset.accessCode,
     },
     loadList,
+    // The PDF lives at /api/drive/[token]/condition-report — same
+    // renderer as the yard's copy, with the licence photo and every
+    // access code excluded by the report itself.
+    conditionReport: { available: conditionReportFiled > 0 },
     checkout: selfCheckout,
     returnStep,
     handoff,
