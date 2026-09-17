@@ -1625,9 +1625,9 @@ export function GanttBoard() {
   // "Other units on this job" chip click — switch the open pop-up to
   // that sibling asset's reservation. Finds the unit row carrying a
   // booking with the sibling's booking number (unitName alone is not
-  // unique — Cargo 22/25 exist in both cargo categories, so the
-  // booking match disambiguates) and re-selects exactly as a bar
-  // click would.
+  // guaranteed unique — Cargo 22/25 sat in both cargo categories until
+  // 2026-09-16 — so the booking match disambiguates) and re-selects
+  // exactly as a bar click would.
   const switchToSibling = useCallback(
     (sib: { unitName: string; bookingNumber?: string }) => {
       for (const u of units) {
