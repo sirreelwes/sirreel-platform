@@ -20,26 +20,27 @@
  * confidently wrong rate on a client's invoice is far worse than a line
  * that visibly needs a person.
  *
- * The list is SIZED AND PLACED to fit what is actually on screen
- * (2026-09-16 and again 2026-09-17, Oliver relaying the warehouse: Sal
- * adding a ratchet strap could only ever see the first hit). Three
- * separate things cut it off, and all three had to go:
+ * The list is PORTALLED to <body> with fixed coordinates, exactly like
+ * the order form's line-item combobox, and for the same reason. Oliver
+ * relayed this one twice (2026-09-16 and again 2026-09-17, with a photo
+ * of the screen): "the dropdown box can't be seen fully, which makes it
+ * harder for warehouse to add items during checkout." Sal, adding a
+ * ratchet strap, could see the question and one hit. Two different edges
+ * were cutting it:
  *
- *   1. the "Add to the order" card clipped it — it carried
- *      overflow-hidden for its rounded corners, so the menu died at the
- *      card's bottom edge wherever it was on screen (see CheckReportForm,
- *      which must not get that class back);
- *   2. the card is the last thing above the notes box, so even unclipped
- *      the menu ran under the bottom of the window — it opens UPWARD when
- *      that buys it room;
- *   3. it was a fixed 240px tall, so on a laptop viewport NEITHER side had
- *      enough and it was cut off whichever way it opened. It now takes the
- *      height that is really there, and when the field is jammed against an
- *      edge it scrolls itself into view once rather than rendering a
- *      two-line sliver.
+ *   · the "Add to the order" card clipped it — the panel was a DOM
+ *     descendant of a box with overflow-hidden, so it died at the card's
+ *     bottom edge wherever it sat on screen;
+ *   · the card is the last thing above the notes box, so even unclipped
+ *     it ran under the bottom of the staff shell's scrolling <main>.
  *
- * Measured against the nearest SCROLLING ancestor, not the window: the
- * staff shell's <main> is `overflow-y-auto`, and that edge is what clips.
+ * A portal answers the first (the panel is no longer inside anything
+ * that can clip it) and `placeDropdown` answers the second — it opens
+ * the list above the field when below is cramped, and never asks for
+ * more height than the visible screen actually has. Deliberately the
+ * SAME rule the line-item combobox uses rather than a second one beside
+ * it: two placement modules drift, and this catalog already taught that
+ * lesson three times over (see "THREE boxes search this catalog").
  *
  * Deliberately does NOT guess. Nothing here auto-selects a match for
  * typed text, however good it looks: "cp battery" hitting "CP200 -
@@ -47,9 +48,10 @@
  * the wrong side of that flip is money.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Search, X } from 'lucide-react'
-import { placeMenu, MENU_IDEAL_PX } from '@/lib/warehouse/menuPlacement'
+import { placeDropdown, readVisibleViewport, type DropdownPlacement } from '@/lib/ui/dropdownPlacement'
 
 interface Hit {
   id: string
@@ -58,25 +60,9 @@ interface Hit {
   category: { name: string } | null
 }
 
-/**
- * What can actually cut this menu off: the nearest scrolling (or hidden)
- * ancestors, narrowed to the window. Measuring against `window` alone is
- * wrong the moment the menu lives inside a scroll container whose bottom
- * edge is above the fold — which is exactly the staff shell.
- */
-function clipBounds(el: HTMLElement): { top: number; bottom: number } {
-  let top = 0
-  let bottom = window.innerHeight
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const overflowY = getComputedStyle(p).overflowY
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden') {
-      const r = p.getBoundingClientRect()
-      top = Math.max(top, r.top)
-      bottom = Math.min(bottom, r.bottom)
-    }
-  }
-  return { top, bottom }
-}
+// useLayoutEffect warns during SSR; the dropdown only ever places itself
+// in the browser. Same shim the line-item combobox uses.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 export interface ExtraItemValue {
   description: string
@@ -95,23 +81,8 @@ export function ExtraItemPicker({
   const [hits, setHits] = useState<Hit[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
-  // Which way the menu opens and how tall it may be, measured — never
-  // assumed. Starts at the ideal so the first paint is not a sliver.
-  const [place, setPlace] = useState({ up: false, maxHeight: MENU_IDEAL_PX })
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  /** One nudge per opening, so a cramped field cannot scroll on a loop. */
-  const nudged = useRef(false)
-
-  // Close on an outside click. A dropdown that stays open over the next
-  // row is worse than no dropdown on a screen with ten of these.
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
+  const [coords, setCoords] = useState<DropdownPlacement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     // Already named — nothing to search for.
@@ -124,7 +95,16 @@ export function ExtraItemPicker({
       try {
         const res = await fetch(`/api/inventory/search?q=${encodeURIComponent(q)}&limit=6`)
         const data = await res.json().catch(() => ({}))
-        if (!cancelled) { setHits(data.items ?? []); setOpen(true) }
+        if (cancelled) return
+        const found = (data.items ?? []) as Hit[]
+        // Place the panel in the SAME commit it opens, so it is a
+        // positioned overlay from its first paint rather than flashing
+        // unpinned at the top of the page.
+        if (found.length > 0 && inputRef.current) {
+          setCoords(placeDropdown(inputRef.current.getBoundingClientRect(), readVisibleViewport(window)))
+        }
+        setHits(found)
+        setOpen(found.length > 0)
       } catch {
         if (!cancelled) setHits([])
       } finally {
@@ -137,55 +117,41 @@ export function ExtraItemPicker({
   const named = !!value.inventoryItemId
   const showList = open && hits.length > 0 && !named
 
-  // Where the menu goes and how tall it is. Re-measured on scroll and
-  // resize while it is open, because the sheet is a long scrolling page
-  // and the field moves toward the edge under the supervisor's thumb.
-  useLayoutEffect(() => {
-    if (!showList) {
-      nudged.current = false
-      return
-    }
-    let frame = 0
-    const measure = () => {
-      const el = boxRef.current
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      const bounds = clipBounds(el)
-      const next = placeMenu({
-        fieldTop: r.top,
-        fieldBottom: r.bottom,
-        boundsTop: bounds.top,
-        boundsBottom: bounds.bottom,
-      })
-      if (next.nudge && !nudged.current) {
-        // Jammed against an edge with nowhere to open. Bring the field
-        // into the middle so there IS somewhere, then measure again — a
-        // two-line sliver is what the warehouse was complaining about.
-        nudged.current = true
-        el.scrollIntoView({ block: 'center' })
-        frame = requestAnimationFrame(measure)
-        return
-      }
-      setPlace((prev) =>
-        prev.up === next.up && prev.maxHeight === next.maxHeight
-          ? prev
-          : { up: next.up, maxHeight: next.maxHeight },
-      )
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    window.addEventListener('scroll', measure, true)
+  // Keep the panel pinned to the field while it is open. Placement —
+  // above or below, and how tall — is decided against the VISIBLE
+  // viewport, which on a phone is what the keyboard has left over.
+  const updateCoords = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    setCoords(placeDropdown(el.getBoundingClientRect(), readVisibleViewport(window)))
+  }, [])
+
+  useIsomorphicLayoutEffect(() => {
+    if (!showList) return
+    updateCoords()
+    const onMove = () => updateCoords()
+    // capture:true catches scrolls in any nested scroll container — the
+    // staff shell's <main> is the one that matters here, not the window.
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
+    // A phone keyboard opening fires on the visual viewport, not on
+    // window.resize (iOS Safari).
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', onMove)
+    vv?.addEventListener('scroll', onMove)
     return () => {
-      if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
+      vv?.removeEventListener('resize', onMove)
+      vv?.removeEventListener('scroll', onMove)
     }
-  }, [showList])
+  }, [showList, updateCoords])
 
   return (
-    <div ref={boxRef} className="relative flex-1 min-w-0">
+    <div className="relative flex-1 min-w-0">
       <div className="relative">
         <input
+          ref={inputRef}
           value={value.description}
           disabled={disabled}
           onChange={(e) =>
@@ -194,6 +160,12 @@ export function ExtraItemPicker({
             onChange({ description: e.target.value, inventoryItemId: null })
           }
           onFocus={() => { if (hits.length) setOpen(true) }}
+          // Leaving the field closes the list. The panel lives in a
+          // portal, so an outside-click test against this component's
+          // own subtree would call a click ON the list "outside" and
+          // close it before the pick landed — every control inside the
+          // panel uses mousedown+preventDefault to hold focus instead.
+          onBlur={() => setOpen(false)}
           placeholder="What went out that isn't on the order"
           className={`w-full bg-lt-inner border rounded-lg pl-2.5 pr-7 py-1.5 text-[14px] text-lt-fg placeholder:text-lt-fg3 ${
             named ? 'border-chip-good-fg/40' : 'border-lt-hairline'
@@ -220,22 +192,36 @@ export function ExtraItemPicker({
         </p>
       )}
 
-      {showList && (
+      {showList && coords && createPortal(
         <div
-          style={{ maxHeight: place.maxHeight }}
-          className={`absolute z-20 left-0 right-0 rounded-lg border border-lt-hairline bg-lt-card shadow-lg overflow-y-auto ${
-            place.up ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            bottom: coords.bottom,
+            left: coords.left,
+            minWidth: coords.minWidth,
+            width: 'max-content',
+            maxWidth: coords.maxWidth,
+            maxHeight: coords.maxHeight,
+            zIndex: 60,
+            // Explicit SOLID fill. The panel floats over the sheet's
+            // rows, so anything less than opaque bleeds through.
+            backgroundColor: '#FFFFFF',
+          }}
+          className="rounded-lg border border-lt-hairline shadow-lg overflow-y-auto"
         >
           {/* Sticky: once the rows scroll, the question and the way out
-              of the menu must not scroll away with them. */}
-          <div className="sticky top-0 z-10 bg-lt-card flex items-center justify-between px-2.5 py-1.5 border-b border-lt-hairline">
+              of the list must not scroll away with them. */}
+          <div
+            className="sticky top-0 z-10 flex items-center justify-between px-2.5 py-1.5 border-b border-lt-hairline"
+            style={{ backgroundColor: '#FFFFFF' }}
+          >
             <span className="text-[11px] uppercase tracking-wide font-semibold text-lt-fg3">
               Is it one of these?
             </span>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onMouseDown={(e) => { e.preventDefault(); setOpen(false) }}
               aria-label="Close"
               className="text-lt-fg3 hover:text-lt-fg"
             >
@@ -246,7 +232,10 @@ export function ExtraItemPicker({
             <button
               key={h.id}
               type="button"
-              onClick={() => {
+              // mousedown, not click: the input must not blur before the
+              // pick is recorded, or the panel unmounts underneath it.
+              onMouseDown={(e) => {
+                e.preventDefault()
                 // The catalog's own wording wins once it is named — it is
                 // what prints on the client's paperwork.
                 onChange({ description: h.description, inventoryItemId: h.id })
@@ -261,7 +250,8 @@ export function ExtraItemPicker({
               </span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

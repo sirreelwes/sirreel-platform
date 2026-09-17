@@ -29,7 +29,6 @@
     "test:line-type": "tsx tests/orders/line-type.test.ts",
     "test:walkaround-slots": "tsx tests/fleet/walkaround-slots.test.ts",
     "test:photo-stamp": "tsx tests/fleet/photo-stamp.test.ts",
-    "test:menu-placement": "tsx tests/warehouse/menu-placement.test.ts",
     "test:pick-sections": "tsx tests/warehouse/pick-sections.test.ts",
     "test:maintenance-tasks": "tsx tests/admin/maintenance-tasks.test.ts",
     "test:dropdown-placement": "tsx tests/ui/dropdown-placement.test.ts",
