@@ -622,6 +622,20 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   close-ups and extras (out first). Arrow keys, filmstrip, Save on each
   frame. `filedInspection().counterpart` now carries its `inspectorName`,
   `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- **Julian's check-in side-by-side was ALREADY this, in four places
+  (2026-09-17: "at checking in of the vehicle, the fleet team takes the
+  same photos they took on checkout prep … damage id would position the
+  photos side by side in a check in report").** Do not build a fifth.
+  (1) DURING check-in capture, `InspectionReturnForm` passes
+  `compareTo={checkout?.photos}` and GuidedPhotoCapture renders the
+  check-out shot directly ABOVE the button that replaces it, so the tech
+  photographs how it is while looking at how it was; (2) the filed record
+  shows each slot beside the other end; (3) `/compare` is the large
+  one-angle-at-a-time viewer; (4) the condition report PDF pairs out/back
+  per slot. What was genuinely missing was the DOOR: the post-check-in
+  screen offered the PDF and the filed record but not the comparison, so
+  it was two taps through a page nobody was aiming for. "Compare out vs
+  back" now sits on the screen the crew is already standing on.
 - `npm run test:photo-stamp`.
 
 ## The driver's copy of the checkout sheet, on their phone (2026-09-17 — Wes/Julian)
