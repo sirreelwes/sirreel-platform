@@ -40,7 +40,7 @@ import {
   type ConversationLane,
 } from '@/lib/email/conversationRules'
 
-const MISSING_TABLE_HINT = 'Run `npx tsx scripts/add-job-thread-tables.ts` (additive SQL) — the Conversation tables are not in the database yet.'
+const MISSING_TABLE_HINT = 'The Conversation tables are not in the database yet — an admin runs "Create the job Conversation tables" on /admin/maintenance (or `npx tsx scripts/add-job-thread-tables.ts`).'
 
 function isMissingTable(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && (err.code === 'P2021' || err.code === 'P2022')
