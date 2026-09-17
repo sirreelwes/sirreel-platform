@@ -5412,6 +5412,28 @@ model JobThreadNote {
   @@map("sr_job_thread_notes")
 }
 
+/// One row per person an URGENT internal note reached, or failed to reach
+/// (2026-09-17). A note is urgent when it has rows here — no flag on the
+/// note itself, so the table went in by CREATE TABLE alone (the phone
+/// path). Plain columns, no relations, like the two tables above.
+model JobThreadAlert {
+  id        String   @id @default(uuid())
+  jobId     String   @map("job_id")
+  noteId    String   @map("note_id")
+  userId    String   @map("user_id")
+  /// SMS | EMAIL | NONE (nothing on file to reach them by)
+  channel   String
+  /// SENT | FAILED | SKIPPED
+  status    String
+  sentTo    String?  @map("sent_to")
+  detail    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([noteId])
+  @@index([jobId, createdAt])
+  @@map("sr_job_thread_alerts")
+}
+
 model VendorContact {
   id       String @id @default(uuid())
   vendorId String @map("vendor_id")

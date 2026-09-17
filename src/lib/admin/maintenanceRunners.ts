@@ -118,7 +118,7 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     const headline = r.missingAfter.length && !dryRun
       ? `${r.missingAfter.join(', ')} still missing after the run — read the log.`
       : n === 0
-        ? 'Both tables already exist — nothing to do.'
+        ? 'Every table already exists — nothing to do.'
         : dryRun
           ? `Dry run — ${n} table${n === 1 ? '' : 's'} would be created.`
           : `${n} table${n === 1 ? '' : 's'} created. Notes and the claim menu work now.`
