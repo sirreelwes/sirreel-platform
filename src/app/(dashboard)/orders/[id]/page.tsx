@@ -2558,6 +2558,20 @@ export default function OrderDetailPage() {
       setSavingLineId(null);
       return;
     }
+    // The reservation follows a date change (2026-09-17). A unit that
+    // could NOT follow — booked elsewhere on the new days — stays on its
+    // old days, and the rep has to hear that here, or the order and the
+    // board quietly disagree again.
+    const saved = await res.json().catch(() => ({}));
+    const followed = saved?.assignmentsFollowed as
+      | { blocked?: { reason: string }[]; tight?: { reason: string }[] }
+      | null
+      | undefined;
+    const notes = [
+      ...(followed?.blocked ?? []).map((b) => b.reason),
+      ...(followed?.tight ?? []).map((t) => t.reason),
+    ];
+    if (notes.length > 0) alert(notes.join('\n'));
     setSavingLineId(null);
     setEditingLineId(null);
     fetchOrder();
