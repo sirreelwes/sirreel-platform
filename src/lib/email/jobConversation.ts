@@ -41,6 +41,7 @@ import {
   type AlertChannel,
   type ClaimAction,
   type ClaimState,
+  isTagSuggested,
   type ConversationKind,
   type ConversationLane,
 } from '@/lib/email/conversationRules'
@@ -74,11 +75,20 @@ export interface StaffLite {
   name: string
   email: string
   role: string
+  /** On the note composer's chip row? False hides the suggestion only —
+   *  an @mention typed by hand still tags and still texts them. */
+  suggested: boolean
 }
 
 async function staffList(): Promise<StaffLite[]> {
   const users = await prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, isActive: true } })
-  return users.filter((u) => u.isActive !== false).map((u) => ({ id: u.id, name: u.name, email: u.email.toLowerCase(), role: String(u.role) }))
+  return users.filter((u) => u.isActive !== false).map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email.toLowerCase(),
+    role: String(u.role),
+    suggested: isTagSuggested({ name: u.name, email: u.email }),
+  }))
 }
 
 export interface EmailRow {
