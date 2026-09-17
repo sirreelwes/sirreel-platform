@@ -26,6 +26,7 @@ import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import {
   AUTO_PHYSICAL_DAMAGE_NOTE,
   CERTIFICATE_HOLDER,
+  COI_INBOX,
   requirementsAsHtml,
   requirementsAsText,
 } from '@/lib/coi/requirements'
@@ -38,10 +39,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-// Where brokers are told to send the certificate. Wes 2026-09-06: rentals@,
-// not hello@ — nobody chases COIs out of the general inbox.
-const COI_INBOX = 'rentals@sirreel.com'
-
 const INK = '#1a1a1a'
 const MUTED = '#6b7280'
 const ACCENT = '#b45309'

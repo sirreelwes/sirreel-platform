@@ -212,6 +212,10 @@ export async function GET(
                 sentAt: true,
                 paidAt: true,
                 dueDate: true,
+                // The note printed on the document. Editable from the job's
+                // Invoices panel (PATCH /api/invoices/[id]), so the form has
+                // to open with what is on there now (2026-09-17).
+                notes: true,
                 createdAt: true,
               },
             },

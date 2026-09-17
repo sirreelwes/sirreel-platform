@@ -171,6 +171,70 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
+- Wes: "Is there a way to extract the broker from a COI and add an option to
+  send a link to them when we need an updated COI or something isn't passing
+  our test? The link would open a read only review showing the broker what we
+  are rejecting or requesting be fixed." Every correction used to go client →
+  broker → client, with our requirement text re-explained at each hop.
+- **The broker is read off the document, not stored.** `COI_PROMPT` now
+  extracts the ACORD 25 **PRODUCER** box (agency, contact name, email, phone,
+  address) beside `namedInsured`; it lives in `CoiCheck.aiResponse.producer`
+  and is read on demand by `readCoiBroker()` in `src/lib/coi/broker.ts`.
+  **No column, no migration** — same reasoning as the named insured: a raw
+  FACT off the certificate that a re-run corrects. Placeholder-scrubbing
+  ("N/A", "same as insured") and e-mail validation live in the READER, not in
+  what we store; an invented broker is a correction request sent to a
+  stranger with the client's name in it.
+- **"Never asked" ≠ "blank box."** A review filed before today has no
+  `producer` key at all and the desk says "re-run it to pull the broker off
+  the certificate" — the same distinction `aiHasInsuredName` carries. Today's
+  `normalizeCoiReview` always stamps the key, so an empty producer box on a
+  fresh review reads as asked-and-blank.
+- **`POST /api/coi/review/[id]` action `EMAIL_BROKER`** — the fourth option
+  beside Approve / Reject / Request fix from client. Same posture as
+  REQUEST_FIX: the email IS the act (a send failure changes nothing), the row
+  parks in COUNTERED, Reply-To is the reviewer. Differences: the recipient
+  defaults to the producer block, the **client is Cc'd by default** (nobody's
+  broker is approached behind their coordinator's back), and **the review
+  LINK is appended by the route, never by the editable draft** — the partner-
+  welcome rule, so a reviewer trimming a paragraph cannot delete the thing the
+  email exists to deliver. Audited `coi.broker_review_sent` (who it went to,
+  never the body — that is on the job's thread). Label `coi-broker-review`
+  rides `sendOnJobThread`, so the broker's reply files to the job.
+- **The link opens `/coi/broker/[token]`** — read-only in the strong sense:
+  no form, no POST, no session. `signCoiBrokerToken` reuses the COI-upload
+  HMAC envelope with a **domain separator** (`coi-broker-review.v1`) so an
+  upload token can never be replayed as a review token, and the payload is
+  ONE `coiId` — a forwarded link never widens. 45-day TTL.
+- **`buildBrokerReviewPacket()` IS the disclosure envelope**, and the page
+  renders nothing it does not return. IN: the requirements, the verdict per
+  requirement, what THEIR certificate shows, the insured, the job name, the
+  replacement-value sentence, where to send the corrected one (the existing
+  client drop link). OUT: the reviewer's internal note, the per-check model
+  prose (it names requirements this job may not have — the 2026-09-09 leak),
+  the risk level, the stored PDF, the order, any rate, any contact but ours.
+- Verdicts are **recomputed on every view**, not frozen at send: a broker who
+  opens the link after the desk approved reads "nothing further needed", and
+  a production company fixed in HQ clears the named-insured line here too.
+  A gear-only job's auto rows stay NA, so we never ask a broker for coverage
+  this job does not need.
+- **The sample certificate rides along** (Wes 2026-09-17: "we may want to
+  also add a copy of our sample COI to broker") — the same ACORD the portal
+  and the Forms menu offer, `SAMPLE_COI_PATH` in requirements.ts, absolute on
+  the marketing origin so it resolves from any host or inbox. **Gated on
+  `SiteSetting.formCoiUrl` being set on BOTH surfaces**: `/api/public/forms/
+  [slot]` 404s until an admin uploads the PDF, so the page offers nothing
+  rather than a dead link and `brokerReviewLinkLines({ hasSample })` names it
+  in the email only when one is on file. A broker matching a document beats a
+  broker matching a paragraph; a broker clicking a 404 costs the round trip
+  this feature exists to save.
+- `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
+  email and this page name one mailbox. `npm run test:coi-broker`.
+- NOT done: nothing yet nudges when a broker has had the link for days with
+  no new certificate, and the broker is not offered anywhere outside the
+  review desk (no chip on the job page, no company-level broker on file).
+
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
   After Hours Instructions (address, Gate 1 code, driver's-license line,
@@ -653,11 +717,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   cannot drift from the record it copies. Token is the credential (404
   invalid / 410 expired / 409 cancelled), scoped to the one assignment.
   Shown on the page as "Vehicle condition → Open the checkout sheet".
-- **Three things it must never carry, and does not:** the DRIVER'S LICENCE
+- **FOUR things it must never carry, and does not:** the DRIVER'S LICENCE
   photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
   side on purpose), the lockbox/gate CODE (the report has never read
   `Asset.accessCode`; codes reach a driver only through the earned-and-
-  unlocked path on the page), and anyone else's rental.
+  unlocked path on the page), anyone else's rental, and **anything about
+  the CHECK-IN**.
+- **The driver's copy is the CHECK-OUT sheet ONLY (2026-09-17 — Wes:
+  "typically we deal straight with production for damage reporting — do
+  not need to send to driver after return").** `checkoutSideOnly()` in
+  inspectionReport.ts strips `back`, every pair's `back`, the check-in
+  damage close-ups and extras, `milesDriven` and `newDamage` — which that
+  file's own comment calls "what the renter is actually being told about"
+  — before the driver route renders. **A driver's link lives 45 days**, so
+  without this the person who drove the truck could read the damage found
+  at check-in before the production heard it. Damage is a conversation
+  with the PRODUCTION; the driver is not a party to it. The availability
+  count on the page is `type: 'CHECKOUT'` for the same reason: a vehicle
+  with only a RETURN on file has nothing to show them. Pre-existing damage
+  recorded at CHECK-OUT stays — that is what they received.
+  `npm run test:driver-report-scope` sweeps EVERY field for check-in
+  markers, so a `back`-shaped field added later fails there rather than
+  quietly reaching a driver. Nothing is emailed to a driver after a return
+  either — `selfReturn` mails the `driver-returns` HQ channel.
 - **NOT gated on blind** — Wes said drivers, not blind drivers, and a
   staffed pickup's driver having the sheet costs nothing. Gated instead on
   a walk-around actually being FILED on the assignment (staff's or the
@@ -1105,6 +1187,62 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   noise), `walkiePool.ts` (availability from a UTC midnight), the
   `timeline-native` fetch window (a range, not a label), and the "created
   on" note stamps. All server-side and none is shown as "today".
+
+## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
+- Ana: "how do I update an invoice from my side?" She could not. Both ways of
+  correcting an invoice existed — **regenerate** (rewrite the figures from
+  the order, KEEP the number — Wes 2026-09-01) and **void + re-cut** — but
+  both lived on the JOB page, two screens from `/collections`, which is where
+  she reads "Client asked for a change". And neither could touch the two
+  facts that live on the invoice and nowhere else.
+- **The split that decides every button here: figures belong to the ORDER;
+  the due date and the printed note belong to the INVOICE.** A rate, a line
+  or a late discount is fixed on the order and pulled through. An invoice
+  total that can be typed over reconciles to nothing, so there is no total
+  field and never should be — `PATCH /api/invoices/[id]` takes `dueDate` and
+  `notes`, full stop.
+  - **Due date** — SirReel bills due-on-receipt so the generator stamps the
+    issue date. Terms a client negotiated, or an extension given on the
+    phone, had nowhere to go, so honouring one meant letting the invoice read
+    as delinquent. That date is what every aging figure and "30d late" chip
+    counts from.
+  - **Note** — the PO number the client's A/P wants on the face of the
+    document, a remit instruction, "corrected 9/17". Ana's edit REPLACES it
+    wholesale; the old value is in the AuditLog `invoice.edited` row.
+- **The PDF follows, rendered from the invoice's OWN snapshot** —
+  `renderStoredInvoice()` (extracted from `renderPaidInvoice`, which is now
+  the PAID-only gate in front of it). NOT `generateRentalInvoice`, which
+  re-derives from the live order and would drag unrelated line edits into a
+  document nobody asked to republish. Replace-on-regenerate for the blob.
+  A **PAID** invoice is already rendered on demand (the PAID stamp), so its
+  blob is left alone.
+- **No snapshot → the edit is REFUSED, whatever the status.** The snapshot is
+  what every presentation is drawn from, PAID render included, so a
+  pre-snapshot invoice would move the row and leave the client's PDF saying
+  something else. The refusal names the fix (regenerate first, or void and
+  re-cut). This guard was first written gated on "needs a blob rewrite" and
+  the test caught the PAID hole — keep it unconditional.
+- **A regenerate now CARRIES THE DUE DATE OVER instead of restamping it.**
+  The generator defaults `dueDate` to the issue date, so a rewrite pushed the
+  due date to today: an invoice 20 days late came back 0 days late because
+  somebody corrected OUR arithmetic, and any hand-set terms were silently
+  gone. A correction does not restart the client's clock. (This is also what
+  lets a hand-set due date survive without a new column.)
+- **Two surfaces, one route.** `/collections` → All HQ invoices → **Correct**
+  on the row: the client's change request IN THEIR WORDS
+  (`clientChangeNote` is on the payload now — "asked for a change" with no
+  words sent her to the job page to read one sentence), the due date, the
+  note, a **"Pull the figures through from the order"** button (the
+  regenerate) and a LINK to the order for what is actually billed. The job
+  page's `JobInvoicesPanel` carries the same edit as **Due date & note**
+  beside its existing Update / Send / Void.
+- VOID is the only hard lock — a withdrawn document stays as it was. **PAID
+  is deliberately NOT locked**: a settled invoice still gets asked for a PO
+  number. Billing-gated (`can(role, 'billing')`) like void, regenerate and
+  reopen. `npm run test:invoice-edits`.
+- Unchanged and still the answer for money: the order is the book. Reopen a
+  CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
+  edit lines or discounts, then pull the figures through.
 
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked

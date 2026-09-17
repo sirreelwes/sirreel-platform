@@ -32,6 +32,16 @@
  * The charge itself records a real Payment on the invoice, which is what
  * flips it PAID and closes the order — see /api/collections/charge.
  *
+ * Correcting. Ana, 2026-09-17: "how do I update an invoice from my side?"
+ * She could not, from here. Every way of correcting an invoice lived on the
+ * job page — two screens away from the desk where she reads "Client asked for
+ * a change" — and none of them could touch the due date or the note printed on
+ * the document, which no order edit produces. "Correct…" opens the three real
+ * answers under the row, named for what they are: edit the due date and note
+ * (PATCH /api/invoices/[id]), pull the figures through from the order
+ * (regenerate, same number), or change what is billed, which is an ORDER edit
+ * and says so with a link rather than pretending to be an invoice field.
+ *
  * Marking paid. Ana, 2026-09-11: a way to mark HQ invoices paid by hand when
  * the money came by Zelle, wire or ACH — with the option to show HOW it was
  * paid. Same explicit-button rule as Charge, and the form opens UNDER the row
@@ -71,6 +81,10 @@ export interface HqInvoice {
   preSentAt: string | null
   clientApprovedAt: string | null
   clientChangeRequestedAt: string | null
+  /** What the client said was wrong, in their words. */
+  clientChangeNote: string | null
+  /** The note printed on the face of the invoice — editable from the row. */
+  notes: string | null
   orderId: string
   orderNumber: string
   companyName: string | null
@@ -349,6 +363,217 @@ function MarkPaidForm({
   )
 }
 
+/**
+ * Correct one invoice, without leaving the desk.
+ *
+ * Three acts, deliberately not one button, because they are not the same act
+ * and the difference is the whole point:
+ *
+ *   · the DUE DATE and the printed NOTE are the invoice's own facts. Nothing
+ *     on the order produces them, so nothing but this can change them.
+ *   · the FIGURES belong to the order. "Pull the figures through" rewrites
+ *     them from it and keeps the number the client already has — it is the
+ *     right button only once the order is right.
+ *   · WHAT IS BILLED is an order edit. There is a link, not a field: an
+ *     invoice total that can be typed over reconciles to nothing.
+ *
+ * Opens under the row it belongs to, naming the invoice and the client, so
+ * there is no armed panel elsewhere on the page to have the wrong row in —
+ * the same rule Charge and Mark paid follow.
+ */
+function CorrectInvoiceForm({
+  inv,
+  onDone,
+  onCancel,
+}: {
+  inv: HqInvoice
+  onDone: (line: string) => void
+  onCancel: () => void
+}) {
+  const [dueDate, setDueDate] = useState(inv.dueDate ?? '')
+  const [note, setNote] = useState(inv.notes ?? '')
+  const [busy, setBusy] = useState<'save' | 'regen' | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [])
+
+  const voided = inv.status === 'VOID'
+  const dirty = (dueDate || '') !== (inv.dueDate ?? '') || note.trim() !== (inv.notes ?? '').trim()
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!dirty || busy || voided) return
+    setBusy('save')
+    setErr(null)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: dueDate || null, notes: note }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.ok === false) {
+        setErr(json.reason || json.error || `Could not save (HTTP ${res.status})`)
+        setBusy(null)
+        return
+      }
+      onDone(
+        `${inv.invoiceNumber} updated — ${json.summary}.` +
+          (json.warning ? ` ${json.warning}` : '') +
+          (json.wasSent && !json.warning
+            ? ' The client has the previous copy — send it again from the job if they need it.'
+            : ''),
+      )
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Could not save')
+      setBusy(null)
+    }
+  }
+
+  const regenerate = async () => {
+    if (busy || voided) return
+    if (
+      inv.sentAt &&
+      !window.confirm(
+        `Pull the figures through to ${inv.invoiceNumber}?\n\n` +
+          `It keeps its number and its due date. The client already has the old figure — ` +
+          `send it again afterwards and tell them it was corrected.`,
+      )
+    ) {
+      return
+    }
+    setBusy('regen')
+    setErr(null)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/regenerate`, { method: 'POST' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.ok === false) {
+        setErr(json.reason || json.error || `Could not update (HTTP ${res.status})`)
+        setBusy(null)
+        return
+      }
+      onDone(
+        json.changed
+          ? `${inv.invoiceNumber} rewritten from the order — ${money(Number(json.previousTotal))} → ${money(Number(json.total))}.` +
+              (json.wasSent ? ' The client has the old figure; send it again.' : '')
+          : `${inv.invoiceNumber} already matched the order — nothing moved.`,
+      )
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Could not update')
+      setBusy(null)
+    }
+  }
+
+  return (
+    <form ref={formRef} onSubmit={save} className="mt-2 rounded-lg border border-zinc-300 bg-white p-3 space-y-3">
+      <div className="text-xs text-zinc-700">
+        <span className="font-semibold text-zinc-900">Correct {inv.invoiceNumber}</span>
+        {` · ${inv.companyName || '—'} · ${money(inv.total)}`}
+        <div className="text-[11px] text-zinc-600 mt-0.5">
+          {voided
+            ? 'This invoice was voided — a withdrawn document stays as it was.'
+            : 'The due date and the note live on the invoice. Rates, lines and discounts live on the order.'}
+        </div>
+      </div>
+
+      {/* What the client actually objected to. Without it this panel is a
+          form with no question in front of it. */}
+      {inv.clientChangeRequestedAt && (
+        <div className="rounded border border-red-300 bg-red-50 px-2.5 py-2 text-[12px] text-red-800">
+          <span className="font-semibold">
+            Client asked for a change {shortDate(inv.clientChangeRequestedAt)}
+          </span>
+          {inv.clientChangeNote ? (
+            <div className="mt-0.5 whitespace-pre-wrap">&ldquo;{inv.clientChangeNote}&rdquo;</div>
+          ) : (
+            <div className="mt-0.5">They left no note — the job&rsquo;s conversation will have it.</div>
+          )}
+        </div>
+      )}
+
+      {!voided && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,180px)_1fr] gap-2">
+            <label className={FIELD_LABEL}>
+              Due date
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={FIELD_INPUT}
+              />
+              <span className="font-normal normal-case tracking-normal text-[11px] text-zinc-600">
+                SirReel bills due on receipt — change it only for agreed terms.
+              </span>
+            </label>
+            <label className={FIELD_LABEL}>
+              Note printed on the invoice
+              <textarea
+                value={note}
+                maxLength={2000}
+                rows={3}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="PO number, remit instruction, what was corrected…"
+                className={`${FIELD_INPUT} resize-y`}
+              />
+              <span className="font-normal normal-case tracking-normal text-[11px] text-zinc-600">
+                The client reads this. It replaces whatever is on there now.
+              </span>
+            </label>
+          </div>
+
+          <div className="rounded border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-[11px] text-zinc-700">
+            <span className="font-semibold text-zinc-900">Wrong amount?</span> That is the order,
+            not the invoice.{' '}
+            <Link href={`/orders/${inv.orderId}`} className="font-semibold underline underline-offset-2">
+              Open {inv.orderNumber}
+            </Link>
+            , fix the lines or the discount, then pull the figures through here.
+          </div>
+        </>
+      )}
+
+      {err && (
+        <div className="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-[12px] text-red-700">{err}</div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {!voided && (
+          <button
+            type="button"
+            onClick={() => void regenerate()}
+            disabled={!!busy}
+            title="Rewrite this invoice from the order, keeping its number and due date"
+            className="mr-auto px-3 py-1.5 rounded-md text-[12px] font-semibold border border-zinc-300 text-zinc-700 hover:bg-zinc-100 disabled:opacity-60"
+          >
+            {busy === 'regen' ? 'Pulling through…' : 'Pull the figures through from the order'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-zinc-600 hover:text-zinc-900"
+        >
+          {voided ? 'Close' : 'Cancel'}
+        </button>
+        {!voided && (
+          <button
+            type="submit"
+            disabled={!dirty || !!busy}
+            title={dirty ? undefined : 'Change the due date or the note first'}
+            className="px-3 py-1.5 rounded-md text-[12px] font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:bg-zinc-200 disabled:text-zinc-500 disabled:cursor-not-allowed"
+          >
+            {busy === 'save' ? 'Saving…' : 'Save'}
+          </button>
+        )}
+      </div>
+    </form>
+  )
+}
+
 export function HqInvoiceSearch({
   onCharge,
   onRecorded,
@@ -373,6 +598,11 @@ export function HqInvoiceSearch({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markingId, setMarkingId] = useState<string | null>(null)
+  const [correctingId, setCorrectingId] = useState<string | null>(null)
+  /** The one-line result of the last correction, dismissable. No Undo: an
+   *  invoice edit is reversible by editing it again, and a fake Undo on a
+   *  document already re-rendered would promise more than it can do. */
+  const [corrected, setCorrected] = useState<string | null>(null)
   const [recorded, setRecorded] = useState<RecordedPayment | null>(null)
   const [undoing, setUndoing] = useState(false)
   const [undoError, setUndoError] = useState<string | null>(null)
@@ -533,8 +763,25 @@ export function HqInvoiceSearch({
         </div>
       )}
 
+      {corrected && (
+        <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+          <div className="flex items-start gap-3">
+            <span className="flex-1">{corrected}</span>
+            <button
+              type="button"
+              onClick={() => setCorrected(null)}
+              className="text-emerald-700 hover:text-emerald-950"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
-        className={`mt-3 overflow-y-auto divide-y divide-zinc-200 ${markingId ? 'max-h-[600px]' : 'max-h-[320px]'}`}
+        className={`mt-3 overflow-y-auto divide-y divide-zinc-200 ${
+          markingId || correctingId ? 'max-h-[600px]' : 'max-h-[320px]'
+        }`}
       >
         {loading && rows.length === 0 ? (
           <div className="py-6 text-sm text-zinc-600 text-center">Loading…</div>
@@ -553,6 +800,7 @@ export function HqInvoiceSearch({
             const late = i.status !== 'PAID' && i.status !== 'VOID' ? daysPastDue(i.dueDate) : null
             const selected = !!selectedId && selectedId === i.id
             const marking = markingId === i.id
+            const correcting = correctingId === i.id
             // How the money came — "Zelle", "Wire + Card". The references
             // ride in the tooltip; the row has no room for a trace number.
             const via = paidViaLabel((i.payments ?? []).map((p) => p.method))
@@ -648,10 +896,31 @@ export function HqInvoiceSearch({
                   <Link href={`/orders/${i.orderId}`} className="font-semibold hover:text-zinc-900">
                     Order →
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCorrectingId(correcting ? null : i.id)
+                      setMarkingId(null)
+                    }}
+                    aria-expanded={correcting}
+                    title="Due date, the note printed on it, or pull the figures through from the order"
+                    className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      correcting
+                        ? 'border-zinc-500 bg-zinc-100 text-zinc-900'
+                        : i.clientChangeRequestedAt
+                          ? 'border-red-400 text-red-700 hover:bg-red-50'
+                          : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+                    }`}
+                  >
+                    Correct
+                  </button>
                   {onRecorded && hqInvoiceChargeable(i) && (
                     <button
                       type="button"
-                      onClick={() => setMarkingId(marking ? null : i.id)}
+                      onClick={() => {
+                        setMarkingId(marking ? null : i.id)
+                        setCorrectingId(null)
+                      }}
                       aria-expanded={marking}
                       title="Zelle, wire, ACH or check that has already arrived — record it on this invoice"
                       className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
@@ -677,6 +946,19 @@ export function HqInvoiceSearch({
                     </button>
                   )}
                 </div>
+
+                {correcting && (
+                  <CorrectInvoiceForm
+                    key={i.id}
+                    inv={i}
+                    onDone={(line) => {
+                      setCorrected(line)
+                      setCorrectingId(null)
+                      void load(q, scope)
+                    }}
+                    onCancel={() => setCorrectingId(null)}
+                  />
+                )}
 
                 {marking && (
                   <MarkPaidForm

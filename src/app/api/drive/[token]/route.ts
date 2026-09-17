@@ -213,8 +213,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   // phone"). Offered only once a walk-around has actually been filed on
   // this vehicle, whoever filed it: the yard's the day before, or the
   // driver's own. A link to an empty sheet is worse than no link.
+  // CHECKOUT only. The driver's copy is the check-out sheet — the return
+  // half is stripped by `checkoutSideOnly` (Wes 2026-09-17: damage goes
+  // straight to the production) — so a vehicle with only a RETURN on file
+  // has nothing to show them and must not advertise a link.
   const conditionReportFiled = await prisma.inspection.count({
-    where: { bookingAssignmentId: asg.id, type: { in: ['CHECKOUT', 'RETURN'] } },
+    where: { bookingAssignmentId: asg.id, type: 'CHECKOUT' },
   })
 
   // Did SirReel already walk this vehicle around? That one fact decides

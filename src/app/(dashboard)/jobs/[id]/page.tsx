@@ -56,6 +56,7 @@ import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
+import { orderHrefFromJob } from '@/lib/nav/orderBackTarget';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
 import { JobVehiclePickupPanel } from '@/components/jobs/JobVehiclePickupPanel';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
@@ -2537,7 +2538,7 @@ const driverTone = (d: any): string => {
                       <span className="font-mono text-[13px] text-zinc-800 mt-0.5 whitespace-nowrap">{fmtMoney(o.total)}</span>
                     )}
                     <Link
-                      href={`/orders/${o.id}`}
+                      href={orderHrefFromJob(o.id)}
                       onClick={(e) => e.stopPropagation()}
                       className="ml-2 shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-bold text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors"
                     >
@@ -2801,7 +2802,7 @@ const driverTone = (d: any): string => {
                         ordinary chip is how three vans went out tomorrow
                         under a cancelled S260915-004. Say which. */}
                     <Link
-                      href={`/orders/${a.attachedOrder.id}`}
+                      href={orderHrefFromJob(a.attachedOrder.id)}
                       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold ${
                         DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
                           ? 'border border-rose-200 bg-rose-50 text-rose-700 line-through decoration-rose-400 hover:bg-rose-100'
@@ -3047,7 +3048,7 @@ const driverTone = (d: any): string => {
                 <div key={order.id} className="border-l-2 border-amber-200 pl-3">
                   <div className="flex items-center gap-2 mb-1.5 text-[12px]">
                     <Link
-                      href={`/orders/${order.id}`}
+                      href={orderHrefFromJob(order.id)}
                       className="font-mono text-zinc-700 hover:text-amber-600"
                     >
                       {order.orderNumber}
